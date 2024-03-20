@@ -1,9 +1,9 @@
+from logger import logger
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from utils import singleton
 
 from bot.models import Base
-from logger import logger
-from utils import singleton
 
 
 @singleton

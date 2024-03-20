@@ -11,6 +11,7 @@ exclude = '''
     | \.env
     | env
     | venv
+    | .venv
     | app/bot_config/migrations
   )
 )
@@ -33,6 +34,8 @@ exclude = '''
 | \.env
 | env
 | venv
+| .venv
+
 | app/bot_config/migrations
 )
 '''
@@ -49,6 +52,8 @@ exclude = '''
 | \.pytest_cache
 | \.env
 | env
+| .venv
+
 | venv
 | app/bot_config/migrations
 )
