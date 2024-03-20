@@ -1,0 +1,55 @@
+[tool.black]
+line-length = 120
+target-version = ['py310']
+include = '\.pyi?$'
+exclude = '''
+(
+  /(
+      \.git          # root of the project
+    | \.mypy_cache
+    | \.pytest_cache
+    | \.env
+    | env
+    | venv
+    | app/bot_config/migrations
+  )
+)
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+line_length = 120
+
+[tool.flake8]
+exclude = '''
+(
+  \.git          # root of the project
+| \.mypy_cache
+| \.pytest_cache
+| \.env
+| env
+| venv
+| app/bot_config/migrations
+)
+'''
+
+[tool.mypy]
+strict = true
+disallow_untyped_calls = true
+warn_unused_ignores = true
+warn_unreachable = true
+exclude = '''
+(
+  \.git          # root of the project
+| \.mypy_cache
+| \.pytest_cache
+| \.env
+| env
+| venv
+| app/bot_config/migrations
+)
+'''
