@@ -5,7 +5,7 @@ from aiogram import Bot, Dispatcher
 from dotenv import load_dotenv
 
 from bot.handlers import main_menu
-from logger import logger
+from common.logger import logger
 
 
 async def main() -> None:

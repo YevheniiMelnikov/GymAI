@@ -2,7 +2,7 @@ from enum import Enum, auto
 
 import yaml
 
-import settings
+from common import settings
 
 
 class MessageText(Enum):
