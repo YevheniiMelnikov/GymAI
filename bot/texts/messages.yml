@@ -2,3 +2,8 @@ start:
   eng: "Start"
   ru: "Старт"
   ua: "Старт"
+
+choose_language:
+  eng: "Welcome! Choose a language 👇"
+  ru: "Добро пожаловать! Выберите язык 👇"
+  ua: "Ласкаво просимо! Оберіть мову 👇"

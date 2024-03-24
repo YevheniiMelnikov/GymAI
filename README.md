@@ -1,7 +1,7 @@
 ### Project setup guide
 
 
-Set your BOT_TOKEN variable in env.local
+Set your env variables in .env file
 ```bash
 docker compose up
 ```

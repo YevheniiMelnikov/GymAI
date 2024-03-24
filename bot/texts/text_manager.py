@@ -7,6 +7,7 @@ from common import settings
 
 class MessageText(Enum):
     start = auto()
+    choose_language = auto()
 
     def __str__(self) -> str:
         return f"messages.{self.name}"

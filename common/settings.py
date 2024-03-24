@@ -1,5 +1,4 @@
 MESSAGES = {
-    "messages": "bot/texts/messages.yml",
-    "buttons": "bot/texts/buttons.yml",
+    "messages": "/opt/bot/texts/messages.yml",
+    "buttons": "/opt/bot/texts/buttons.yml",
 }
-DB_NAME = "sqlite:///database.db"
