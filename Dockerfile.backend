@@ -1,0 +1,17 @@
+FROM python:3.12
+
+ENV APP_HOME=/opt
+ENV PYTHONPATH=$APP_HOME
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc python3-dev
+
+WORKDIR $APP_HOME
+
+ADD requirements.txt $APP_HOME/requirements.txt
+ADD backend $APP_HOME/backend
+RUN pip install --no-cache-dir -r requirements.txt
+
+WORKDIR $APP_HOME/backend
+
+EXPOSE 8000

@@ -3,7 +3,6 @@ import os
 
 from aiogram import Bot, Dispatcher
 from dotenv import load_dotenv
-
 from bot.handlers import main_menu
 from common.logger import logger
 

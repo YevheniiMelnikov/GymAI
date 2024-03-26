@@ -1,4 +1,4 @@
-version: "3"
+version: '3'
 
 services:
   db:
@@ -7,48 +7,53 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
       POSTGRES_DB: postgres
-    expose:
-      - 5432
     ports:
       - "5432:5432"
-    env_file:
-      - .env
     volumes:
       - pgdata:/var/lib/postgresql/data
-
-  bot:
-    build:
-      context: .
-      dockerfile: deployment/Dockerfile.tg
-    depends_on:
-      - db
-    env_file:
-      - .env
-    command:
-      - python
-      - -u
-      - main.py
-    volumes:
-      - .:/opt:z
 
   backend:
     build:
       context: .
-      dockerfile: deployment/Dockerfile.django
+      dockerfile: Dockerfile.backend
     depends_on:
       - db
-    volumes:
-      - .:/opt:z
     ports:
       - "8000:8000"
-    env_file:
-      - .env
+    environment:
+      DB_HOST: db
+      DB_NAME: postgres
+      DB_USER: postgres
+      DB_PASSWORD: password
+    volumes:
+      - ./backend:/opt/backend:z
     command:
       - python
       - -u
       - manage.py
       - runserver
       - "0.0.0.0:8000"
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile.tg
+    depends_on:
+      - backend
+      - db
+    environment:
+      DJANGO_HOST: backend
+      DJANGO_PORT: "8000"
+    volumes:
+      - .:/opt:z
+    ports:
+      - "8080:8000"
+    env_file:
+      - .env
+    command:
+      - python
+      - -u
+      - main.py
 
 volumes:
   pgdata:
