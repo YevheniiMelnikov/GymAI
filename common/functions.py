@@ -1,10 +1,9 @@
 import os
-from typing import Type
 
 from aiogram import Bot
 from dotenv import load_dotenv
 
-# load_dotenv()
+load_dotenv()
 bot = Bot(os.environ.get("BOT_TOKEN"))
 
 

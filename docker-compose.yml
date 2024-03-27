@@ -37,7 +37,7 @@ services:
   bot:
     build:
       context: .
-      dockerfile: Dockerfile.tg
+      dockerfile: Dockerfile
     depends_on:
       - backend
       - db

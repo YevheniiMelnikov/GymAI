@@ -5,8 +5,8 @@ from aiogram.types import Message
 
 from bot.keyboards.keyboards import language_choice, main_menu_keyboard
 from bot.states import States
-from bot.texts.text_manager import translate, MessageText
 from common.functions import get_person_by_id, add_user_to_db, edit_person
+from texts.text_manager import translate, MessageText
 
 start_router = Router()
 

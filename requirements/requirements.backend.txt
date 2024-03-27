@@ -1,0 +1,6 @@
+Django==4.2.7
+django-extensions==3.2.3
+djangorestframework==3.14.0
+psycopg2-binary==2.9.9
+djangorestframework-api-key==3.0.0
+drf-yasg==1.21.7

@@ -1,8 +1,6 @@
 from aiogram.types import ReplyKeyboardMarkup, InlineKeyboardMarkup
 from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 
-from bot.texts.text_manager import translate, ButtonText
-
 
 def language_choice() -> ReplyKeyboardMarkup:
     kb = ReplyKeyboardBuilder()

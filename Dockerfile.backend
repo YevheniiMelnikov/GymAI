@@ -8,9 +8,9 @@ RUN apt-get update \
 
 WORKDIR $APP_HOME
 
-ADD requirements.txt $APP_HOME/requirements.txt
+ADD requirements/requirements.backend.txt $APP_HOME/requirements/requirements.backend.txt
 ADD backend $APP_HOME/backend
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install -r requirements/requirements.backend.txt
 
 WORKDIR $APP_HOME/backend
 

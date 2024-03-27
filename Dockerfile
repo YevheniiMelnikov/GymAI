@@ -8,9 +8,9 @@ RUN apt-get update \
 
 WORKDIR $APP_HOME
 
-ADD requirements.txt $APP_HOME/requirements.txt
+ADD requirements/requirements.txt $APP_HOME/requirements/requirements.txt
 ADD bot $APP_HOME/bot
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install -r requirements/requirements.txt
 
 WORKDIR $APP_HOME/bot
 
