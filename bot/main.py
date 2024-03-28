@@ -5,7 +5,7 @@ from aiogram import Bot, Dispatcher
 from dotenv import load_dotenv
 
 from bot.commands import bot_commands
-from bot.handlers import main_menu
+from bot.handlers import start_router
 from common.logger import logger
 
 
@@ -13,7 +13,7 @@ async def main() -> None:
     load_dotenv()
     bot = Bot(token=os.getenv("BOT_TOKEN"))  # type: ignore[arg-type]
     dp = Dispatcher()
-    dp.include_router(main_menu.start_router)
+    dp.include_router(start_router)
     logger.info("Starting bot ...")
     await bot.delete_webhook(drop_pending_updates=True)
     await bot.set_my_commands(bot_commands)

@@ -3,7 +3,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
-from bot.keyboards.keyboards import language_choice, main_menu_keyboard
+from bot.keyboards import language_choice, main_menu_keyboard
 from bot.states import States
 from common.functions import get_person_by_id, add_user_to_db, edit_person
 from texts.text_manager import translate, MessageText

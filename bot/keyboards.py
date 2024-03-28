@@ -12,13 +12,4 @@ def language_choice() -> ReplyKeyboardMarkup:
 
 def main_menu_keyboard(lang_code: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    # kb.button(
-    #     text=translate(ButtonText.text_me, lang=lang_code),
-    #     url=os.getenv("OWNER_LINK"),
-    #     callback_data="text_me",
-    # )
-    # kb.button(
-    #     text=translate(ButtonText.show_events, lang=lang_code),
-    #     callback_data="show_events",
-    # )
     return kb.as_markup(resize_keyboard=True, one_time_keyboard=True)
