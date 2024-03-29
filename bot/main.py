@@ -1,23 +1,28 @@
 import asyncio
 import os
 
+import loguru
 from aiogram import Bot, Dispatcher
 from dotenv import load_dotenv
 
 from bot.commands import bot_commands
 from bot.handlers import start_router
-from common.logger import logger
+
+logger = loguru.logger
 
 
 async def main() -> None:
     load_dotenv()
-    bot = Bot(token=os.getenv("BOT_TOKEN"))  # type: ignore[arg-type]
+    bot = Bot(token=os.getenv("BOT_TOKEN"))
     dp = Dispatcher()
     dp.include_router(start_router)
     logger.info("Starting bot ...")
-    await bot.delete_webhook(drop_pending_updates=True)
-    await bot.set_my_commands(bot_commands)
-    await dp.start_polling(bot)
+    try:
+        await bot.delete_webhook(drop_pending_updates=True)
+        await bot.set_my_commands(bot_commands)
+        await dp.start_polling(bot)
+    except Exception as e:
+        logger.error(e)
 
 
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+import loguru
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -8,11 +9,13 @@ from bot.states import States
 from common.functions import get_person_by_id, add_user_to_db, edit_person
 from texts.text_manager import translate, MessageText
 
+logger = loguru.logger
 start_router = Router()
 
 
 @start_router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext) -> None:
+    logger.info(f"User {message.from_user.id} started bot")
     await state.clear()
     person = await get_person_by_id(message.from_user.id)
     if person:
