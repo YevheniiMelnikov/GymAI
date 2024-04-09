@@ -22,7 +22,6 @@ from drf_yasg.views import get_schema_view
 from rest_framework import permissions
 from rest_framework.routers import DefaultRouter
 
-from backend.accounts.views import PersonAPIView
 
 api_info = openapi.Info(title="Admin Rest", default_version="0.1")
 schema_view = get_schema_view(api_info, public=True, url="", permission_classes=[permissions.IsAuthenticated])

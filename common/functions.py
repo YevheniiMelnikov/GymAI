@@ -15,17 +15,10 @@ bot = Bot(os.environ.get("BOT_TOKEN"))
 async def get_person_by_id(tg_user_id: int) -> Person | None:
     try:
         async with httpx.AsyncClient() as client:
-            request_url = "http://backend:8000/api/v1/persons_list/"
-            result = await client.get(request_url)
-            users_response = result.json()
-
-            if "persons" in users_response:
-                users_list = users_response["persons"]
-                for user_data in users_list:
-                    if user_data.get("tg_user_id") == tg_user_id:  # TODO: FIND BETTER SOLUTION
-                        return Person.from_dict(user_data)
-
-            return None
+            request_url = f"http://backend:8000/api/v1/persons_detail/{tg_user_id}"
+            response = await client.get(request_url)
+            user_data = response.json()
+            return Person.from_dict(user_data) if user_data else None
 
     except Exception as e:
         logger.error(e)

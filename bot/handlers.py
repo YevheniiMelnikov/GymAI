@@ -18,7 +18,6 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     logger.info(f"User {message.from_user.id} started bot")
     await state.clear()
     person = await get_person_by_id(message.from_user.id)
-    print(person)
     if person:
         await state.set_state(States.main_menu)
         await message.answer(
