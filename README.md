@@ -2,11 +2,8 @@
 
 
 Set your env variables in .env file
-```bash
-docker compose up
-```
 
-Useful commands:
+Then run:
 ```bash
-docker compose run backend manage.py createsuperuser
+docker compose up --build
 ```

@@ -12,7 +12,7 @@ exclude = '''
     | env
     | venv
     | .venv
-    | app/bot_config/migrations
+    | backend/accounts/migrations
   )
 )
 '''
@@ -24,6 +24,9 @@ include_trailing_comma = true
 force_grid_wrap = 0
 use_parentheses = true
 line_length = 120
+skip_glob = [
+  "backend/accounts/migrations/**"
+]
 
 [tool.flake8]
 exclude = '''
@@ -36,7 +39,7 @@ exclude = '''
 | venv
 | .venv
 
-| app/bot_config/migrations
+| backend/accounts/migrations
 )
 '''
 
@@ -55,6 +58,6 @@ exclude = '''
 | .venv
 
 | venv
-| app/bot_config/migrations
+| backend/accounts/migrations
 )
 '''

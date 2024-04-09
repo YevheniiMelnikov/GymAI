@@ -6,8 +6,8 @@ from aiogram.types import Message
 
 from bot.keyboards import language_choice, main_menu_keyboard
 from bot.states import States
-from common.functions import get_person_by_id, add_user_to_db, edit_person
-from texts.text_manager import translate, MessageText
+from common.functions import add_user_to_db, edit_person, get_person_by_id
+from texts.text_manager import MessageText, translate
 
 logger = loguru.logger
 start_router = Router()
@@ -18,6 +18,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     logger.info(f"User {message.from_user.id} started bot")
     await state.clear()
     person = await get_person_by_id(message.from_user.id)
+    print(person)
     if person:
         await state.set_state(States.main_menu)
         await message.answer(

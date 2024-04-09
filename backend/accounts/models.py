@@ -4,8 +4,8 @@ from django.db.models import Model
 
 class Person(Model):
     tg_user_id = models.PositiveIntegerField(null=False, primary_key=True, unique=True)
-    short_name = models.CharField(max_length=50, null=False, blank=False)
-    password = models.CharField(max_length=50, null=False, blank=False)
+    short_name = models.CharField(max_length=50)
+    password = models.CharField(max_length=50)
     status = models.CharField(max_length=50, default="client")
     gender = models.CharField(max_length=50, null=True, blank=True)
     birth_date = models.DateField(null=True, blank=True)
@@ -15,4 +15,18 @@ class Person(Model):
     REQUIRED_FIELDS = ["short_name", "password", "status"]
 
     class Meta:
-        ordering = ["tg_user_id"]
+        verbose_name = "Person"
+        verbose_name_plural = "Persons"
+
+
+class Subscription(models.Model):
+    user = models.ForeignKey(Person, on_delete=models.CASCADE, related_name="subscriptions")
+    subscription_id = models.AutoField(primary_key=True)
+    expire_date = models.DateField()
+    enabled = models.BooleanField(default=False)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    training_count = models.IntegerField()
+
+    class Meta:
+        verbose_name = "Subscription"
+        verbose_name_plural = "Subscriptions"
