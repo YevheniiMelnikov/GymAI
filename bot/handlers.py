@@ -6,7 +6,7 @@ from aiogram.types import Message
 
 from bot.keyboards import language_choice, main_menu_keyboard
 from bot.states import States
-from common.functions import add_user_to_db, edit_person, get_person
+from common.functions import edit_person, get_person, create_person
 from texts.text_manager import MessageText, translate
 
 logger = loguru.logger
@@ -45,7 +45,7 @@ async def create_user(message: Message, state: FSMContext) -> None:
         if person:
             await edit_person(message.from_user.id, {"language": lang_code})
         else:
-            await add_user_to_db(user_id=message.from_user.id, lang=lang_code)
+            await create_person(dict(user_id=message.from_user.id, lang=lang_code))  # TODO: ADD EXTRA STEPS
         await state.set_state(States.main_menu)
         await message.answer(
             text=translate(MessageText.start, lang=lang_code),

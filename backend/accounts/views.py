@@ -8,8 +8,8 @@ from .serializers import PersonSerializer
 
 
 class PersonViewSet(viewsets.ModelViewSet):
-    # permission_classes = [HasAPIKey | permissions.IsAuthenticated]
     serializer_class = serializers.PersonSerializer
     queryset = Person.objects.all()
+    # permission_classes = [HasAPIKey | permissions.IsAuthenticated]
     # filter_backends = [DjangoFilterBackend]
     # filterset_fields = ["name", "enabled", "status", "start", "end"]

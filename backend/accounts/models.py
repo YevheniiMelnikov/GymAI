@@ -11,9 +11,6 @@ class Person(Model):
     birth_date = models.DateField(null=True, blank=True)
     language = models.CharField(max_length=50, null=True, blank=True)
 
-    USERNAME_FIELD = "tg_user_id"
-    # REQUIRED_FIELDS = ["short_name", "password", "status"]
-
     class Meta:
         verbose_name = "person"
         verbose_name_plural = "persons"

@@ -13,45 +13,47 @@ bot = Bot(os.environ.get("BOT_TOKEN"))
 BACKEND_URL = os.environ.get("BACKEND_URL")
 
 
+async def api_request(method: str, url: str, data: dict = None) -> tuple:
+    logger.info(f"Making {method} request to {url}")
+    try:
+        async with httpx.AsyncClient() as client:
+            if method == 'get':
+                response = await client.get(url)
+            elif method == 'post':
+                response = await client.post(url, json=data)
+            elif method == 'put':
+                response = await client.put(url, json=data)
+            elif method == 'delete':
+                response = await client.delete(url)
+            else:
+                raise ValueError(f"Unsupported HTTP method: {method}")
+
+            return response.status_code, response.json()
+
+    except Exception as e:
+        logger.error(e)
+        return None, None
+
+
+async def create_person(data: dict) -> bool:
+    url = f"{BACKEND_URL}/person/"
+    status_code, _ = await api_request('post', url, data)
+    return status_code == 201 if status_code else False
+
+
 async def get_person(tg_user_id: int) -> Person | None:
-    try:
-        async with httpx.AsyncClient() as client:
-            request_url = f"{BACKEND_URL}/person/{tg_user_id}"
-            response = await client.get(request_url)
-            user_data = response.json()
-            return Person.from_dict(user_data) if user_data else None
-
-    except Exception as e:
-        logger.error(e)
-        return None
+    url = f"{BACKEND_URL}/persons/{tg_user_id}/"
+    status_code, user_data = await api_request('get', url)
+    return Person.from_dict(user_data) if user_data else None
 
 
-async def edit_person_by_id(tg_user_id: int, data: dict) -> bool:
-    try:
-        async with httpx.AsyncClient() as client:
-            request_url = f"{BACKEND_URL}/person/{tg_user_id}"
-            response = await client.put(request_url, json=data)
-            return response.status_code == 200
-
-    except Exception as e:
-        logger.error(e)
-        return False
+async def edit_person(tg_user_id: int, data: dict) -> bool:
+    url = f"{BACKEND_URL}/person/{tg_user_id}/"
+    status_code, _ = await api_request('put', url, data)
+    return status_code == 200 if status_code else False
 
 
 async def delete_person(tg_user_id: int) -> bool:
-    try:
-        async with httpx.AsyncClient() as client:
-            request_url = f"{BACKEND_URL}/person/delete/{tg_user_id}"
-            response = await client.delete(request_url)
-            return response.status_code == 404
-
-    except Exception as e:
-        logger.error(e)
-
-
-async def add_user_to_db(user_id: int, lang: str) -> None:
-    pass
-
-
-async def edit_person(user_id: int, data: dict[str, str]) -> None:
-    pass
+    url = f"{BACKEND_URL}/person/{tg_user_id}/"
+    status_code, _ = await api_request('delete', url)
+    return status_code == 404 if status_code else False
