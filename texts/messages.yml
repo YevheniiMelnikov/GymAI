@@ -1,4 +1,4 @@
-start:
+welcome:
   eng: "Start"
   ru: "Старт"
   ua: "Старт"
@@ -7,3 +7,38 @@ choose_language:
   eng: "Welcome! Choose a language 👇"
   ru: "Добро пожаловать! Выберите язык 👇"
   ua: "Ласкаво просимо! Оберіть мову 👇"
+
+choose_short_name:
+  eng: "Enter your nickname 👇"
+  ru: "Укажите свой никнейм 👇"
+  ua: "Вкажіть свій нікнейм 👇"
+
+choose_password:
+  eng: "Make up a password 🔐"
+  ru: "Придумайте пароль 🔐"
+  ua: "Придумайте пароль 🔐"
+
+invalid_content:
+  eng: "Invalid data type 😕"
+  ru: "Неверный тип данных 😕"
+  ua: "Неправильний тип даних 😕"
+
+registration_successful:
+  eng: "Registration successful 😎"
+  ru: "Регистрация успешна 😎"
+  ua: "Реєстрація успішна 😎"
+
+choose_account_type:
+  eng: "Choose your account type 👇"
+  ru: "Выберите тип вашего аккаунта 👇"
+  ua: "Оберіть тип вашого облікового запису 👇"
+
+choose_gender:
+  eng: "Choose your gender"
+  ru: "Выберите ваш пол"
+  ua: "Оберіть вашу стать"
+
+choose_birth_date:
+  eng: "Enter your date of birth 📅\nUse format YYYY-MM-DD"
+  ru: "Укажите дату вашего рождения 📅\nИспользуйте формат ГГГГ-MM-ДД"
+  ua: "Вкажіть дату вашого народження 📅\nВикористовуйте формат РРРР-ММ-ДД"

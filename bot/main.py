@@ -6,7 +6,7 @@ from aiogram import Bot, Dispatcher
 from dotenv import load_dotenv
 
 from bot.commands import bot_commands
-from bot.handlers import main_router
+from bot.message_handlers import main_router
 
 logger = loguru.logger
 

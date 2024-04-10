@@ -38,6 +38,8 @@ async def api_request(method: str, url: str, data: dict = None) -> tuple:
 async def create_person(data: dict) -> bool:
     url = f"{BACKEND_URL}/persons/"
     status_code, _ = await api_request("post", url, data)
+    print(status_code)
+    print(_)
     return status_code == 201 if status_code else False
 
 
@@ -57,6 +59,6 @@ async def edit_person(tg_user_id: int, data: dict) -> bool:
 
 
 async def delete_person(tg_user_id: int) -> bool:
-    url = f"{BACKEND_URL}/person/{tg_user_id}/"
+    url = f"{BACKEND_URL}/persons/{tg_user_id}/"
     status_code, _ = await api_request("delete", url)
     return status_code == 404 if status_code else False
