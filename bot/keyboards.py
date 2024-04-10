@@ -1,6 +1,8 @@
 from aiogram.types import InlineKeyboardMarkup, ReplyKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
+codes = {"Українська 🇺🇦": "ua", "English 🇬🇧": "eng", "Русский 🇷🇺": "ru"}
+
 
 def language_choice() -> ReplyKeyboardMarkup:
     kb = ReplyKeyboardBuilder()

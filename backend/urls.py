@@ -21,12 +21,12 @@ from django.urls import include, path
 from drf_yasg import openapi
 from drf_yasg.views import get_schema_view
 from rest_framework import permissions
-from rest_framework.routers import DefaultRouter
+from rest_framework.routers import SimpleRouter
 
 api_info = openapi.Info(title="Admin Rest", default_version="0.1")
 schema_view = get_schema_view(api_info, public=True, url="", permission_classes=[permissions.IsAuthenticated])
-router = DefaultRouter()
-router.register(r"persons", views.PersonViewSet, basename="person")
+router = SimpleRouter()
+router.register(r"persons", views.PersonViewSet, basename="persons")
 
 urlpatterns = [
     path("admin/", admin.site.urls),

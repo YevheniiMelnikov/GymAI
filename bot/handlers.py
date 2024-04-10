@@ -4,24 +4,29 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
-from bot.keyboards import language_choice, main_menu_keyboard
+from bot.keyboards import codes, language_choice, main_menu_keyboard
 from bot.states import States
-from common.functions import edit_person, get_person, create_person
+from common.functions import create_person, edit_person, get_person
 from texts.text_manager import MessageText, translate
 
 logger = loguru.logger
-start_router = Router()
+main_router = Router()
 
 
-@start_router.message(Command("start"))
+@main_router.message(Command("language"))
+async def cmd_language(message: Message, state: FSMContext) -> None:
+    await message.answer(text=translate(MessageText.choose_language), reply_markup=language_choice())
+    await state.set_state(States.language_choice)
+
+
+@main_router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext) -> None:
     logger.info(f"User {message.from_user.id} started bot")
     await state.clear()
-    person = await get_person(message.from_user.id)
-    if person:
+    if person := await get_person(message.from_user.id):
         await state.set_state(States.main_menu)
         await message.answer(
-            text=translate(MessageText.start, lang=person.language),
+            text=translate(MessageText.start, lang="ru"),  # TODO: PASS PERSON.LANGUAGE
             reply_markup=main_menu_keyboard(person.language),
         )
     else:
@@ -29,23 +34,15 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         await state.set_state(States.language_choice)
 
 
-@start_router.message(Command("language"))
-async def cmd_language(message: Message, state: FSMContext) -> None:
-    await message.answer(text=translate(MessageText.choose_language), reply_markup=language_choice())
-    await state.set_state(States.language_choice)
-
-
-@start_router.message(States.language_choice)
+@main_router.message(States.language_choice)
 async def create_user(message: Message, state: FSMContext) -> None:
-    codes = {"Українська 🇺🇦": "ua", "English 🇬🇧": "eng", "Русский 🇷🇺": "ru"}
-    lang_code = codes.get(message.text)
-
-    if lang_code:
-        person = await get_person(message.from_user.id)
-        if person:
+    if lang_code := codes.get(message.text):
+        if await get_person(message.from_user.id):
             await edit_person(message.from_user.id, {"language": lang_code})
         else:
-            await create_person(dict(user_id=message.from_user.id, lang=lang_code))  # TODO: ADD EXTRA STEPS
+            await create_person(
+                dict(tg_user_id=message.from_user.id, short_name="username", password="password", language=lang_code)
+            )  # TODO: ADD EXTRA STEPS
         await state.set_state(States.main_menu)
         await message.answer(
             text=translate(MessageText.start, lang=lang_code),

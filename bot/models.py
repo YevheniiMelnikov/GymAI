@@ -13,7 +13,9 @@ class Person:
 
     @classmethod
     def from_dict(cls, data: dict):
-        return cls(**data)
+        fields = ["tg_user_id", "short_name", "password", "status", "gender", "birth_date", "language"]
+        filtered_data = {key: data.get(key) for key in fields}
+        return cls(**filtered_data)
 
     def __repr__(self):
         return (

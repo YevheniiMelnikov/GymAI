@@ -1,14 +1,18 @@
 from accounts.models import Person
-from rest_framework import permissions, viewsets
-from rest_framework.generics import ListAPIView, RetrieveUpdateDestroyAPIView, UpdateAPIView
+from rest_framework import mixins, permissions, viewsets
 from rest_framework_api_key.permissions import HasAPIKey
 
-from . import serializers
 from .serializers import PersonSerializer
 
 
-class PersonViewSet(viewsets.ModelViewSet):
-    serializer_class = serializers.PersonSerializer
+class PersonViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+    mixins.UpdateModelMixin,
+):
+    serializer_class = PersonSerializer
     queryset = Person.objects.all()
     # permission_classes = [HasAPIKey | permissions.IsAuthenticated]
     # filter_backends = [DjangoFilterBackend]

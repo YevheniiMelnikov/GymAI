@@ -6,7 +6,7 @@ from aiogram import Bot, Dispatcher
 from dotenv import load_dotenv
 
 from bot.commands import bot_commands
-from bot.handlers import start_router
+from bot.handlers import main_router
 
 logger = loguru.logger
 
@@ -15,7 +15,7 @@ async def main() -> None:
     load_dotenv()
     bot = Bot(token=os.getenv("BOT_TOKEN"))
     dp = Dispatcher()
-    dp.include_router(start_router)
+    dp.include_router(main_router)
     logger.info("Starting bot ...")
     try:
         await bot.delete_webhook(drop_pending_updates=True)
