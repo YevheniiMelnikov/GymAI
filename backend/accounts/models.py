@@ -12,11 +12,11 @@ class Person(Model):
     language = models.CharField(max_length=50, null=True, blank=True)
 
     USERNAME_FIELD = "tg_user_id"
-    REQUIRED_FIELDS = ["short_name", "password", "status"]
+    # REQUIRED_FIELDS = ["short_name", "password", "status"]
 
     class Meta:
-        verbose_name = "Person"
-        verbose_name_plural = "Persons"
+        verbose_name = "person"
+        verbose_name_plural = "persons"
 
 
 class Subscription(models.Model):
@@ -28,5 +28,5 @@ class Subscription(models.Model):
     training_count = models.IntegerField()
 
     class Meta:
-        verbose_name = "Subscription"
-        verbose_name_plural = "Subscriptions"
+        verbose_name = "subscription"
+        verbose_name_plural = "subscriptions"
