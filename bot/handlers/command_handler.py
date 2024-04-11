@@ -13,14 +13,29 @@ logger = loguru.logger
 cmd_router = Router()
 
 
+# @cmd_router.message(Command("language"))
+# async def cmd_language(message: Message, state: FSMContext) -> None:
+#     if person := await get_person(message.from_user.id):
+#         if person.language:
+#             await message.answer(
+#                 text=translate(MessageText.choose_language, lang=person.language), reply_markup=language_choice()
+#             )
+#             await state.set_state(States.language_choice)
+#         else:
+#             await message.answer(text=translate(MessageText.choose_language), reply_markup=language_choice())
+#             await state.set_state(States.language_choice)
+
+
 @cmd_router.message(Command("language"))
 async def cmd_language(message: Message, state: FSMContext) -> None:
     person = await get_person(message.from_user.id)
-    if person:
-        await message.answer(
-            text=translate(MessageText.choose_language, lang=person.language), reply_markup=language_choice()
-        )
-        await state.set_state(States.language_choice)
+    lang = person.language if person and person.language else None
+
+    await message.answer(
+        text=translate(MessageText.choose_language, lang=lang) if lang else translate(MessageText.choose_language),
+        reply_markup=language_choice(),
+    )
+    await state.set_state(States.language_choice)
 
 
 @cmd_router.message(Command("start"))
@@ -33,7 +48,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
             await state.set_state(States.language_choice)
             await message.answer(text=translate(MessageText.choose_language), reply_markup=language_choice())
         else:
-            await show_main_menu(message, state)
+            await show_main_menu(message, state, person.language)
     else:
         await state.set_state(States.language_choice)
         await message.answer(text=translate(MessageText.choose_language), reply_markup=language_choice())

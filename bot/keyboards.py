@@ -3,7 +3,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
 from texts.text_manager import ButtonText, translate
 
-codes = {"Українська 🇺🇦": "ua", "English 🇬🇧": "eng", "Русский 🇷🇺": "ru"}
+codes = {"Українська 🇺🇦": "ua", "English 🇬🇧": "eng", "Русский 🇷🇺": "ru"} # TODO: FIND BETTER SOLUTION
 
 
 def language_choice() -> ReplyKeyboardMarkup:

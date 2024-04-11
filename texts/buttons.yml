@@ -34,6 +34,6 @@ show_my_profile:
   ua: "Мій профіль"
 
 my_current_program:
-  eng: "Show my current program"
-  ru: "Мой план nhtybhjdjr"
-  ua: "Мій план тренувань"
+  eng: "My trainings"
+  ru: "Мои тренировки"
+  ua: "Мої тренування"

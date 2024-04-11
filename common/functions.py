@@ -81,17 +81,17 @@ async def set_data_and_next_state(
     await message.delete()
 
 
-async def show_main_menu(message: Message, state: FSMContext) -> None:
+async def show_main_menu(message: Message, state: FSMContext, lang: str) -> None:
     person = await get_person(message.from_user.id)
     if person.status == "client":
         await state.set_state(States.client_menu)
         await message.answer(
-            text=translate(MessageText.welcome, lang=person.language).format(name=person.short_name),
-            reply_markup=client_menu_keyboard(person.language),
+            text=translate(MessageText.welcome, lang=lang).format(name=person.short_name),
+            reply_markup=client_menu_keyboard(lang),
         )
     elif person.status == "coach":
         await state.set_state(States.coach_menu)
         await message.answer(
-            text=translate(MessageText.welcome, lang=person.language).format(name=person.short_name),
-            reply_markup=coach_menu_keyboard(person.language),
+            text=translate(MessageText.welcome, lang=lang).format(name=person.short_name),
+            reply_markup=coach_menu_keyboard(lang),
         )

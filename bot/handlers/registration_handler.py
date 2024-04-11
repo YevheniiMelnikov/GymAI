@@ -1,8 +1,9 @@
 import loguru
-from aiogram import Router
+from aiogram import Router, Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from bot.commands import bot_commands
 from bot.keyboards import *
 from bot.states import States
 from common.functions import (
@@ -20,16 +21,17 @@ register_router = Router()
 
 
 @register_router.message(States.language_choice)
-async def set_language(message: Message, state: FSMContext) -> None:
-    lang_code = codes.get(message.text)
-    if lang_code:
+async def set_language(message: Message, state: FSMContext, bot: Bot) -> None:
+    if lang := codes.get(message.text):
+        await bot.set_my_commands(bot_commands[lang])
         if await get_person(message.from_user.id):
-            await edit_person(message.from_user.id, {"language": lang_code})
+            await edit_person(message.from_user.id, {"language": lang})
+            await show_main_menu(message, state, lang)
         else:
-            await state.update_data({"lang": lang_code})
+            await state.update_data({"lang": lang})
             await message.answer(
-                text=translate(MessageText.choose_account_type, lang=lang_code),
-                reply_markup=choose_account_type(lang_code),
+                text=translate(MessageText.choose_account_type, lang=lang),
+                reply_markup=choose_account_type(lang),
             )
             await state.set_state(States.account_type)
     else:
@@ -40,6 +42,7 @@ async def set_language(message: Message, state: FSMContext) -> None:
 async def set_account_type(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     if callback_query.message.content_type != "text":
+        await callback_query.message.delete()
         await handle_invalid_input(callback_query.message, state, States.account_type, data.get("lang"))
         return
 
@@ -47,6 +50,7 @@ async def set_account_type(callback_query: CallbackQuery, state: FSMContext) -> 
         callback_query.message, state, States.short_name, {"account_type": callback_query.data}
     )
     await callback_query.message.answer(translate(MessageText.choose_short_name, lang=data.get("lang")))
+    await callback_query.message.delete()
 
 
 @register_router.message(States.short_name)
@@ -101,6 +105,5 @@ async def set_birth_date_and_register(message: Message, state: FSMContext) -> No
         ),
     )
     logger.info(f"User {message.from_user.id} registered")
-    # await state.set_state(States.main_menu)
     await message.answer(text=translate(MessageText.registration_successful, lang=data.get("lang")))
-    await show_main_menu(message, state)
+    await show_main_menu(message, state, data["lang"])
