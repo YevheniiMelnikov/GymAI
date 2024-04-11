@@ -101,6 +101,6 @@ async def set_birth_date_and_register(message: Message, state: FSMContext) -> No
         ),
     )
     logger.info(f"User {message.from_user.id} registered")
-    await state.set_state(States.main_menu)
+    # await state.set_state(States.main_menu)
     await message.answer(text=translate(MessageText.registration_successful, lang=data.get("lang")))
     await show_main_menu(message, state)
