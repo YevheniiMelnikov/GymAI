@@ -9,3 +9,5 @@ class States(StatesGroup):
     gender = State()
     account_type = State()
     birth_date = State()
+    client_menu = State()
+    coach_menu = State()

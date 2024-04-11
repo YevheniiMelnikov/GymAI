@@ -6,7 +6,9 @@ from aiogram import Bot, Dispatcher
 from dotenv import load_dotenv
 
 from bot.commands import bot_commands
-from bot.message_handlers import main_router
+from bot.handlers.command_handler import cmd_router
+from bot.handlers.main_handler import main_router
+from bot.handlers.registration_handler import register_router
 
 logger = loguru.logger
 
@@ -15,6 +17,8 @@ async def main() -> None:
     load_dotenv()
     bot = Bot(token=os.getenv("BOT_TOKEN"))
     dp = Dispatcher()
+    dp.include_router(register_router)
+    dp.include_router(cmd_router)
     dp.include_router(main_router)
     logger.info("Starting bot ...")
     try:

@@ -1,7 +1,7 @@
 welcome:
-  eng: "Start"
-  ru: "Старт"
-  ua: "Старт"
+  eng: "Hi {name}! Choose an action from the following: "
+  ru: "Привет {name}! Выбери действие из предложенных: "
+  ua: "Привіт {name}! Обери дію із запропонованих: "
 
 choose_language:
   eng: "Welcome! Choose a language 👇"

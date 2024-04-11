@@ -28,6 +28,17 @@ def choose_account_type(lang_code: str) -> InlineKeyboardMarkup:
     return kb.as_markup(resize_keyboard=True, one_time_keyboard=True)
 
 
-def main_menu_keyboard(lang_code: str) -> InlineKeyboardMarkup:
+def client_menu_keyboard(lang_code: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
+    kb.button(text=translate(ButtonText.my_current_program, lang=lang_code), callback_data="my_program")
+    kb.button(text=translate(ButtonText.give_feedback, lang=lang_code), callback_data="feedback")
+    kb.button(text=translate(ButtonText.show_my_profile, lang=lang_code), callback_data="my_profile")
+    return kb.as_markup(resize_keyboard=True, one_time_keyboard=True)
+
+
+def coach_menu_keyboard(lang_code: str) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=translate(ButtonText.show_my_clients, lang=lang_code), callback_data="my_program")
+    kb.button(text=translate(ButtonText.give_feedback, lang=lang_code), callback_data="feedback")
+    kb.button(text=translate(ButtonText.show_my_profile, lang=lang_code), callback_data="my_profile")
     return kb.as_markup(resize_keyboard=True, one_time_keyboard=True)

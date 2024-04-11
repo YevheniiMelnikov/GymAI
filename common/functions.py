@@ -7,7 +7,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from dotenv import load_dotenv
 
+from bot.keyboards import client_menu_keyboard, coach_menu_keyboard
 from bot.models import Person
+from bot.states import States
 from texts.text_manager import MessageText, translate
 
 logger = loguru.logger
@@ -72,8 +74,24 @@ async def handle_invalid_input(message: Message, state: FSMContext, current_stat
 
 
 async def set_data_and_next_state(
-    message: Message, state: FSMContext, key: str, value: str | None, next_state: str
+    message: Message, state: FSMContext, next_state: str, data: dict[str, str] | None = None
 ) -> None:
-    await state.update_data({key: value})
+    await state.update_data(data)
     await state.set_state(next_state)
     await message.delete()
+
+
+async def show_main_menu(message: Message, state: FSMContext) -> None:
+    person = await get_person(message.from_user.id)
+    if person.status == "client":
+        await state.set_state(States.client_menu)
+        await message.answer(
+            text=translate(MessageText.welcome, lang=person.language).format(name=person.short_name),
+            reply_markup=client_menu_keyboard(person.language),
+        )
+    elif person.status == "coach":
+        await state.set_state(States.coach_menu)
+        await message.answer(
+            text=translate(MessageText.welcome, lang=person.language).format(name=person.short_name),
+            reply_markup=coach_menu_keyboard(person.language),
+        )

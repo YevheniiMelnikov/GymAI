@@ -17,3 +17,23 @@ coach:
   eng: "As coach"
   ru: "Как тренер"
   ua: "Як тренер"
+
+show_my_clients:
+  eng: "My clients"
+  ru: "Мои клиенты"
+  ua: "Мої клієнти"
+
+give_feedback:
+  eng: "Give feedback"
+  ru: "Написать отзыв"
+  ua: "Написати відгук"
+
+show_my_profile:
+  eng: "My profile"
+  ru: "Мой профиль"
+  ua: "Мій профіль"
+
+my_current_program:
+  eng: "Show my current program"
+  ru: "Мой план nhtybhjdjr"
+  ua: "Мій план тренувань"
