@@ -9,9 +9,9 @@ choose_language:
   ua: "Ласкаво просимо! Оберіть мову 👇"
 
 choose_short_name:
-  eng: "Enter your nickname 👇"
-  ru: "Укажите свой никнейм 👇"
-  ua: "Вкажіть свій нікнейм 👇"
+  eng: "Enter your nickname"
+  ru: "Укажите свой никнейм"
+  ua: "Вкажіть свій нікнейм"
 
 choose_password:
   eng: "Make up a password 🔐"
