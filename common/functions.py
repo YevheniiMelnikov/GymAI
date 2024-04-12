@@ -8,8 +8,8 @@ from aiogram.types import Message
 from dotenv import load_dotenv
 
 from bot.keyboards import client_menu_keyboard, coach_menu_keyboard
-from bot.models import Person
 from bot.states import States
+from common.models import Person
 from texts.text_manager import MessageText, translate
 
 logger = loguru.logger
@@ -65,12 +65,6 @@ async def delete_person(tg_user_id: int) -> bool:
     url = f"{BACKEND_URL}/persons/{tg_user_id}/"
     status_code, _ = await api_request("delete", url)
     return status_code == 404 if status_code else False
-
-
-async def handle_invalid_input(message: Message, state: FSMContext, current_state: str, language: str | None) -> None:
-    await state.set_state(current_state)
-    await message.answer(text=translate(MessageText.invalid_content, lang=language if language else "ua"))
-    await message.delete()
 
 
 async def set_data_and_next_state(

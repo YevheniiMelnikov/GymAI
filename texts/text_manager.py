@@ -7,6 +7,7 @@ from common import settings
 
 class MessageText(Enum):
     welcome = auto()
+    saved = auto()
     choose_language = auto()
     choose_short_name = auto()
     choose_password = auto()
