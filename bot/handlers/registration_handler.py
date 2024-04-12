@@ -1,5 +1,5 @@
 import loguru
-from aiogram import Router, Bot
+from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
@@ -40,17 +40,11 @@ async def set_language(message: Message, state: FSMContext, bot: Bot) -> None:
 
 @register_router.callback_query(States.account_type)
 async def set_account_type(callback_query: CallbackQuery, state: FSMContext) -> None:
-    data = await state.get_data()
-    if callback_query.message.content_type != "text":
-        await callback_query.message.delete()
-        await handle_invalid_input(callback_query.message, state, States.account_type, data.get("lang"))
-        return
-
     await set_data_and_next_state(
         callback_query.message, state, States.short_name, {"account_type": callback_query.data}
     )
+    data = await state.get_data()
     await callback_query.message.answer(translate(MessageText.choose_short_name, lang=data.get("lang")))
-    await callback_query.message.delete()
 
 
 @register_router.message(States.short_name)
@@ -68,7 +62,7 @@ async def set_short_name(message: Message, state: FSMContext) -> None:
 async def set_password(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     if message.content_type != "text":
-        await handle_invalid_input(message, state, States.short_name, data.get("lang"))
+        await handle_invalid_input(message, state, States.password, data.get("lang"))
         return
 
     await set_data_and_next_state(message, state, States.gender, {"password": message.text})
@@ -90,7 +84,7 @@ async def set_gender(callback_query: CallbackQuery, state: FSMContext) -> None:
 async def set_birth_date_and_register(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     if message.content_type != "text":
-        await handle_invalid_input(message, state, States.gender, data.get("lang"))
+        await handle_invalid_input(message, state, States.birth_date, data.get("lang"))
         return
     await state.update_data({"birth_date": message.text})
     await create_person(

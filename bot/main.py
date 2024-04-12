@@ -17,9 +17,7 @@ async def main() -> None:
     load_dotenv()
     bot = Bot(token=os.getenv("BOT_TOKEN"), parse_mode="HTML")
     dp = Dispatcher()
-    dp.include_router(register_router)
-    dp.include_router(cmd_router)
-    dp.include_router(main_router)
+    dp.include_routers(cmd_router, main_router, register_router)
     logger.info("Starting bot ...")
     try:
         await bot.delete_webhook(drop_pending_updates=True)

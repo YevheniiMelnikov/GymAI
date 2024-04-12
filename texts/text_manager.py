@@ -25,10 +25,10 @@ class ButtonText(Enum):
     male = auto()
     client = auto()
     coach = auto()
-    show_my_clients = auto()
-    give_feedback = auto()
-    show_my_profile = auto()
-    my_current_program = auto()
+    my_clients = auto()
+    feedback = auto()
+    my_profile = auto()
+    my_program = auto()
 
     def __str__(self) -> str:
         return f"buttons.{self.name}"
