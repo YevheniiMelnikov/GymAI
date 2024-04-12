@@ -6,29 +6,17 @@ from aiogram.types import Message
 
 from bot.keyboards import language_choice
 from bot.states import States
-from common.functions import get_person, show_main_menu
+from common.functions import show_main_menu
+from common.user_service import user_service
 from texts.text_manager import MessageText, translate
 
 logger = loguru.logger
 cmd_router = Router()
 
 
-# @cmd_router.message(Command("language"))
-# async def cmd_language(message: Message, state: FSMContext) -> None:
-#     if person := await get_person(message.from_user.id):
-#         if person.language:
-#             await message.answer(
-#                 text=translate(MessageText.choose_language, lang=person.language), reply_markup=language_choice()
-#             )
-#             await state.set_state(States.language_choice)
-#         else:
-#             await message.answer(text=translate(MessageText.choose_language), reply_markup=language_choice())
-#             await state.set_state(States.language_choice)
-
-
 @cmd_router.message(Command("language"))
 async def cmd_language(message: Message, state: FSMContext) -> None:
-    person = await get_person(message.from_user.id)
+    person = await user_service.get_person(message.from_user.id)
     lang = person.language if person and person.language else None
 
     await message.answer(
@@ -42,7 +30,7 @@ async def cmd_language(message: Message, state: FSMContext) -> None:
 async def cmd_start(message: Message, state: FSMContext) -> None:
     logger.info(f"User {message.from_user.id} started bot")
     await state.clear()
-    person = await get_person(message.from_user.id)
+    person = await user_service.get_person(message.from_user.id)
     if person:
         if not person.language:
             await state.set_state(States.language_choice)

@@ -6,8 +6,8 @@ from aiogram.types import CallbackQuery, Message
 from bot.commands import bot_commands
 from bot.keyboards import *
 from bot.states import States
-from common.functions import create_person, edit_person, get_person, set_data_and_next_state, show_main_menu, \
-    validate_birth_date
+from common.functions import set_data_and_next_state, show_main_menu, validate_birth_date
+from common.user_service import user_service
 from texts.text_manager import MessageText, translate
 
 logger = loguru.logger
@@ -18,8 +18,8 @@ register_router = Router()
 async def set_language(message: Message, state: FSMContext, bot: Bot) -> None:
     if lang := codes.get(message.text):
         await bot.set_my_commands(bot_commands[lang])
-        if await get_person(message.from_user.id):
-            await edit_person(message.from_user.id, dict(language=lang))
+        if await user_service.get_person(message.from_user.id):
+            await user_service.edit_person(message.from_user.id, dict(language=lang))
             await show_main_menu(message, state, lang)
         else:
             await state.update_data(lang=lang)
@@ -70,7 +70,7 @@ async def set_birth_date_and_register(message: Message, state: FSMContext) -> No
     if await validate_birth_date(message.text):
         await state.update_data(birth_date=message.text)
         data = await state.get_data()
-        await create_person(
+        await user_service.create_person(
             dict(
                 tg_user_id=message.from_user.id,
                 short_name=data["short_name"],
