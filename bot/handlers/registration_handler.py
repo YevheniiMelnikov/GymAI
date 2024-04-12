@@ -6,7 +6,8 @@ from aiogram.types import CallbackQuery, Message
 from bot.commands import bot_commands
 from bot.keyboards import *
 from bot.states import States
-from common.functions import create_person, edit_person, get_person, set_data_and_next_state, show_main_menu
+from common.functions import create_person, edit_person, get_person, set_data_and_next_state, show_main_menu, \
+    validate_birth_date
 from texts.text_manager import MessageText, translate
 
 logger = loguru.logger
@@ -66,19 +67,23 @@ async def set_gender(callback_query: CallbackQuery, state: FSMContext) -> None:
 
 @register_router.message(States.birth_date, F.text)
 async def set_birth_date_and_register(message: Message, state: FSMContext) -> None:
-    await state.update_data(birth_date=message.text)
-    data = await state.get_data()
-    await create_person(
-        dict(
-            tg_user_id=message.from_user.id,
-            short_name=data["short_name"],
-            password=data["password"],
-            status=data["account_type"],
-            gender=data["gender"],
-            birth_date=data["birth_date"],
-            language=data["lang"],
-        ),
-    )
-    logger.info(f"User {message.from_user.id} registered")
-    await message.answer(text=translate(MessageText.registration_successful, lang=data["lang"]))
-    await show_main_menu(message, state, data["lang"])
+    if await validate_birth_date(message.text):
+        await state.update_data(birth_date=message.text)
+        data = await state.get_data()
+        await create_person(
+            dict(
+                tg_user_id=message.from_user.id,
+                short_name=data["short_name"],
+                password=data["password"],
+                status=data["account_type"],
+                gender=data["gender"],
+                birth_date=data["birth_date"],
+                language=data["lang"],
+            ),
+        )
+        logger.info(f"User {message.from_user.id} registered")
+        await message.answer(text=translate(MessageText.registration_successful, lang=data["lang"]))
+        await show_main_menu(message, state, data["lang"])
+    else:
+        data = await state.get_data()
+        await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))

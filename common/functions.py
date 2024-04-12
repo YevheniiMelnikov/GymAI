@@ -1,4 +1,5 @@
 import os
+import re
 
 import httpx
 import loguru
@@ -89,3 +90,31 @@ async def show_main_menu(message: Message, state: FSMContext, lang: str) -> None
             text=translate(MessageText.welcome, lang=lang).format(name=person.short_name),
             reply_markup=coach_menu_keyboard(lang),
         )
+
+
+async def validate_birth_date(date_str: str) -> bool:
+    pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    if not pattern.match(date_str):
+        return False
+
+    year, month, day = map(int, date_str.split('-'))
+    if year < 1900 or year > 2100:
+        return False
+
+    if month < 1 or month > 12:
+        return False
+
+    if day < 1 or day > 31:
+        return False
+
+    if month in [4, 6, 9, 11] and day > 30:
+        return False
+
+    if month == 2:
+        if (year % 4 == 0 and year % 100 != 0) or (year % 400 == 0):
+            if day > 29:
+                return False
+        elif day > 28:
+            return False
+
+    return True
