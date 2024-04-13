@@ -2,6 +2,7 @@ import asyncio
 import os
 
 import loguru
+from aiogram.fsm.storage.redis import RedisStorage
 from aiogram import Bot, Dispatcher
 from dotenv import load_dotenv
 
@@ -17,7 +18,7 @@ logger = loguru.logger
 
 async def main() -> None:
     bot = Bot(token=os.getenv("BOT_TOKEN"), parse_mode="HTML")
-    dp = Dispatcher()
+    dp = Dispatcher(storage=RedisStorage.from_url("redis://redis"))
     dp.include_routers(cmd_router, main_router, register_router, invalid_content_router)
     logger.info("Starting bot ...")
     try:
