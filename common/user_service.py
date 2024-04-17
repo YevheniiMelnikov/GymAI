@@ -10,9 +10,10 @@ logger = loguru.logger
 
 class UserService:
     BACKEND_URL = os.environ.get("BACKEND_URL")
+    # API_KEY_SECRET = os.environ.get("API_KEY_SECRET")
 
-    @staticmethod
-    async def api_request(method: str, url: str, data: dict = None) -> tuple:
+    async def api_request(self, method: str, url: str, data: dict = None) -> tuple:
+        # headers = {"Authorization": f"Api-Key {self.API_KEY_SECRET}"}
         logger.info(f"METHOD: {method.upper()} URL: {url} data: {data}")
         try:
             async with httpx.AsyncClient() as client:
@@ -34,7 +35,7 @@ class UserService:
             return None, None
 
     async def create_person(self, data: dict) -> bool:
-        url = f"{self.BACKEND_URL}/persons/"
+        url = f"{self.BACKEND_URL}/create-person/"
         status_code, _ = await self.api_request("post", url, data)
         return status_code == 201 if status_code else False
 

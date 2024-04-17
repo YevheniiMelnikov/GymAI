@@ -38,15 +38,15 @@ async def set_account_type(callback_query: CallbackQuery, state: FSMContext) -> 
     data = await state.get_data()
     await callback_query.answer(translate(MessageText.saved, lang=data["lang"]))
     await set_data_and_next_state(
-        callback_query.message, state, States.short_name, dict(account_type=callback_query.data)
+        callback_query.message, state, States.username, dict(account_type=callback_query.data)
     )
-    await callback_query.message.answer(translate(MessageText.choose_short_name, lang=data["lang"]))
+    await callback_query.message.answer(translate(MessageText.choose_username, lang=data["lang"]))
 
 
-@register_router.message(States.short_name, F.text)
-async def set_short_name(message: Message, state: FSMContext) -> None:
+@register_router.message(States.username, F.text)
+async def set_username(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
-    await set_data_and_next_state(message, state, States.password, dict(short_name=message.text))
+    await set_data_and_next_state(message, state, States.password, dict(username=message.text))
     await message.answer(translate(MessageText.choose_password, lang=data["lang"]))
 
 
@@ -70,20 +70,23 @@ async def set_birth_date_and_register(message: Message, state: FSMContext) -> No
     if await validate_birth_date(message.text):
         await state.update_data(birth_date=message.text)
         data = await state.get_data()
-        await user_service.create_person(
+        if await user_service.create_person(
             dict(
-                tg_user_id=message.from_user.id,
-                short_name=data["short_name"],
+                username=data["username"],
                 password=data["password"],
                 status=data["account_type"],
                 gender=data["gender"],
                 birth_date=data["birth_date"],
                 language=data["lang"],
             ),
-        )
-        logger.info(f"User {message.from_user.id} registered")
-        await message.answer(text=translate(MessageText.registration_successful, lang=data["lang"]))
-        await show_main_menu(message, state, data["lang"])
+        ):
+            logger.info(f"User {message.from_user.id} registered")
+            await message.answer(text=translate(MessageText.registration_successful, lang=data["lang"]))
+            await show_main_menu(message, state, data["lang"])
+        else:
+            await message.answer(text=translate(MessageText.unexpected_error, lang=data["lang"]))
+            await state.clear()
+            await state.set_state(States.language_choice)
     else:
         data = await state.get_data()
         await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))

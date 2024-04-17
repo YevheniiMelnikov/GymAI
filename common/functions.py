@@ -31,13 +31,13 @@ async def show_main_menu(message: Message, state: FSMContext, lang: str) -> None
     if person.status == "client":
         await state.set_state(States.client_menu)
         await message.answer(
-            text=translate(MessageText.welcome, lang=lang).format(name=person.short_name),
+            text=translate(MessageText.welcome, lang=lang).format(name=person.username),
             reply_markup=client_menu_keyboard(lang),
         )
     elif person.status == "coach":
         await state.set_state(States.coach_menu)
         await message.answer(
-            text=translate(MessageText.welcome, lang=lang).format(name=person.short_name),
+            text=translate(MessageText.welcome, lang=lang).format(name=person.username),
             reply_markup=coach_menu_keyboard(lang),
         )
 

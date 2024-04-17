@@ -9,13 +9,14 @@ class MessageText(Enum):
     welcome = auto()
     saved = auto()
     choose_language = auto()
-    choose_short_name = auto()
+    choose_username = auto()
     choose_password = auto()
     invalid_content = auto()
     choose_gender = auto()
     choose_account_type = auto()
     choose_birth_date = auto()
     registration_successful = auto()
+    unexpected_error = auto()
 
     def __str__(self) -> str:
         return f"messages.{self.name}"

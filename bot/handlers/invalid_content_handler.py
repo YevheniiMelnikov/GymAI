@@ -14,8 +14,8 @@ async def invalid_language(message: Message) -> None:
     await message.delete()
 
 
-@invalid_content_router.message(States.short_name)
-async def invalid_short_name(message: Message, state: FSMContext) -> None:
+@invalid_content_router.message(States.username)
+async def invalid_username(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))
     await message.delete()

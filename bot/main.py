@@ -2,8 +2,8 @@ import asyncio
 import os
 
 import loguru
-from aiogram.fsm.storage.redis import RedisStorage
 from aiogram import Bot, Dispatcher
+from aiogram.fsm.storage.redis import RedisStorage
 from dotenv import load_dotenv
 
 from bot.commands import bot_commands
