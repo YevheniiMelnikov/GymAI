@@ -21,12 +21,14 @@ async def language(message: Message, state: FSMContext, bot: Bot) -> None:
         if person := await user_service.current_person():
             await user_service.edit_person(person.id, dict(language=lang))
             await show_main_menu(message, state, lang)
+            await message.delete()
         else:
             await state.update_data(lang=lang)
             await message.answer(
                 text=translate(MessageText.choose_action, lang=lang),
                 reply_markup=action_choice(lang),
             )
+            await message.delete()
             await state.set_state(States.action_choice)
     else:
         await message.answer(translate(MessageText.invalid_content, lang="ua"))
@@ -73,11 +75,19 @@ async def password(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await state.update_data(password=message.text)
     if data["action"] == "sign_in":
-        await user_service.sign_in(username=data["username"], password=data["password"])
+        if await user_service.sign_in(username=data["username"], password=message.text):
+            await message.answer(text=translate(MessageText.signed_in, lang=data["lang"]))
+            await show_main_menu(message, state, data["lang"])
+            await message.delete()
+        else:
+            await message.answer(text=translate(MessageText.invalid_credentials, lang=data["lang"]))
+            await state.set_state(States.username)
+            await message.answer(text=translate(MessageText.username, lang=data["lang"]))
+            await message.delete()
     elif data["action"] == "sign_up":
         await state.set_state(States.password_retype)
         await message.answer(text=translate(MessageText.password_retype, lang=data["lang"]))
-    await message.delete()
+        await message.delete()
 
 
 @register_router.message(States.password_retype, F.text)
@@ -97,14 +107,11 @@ async def email(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     if validate_email(message.text):
         await state.update_data(email=message.text)
-        is_staff = False if data["account_type"] == "client" else True
-        if await user_service.sign_up(
-            dict(username=data["username"], password=data["password"], email=message.text, is_staff=is_staff)
-        ):
-            await state.clear()
+        if await user_service.sign_up(dict(username=data["username"], password=data["password"], email=message.text)):
             logger.info(f"User {message.from_user.id} registered")
             await message.answer(text=translate(MessageText.registration_successful, lang=data["lang"]))
             await show_main_menu(message, state, data["lang"])
+            await state.clear()
         else:
             await message.answer(text=translate(MessageText.unexpected_error, lang=data["lang"]))
             await state.clear()

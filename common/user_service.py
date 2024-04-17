@@ -35,12 +35,12 @@ class UserService:
             return None, None
 
     async def sign_up(self, data: dict) -> bool:
-        url = f"{self.BACKEND_URL}/persons/create/"
+        url = f"{self.BACKEND_URL}/api/v1/persons/create/"
         status_code, _ = await self.api_request("post", url, data)
         return status_code == 201 if status_code else False
 
     async def get_person(self, user_id: int) -> Person | None:
-        url = f"{self.BACKEND_URL}/persons/{user_id}/"
+        url = f"{self.BACKEND_URL}/api/v1/persons/{user_id}/"
         status_code, user_data = await self.api_request("get", url)
         if user_data and "user_id" in user_data:
             return Person.from_dict(user_data)
@@ -48,20 +48,26 @@ class UserService:
             return None
 
     async def edit_person(self, user_id: int, data: dict) -> bool:
-        url = f"{self.BACKEND_URL}/persons/{user_id}/"
+        url = f"{self.BACKEND_URL}/api/v1/persons/{user_id}/"
         status_code, _ = await self.api_request("put", url, data)
         return status_code == 200 if status_code else False
 
     async def delete_person(self, user_id: int) -> bool:
-        url = f"{self.BACKEND_URL}/persons/{user_id}/"
+        url = f"{self.BACKEND_URL}/api/v1/persons/{user_id}/"
         status_code, _ = await self.api_request("delete", url)
         return status_code == 404 if status_code else False
 
     async def current_person(self) -> Person | None:
         pass
 
-    async def sign_in(self, username: str, password: str) -> bool:
-        pass
+    async def sign_in(self, username: str, password: str) -> str | None:
+        url = f"{self.BACKEND_URL}/auth/token/login/"
+        status_code, response = await self.api_request("post", url, {"username": username, "password": password})
+        if status_code == 200 and response.get("auth_token"):
+            logger.info(f"User {username} logged in")
+            return response["auth_token"]
+        else:
+            return None
 
 
 user_service = UserService()

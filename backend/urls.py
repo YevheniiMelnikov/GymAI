@@ -18,5 +18,4 @@ urlpatterns = [
     path("api/v1/persons/<int:pk>/", PersonAPIUpdate.as_view(), name="person-update"),
     path("api/v1/persons/<int:pk>/delete/", PersonAPIDestroy.as_view(), name="person-delete"),
     path("api/v1/persons/create/", CreateUserView.as_view(), name="person-create"),
-    # path("api/v1/", include("accounts.urls")),
 ]

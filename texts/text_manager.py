@@ -6,21 +6,26 @@ from common import settings
 
 
 class MessageText(Enum):
-    welcome = auto()
-    choose_action = auto()
-    password_retype = auto()
-    password_mismatch = auto()
-    saved = auto()
-    choose_language = auto()
     username = auto()
     password = auto()
     email = auto()
-    invalid_content = auto()
+    birth_date = auto()
+
+    choose_action = auto()
+    choose_language = auto()
     choose_gender = auto()
     choose_account_type = auto()
-    birth_date = auto()
-    registration_successful = auto()
+
+    invalid_credentials = auto()
+    invalid_content = auto()
     unexpected_error = auto()
+    password_mismatch = auto()
+
+    saved = auto()
+    password_retype = auto()
+    registration_successful = auto()
+    welcome = auto()
+    signed_in = auto()
 
     def __str__(self) -> str:
         return f"messages.{self.name}"
