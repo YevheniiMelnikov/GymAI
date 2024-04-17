@@ -6,7 +6,6 @@ from aiogram.types import Message
 
 from bot.keyboards import language_choice
 from bot.states import States
-from common.functions import show_main_menu
 from common.user_service import user_service
 from texts.text_manager import MessageText, translate
 
