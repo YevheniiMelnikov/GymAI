@@ -1,6 +1,6 @@
-from django.contrib.auth.forms import UserCreationForm
+# from django.contrib.auth.forms import UserCreationForm
 
-from backend.accounts.models import Person
+# from .models import Person
 
 # class SignUpForm(UserCreationForm):
 #     class Meta:
