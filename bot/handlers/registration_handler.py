@@ -75,7 +75,7 @@ async def password(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await state.update_data(password=message.text)
     if data["action"] == "sign_in":
-        if await user_service.sign_in(username=data["username"], password=message.text):
+        if await user_service.log_in(username=data["username"], password=message.text):
             await message.answer(text=translate(MessageText.signed_in, lang=data["lang"]))
             await show_main_menu(message, state, data["lang"])
             await message.delete()

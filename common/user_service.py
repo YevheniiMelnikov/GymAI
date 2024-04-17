@@ -10,9 +10,9 @@ logger = loguru.logger
 
 class UserService:
     BACKEND_URL = os.environ.get("BACKEND_URL")
-    # API_KEY_SECRET = os.environ.get("API_KEY_SECRET")
+    API_KEY_SECRET = os.environ.get("API_KEY_SECRET")
 
-    async def api_request(self, method: str, url: str, data: dict = None) -> tuple:
+    async def api_request(self, method: str, url: str, data: dict = None, headers: dict = None) -> tuple:
         # headers = {"Authorization": f"Api-Key {self.API_KEY_SECRET}"}
         logger.info(f"METHOD: {method.upper()} URL: {url} data: {data}")
         try:
@@ -20,9 +20,9 @@ class UserService:
                 if method == "get":
                     response = await client.get(url)
                 elif method == "post":
-                    response = await client.post(url, data=data)
+                    response = await client.post(url, data=data, headers=headers)
                 elif method == "put":
-                    response = await client.put(url, data=data)
+                    response = await client.put(url, data=data, headers=headers)
                 elif method == "delete":
                     response = await client.delete(url)
                 else:
@@ -60,14 +60,19 @@ class UserService:
     async def current_person(self) -> Person | None:
         pass
 
-    async def sign_in(self, username: str, password: str) -> str | None:
+    async def log_in(self, username: str, password: str) -> str | None:
         url = f"{self.BACKEND_URL}/auth/token/login/"
-        status_code, response = await self.api_request("post", url, {"username": username, "password": password})
+        status_code, response = await self.api_request("post", url, data={"username": username, "password": password})
         if status_code == 200 and response.get("auth_token"):
             logger.info(f"User {username} logged in")
             return response["auth_token"]
         else:
             return None
+
+    async def log_out(self, token: str) -> bool:
+        url = f"{self.BACKEND_URL}/auth/token/logout/"
+        status_code, _ = await self.api_request("post", url, headers={"Token": token})
+        return status_code == 204
 
 
 user_service = UserService()
