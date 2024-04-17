@@ -18,31 +18,23 @@ bot = Bot(os.environ.get("BOT_TOKEN"))
 BACKEND_URL = os.environ.get("BACKEND_URL")
 
 
-async def set_data_and_next_state(
-    message: Message, state: FSMContext, next_state: str, data: dict[str, str] | None = None
-) -> None:
-    await state.update_data(data)
-    await state.set_state(next_state)
-    await message.delete()
-
-
 async def show_main_menu(message: Message, state: FSMContext, lang: str) -> None:
-    person = await user_service.get_person(message.from_user.id)
-    if person.status == "client":
-        await state.set_state(States.client_menu)
-        await message.answer(
-            text=translate(MessageText.welcome, lang=lang).format(name=person.username),
-            reply_markup=client_menu_keyboard(lang),
-        )
-    elif person.status == "coach":
-        await state.set_state(States.coach_menu)
-        await message.answer(
-            text=translate(MessageText.welcome, lang=lang).format(name=person.username),
-            reply_markup=coach_menu_keyboard(lang),
-        )
+    if person := await user_service.current_person():
+        if person.status == "client":
+            await state.set_state(States.client_menu)
+            await message.answer(
+                text=translate(MessageText.welcome, lang=lang).format(name=person.username),
+                reply_markup=client_menu_keyboard(lang),
+            )
+        elif person.status == "coach":
+            await state.set_state(States.coach_menu)
+            await message.answer(
+                text=translate(MessageText.welcome, lang=lang).format(name=person.username),
+                reply_markup=coach_menu_keyboard(lang),
+            )
 
 
-async def validate_birth_date(date_str: str) -> bool:
+def validate_birth_date(date_str: str) -> bool:
     pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
     if not pattern.match(date_str):
         return False
@@ -68,3 +60,8 @@ async def validate_birth_date(date_str: str) -> bool:
             return False
 
     return True
+
+
+def validate_email(email):
+    pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$"
+    return bool(re.match(pattern, email))

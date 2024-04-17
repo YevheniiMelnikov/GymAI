@@ -34,8 +34,8 @@ class UserService:
             logger.error(e)
             return None, None
 
-    async def create_person(self, data: dict) -> bool:
-        url = f"{self.BACKEND_URL}/create-person/"
+    async def sign_up(self, data: dict) -> bool:
+        url = f"{self.BACKEND_URL}/persons/create/"
         status_code, _ = await self.api_request("post", url, data)
         return status_code == 201 if status_code else False
 
@@ -48,7 +48,7 @@ class UserService:
             return None
 
     async def edit_person(self, user_id: int, data: dict) -> bool:
-        url = f"{self.BACKEND_URL}/person/{user_id}/"
+        url = f"{self.BACKEND_URL}/persons/{user_id}/"
         status_code, _ = await self.api_request("put", url, data)
         return status_code == 200 if status_code else False
 
@@ -56,6 +56,12 @@ class UserService:
         url = f"{self.BACKEND_URL}/persons/{user_id}/"
         status_code, _ = await self.api_request("delete", url)
         return status_code == 404 if status_code else False
+
+    async def current_person(self) -> Person | None:
+        pass
+
+    async def sign_in(self, username: str, password: str) -> bool:
+        pass
 
 
 user_service = UserService()

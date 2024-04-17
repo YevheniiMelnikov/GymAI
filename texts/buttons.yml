@@ -37,3 +37,13 @@ my_program:
   eng: "My trainings"
   ru: "Мои тренировки"
   ua: "Мої тренування"
+
+sign_in:
+  eng: "Sign in"
+  ru: "Вход"
+  ua: "Увійти"
+
+sign_up:
+  eng: "Sign up"
+  ru: "Регистрация"
+  ua: "Реєстрація"

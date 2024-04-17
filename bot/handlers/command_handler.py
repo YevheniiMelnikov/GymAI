@@ -14,7 +14,7 @@ logger = loguru.logger
 cmd_router = Router()
 
 
-@cmd_router.message(Command("language"))
+@cmd_router.message(Command("language"))  # TODO: UPDATE
 async def cmd_language(message: Message, state: FSMContext) -> None:
     person = await user_service.get_person(message.from_user.id)
     lang = person.language if person and person.language else None
@@ -30,23 +30,16 @@ async def cmd_language(message: Message, state: FSMContext) -> None:
 async def cmd_start(message: Message, state: FSMContext) -> None:
     logger.info(f"User {message.from_user.id} started bot")
     await state.clear()
-    person = await user_service.get_person(message.from_user.id)
-    if person:
-        if not person.language:
-            await state.set_state(States.language_choice)
-            await message.answer(text=translate(MessageText.choose_language), reply_markup=language_choice())
-        else:
-            await show_main_menu(message, state, person.language)
-    else:
-        await state.set_state(States.language_choice)
-        await message.answer(text=translate(MessageText.choose_language), reply_markup=language_choice())
+    # await logout()  # TODO: implement
+    await state.set_state(States.language_choice)
+    await message.answer(text=translate(MessageText.choose_language), reply_markup=language_choice())
 
 
-@cmd_router.message(Command("logout"))
+@cmd_router.message(Command("logout"))  # TODO: implement
 async def cmd_logout(message: Message, state: FSMContext) -> None:
     pass
 
 
-@cmd_router.message(Command("help"))
+@cmd_router.message(Command("help"))  # TODO: implement
 async def cmd_help(message: Message, state: FSMContext) -> None:
     pass

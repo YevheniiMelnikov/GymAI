@@ -7,14 +7,18 @@ from common import settings
 
 class MessageText(Enum):
     welcome = auto()
+    choose_action = auto()
+    password_retype = auto()
+    password_mismatch = auto()
     saved = auto()
     choose_language = auto()
-    choose_username = auto()
-    choose_password = auto()
+    username = auto()
+    password = auto()
+    email = auto()
     invalid_content = auto()
     choose_gender = auto()
     choose_account_type = auto()
-    choose_birth_date = auto()
+    birth_date = auto()
     registration_successful = auto()
     unexpected_error = auto()
 
@@ -31,6 +35,8 @@ class ButtonText(Enum):
     feedback = auto()
     my_profile = auto()
     my_program = auto()
+    sign_in = auto()
+    sign_up = auto()
 
     def __str__(self) -> str:
         return f"buttons.{self.name}"

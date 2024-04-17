@@ -1,10 +1,9 @@
+from accounts.views import CreateUserView, PersonAPIDestroy, PersonAPIList, PersonAPIUpdate
 from django.contrib import admin
 from django.urls import include, path, re_path
 from drf_yasg import openapi
 from drf_yasg.views import get_schema_view
 from rest_framework import permissions
-
-from accounts.views import CreateUserView, PersonAPIDestroy, PersonAPIList, PersonAPIUpdate
 
 api_info = openapi.Info(title="Admin Rest", default_version="0.1")
 schema_view = get_schema_view(api_info, public=True, url="", permission_classes=[permissions.IsAuthenticated])

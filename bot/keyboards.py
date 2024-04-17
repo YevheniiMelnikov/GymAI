@@ -44,3 +44,10 @@ def coach_menu_keyboard(lang_code: str) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=translate(ButtonText.my_profile, lang=lang_code), callback_data="my_profile")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+
+
+def action_choice(lang_code: str) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=translate(ButtonText.sign_in, lang=lang_code), callback_data="sign_in")
+    kb.button(text=translate(ButtonText.sign_up, lang=lang_code), callback_data="sign_up")
+    return kb.as_markup(one_time_keyboard=True)
