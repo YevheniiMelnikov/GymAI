@@ -39,21 +39,21 @@ class UserService:
         status_code, _ = await self.api_request("post", url, data)
         return status_code == 201 if status_code else False
 
-    async def get_person(self, tg_user_id: int) -> Person | None:
-        url = f"{self.BACKEND_URL}/persons/{tg_user_id}/"
+    async def get_person(self, user_id: int) -> Person | None:
+        url = f"{self.BACKEND_URL}/persons/{user_id}/"
         status_code, user_data = await self.api_request("get", url)
-        if user_data and "tg_user_id" in user_data:
+        if user_data and "user_id" in user_data:
             return Person.from_dict(user_data)
         else:
             return None
 
-    async def edit_person(self, tg_user_id: int, data: dict) -> bool:
-        url = f"{self.BACKEND_URL}/person/{tg_user_id}/"
+    async def edit_person(self, user_id: int, data: dict) -> bool:
+        url = f"{self.BACKEND_URL}/person/{user_id}/"
         status_code, _ = await self.api_request("put", url, data)
         return status_code == 200 if status_code else False
 
-    async def delete_person(self, tg_user_id: int) -> bool:
-        url = f"{self.BACKEND_URL}/persons/{tg_user_id}/"
+    async def delete_person(self, user_id: int) -> bool:
+        url = f"{self.BACKEND_URL}/persons/{user_id}/"
         status_code, _ = await self.api_request("delete", url)
         return status_code == 404 if status_code else False
 

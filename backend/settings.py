@@ -129,20 +129,19 @@ REST_FRAMEWORK = {
         "rest_framework.renderers.JSONRenderer",
         "rest_framework.renderers.BrowsableAPIRenderer",
     ],
-    # 'DEFAULT_AUTHENTICATION_CLASSES': [
-    #     'rest_framework.authentication.TokenAuthentication',
-    #     'rest_framework.authentication.BasicAuthentication',
-    #     'rest_framework.authentication.SessionAuthentication',
-    # ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.BasicAuthentication',
+    ],
     # "DEFAULT_PERMISSION_CLASSES": [
     #     "rest_framework_api_key.permissions.HasAPIKey",
     # ]
 }
 
-# DJOSER = {
-#     "USER_AUTHENTICATION_FIELD": "tg_user_id",
-#     "USER_CREATE_PASSWORD_RETYPE": True,
-#     "SERIALIZERS": {
-#         "user_create": "accounts.serializers.PersonSerializer",
-#     },
-# }
+DJOSER = {
+    "USER_AUTHENTICATION_FIELD": "username",
+    "USER_CREATE_PASSWORD_RETYPE": True,
+    "SERIALIZERS": {
+        "user_create": "accounts.serializers.PersonSerializer",
+    },
+}
