@@ -11,21 +11,14 @@ from bot.handlers.command_handler import cmd_router
 from bot.handlers.invalid_content_handler import invalid_content_router
 from bot.handlers.main_handler import main_router
 from bot.handlers.registration_handler import register_router
-from common.user_service import UserSession
 
 load_dotenv()
 logger = loguru.logger
-user_session = UserSession()
-
-
-async def run_redis() -> RedisStorage:
-    await user_session.init_redis()
-    return RedisStorage.from_url("redis://redis")
 
 
 async def main() -> None:
     bot = Bot(token=os.getenv("BOT_TOKEN"), parse_mode="HTML")
-    dp = Dispatcher(storage=await run_redis())
+    dp = Dispatcher(storage=RedisStorage.from_url("redis://redis"))
     dp.include_routers(cmd_router, main_router, register_router, invalid_content_router)
     logger.info("Starting bot ...")
     try:

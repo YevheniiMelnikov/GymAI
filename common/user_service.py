@@ -1,11 +1,10 @@
 import json
 import os
 
-import aioredis
 import httpx
 import loguru
+import redis
 
-from bot.main import user_session
 from common.models import Person
 
 logger = loguru.logger
@@ -15,8 +14,8 @@ class UserSession:
     def __init__(self):
         self.redis_pool = None
 
-    async def init_redis(self):
-        self.redis_pool = await aioredis.from_url("redis://redis")
+    def init_redis(self):
+        self.redis_pool = redis.from_url("redis://redis")
 
     async def close_redis(self):
         self.redis_pool.close()
@@ -115,4 +114,6 @@ class UserService:
         return status_code == 204
 
 
+user_session = UserSession()
+user_session.init_redis()
 user_service = UserService(user_session)
