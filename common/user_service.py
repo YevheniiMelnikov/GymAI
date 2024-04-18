@@ -5,7 +5,7 @@ import httpx
 import loguru
 import redis
 
-from common.models import Person
+from common.models import Profile
 
 logger = loguru.logger
 
@@ -29,7 +29,7 @@ class UserSession:
         async with self.redis_pool.get() as conn:
             await conn.set(user_id, json.dumps(session_data))
 
-    async def get_user(self, user_id) -> Person | None:
+    async def get_user(self, user_id) -> Profile | None:
         async with self.redis_pool.get() as conn:
             session_data = await conn.get(user_id)
             if session_data:
@@ -78,25 +78,25 @@ class UserService:
         status_code, _ = await self.api_request("post", url, data)
         return status_code == 201 if status_code else False
 
-    async def get_person(self, user_id: int) -> Person | None:
+    async def get_user(self, user_id: int) -> Profile | None:
         url = f"{self.backend_url}/api/v1/persons/{user_id}/"
         status_code, user_data = await self.api_request("get", url)
         if user_data and "user_id" in user_data:
-            return Person.from_dict(user_data)
+            return Profile.from_dict(user_data)
         else:
             return None
 
-    async def edit_person(self, user_id: int, data: dict) -> bool:
+    async def edit_user(self, user_id: int, data: dict) -> bool:
         url = f"{self.backend_url}/api/v1/persons/{user_id}/"
         status_code, _ = await self.api_request("put", url, data)
         return status_code == 200 if status_code else False
 
-    async def delete_person(self, user_id: int) -> bool:
+    async def delete_user(self, user_id: int) -> bool:
         url = f"{self.backend_url}/api/v1/persons/{user_id}/"
         status_code, _ = await self.api_request("delete", url)
         return status_code == 404 if status_code else False
 
-    async def current_person(self) -> Person | None:
+    async def current_user(self) -> Profile | None:
         pass
 
     async def log_in(self, username: str, password: str) -> str | None:

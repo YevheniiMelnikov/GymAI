@@ -7,8 +7,8 @@ from rest_framework.status import HTTP_201_CREATED, HTTP_400_BAD_REQUEST
 from rest_framework.views import APIView
 from rest_framework_api_key.permissions import HasAPIKey
 
-from .models import Person
-from .serializers import PersonSerializer
+from .models import Profile
+from .serializers import ProfileSerializer
 
 
 class CreateUserView(APIView):
@@ -28,19 +28,19 @@ class CreateUserView(APIView):
         return Response({"message": "User created successfully"}, status=HTTP_201_CREATED)
 
 
-class PersonAPIList(generics.ListCreateAPIView):
-    serializer_class = PersonSerializer
-    queryset = Person.objects.all()
+class ProfileAPIList(generics.ListCreateAPIView):
+    serializer_class = ProfileSerializer
+    queryset = Profile.objects.all()
     permission_classes = [IsAuthenticatedOrReadOnly]
 
 
-class PersonAPIUpdate(generics.RetrieveUpdateAPIView):
-    serializer_class = PersonSerializer
-    queryset = Person.objects.all()
+class ProfileAPIUpdate(generics.RetrieveUpdateAPIView):
+    serializer_class = ProfileSerializer
+    queryset = Profile.objects.all()
     permission_classes = [IsAuthenticated | HasAPIKey]
 
 
-class PersonAPIDestroy(generics.RetrieveDestroyAPIView):
-    serializer_class = PersonSerializer
-    queryset = Person.objects.all()
+class ProfileAPIDestroy(generics.RetrieveDestroyAPIView):
+    serializer_class = ProfileSerializer
+    queryset = Profile.objects.all()
     permission_classes = [IsAdminUser | HasAPIKey]

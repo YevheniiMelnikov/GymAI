@@ -143,6 +143,6 @@ DJOSER = {
     "USER_AUTHENTICATION_FIELD": "username",
     "USER_CREATE_PASSWORD_RETYPE": True,
     "SERIALIZERS": {
-        "user_create": "accounts.serializers.PersonSerializer",
+        "user_create": "accounts.serializers.ProfileSerializer",
     },
 }

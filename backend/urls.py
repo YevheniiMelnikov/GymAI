@@ -1,4 +1,4 @@
-from accounts.views import CreateUserView, PersonAPIDestroy, PersonAPIList, PersonAPIUpdate
+from accounts.views import CreateUserView, ProfileAPIDestroy, ProfileAPIList, ProfileAPIUpdate
 from django.contrib import admin
 from django.urls import include, path, re_path
 from drf_yasg import openapi
@@ -14,8 +14,8 @@ urlpatterns = [
     path("api/v1/drf-auth/", include("rest_framework.urls")),
     path("api/v1/auth/", include("djoser.urls")),
     re_path(r"^auth/", include("djoser.urls.authtoken")),
-    path("api/v1/persons/", PersonAPIList.as_view(), name="person_list"),
-    path("api/v1/persons/<int:pk>/", PersonAPIUpdate.as_view(), name="person-update"),
-    path("api/v1/persons/<int:pk>/delete/", PersonAPIDestroy.as_view(), name="person-delete"),
+    path("api/v1/persons/", ProfileAPIList.as_view(), name="person_list"),
+    path("api/v1/persons/<int:pk>/", ProfileAPIUpdate.as_view(), name="person-update"),
+    path("api/v1/persons/<int:pk>/delete/", ProfileAPIDestroy.as_view(), name="person-delete"),
     path("api/v1/persons/create/", CreateUserView.as_view(), name="person-create"),
 ]

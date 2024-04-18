@@ -19,17 +19,17 @@ BACKEND_URL = os.environ.get("BACKEND_URL")
 
 
 async def show_main_menu(message: Message, state: FSMContext, lang: str) -> None:
-    if person := await user_service.current_person():
-        if person.status == "client":
+    if user := await user_service.current_user():
+        if user.status == "client":
             await state.set_state(States.client_menu)
             await message.answer(
-                text=translate(MessageText.welcome, lang=lang).format(name=person.username),
+                text=translate(MessageText.welcome, lang=lang).format(name=user.username),
                 reply_markup=client_menu_keyboard(lang),
             )
-        elif person.status == "coach":
+        elif user.status == "coach":
             await state.set_state(States.coach_menu)
             await message.answer(
-                text=translate(MessageText.welcome, lang=lang).format(name=person.username),
+                text=translate(MessageText.welcome, lang=lang).format(name=user.username),
                 reply_markup=coach_menu_keyboard(lang),
             )
 

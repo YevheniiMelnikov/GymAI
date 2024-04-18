@@ -18,8 +18,8 @@ register_router = Router()
 async def language(message: Message, state: FSMContext, bot: Bot) -> None:
     if lang := codes.get(message.text):
         await bot.set_my_commands(bot_commands[lang])
-        if person := await user_service.current_person():
-            await user_service.edit_person(person.id, dict(language=lang))
+        if user := await user_service.current_user():
+            await user_service.edit_user(user.id, dict(language=lang))
             await show_main_menu(message, state, lang)
             await message.delete()
         else:

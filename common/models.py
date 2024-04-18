@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 
 @dataclass
-class Person:
+class Profile:
     id: int
     status: str
     gender: str = None
@@ -17,6 +17,6 @@ class Person:
 
     def __repr__(self):
         return (
-            f"Person(id={self.id}, status={self.status}, gender={self.gender}, "
+            f"Profile(id={self.id}, status={self.status}, gender={self.gender}, "
             f"birth_date={self.birth_date}, language={self.language})"
         )

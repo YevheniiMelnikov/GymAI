@@ -15,8 +15,8 @@ cmd_router = Router()
 
 @cmd_router.message(Command("language"))
 async def cmd_language(message: Message, state: FSMContext) -> None:
-    if person := await user_service.current_person():
-        lang = person.language
+    if user := await user_service.current_user():
+        lang = user.language
     else:
         lang = None
 
@@ -31,7 +31,7 @@ async def cmd_language(message: Message, state: FSMContext) -> None:
 async def cmd_start(message: Message, state: FSMContext) -> None:
     logger.info(f"User {message.from_user.id} started bot")
     await state.clear()
-    # if user_service.current_person():
+    # if user_service.current_user():
     #     await user_service.log_out(token="token")  # TODO: implement
     await state.set_state(States.language_choice)
     await message.answer(text=translate(MessageText.choose_language), reply_markup=language_choice())
