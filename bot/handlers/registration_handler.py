@@ -6,6 +6,7 @@ from aiogram.types import CallbackQuery, Message
 from bot.commands import bot_commands
 from bot.keyboards import *
 from bot.states import States
+from common.exeptions import UsernameUnavailable
 from common.functions import register_user, show_main_menu, validate_email
 from common.user_service import user_service
 from texts.text_manager import MessageText, translate
@@ -69,7 +70,7 @@ async def account_type(callback_query: CallbackQuery, state: FSMContext) -> None
     await callback_query.message.delete()
 
 
-@register_router.message(States.username, F.text)  # TODO: HANDLE CASE IF USERNAME ALREADY EXISTS
+@register_router.message(States.username, F.text)
 async def username(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await state.update_data(username=message.text)
@@ -114,7 +115,11 @@ async def password_retype(message: Message, state: FSMContext) -> None:
 async def email(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     if validate_email(message.text):
-        await register_user(message, state, data)
+        try:
+            await register_user(message, state, data)
+        except UsernameUnavailable:
+            await state.set_state(States.username)
+            await message.answer(text=translate(MessageText.username_unavailable, lang=data["lang"]))
         await message.delete()
     else:
         await state.set_state(States.email)

@@ -5,6 +5,7 @@ import httpx
 import loguru
 import redis
 
+from common.exeptions import UsernameUnavailable
 from common.models import Profile
 
 logger = loguru.logger
@@ -75,11 +76,15 @@ class UserService:
                 "language": kwargs.get("language"),
             },
         )
-        if status_code and status_code == 201:
-            logger.warning(f"response: {response}")
+        if status_code == 201:
             return Profile.from_dict(
                 dict(id=response["id"], status=kwargs.get("status"), language=kwargs.get("language"))
             )
+        elif status_code == 400 and "error" in response:
+            error_message = response["error"]
+            if "already exists" in error_message:
+                raise UsernameUnavailable(error_message)
+            return None
         else:
             return None
 

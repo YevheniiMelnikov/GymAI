@@ -82,3 +82,8 @@ signed_in:
   eng: "You successfully signed in"
   ru: "Вы успешно авторизовались в системе"
   ua: "Ви успішно авторизувались в системі"
+
+username_unavailable:
+  eng: "This username is already taken, try another one"
+  ru: "Похоже что данное имя пользователя уже занято, попробуйте подобрать другое"
+  ua: "Це ім'я користувача вже зайнято, спробуйте підібрати інше"
