@@ -6,7 +6,7 @@ from aiogram.types import CallbackQuery, Message
 from bot.commands import bot_commands
 from bot.keyboards import *
 from bot.states import States
-from common.functions import show_main_menu, validate_email
+from common.functions import register_user, show_main_menu, validate_email
 from common.user_service import user_service
 from texts.text_manager import MessageText, translate
 
@@ -18,18 +18,26 @@ register_router = Router()
 async def language(message: Message, state: FSMContext, bot: Bot) -> None:
     if lang := codes.get(message.text):
         await bot.set_my_commands(bot_commands[lang])
-        if user := await user_service.current_user():
-            await user_service.edit_user(user.id, dict(language=lang))
-            await show_main_menu(message, state, lang)
-            await message.delete()
-        else:
-            await state.update_data(lang=lang)
-            await message.answer(
-                text=translate(MessageText.choose_action, lang=lang),
-                reply_markup=action_choice(lang),
-            )
-            await message.delete()
-            await state.set_state(States.action_choice)
+        await state.update_data(lang=lang)
+        await message.answer(
+            text=translate(MessageText.choose_action, lang=lang),
+            reply_markup=action_choice(lang),
+        )
+        await message.delete()
+        await state.set_state(States.action_choice)
+        # token = await user_service.get_token()  # TODO: PASS TOKEN
+        # if user := await user_service.current_user(token=token):
+        #     await user_service.edit_user(user.id, dict(language=lang))
+        #     await show_main_menu(message, state, lang)
+        #     await message.delete()
+        # else:
+        #     await state.update_data(lang=lang)
+        #     await message.answer(
+        #         text=translate(MessageText.choose_action, lang=lang),
+        #         reply_markup=action_choice(lang),
+        #     )
+        #     await message.delete()
+        #     await state.set_state(States.action_choice)
     else:
         await message.answer(translate(MessageText.invalid_content, lang="ua"))
         await message.delete()
@@ -61,7 +69,7 @@ async def account_type(callback_query: CallbackQuery, state: FSMContext) -> None
     await callback_query.message.delete()
 
 
-@register_router.message(States.username, F.text)
+@register_router.message(States.username, F.text)  # TODO: HANDLE CASE IF USERNAME ALREADY EXISTS
 async def username(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await state.update_data(username=message.text)
@@ -106,19 +114,8 @@ async def password_retype(message: Message, state: FSMContext) -> None:
 async def email(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     if validate_email(message.text):
-        await state.update_data(email=message.text)
-        if await user_service.sign_up(dict(username=data["username"], password=data["password"], email=message.text)):
-            logger.info(f"User {message.from_user.id} registered")
-            await message.answer(text=translate(MessageText.registration_successful, lang=data["lang"]))
-            await show_main_menu(message, state, data["lang"])
-            await state.clear()
-        else:
-            await message.answer(text=translate(MessageText.unexpected_error, lang=data["lang"]))
-            await state.clear()
-            await state.set_state(States.username)
-            await message.answer(text=translate(MessageText.username, lang=data["lang"]))
+        await register_user(message, state, data)
         await message.delete()
-
     else:
         await state.set_state(States.email)
         await message.answer(text=translate(MessageText.invalid_content, lang=data["lang"]))

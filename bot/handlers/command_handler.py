@@ -15,7 +15,7 @@ cmd_router = Router()
 
 @cmd_router.message(Command("language"))
 async def cmd_language(message: Message, state: FSMContext) -> None:
-    if user := await user_service.current_user():
+    if user := await user_service.current_user():  # TODO: implement
         lang = user.language
     else:
         lang = None

@@ -15,6 +15,15 @@ class Profile:
         filtered_data = {key: data.get(key) for key in fields}
         return cls(**filtered_data)
 
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "status": self.status,
+            "gender": self.gender,
+            "birth_date": self.birth_date,
+            "language": self.language,
+        }
+
     def __repr__(self):
         return (
             f"Profile(id={self.id}, status={self.status}, gender={self.gender}, "

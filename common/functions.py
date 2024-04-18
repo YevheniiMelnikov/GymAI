@@ -19,7 +19,8 @@ BACKEND_URL = os.environ.get("BACKEND_URL")
 
 
 async def show_main_menu(message: Message, state: FSMContext, lang: str) -> None:
-    if user := await user_service.current_user():
+    # token = await user_service.get_token()
+    if user := await user_service.current_user(token=None):  # TODO: PASS TOKEN
         if user.status == "client":
             await state.set_state(States.client_menu)
             await message.answer(
@@ -32,6 +33,28 @@ async def show_main_menu(message: Message, state: FSMContext, lang: str) -> None
                 text=translate(MessageText.welcome, lang=lang).format(name=user.username),
                 reply_markup=coach_menu_keyboard(lang),
             )
+
+
+async def register_user(message: Message, state: FSMContext, data: dict) -> None:
+    await state.update_data(email=message.text)
+    if profile := await user_service.sign_up(
+        username=data["username"],
+        password=data["password"],
+        email=message.text,
+        status=data["account_type"],
+        language=data["lang"],
+    ):
+        logger.info(f"User {message.from_user.id} registered")
+        auth_token = await user_service.log_in(username=data["username"], password=data["password"])
+        user_service.session.set_profile(profile, auth_token)
+        await message.answer(text=translate(MessageText.registration_successful, lang=data["lang"]))
+        await show_main_menu(message, state, data["lang"])
+        await state.clear()
+    else:
+        await message.answer(text=translate(MessageText.unexpected_error, lang=data["lang"]))
+        await state.clear()
+        await state.set_state(States.username)
+        await message.answer(text=translate(MessageText.username, lang=data["lang"]))
 
 
 def validate_birth_date(date_str: str) -> bool:
