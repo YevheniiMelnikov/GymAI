@@ -14,32 +14,32 @@ class UserSession:
     def __init__(self):
         self.redis_pool = None
 
-    def init_redis(self):
+    def init_redis(self) -> None:
         self.redis_pool = redis.from_url("redis://redis")
 
-    async def close_redis(self):
+    def close_redis(self) -> None:
         self.redis_pool.close()
-        await self.redis_pool.wait_closed()
+        self.redis_pool.wait_closed()
 
-    async def set_user(self, user_id, user, auth_token) -> None:
+    def set_profile(self, profile_id: int, profile: Profile, auth_token: str) -> None:
         session_data = {
-            'user': user,
+            'profile': profile,
             'auth_token': auth_token
         }
-        async with self.redis_pool.get() as conn:
-            await conn.set(user_id, json.dumps(session_data))
+        with self.redis_pool.get() as conn:
+            conn.set(profile_id, json.dumps(session_data))
 
-    async def get_user(self, user_id) -> Profile | None:
-        async with self.redis_pool.get() as conn:
-            session_data = await conn.get(user_id)
+    def get_profile(self, profile_id: int) -> Profile | None:
+        with self.redis_pool.get() as conn:
+            session_data = conn.get(profile_id)
             if session_data:
-                return json.loads(session_data.decode('utf-8'))['user']
+                return Profile.from_dict(json.loads(session_data.decode('utf-8'))['profile'])
             else:
                 return None
 
-    async def get_auth_token(self, user_id):
-        async with self.redis_pool.get() as conn:
-            session_data = await conn.get(user_id)
+    def get_auth_token(self, profile_id: int) -> str | None:
+        with self.redis_pool.get() as conn:
+            session_data = conn.get(profile_id)
             if session_data:
                 return json.loads(session_data.decode('utf-8'))['auth_token']
             else:
@@ -98,6 +98,7 @@ class UserService:
 
     async def current_user(self) -> Profile | None:
         pass
+        # url = f"{self.backend_url}/api/v1/current-user/"
 
     async def log_in(self, username: str, password: str) -> str | None:
         url = f"{self.backend_url}/auth/token/login/"

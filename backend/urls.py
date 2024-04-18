@@ -1,4 +1,4 @@
-from accounts.views import CreateUserView, ProfileAPIDestroy, ProfileAPIList, ProfileAPIUpdate
+from accounts.views import CreateUserView, ProfileAPIDestroy, ProfileAPIList, ProfileAPIUpdate, CurrentUserView
 from django.contrib import admin
 from django.urls import include, path, re_path
 from drf_yasg import openapi
@@ -18,4 +18,5 @@ urlpatterns = [
     path("api/v1/persons/<int:pk>/", ProfileAPIUpdate.as_view(), name="person-update"),
     path("api/v1/persons/<int:pk>/delete/", ProfileAPIDestroy.as_view(), name="person-delete"),
     path("api/v1/persons/create/", CreateUserView.as_view(), name="person-create"),
+    path('api/v1/current-user/', CurrentUserView.as_view(), name='current_user'),
 ]

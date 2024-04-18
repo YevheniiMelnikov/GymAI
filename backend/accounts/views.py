@@ -44,3 +44,13 @@ class ProfileAPIDestroy(generics.RetrieveDestroyAPIView):
     serializer_class = ProfileSerializer
     queryset = Profile.objects.all()
     permission_classes = [IsAdminUser | HasAPIKey]
+
+
+class CurrentUserView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def get(self, request) -> Response:
+        if request.user.is_authenticated:
+            return Response({'user_id': request.user.id})
+        else:
+            return Response({'user_id': None})
