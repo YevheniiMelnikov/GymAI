@@ -27,6 +27,7 @@ class MessageText(Enum):
     registration_successful = auto()
     welcome = auto()
     signed_in = auto()
+    logout = auto()
 
     def __str__(self) -> str:
         return f"messages.{self.name}"

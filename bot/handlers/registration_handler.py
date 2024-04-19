@@ -7,7 +7,8 @@ from bot.commands import bot_commands
 from bot.keyboards import *
 from bot.states import States
 from common.exeptions import UsernameUnavailable
-from common.functions import register_user, show_main_menu, validate_email
+from common.functions import register_user, show_main_menu, validate_email, sign_in
+from common.models import Profile
 from common.user_service import user_service
 from texts.text_manager import MessageText, translate
 
@@ -84,15 +85,7 @@ async def password(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await state.update_data(password=message.text)
     if data["action"] == "sign_in":
-        if await user_service.log_in(username=data["username"], password=message.text):
-            await message.answer(text=translate(MessageText.signed_in, lang=data["lang"]))
-            await show_main_menu(message, state, data["lang"])
-            await message.delete()
-        else:
-            await message.answer(text=translate(MessageText.invalid_credentials, lang=data["lang"]))
-            await state.set_state(States.username)
-            await message.answer(text=translate(MessageText.username, lang=data["lang"]))
-            await message.delete()
+        await sign_in(message, state, data)
     elif data["action"] == "sign_up":
         await state.set_state(States.password_retype)
         await message.answer(text=translate(MessageText.password_retype, lang=data["lang"]))

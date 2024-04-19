@@ -46,7 +46,7 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
     ):
         logger.info(f"User {message.from_user.id} registered")
         auth_token = await user_service.log_in(username=data["username"], password=data["password"])
-        user_service.session.set_profile(profile, auth_token)
+        user_service.session.set_profile(profile, auth_token, message.from_user.id)
         await message.answer(text=translate(MessageText.registration_successful, lang=data["lang"]))
         await show_main_menu(message, state, data["lang"])
         await state.clear()
@@ -55,6 +55,25 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
         await state.clear()
         await state.set_state(States.username)
         await message.answer(text=translate(MessageText.username, lang=data["lang"]))
+
+
+async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
+    if auth_token := await user_service.log_in(username=data["username"], password=message.text):
+        if profile := await user_service.current_user(auth_token):
+            user_service.session.set_profile(profile, auth_token, telegram_id=message.from_user.id)
+            await message.answer(text=translate(MessageText.signed_in, lang=data["lang"]))
+            await show_main_menu(message, state, data["lang"])
+            await message.delete()
+        else:
+            await message.answer(text=translate(MessageText.unexpected_error, lang=data["lang"]))
+            await state.set_state(States.username)
+            await message.answer(text=translate(MessageText.username, lang=data["lang"]))
+            await message.delete()
+    else:
+        await message.answer(text=translate(MessageText.invalid_credentials, lang=data["lang"]))
+        await state.set_state(States.username)
+        await message.answer(text=translate(MessageText.username, lang=data["lang"]))
+        await message.delete()
 
 
 def validate_birth_date(date_str: str) -> bool:

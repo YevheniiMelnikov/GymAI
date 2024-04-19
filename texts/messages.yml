@@ -87,3 +87,8 @@ username_unavailable:
   eng: "This username is already taken, try another one"
   ru: "Похоже что данное имя пользователя уже занято, попробуйте подобрать другое"
   ua: "Це ім'я користувача вже зайнято, спробуйте підібрати інше"
+
+logout:
+  eng: "You are logged out of the system. To continue working, use the /start command"
+  ru: "Вы вышли из системы. Чтобы продолжить работу воспользуйтесь командой /start"
+  ua: "Ви вийшли із системи. Щоб продовжити роботу скористайтеся командою /start"

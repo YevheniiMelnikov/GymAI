@@ -15,15 +15,10 @@ cmd_router = Router()
 
 @cmd_router.message(Command("language"))
 async def cmd_language(message: Message, state: FSMContext) -> None:
-    if user := await user_service.current_user():  # TODO: implement
-        lang = user.language
-    else:
-        lang = None
-
-    await message.answer(
-        text=translate(MessageText.choose_language, lang=lang) if lang else translate(MessageText.choose_language),
-        reply_markup=language_choice(),
-    )
+    profile = user_service.session.current_profile(message.from_user.id)
+    lang = profile.language if profile else None
+    text = translate(MessageText.choose_language, lang=lang) if lang else translate(MessageText.choose_language)
+    await message.answer(text=text, reply_markup=language_choice())
     await state.set_state(States.language_choice)
 
 
@@ -31,15 +26,16 @@ async def cmd_language(message: Message, state: FSMContext) -> None:
 async def cmd_start(message: Message, state: FSMContext) -> None:
     logger.info(f"User {message.from_user.id} started bot")
     await state.clear()
-    # if user_service.current_user():
-    #     await user_service.log_out(token="token")  # TODO: implement
+    await user_service.log_out(message.from_user.id)
     await state.set_state(States.language_choice)
     await message.answer(text=translate(MessageText.choose_language), reply_markup=language_choice())
 
 
-@cmd_router.message(Command("logout"))  # TODO: implement
+@cmd_router.message(Command("logout"))
 async def cmd_logout(message: Message, state: FSMContext) -> None:
-    pass
+    await state.clear()
+    await user_service.log_out(message.from_user.id)
+    await message.answer(text=translate(MessageText.logout))
 
 
 @cmd_router.message(Command("help"))  # TODO: implement

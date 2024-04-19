@@ -11,23 +11,41 @@ from common.models import Profile
 logger = loguru.logger
 
 
-class UserSession:
+class UserProfileManager:
     def __init__(self):
         self.redis_pool = redis.Redis.from_url("redis://redis")  # TODO: SEPARATE TO DB1
 
     def close_pool(self) -> None:
         self.redis_pool.close()
 
-    def set_profile(self, profile: Profile, auth_token: str) -> None:
-        session_data = {"profile": profile.to_dict(), "auth_token": auth_token}
+    def set_profile(self, profile: Profile, auth_token: str, telegram_id: int, is_current: bool = True) -> None:
+        session_data = {
+            "profile": profile.to_dict(),
+            "auth_token": auth_token,
+            "is_current": is_current,
+            "telegram_id": telegram_id
+        }
         self.redis_pool.hset("profiles", str(profile.id), json.dumps(session_data))
 
-    def get_profile(self, profile_id: int) -> Profile | None:
-        session_data = self.redis_pool.hget("profiles", str(profile_id))
-        if session_data:
-            return Profile.from_dict(json.loads(session_data)["profile"])
-        else:
-            return None
+    def current_profile(self, telegram_id: int) -> Profile | None:
+        profiles = self.get_profiles(telegram_id)
+        for profile in profiles:
+            profile_data = self.redis_pool.hget("profiles", str(profile.id))
+            if profile_data:
+                profile_data = json.loads(profile_data)
+                if profile_data.get("is_current", True):
+                    return profile
+        return None
+
+    def get_profiles(self, telegram_id: int) -> list[Profile]:
+        all_profiles = []
+        for profile_id in self.redis_pool.hkeys("profiles"):
+            profile_data = self.redis_pool.hget("profiles", profile_id)
+            if profile_data:
+                profile_data = json.loads(profile_data)
+                if profile_data.get("telegram_id") == telegram_id:
+                    all_profiles.append(Profile.from_dict(profile_data["profile"]))
+        return all_profiles
 
     def get_auth_token(self, profile_id: int) -> str | None:
         session_data = self.redis_pool.hget("profiles", str(profile_id))
@@ -36,14 +54,21 @@ class UserSession:
         else:
             return None
 
+    def deactivate_profile(self, profile_id: int) -> None:
+        session_data = self.redis_pool.hget("profiles", str(profile_id))
+        if session_data:
+            profile_data = json.loads(session_data)
+            profile_data["is_current"] = False
+            self.redis_pool.hset("profiles", str(profile_id), json.dumps(profile_data))
+
 
 class UserService:
-    def __init__(self, session: UserSession):
+    def __init__(self, session: UserProfileManager):
         self.backend_url = os.environ.get("BACKEND_URL")
         self.session = session
 
     async def api_request(self, method: str, url: str, data: dict = None, headers: dict = None) -> tuple:
-        logger.info(f"METHOD: {method.upper()} URL: {url} data: {data}")
+        logger.info(f"METHOD: {method.upper()} URL: {url} data: {data}, headers: {headers}")
         try:
             async with httpx.AsyncClient() as client:  # TODO: PASS API_KEY
                 if method == "get":
@@ -56,6 +81,9 @@ class UserService:
                     response = await client.delete(url)
                 else:
                     raise ValueError(f"Unsupported HTTP method: {method}")
+
+                if response.status_code == 204:
+                    return response.status_code, None
 
                 return response.status_code, response.json()
 
@@ -123,11 +151,18 @@ class UserService:
         else:
             return None
 
-    async def log_out(self, token: str) -> bool:
-        url = f"{self.backend_url}/auth/token/logout/"
-        status_code, _ = await self.api_request("post", url, headers={"Token": token})
-        return status_code == 204
+    async def log_out(self, tg_user_id: int) -> bool:
+        if current_profile := self.session.current_profile(tg_user_id):
+            auth_token = self.session.get_auth_token(current_profile.id)
+            url = f"{self.backend_url}/auth/token/logout/"
+            status_code, _ = await self.api_request("post", url, headers={"Authorization": f"Token {auth_token}"})
+            if status_code == 204:
+                user_service.session.deactivate_profile(current_profile.id)
+                logger.info(f"User with profile_id {current_profile.id} logged out")
+                return True
+            else:
+                return False
 
 
-user_session = UserSession()
+user_session = UserProfileManager()
 user_service = UserService(user_session)
