@@ -97,3 +97,8 @@ start:
   eng: "Greetings. With my help, you can achieve success in training, or find your own mentees"
   ru: "Приветствую. С моей помощью вы можете достичь успеха в тренировках, или найти себе подопечных"
   ua: "Вітаю. З моєю допомогою ви можете досягти успіху в тренуваннях, або знайти собі підопічних"
+
+reset_password_offer:
+  eng: "To reset your password, use the /reset_password command"
+  ru: "Чтобы сбросить пароль, используйте команду /reset_password"
+  ua: "Щоб скинути пароль, використовуйте команду /reset_password"

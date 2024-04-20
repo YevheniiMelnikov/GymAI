@@ -51,3 +51,8 @@ async def cmd_logout(message: Message, state: FSMContext) -> None:
 @cmd_router.message(Command("help"))  # TODO: implement
 async def cmd_help(message: Message, state: FSMContext) -> None:
     pass
+
+
+@cmd_router.message(Command("reset_password"))  # TODO: implement
+async def cmd_logout(message: Message, state: FSMContext) -> None:
+    pass

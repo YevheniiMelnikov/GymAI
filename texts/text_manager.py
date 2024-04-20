@@ -21,6 +21,7 @@ class MessageText(Enum):
     unexpected_error = auto()
     password_mismatch = auto()
     username_unavailable = auto()
+    reset_password_offer = auto()
 
     saved = auto()
     password_retype = auto()
