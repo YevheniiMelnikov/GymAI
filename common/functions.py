@@ -19,47 +19,49 @@ BACKEND_URL = os.environ.get("BACKEND_URL")
 
 
 async def show_main_menu(message: Message, state: FSMContext, lang: str) -> None:
-    # token = await user_service.get_token()
-    if user := await user_service.current_user(token=None):  # TODO: PASS TOKEN
-        if user.status == "client":
+    if profile := user_service.session.get_current_profile_by_tg_id(message.from_user.id):
+        if profile.status == "client":
             await state.set_state(States.client_menu)
             await message.answer(
-                text=translate(MessageText.welcome, lang=lang).format(name=user.username),
+                text=translate(MessageText.main_menu, lang=lang),
                 reply_markup=client_menu_keyboard(lang),
             )
-        elif user.status == "coach":
+        elif profile.status == "coach":
             await state.set_state(States.coach_menu)
             await message.answer(
-                text=translate(MessageText.welcome, lang=lang).format(name=user.username),
+                text=translate(MessageText.main_menu, lang=lang),
                 reply_markup=coach_menu_keyboard(lang),
             )
 
 
 async def register_user(message: Message, state: FSMContext, data: dict) -> None:
     await state.update_data(email=message.text)
-    if profile := await user_service.sign_up(
+    profile = await user_service.sign_up(
         username=data["username"],
         password=data["password"],
         email=message.text,
         status=data["account_type"],
         language=data["lang"],
-    ):
+    )
+
+    if profile:
         logger.info(f"User {message.from_user.id} registered")
         auth_token = await user_service.log_in(username=data["username"], password=data["password"])
-        user_service.session.set_profile(profile, auth_token, message.from_user.id)
-        await message.answer(text=translate(MessageText.registration_successful, lang=data["lang"]))
-        await show_main_menu(message, state, data["lang"])
-        await state.clear()
+
+        if auth_token:
+            logger.info(f"User {message.from_user.id} logged in")
+            user_service.session.set_profile(profile, auth_token, message.from_user.id)
+            await message.answer(text=translate(MessageText.registration_successful, lang=data["lang"]))
+            await show_main_menu(message, state, data["lang"])
+        else:
+            await handle_registration_failure(message, state, data["lang"])
     else:
-        await message.answer(text=translate(MessageText.unexpected_error, lang=data["lang"]))
-        await state.clear()
-        await state.set_state(States.username)
-        await message.answer(text=translate(MessageText.username, lang=data["lang"]))
+        await handle_registration_failure(message, state, data["lang"])
 
 
 async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
     if auth_token := await user_service.log_in(username=data["username"], password=message.text):
-        if profile := await user_service.current_user(auth_token):
+        if profile := await user_service.get_profile_by_username(data["username"], auth_token):
             user_service.session.set_profile(profile, auth_token, telegram_id=message.from_user.id)
             await message.answer(text=translate(MessageText.signed_in, lang=data["lang"]))
             await show_main_menu(message, state, data["lang"])
@@ -74,6 +76,13 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
         await state.set_state(States.username)
         await message.answer(text=translate(MessageText.username, lang=data["lang"]))
         await message.delete()
+
+
+async def handle_registration_failure(message: Message, state: FSMContext, lang: str) -> None:
+    await message.answer(text=translate(MessageText.unexpected_error, lang=lang))
+    await state.clear()
+    await state.set_state(States.username)
+    await message.answer(text=translate(MessageText.username, lang=lang))
 
 
 def validate_birth_date(date_str: str) -> bool:

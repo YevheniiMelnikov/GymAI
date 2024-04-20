@@ -23,11 +23,11 @@ class UserProfileManager:
             "profile": profile.to_dict(),
             "auth_token": auth_token,
             "is_current": is_current,
-            "telegram_id": telegram_id
+            "telegram_id": telegram_id,
         }
         self.redis_pool.hset("profiles", str(profile.id), json.dumps(session_data))
 
-    def current_profile(self, telegram_id: int) -> Profile | None:
+    def get_current_profile_by_tg_id(self, telegram_id: int) -> Profile | None:
         profiles = self.get_profiles(telegram_id)
         for profile in profiles:
             profile_data = self.redis_pool.hget("profiles", str(profile.id))
@@ -116,43 +116,21 @@ class UserService:
         else:
             return None
 
-    async def get_user(self, user_id: int) -> Profile | None:
+    async def edit_profile(self, user_id: int, data: dict, token: str) -> bool:
         url = f"{self.backend_url}/api/v1/persons/{user_id}/"
-        status_code, user_data = await self.api_request("get", url)
-        if user_data and "user_id" in user_data:
-            return Profile.from_dict(user_data)
-        else:
-            return None
-
-    async def edit_user(self, user_id: int, data: dict) -> bool:
-        url = f"{self.backend_url}/api/v1/persons/{user_id}/"
-        status_code, _ = await self.api_request("put", url, data)
+        status_code, _ = await self.api_request("put", url, data, headers={"Authorization": f"Token {token}"})
         return status_code == 200 if status_code else False
-
-    async def delete_user(self, user_id: int) -> bool:
-        url = f"{self.backend_url}/api/v1/persons/{user_id}/"
-        status_code, _ = await self.api_request("delete", url)
-        return status_code == 404 if status_code else False
-
-    async def current_user(self, token: str) -> Profile | None:
-        url = f"{self.backend_url}/api/v1/current-user/"
-        status_code, user_data = await self.api_request("get", url, headers={"Authorization": f"Token {token}"})
-        if user_data and "user_id" in user_data:
-            return Profile.from_dict(user_data)
-        else:
-            return None
 
     async def log_in(self, username: str, password: str) -> str | None:
         url = f"{self.backend_url}/auth/token/login/"
         status_code, response = await self.api_request("post", url, data={"username": username, "password": password})
         if status_code == 200 and response.get("auth_token"):
-            logger.info(f"User {username} logged in")
             return response["auth_token"]
         else:
             return None
 
     async def log_out(self, tg_user_id: int) -> bool:
-        if current_profile := self.session.current_profile(tg_user_id):
+        if current_profile := self.session.get_current_profile_by_tg_id(tg_user_id):
             auth_token = self.session.get_auth_token(current_profile.id)
             url = f"{self.backend_url}/auth/token/logout/"
             status_code, _ = await self.api_request("post", url, headers={"Authorization": f"Token {auth_token}"})
@@ -162,6 +140,20 @@ class UserService:
                 return True
             else:
                 return False
+
+    async def get_profile_by_username(self, username: str, token: str) -> Profile | None:
+        url = f"{self.backend_url}/api/v1/persons/{username}/"
+        status_code, user_data = await self.api_request("get", url, headers={"Authorization": f"Token {token}"})
+        if status_code == 200 and user_data["id"]:
+            return Profile.from_dict(user_data)
+        else:
+            logger.info(f"Failed to retrieve profile for {username}. HTTP status: {status_code}")
+            return None
+
+    async def delete_profile(self, user_id: int) -> bool:  # TODO: NOT USED YET
+        url = f"{self.backend_url}/api/v1/persons/{user_id}/"
+        status_code, _ = await self.api_request("delete", url)
+        return status_code == 404 if status_code else False
 
 
 user_session = UserProfileManager()

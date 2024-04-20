@@ -25,7 +25,8 @@ class MessageText(Enum):
     saved = auto()
     password_retype = auto()
     registration_successful = auto()
-    welcome = auto()
+    main_menu = auto()
+    start = auto()
     signed_in = auto()
     logout = auto()
 
@@ -77,4 +78,6 @@ resource_manager = TextManager()
 
 
 def translate(key: ResourceType, lang: str = "ua") -> str | None:  # TODO: MOVE TO FUNCTIONS
+    if lang is None:
+        lang = "ua"
     return resource_manager.get_text(key, lang)

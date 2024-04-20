@@ -7,8 +7,7 @@ from bot.commands import bot_commands
 from bot.keyboards import *
 from bot.states import States
 from common.exeptions import UsernameUnavailable
-from common.functions import register_user, show_main_menu, validate_email, sign_in
-from common.models import Profile
+from common.functions import register_user, show_main_menu, sign_in, validate_email
 from common.user_service import user_service
 from texts.text_manager import MessageText, translate
 
@@ -20,28 +19,21 @@ register_router = Router()
 async def language(message: Message, state: FSMContext, bot: Bot) -> None:
     if lang := codes.get(message.text):
         await bot.set_my_commands(bot_commands[lang])
-        await state.update_data(lang=lang)
-        await message.answer(
-            text=translate(MessageText.choose_action, lang=lang),
-            reply_markup=action_choice(lang),
-        )
-        await message.delete()
-        await state.set_state(States.action_choice)
-        # token = await user_service.get_token()  # TODO: PASS TOKEN
-        # if user := await user_service.current_user(token=token):
-        #     await user_service.edit_user(user.id, dict(language=lang))
-        #     await show_main_menu(message, state, lang)
-        #     await message.delete()
-        # else:
-        #     await state.update_data(lang=lang)
-        #     await message.answer(
-        #         text=translate(MessageText.choose_action, lang=lang),
-        #         reply_markup=action_choice(lang),
-        #     )
-        #     await message.delete()
-        #     await state.set_state(States.action_choice)
+        if profile := user_service.session.get_current_profile_by_tg_id(message.from_user.id):
+            auth_token = user_service.session.get_auth_token(profile.id)
+            await user_service.edit_profile(profile.id, dict(language=lang), auth_token)  # TODO: PASS USER.ID INSTEAD
+            await show_main_menu(message, state, lang)
+            await message.delete()
+        else:
+            await state.update_data(lang=lang)
+            await message.answer(
+                text=translate(MessageText.choose_action, lang=lang),
+                reply_markup=action_choice(lang),
+            )
+            await message.delete()
+            await state.set_state(States.action_choice)
     else:
-        await message.answer(translate(MessageText.invalid_content, lang="ua"))
+        await message.answer(translate(MessageText.invalid_content))
         await message.delete()
 
 
@@ -113,7 +105,7 @@ async def email(message: Message, state: FSMContext) -> None:
         except UsernameUnavailable:
             await state.set_state(States.username)
             await message.answer(text=translate(MessageText.username_unavailable, lang=data["lang"]))
-        await message.delete()
+            await message.delete()
     else:
         await state.set_state(States.email)
         await message.answer(text=translate(MessageText.invalid_content, lang=data["lang"]))

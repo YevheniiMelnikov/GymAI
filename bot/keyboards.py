@@ -3,14 +3,14 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
 from texts.text_manager import ButtonText, translate
 
-codes = {"Українська 🇺🇦": "ua", "English 🇬🇧": "eng", "Русский 🇷🇺": "ru"}  # TODO: FIND BETTER SOLUTION
+codes = {"Українська": "ua", "English": "eng", "Русский": "ru"}  # TODO: FIND BETTER SOLUTION
 
 
 def language_choice() -> ReplyKeyboardMarkup:
     kb = ReplyKeyboardBuilder()
-    kb.button(text="Українська 🇺🇦")
-    kb.button(text="English 🇬🇧")
-    kb.button(text="Русский 🇷🇺")
+    kb.button(text="Українська")
+    kb.button(text="English")
+    kb.button(text="Русский")
     return kb.as_markup(resize_keyboard=True, one_time_keyboard=True)
 
 

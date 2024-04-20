@@ -1,10 +1,11 @@
 from django.contrib.auth.models import User
 from django.db import transaction
+from django.shortcuts import get_object_or_404
 from rest_framework import generics
-from rest_framework.permissions import IsAdminUser, IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.status import HTTP_201_CREATED, HTTP_400_BAD_REQUEST
+from rest_framework.status import HTTP_201_CREATED, HTTP_400_BAD_REQUEST, HTTP_404_NOT_FOUND
 from rest_framework.views import APIView
 from rest_framework_api_key.permissions import HasAPIKey
 
@@ -45,14 +46,23 @@ class CreateUserView(APIView):
         return Response(user_data, status=HTTP_201_CREATED)
 
 
-class CurrentUserView(APIView):
-    permission_classes = [IsAuthenticatedOrReadOnly]
+class UserProfileView(APIView):
+    permission_classes = [AllowAny]
+    # permission_classes = [IsAuthenticated] # TODO: IsAuthenticated returns 401
+    serializer_class = ProfileSerializer
 
-    def get(self, request) -> Response:
-        if request.user.is_authenticated:
-            return Response({"user_id": request.user.id})
+    def get(self, request, username):
+        try:
+            user = User.objects.get(username=username)
+        except Exception as e:
+            return Response({"error": e}, status=HTTP_404_NOT_FOUND)
+
+        profile = getattr(user, "profile", None)
+        if profile:
+            serializer = self.serializer_class(profile)
+            return Response(serializer.data)
         else:
-            return Response({"user_id": None})
+            return Response({"error": "Profile not found"}, status=HTTP_404_NOT_FOUND)
 
 
 class ProfileAPIList(generics.ListCreateAPIView):
@@ -65,6 +75,11 @@ class ProfileAPIUpdate(generics.RetrieveUpdateAPIView):
     serializer_class = ProfileSerializer
     queryset = Profile.objects.all()
     permission_classes = [IsAuthenticated | HasAPIKey]
+
+    def get_object(self):
+        user_id = self.kwargs.get("user_id")
+        user = get_object_or_404(User, pk=user_id)
+        return user.profile
 
 
 class ProfileAPIDestroy(generics.RetrieveDestroyAPIView):
