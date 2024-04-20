@@ -107,3 +107,18 @@ help:
   eng: "/start - Start bot \n/language - Change language \n/logout - Logout from bot \n/reset_password - Reset password"
   ru: "/start - Запустить бота \n/language - Изменить язык \n/logout - Выйти из бота \n/reset_password - Сбросить пароль"
   ua: "/start - Запустити бота \n/language - Змінити мову \n/logout - Вийти з бота \n/reset_password - Скинути пароль"
+
+no_profiles_found:
+  eng: "There are no accounts assigned to your Telegram account that meet the conditions of the request"
+  ru: "За вашим телеграм аккаунтом нет закрепленных аккаунтов удовлетворяющих условия запроса"
+  ua: "За вашим телеграм акаунтом немає закріплених акаунтів, що задовольняють умови запиту"
+
+password_reset_sent:
+  eng: "Password reset link sent to your email {email} If access to the box is lost - contact us via the /feedback command"
+  ru: "Ссылка для сброса пароля отправлена на ваш почтовый адрес {email} Если доступ к ящику утрачен - свяжитесь с нами через команду /feedback"
+  ua: "Посилання для скидання пароля надіслано на ваш поштовий адрес {email} Якщо доступ до скриньки втрачено - зв'яжіться з нами через команду /feedback"
+
+feedback:
+  eng: "Give a feedback"
+  ru: "Оставьте свой отзыв"
+  ua: "Залиште свій відгук"

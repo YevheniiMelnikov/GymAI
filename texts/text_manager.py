@@ -22,9 +22,12 @@ class MessageText(Enum):
     password_mismatch = auto()
     username_unavailable = auto()
     reset_password_offer = auto()
+    no_profiles_found = auto()
 
     saved = auto()
+    feedback = auto()
     password_retype = auto()
+    password_reset_sent = auto()
     registration_successful = auto()
     main_menu = auto()
     help = auto()

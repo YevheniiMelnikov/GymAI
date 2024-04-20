@@ -21,14 +21,29 @@ class UserProfileManager:
     def close_pool(self) -> None:
         self.redis_pool.disconnect()
 
-    def set_profile(self, profile: Profile, auth_token: str, telegram_id: int, is_current: bool = True) -> None:
+    def set_profile(
+        self,
+        profile: Profile,
+        username: str,
+        auth_token: str,
+        telegram_id: int,
+        email: str | None = None,
+        is_current: bool = True,
+    ) -> None:
+        redis_conn = self.get_redis_connection()
+        existing_data = redis_conn.hget("profiles", str(profile.id))
+        if existing_data:
+            existing_data = json.loads(existing_data)
+            email = email or existing_data.get("email")
+
         session_data = {
             "profile": profile.to_dict(),
+            "username": username,
             "auth_token": auth_token,
-            "is_current": is_current,
             "telegram_id": telegram_id,
+            "email": email,
+            "is_current": is_current,
         }
-        redis_conn = self.get_redis_connection()
         redis_conn.hset("profiles", str(profile.id), json.dumps(session_data))
 
     def get_current_profile_by_tg_id(self, telegram_id: int) -> Profile | None:
@@ -44,9 +59,24 @@ class UserProfileManager:
                 profile_data = json.loads(session_data)
                 if profile_data.get("telegram_id") == telegram_id:
                     profile = Profile.from_dict(profile_data["profile"])
-                    profile.is_current = profile_data.get("is_current", True)
                     all_profiles.append(profile)
         return all_profiles
+
+    def get_username_by_profile_id(self, profile_id: int) -> str | None:
+        redis_conn = self.get_redis_connection()
+        session_data = redis_conn.hget("profiles", str(profile_id))
+        if session_data:
+            session_data = json.loads(session_data)
+            return session_data.get("username")
+        return None
+
+    def get_email_by_profile_id(self, profile_id: int) -> str | None:
+        redis_conn = self.get_redis_connection()
+        session_data = redis_conn.hget("profiles", str(profile_id))
+        if session_data:
+            session_data = json.loads(session_data)
+            return session_data.get("email")
+        return None
 
     def get_auth_token(self, profile_id: int) -> str | None:
         redis_conn = self.get_redis_connection()
@@ -132,9 +162,9 @@ class UserService:
         logger.info(f"Failed to retrieve profile for {username}. HTTP status: {status_code}")
         return None
 
-    async def request_password_reset(self, email: str) -> bool:
+    async def request_password_reset(self, email: str) -> bool:  # TODO: IMPLEMENT
         url = f"{self.backend_url}/auth/users/reset_password/"
-        data = {'email': email}
+        data = {"email": email}
         status_code, _ = await self.api_request("post", url, data)
         return status_code == 204
 

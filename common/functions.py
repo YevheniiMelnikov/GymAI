@@ -41,22 +41,28 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
         return
 
     logger.info(f"User {message.from_user.id} registered")
-    auth_token = await user_service.log_in(username=data["username"], password=data["password"])
+    token = await user_service.log_in(username=data["username"], password=data["password"])
 
-    if not auth_token:
+    if not token:
         logger.error(f"Login failed for user {message.from_user.id} after registration")
         await handle_registration_failure(message, state, data["lang"])
         return
 
     logger.info(f"User {message.from_user.id} logged in")
-    user_service.session.set_profile(profile, auth_token, message.from_user.id)
+    user_service.session.set_profile(
+        profile=profile,
+        username=data["username"],
+        auth_token=token,
+        telegram_id=message.from_user.id,
+        email=message.text,
+    )
     await message.answer(text=translate(MessageText.registration_successful, lang=data["lang"]))
     await show_main_menu(message, state, data["lang"])
 
 
 async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
-    auth_token = await user_service.log_in(username=data["username"], password=message.text)
-    if not auth_token:
+    token = await user_service.log_in(username=data["username"], password=message.text)
+    if not token:
         attempts = data.get("login_attempts", 0) + 1
         await state.update_data(login_attempts=attempts)
         if attempts >= 3:
@@ -69,7 +75,7 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
         return
 
     logger.info(f"User {message.from_user.id} logged in")
-    profile = await user_service.get_profile_by_username(data["username"], auth_token)
+    profile = await user_service.get_profile_by_username(data["username"], token)
     if not profile:
         await message.answer(text=translate(MessageText.unexpected_error, lang=data["lang"]))
         await state.set_state(States.username)
@@ -78,7 +84,9 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
         return
 
     await state.update_data(login_attempts=0)
-    user_service.session.set_profile(profile, auth_token, telegram_id=message.from_user.id)
+    user_service.session.set_profile(
+        profile=profile, username=data["username"], auth_token=token, telegram_id=message.from_user.id
+    )
     logger.info(f"profile_id {profile.id} set for user {message.from_user.id}")
     await message.answer(text=translate(MessageText.signed_in, lang=data["lang"]))
     await show_main_menu(message, state, data["lang"])
@@ -112,3 +120,7 @@ def validate_birth_date(date_str: str) -> bool:
 def validate_email(email: str) -> bool:
     pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$"
     return bool(re.match(pattern, email))
+
+
+async def reset_password(profile) -> None:  # TODO: IMPLEMENT
+    pass
