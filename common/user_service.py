@@ -12,11 +12,14 @@ logger = loguru.logger
 
 
 class UserProfileManager:
-    def __init__(self):
-        self.redis_pool = redis.Redis.from_url("redis://redis")  # TODO: SEPARATE TO DB1
+    def __init__(self, redis_url: str):
+        self.redis_pool = redis.ConnectionPool.from_url(f"{redis_url}/1")
+
+    def get_redis_connection(self):
+        return redis.Redis(connection_pool=self.redis_pool)
 
     def close_pool(self) -> None:
-        self.redis_pool.close()
+        self.redis_pool.disconnect()
 
     def set_profile(self, profile: Profile, auth_token: str, telegram_id: int, is_current: bool = True) -> None:
         session_data = {
@@ -25,41 +28,40 @@ class UserProfileManager:
             "is_current": is_current,
             "telegram_id": telegram_id,
         }
-        self.redis_pool.hset("profiles", str(profile.id), json.dumps(session_data))
+        redis_conn = self.get_redis_connection()
+        redis_conn.hset("profiles", str(profile.id), json.dumps(session_data))
 
     def get_current_profile_by_tg_id(self, telegram_id: int) -> Profile | None:
         profiles = self.get_profiles(telegram_id)
-        for profile in profiles:
-            profile_data = self.redis_pool.hget("profiles", str(profile.id))
-            if profile_data:
-                profile_data = json.loads(profile_data)
-                if profile_data.get("is_current", True):
-                    return profile
-        return None
+        return next((profile for profile in profiles if getattr(profile, 'is_current', True)), None)
 
     def get_profiles(self, telegram_id: int) -> list[Profile]:
+        redis_conn = self.get_redis_connection()
         all_profiles = []
-        for profile_id in self.redis_pool.hkeys("profiles"):
-            profile_data = self.redis_pool.hget("profiles", profile_id)
-            if profile_data:
-                profile_data = json.loads(profile_data)
+        for profile_id in redis_conn.hkeys("profiles"):
+            session_data = redis_conn.hget("profiles", profile_id)
+            if session_data:
+                profile_data = json.loads(session_data)
                 if profile_data.get("telegram_id") == telegram_id:
-                    all_profiles.append(Profile.from_dict(profile_data["profile"]))
+                    profile = Profile.from_dict(profile_data["profile"])
+                    profile.is_current = profile_data.get("is_current", True)
+                    all_profiles.append(profile)
         return all_profiles
 
     def get_auth_token(self, profile_id: int) -> str | None:
-        session_data = self.redis_pool.hget("profiles", str(profile_id))
+        redis_conn = self.get_redis_connection()
+        session_data = redis_conn.hget("profiles", str(profile_id))
         if session_data:
             return json.loads(session_data)["auth_token"]
-        else:
-            return None
+        return None
 
     def deactivate_profile(self, profile_id: int) -> None:
-        session_data = self.redis_pool.hget("profiles", str(profile_id))
+        redis_conn = self.get_redis_connection()
+        session_data = redis_conn.hget("profiles", str(profile_id))
         if session_data:
             profile_data = json.loads(session_data)
             profile_data["is_current"] = False
-            self.redis_pool.hset("profiles", str(profile_id), json.dumps(profile_data))
+            redis_conn.hset("profiles", str(profile_id), json.dumps(profile_data))
 
 
 class UserService:
@@ -156,5 +158,5 @@ class UserService:
         return status_code == 404 if status_code else False
 
 
-user_session = UserProfileManager()
+user_session = UserProfileManager(os.getenv("REDIS_URL"))
 user_service = UserService(user_session)
