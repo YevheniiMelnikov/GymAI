@@ -35,5 +35,6 @@ async def main() -> None:
     except Exception as e:
         logger.error(f"Failed to start the bot due to an exception: {str(e)}")
 
+
 if __name__ == "__main__":
     asyncio.run(main())

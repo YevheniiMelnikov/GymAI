@@ -5,7 +5,7 @@ import httpx
 import loguru
 import redis
 
-from common.exeptions import UsernameUnavailable
+from common.exeptions import UserServiceError
 from common.models import Profile
 
 logger = loguru.logger
@@ -33,7 +33,7 @@ class UserProfileManager:
 
     def get_current_profile_by_tg_id(self, telegram_id: int) -> Profile | None:
         profiles = self.get_profiles(telegram_id)
-        return next((profile for profile in profiles if getattr(profile, 'is_current', True)), None)
+        return next((profile for profile in profiles if getattr(profile, "is_current", True)), None)
 
     def get_profiles(self, telegram_id: int) -> list[Profile]:
         redis_conn = self.get_redis_connection()
@@ -68,89 +68,69 @@ class UserService:
     def __init__(self, session: UserProfileManager):
         self.backend_url = os.environ.get("BACKEND_URL")
         self.session = session
+        self.client = httpx.AsyncClient()
+
+    async def close(self):
+        await self.client.aclose()
 
     async def api_request(self, method: str, url: str, data: dict = None, headers: dict = None) -> tuple:
-        logger.info(f"METHOD: {method.upper()} URL: {url} data: {data}, headers: {headers}")
+        logger.info(f"Executing {method.upper()} request to {url} with data: {data} and headers: {headers}")
         try:
-            async with httpx.AsyncClient() as client:  # TODO: PASS API_KEY
-                if method == "get":
-                    response = await client.get(url)
-                elif method == "post":
-                    response = await client.post(url, data=data, headers=headers)
-                elif method == "put":
-                    response = await client.put(url, data=data, headers=headers)
-                elif method == "delete":
-                    response = await client.delete(url)
-                else:
-                    raise ValueError(f"Unsupported HTTP method: {method}")
+            response = await self.client.request(method, url, data=data, headers=headers)
+            if response.status_code == 204:
+                return response.status_code, None
 
-                if response.status_code == 204:
-                    return response.status_code, None
+            return response.status_code, response.json()
 
-                return response.status_code, response.json()
-
+        except httpx.HTTPError as e:
+            logger.error(f"HTTP error occurred: {str(e)}")
+            raise UserServiceError(f"HTTP request failed: {str(e)}")
         except Exception as e:
-            logger.error(e)
-            return None, None
+            logger.error(f"Unexpected error: {str(e)}")
+            raise UserServiceError(f"Unexpected error occurred: {str(e)}")
 
     async def sign_up(self, **kwargs) -> Profile | None:
         url = f"{self.backend_url}/api/v1/persons/create/"
-        status_code, response = await self.api_request(
-            "post",
-            url,
-            {
-                "username": kwargs.get("username"),
-                "password": kwargs.get("password"),
-                "email": kwargs.get("email"),
-                "status": kwargs.get("status"),
-                "language": kwargs.get("language"),
-            },
-        )
+        status_code, response = await self.api_request("post", url, kwargs)
         if status_code == 201:
-            return Profile.from_dict(
-                dict(id=response["id"], status=kwargs.get("status"), language=kwargs.get("language"))
-            )
+            return Profile.from_dict(response)
         elif status_code == 400 and "error" in response:
             error_message = response["error"]
             if "already exists" in error_message:
-                raise UsernameUnavailable(error_message)
-            return None
-        else:
-            return None
+                raise UserServiceError(error_message)
+        return None
 
     async def edit_profile(self, user_id: int, data: dict, token: str) -> bool:
         url = f"{self.backend_url}/api/v1/persons/{user_id}/"
         status_code, _ = await self.api_request("put", url, data, headers={"Authorization": f"Token {token}"})
-        return status_code == 200 if status_code else False
+        return status_code == 200
 
     async def log_in(self, username: str, password: str) -> str | None:
         url = f"{self.backend_url}/auth/token/login/"
-        status_code, response = await self.api_request("post", url, data={"username": username, "password": password})
-        if status_code == 200 and response.get("auth_token"):
+        status_code, response = await self.api_request("post", url, {"username": username, "password": password})
+        if status_code == 200 and "auth_token" in response:
             return response["auth_token"]
-        else:
-            return None
+        return None
 
     async def log_out(self, tg_user_id: int) -> bool:
-        if current_profile := self.session.get_current_profile_by_tg_id(tg_user_id):
+        current_profile = self.session.get_current_profile_by_tg_id(tg_user_id)
+        if current_profile:
             auth_token = self.session.get_auth_token(current_profile.id)
             url = f"{self.backend_url}/auth/token/logout/"
             status_code, _ = await self.api_request("post", url, headers={"Authorization": f"Token {auth_token}"})
             if status_code == 204:
-                user_service.session.deactivate_profile(current_profile.id)
+                self.session.deactivate_profile(current_profile.id)
                 logger.info(f"User with profile_id {current_profile.id} logged out")
                 return True
-            else:
-                return False
+        return False
 
     async def get_profile_by_username(self, username: str, token: str) -> Profile | None:
         url = f"{self.backend_url}/api/v1/persons/{username}/"
         status_code, user_data = await self.api_request("get", url, headers={"Authorization": f"Token {token}"})
-        if status_code == 200 and user_data["id"]:
+        if status_code == 200:
             return Profile.from_dict(user_data)
-        else:
-            logger.info(f"Failed to retrieve profile for {username}. HTTP status: {status_code}")
-            return None
+        logger.info(f"Failed to retrieve profile for {username}. HTTP status: {status_code}")
+        return None
 
     async def delete_profile(self, user_id: int) -> bool:  # TODO: NOT USED YET
         url = f"{self.backend_url}/api/v1/persons/{user_id}/"

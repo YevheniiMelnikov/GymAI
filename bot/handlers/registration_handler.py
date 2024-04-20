@@ -26,7 +26,7 @@ async def language(message: Message, state: FSMContext, bot: Bot) -> None:
     await bot.set_my_commands(bot_commands[lang_code])
     if profile := user_service.session.get_current_profile_by_tg_id(message.from_user.id):
         auth_token = user_service.session.get_auth_token(profile.id)
-        await user_service.edit_profile(profile.id, {'language': lang_code}, auth_token)
+        await user_service.edit_profile(profile.id, {"language": lang_code}, auth_token)
         await show_main_menu(message, state, lang_code)
     else:
         await state.update_data(lang=lang_code)
