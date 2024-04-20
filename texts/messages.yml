@@ -102,3 +102,8 @@ reset_password_offer:
   eng: "To reset your password, use the /reset_password command"
   ru: "Чтобы сбросить пароль, используйте команду /reset_password"
   ua: "Щоб скинути пароль, використовуйте команду /reset_password"
+
+help:
+  eng: "/start - Start bot \n/language - Change language \n/logout - Logout from bot \n/reset_password - Reset password"
+  ru: "/start - Запустить бота \n/language - Изменить язык \n/logout - Выйти из бота \n/reset_password - Сбросить пароль"
+  ua: "/start - Запустити бота \n/language - Змінити мову \n/logout - Вийти з бота \n/reset_password - Скинути пароль"

@@ -132,6 +132,12 @@ class UserService:
         logger.info(f"Failed to retrieve profile for {username}. HTTP status: {status_code}")
         return None
 
+    async def request_password_reset(self, email: str) -> bool:
+        url = f"{self.backend_url}/auth/users/reset_password/"
+        data = {'email': email}
+        status_code, _ = await self.api_request("post", url, data)
+        return status_code == 204
+
     async def delete_profile(self, user_id: int) -> bool:  # TODO: NOT USED YET
         url = f"{self.backend_url}/api/v1/persons/{user_id}/"
         status_code, _ = await self.api_request("delete", url)

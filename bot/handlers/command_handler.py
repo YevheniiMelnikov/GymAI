@@ -47,11 +47,13 @@ async def cmd_logout(message: Message, state: FSMContext) -> None:
     await message.answer(text=translate(MessageText.logout))
 
 
-@cmd_router.message(Command("help"))  # TODO: implement
+@cmd_router.message(Command("reset_password"))
+async def list_user_profiles(message: Message, state: FSMContext) -> None:
+    pass
+
+
+@cmd_router.message(Command("help"))
 async def cmd_help(message: Message, state: FSMContext) -> None:
-    pass
-
-
-@cmd_router.message(Command("reset_password"))  # TODO: implement
-async def cmd_logout(message: Message, state: FSMContext) -> None:
-    pass
+    profile = user_service.session.get_current_profile_by_tg_id(message.from_user.id)
+    language = profile.language if profile else None
+    await message.answer(text=translate(MessageText.help, lang=language))

@@ -140,9 +140,21 @@ REST_FRAMEWORK = {
 }
 
 DJOSER = {
+    "PASSWORD_RESET_CONFIRM_URL": "password/reset/confirm/{uid}/{token}",
+    "PASSWORD_RESET_CONFIRM_RETYPE": True,
+    "PASSWORD_RESET_SHOW_EMAIL_NOT_FOUND": True,
+    "SEND_ACTIVATION_EMAIL": True,
+    "EMAIL": {"password_reset": "djoser.email.PasswordResetEmail"},
     "USER_AUTHENTICATION_FIELD": "username",
     "USER_CREATE_PASSWORD_RETYPE": True,
     "SERIALIZERS": {
         "user_create": "accounts.serializers.ProfileSerializer",
     },
 }
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'originalgangsta1012@gmail.com'  # TODO: MOVE TO .ENV
+EMAIL_HOST_PASSWORD = 'kysne5-temvyk-Texkok'

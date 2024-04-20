@@ -51,7 +51,7 @@ class UserProfileView(APIView):
     # permission_classes = [IsAuthenticated] # TODO: IsAuthenticated returns 401
     serializer_class = ProfileSerializer
 
-    def get(self, request, username):
+    def get(self, request, username) -> Response:
         try:
             user = User.objects.get(username=username)
         except Exception as e:

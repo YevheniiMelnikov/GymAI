@@ -27,6 +27,7 @@ class MessageText(Enum):
     password_retype = auto()
     registration_successful = auto()
     main_menu = auto()
+    help = auto()
     start = auto()
     signed_in = auto()
     logout = auto()
