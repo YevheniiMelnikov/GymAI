@@ -17,17 +17,23 @@ logger = loguru.logger
 
 
 async def main() -> None:
-    bot = Bot(token=os.getenv("BOT_TOKEN"), parse_mode="HTML")
-    dp = Dispatcher(storage=RedisStorage.from_url("redis://redis"))
+    bot_token = os.getenv("BOT_TOKEN")
+    if not bot_token:
+        logger.error("BOT_TOKEN environment variable not found.")
+        return
+
+    bot = Bot(token=bot_token, parse_mode="HTML")
+    redis_url = os.getenv("REDIS_URL", "redis://redis")
+    dp = Dispatcher(storage=RedisStorage.from_url(redis_url))
     dp.include_routers(cmd_router, main_router, register_router, invalid_content_router)
+
     logger.info("Starting bot ...")
     try:
         await bot.delete_webhook(drop_pending_updates=True)
-        await bot.set_my_commands(bot_commands["ua"])
+        await bot.set_my_commands(bot_commands.get("ua", []))
         await dp.start_polling(bot)
     except Exception as e:
-        logger.error(e)
-
+        logger.error(f"Failed to start the bot due to an exception: {str(e)}")
 
 if __name__ == "__main__":
     asyncio.run(main())

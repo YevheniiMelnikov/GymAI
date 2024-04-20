@@ -35,10 +35,9 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         await state.update_data(lang=profile.language)
         await message.delete()
         await state.set_state(States.action_choice)
-        return
-
-    await state.set_state(States.language_choice)
-    await message.answer(text=translate(MessageText.choose_language), reply_markup=language_choice())
+    else:
+        await state.set_state(States.language_choice)
+        await message.answer(text=translate(MessageText.choose_language), reply_markup=language_choice())
 
 
 @cmd_router.message(Command("logout"))
