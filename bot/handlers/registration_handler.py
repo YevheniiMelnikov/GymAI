@@ -3,11 +3,10 @@ from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.commands import bot_commands
 from bot.keyboards import *
 from bot.states import States
 from common.exeptions import UsernameUnavailable
-from common.functions import register_user, show_main_menu, sign_in, validate_email
+from common.functions import register_user, set_bot_commands, show_main_menu, sign_in, validate_email
 from common.user_service import user_service
 from texts.text_manager import MessageText, translate
 
@@ -23,7 +22,7 @@ async def language(message: Message, state: FSMContext, bot: Bot) -> None:
         await message.delete()
         return
 
-    await bot.set_my_commands(bot_commands[lang_code])
+    await set_bot_commands(lang_code)
     if profile := user_service.session.get_current_profile_by_tg_id(message.from_user.id):
         auth_token = user_service.session.get_auth_token(profile.id)
         await user_service.edit_profile(profile.id, {"language": lang_code}, auth_token)

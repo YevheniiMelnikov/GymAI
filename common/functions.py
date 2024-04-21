@@ -4,13 +4,13 @@ import re
 import loguru
 from aiogram import Bot
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import BotCommand, Message
 from dotenv import load_dotenv
 
 from bot.keyboards import client_menu_keyboard, coach_menu_keyboard
 from bot.states import States
 from common.user_service import user_service
-from texts.text_manager import MessageText, translate
+from texts.text_manager import MessageText, resource_manager, translate
 
 logger = loguru.logger
 load_dotenv()
@@ -115,6 +115,12 @@ def validate_birth_date(date_str: str) -> bool:
         return False
 
     return 1 <= day <= 31
+
+
+async def set_bot_commands(lang: str = "ua"):
+    command_texts = resource_manager.commands
+    commands = [BotCommand(command=cmd, description=desc[lang]) for cmd, desc in command_texts.items()]
+    await bot.set_my_commands(commands)
 
 
 def validate_email(email: str) -> bool:

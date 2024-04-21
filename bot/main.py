@@ -6,11 +6,11 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.redis import RedisStorage
 from dotenv import load_dotenv
 
-from bot.commands import bot_commands
 from bot.handlers.command_handler import cmd_router
 from bot.handlers.invalid_content_handler import invalid_content_router
 from bot.handlers.main_handler import main_router
 from bot.handlers.registration_handler import register_router
+from common.functions import set_bot_commands
 
 load_dotenv()
 logger = loguru.logger
@@ -30,7 +30,7 @@ async def main() -> None:
     logger.info("Starting bot ...")
     try:
         await bot.delete_webhook(drop_pending_updates=True)
-        await bot.set_my_commands(bot_commands.get("ua", []))
+        await set_bot_commands()
         await dp.start_polling(bot)
     except Exception as e:
         logger.error(f"Failed to start the bot due to an exception: {str(e)}")

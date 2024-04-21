@@ -61,6 +61,7 @@ ResourceType = str | MessageText | ButtonText
 class TextManager:
     def __init__(self) -> None:
         self.messages = self.load_messages()
+        self.commands = self.load_commands()
 
     def get_text(self, key: ResourceType, lang: str | None = "eng") -> str | None:
         if str(key) in self.messages:
@@ -71,11 +72,20 @@ class TextManager:
     @staticmethod
     def load_messages() -> dict[str, dict[str, str]]:
         result = {}
-        for type, path in settings.MESSAGES.items():
+        for type, path in settings.RESOURCES.items():
             with open(path, "r", encoding="utf-8") as file:
                 data = yaml.safe_load(file)
             for key, value in data.items():
                 result[f"{type}.{key}"] = value
+        return result
+
+    @staticmethod
+    def load_commands():
+        result = {}
+        with open(settings.RESOURCES["commands"], "r", encoding="utf-8") as file:
+            data = yaml.safe_load(file)
+            for key, value in data.items():
+                result[key] = value
         return result
 
 
