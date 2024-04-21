@@ -65,8 +65,8 @@ async def cmd_feedback(message: Message, state: FSMContext) -> None:
 async def cmd_reset_password(message: Message, state: FSMContext) -> None:
     profiles = user_service.session.get_profiles(message.from_user.id)
     if profiles:
-        usernames = [user_service.session.get_username_by_profile_id(profile.id) for profile in profiles]
-        emails = [user_service.session.get_email_by_profile_id(profile.id) for profile in profiles]
+        usernames = [user_service.session.get_profile_info_by_key(profile.id, "username") for profile in profiles]
+        emails = [user_service.session.get_profile_info_by_key(profile.id, "email") for profile in profiles]
         profiles_data = [profile.to_dict() for profile in profiles]
         language = profiles[0].language if profiles[0].language else None
         await state.update_data(lang=language, profiles=profiles_data, usernames=usernames, emails=emails)

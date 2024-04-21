@@ -62,20 +62,12 @@ class UserProfileManager:
                     all_profiles.append(profile)
         return all_profiles
 
-    def get_username_by_profile_id(self, profile_id: int) -> str | None:
+    def get_profile_info_by_key(self, profile_id: int, key: str) -> str | None:
         redis_conn = self.get_redis_connection()
         session_data = redis_conn.hget("profiles", str(profile_id))
         if session_data:
             session_data = json.loads(session_data)
-            return session_data.get("username")
-        return None
-
-    def get_email_by_profile_id(self, profile_id: int) -> str | None:
-        redis_conn = self.get_redis_connection()
-        session_data = redis_conn.hget("profiles", str(profile_id))
-        if session_data:
-            session_data = json.loads(session_data)
-            return session_data.get("email")
+            return session_data.get(key)
         return None
 
     def get_auth_token(self, profile_id: int) -> str | None:
