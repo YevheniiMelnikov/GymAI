@@ -92,7 +92,7 @@ class TextManager:
 resource_manager = TextManager()
 
 
-def translate(key: ResourceType, lang: str = "ua") -> str | None:  # TODO: MOVE TO FUNCTIONS
+def translate(key: ResourceType, lang: str = "ua") -> str | None:
     if lang is None:
         lang = "ua"
     return resource_manager.get_text(key, lang)

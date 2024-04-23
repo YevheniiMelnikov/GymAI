@@ -1,6 +1,9 @@
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -49,7 +52,7 @@ ROOT_URLCONF = "backend.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / 'backend/templates'],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -118,6 +121,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = "static/"
+STATICFILES_DIRS = [
+    BASE_DIR / 'backend/static',
+]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -139,12 +145,16 @@ REST_FRAMEWORK = {
     # ]
 }
 
+DOMAIN = '127.0.0.1:8000/'
+SITE_NAME = 'GymBot'
+CORS_ALLOWED_ORIGINS = ["*"]
+
 DJOSER = {
-    "PASSWORD_RESET_CONFIRM_URL": "password/reset/confirm/{uid}/{token}",
+    "PASSWORD_RESET_CONFIRM_URL": "password-reset/{uid}/{token}",
     "PASSWORD_RESET_CONFIRM_RETYPE": True,
     "PASSWORD_RESET_SHOW_EMAIL_NOT_FOUND": True,
     "SEND_ACTIVATION_EMAIL": True,
-    "EMAIL": {"password_reset": "djoser.email.PasswordResetEmail"},
+    "EMAIL": {"password_reset": "accounts.emails.CustomPasswordResetEmail"},
     "USER_AUTHENTICATION_FIELD": "username",
     "USER_CREATE_PASSWORD_RETYPE": True,
     "SERIALIZERS": {
@@ -156,5 +166,8 @@ EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = "smtp.gmail.com"
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")  # TODO: FIX
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")  # TODO: FIX
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+SERVER_EMAIL = EMAIL_HOST_USER
+EMAIL_ADMIN = EMAIL_HOST_USER

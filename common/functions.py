@@ -1,6 +1,7 @@
 import os
 import re
 
+import httpx
 import loguru
 from aiogram import Bot
 from aiogram.fsm.context import FSMContext
@@ -128,5 +129,8 @@ def validate_email(email: str) -> bool:
     return bool(re.match(pattern, email))
 
 
-async def reset_password(profile) -> None:  # TODO: IMPLEMENT
-    pass
+async def reset_password(email: str) -> bool:
+    backend_url = os.getenv("BACKEND_URL")
+    async with httpx.AsyncClient() as client:
+        response = await client.post(f"{backend_url}/api/v1/auth/users/reset_password/", data={"email": email})
+        return response.status_code == 204

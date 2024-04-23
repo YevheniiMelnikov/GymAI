@@ -83,7 +83,7 @@ async def process_password_reset(message: Message, state: FSMContext) -> None:
     if index is not None and data["emails"][index]:
         email = data["emails"][index]
         profile = Profile.from_dict(data["profiles"][index])
-        await reset_password(email)  # TODO: IMPLEMENT
+        await reset_password(email)
         logger.info(f"Password reset requested for {email}")
         await message.answer(text=translate(MessageText.password_reset_sent, profile.language).format(email=email))
         await state.clear()

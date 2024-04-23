@@ -1,4 +1,5 @@
-from accounts.views import CreateUserView, ProfileAPIDestroy, ProfileAPIList, ProfileAPIUpdate, UserProfileView
+from accounts.views import CreateUserView, ProfileAPIDestroy, ProfileAPIList, ProfileAPIUpdate, UserProfileView, \
+    reset_password_request_view
 from django.contrib import admin
 from django.urls import include, path, re_path
 from drf_yasg import openapi
@@ -13,10 +14,12 @@ urlpatterns = [
     path("docs/", schema_view.with_ui("swagger", cache_timeout=0), name="swagger"),
     path("api/v1/drf-auth/", include("rest_framework.urls")),
     path("api/v1/auth/", include("djoser.urls")),
+    # path("api/v1/auth/token/", include("djoser.urls.authtoken")),
     re_path(r"^auth/", include("djoser.urls.authtoken")),
     path("api/v1/persons/", ProfileAPIList.as_view(), name="profile_list"),
     path("api/v1/persons/<int:user_id>/", ProfileAPIUpdate.as_view(), name="profile-update"),
     path("api/v1/persons/<int:user_id>/delete/", ProfileAPIDestroy.as_view(), name="profile-delete"),
     path("api/v1/persons/create/", CreateUserView.as_view(), name="profile-create"),
     path("api/v1/persons/<str:username>/", UserProfileView.as_view(), name="user-profile"),
+    path('password-reset/<uidb64>/<token>/', reset_password_request_view, name='password-reset-confirm'),
 ]

@@ -15,7 +15,7 @@ register_router = Router()
 
 
 @register_router.message(States.language_choice, F.text)
-async def language(message: Message, state: FSMContext, bot: Bot) -> None:
+async def language(message: Message, state: FSMContext) -> None:
     lang_code = codes.get(message.text)
     if not lang_code:
         await message.answer(translate(MessageText.invalid_content))
