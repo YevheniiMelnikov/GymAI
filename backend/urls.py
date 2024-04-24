@@ -1,5 +1,11 @@
-from accounts.views import CreateUserView, ProfileAPIDestroy, ProfileAPIList, ProfileAPIUpdate, UserProfileView, \
-    reset_password_request_view
+from accounts.views import (
+    CreateUserView,
+    ProfileAPIDestroy,
+    ProfileAPIList,
+    ProfileAPIUpdate,
+    UserProfileView,
+    reset_password_request_view,
+)
 from django.contrib import admin
 from django.urls import include, path, re_path
 from drf_yasg import openapi
@@ -21,5 +27,5 @@ urlpatterns = [
     path("api/v1/persons/<int:user_id>/delete/", ProfileAPIDestroy.as_view(), name="profile-delete"),
     path("api/v1/persons/create/", CreateUserView.as_view(), name="profile-create"),
     path("api/v1/persons/<str:username>/", UserProfileView.as_view(), name="user-profile"),
-    path('password-reset/<uidb64>/<token>/', reset_password_request_view, name='password-reset-confirm'),
+    path("password-reset/<uidb64>/<token>/", reset_password_request_view, name="password-reset-confirm"),
 ]

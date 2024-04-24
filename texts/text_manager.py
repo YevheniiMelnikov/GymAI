@@ -20,9 +20,11 @@ class MessageText(Enum):
     invalid_content = auto()
     unexpected_error = auto()
     password_mismatch = auto()
+    password_requirements = auto()
     username_unavailable = auto()
     reset_password_offer = auto()
     no_profiles_found = auto()
+    password_unsafe = auto()
 
     saved = auto()
     feedback = auto()

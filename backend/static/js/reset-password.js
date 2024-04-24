@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const confirmPassword = document.getElementById('confirm-password').value;
 
         if (newPassword !== confirmPassword) {
-            alert('Пароли не совпадают');
+            alert('Паролі не співпадають');
             return;
         }
 
@@ -33,31 +33,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 })
             });
 
-            // Если статус ответа 204, ничего не читаем из тела ответа
             if (response.status === 204) {
-                alert('Пароль успешно сброшен');
+                alert('Пароль успішно скинуто');
                 window.location.href = 'https://t.me/my_another_useless_test_bot';
-            } else if (response.ok) {
-                // Если ответ успешный, но статус не 204, пытаемся прочитать JSON
-                const responseData = await response.json();
-                // Обработка полученных данных...
             } else {
-                // Если ответ не успешный, пытаемся прочитать и обработать ошибку из JSON
-                try {
-                    const responseData = await response.json();
-                    const error = responseData.non_field_errors || 'Произошла ошибка при сбросе пароля';
-                    alert(error);
-                    console.error('Error resetting password:', error);
-                } catch (jsonError) {
-                    // Если не удалось прочитать JSON, выводим общее сообщение об ошибке
-                    console.error('Error reading response:', jsonError);
-                    alert('Произошла ошибка при сбросе пароля');
+                const responseData = await response.json();
+                if (response.ok) {
+                } else {
+                    if (responseData.password) {
+                        alert('Пароль не відповідає критеріям безпеки: ' + responseData.password.join(' '));
+                    } else {
+                        const error = responseData.non_field_errors || 'Відбулась помилка під час скидання пароля';
+                        alert(error);
+                        console.error('Error resetting password:', error);
+                    }
                 }
             }
         } catch (networkError) {
-            // Обработка сетевых ошибок или других исключений
             console.error('Network or other error:', networkError);
-            alert('Ошибка сети или другая ошибка');
+            alert('Виникла непередбачена помилка');
         }
     }
 });

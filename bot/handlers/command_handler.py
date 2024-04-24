@@ -6,7 +6,6 @@ from aiogram.types import Message
 
 from bot.keyboards import action_choice, language_choice
 from bot.states import States
-from common.functions import reset_password
 from common.models import Profile
 from common.user_service import user_service
 from texts.text_manager import MessageText, translate
@@ -83,10 +82,10 @@ async def process_password_reset(message: Message, state: FSMContext) -> None:
     if index is not None and data["emails"][index]:
         email = data["emails"][index]
         profile = Profile.from_dict(data["profiles"][index])
-        await reset_password(email)
-        logger.info(f"Password reset requested for {email}")
+        await user_service.reset_password(email)
         await message.answer(text=translate(MessageText.password_reset_sent, profile.language).format(email=email))
-        await state.clear()
+        await message.answer(text=translate(MessageText.username, profile.language))
+        await state.set_state(States.username)
     else:
         await message.answer(text=translate(MessageText.no_profiles_found, data["lang"]))
         await message.answer(text=translate(MessageText.help, data["lang"]))

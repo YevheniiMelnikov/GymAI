@@ -101,6 +101,12 @@ async def handle_registration_failure(message: Message, state: FSMContext, lang:
     await message.answer(text=translate(MessageText.username, lang=lang))
 
 
+async def set_bot_commands(lang: str = "ua"):
+    command_texts = resource_manager.commands
+    commands = [BotCommand(command=cmd, description=desc[lang]) for cmd, desc in command_texts.items()]
+    await bot.set_my_commands(commands)
+
+
 def validate_birth_date(date_str: str) -> bool:
     pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
     if not pattern.match(date_str):
@@ -118,19 +124,17 @@ def validate_birth_date(date_str: str) -> bool:
     return 1 <= day <= 31
 
 
-async def set_bot_commands(lang: str = "ua"):
-    command_texts = resource_manager.commands
-    commands = [BotCommand(command=cmd, description=desc[lang]) for cmd, desc in command_texts.items()]
-    await bot.set_my_commands(commands)
-
-
 def validate_email(email: str) -> bool:
     pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$"
     return bool(re.match(pattern, email))
 
 
-async def reset_password(email: str) -> bool:
-    backend_url = os.getenv("BACKEND_URL")
-    async with httpx.AsyncClient() as client:
-        response = await client.post(f"{backend_url}/api/v1/auth/users/reset_password/", data={"email": email})
-        return response.status_code == 204
+def validate_password(password: str) -> bool:
+    if len(password) < 8:
+        return False
+    if not any(char.isdigit() for char in password):
+        return False
+    if not any(char.isalpha() for char in password):
+        return False
+
+    return True

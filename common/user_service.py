@@ -5,7 +5,7 @@ import httpx
 import loguru
 import redis
 
-from common.exeptions import UserServiceError
+from common.exeptions import UsernameUnavailable, UserServiceError
 from common.models import Profile
 
 logger = loguru.logger
@@ -119,7 +119,7 @@ class UserService:
         elif status_code == 400 and "error" in response:
             error_message = response["error"]
             if "already exists" in error_message:
-                raise UserServiceError(error_message)
+                raise UsernameUnavailable(error_message)
         return None
 
     async def edit_profile(self, user_id: int, data: dict, token: str) -> bool:
@@ -154,10 +154,11 @@ class UserService:
         logger.info(f"Failed to retrieve profile for {username}. HTTP status: {status_code}")
         return None
 
-    async def request_password_reset(self, email: str) -> bool:  # TODO: IMPLEMENT
-        url = f"{self.backend_url}/auth/users/reset_password/"
-        data = {"email": email}
-        status_code, _ = await self.api_request("post", url, data)
+    async def reset_password(self, email: str) -> bool:
+        status_code, _ = await self.api_request(
+            "post", f"{self.backend_url}/api/v1/auth/users/reset_password/", {"email": email}
+        )
+        logger.info(f"Password reset requested for {email}")
         return status_code == 204
 
     async def delete_profile(self, user_id: int) -> bool:  # TODO: NOT USED YET

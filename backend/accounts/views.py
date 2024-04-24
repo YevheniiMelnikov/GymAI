@@ -89,4 +89,4 @@ class ProfileAPIDestroy(generics.RetrieveDestroyAPIView):
 
 
 def reset_password_request_view(request, uidb64, token):
-    return render(request, 'reset-password.html', {'uid': uidb64, 'token': token})
+    return render(request, "reset-password.html", {"uid": uidb64, "token": token})
