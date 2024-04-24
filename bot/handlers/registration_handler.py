@@ -121,4 +121,5 @@ async def email(message: Message, state: FSMContext) -> None:
     except UsernameUnavailable:
         await state.set_state(States.username)
         await message.answer(text=translate(MessageText.username_unavailable, lang=data["lang"]))
+    finally:
         await message.delete()

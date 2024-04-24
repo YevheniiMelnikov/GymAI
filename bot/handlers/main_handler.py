@@ -26,6 +26,4 @@ async def coach_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
         await callback_query.message.answer(text="Ваши клиенты: ")
     elif callback_query.data == "feedback":
         await callback_query.message.answer(text="Оцените работу бота: ")
-    elif callback_query.data == "my_profile":
-        await callback_query.message.answer(text="Ваш профиль: ")
     await callback_query.message.delete()
