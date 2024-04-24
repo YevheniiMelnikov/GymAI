@@ -1,16 +1,17 @@
 import os
+import re
 
 import httpx
 import loguru
 from aiogram import Bot
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import BotCommand, Message
 from dotenv import load_dotenv
 
 from bot.keyboards import client_menu_keyboard, coach_menu_keyboard
-from bot.models import Person
 from bot.states import States
-from texts.text_manager import MessageText, translate
+from common.user_service import user_service
+from texts.text_manager import MessageText, resource_manager, translate
 
 logger = loguru.logger
 load_dotenv()
@@ -18,80 +19,122 @@ bot = Bot(os.environ.get("BOT_TOKEN"))
 BACKEND_URL = os.environ.get("BACKEND_URL")
 
 
-async def api_request(method: str, url: str, data: dict = None) -> tuple:
-    logger.info(f"METHOD: {method.upper()} URL: {url} data: {data}")
-    try:
-        async with httpx.AsyncClient() as client:
-            if method == "get":
-                response = await client.get(url)
-            elif method == "post":
-                response = await client.post(url, data=data)
-            elif method == "put":
-                response = await client.put(url, data=data)
-            elif method == "delete":
-                response = await client.delete(url)
-            else:
-                raise ValueError(f"Unsupported HTTP method: {method}")
-
-            return response.status_code, response.json()
-
-    except Exception as e:
-        logger.error(e)
-        return None, None
+async def show_main_menu(message: Message, state: FSMContext, lang: str):
+    profile = user_service.session.get_current_profile_by_tg_id(message.from_user.id)
+    menu = client_menu_keyboard if profile.status == "client" else coach_menu_keyboard
+    await state.set_state(States.client_menu if profile.status == "client" else States.coach_menu)
+    await message.answer(text=translate(MessageText.main_menu, lang=lang), reply_markup=menu(lang))
 
 
-async def create_person(data: dict) -> bool:
-    url = f"{BACKEND_URL}/persons/"
-    status_code, _ = await api_request("post", url, data)
-    return status_code == 201 if status_code else False
+async def register_user(message: Message, state: FSMContext, data: dict) -> None:
+    await state.update_data(email=message.text)
+    profile = await user_service.sign_up(
+        username=data["username"],
+        password=data["password"],
+        email=message.text,
+        status=data["account_type"],
+        language=data["lang"],
+    )
+
+    if not profile:
+        logger.error(f"Registration failed for user {message.from_user.id}")
+        await handle_registration_failure(message, state, data["lang"])
+        return
+
+    logger.info(f"User {message.from_user.id} registered")
+    token = await user_service.log_in(username=data["username"], password=data["password"])
+
+    if not token:
+        logger.error(f"Login failed for user {message.from_user.id} after registration")
+        await handle_registration_failure(message, state, data["lang"])
+        return
+
+    logger.info(f"User {message.from_user.id} logged in")
+    user_service.session.set_profile(
+        profile=profile,
+        username=data["username"],
+        auth_token=token,
+        telegram_id=message.from_user.id,
+        email=message.text,
+    )
+    await message.answer(text=translate(MessageText.registration_successful, lang=data["lang"]))
+    await show_main_menu(message, state, data["lang"])
 
 
-async def get_person(tg_user_id: int) -> Person | None:
-    url = f"{BACKEND_URL}/persons/{tg_user_id}/"
-    status_code, user_data = await api_request("get", url)
-    if user_data and "tg_user_id" in user_data:
-        return Person.from_dict(user_data)
-    else:
-        return None
+async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
+    token = await user_service.log_in(username=data["username"], password=message.text)
+    if not token:
+        attempts = data.get("login_attempts", 0) + 1
+        await state.update_data(login_attempts=attempts)
+        if attempts >= 3:
+            await message.answer(text=translate(MessageText.reset_password_offer, lang=data["lang"]))
+        else:
+            await message.answer(text=translate(MessageText.invalid_credentials, lang=data["lang"]))
+            await state.set_state(States.username)
+            await message.answer(text=translate(MessageText.username, lang=data["lang"]))
+        await message.delete()
+        return
 
+    logger.info(f"User {message.from_user.id} logged in")
+    profile = await user_service.get_profile_by_username(data["username"], token)
+    if not profile:
+        await message.answer(text=translate(MessageText.unexpected_error, lang=data["lang"]))
+        await state.set_state(States.username)
+        await message.answer(text=translate(MessageText.username, lang=data["lang"]))
+        await message.delete()
+        return
 
-async def edit_person(tg_user_id: int, data: dict) -> bool:
-    url = f"{BACKEND_URL}/person/{tg_user_id}/"
-    status_code, _ = await api_request("put", url, data)
-    return status_code == 200 if status_code else False
-
-
-async def delete_person(tg_user_id: int) -> bool:
-    url = f"{BACKEND_URL}/persons/{tg_user_id}/"
-    status_code, _ = await api_request("delete", url)
-    return status_code == 404 if status_code else False
-
-
-async def handle_invalid_input(message: Message, state: FSMContext, current_state: str, language: str | None) -> None:
-    await state.set_state(current_state)
-    await message.answer(text=translate(MessageText.invalid_content, lang=language if language else "ua"))
+    await state.update_data(login_attempts=0)
+    user_service.session.set_profile(
+        profile=profile, username=data["username"], auth_token=token, telegram_id=message.from_user.id
+    )
+    logger.info(f"profile_id {profile.id} set for user {message.from_user.id}")
+    await message.answer(text=translate(MessageText.signed_in, lang=data["lang"]))
+    await show_main_menu(message, state, data["lang"])
     await message.delete()
 
 
-async def set_data_and_next_state(
-    message: Message, state: FSMContext, next_state: str, data: dict[str, str] | None = None
-) -> None:
-    await state.update_data(data)
-    await state.set_state(next_state)
-    await message.delete()
+async def handle_registration_failure(message: Message, state: FSMContext, lang: str) -> None:
+    await message.answer(text=translate(MessageText.unexpected_error, lang=lang))
+    await state.clear()
+    await state.set_state(States.username)
+    await message.answer(text=translate(MessageText.username, lang=lang))
 
 
-async def show_main_menu(message: Message, state: FSMContext, lang: str) -> None:
-    person = await get_person(message.from_user.id)
-    if person.status == "client":
-        await state.set_state(States.client_menu)
-        await message.answer(
-            text=translate(MessageText.welcome, lang=lang).format(name=person.short_name),
-            reply_markup=client_menu_keyboard(lang),
-        )
-    elif person.status == "coach":
-        await state.set_state(States.coach_menu)
-        await message.answer(
-            text=translate(MessageText.welcome, lang=lang).format(name=person.short_name),
-            reply_markup=coach_menu_keyboard(lang),
-        )
+async def set_bot_commands(lang: str = "ua"):
+    command_texts = resource_manager.commands
+    commands = [BotCommand(command=cmd, description=desc[lang]) for cmd, desc in command_texts.items()]
+    await bot.set_my_commands(commands)
+
+
+def validate_birth_date(date_str: str) -> bool:
+    pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    if not pattern.match(date_str):
+        return False
+
+    year, month, day = map(int, date_str.split("-"))
+    if not (1900 <= year <= 2100 and 1 <= month <= 12):
+        return False
+
+    if (month in [4, 6, 9, 11] and day > 30) or (
+        month == 2 and day > (29 if (year % 4 == 0 and year % 100 != 0) or year % 400 == 0 else 28)
+    ):
+        return False
+
+    return 1 <= day <= 31
+
+
+def validate_email(email: str) -> bool:
+    pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$"
+    return bool(re.match(pattern, email))
+
+
+def validate_password(password: str) -> bool:
+    if len(password) < 8:
+        return False
+    if not any(char.isdigit() for char in password):
+        return False
+    if not any(char.isalpha() for char in password):
+        return False
+
+    return True

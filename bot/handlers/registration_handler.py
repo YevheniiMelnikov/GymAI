@@ -1,109 +1,124 @@
 import loguru
-from aiogram import Router, Bot
+from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.commands import bot_commands
 from bot.keyboards import *
 from bot.states import States
-from common.functions import (
-    create_person,
-    edit_person,
-    get_person,
-    handle_invalid_input,
-    set_data_and_next_state,
-    show_main_menu,
-)
+from common.exeptions import UsernameUnavailable
+from common.functions import register_user, set_bot_commands, show_main_menu, sign_in, validate_email, validate_password
+from common.user_service import user_service
 from texts.text_manager import MessageText, translate
 
 logger = loguru.logger
 register_router = Router()
 
 
-@register_router.message(States.language_choice)
-async def set_language(message: Message, state: FSMContext, bot: Bot) -> None:
-    if lang := codes.get(message.text):
-        await bot.set_my_commands(bot_commands[lang])
-        if await get_person(message.from_user.id):
-            await edit_person(message.from_user.id, {"language": lang})
-            await show_main_menu(message, state, lang)
-        else:
-            await state.update_data({"lang": lang})
-            await message.answer(
-                text=translate(MessageText.choose_account_type, lang=lang),
-                reply_markup=choose_account_type(lang),
-            )
-            await state.set_state(States.account_type)
-    else:
-        await handle_invalid_input(message, state, States.language_choice, None)
-
-
-@register_router.callback_query(States.account_type)
-async def set_account_type(callback_query: CallbackQuery, state: FSMContext) -> None:
-    data = await state.get_data()
-    if callback_query.message.content_type != "text":
-        await callback_query.message.delete()
-        await handle_invalid_input(callback_query.message, state, States.account_type, data.get("lang"))
+@register_router.message(States.language_choice, F.text)
+async def language(message: Message, state: FSMContext) -> None:
+    lang_code = codes.get(message.text)
+    if not lang_code:
+        await message.answer(translate(MessageText.invalid_content))
+        await message.delete()
         return
 
-    await set_data_and_next_state(
-        callback_query.message, state, States.short_name, {"account_type": callback_query.data}
-    )
-    await callback_query.message.answer(translate(MessageText.choose_short_name, lang=data.get("lang")))
+    await set_bot_commands(lang_code)
+    if profile := user_service.session.get_current_profile_by_tg_id(message.from_user.id):
+        auth_token = user_service.session.get_auth_token(profile.id)
+        await user_service.edit_profile(profile.id, {"language": lang_code}, auth_token)
+        await show_main_menu(message, state, lang_code)
+    else:
+        await state.update_data(lang=lang_code)
+        await message.answer(
+            text=translate(MessageText.choose_action, lang=lang_code),
+            reply_markup=action_choice(lang_code),
+        )
+        await state.set_state(States.action_choice)
+
+    await message.delete()
+
+
+@register_router.callback_query(States.action_choice)
+async def action(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    await state.update_data(action=callback_query.data)
+
+    if callback_query.data == "sign_in":
+        await callback_query.message.answer(translate(MessageText.username, lang=data["lang"]))
+        await state.set_state(States.username)
+    elif callback_query.data == "sign_up":
+        await callback_query.message.answer(
+            translate(MessageText.choose_account_type, lang=data["lang"]),
+            reply_markup=choose_account_type(data["lang"]),
+        )
+        await state.set_state(States.account_type)
+
     await callback_query.message.delete()
 
 
-@register_router.message(States.short_name)
-async def set_short_name(message: Message, state: FSMContext) -> None:
+@register_router.callback_query(States.account_type)
+async def account_type(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
-    if message.content_type != "text":
-        await handle_invalid_input(message, state, States.short_name, data.get("lang"))
+    await callback_query.answer(translate(MessageText.saved, lang=data["lang"]))
+    await state.update_data(account_type=callback_query.data, show_password_requirements=True)
+    await state.set_state(States.username)
+    await callback_query.message.answer(translate(MessageText.username, lang=data["lang"]))
+    await callback_query.message.delete()
+
+
+@register_router.message(States.username, F.text)
+async def username(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    await state.update_data(username=message.text)
+    await state.set_state(States.password)
+    await message.answer(translate(MessageText.password, lang=data["lang"]))
+    if data.get("show_password_requirements"):
+        await message.answer(text=translate(MessageText.password_requirements, lang=data["lang"]))
+    await message.delete()
+
+
+@register_router.message(States.password, F.text)
+async def password(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    if not validate_password(message.text):
+        await message.answer(text=translate(MessageText.password_unsafe, lang=data["lang"]))
+        await message.delete()
+        await state.set_state(States.password)
         return
 
-    await set_data_and_next_state(message, state, States.password, {"short_name": message.text})
-    await message.answer(translate(MessageText.choose_password, lang=data.get("lang")))
+    await state.update_data(password=message.text)
+    if data.get("action") == "sign_up":
+        await state.set_state(States.password_retype)
+        await message.answer(text=translate(MessageText.password_retype, lang=data["lang"]))
+        await message.delete()
+    else:
+        await sign_in(message, state, data)
 
 
-@register_router.message(States.password)
-async def set_password(message: Message, state: FSMContext) -> None:
+@register_router.message(States.password_retype, F.text)
+async def password_retype(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
-    if message.content_type != "text":
-        await handle_invalid_input(message, state, States.short_name, data.get("lang"))
+    if message.text == data["password"]:
+        await state.set_state(States.email)
+        await message.answer(text=translate(MessageText.email, lang=data["lang"]))
+    else:
+        await state.set_state(States.password)
+        await message.answer(text=translate(MessageText.password_mismatch, lang=data["lang"]))
+    await message.delete()
+
+
+@register_router.message(States.email, F.text)
+async def email(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+
+    if not validate_email(message.text):
+        await message.answer(text=translate(MessageText.invalid_content, lang=data["lang"]))
+        await message.delete()
         return
 
-    await set_data_and_next_state(message, state, States.gender, {"password": message.text})
-    await message.answer(text=translate(MessageText.choose_gender), reply_markup=choose_gender(data.get("lang")))
-
-
-@register_router.callback_query(States.gender)
-async def set_gender(callback_query: CallbackQuery, state: FSMContext) -> None:
-    data = await state.get_data()
-    if callback_query.message.content_type != "text":
-        await handle_invalid_input(callback_query.message, state, States.gender, data.get("lang"))
-        return
-
-    await set_data_and_next_state(callback_query.message, state, States.birth_date, {"gender": callback_query.data})
-    await callback_query.message.answer(text=translate(MessageText.choose_birth_date, lang=data.get("lang")))
-
-
-@register_router.message(States.birth_date)
-async def set_birth_date_and_register(message: Message, state: FSMContext) -> None:
-    data = await state.get_data()
-    if message.content_type != "text":
-        await handle_invalid_input(message, state, States.gender, data.get("lang"))
-        return
-    await state.update_data({"birth_date": message.text})
-    await create_person(
-        dict(
-            tg_user_id=message.from_user.id,
-            short_name=data["short_name"],
-            password=data["password"],
-            status=data["account_type"],
-            gender=data["gender"],
-            birth_date=message.text,
-            language=data["lang"],
-        ),
-    )
-    logger.info(f"User {message.from_user.id} registered")
-    await message.answer(text=translate(MessageText.registration_successful, lang=data.get("lang")))
-    await show_main_menu(message, state, data["lang"])
+    try:
+        await register_user(message, state, data)
+    except UsernameUnavailable:
+        await state.set_state(States.username)
+        await message.answer(text=translate(MessageText.username_unavailable, lang=data["lang"]))
+        await message.delete()

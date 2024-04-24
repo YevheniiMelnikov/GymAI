@@ -1,8 +1,11 @@
-from accounts.models import Person
 from rest_framework import serializers
 
+from .models import Profile
 
-class PersonSerializer(serializers.ModelSerializer):
+
+class ProfileSerializer(serializers.ModelSerializer):
+    user = serializers.HiddenField(default=serializers.CurrentUserDefault())
+
     class Meta:
-        model = Person
+        model = Profile
         fields = "__all__"

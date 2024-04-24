@@ -6,15 +6,36 @@ from common import settings
 
 
 class MessageText(Enum):
-    welcome = auto()
+    username = auto()
+    password = auto()
+    email = auto()
+    birth_date = auto()
+
+    choose_action = auto()
     choose_language = auto()
-    choose_short_name = auto()
-    choose_password = auto()
-    invalid_content = auto()
     choose_gender = auto()
     choose_account_type = auto()
-    choose_birth_date = auto()
+
+    invalid_credentials = auto()
+    invalid_content = auto()
+    unexpected_error = auto()
+    password_mismatch = auto()
+    password_requirements = auto()
+    username_unavailable = auto()
+    reset_password_offer = auto()
+    no_profiles_found = auto()
+    password_unsafe = auto()
+
+    saved = auto()
+    feedback = auto()
+    password_retype = auto()
+    password_reset_sent = auto()
     registration_successful = auto()
+    main_menu = auto()
+    help = auto()
+    start = auto()
+    signed_in = auto()
+    logout = auto()
 
     def __str__(self) -> str:
         return f"messages.{self.name}"
@@ -25,10 +46,12 @@ class ButtonText(Enum):
     male = auto()
     client = auto()
     coach = auto()
-    show_my_clients = auto()
-    give_feedback = auto()
-    show_my_profile = auto()
-    my_current_program = auto()
+    my_clients = auto()
+    feedback = auto()
+    my_profile = auto()
+    my_program = auto()
+    sign_in = auto()
+    sign_up = auto()
 
     def __str__(self) -> str:
         return f"buttons.{self.name}"
@@ -40,6 +63,7 @@ ResourceType = str | MessageText | ButtonText
 class TextManager:
     def __init__(self) -> None:
         self.messages = self.load_messages()
+        self.commands = self.load_commands()
 
     def get_text(self, key: ResourceType, lang: str | None = "eng") -> str | None:
         if str(key) in self.messages:
@@ -50,16 +74,27 @@ class TextManager:
     @staticmethod
     def load_messages() -> dict[str, dict[str, str]]:
         result = {}
-        for type, path in settings.MESSAGES.items():
+        for type, path in settings.RESOURCES.items():
             with open(path, "r", encoding="utf-8") as file:
                 data = yaml.safe_load(file)
             for key, value in data.items():
                 result[f"{type}.{key}"] = value
         return result
 
+    @staticmethod
+    def load_commands():
+        result = {}
+        with open(settings.RESOURCES["commands"], "r", encoding="utf-8") as file:
+            data = yaml.safe_load(file)
+            for key, value in data.items():
+                result[key] = value
+        return result
+
 
 resource_manager = TextManager()
 
 
-def translate(key: ResourceType, lang: str = "ua") -> str | None:  # TODO: MOVE TO FUNCTIONS
+def translate(key: ResourceType, lang: str = "ua") -> str | None:
+    if lang is None:
+        lang = "ua"
     return resource_manager.get_text(key, lang)

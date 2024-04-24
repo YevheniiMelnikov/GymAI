@@ -1,14 +1,19 @@
 version: '3'
 
 services:
+  redis:
+    image: "redis:latest"
+    expose:
+      - 6379
+    ports:
+      - "6379:6379"
+
   db:
     image: "postgres:latest"
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: postgres
     ports:
       - "5432:5432"
+    env_file:
+      - ./.env
     volumes:
       - pgdata:/var/lib/postgresql/data
 
@@ -20,11 +25,8 @@ services:
       - db
     ports:
       - "8000:8000"
-    environment:
-      DB_HOST: db
-      DB_NAME: postgres
-      DB_USER: postgres
-      DB_PASSWORD: password
+    env_file:
+      - ./.env
     volumes:
       - ./backend:/opt/backend:z
     command:
@@ -41,15 +43,12 @@ services:
     depends_on:
       - backend
       - db
-    environment:
-      DJANGO_HOST: backend
-      DJANGO_PORT: "8000"
     volumes:
       - .:/opt:z
     ports:
       - "8080:8000"
     env_file:
-      - .env
+      - ./.env
     command:
       - python
       - -u
