@@ -15,6 +15,7 @@ class States(StatesGroup):
     client_menu = State()
     coach_menu = State()
     action_choice = State()
+    feedback = State()
 
     password_reset = State()
     password_retype = State()

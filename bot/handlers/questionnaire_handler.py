@@ -5,7 +5,7 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.handlers.registration_handler import register_router
 from bot.states import States
-from common.functions import validate_birth_date
+from common.utils import validate_birth_date
 from texts.text_manager import MessageText, translate
 
 logger = loguru.logger

@@ -1,13 +1,14 @@
 import loguru
-from aiogram import Bot, F, Router
+from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import *
 from bot.states import States
 from common.exeptions import UsernameUnavailable
-from common.functions import register_user, set_bot_commands, show_main_menu, sign_in, validate_email, validate_password
+from common.functions import register_user, set_bot_commands, show_main_menu, sign_in
 from common.user_service import user_service
+from common.utils import validate_email, validate_password
 from texts.text_manager import MessageText, translate
 
 logger = loguru.logger
@@ -24,9 +25,12 @@ async def language(message: Message, state: FSMContext) -> None:
 
     await set_bot_commands(lang_code)
     if profile := user_service.session.get_current_profile_by_tg_id(message.from_user.id):
-        auth_token = user_service.session.get_auth_token(profile.id)
-        await user_service.edit_profile(profile.id, {"language": lang_code}, auth_token)
-        await show_main_menu(message, state, lang_code)
+        auth_token = user_service.session.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
+        if await user_service.edit_profile(profile.id, {"language": lang_code}, auth_token):
+            user_service.session.set_profile_info_by_key(message.from_user.id, profile.id, "language", lang_code)
+            await show_main_menu(message, state, lang_code)
+        else:
+            await message.answer(text=translate(MessageText.unexpected_error, lang=lang_code))
     else:
         await state.update_data(lang=lang_code)
         await message.answer(
@@ -121,4 +125,5 @@ async def email(message: Message, state: FSMContext) -> None:
     except UsernameUnavailable:
         await state.set_state(States.username)
         await message.answer(text=translate(MessageText.username_unavailable, lang=data["lang"]))
+    finally:
         await message.delete()
