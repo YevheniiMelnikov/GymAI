@@ -16,7 +16,7 @@ logger = loguru.logger
 @main_router.callback_query(States.client_menu)
 async def client_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
-    profile = user_service.session.get_current_profile_by_tg_id(data["id"])
+    profile = user_service.storage.get_current_profile_by_tg_id(data["id"])
     if callback_query.data == "my_program":
         await callback_query.message.answer(text="Программа в разработке")
     elif callback_query.data == "feedback":
@@ -31,7 +31,7 @@ async def client_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
 @main_router.callback_query(States.coach_menu)
 async def coach_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
-    profile = user_service.session.get_current_profile_by_tg_id(data["id"])  # TODO: ADD MY PROFILE
+    profile = user_service.storage.get_current_profile_by_tg_id(data["id"])  # TODO: ADD MY PROFILE
     if callback_query.data == "show_my_clients":
         await callback_query.message.answer(text="Ваши клиенты: ")
     elif callback_query.data == "feedback":
@@ -62,8 +62,8 @@ async def process_password_reset(message: Message, state: FSMContext) -> None:
 
 @main_router.message(States.feedback)
 async def handle_feedback(message: Message, state: FSMContext) -> None:
-    profile = user_service.session.get_current_profile_by_tg_id(message.from_user.id)
-    auth_token = user_service.session.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
+    profile = user_service.storage.get_current_profile_by_tg_id(message.from_user.id)
+    auth_token = user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
     if user_data := await user_service.get_user_data_by_token(auth_token):
         if await user_service.send_feedback(user_data.get("email"), user_data.get("username"), message.text):
             logger.info(f"{user_data.get('username')} sent feedback")

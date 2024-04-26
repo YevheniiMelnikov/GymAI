@@ -9,5 +9,8 @@ check:
 migrations:
 	@docker compose exec -it backend bash -c "python manage.py makemigrations && python manage.py migrate"
 
+tests:
+	@pytest tests -v --ff
 
-.PHONY: format check
+
+.PHONY: format check migrations tests

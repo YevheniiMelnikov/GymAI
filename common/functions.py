@@ -18,7 +18,7 @@ BACKEND_URL = os.environ.get("BACKEND_URL")
 
 
 async def show_main_menu(message: Message, state: FSMContext, lang: str):
-    profile = user_service.session.get_current_profile_by_tg_id(message.from_user.id)
+    profile = user_service.storage.get_current_profile_by_tg_id(message.from_user.id)
     menu = client_menu_keyboard if profile.status == "client" else coach_menu_keyboard
     await state.set_state(States.client_menu if profile.status == "client" else States.coach_menu)
     await state.update_data(id=message.from_user.id)
@@ -48,7 +48,7 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
 
     logger.info(f"User {message.from_user.id} logged in")
     profile_data = await user_service.get_profile_by_username(data["username"], token)
-    user_service.session.set_profile(
+    user_service.storage.set_profile(
         profile=profile_data,
         username=data["username"],
         auth_token=token,
@@ -83,7 +83,7 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
         return
 
     await state.update_data(login_attempts=0)
-    user_service.session.set_profile(
+    user_service.storage.set_profile(
         profile=profile, username=data["username"], auth_token=token, telegram_id=message.from_user.id
     )
     logger.info(f"profile_id {profile.id} set for user {message.from_user.id}")

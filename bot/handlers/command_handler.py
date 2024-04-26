@@ -15,7 +15,7 @@ cmd_router = Router()
 
 @cmd_router.message(Command("language"))
 async def cmd_language(message: Message, state: FSMContext) -> None:
-    profile = user_service.session.get_current_profile_by_tg_id(message.from_user.id)
+    profile = user_service.storage.get_current_profile_by_tg_id(message.from_user.id)
     lang = profile.language if profile else None
     await message.answer(text=translate(MessageText.choose_language, lang=lang), reply_markup=language_choice())
     await state.set_state(States.language_choice)
@@ -26,7 +26,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     logger.info(f"User {message.from_user.id} started bot")
     await state.clear()
     await message.answer(text=translate(MessageText.start))
-    if user_service.session.get_current_profile_by_tg_id(message.from_user.id):
+    if user_service.storage.get_current_profile_by_tg_id(message.from_user.id):
         await user_service.log_out(message.from_user.id)
     await message.delete()
     await state.set_state(States.language_choice)
@@ -35,7 +35,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
 
 @cmd_router.message(Command("logout"))
 async def cmd_logout(message: Message, state: FSMContext) -> None:
-    profile = user_service.session.get_current_profile_by_tg_id(message.from_user.id)
+    profile = user_service.storage.get_current_profile_by_tg_id(message.from_user.id)
     language = profile.language if profile else None
     await state.clear()
     await user_service.log_out(message.from_user.id)
@@ -44,14 +44,14 @@ async def cmd_logout(message: Message, state: FSMContext) -> None:
 
 @cmd_router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
-    profile = user_service.session.get_current_profile_by_tg_id(message.from_user.id)
+    profile = user_service.storage.get_current_profile_by_tg_id(message.from_user.id)
     language = profile.language if profile else None
     await message.answer(text=translate(MessageText.help, lang=language))
 
 
 @cmd_router.message(Command("feedback"))
 async def cmd_feedback(message: Message, state: FSMContext) -> None:
-    profile = user_service.session.get_current_profile_by_tg_id(message.from_user.id)
+    profile = user_service.storage.get_current_profile_by_tg_id(message.from_user.id)
     language = profile.language if profile else None
     await message.answer(text=translate(MessageText.feedback, lang=language))
     await state.set_state(States.feedback)
@@ -59,14 +59,14 @@ async def cmd_feedback(message: Message, state: FSMContext) -> None:
 
 @cmd_router.message(Command("reset_password"))
 async def cmd_reset_password(message: Message, state: FSMContext) -> None:
-    profiles = user_service.session.get_profiles(message.from_user.id)
+    profiles = user_service.storage.get_profiles(message.from_user.id)
     if profiles:
         usernames = [
-            user_service.session.get_profile_info_by_key(message.from_user.id, profile.id, "username")
+            user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "username")
             for profile in profiles
         ]
         emails = [
-            user_service.session.get_profile_info_by_key(message.from_user.id, profile.id, "email")
+            user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "email")
             for profile in profiles
         ]
         profiles_data = [profile.to_dict() for profile in profiles]

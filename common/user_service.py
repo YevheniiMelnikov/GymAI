@@ -115,9 +115,9 @@ class UserProfileManager:
 
 
 class UserService:
-    def __init__(self, session: UserProfileManager):
+    def __init__(self, storage: UserProfileManager):
         self.backend_url = os.environ.get("BACKEND_URL")
-        self.session = session
+        self.storage = storage
         self.client = httpx.AsyncClient()
 
     async def close(self):
@@ -126,20 +126,21 @@ class UserService:
     async def api_request(self, method: str, url: str, data: dict = None, headers: dict = None) -> tuple:
         logger.info(f"Executing {method.upper()} request to {url} with data: {data} and headers: {headers}")
         try:
-            response = await self.client.request(method, url, data=data, headers=headers)
+            response = await self.client.request(method, url, json=data, headers=headers)
             if response.status_code in (204, 200):
                 try:
-                    return response.status_code, response.json()
+                    json_data = await response.json()
+                    return response.status_code, json_data
                 except JSONDecodeError:
                     return response.status_code, None
             else:
                 return response.status_code, response.text
         except httpx.HTTPError as e:
-            logger.error(f"HTTP error occurred: {str(e)}")
-            raise UserServiceError(f"HTTP request failed: {str(e)}")
+            logger.error(f"HTTP error occurred: {e}")
+            raise UserServiceError(f"HTTP request failed: {e}")
         except Exception as e:
-            logger.error(f"Unexpected error: {str(e)}")
-            raise UserServiceError(f"Unexpected error occurred: {str(e)}")
+            logger.error(f"Unexpected error: {e}")
+            raise UserServiceError(f"Unexpected error occurred: {e}")
 
     async def sign_up(self, **kwargs) -> bool:
         url = f"{self.backend_url}/api/v1/persons/create/"
@@ -164,13 +165,13 @@ class UserService:
         return None
 
     async def log_out(self, tg_user_id: int) -> bool:
-        current_profile = self.session.get_current_profile_by_tg_id(tg_user_id)
+        current_profile = self.storage.get_current_profile_by_tg_id(tg_user_id)
         if current_profile:
-            auth_token = self.session.get_profile_info_by_key(tg_user_id, current_profile.id, "auth_token")
+            auth_token = self.storage.get_profile_info_by_key(tg_user_id, current_profile.id, "auth_token")
             url = f"{self.backend_url}/auth/token/logout/"
             status_code, _ = await self.api_request("post", url, headers={"Authorization": f"Token {auth_token}"})
             if status_code == 204:
-                self.session.deactivate_profiles(tg_user_id)
+                self.storage.deactivate_profiles(tg_user_id)
                 logger.info(f"User with profile_id {current_profile.id} logged out")
                 return True
         return False
@@ -211,8 +212,8 @@ class UserService:
         )
         return status_code == 200
 
-    async def delete_profile(self, user_id: int) -> bool:  # TODO: NOT USED YET
-        url = f"{self.backend_url}/api/v1/persons/{user_id}/"
+    async def delete_profile(self, profile_id: int) -> bool:  # TODO: NOT USED YET
+        url = f"{self.backend_url}/api/v1/persons/{profile_id}/"
         status_code, _ = await self.api_request("delete", url)
         return status_code == 404 if status_code else False
 
