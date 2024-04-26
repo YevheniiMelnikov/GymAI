@@ -54,9 +54,9 @@ saved:
   ua: "Збережено"
 
 unexpected_error:
-  eng: "Unexpected error"
-  ru: "Непредвиденная ошибка"
-  ua: "Непередбачена помилка"
+  eng: "Unexpected error. Use /start command"
+  ru: "Непредвиденная ошибка. Используйте команду /start"
+  ua: "Непередбачена помилка. Скористайтесь командою /start"
 
 choose_action:
   eng: "Choose an action"
@@ -127,6 +127,11 @@ feedback:
   eng: "Give a feedback"
   ru: "Оставьте свой отзыв"
   ua: "Залиште свій відгук"
+
+feedback_sent:
+  eng: "Thank you for your feedback"
+  ru: "Спасибо за ваш отзыв"
+  ua: "Дякуємо за ваш відгук"
 
 password_unsafe:
   eng: "The password entered does not meet security requirements, please try again"

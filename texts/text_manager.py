@@ -30,6 +30,7 @@ class MessageText(Enum):
     feedback = auto()
     password_retype = auto()
     password_reset_sent = auto()
+    feedback_sent = auto()
     registration_successful = auto()
     main_menu = auto()
     help = auto()

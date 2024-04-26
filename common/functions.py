@@ -1,7 +1,5 @@
 import os
-import re
 
-import httpx
 import loguru
 from aiogram import Bot
 from aiogram.fsm.context import FSMContext
@@ -23,20 +21,19 @@ async def show_main_menu(message: Message, state: FSMContext, lang: str):
     profile = user_service.session.get_current_profile_by_tg_id(message.from_user.id)
     menu = client_menu_keyboard if profile.status == "client" else coach_menu_keyboard
     await state.set_state(States.client_menu if profile.status == "client" else States.coach_menu)
+    await state.update_data(id=message.from_user.id)
     await message.answer(text=translate(MessageText.main_menu, lang=lang), reply_markup=menu(lang))
 
 
 async def register_user(message: Message, state: FSMContext, data: dict) -> None:
     await state.update_data(email=message.text)
-    profile = await user_service.sign_up(
+    if not await user_service.sign_up(
         username=data["username"],
         password=data["password"],
         email=message.text,
         status=data["account_type"],
         language=data["lang"],
-    )
-
-    if not profile:
+    ):
         logger.error(f"Registration failed for user {message.from_user.id}")
         await handle_registration_failure(message, state, data["lang"])
         return
@@ -50,8 +47,9 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
         return
 
     logger.info(f"User {message.from_user.id} logged in")
+    profile_data = await user_service.get_profile_by_username(data["username"], token)
     user_service.session.set_profile(
-        profile=profile,
+        profile=profile_data,
         username=data["username"],
         auth_token=token,
         telegram_id=message.from_user.id,
@@ -105,36 +103,3 @@ async def set_bot_commands(lang: str = "ua"):
     command_texts = resource_manager.commands
     commands = [BotCommand(command=cmd, description=desc[lang]) for cmd, desc in command_texts.items()]
     await bot.set_my_commands(commands)
-
-
-def validate_birth_date(date_str: str) -> bool:
-    pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-    if not pattern.match(date_str):
-        return False
-
-    year, month, day = map(int, date_str.split("-"))
-    if not (1900 <= year <= 2100 and 1 <= month <= 12):
-        return False
-
-    if (month in [4, 6, 9, 11] and day > 30) or (
-        month == 2 and day > (29 if (year % 4 == 0 and year % 100 != 0) or year % 400 == 0 else 28)
-    ):
-        return False
-
-    return 1 <= day <= 31
-
-
-def validate_email(email: str) -> bool:
-    pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$"
-    return bool(re.match(pattern, email))
-
-
-def validate_password(password: str) -> bool:
-    if len(password) < 8:
-        return False
-    if not any(char.isdigit() for char in password):
-        return False
-    if not any(char.isalpha() for char in password):
-        return False
-
-    return True

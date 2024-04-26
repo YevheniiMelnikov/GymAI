@@ -1,11 +1,20 @@
+import os
+
 from django.contrib.auth.models import User
+from django.core.mail import send_mail
 from django.db import transaction
 from django.shortcuts import get_object_or_404, render
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.status import HTTP_201_CREATED, HTTP_400_BAD_REQUEST, HTTP_404_NOT_FOUND
+from rest_framework.status import (
+    HTTP_200_OK,
+    HTTP_201_CREATED,
+    HTTP_400_BAD_REQUEST,
+    HTTP_404_NOT_FOUND,
+    HTTP_500_INTERNAL_SERVER_ERROR,
+)
 from rest_framework.views import APIView
 from rest_framework_api_key.permissions import HasAPIKey
 
@@ -65,21 +74,52 @@ class UserProfileView(APIView):
             return Response({"error": "Profile not found"}, status=HTTP_404_NOT_FOUND)
 
 
-class ProfileAPIList(generics.ListCreateAPIView):
-    serializer_class = ProfileSerializer
-    queryset = Profile.objects.all()
-    permission_classes = [IsAuthenticatedOrReadOnly]
+class CurrentUserView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        return Response({"username": user.username, "email": user.email})
 
 
-class ProfileAPIUpdate(generics.RetrieveUpdateAPIView):
+class SendFeedbackAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        email = request.data.get("email")
+        username = request.data.get("username")
+        feedback = request.data.get("feedback")
+
+        subject = f"New Feedback from {username}"
+        message = f"User {username} with email {email} sent the following feedback:\n\n{feedback}"
+
+        try:
+            send_mail(subject, message, os.getenv("EMAIL_HOST_USER"), [os.getenv("EMAIL_HOST_USER")])
+        except Exception:
+            return Response({"message": "Failed to send feedback"}, status=HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({"message": "Feedback sent successfully"}, status=HTTP_200_OK)
+
+
+class ProfileAPIUpdate(APIView):
     serializer_class = ProfileSerializer
-    queryset = Profile.objects.all()
-    permission_classes = [IsAuthenticated | HasAPIKey]
+    permission_classes = [IsAuthenticated]
 
     def get_object(self):
-        user_id = self.kwargs.get("user_id")
-        user = get_object_or_404(User, pk=user_id)
-        return user.profile
+        profile_id = self.kwargs.get("profile_id")
+        return get_object_or_404(Profile, pk=profile_id)
+
+    def put(self, request, profile_id, format=None):
+        profile = self.get_object()
+        serializer = ProfileSerializer(profile, data=request.data, context={"request": request})
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=HTTP_400_BAD_REQUEST)
+
+
+def reset_password_request_view(request, uidb64, token):
+    return render(request, "reset-password.html", {"uid": uidb64, "token": token})
 
 
 class ProfileAPIDestroy(generics.RetrieveDestroyAPIView):
@@ -88,5 +128,7 @@ class ProfileAPIDestroy(generics.RetrieveDestroyAPIView):
     permission_classes = [IsAdminUser | HasAPIKey]
 
 
-def reset_password_request_view(request, uidb64, token):
-    return render(request, "reset-password.html", {"uid": uidb64, "token": token})
+class ProfileAPIList(generics.ListCreateAPIView):
+    serializer_class = ProfileSerializer
+    queryset = Profile.objects.all()
+    permission_classes = [IsAuthenticatedOrReadOnly]

@@ -1,5 +1,7 @@
 import json
 import os
+import time
+from json import JSONDecodeError
 
 import httpx
 import loguru
@@ -13,13 +15,12 @@ logger = loguru.logger
 
 class UserProfileManager:
     def __init__(self, redis_url: str):
-        self.redis_pool = redis.ConnectionPool.from_url(f"{redis_url}/1")
-
-    def get_redis_connection(self):
-        return redis.Redis(connection_pool=self.redis_pool)
+        self.redis_url = redis_url
+        self.redis = redis.from_url(f"{self.redis_url}/1", encoding="utf-8", decode_responses=True)
 
     def close_pool(self) -> None:
-        self.redis_pool.disconnect()
+        if self.redis:
+            self.redis.close()
 
     def set_profile(
         self,
@@ -27,63 +28,90 @@ class UserProfileManager:
         username: str,
         auth_token: str,
         telegram_id: int,
-        email: str | None = None,
+        email: str = None,
         is_current: bool = True,
-    ) -> None:
-        redis_conn = self.get_redis_connection()
-        existing_data = redis_conn.hget("profiles", str(profile.id))
-        if existing_data:
-            existing_data = json.loads(existing_data)
-            email = email or existing_data.get("email")
+    ):
+        email = email or self.get_profile_info_by_key(telegram_id, profile.id, "email")
+        try:
+            current_profiles_data = self.redis.hget("user_profiles", telegram_id)
+            if current_profiles_data:
+                current_profiles = json.loads(current_profiles_data)
+            else:
+                current_profiles = []
 
-        session_data = {
-            "profile": profile.to_dict(),
-            "username": username,
-            "auth_token": auth_token,
-            "telegram_id": telegram_id,
-            "email": email,
-            "is_current": is_current,
-        }
-        redis_conn.hset("profiles", str(profile.id), json.dumps(session_data))
+            profile_data = {
+                "id": profile.id,
+                "status": profile.status,
+                "gender": profile.gender,
+                "birth_date": profile.birth_date,
+                "language": profile.language,
+                "username": username,
+                "auth_token": auth_token,
+                "email": email,
+                "is_current": is_current,
+                "last_used": time.time(),
+            }
+
+            existing_profile_index = next(
+                (index for index, p in enumerate(current_profiles) if p["id"] == profile.id), None
+            )
+            if existing_profile_index is not None:
+                current_profiles[existing_profile_index].update(profile_data)
+            else:
+                current_profiles.append(profile_data)
+
+            self.redis.hset("user_profiles", telegram_id, json.dumps(current_profiles))
+            logger.info(f"Profile {profile.id} set for user {telegram_id}")
+
+        except Exception as e:
+            logger.error(f"Failed to set profile for user {telegram_id}: {e}")
 
     def get_current_profile_by_tg_id(self, telegram_id: int) -> Profile | None:
-        profiles = self.get_profiles(telegram_id)
-        return next((profile for profile in profiles if getattr(profile, "is_current", True)), None)
+        try:
+            profiles_data = json.loads(self.redis.hget("user_profiles", telegram_id) or "[]")
+            current_profiles = [Profile.from_dict(data) for data in profiles_data if data.get("is_current", True)]
+            if current_profiles:
+                return max(current_profiles, key=lambda p: p.last_used)
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get current profile for user {telegram_id}: {e}")
+            return None
 
     def get_profiles(self, telegram_id: int) -> list[Profile]:
-        redis_conn = self.get_redis_connection()
-        all_profiles = []
-        for profile_id in redis_conn.hkeys("profiles"):
-            session_data = redis_conn.hget("profiles", profile_id)
-            if session_data:
-                profile_data = json.loads(session_data)
-                if profile_data.get("telegram_id") == telegram_id:
-                    profile = Profile.from_dict(profile_data["profile"])
-                    all_profiles.append(profile)
-        return all_profiles
+        profiles_data = json.loads(self.redis.hget("user_profiles", telegram_id) or "[]")
+        return [Profile.from_dict(data) for data in profiles_data]
 
-    def get_profile_info_by_key(self, profile_id: int, key: str) -> str | None:
-        redis_conn = self.get_redis_connection()
-        session_data = redis_conn.hget("profiles", str(profile_id))
-        if session_data:
-            session_data = json.loads(session_data)
-            return session_data.get(key)
+    def deactivate_profiles(self, telegram_id: int) -> None:
+        try:
+            profiles_data = json.loads(self.redis.hget("user_profiles", telegram_id) or "[]")
+            for profile_data in profiles_data:
+                profile_data["is_current"] = False
+            self.redis.hset("user_profiles", telegram_id, json.dumps(profiles_data))
+            logger.info(f"Profiles of user {telegram_id} deactivated")
+        except Exception as e:
+            logger.error(f"Failed to deactivate profiles of user {telegram_id}: {e}")
+
+    def get_profile_info_by_key(self, telegram_id: int, profile_id: int, key: str) -> str | None:
+        profiles = json.loads(self.redis.hget("user_profiles", telegram_id) or "[]")
+        for profile_data in profiles:
+            if profile_data.get("id") == profile_id and profile_data.get("is_current", True):
+                return profile_data.get(key)
         return None
 
-    def get_auth_token(self, profile_id: int) -> str | None:
-        redis_conn = self.get_redis_connection()
-        session_data = redis_conn.hget("profiles", str(profile_id))
-        if session_data:
-            return json.loads(session_data)["auth_token"]
-        return None
-
-    def deactivate_profile(self, profile_id: int) -> None:
-        redis_conn = self.get_redis_connection()
-        session_data = redis_conn.hget("profiles", str(profile_id))
-        if session_data:
-            profile_data = json.loads(session_data)
-            profile_data["is_current"] = False
-            redis_conn.hset("profiles", str(profile_id), json.dumps(profile_data))
+    def set_profile_info_by_key(self, telegram_id: int, profile_id: int, key: str, value) -> bool:
+        try:
+            profiles_data = json.loads(self.redis.hget("user_profiles", telegram_id) or "[]")
+            for profile_data in profiles_data:
+                if profile_data.get("id") == profile_id:
+                    profile_data[key] = value
+                    break
+            else:
+                return False
+            self.redis.hset("user_profiles", telegram_id, json.dumps(profiles_data))
+            return True
+        except Exception as e:
+            logger.error(f"Failed to set profile info for user {telegram_id} and profile {profile_id}: {e}")
+            return False
 
 
 class UserService:
@@ -99,11 +127,13 @@ class UserService:
         logger.info(f"Executing {method.upper()} request to {url} with data: {data} and headers: {headers}")
         try:
             response = await self.client.request(method, url, data=data, headers=headers)
-            if response.status_code == 204:
-                return response.status_code, None
-
-            return response.status_code, response.json()
-
+            if response.status_code in (204, 200):
+                try:
+                    return response.status_code, response.json()
+                except JSONDecodeError:
+                    return response.status_code, None
+            else:
+                return response.status_code, response.text
         except httpx.HTTPError as e:
             logger.error(f"HTTP error occurred: {str(e)}")
             raise UserServiceError(f"HTTP request failed: {str(e)}")
@@ -111,16 +141,15 @@ class UserService:
             logger.error(f"Unexpected error: {str(e)}")
             raise UserServiceError(f"Unexpected error occurred: {str(e)}")
 
-    async def sign_up(self, **kwargs) -> Profile | None:
+    async def sign_up(self, **kwargs) -> bool:
         url = f"{self.backend_url}/api/v1/persons/create/"
         status_code, response = await self.api_request("post", url, kwargs)
-        if status_code == 201:
-            return Profile.from_dict(response)
-        elif status_code == 400 and "error" in response:
+        if status_code == 400 and "error" in response:
             error_message = response["error"]
             if "already exists" in error_message:
                 raise UsernameUnavailable(error_message)
-        return None
+
+        return status_code == 201
 
     async def edit_profile(self, user_id: int, data: dict, token: str) -> bool:
         url = f"{self.backend_url}/api/v1/persons/{user_id}/"
@@ -137,11 +166,11 @@ class UserService:
     async def log_out(self, tg_user_id: int) -> bool:
         current_profile = self.session.get_current_profile_by_tg_id(tg_user_id)
         if current_profile:
-            auth_token = self.session.get_auth_token(current_profile.id)
+            auth_token = self.session.get_profile_info_by_key(tg_user_id, current_profile.id, "auth_token")
             url = f"{self.backend_url}/auth/token/logout/"
             status_code, _ = await self.api_request("post", url, headers={"Authorization": f"Token {auth_token}"})
             if status_code == 204:
-                self.session.deactivate_profile(current_profile.id)
+                self.session.deactivate_profiles(tg_user_id)
                 logger.info(f"User with profile_id {current_profile.id} logged out")
                 return True
         return False
@@ -154,12 +183,33 @@ class UserService:
         logger.info(f"Failed to retrieve profile for {username}. HTTP status: {status_code}")
         return None
 
+    async def get_user_data_by_token(self, token: str) -> dict[str, str] | None:
+        url = f"{self.backend_url}/api/v1/current-user/"
+        status_code, response = await self.api_request("get", url, headers={"Authorization": f"Token {token}"})
+        if status_code == 200:
+            return response
+        logger.info(f"Failed to retrieve user data. HTTP status: {status_code}")
+        return None
+
     async def reset_password(self, email: str) -> bool:
         status_code, _ = await self.api_request(
             "post", f"{self.backend_url}/api/v1/auth/users/reset_password/", {"email": email}
         )
         logger.info(f"Password reset requested for {email}")
         return status_code == 204
+
+    async def send_feedback(self, email: str, username: str, feedback: str) -> bool:
+        url = f"{self.backend_url}/api/v1/send-feedback/"
+        status_code, _ = await self.api_request(
+            "post",
+            url,
+            {
+                "email": email,
+                "username": username,
+                "feedback": feedback,
+            },
+        )
+        return status_code == 200
 
     async def delete_profile(self, user_id: int) -> bool:  # TODO: NOT USED YET
         url = f"{self.backend_url}/api/v1/persons/{user_id}/"
