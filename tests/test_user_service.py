@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -8,9 +8,11 @@ from common.user_service import UserService
 @pytest.mark.asyncio
 async def test_log_in_successful(user_service: UserService) -> None:
     response_mock = AsyncMock(status_code=200)
-    response_mock.json.return_value = {"auth_token": "abc123"}
+    response_mock.json = MagicMock(return_value={"auth_token": "abc123"})
     user_service.client.request = AsyncMock(return_value=response_mock)
+
     token = await user_service.log_in("username", "password")
+
     assert token == "abc123"
     user_service.client.request.assert_called_once_with(
         "post",

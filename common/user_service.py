@@ -129,7 +129,7 @@ class UserService:
             response = await self.client.request(method, url, json=data, headers=headers)
             if response.status_code in (204, 200):
                 try:
-                    json_data = await response.json()
+                    json_data = response.json()
                     return response.status_code, json_data
                 except JSONDecodeError:
                     return response.status_code, None
@@ -146,9 +146,8 @@ class UserService:
         url = f"{self.backend_url}/api/v1/persons/create/"
         status_code, response = await self.api_request("post", url, kwargs)
         if status_code == 400 and "error" in response:
-            error_message = response["error"]
-            if "already exists" in error_message:
-                raise UsernameUnavailable(error_message)
+            if "already exists" in response.text:
+                raise UsernameUnavailable(response.text)
 
         return status_code == 201
 
