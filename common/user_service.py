@@ -2,6 +2,7 @@ import json
 import os
 import time
 from json import JSONDecodeError
+from typing import Any
 
 import httpx
 import loguru
@@ -98,7 +99,7 @@ class UserProfileManager:
                 return profile_data.get(key)
         return None
 
-    def set_profile_info_by_key(self, telegram_id: int, profile_id: int, key: str, value) -> bool:
+    def set_profile_info_by_key(self, telegram_id: int, profile_id: int, key: str, value: Any) -> bool:
         try:
             profiles_data = json.loads(self.redis.hget("user_profiles", telegram_id) or "[]")
             for profile_data in profiles_data:

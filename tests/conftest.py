@@ -4,7 +4,7 @@ import redis
 
 os.environ["REDIS_URL"] = "redis://redis/0"
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -15,5 +15,11 @@ from common.user_service import UserProfileManager, UserService
 def user_service(monkeypatch) -> UserService:
     with monkeypatch.context() as m:
         m.setattr(redis, "from_url", AsyncMock())
-        m.setattr(os, "getenv", lambda name, default=None: "redis://localhost:6379" if name == "REDIS_URL" else default)
         yield UserService(storage=UserProfileManager(os.getenv("REDIS_URL")))
+
+
+@pytest.fixture
+def profile_manager() -> UserProfileManager:
+    manager = UserProfileManager(os.getenv("REDIS_URL"))
+    manager.redis = MagicMock()
+    return manager
