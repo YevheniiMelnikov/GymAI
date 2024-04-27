@@ -5,7 +5,7 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import *
 from bot.states import States
-from common.exeptions import UsernameUnavailable
+from common.exceptions import UsernameUnavailable
 from common.functions import register_user, set_bot_commands, show_main_menu, sign_in
 from common.user_service import user_service
 from common.utils import validate_email, validate_password
@@ -24,10 +24,10 @@ async def language(message: Message, state: FSMContext) -> None:
         return
 
     await set_bot_commands(lang_code)
-    if profile := user_service.session.get_current_profile_by_tg_id(message.from_user.id):
-        auth_token = user_service.session.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
+    if profile := user_service.storage.get_current_profile_by_tg_id(message.from_user.id):
+        auth_token = user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
         if await user_service.edit_profile(profile.id, {"language": lang_code}, auth_token):
-            user_service.session.set_profile_info_by_key(message.from_user.id, profile.id, "language", lang_code)
+            user_service.storage.set_profile_info_by_key(message.from_user.id, profile.id, "language", lang_code)
             await show_main_menu(message, state, lang_code)
         else:
             await message.answer(text=translate(MessageText.unexpected_error, lang=lang_code))
@@ -64,7 +64,7 @@ async def action(callback_query: CallbackQuery, state: FSMContext) -> None:
 async def account_type(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     await callback_query.answer(translate(MessageText.saved, lang=data["lang"]))
-    await state.update_data(account_type=callback_query.data, show_password_requirements=True)
+    await state.update_data(account_type=callback_query.data)
     await state.set_state(States.username)
     await callback_query.message.answer(translate(MessageText.username, lang=data["lang"]))
     await callback_query.message.delete()
@@ -76,7 +76,7 @@ async def username(message: Message, state: FSMContext) -> None:
     await state.update_data(username=message.text)
     await state.set_state(States.password)
     await message.answer(translate(MessageText.password, lang=data["lang"]))
-    if data.get("show_password_requirements"):
+    if data.get("action") == "sign_up":
         await message.answer(text=translate(MessageText.password_requirements, lang=data["lang"]))
     await message.delete()
 
@@ -84,17 +84,16 @@ async def username(message: Message, state: FSMContext) -> None:
 @register_router.message(States.password, F.text)
 async def password(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
-    if not validate_password(message.text):
-        await message.answer(text=translate(MessageText.password_unsafe, lang=data["lang"]))
-        await message.delete()
-        await state.set_state(States.password)
-        return
-
-    await state.update_data(password=message.text)
     if data.get("action") == "sign_up":
-        await state.set_state(States.password_retype)
-        await message.answer(text=translate(MessageText.password_retype, lang=data["lang"]))
+        if not validate_password(message.text):
+            await message.answer(text=translate(MessageText.password_unsafe, lang=data["lang"]))
+            await state.set_state(States.password)
+        else:
+            await state.update_data(password=message.text)
+            await message.answer(text=translate(MessageText.password_retype, lang=data["lang"]))
+            await state.set_state(States.password_retype)
         await message.delete()
+
     else:
         await sign_in(message, state, data)
 

@@ -79,9 +79,9 @@ password_mismatch:
   ua: "Паролі не співпадають, спробуйте ще раз"
 
 invalid_credentials:
-  eng: "Invalid credentials, try again"
-  ru: "Неверные данные, попробуйте еще раз"
-  ua: "Невірні дані, спробуйте ще раз"
+  eng: "Invalid credentials. Try again or use /help command"
+  ru: "Неверные данные. Попробуйте еще раз или используйте команду /help"
+  ua: "Невірні дані. Спробуйте ще раз або скористайтесь командою /help"
 
 signed_in:
   eng: "You successfully signed in"

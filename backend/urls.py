@@ -1,13 +1,4 @@
-from accounts.views import (
-    CreateUserView,
-    CurrentUserView,
-    ProfileAPIDestroy,
-    ProfileAPIList,
-    ProfileAPIUpdate,
-    SendFeedbackAPIView,
-    UserProfileView,
-    reset_password_request_view,
-)
+from accounts.views import *
 from django.contrib import admin
 from django.urls import include, path, re_path
 from drf_yasg import openapi

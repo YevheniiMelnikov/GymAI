@@ -17,8 +17,8 @@ bot = Bot(os.environ.get("BOT_TOKEN"))
 BACKEND_URL = os.environ.get("BACKEND_URL")
 
 
-async def show_main_menu(message: Message, state: FSMContext, lang: str):
-    profile = user_service.session.get_current_profile_by_tg_id(message.from_user.id)
+async def show_main_menu(message: Message, state: FSMContext, lang: str) -> None:
+    profile = user_service.storage.get_current_profile_by_tg_id(message.from_user.id)
     menu = client_menu_keyboard if profile.status == "client" else coach_menu_keyboard
     await state.set_state(States.client_menu if profile.status == "client" else States.coach_menu)
     await state.update_data(id=message.from_user.id)
@@ -48,7 +48,7 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
 
     logger.info(f"User {message.from_user.id} logged in")
     profile_data = await user_service.get_profile_by_username(data["username"], token)
-    user_service.session.set_profile(
+    user_service.storage.set_profile(
         profile=profile_data,
         username=data["username"],
         auth_token=token,
@@ -83,7 +83,7 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
         return
 
     await state.update_data(login_attempts=0)
-    user_service.session.set_profile(
+    user_service.storage.set_profile(
         profile=profile, username=data["username"], auth_token=token, telegram_id=message.from_user.id
     )
     logger.info(f"profile_id {profile.id} set for user {message.from_user.id}")
@@ -99,7 +99,7 @@ async def handle_registration_failure(message: Message, state: FSMContext, lang:
     await message.answer(text=translate(MessageText.username, lang=lang))
 
 
-async def set_bot_commands(lang: str = "ua"):
+async def set_bot_commands(lang: str = "ua") -> None:
     command_texts = resource_manager.commands
     commands = [BotCommand(command=cmd, description=desc[lang]) for cmd, desc in command_texts.items()]
     await bot.set_my_commands(commands)

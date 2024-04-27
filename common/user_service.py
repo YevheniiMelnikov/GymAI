@@ -2,12 +2,13 @@ import json
 import os
 import time
 from json import JSONDecodeError
+from typing import Any
 
 import httpx
 import loguru
 import redis
 
-from common.exeptions import UsernameUnavailable, UserServiceError
+from common.exceptions import UsernameUnavailable, UserServiceError
 from common.models import Profile
 
 logger = loguru.logger
@@ -28,9 +29,9 @@ class UserProfileManager:
         username: str,
         auth_token: str,
         telegram_id: int,
-        email: str = None,
+        email: str | None = None,
         is_current: bool = True,
-    ):
+    ) -> None:
         email = email or self.get_profile_info_by_key(telegram_id, profile.id, "email")
         try:
             current_profiles_data = self.redis.hget("user_profiles", telegram_id)
@@ -98,7 +99,7 @@ class UserProfileManager:
                 return profile_data.get(key)
         return None
 
-    def set_profile_info_by_key(self, telegram_id: int, profile_id: int, key: str, value) -> bool:
+    def set_profile_info_by_key(self, telegram_id: int, profile_id: int, key: str, value: Any) -> bool:
         try:
             profiles_data = json.loads(self.redis.hget("user_profiles", telegram_id) or "[]")
             for profile_data in profiles_data:
@@ -115,9 +116,9 @@ class UserProfileManager:
 
 
 class UserService:
-    def __init__(self, session: UserProfileManager):
+    def __init__(self, storage: UserProfileManager):
         self.backend_url = os.environ.get("BACKEND_URL")
-        self.session = session
+        self.storage = storage
         self.client = httpx.AsyncClient()
 
     async def close(self):
@@ -126,28 +127,28 @@ class UserService:
     async def api_request(self, method: str, url: str, data: dict = None, headers: dict = None) -> tuple:
         logger.info(f"Executing {method.upper()} request to {url} with data: {data} and headers: {headers}")
         try:
-            response = await self.client.request(method, url, data=data, headers=headers)
+            response = await self.client.request(method, url, json=data, headers=headers)
             if response.status_code in (204, 200):
                 try:
-                    return response.status_code, response.json()
+                    json_data = response.json()
+                    return response.status_code, json_data
                 except JSONDecodeError:
                     return response.status_code, None
             else:
                 return response.status_code, response.text
         except httpx.HTTPError as e:
-            logger.error(f"HTTP error occurred: {str(e)}")
-            raise UserServiceError(f"HTTP request failed: {str(e)}")
+            logger.error(f"HTTP error occurred: {e}")
+            raise UserServiceError(f"HTTP request failed: {e}")
         except Exception as e:
-            logger.error(f"Unexpected error: {str(e)}")
-            raise UserServiceError(f"Unexpected error occurred: {str(e)}")
+            logger.error(f"Unexpected error: {e}")
+            raise UserServiceError(f"Unexpected error occurred: {e}")
 
     async def sign_up(self, **kwargs) -> bool:
         url = f"{self.backend_url}/api/v1/persons/create/"
         status_code, response = await self.api_request("post", url, kwargs)
         if status_code == 400 and "error" in response:
-            error_message = response["error"]
-            if "already exists" in error_message:
-                raise UsernameUnavailable(error_message)
+            if "already exists" in response.text:
+                raise UsernameUnavailable(response.text)
 
         return status_code == 201
 
@@ -164,13 +165,13 @@ class UserService:
         return None
 
     async def log_out(self, tg_user_id: int) -> bool:
-        current_profile = self.session.get_current_profile_by_tg_id(tg_user_id)
+        current_profile = self.storage.get_current_profile_by_tg_id(tg_user_id)
         if current_profile:
-            auth_token = self.session.get_profile_info_by_key(tg_user_id, current_profile.id, "auth_token")
+            auth_token = self.storage.get_profile_info_by_key(tg_user_id, current_profile.id, "auth_token")
             url = f"{self.backend_url}/auth/token/logout/"
             status_code, _ = await self.api_request("post", url, headers={"Authorization": f"Token {auth_token}"})
             if status_code == 204:
-                self.session.deactivate_profiles(tg_user_id)
+                self.storage.deactivate_profiles(tg_user_id)
                 logger.info(f"User with profile_id {current_profile.id} logged out")
                 return True
         return False
@@ -211,8 +212,8 @@ class UserService:
         )
         return status_code == 200
 
-    async def delete_profile(self, user_id: int) -> bool:  # TODO: NOT USED YET
-        url = f"{self.backend_url}/api/v1/persons/{user_id}/"
+    async def delete_profile(self, profile_id: int) -> bool:  # TODO: NOT USED YET
+        url = f"{self.backend_url}/api/v1/persons/{profile_id}/"
         status_code, _ = await self.api_request("delete", url)
         return status_code == 404 if status_code else False
 

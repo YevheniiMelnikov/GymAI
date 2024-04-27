@@ -3,8 +3,8 @@ from django.utils.translation import gettext as _
 
 
 class CustomPasswordValidator:
-    def __init__(self, min_length=8):
-        self.min_length = min_length
+    def __init__(self):
+        self.min_length = 8
 
     def validate(self, password, user=None):
         if len(password) < self.min_length:
