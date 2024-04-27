@@ -17,7 +17,7 @@ bot = Bot(os.environ.get("BOT_TOKEN"))
 BACKEND_URL = os.environ.get("BACKEND_URL")
 
 
-async def show_main_menu(message: Message, state: FSMContext, lang: str):
+async def show_main_menu(message: Message, state: FSMContext, lang: str) -> None:
     profile = user_service.storage.get_current_profile_by_tg_id(message.from_user.id)
     menu = client_menu_keyboard if profile.status == "client" else coach_menu_keyboard
     await state.set_state(States.client_menu if profile.status == "client" else States.coach_menu)
@@ -99,7 +99,7 @@ async def handle_registration_failure(message: Message, state: FSMContext, lang:
     await message.answer(text=translate(MessageText.username, lang=lang))
 
 
-async def set_bot_commands(lang: str = "ua"):
+async def set_bot_commands(lang: str = "ua") -> None:
     command_texts = resource_manager.commands
     commands = [BotCommand(command=cmd, description=desc[lang]) for cmd, desc in command_texts.items()]
     await bot.set_my_commands(commands)

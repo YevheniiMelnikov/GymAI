@@ -8,7 +8,7 @@ import httpx
 import loguru
 import redis
 
-from common.exeptions import UsernameUnavailable, UserServiceError
+from common.exceptions import UsernameUnavailable, UserServiceError
 from common.models import Profile
 
 logger = loguru.logger
@@ -29,9 +29,9 @@ class UserProfileManager:
         username: str,
         auth_token: str,
         telegram_id: int,
-        email: str = None,
+        email: str | None = None,
         is_current: bool = True,
-    ):
+    ) -> None:
         email = email or self.get_profile_info_by_key(telegram_id, profile.id, "email")
         try:
             current_profiles_data = self.redis.hget("user_profiles", telegram_id)

@@ -31,12 +31,14 @@ async def client_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
 @main_router.callback_query(States.coach_menu)
 async def coach_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
-    profile = user_service.storage.get_current_profile_by_tg_id(data["id"])  # TODO: ADD MY PROFILE
+    profile = user_service.storage.get_current_profile_by_tg_id(data["id"])
     if callback_query.data == "show_my_clients":
         await callback_query.message.answer(text="Ваши клиенты: ")
     elif callback_query.data == "feedback":
         await callback_query.message.answer(text=translate(MessageText.feedback, lang=profile.language))
         await state.set_state(States.feedback)
+    elif callback_query.data == "my_profile":
+        await callback_query.message.answer(text="Ваш профиль: ")
     await callback_query.message.delete()
     await state.clear()
 

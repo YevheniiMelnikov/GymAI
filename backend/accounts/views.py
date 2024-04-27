@@ -56,8 +56,7 @@ class CreateUserView(APIView):
 
 
 class UserProfileView(APIView):
-    permission_classes = [AllowAny]
-    # permission_classes = [IsAuthenticated] # TODO: IsAuthenticated returns 401
+    permission_classes = [IsAuthenticated]
     serializer_class = ProfileSerializer
 
     def get(self, request, username) -> Response:
