@@ -121,7 +121,7 @@ class UserService:
         self.storage = storage
         self.client = httpx.AsyncClient()
 
-    async def close(self):
+    async def close(self) -> None:
         await self.client.aclose()
 
     async def api_request(self, method: str, url: str, data: dict = None, headers: dict = None) -> tuple:

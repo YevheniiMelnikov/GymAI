@@ -83,7 +83,7 @@ class TextManager:
         return result
 
     @staticmethod
-    def load_commands():
+    def load_commands() -> dict[str, dict[str, str]]:
         result = {}
         with open(settings.RESOURCES["commands"], "r", encoding="utf-8") as file:
             data = yaml.safe_load(file)
@@ -95,7 +95,5 @@ class TextManager:
 resource_manager = TextManager()
 
 
-def translate(key: ResourceType, lang: str = "ua") -> str | None:
-    if lang is None:
-        lang = "ua"
+def translate(key: ResourceType, lang: str | None = "ua") -> str | None:
     return resource_manager.get_text(key, lang)

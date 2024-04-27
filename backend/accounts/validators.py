@@ -6,7 +6,7 @@ class CustomPasswordValidator:
     def __init__(self):
         self.min_length = 8
 
-    def validate(self, password, user=None):
+    def validate(self, password: str, user=None) -> None:
         if len(password) < self.min_length:
             raise ValidationError(
                 _("This password must contain at least %(min_length)d characters."),
@@ -26,7 +26,7 @@ class CustomPasswordValidator:
                 code="password_no_letter",
             )
 
-    def get_help_text(self):
+    def get_help_text(self) -> str:
         return _(
             "Ваш пароль повинен містити принаймні %(min_length)d символів,"
             "включаючи принаймні одну літеру та одну цифру." % {"min_length": self.min_length}

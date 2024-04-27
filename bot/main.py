@@ -33,7 +33,7 @@ async def main() -> None:
         await set_bot_commands()
         await dp.start_polling(bot)
     except Exception as e:
-        logger.error(f"Failed to start the bot due to an exception: {str(e)}")
+        logger.error(f"Failed to start the bot due to an exception: {e}")
 
 
 if __name__ == "__main__":

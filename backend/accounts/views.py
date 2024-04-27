@@ -59,7 +59,7 @@ class UserProfileView(APIView):
     permission_classes = [IsAuthenticated]
     serializer_class = ProfileSerializer
 
-    def get(self, request, username) -> Response:
+    def get(self, request: Request, username) -> Response:
         try:
             user = User.objects.get(username=username)
         except Exception as e:
@@ -84,7 +84,7 @@ class CurrentUserView(APIView):
 class SendFeedbackAPIView(APIView):
     permission_classes = [AllowAny]
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request: Request, *args, **kwargs) -> Response:
         email = request.data.get("email")
         username = request.data.get("username")
         feedback = request.data.get("feedback")
@@ -104,11 +104,11 @@ class ProfileAPIUpdate(APIView):
     serializer_class = ProfileSerializer
     permission_classes = [IsAuthenticated]
 
-    def get_object(self):
+    def get_object(self) -> Profile:
         profile_id = self.kwargs.get("profile_id")
         return get_object_or_404(Profile, pk=profile_id)
 
-    def put(self, request, profile_id, format=None):
+    def put(self, request: Request, profile_id: int, format=None) -> Response:
         profile = self.get_object()
         serializer = ProfileSerializer(profile, data=request.data, context={"request": request})
         if serializer.is_valid():
@@ -117,7 +117,7 @@ class ProfileAPIUpdate(APIView):
         return Response(serializer.errors, status=HTTP_400_BAD_REQUEST)
 
 
-def reset_password_request_view(request, uidb64, token):
+def reset_password_request_view(request, uidb64: str, token: str) -> render:
     return render(request, "reset-password.html", {"uid": uidb64, "token": token})
 
 
