@@ -10,6 +10,8 @@ class MessageText(Enum):
     password = auto()
     email = auto()
     birth_date = auto()
+    client_profile = auto()
+    coach_profile = auto()
 
     choose_action = auto()
     choose_language = auto()
@@ -53,6 +55,8 @@ class ButtonText(Enum):
     my_program = auto()
     sign_in = auto()
     sign_up = auto()
+    back = auto()
+    edit_profile = auto()
 
     def __str__(self) -> str:
         return f"buttons.{self.name}"

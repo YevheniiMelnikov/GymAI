@@ -1,5 +1,8 @@
+from contextlib import suppress
+
 import loguru
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
@@ -35,11 +38,12 @@ async def language(message: Message, state: FSMContext) -> None:
         await state.update_data(lang=lang_code)
         await message.answer(
             text=translate(MessageText.choose_action, lang=lang_code),
-            reply_markup=action_choice(lang_code),
+            reply_markup=action_choice_keyboard(lang_code),
         )
         await state.set_state(States.action_choice)
 
-    await message.delete()
+    with suppress(TelegramBadRequest):
+        await message.delete()
 
 
 @register_router.callback_query(States.action_choice)

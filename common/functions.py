@@ -1,7 +1,9 @@
 import os
+from contextlib import suppress
 
 import loguru
 from aiogram import Bot
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BotCommand, Message
 from dotenv import load_dotenv
@@ -17,12 +19,15 @@ bot = Bot(os.environ.get("BOT_TOKEN"))
 BACKEND_URL = os.environ.get("BACKEND_URL")
 
 
-async def show_main_menu(message: Message, state: FSMContext, lang: str) -> None:
-    profile = user_service.storage.get_current_profile_by_tg_id(message.from_user.id)
+async def show_main_menu(message: Message, state: FSMContext, lang: str, tg_id: int | None = None) -> None:
+    profile = user_service.storage.get_current_profile_by_tg_id(tg_id or message.from_user.id)
     menu = client_menu_keyboard if profile.status == "client" else coach_menu_keyboard
-    await state.set_state(States.client_menu if profile.status == "client" else States.coach_menu)
-    await state.update_data(id=message.from_user.id)
+    await state.clear()
+    await state.set_state(States.main_menu)
+    await state.update_data(id=tg_id or message.from_user.id)
     await message.answer(text=translate(MessageText.main_menu, lang=lang), reply_markup=menu(lang))
+    with suppress(TelegramBadRequest):
+        await message.delete()
 
 
 async def register_user(message: Message, state: FSMContext, data: dict) -> None:

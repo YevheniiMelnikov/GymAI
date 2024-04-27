@@ -47,3 +47,13 @@ sign_up:
   eng: "Sign up"
   ru: "Регистрация"
   ua: "Реєстрація"
+
+back:
+  eng: "Back"
+  ru: "Назад"
+  ua: "Назад"
+
+edit_profile:
+  eng: "Edit"
+  ru: "Редактировать"
+  ua: "Редагувати"

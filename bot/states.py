@@ -12,10 +12,9 @@ class States(StatesGroup):
     gender = State()
     birth_date = State()
 
-    client_menu = State()
-    coach_menu = State()
     action_choice = State()
     feedback = State()
+    profile = State()
 
     password_reset = State()
     password_retype = State()

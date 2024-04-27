@@ -46,8 +46,15 @@ def coach_menu_keyboard(lang_code: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
 
 
-def action_choice(lang_code: str) -> InlineKeyboardMarkup:
+def action_choice_keyboard(lang_code: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text=translate(ButtonText.sign_in, lang=lang_code), callback_data="sign_in")
     kb.button(text=translate(ButtonText.sign_up, lang=lang_code), callback_data="sign_up")
+    return kb.as_markup(one_time_keyboard=True)
+
+
+def profile_menu_keyboard(lang_code: str) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=translate(ButtonText.back, lang=lang_code), callback_data="back")
+    kb.button(text=translate(ButtonText.edit_profile, lang=lang_code), callback_data="edit_profile")
     return kb.as_markup(one_time_keyboard=True)

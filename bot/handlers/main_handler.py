@@ -3,6 +3,7 @@ from aiogram import Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from bot.keyboards import profile_menu_keyboard
 from bot.states import States
 from common.functions import show_main_menu
 from common.models import Profile
@@ -13,34 +14,40 @@ main_router = Router()
 logger = loguru.logger
 
 
-@main_router.callback_query(States.client_menu)
-async def client_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
+@main_router.callback_query(States.main_menu)
+async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     profile = user_service.storage.get_current_profile_by_tg_id(data["id"])
     if callback_query.data == "my_program":
-        await callback_query.message.answer(text="Программа в разработке")
+        await callback_query.message.answer(text="Программа в разработке")  # TODO: IMPLEMENT
     elif callback_query.data == "feedback":
         await callback_query.message.answer(text=translate(MessageText.feedback, lang=profile.language))
         await state.set_state(States.feedback)
     elif callback_query.data == "my_profile":
-        await callback_query.message.answer(text="Ваш профиль: ")
+        text = (
+            translate(MessageText.client_profile, lang=profile.language)  # TODO: ADD FORMAT HERE
+            if profile.status == "client"
+            else translate(MessageText.coach_profile, lang=profile.language)  # TODO: ADD FORMAT HERE
+        )
+        await callback_query.message.answer(
+            text=text,
+            reply_markup=profile_menu_keyboard(profile.language),
+        )
+        await state.set_state(States.profile)
+    elif callback_query.data == "show_my_clients":
+        await callback_query.message.answer(text="Ваши клиенты: ")  # TODO: IMPLEMENT
     await callback_query.message.delete()
-    await state.clear()
 
 
-@main_router.callback_query(States.coach_menu)
-async def coach_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
+@main_router.callback_query(States.profile)
+async def profile_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     profile = user_service.storage.get_current_profile_by_tg_id(data["id"])
-    if callback_query.data == "show_my_clients":
-        await callback_query.message.answer(text="Ваши клиенты: ")
-    elif callback_query.data == "feedback":
-        await callback_query.message.answer(text=translate(MessageText.feedback, lang=profile.language))
-        await state.set_state(States.feedback)
-    elif callback_query.data == "my_profile":
-        await callback_query.message.answer(text="Ваш профиль: ")
-    await callback_query.message.delete()
-    await state.clear()
+    if callback_query.data == "edit_profile":
+        pass  # TODO: IMPLEMENT
+    elif callback_query.data == "back":
+        await show_main_menu(callback_query.message, state, profile.language, data["id"])
+        await state.set_state(States.main_menu)
 
 
 @main_router.message(States.password_reset)
