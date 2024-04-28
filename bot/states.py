@@ -11,6 +11,9 @@ class States(StatesGroup):
     account_type = State()
     gender = State()
     birth_date = State()
+    name = State()
+    workout_goals = State()
+    weight = State()
 
     action_choice = State()
     feedback = State()

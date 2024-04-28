@@ -140,10 +140,30 @@ password_unsafe:
 
 client_profile:
   eng: "<b>Gender:</b> {gender}\n<b>Date of birth:</b> {birth_date}\n<b>Workout goals:</b> {goals}\n<b>Weight:</b> {weight} kg\n<b>Workout experience:</b> {experience}\n<b>Health notes:</b> {notes}"
-  ru: "<b>Пол:</b> {gender}\n<b>Дата рождения:</b> {birth_date}\n<b>Тренировочные цели:</b> {goals}\n<b>Weight:</b> {weight} kg\n<b>Опыт тренировок:</b> {experience}\n<b>Примечания по здоровью:</b> {notes}"
-  ua: "<b>Стать:</b> {gender}\n<b>Дата народження:</b> {birth_date}\n<b>Тренувальні цілі:</b> {goals}\n<b>Weight:</b> {weight} kg\n<b>Тренувальний досвід:</b> {experience}\n<b>Примітки по здоров'ю:</b> {notes}"
+  ru: "<b>Пол:</b> {gender}\n<b>Дата рождения:</b> {birth_date}\n<b>Тренировочные цели:</b> {goals}\n<b>Вес:</b> {weight} kg\n<b>Опыт тренировок:</b> {experience}\n<b>Примечания по здоровью:</b> {notes}"
+  ua: "<b>Стать:</b> {gender}\n<b>Дата народження:</b> {birth_date}\n<b>Тренувальні цілі:</b> {goals}\n<b>Вага:</b> {weight} kg\n<b>Тренувальний досвід:</b> {experience}\n<b>Примітки по здоров'ю:</b> {notes}"
 
 coach_profile:
   eng: "<b>Name:</b> {name}\n<b>Work experience:</b> {experience}\n<b>Additional information:</b> {notes}"
   ru: "<b>Имя:</b> {name}\n<b>Опыт работы:</b> {experience}\n<b>Дополнительная информация:</b> {notes}"
   ua: "<b>Ім'я:</b> {name}\n<b>Досвід роботи:</b> {experience}\n<b>Додаткова інформація:</b> {notes}"
+
+edit_profile:
+  eng: "There will be a few questions, this won't take long to answer"
+  ru: "Будет несколько вопросов, это не займет много времени"
+  ua: "Буде кілька запитань, це не займе багато часу"
+
+name:
+  eng: "Enter your name"
+  ru: "Укажите свое имя"
+  ua: "Введіть своє ім'я"
+
+workout_goals:
+  eng: "Describe your training goals (weight loss, muscle gain, wellness, etc.)"
+  ru: "Опишите свои тренировочные цели (похудение, набор мышц, оздоровление и т.д.)"
+  ua: "Опишіть свої тренувальні цілі (схуднення, набір м'язів, оздоровлення тощо)"
+
+weight:
+  eng: "Enter your weight in kg"
+  ru: "Укажите свой вес в кг"
+  ua: "Введіть свою вагу в кг"

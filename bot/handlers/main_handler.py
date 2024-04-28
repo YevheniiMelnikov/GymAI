@@ -5,7 +5,7 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import profile_menu_keyboard
 from bot.states import States
-from common.functions import show_main_menu
+from common.functions import show_main_menu, update_profile
 from common.models import Profile
 from common.user_service import user_service
 from texts.text_manager import MessageText, translate
@@ -16,7 +16,8 @@ logger = loguru.logger
 
 @main_router.callback_query(States.main_menu)
 async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = user_service.storage.get_current_profile_by_tg_id(callback_query.from_user.id)
+    data = await state.get_data()
+    profile = Profile.from_dict(data["profile"])
     if callback_query.data == "my_program":
         await callback_query.message.answer(text="Программа в разработке")  # TODO: IMPLEMENT
     elif callback_query.data == "feedback":
@@ -40,12 +41,12 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
 
 @main_router.callback_query(States.profile)
 async def profile_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = user_service.storage.get_current_profile_by_tg_id(callback_query.from_user.id)
+    data = await state.get_data()
+    profile = Profile.from_dict(data["profile"])
     if callback_query.data == "edit_profile":
-        pass  # TODO: IMPLEMENT
+        await update_profile(callback_query.message, profile, state)
     elif callback_query.data == "back":
         await show_main_menu(callback_query.message, profile, state)
-        await state.set_state(States.main_menu)
 
 
 @main_router.message(States.password_reset)

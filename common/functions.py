@@ -8,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import BotCommand, Message
 from dotenv import load_dotenv
 
-from bot.keyboards import client_menu_keyboard, coach_menu_keyboard
+from bot.keyboards import choose_gender, client_menu_keyboard, coach_menu_keyboard
 from bot.states import States
 from common.models import Profile
 from common.user_service import user_service
@@ -20,11 +20,32 @@ bot = Bot(os.environ.get("BOT_TOKEN"))
 BACKEND_URL = os.environ.get("BACKEND_URL")
 
 
+async def update_profile(message: Message, profile: Profile, state: FSMContext) -> None:
+    await state.clear()
+    await state.update_data(lang=profile.language)
+    if profile.status == "client":
+        if not profile.gender:
+            await message.answer(text=translate(MessageText.edit_profile, lang=profile.language))
+            await state.set_state(States.gender)
+            await message.answer(
+                translate(MessageText.choose_gender, profile.language), reply_markup=choose_gender(profile.language)
+            )
+        else:
+            await message.answer(translate(MessageText.workout_goals, profile.language))
+            await state.set_state(States.workout_goals)
+    else:
+        await message.answer(text=translate(MessageText.name, lang=profile.language))  # TODO: CHECK IF NAME ALREADY SET
+        await state.set_state(States.name)
+
+
 async def show_main_menu(message: Message, profile: Profile, state: FSMContext) -> None:
     menu = client_menu_keyboard if profile.status == "client" else coach_menu_keyboard
     await state.clear()
     await state.set_state(States.main_menu)
-    await message.answer(text=translate(MessageText.main_menu, lang=profile.language), reply_markup=menu(profile.language))
+    await state.update_data(profile=Profile.to_dict(profile))
+    await message.answer(
+        text=translate(MessageText.main_menu, lang=profile.language), reply_markup=menu(profile.language)
+    )
     with suppress(TelegramBadRequest):
         await message.delete()
 

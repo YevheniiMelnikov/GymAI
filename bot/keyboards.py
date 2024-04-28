@@ -58,3 +58,9 @@ def profile_menu_keyboard(lang_code: str) -> InlineKeyboardMarkup:
     kb.button(text=translate(ButtonText.back, lang=lang_code), callback_data="back")
     kb.button(text=translate(ButtonText.edit_profile, lang=lang_code), callback_data="edit_profile")
     return kb.as_markup(one_time_keyboard=True)
+
+
+def edit_profile_keyboard(lang_code: str) -> ReplyKeyboardMarkup:
+    kb = ReplyKeyboardBuilder()
+    kb.button(text=translate(ButtonText.back, lang=lang_code), callback_data="back")
+    return kb.as_markup(one_time_keyboard=True)

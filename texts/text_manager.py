@@ -9,14 +9,18 @@ class MessageText(Enum):
     username = auto()
     password = auto()
     email = auto()
-    birth_date = auto()
     client_profile = auto()
     coach_profile = auto()
-
     choose_action = auto()
     choose_language = auto()
-    choose_gender = auto()
     choose_account_type = auto()
+    edit_profile = auto()
+
+    name = auto()
+    choose_gender = auto()
+    birth_date = auto()
+    workout_goals = auto()
+    weight = auto()
 
     invalid_credentials = auto()
     invalid_content = auto()
