@@ -118,6 +118,7 @@ class UserProfileManager:
 class UserService:
     def __init__(self, storage: UserProfileManager):
         self.backend_url = os.environ.get("BACKEND_URL")
+        self.api_key = os.environ.get("API_KEY")
         self.storage = storage
         self.client = httpx.AsyncClient()
 
@@ -145,16 +146,18 @@ class UserService:
 
     async def sign_up(self, **kwargs) -> bool:
         url = f"{self.backend_url}/api/v1/persons/create/"
-        status_code, response = await self.api_request("post", url, kwargs)
+        status_code, response = await self.api_request(
+            "post", url, data=kwargs, headers={"Authorization": f"Api-Key {self.api_key}"}
+        )
         if status_code == 400 and "error" in response:
             if "already exists" in response.text:
                 raise UsernameUnavailable(response.text)
 
         return status_code == 201
 
-    async def edit_profile(self, user_id: int, data: dict, token: str) -> bool:
+    async def edit_profile(self, user_id: int, data: dict) -> bool:
         url = f"{self.backend_url}/api/v1/persons/{user_id}/"
-        status_code, _ = await self.api_request("put", url, data, headers={"Authorization": f"Token {token}"})
+        status_code, _ = await self.api_request("put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"})
         return status_code == 200
 
     async def log_in(self, username: str, password: str) -> str | None:
@@ -176,15 +179,17 @@ class UserService:
                 return True
         return False
 
-    async def get_profile_by_username(self, username: str, token: str) -> Profile | None:
+    async def get_profile_by_username(self, username: str) -> Profile | None:
         url = f"{self.backend_url}/api/v1/persons/{username}/"
-        status_code, user_data = await self.api_request("get", url, headers={"Authorization": f"Token {token}"})
+        status_code, user_data = await self.api_request(
+            "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
+        )
         if status_code == 200:
             return Profile.from_dict(user_data)
         logger.info(f"Failed to retrieve profile for {username}. HTTP status: {status_code}")
         return None
 
-    async def get_user_data_by_token(self, token: str) -> dict[str, str] | None:
+    async def get_user_data(self, token: str) -> dict[str, str] | None:
         url = f"{self.backend_url}/api/v1/current-user/"
         status_code, response = await self.api_request("get", url, headers={"Authorization": f"Token {token}"})
         if status_code == 200:
@@ -214,7 +219,7 @@ class UserService:
 
     async def delete_profile(self, profile_id: int) -> bool:  # TODO: NOT USED YET
         url = f"{self.backend_url}/api/v1/persons/{profile_id}/"
-        status_code, _ = await self.api_request("delete", url)
+        status_code, _ = await self.api_request("delete", url, headers={"Authorization": f"Api-Key {self.api_key}"})
         return status_code == 404 if status_code else False
 
 

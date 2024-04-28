@@ -54,9 +54,9 @@ saved:
   ua: "Збережено"
 
 unexpected_error:
-  eng: "Unexpected error. Use /start command"
-  ru: "Непредвиденная ошибка. Используйте команду /start"
-  ua: "Непередбачена помилка. Скористайтесь командою /start"
+  eng: "Unexpected error. If I don't respond - use the /start command"
+  ru: "Непредвиденная ошибка. Если я не буду отвечать - воспользуйтесь командой /start"
+  ua: "Непередбачена помилка. Якщо я не відповідатиму - скористайтеся командою /start"
 
 choose_action:
   eng: "Choose an action"

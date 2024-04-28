@@ -5,7 +5,7 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.shortcuts import get_object_or_404, render
 from rest_framework import generics
-from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAdminUser, IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.status import (
@@ -23,6 +23,8 @@ from .serializers import ProfileSerializer
 
 
 class CreateUserView(APIView):
+    permission_classes = [HasAPIKey | IsAuthenticated]
+
     def post(self, request: Request) -> Response:
         username = request.data.get("username")
         password = request.data.get("password")
@@ -56,7 +58,7 @@ class CreateUserView(APIView):
 
 
 class UserProfileView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HasAPIKey | IsAuthenticated]
     serializer_class = ProfileSerializer
 
     def get(self, request: Request, username) -> Response:
@@ -74,7 +76,7 @@ class UserProfileView(APIView):
 
 
 class CurrentUserView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HasAPIKey | IsAuthenticated]
 
     def get(self, request):
         user = request.user
@@ -82,7 +84,7 @@ class CurrentUserView(APIView):
 
 
 class SendFeedbackAPIView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [HasAPIKey | IsAuthenticated]
 
     def post(self, request: Request, *args, **kwargs) -> Response:
         email = request.data.get("email")
@@ -102,7 +104,7 @@ class SendFeedbackAPIView(APIView):
 
 class ProfileAPIUpdate(APIView):
     serializer_class = ProfileSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [HasAPIKey | IsAuthenticated]
 
     def get_object(self) -> Profile:
         profile_id = self.kwargs.get("profile_id")
@@ -130,4 +132,4 @@ class ProfileAPIDestroy(generics.RetrieveDestroyAPIView):
 class ProfileAPIList(generics.ListCreateAPIView):
     serializer_class = ProfileSerializer
     queryset = Profile.objects.all()
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    permission_classes = [IsAuthenticatedOrReadOnly | HasAPIKey]

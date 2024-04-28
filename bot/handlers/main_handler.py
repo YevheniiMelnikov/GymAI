@@ -72,7 +72,7 @@ async def process_password_reset(message: Message, state: FSMContext) -> None:
 async def handle_feedback(message: Message, state: FSMContext) -> None:
     profile = user_service.storage.get_current_profile_by_tg_id(message.from_user.id)
     auth_token = user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
-    if user_data := await user_service.get_user_data_by_token(auth_token):
+    if user_data := await user_service.get_user_data(auth_token):
         if await user_service.send_feedback(user_data.get("email"), user_data.get("username"), message.text):
             logger.info(f"{user_data.get('username')} sent feedback")
             await message.answer(text=translate(MessageText.feedback_sent, lang=profile.language))

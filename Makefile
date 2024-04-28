@@ -12,5 +12,8 @@ migrations:
 tests:
 	@pytest tests -v --ff
 
+db:
+	@docker compose up redis db
+
 
 .PHONY: format check migrations tests

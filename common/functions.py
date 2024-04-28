@@ -72,7 +72,7 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
         return
 
     logger.info(f"User {message.from_user.id} logged in")
-    profile_data = await user_service.get_profile_by_username(data["username"], token)
+    profile_data = await user_service.get_profile_by_username(data["username"])
     user_service.storage.set_profile(
         profile=profile_data,
         username=data["username"],
@@ -100,7 +100,7 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
         return
 
     logger.info(f"User {message.from_user.id} logged in")
-    profile = await user_service.get_profile_by_username(data["username"], token)
+    profile = await user_service.get_profile_by_username(data["username"])
     if not profile:
         await message.answer(text=translate(MessageText.unexpected_error, lang=data["lang"]))
         await state.set_state(States.username)
@@ -115,7 +115,8 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
     logger.info(f"profile_id {profile.id} set for user {message.from_user.id}")
     await message.answer(text=translate(MessageText.signed_in, lang=data["lang"]))
     await show_main_menu(message, profile, state)
-    await message.delete()
+    with suppress(TelegramBadRequest):
+        await message.delete()
 
 
 async def handle_registration_failure(message: Message, state: FSMContext, lang: str) -> None:
