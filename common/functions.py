@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 
 from bot.keyboards import client_menu_keyboard, coach_menu_keyboard
 from bot.states import States
+from common.models import Profile
 from common.user_service import user_service
 from texts.text_manager import MessageText, resource_manager, translate
 
@@ -19,13 +20,11 @@ bot = Bot(os.environ.get("BOT_TOKEN"))
 BACKEND_URL = os.environ.get("BACKEND_URL")
 
 
-async def show_main_menu(message: Message, state: FSMContext, lang: str, tg_id: int | None = None) -> None:
-    profile = user_service.storage.get_current_profile_by_tg_id(tg_id or message.from_user.id)
+async def show_main_menu(message: Message, profile: Profile, state: FSMContext) -> None:
     menu = client_menu_keyboard if profile.status == "client" else coach_menu_keyboard
     await state.clear()
     await state.set_state(States.main_menu)
-    await state.update_data(id=tg_id or message.from_user.id)
-    await message.answer(text=translate(MessageText.main_menu, lang=lang), reply_markup=menu(lang))
+    await message.answer(text=translate(MessageText.main_menu, lang=profile.language), reply_markup=menu(profile.language))
     with suppress(TelegramBadRequest):
         await message.delete()
 
@@ -61,7 +60,8 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
         email=message.text,
     )
     await message.answer(text=translate(MessageText.registration_successful, lang=data["lang"]))
-    await show_main_menu(message, state, data["lang"])
+    profile = user_service.storage.get_current_profile_by_tg_id(message.from_user.id)
+    await show_main_menu(message, profile, state)
 
 
 async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
@@ -93,7 +93,7 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
     )
     logger.info(f"profile_id {profile.id} set for user {message.from_user.id}")
     await message.answer(text=translate(MessageText.signed_in, lang=data["lang"]))
-    await show_main_menu(message, state, data["lang"])
+    await show_main_menu(message, profile, state)
     await message.delete()
 
 

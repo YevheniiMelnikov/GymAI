@@ -16,8 +16,7 @@ logger = loguru.logger
 
 @main_router.callback_query(States.main_menu)
 async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
-    data = await state.get_data()
-    profile = user_service.storage.get_current_profile_by_tg_id(data["id"])
+    profile = user_service.storage.get_current_profile_by_tg_id(callback_query.from_user.id)
     if callback_query.data == "my_program":
         await callback_query.message.answer(text="Программа в разработке")  # TODO: IMPLEMENT
     elif callback_query.data == "feedback":
@@ -41,12 +40,11 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
 
 @main_router.callback_query(States.profile)
 async def profile_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
-    data = await state.get_data()
-    profile = user_service.storage.get_current_profile_by_tg_id(data["id"])
+    profile = user_service.storage.get_current_profile_by_tg_id(callback_query.from_user.id)
     if callback_query.data == "edit_profile":
         pass  # TODO: IMPLEMENT
     elif callback_query.data == "back":
-        await show_main_menu(callback_query.message, state, profile.language, data["id"])
+        await show_main_menu(callback_query.message, profile, state)
         await state.set_state(States.main_menu)
 
 
@@ -79,7 +77,7 @@ async def handle_feedback(message: Message, state: FSMContext) -> None:
             await message.answer(text=translate(MessageText.feedback_sent, lang=profile.language))
         else:
             await message.answer(text=translate(MessageText.unexpected_error, lang=profile.language))
-        await show_main_menu(message, state, profile.language)
+        await show_main_menu(message, profile, state)
     else:
         await message.answer(text=translate(MessageText.unexpected_error, lang=profile.language))
-        await show_main_menu(message, state, profile.language)
+        await show_main_menu(message, profile, state)
