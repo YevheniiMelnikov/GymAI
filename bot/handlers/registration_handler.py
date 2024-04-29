@@ -1,5 +1,8 @@
+from contextlib import suppress
+
 import loguru
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
@@ -25,21 +28,23 @@ async def language(message: Message, state: FSMContext) -> None:
 
     await set_bot_commands(lang_code)
     if profile := user_service.storage.get_current_profile_by_tg_id(message.from_user.id):
-        auth_token = user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
-        if await user_service.edit_profile(profile.id, {"language": lang_code}, auth_token):
+        token = user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
+        if await user_service.edit_profile(profile.id, {"language": lang_code}, token):
             user_service.storage.set_profile_info_by_key(message.from_user.id, profile.id, "language", lang_code)
-            await show_main_menu(message, state, lang_code)
+            profile.language = lang_code
+            await show_main_menu(message, profile, state)
         else:
             await message.answer(text=translate(MessageText.unexpected_error, lang=lang_code))
     else:
         await state.update_data(lang=lang_code)
         await message.answer(
             text=translate(MessageText.choose_action, lang=lang_code),
-            reply_markup=action_choice(lang_code),
+            reply_markup=action_choice_keyboard(lang_code),
         )
         await state.set_state(States.action_choice)
 
-    await message.delete()
+    with suppress(TelegramBadRequest):
+        await message.delete()
 
 
 @register_router.callback_query(States.action_choice)
@@ -125,4 +130,5 @@ async def email(message: Message, state: FSMContext) -> None:
         await state.set_state(States.username)
         await message.answer(text=translate(MessageText.username_unavailable, lang=data["lang"]))
     finally:
-        await message.delete()
+        with suppress(TelegramBadRequest):
+            await message.delete()

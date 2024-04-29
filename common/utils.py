@@ -39,9 +39,12 @@ def validate_birth_date(date_str: str) -> bool:
     if not (1900 <= year <= 2100 and 1 <= month <= 12):
         return False
 
-    if (month in [4, 6, 9, 11] and day > 30) or (
-        month == 2 and day > (29 if (year % 4 == 0 and year % 100 != 0) or year % 400 == 0 else 28)
-    ):
+    if month in [4, 6, 9, 11] and day > 30:
         return False
+    elif month == 2:
+        if (year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)) and day > 29:
+            return False
+        elif day > 28:
+            return False
 
     return 1 <= day <= 31

@@ -11,11 +11,13 @@ class States(StatesGroup):
     account_type = State()
     gender = State()
     birth_date = State()
+    name = State()
+    workout_goals = State()
+    weight = State()
 
-    client_menu = State()
-    coach_menu = State()
     action_choice = State()
     feedback = State()
+    profile = State()
 
     password_reset = State()
     password_retype = State()

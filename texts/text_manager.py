@@ -9,12 +9,18 @@ class MessageText(Enum):
     username = auto()
     password = auto()
     email = auto()
-    birth_date = auto()
-
+    client_profile = auto()
+    coach_profile = auto()
     choose_action = auto()
     choose_language = auto()
-    choose_gender = auto()
     choose_account_type = auto()
+    edit_profile = auto()
+
+    name = auto()
+    choose_gender = auto()
+    birth_date = auto()
+    workout_goals = auto()
+    weight = auto()
 
     invalid_credentials = auto()
     invalid_content = auto()
@@ -27,6 +33,7 @@ class MessageText(Enum):
     password_unsafe = auto()
 
     saved = auto()
+    your_data_updated = auto()
     feedback = auto()
     password_retype = auto()
     password_reset_sent = auto()
@@ -53,6 +60,8 @@ class ButtonText(Enum):
     my_program = auto()
     sign_in = auto()
     sign_up = auto()
+    back = auto()
+    edit_profile = auto()
 
     def __str__(self) -> str:
         return f"buttons.{self.name}"
@@ -83,7 +92,7 @@ class TextManager:
         return result
 
     @staticmethod
-    def load_commands():
+    def load_commands() -> dict[str, dict[str, str]]:
         result = {}
         with open(settings.RESOURCES["commands"], "r", encoding="utf-8") as file:
             data = yaml.safe_load(file)
@@ -95,7 +104,5 @@ class TextManager:
 resource_manager = TextManager()
 
 
-def translate(key: ResourceType, lang: str = "ua") -> str | None:
-    if lang is None:
-        lang = "ua"
+def translate(key: ResourceType, lang: str | None = "ua") -> str | None:
     return resource_manager.get_text(key, lang)

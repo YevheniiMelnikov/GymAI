@@ -1,13 +1,16 @@
 import os
+from contextlib import suppress
 
 import loguru
 from aiogram import Bot
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BotCommand, Message
 from dotenv import load_dotenv
 
-from bot.keyboards import client_menu_keyboard, coach_menu_keyboard
+from bot.keyboards import choose_gender, client_menu_keyboard, coach_menu_keyboard
 from bot.states import States
+from common.models import Profile
 from common.user_service import user_service
 from texts.text_manager import MessageText, resource_manager, translate
 
@@ -17,12 +20,34 @@ bot = Bot(os.environ.get("BOT_TOKEN"))
 BACKEND_URL = os.environ.get("BACKEND_URL")
 
 
-async def show_main_menu(message: Message, state: FSMContext, lang: str) -> None:
-    profile = user_service.storage.get_current_profile_by_tg_id(message.from_user.id)
+async def update_profile(message: Message, profile: Profile, state: FSMContext) -> None:
+    await state.clear()
+    await state.update_data(lang=profile.language)
+    if profile.status == "client":
+        if not profile.gender:
+            await message.answer(text=translate(MessageText.edit_profile, lang=profile.language))
+            await state.set_state(States.gender)
+            await message.answer(
+                translate(MessageText.choose_gender, profile.language), reply_markup=choose_gender(profile.language)
+            )
+        else:
+            await message.answer(translate(MessageText.workout_goals, profile.language))
+            await state.set_state(States.workout_goals)
+    else:
+        await message.answer(text=translate(MessageText.name, lang=profile.language))  # TODO: CHECK IF NAME ALREADY SET
+        await state.set_state(States.name)
+
+
+async def show_main_menu(message: Message, profile: Profile, state: FSMContext) -> None:
     menu = client_menu_keyboard if profile.status == "client" else coach_menu_keyboard
-    await state.set_state(States.client_menu if profile.status == "client" else States.coach_menu)
-    await state.update_data(id=message.from_user.id)
-    await message.answer(text=translate(MessageText.main_menu, lang=lang), reply_markup=menu(lang))
+    await state.clear()
+    await state.set_state(States.main_menu)
+    await state.update_data(profile=Profile.to_dict(profile))
+    await message.answer(
+        text=translate(MessageText.main_menu, lang=profile.language), reply_markup=menu(profile.language)
+    )
+    with suppress(TelegramBadRequest):
+        await message.delete()
 
 
 async def register_user(message: Message, state: FSMContext, data: dict) -> None:
@@ -47,7 +72,7 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
         return
 
     logger.info(f"User {message.from_user.id} logged in")
-    profile_data = await user_service.get_profile_by_username(data["username"], token)
+    profile_data = await user_service.get_profile_by_username(data["username"])
     user_service.storage.set_profile(
         profile=profile_data,
         username=data["username"],
@@ -56,7 +81,8 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
         email=message.text,
     )
     await message.answer(text=translate(MessageText.registration_successful, lang=data["lang"]))
-    await show_main_menu(message, state, data["lang"])
+    profile = user_service.storage.get_current_profile_by_tg_id(message.from_user.id)
+    await show_main_menu(message, profile, state)
 
 
 async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
@@ -74,7 +100,7 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
         return
 
     logger.info(f"User {message.from_user.id} logged in")
-    profile = await user_service.get_profile_by_username(data["username"], token)
+    profile = await user_service.get_profile_by_username(data["username"])
     if not profile:
         await message.answer(text=translate(MessageText.unexpected_error, lang=data["lang"]))
         await state.set_state(States.username)
@@ -88,8 +114,9 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
     )
     logger.info(f"profile_id {profile.id} set for user {message.from_user.id}")
     await message.answer(text=translate(MessageText.signed_in, lang=data["lang"]))
-    await show_main_menu(message, state, data["lang"])
-    await message.delete()
+    await show_main_menu(message, profile, state)
+    with suppress(TelegramBadRequest):
+        await message.delete()
 
 
 async def handle_registration_failure(message: Message, state: FSMContext, lang: str) -> None:
@@ -103,3 +130,23 @@ async def set_bot_commands(lang: str = "ua") -> None:
     command_texts = resource_manager.commands
     commands = [BotCommand(command=cmd, description=desc[lang]) for cmd, desc in command_texts.items()]
     await bot.set_my_commands(commands)
+
+
+async def update_client_profile(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    try:
+        profile = user_service.storage.get_current_profile_by_tg_id(message.from_user.id)
+        assert profile
+        token = user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
+        assert token
+        await user_service.edit_profile(profile.id, data, token)  # TODO: IMPLEMENT
+        await message.answer(translate(MessageText.your_data_updated, lang=data["lang"]))
+        await state.set_state(States.main_menu)
+        await message.answer(
+            translate(MessageText.main_menu, lang=data["lang"]), reply_markup=client_menu_keyboard(data["lang"])
+        )
+    except Exception as e:
+        logger.error(e)
+        await message.answer(translate(MessageText.unexpected_error, lang=data["lang"]))
+    finally:
+        await message.delete()

@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from bot.handlers.command_handler import cmd_router
 from bot.handlers.invalid_content_handler import invalid_content_router
 from bot.handlers.main_handler import main_router
+from bot.handlers.questionnaire_handler import questionnaire_router
 from bot.handlers.registration_handler import register_router
 from common.functions import set_bot_commands
 
@@ -25,7 +26,7 @@ async def main() -> None:
     bot = Bot(token=bot_token, parse_mode="HTML")
     redis_url = os.getenv("REDIS_URL")
     dp = Dispatcher(storage=RedisStorage.from_url(f"{redis_url}/0"))
-    dp.include_routers(cmd_router, main_router, register_router, invalid_content_router)
+    dp.include_routers(cmd_router, main_router, register_router, questionnaire_router, invalid_content_router)
 
     logger.info("Starting bot ...")
     try:
@@ -33,7 +34,7 @@ async def main() -> None:
         await set_bot_commands()
         await dp.start_polling(bot)
     except Exception as e:
-        logger.error(f"Failed to start the bot due to an exception: {str(e)}")
+        logger.error(f"Failed to start the bot due to an exception: {e}")
 
 
 if __name__ == "__main__":
