@@ -61,3 +61,17 @@ async def invalid_weight(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))
     await message.delete()
+
+
+@invalid_content_router.message(States.workout_experience)
+async def invalid_workout_experience(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))
+    await message.delete()
+
+
+@invalid_content_router.message(States.health_notes)
+async def invalid_health_notes(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))
+    await message.delete()
