@@ -155,9 +155,9 @@ class UserService:
 
         return status_code == 201
 
-    async def edit_profile(self, user_id: int, data: dict) -> bool:
+    async def edit_profile(self, user_id: int, data: dict, token: str) -> bool:
         url = f"{self.backend_url}/api/v1/persons/{user_id}/"
-        status_code, _ = await self.api_request("put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"})
+        status_code, _ = await self.api_request("put", url, data, headers={"Authorization": f"Token {token}"})
         return status_code == 200
 
     async def log_in(self, username: str, password: str) -> str | None:

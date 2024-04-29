@@ -130,3 +130,23 @@ async def set_bot_commands(lang: str = "ua") -> None:
     command_texts = resource_manager.commands
     commands = [BotCommand(command=cmd, description=desc[lang]) for cmd, desc in command_texts.items()]
     await bot.set_my_commands(commands)
+
+
+async def update_client_profile(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    try:
+        profile = user_service.storage.get_current_profile_by_tg_id(message.from_user.id)
+        assert profile
+        token = user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
+        assert token
+        await user_service.edit_profile(profile.id, data, token)  # TODO: IMPLEMENT
+        await message.answer(translate(MessageText.your_data_updated, lang=data["lang"]))
+        await state.set_state(States.main_menu)
+        await message.answer(
+            translate(MessageText.main_menu, lang=data["lang"]), reply_markup=client_menu_keyboard(data["lang"])
+        )
+    except Exception as e:
+        logger.error(e)
+        await message.answer(translate(MessageText.unexpected_error, lang=data["lang"]))
+    finally:
+        await message.delete()

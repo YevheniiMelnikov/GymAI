@@ -167,3 +167,8 @@ weight:
   eng: "Enter your weight in kg"
   ru: "Укажите свой вес в кг"
   ua: "Введіть свою вагу в кг"
+
+your_data_updated:
+  eng: "Your data has been updated"
+  ru: "Ваши данные были обновлены"
+  ua: "Ваші дані були оновлені"

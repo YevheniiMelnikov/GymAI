@@ -45,7 +45,7 @@ async def cmd_logout(message: Message, state: FSMContext) -> None:
 @cmd_router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
     profile = user_service.storage.get_current_profile_by_tg_id(message.from_user.id)
-    language = profile.language if profile else None
+    language = profile.language if profile else "ua"
     await message.answer(text=translate(MessageText.help, lang=language))
 
 

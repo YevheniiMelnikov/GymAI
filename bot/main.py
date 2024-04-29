@@ -26,7 +26,7 @@ async def main() -> None:
     bot = Bot(token=bot_token, parse_mode="HTML")
     redis_url = os.getenv("REDIS_URL")
     dp = Dispatcher(storage=RedisStorage.from_url(f"{redis_url}/0"))
-    dp.include_routers(cmd_router, main_router, register_router, invalid_content_router, questionnaire_router)
+    dp.include_routers(cmd_router, main_router, register_router, questionnaire_router, invalid_content_router)
 
     logger.info("Starting bot ...")
     try:

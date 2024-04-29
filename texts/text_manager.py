@@ -33,6 +33,7 @@ class MessageText(Enum):
     password_unsafe = auto()
 
     saved = auto()
+    your_data_updated = auto()
     feedback = auto()
     password_retype = auto()
     password_reset_sent = auto()

@@ -47,3 +47,17 @@ async def invalid_gender(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))
     await message.delete()
+
+
+@invalid_content_router.message(States.workout_goals)
+async def invalid_workout_goals(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))
+    await message.delete()
+
+
+@invalid_content_router.message(States.weight)
+async def invalid_weight(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))
+    await message.delete()
