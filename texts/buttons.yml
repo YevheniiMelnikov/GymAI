@@ -57,3 +57,28 @@ edit_profile:
   eng: "Edit"
   ru: "Редактировать"
   ua: "Редагувати"
+
+subscription:
+  eng: "Subscription"
+  ru: "Подписка"
+  ua: "Підписка"
+
+beginner:
+  eng: "Beginner"
+  ru: "Новичок"
+  ua: "Новачок"
+
+intermediate:
+  eng: "1-3 years"
+  ru: "1-3 года"
+  ua: "1-3 років"
+
+advanced:
+  eng: "3-5 years"
+  ru: "3-5 лет"
+  ua: "3-5 років"
+
+experienced:
+  eng: "5+ years"
+  ru: "5+ лет"
+  ua: "5+ років"

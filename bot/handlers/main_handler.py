@@ -18,24 +18,27 @@ logger = loguru.logger
 async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     profile = Profile.from_dict(data["profile"])
-    if callback_query.data == "my_program":
-        await callback_query.message.answer(text="Программа в разработке")  # TODO: IMPLEMENT
-    elif callback_query.data == "feedback":
-        await callback_query.message.answer(text=translate(MessageText.feedback, lang=profile.language))
-        await state.set_state(States.feedback)
-    elif callback_query.data == "my_profile":
-        text = (
-            translate(MessageText.client_profile, lang=profile.language)  # TODO: ADD FORMAT HERE
-            if profile.status == "client"
-            else translate(MessageText.coach_profile, lang=profile.language)  # TODO: ADD FORMAT HERE
-        )
-        await callback_query.message.answer(
-            text=text,
-            reply_markup=profile_menu_keyboard(profile.language),
-        )
-        await state.set_state(States.profile)
-    elif callback_query.data == "show_my_clients":
-        await callback_query.message.answer(text="Ваши клиенты: ")  # TODO: IMPLEMENT
+    match callback_query.data:
+        case "feedback":
+            await callback_query.message.answer(text=translate(MessageText.feedback, lang=profile.language))
+            await state.set_state(States.feedback)
+        case "my_profile":
+            text = (
+                translate(MessageText.client_profile, lang=profile.language)  # TODO: ADD FORMAT HERE
+                if profile.status == "client"
+                else translate(MessageText.coach_profile, lang=profile.language)  # TODO: ADD FORMAT HERE
+            )
+            await callback_query.message.answer(
+                text=text,
+                reply_markup=profile_menu_keyboard(profile.language),
+            )
+            await state.set_state(States.profile)
+        case "my_clients":
+            await callback_query.message.answer(text="Ваши клиенты: ")  # TODO: IMPLEMENT
+        case "my_program":
+            await callback_query.message.answer(text="Программа")  # TODO: IMPLEMENT
+        case "my_subscription":
+            await callback_query.message.answer(text="Подписка")  # TODO: IMPLEMENT
     await callback_query.message.delete()
 
 

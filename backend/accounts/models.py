@@ -6,9 +6,13 @@ from django.db.models import Model
 class Profile(Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     status = models.CharField(max_length=50, default="client")
+    language = models.CharField(max_length=50, null=True, blank=True)
+
+    # client fields:
     gender = models.CharField(max_length=50, null=True, blank=True)
     birth_date = models.DateField(null=True, blank=True)
-    language = models.CharField(max_length=50, null=True, blank=True)
+
+    # trainer fields:
 
     class Meta:
         verbose_name = "profile"
