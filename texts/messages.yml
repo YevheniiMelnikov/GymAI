@@ -144,9 +144,9 @@ client_profile:
   ua: "<b>Стать:</b> {gender}\n<b>Дата народження:</b> {birth_date}\n<b>Тренувальні цілі:</b> {goals}\n<b>Вага:</b> {weight} kg\n<b>Тренувальний досвід:</b> {experience}\n<b>Примітки по здоров'ю:</b> {notes}"
 
 coach_profile:
-  eng: "<b>Name:</b> {name}\n<b>Work experience:</b> {experience}\n<b>Additional information:</b> {notes}"
-  ru: "<b>Имя:</b> {name}\n<b>Опыт работы:</b> {experience}\n<b>Дополнительная информация:</b> {notes}"
-  ua: "<b>Ім'я:</b> {name}\n<b>Досвід роботи:</b> {experience}\n<b>Додаткова інформація:</b> {notes}"
+  eng: "<b>Name:</b> {name}\n<b>Work experience:</b> {experience}\n<b>Additional information:</b> {notes}\n<b>Payment details:</b> {payment_details}"
+  ru: "<b>Имя:</b> {name}\n<b>Опыт работы:</b> {experience}\n<b>Дополнительная информация:</b> {notes}\n<b>Реквизиты оплаты:</b> {payment_details}"
+  ua: "<b>Ім'я:</b> {name}\n<b>Досвід роботи:</b> {experience}\n<b>Додаткова інформація:</b> {notes}\n<b>Реквізити оплати:</b> {payment_details}"
 
 edit_profile:
   eng: "There will be a few questions, this won't take long to answer"

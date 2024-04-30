@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.core.validators import MaxValueValidator
 from django.db import models
 from django.db.models import Model
 
@@ -11,8 +12,16 @@ class Profile(Model):
     # client fields:
     gender = models.CharField(max_length=50, null=True, blank=True)
     birth_date = models.DateField(null=True, blank=True)
+    workout_experience = models.CharField(max_length=50, null=True, blank=True)
+    workout_goals = models.CharField(max_length=250, null=True, blank=True)
+    health_notes = models.CharField(max_length=250, null=True, blank=True)
+    weight = models.IntegerField(null=True, blank=True, validators=[MaxValueValidator(999)])
 
     # trainer fields:
+    name = models.CharField(max_length=50, null=True, blank=True)
+    experience = models.IntegerField(null=True, blank=True, validators=[MaxValueValidator(99)])
+    additional_info = models.CharField(max_length=250, null=True, blank=True)
+    payment_details = models.CharField(max_length=50, null=True, blank=True)
 
     class Meta:
         verbose_name = "profile"
