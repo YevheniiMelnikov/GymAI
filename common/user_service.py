@@ -9,7 +9,7 @@ import loguru
 import redis
 
 from common.exceptions import UsernameUnavailable, UserServiceError
-from common.models import Profile
+from common.models import Profile, Client, Coach
 
 logger = loguru.logger
 
@@ -43,8 +43,6 @@ class UserProfileManager:
             profile_data = {
                 "id": profile.id,
                 "status": profile.status,
-                "gender": profile.gender,
-                "birth_date": profile.birth_date,
                 "language": profile.language,
                 "username": username,
                 "auth_token": auth_token,
@@ -113,6 +111,57 @@ class UserProfileManager:
         except Exception as e:
             logger.error(f"Failed to set profile info for user {telegram_id} and profile {profile_id}: {e}")
             return False
+
+    def set_client_data(self, client: Client) -> None:
+        try:
+            client_data = {
+                "gender": client.gender,
+                "birth_date": client.birth_date,
+                "workout_experience": client.workout_experience,
+                "workout_goals": client.workout_goals,
+                "health_notes": client.health_notes,
+                "weight": client.weight,
+            }
+            self.redis.hset("clients", client.id, json.dumps(client_data))
+            logger.info(f"Client data for {client.id} has been set")
+        except Exception as e:
+            logger.error(f"Failed to set client data for {client.id}: {e}")
+
+    def get_client_by_id(self, profile_id: int) -> Client | None:
+        try:
+            client_data = self.redis.hget("clients", profile_id)
+            if client_data:
+                data = json.loads(client_data)
+                data["id"] = profile_id
+                return Client.from_dict(data)
+            else:
+                logger.info(f"No client data found for client ID {profile_id}")
+                return None
+        except Exception as e:
+            logger.error(f"Failed to get client data for client ID {profile_id}: {e}")
+            return None
+
+    def set_coach_data(self, coach: Coach) -> None:
+        try:
+            trainer_data = coach.to_dict()
+            self.redis.hset("trainers", coach.id, json.dumps(trainer_data))
+            logger.info(f"Trainer data set for trainer ID {coach.id}")
+        except Exception as e:
+            logger.error(f"Failed to set trainer data for trainer ID {coach.id}: {e}")
+
+    def get_coach_by_id(self, coach_id: int) -> Coach | None:
+        try:
+            coach_data = self.redis.hget("coaches", coach_id)
+            if coach_data:
+                data = json.loads(coach_data)
+                data["id"] = coach_id
+                return Coach.from_dict(data)
+            else:
+                logger.info(f"No coach data found for coach ID {coach_id}")
+                return None
+        except Exception as e:
+            logger.error(f"Failed to get coach data for coach ID {coach_id}: {e}")
+            return None
 
 
 class UserService:

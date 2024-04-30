@@ -23,11 +23,12 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
             await callback_query.message.answer(text=translate(MessageText.feedback, lang=profile.language))
             await state.set_state(States.feedback)
         case "my_profile":
-            text = (
-                translate(MessageText.client_profile, lang=profile.language)  # TODO: ADD FORMAT HERE
-                if profile.status == "client"
-                else translate(MessageText.coach_profile, lang=profile.language)  # TODO: ADD FORMAT HERE
-            )
+            if profile.status == "client":
+                client = user_service.storage.get_client_by_id(profile.id)  # TODO: IMPLEMENT
+                text = translate(MessageText.client_profile, lang=profile.language)  # TODO: ADD FORMAT HERE
+            else:
+                text = translate(MessageText.coach_profile, lang=profile.language)  # TODO: ADD FORMAT HERE
+
             await callback_query.message.answer(
                 text=text,
                 reply_markup=profile_menu_keyboard(profile.language),

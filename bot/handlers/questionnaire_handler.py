@@ -80,4 +80,3 @@ async def health_notes(message: Message, state: FSMContext) -> None:
     await message.answer(translate(MessageText.weight, lang=data["lang"]))
     await state.set_state(States.weight)
     await update_client_profile(message, state)
-    await message.delete()

@@ -17,7 +17,7 @@ class Profile(Model):
     health_notes = models.CharField(max_length=250, null=True, blank=True)
     weight = models.IntegerField(null=True, blank=True, validators=[MaxValueValidator(999)])
 
-    # trainer fields:
+    # coach fields:
     name = models.CharField(max_length=50, null=True, blank=True)
     experience = models.IntegerField(null=True, blank=True, validators=[MaxValueValidator(99)])
     additional_info = models.CharField(max_length=250, null=True, blank=True)

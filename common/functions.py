@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 from bot.keyboards import choose_gender, client_menu_keyboard, coach_menu_keyboard
 from bot.states import States
-from common.models import Profile
+from common.models import Profile, Client
 from common.user_service import user_service
 from texts.text_manager import MessageText, resource_manager, translate
 
@@ -23,16 +23,12 @@ BACKEND_URL = os.environ.get("BACKEND_URL")
 async def update_profile(message: Message, profile: Profile, state: FSMContext) -> None:
     await state.clear()
     await state.update_data(lang=profile.language)
-    if profile.status == "client":
-        if not profile.gender:
-            await message.answer(text=translate(MessageText.edit_profile, lang=profile.language))
-            await state.set_state(States.gender)
-            await message.answer(
-                translate(MessageText.choose_gender, profile.language), reply_markup=choose_gender(profile.language)
-            )
-        else:
-            await message.answer(translate(MessageText.workout_goals, profile.language))
-            await state.set_state(States.workout_goals)
+    if profile.status == "client":  # TODO: CHECK IF QUESTIONNAIRE WAS FILLED PREVIOUSLY
+        await message.answer(text=translate(MessageText.edit_profile, lang=profile.language))
+        await state.set_state(States.gender)
+        await message.answer(
+            translate(MessageText.choose_gender, profile.language), reply_markup=choose_gender(profile.language)
+        )
     else:
         await message.answer(text=translate(MessageText.name, lang=profile.language))  # TODO: CHECK IF NAME ALREADY SET
         await state.set_state(States.name)
@@ -134,13 +130,19 @@ async def set_bot_commands(lang: str = "ua") -> None:
 
 async def update_client_profile(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
+
     try:
         profile = user_service.storage.get_current_profile_by_tg_id(message.from_user.id)
-        assert profile
+        data["id"] = profile.id
+        user_service.storage.set_client_data(Client.from_dict(data))
+        client = user_service.storage.get_client_by_id(data["id"])
+        print(client)
         token = user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
         assert token
         await user_service.edit_profile(profile.id, data, token)  # TODO: IMPLEMENT
         await message.answer(translate(MessageText.your_data_updated, lang=data["lang"]))
+        await state.clear()
+        await state.update_data(profile=Profile.to_dict(profile))
         await state.set_state(States.main_menu)
         await message.answer(
             translate(MessageText.main_menu, lang=data["lang"]), reply_markup=client_menu_keyboard(data["lang"])
