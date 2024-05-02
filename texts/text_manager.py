@@ -15,6 +15,8 @@ class MessageText(Enum):
     choose_language = auto()
     choose_account_type = auto()
     edit_profile = auto()
+    choose_profile_parameter = auto()
+    update_your_data = auto()
 
     name = auto()
     choose_gender = auto()
@@ -69,6 +71,10 @@ class ButtonText(Enum):
     intermediate = auto()
     advanced = auto()
     experienced = auto()
+    weight = auto()
+    health_notes = auto()
+    workout_goals = auto()
+    workout_experience = auto()
 
     def __str__(self) -> str:
         return f"buttons.{self.name}"

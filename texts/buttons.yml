@@ -82,3 +82,23 @@ experienced:
   eng: "5+ years"
   ru: "5+ лет"
   ua: "5+ років"
+
+weight:
+  eng: "Weight"
+  ru: "Вес"
+  ua: "Вага"
+
+workout_experience:
+  eng: "Workout experience"
+  ru: "Опыт тренировок"
+  ua: "Тренувальний досвід"
+
+health_notes:
+  eng: "Health notes"
+  ru: "Примечания по здоровью"
+  ua: "Примітки по здоров'ю"
+
+workout_goals:
+  eng: "Workout goals"
+  ru: "Тренировочные цели"
+  ua: "Тренувальні цілі"

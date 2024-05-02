@@ -139,9 +139,9 @@ password_unsafe:
   ua: "Введений пароль не відповідає вимогам безпеки, спробуйте ще раз"
 
 client_profile:
-  eng: "<b>Gender:</b> {gender}\n<b>Date of birth:</b> {birth_date}\n<b>Workout goals:</b> {goals}\n<b>Weight:</b> {weight} kg\n<b>Workout experience:</b> {experience}\n<b>Health notes:</b> {notes}"
-  ru: "<b>Пол:</b> {gender}\n<b>Дата рождения:</b> {birth_date}\n<b>Тренировочные цели:</b> {goals}\n<b>Вес:</b> {weight} kg\n<b>Опыт тренировок:</b> {experience}\n<b>Примечания по здоровью:</b> {notes}"
-  ua: "<b>Стать:</b> {gender}\n<b>Дата народження:</b> {birth_date}\n<b>Тренувальні цілі:</b> {goals}\n<b>Вага:</b> {weight} kg\n<b>Тренувальний досвід:</b> {experience}\n<b>Примітки по здоров'ю:</b> {notes}"
+  eng: "<b>Gender:</b> {gender}\n<b>Date of birth:</b> {birth_date}\n<b>Workout goals:</b> {goals}\n<b>Weight (kg):</b> {weight}\n<b>Workout experience (years):</b> {experience}\n<b>Health notes:</b> {notes}"
+  ru: "<b>Пол:</b> {gender}\n<b>Дата рождения:</b> {birth_date}\n<b>Тренировочные цели:</b> {goals}\n<b>Вес (кг):</b> {weight}\n<b>Опыт тренировок (лет):</b> {experience}\n<b>Примечания по здоровью:</b> {notes}"
+  ua: "<b>Стать:</b> {gender}\n<b>Дата народження:</b> {birth_date}\n<b>Тренувальні цілі:</b> {goals}\n<b>Вага (кг):</b> {weight}\n<b>Тренувальний досвід (років):</b> {experience}\n<b>Примітки по здоров'ю:</b> {notes}"
 
 coach_profile:
   eng: "<b>Name:</b> {name}\n<b>Work experience:</b> {experience}\n<b>Additional information:</b> {notes}\n<b>Payment details:</b> {payment_details}"
@@ -174,11 +174,21 @@ workout_experience:
   ua: "Вкажіть ваш досвід у тренуваннях"
 
 health_notes:
-  eng: "Indicate what should be taken into account in the design of your training program. Contraindications, injuries, wishes, etc"
-  ru: "Укажите что стоит учесть в составлении вашей тренировочной программы. Противопоказания, травмы, пожелания и т.д."
-  ua: "Вкажіть що варто врахувати в складанні вашої тренувальної програми. Протипоказання, травми, побажання тощо"
+  eng: "Indicate what should be taken into account in the design of your training program. Contraindications, injuries, etc"
+  ru: "Укажите что стоит учесть в составлении вашей тренировочной программы. Противопоказания, травмы, и т.д."
+  ua: "Вкажіть що варто врахувати в складанні вашої тренувальної програми. Протипоказання, травми тощо"
 
 your_data_updated:
   eng: "Your data has been updated"
   ru: "Ваши данные были обновлены"
   ua: "Ваші дані були оновлені"
+
+choose_profile_parameter:
+  eng: "Select what you want to edit"
+  ru: "Выберите что желаете отредактировать"
+  ua: "Виберіть що бажаєте відредагувати"
+
+update_your_data:
+  eng: "Enter the current data"
+  ru: "Введите актуальные данные"
+  ua: "Введіть актуальні дані"

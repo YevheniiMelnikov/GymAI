@@ -24,9 +24,7 @@ class Profile:
         }
 
     def __repr__(self) -> str:
-        return (
-            f"Profile(id={self.id}, status={self.status}, language={self.language}, last_used={self.last_used})"
-        )
+        return f"Profile(id={self.id}, status={self.status}, language={self.language}, last_used={self.last_used})"
 
 
 @dataclass

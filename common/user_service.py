@@ -9,7 +9,7 @@ import loguru
 import redis
 
 from common.exceptions import UsernameUnavailable, UserServiceError
-from common.models import Profile, Client, Coach
+from common.models import Client, Coach, Profile
 
 logger = loguru.logger
 
@@ -112,20 +112,23 @@ class UserProfileManager:
             logger.error(f"Failed to set profile info for user {telegram_id} and profile {profile_id}: {e}")
             return False
 
-    def set_client_data(self, client: Client) -> None:
+    def set_client_data(self, profile_id: int, client_data: dict) -> None:
         try:
-            client_data = {
-                "gender": client.gender,
-                "birth_date": client.birth_date,
-                "workout_experience": client.workout_experience,
-                "workout_goals": client.workout_goals,
-                "health_notes": client.health_notes,
-                "weight": client.weight,
-            }
-            self.redis.hset("clients", client.id, json.dumps(client_data))
-            logger.info(f"Client data for {client.id} has been set")
+            allowed_fields = ["gender", "birth_date", "workout_experience", "workout_goals", "health_notes", "weight"]
+            filtered_client_data = {key: client_data[key] for key in allowed_fields if key in client_data}
+
+            # Получаем существующие данные профиля клиента из Redis
+            existing_data = json.loads(self.redis.hget("clients", profile_id) or "{}")
+
+            # Обновляем существующие данные профиля клиента
+            existing_data.update(filtered_client_data)
+
+            # Сохраняем обновленные данные профиля клиента в Redis
+            self.redis.hset("clients", profile_id, json.dumps(existing_data))
+
+            logger.info(f"Client data for {profile_id} has been set or updated")
         except Exception as e:
-            logger.error(f"Failed to set client data for {client.id}: {e}")
+            logger.error(f"Failed to set or update client data for {profile_id}: {e}")
 
     def get_client_by_id(self, profile_id: int) -> Client | None:
         try:
@@ -141,13 +144,14 @@ class UserProfileManager:
             logger.error(f"Failed to get client data for client ID {profile_id}: {e}")
             return None
 
-    def set_coach_data(self, coach: Coach) -> None:
+    def set_coach_data(self, profile_id: int, coach_data: dict) -> None:
         try:
-            trainer_data = coach.to_dict()
-            self.redis.hset("trainers", coach.id, json.dumps(trainer_data))
-            logger.info(f"Trainer data set for trainer ID {coach.id}")
+            allowed_fields = ["name", "experience", "additional_info", "payment_details"]
+            filtered_coach_data = {key: coach_data[key] for key in allowed_fields if key in coach_data}
+            self.redis.hset("coaches", profile_id, json.dumps(filtered_coach_data))
+            logger.info(f"Coach data set or updated for trainer ID {profile_id}")
         except Exception as e:
-            logger.error(f"Failed to set trainer data for trainer ID {coach.id}: {e}")
+            logger.error(f"Failed to set or update coach data for trainer ID {profile_id}: {e}")
 
     def get_coach_by_id(self, coach_id: int) -> Coach | None:
         try:
