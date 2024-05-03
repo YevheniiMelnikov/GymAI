@@ -1,5 +1,12 @@
 import re
 from functools import wraps
+from typing import Optional
+
+from aiogram.fsm.state import State
+
+from bot.states import States
+from common.models import Client, Coach
+from texts.text_manager import ButtonText, MessageText, translate
 
 
 def singleton(cls: type) -> object:
@@ -48,3 +55,39 @@ def validate_birth_date(date_str: str) -> bool:
             return False
 
     return 1 <= day <= 31
+
+
+def get_profile_attributes(role: str, user: Optional[Client | Coach], lang_code: str) -> dict[str, str]:
+    genders = {
+        "male": translate(ButtonText.male, lang=lang_code),
+        "female": translate(ButtonText.female, lang=lang_code),
+    }
+    if role == "client":
+        attributes = {
+            "gender": genders[user.gender] if user and user.gender in genders else "",
+            "birth_date": user.birth_date if user.birth_date else "",
+            "experience": user.workout_experience if user.workout_experience else "",
+            "goals": user.workout_goals if user.workout_goals else "",
+            "weight": user.weight if user.weight else "",
+            "notes": user.health_notes if user.health_notes else "",
+        }
+    else:
+        attributes = {
+            "name": user.name if user and user.name else "",
+            "experience": user.work_experience if user and user.work_experience else "",
+            "notes": user.additional_info if user and user.additional_info else "",
+            "payment_details": user.payment_details if user and user.payment_details else "",
+        }
+    return attributes
+
+
+def get_state_and_message(callback: str, lang: str) -> tuple[State, str]:
+    return {
+        "workout_experience": (States.workout_experience, translate(MessageText.workout_experience, lang=lang)),
+        "workout_goals": (States.workout_goals, translate(MessageText.workout_goals, lang=lang)),
+        "weight": (States.weight, translate(MessageText.weight, lang=lang)),
+        "health_notes": (States.health_notes, translate(MessageText.health_notes, lang=lang)),
+        "work_experience": (States.work_experience, translate(MessageText.work_experience, lang=lang)),
+        "additional_info": (States.additional_info, translate(MessageText.additional_info, lang=lang)),
+        "payment_details": (States.payment_details, translate(MessageText.payment_details, lang=lang)),
+    }.get(callback, (None, None))

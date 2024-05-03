@@ -61,3 +61,45 @@ async def invalid_weight(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))
     await message.delete()
+
+
+@invalid_content_router.message(States.workout_experience)
+async def invalid_workout_experience(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))
+    await message.delete()
+
+
+@invalid_content_router.message(States.health_notes)
+async def invalid_health_notes(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))
+    await message.delete()
+
+
+@invalid_content_router.message(States.name)
+async def invalid_name(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))
+    await message.delete()
+
+
+@invalid_content_router.message(States.work_experience)
+async def invalid_work_experience(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))
+    await message.delete()
+
+
+@invalid_content_router.message(States.additional_info)
+async def invalid_additional_info(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))
+    await message.delete()
+
+
+@invalid_content_router.message(States.payment_details)
+async def invalid_payment_details(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))
+    await message.delete()

@@ -15,12 +15,19 @@ class MessageText(Enum):
     choose_language = auto()
     choose_account_type = auto()
     edit_profile = auto()
+    choose_profile_parameter = auto()
+    update_your_data = auto()
 
     name = auto()
     choose_gender = auto()
     birth_date = auto()
     workout_goals = auto()
     weight = auto()
+    workout_experience = auto()
+    health_notes = auto()
+    work_experience = auto()
+    payment_details = auto()
+    additional_info = auto()
 
     invalid_credentials = auto()
     invalid_content = auto()
@@ -62,6 +69,18 @@ class ButtonText(Enum):
     sign_up = auto()
     back = auto()
     edit_profile = auto()
+    subscription = auto()
+    beginner = auto()
+    intermediate = auto()
+    advanced = auto()
+    experienced = auto()
+    weight = auto()
+    health_notes = auto()
+    workout_goals = auto()
+    workout_experience = auto()
+    work_experience = auto()
+    additional_info = auto()
+    payment_details = auto()
 
     def __str__(self) -> str:
         return f"buttons.{self.name}"

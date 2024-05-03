@@ -57,3 +57,63 @@ edit_profile:
   eng: "Edit"
   ru: "Редактировать"
   ua: "Редагувати"
+
+subscription:
+  eng: "Subscription"
+  ru: "Подписка"
+  ua: "Підписка"
+
+beginner:
+  eng: "Beginner"
+  ru: "Новичок"
+  ua: "Новачок"
+
+intermediate:
+  eng: "1-3 years"
+  ru: "1-3 года"
+  ua: "1-3 років"
+
+advanced:
+  eng: "3-5 years"
+  ru: "3-5 лет"
+  ua: "3-5 років"
+
+experienced:
+  eng: "5+ years"
+  ru: "5+ лет"
+  ua: "5+ років"
+
+weight:
+  eng: "Weight"
+  ru: "Вес"
+  ua: "Вага"
+
+workout_experience:
+  eng: "Workout experience"
+  ru: "Опыт тренировок"
+  ua: "Тренувальний досвід"
+
+health_notes:
+  eng: "Health notes"
+  ru: "Примечания по здоровью"
+  ua: "Примітки по здоров'ю"
+
+workout_goals:
+  eng: "Workout goals"
+  ru: "Тренировочные цели"
+  ua: "Тренувальні цілі"
+
+work_experience:
+  eng: "Work experience"
+  ru: "Опыт работы"
+  ua: "Досвід роботи"
+
+payment_details:
+  eng: "Payment details"
+  ru: "Реквизиты оплаты"
+  ua: "Реквізити оплати"
+
+additional_info:
+  eng: "Additional info"
+  ru: "Дополнительная информация"
+  ua: "Додаткова інформація"

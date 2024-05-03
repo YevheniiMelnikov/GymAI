@@ -32,6 +32,11 @@ def client_menu_keyboard(lang_code: str) -> InlineKeyboardMarkup:
     buttons = [
         [InlineKeyboardButton(text=translate(ButtonText.my_program, lang=lang_code), callback_data="my_program")],
         [InlineKeyboardButton(text=translate(ButtonText.feedback, lang=lang_code), callback_data="feedback")],
+        [
+            InlineKeyboardButton(
+                text=translate(ButtonText.subscription, lang=lang_code), callback_data="my_subscription"
+            )
+        ],
         [InlineKeyboardButton(text=translate(ButtonText.my_profile, lang=lang_code), callback_data="my_profile")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
@@ -60,7 +65,47 @@ def profile_menu_keyboard(lang_code: str) -> InlineKeyboardMarkup:
     return kb.as_markup(one_time_keyboard=True)
 
 
-def edit_profile_keyboard(lang_code: str) -> ReplyKeyboardMarkup:
-    kb = ReplyKeyboardBuilder()
-    kb.button(text=translate(ButtonText.back, lang=lang_code), callback_data="back")
+def edit_client_profile(lang_code: str) -> InlineKeyboardMarkup:
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text=translate(ButtonText.workout_experience, lang=lang_code), callback_data="workout_experience"
+            )
+        ],
+        [InlineKeyboardButton(text=translate(ButtonText.workout_goals, lang=lang_code), callback_data="workout_goals")],
+        [InlineKeyboardButton(text=translate(ButtonText.health_notes, lang=lang_code), callback_data="health_notes")],
+        [InlineKeyboardButton(text=translate(ButtonText.weight, lang=lang_code), callback_data="weight")],
+        [InlineKeyboardButton(text=translate(ButtonText.back, lang=lang_code), callback_data="back")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+
+
+def edit_coach_profile(lang_code: str) -> InlineKeyboardMarkup:
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text=translate(ButtonText.work_experience, lang=lang_code), callback_data="work_experience"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=translate(ButtonText.additional_info, lang=lang_code), callback_data="additional_info"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=translate(ButtonText.payment_details, lang=lang_code), callback_data="payment_details"
+            )
+        ],
+        [InlineKeyboardButton(text=translate(ButtonText.back, lang=lang_code), callback_data="back")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+
+
+def workout_experience_keyboard(lang_code: str) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=translate(ButtonText.beginner, lang=lang_code), callback_data="0-1")
+    kb.button(text=translate(ButtonText.intermediate, lang=lang_code), callback_data="1-3")
+    kb.button(text=translate(ButtonText.advanced, lang=lang_code), callback_data="3-5")
+    kb.button(text=translate(ButtonText.experienced, lang=lang_code), callback_data="5+")
     return kb.as_markup(one_time_keyboard=True)

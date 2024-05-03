@@ -9,7 +9,7 @@ import loguru
 import redis
 
 from common.exceptions import UsernameUnavailable, UserServiceError
-from common.models import Profile
+from common.models import Client, Coach, Profile
 
 logger = loguru.logger
 
@@ -43,8 +43,6 @@ class UserProfileManager:
             profile_data = {
                 "id": profile.id,
                 "status": profile.status,
-                "gender": profile.gender,
-                "birth_date": profile.birth_date,
                 "language": profile.language,
                 "username": username,
                 "auth_token": auth_token,
@@ -114,6 +112,56 @@ class UserProfileManager:
             logger.error(f"Failed to set profile info for user {telegram_id} and profile {profile_id}: {e}")
             return False
 
+    def set_client_data(self, profile_id: int, client_data: dict) -> None:
+        try:
+            allowed_fields = ["gender", "birth_date", "workout_experience", "workout_goals", "health_notes", "weight"]
+            filtered_client_data = {key: client_data[key] for key in allowed_fields if key in client_data}
+            existing_data = json.loads(self.redis.hget("clients", profile_id) or "{}")
+            existing_data.update(filtered_client_data)
+            self.redis.hset("clients", profile_id, json.dumps(existing_data))
+            logger.info(f"Client data for {profile_id} has been set or updated")
+        except Exception as e:
+            logger.error(f"Failed to set or update client data for {profile_id}: {e}")
+
+    def get_client_by_id(self, profile_id: int) -> Client | None:
+        try:
+            client_data = self.redis.hget("clients", profile_id)
+            if client_data:
+                data = json.loads(client_data)
+                data["id"] = profile_id
+                return Client.from_dict(data)
+            else:
+                logger.info(f"No client data found for client ID {profile_id}")
+                return None
+        except Exception as e:
+            logger.error(f"Failed to get client data for client ID {profile_id}: {e}")
+            return None
+
+    def set_coach_data(self, profile_id: int, coach_data: dict) -> None:
+        try:
+            allowed_fields = ["name", "work_experience", "additional_info", "payment_details"]
+            filtered_coach_data = {key: coach_data[key] for key in allowed_fields if key in coach_data}
+            existing_data = json.loads(self.redis.hget("coaches", profile_id) or "{}")
+            existing_data.update(filtered_coach_data)
+            self.redis.hset("coaches", profile_id, json.dumps(existing_data))
+            logger.info(f"Coach data set or updated for coach ID {profile_id}")
+        except Exception as e:
+            logger.error(f"Failed to set or update coach data for coach ID {profile_id}: {e}")
+
+    def get_coach_by_id(self, profile_id: int) -> Coach | None:
+        try:
+            coach_data = self.redis.hget("coaches", profile_id)
+            if coach_data:
+                data = json.loads(coach_data)
+                data["id"] = profile_id
+                return Coach.from_dict(data)
+            else:
+                logger.info(f"No coach data found for coach ID {profile_id}")
+                return None
+        except Exception as e:
+            logger.error(f"Failed to get coach data for coach ID {profile_id}: {e}")
+            return None
+
 
 class UserService:
     def __init__(self, storage: UserProfileManager):
@@ -155,9 +203,20 @@ class UserService:
 
         return status_code == 201
 
-    async def edit_profile(self, user_id: int, data: dict, token: str) -> bool:
-        url = f"{self.backend_url}/api/v1/persons/{user_id}/"
-        status_code, _ = await self.api_request("put", url, data, headers={"Authorization": f"Token {token}"})
+    async def edit_profile(self, profile_id: int, data: dict, token: str) -> bool:
+        editable_fields = [
+            "language",
+            "workout_experience",
+            "work_experience",
+            "additional_info",
+            "payment_details",
+            "workout_goals",
+            "health_notes",
+            "weight",
+        ]
+        filtered_data = {key: data[key] for key in editable_fields if key in data and data[key] is not None}
+        url = f"{self.backend_url}/api/v1/persons/{profile_id}/"
+        status_code, _ = await self.api_request("put", url, filtered_data, headers={"Authorization": f"Token {token}"})
         return status_code == 200
 
     async def log_in(self, username: str, password: str) -> str | None:

@@ -8,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import BotCommand, Message
 from dotenv import load_dotenv
 
-from bot.keyboards import choose_gender, client_menu_keyboard, coach_menu_keyboard
+from bot.keyboards import *
 from bot.states import States
 from common.models import Profile
 from common.user_service import user_service
@@ -24,18 +24,29 @@ async def update_profile(message: Message, profile: Profile, state: FSMContext) 
     await state.clear()
     await state.update_data(lang=profile.language)
     if profile.status == "client":
-        if not profile.gender:
+        if user_service.storage.get_client_by_id(profile.id):
+            await message.answer(
+                text=translate(MessageText.choose_profile_parameter, lang=profile.language),
+                reply_markup=edit_client_profile(profile.language),
+            )
+            await state.set_state(States.edit_profile)
+        else:
             await message.answer(text=translate(MessageText.edit_profile, lang=profile.language))
             await state.set_state(States.gender)
             await message.answer(
                 translate(MessageText.choose_gender, profile.language), reply_markup=choose_gender(profile.language)
             )
-        else:
-            await message.answer(translate(MessageText.workout_goals, profile.language))
-            await state.set_state(States.workout_goals)
     else:
-        await message.answer(text=translate(MessageText.name, lang=profile.language))  # TODO: CHECK IF NAME ALREADY SET
-        await state.set_state(States.name)
+        if user_service.storage.get_coach_by_id(profile.id):
+            await message.answer(
+                text=translate(MessageText.choose_profile_parameter, lang=profile.language),
+                reply_markup=edit_coach_profile(profile.language),
+            )
+            await state.set_state(States.edit_profile)
+        else:
+            await message.answer(text=translate(MessageText.edit_profile, lang=profile.language))
+            await message.answer(text=translate(MessageText.name, lang=profile.language))
+            await state.set_state(States.name)
 
 
 async def show_main_menu(message: Message, profile: Profile, state: FSMContext) -> None:
@@ -132,21 +143,32 @@ async def set_bot_commands(lang: str = "ua") -> None:
     await bot.set_my_commands(commands)
 
 
-async def update_client_profile(message: Message, state: FSMContext) -> None:
+async def update_user_info(message: Message, state: FSMContext, role: str) -> None:
     data = await state.get_data()
+
     try:
-        profile = user_service.storage.get_current_profile_by_tg_id(message.from_user.id)
-        assert profile
+        profile = user_service.storage.get_current_profile_by_tg_id(message.chat.id)
+        if role == "client":
+            user_service.storage.set_client_data(profile.id, data)
+        else:
+            user_service.storage.set_coach_data(profile.id, data)
         token = user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
         assert token
-        await user_service.edit_profile(profile.id, data, token)  # TODO: IMPLEMENT
+        await user_service.edit_profile(profile.id, data, token)
         await message.answer(translate(MessageText.your_data_updated, lang=data["lang"]))
+        await state.clear()
+        await state.update_data(profile=Profile.to_dict(profile))
         await state.set_state(States.main_menu)
-        await message.answer(
-            translate(MessageText.main_menu, lang=data["lang"]), reply_markup=client_menu_keyboard(data["lang"])
-        )
+        if role == "client":
+            await message.answer(
+                translate(MessageText.main_menu, lang=data["lang"]), reply_markup=client_menu_keyboard(data["lang"])
+            )
+        else:
+            await message.answer(
+                translate(MessageText.main_menu, lang=data["lang"]), reply_markup=coach_menu_keyboard(data["lang"])
+            )
     except Exception as e:
-        logger.error(e)
+        logger.error(f"Error updating profile: {e}")
         await message.answer(translate(MessageText.unexpected_error, lang=data["lang"]))
     finally:
         await message.delete()

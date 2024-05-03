@@ -8,6 +8,7 @@ from bot.states import States
 from common.functions import show_main_menu, update_profile
 from common.models import Profile
 from common.user_service import user_service
+from common.utils import get_profile_attributes
 from texts.text_manager import MessageText, translate
 
 main_router = Router()
@@ -17,25 +18,34 @@ logger = loguru.logger
 @main_router.callback_query(States.main_menu)
 async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
-    profile = Profile.from_dict(data["profile"])
-    if callback_query.data == "my_program":
-        await callback_query.message.answer(text="Программа в разработке")  # TODO: IMPLEMENT
-    elif callback_query.data == "feedback":
-        await callback_query.message.answer(text=translate(MessageText.feedback, lang=profile.language))
-        await state.set_state(States.feedback)
-    elif callback_query.data == "my_profile":
-        text = (
-            translate(MessageText.client_profile, lang=profile.language)  # TODO: ADD FORMAT HERE
-            if profile.status == "client"
-            else translate(MessageText.coach_profile, lang=profile.language)  # TODO: ADD FORMAT HERE
-        )
-        await callback_query.message.answer(
-            text=text,
-            reply_markup=profile_menu_keyboard(profile.language),
-        )
-        await state.set_state(States.profile)
-    elif callback_query.data == "show_my_clients":
-        await callback_query.message.answer(text="Ваши клиенты: ")  # TODO: IMPLEMENT
+    profile = user_service.storage.get_current_profile_by_tg_id(callback_query.from_user.id) or Profile.from_dict(
+        data["profile"]
+    )
+    match callback_query.data:
+        case "feedback":
+            await callback_query.message.answer(text=translate(MessageText.feedback, lang=profile.language))
+            await state.set_state(States.feedback)
+        case "my_profile":
+            if profile.status == "client":
+                client = user_service.storage.get_client_by_id(profile.id)
+                format_attributes = get_profile_attributes(role="client", user=client, lang_code=profile.language)
+                text = translate(MessageText.client_profile, lang=profile.language).format(**format_attributes)
+            else:
+                coach = user_service.storage.get_coach_by_id(profile.id)
+                format_attributes = get_profile_attributes(role="coach", user=coach, lang_code=profile.language)
+                text = translate(MessageText.coach_profile, lang=profile.language).format(**format_attributes)
+
+            await callback_query.message.answer(
+                text=text,
+                reply_markup=profile_menu_keyboard(profile.language),
+            )
+            await state.set_state(States.profile)
+        case "my_clients":
+            await callback_query.message.answer(text="Ваши клиенты: ")  # TODO: IMPLEMENT
+        case "my_program":
+            await callback_query.message.answer(text="Программа")  # TODO: IMPLEMENT
+        case "my_subscription":
+            await callback_query.message.answer(text="Подписка")  # TODO: IMPLEMENT
     await callback_query.message.delete()
 
 
