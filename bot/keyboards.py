@@ -80,6 +80,28 @@ def edit_client_profile(lang_code: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
 
 
+def edit_coach_profile(lang_code: str) -> InlineKeyboardMarkup:
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text=translate(ButtonText.work_experience, lang=lang_code), callback_data="work_experience"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=translate(ButtonText.additional_info, lang=lang_code), callback_data="additional_info"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=translate(ButtonText.payment_details, lang=lang_code), callback_data="payment_details"
+            )
+        ],
+        [InlineKeyboardButton(text=translate(ButtonText.back, lang=lang_code), callback_data="back")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+
+
 def workout_experience_keyboard(lang_code: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text=translate(ButtonText.beginner, lang=lang_code), callback_data="0-1")

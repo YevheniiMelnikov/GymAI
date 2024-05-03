@@ -1,8 +1,8 @@
 import re
 from functools import wraps
+from typing import Optional
 
 from aiogram.fsm.state import State
-from typing import Optional
 
 from bot.states import States
 from common.models import Client, Coach
@@ -73,13 +73,12 @@ def get_profile_attributes(role: str, user: Optional[Client | Coach], lang_code:
         }
     else:
         attributes = {
-            "name": user.name if user else "",
-            "experience": user.experience if user else "",
-            "notes": user.additional_info if user else "",
-            "payment_details": user.payment_details if user else "",
+            "name": user.name if user and user.name else "",
+            "experience": user.work_experience if user and user.work_experience else "",
+            "notes": user.additional_info if user and user.additional_info else "",
+            "payment_details": user.payment_details if user and user.payment_details else "",
         }
     return attributes
-
 
 
 def get_state_and_message(callback: str, lang: str) -> tuple[State, str]:
@@ -88,4 +87,7 @@ def get_state_and_message(callback: str, lang: str) -> tuple[State, str]:
         "workout_goals": (States.workout_goals, translate(MessageText.workout_goals, lang=lang)),
         "weight": (States.weight, translate(MessageText.weight, lang=lang)),
         "health_notes": (States.health_notes, translate(MessageText.health_notes, lang=lang)),
+        "work_experience": (States.work_experience, translate(MessageText.work_experience, lang=lang)),
+        "additional_info": (States.additional_info, translate(MessageText.additional_info, lang=lang)),
+        "payment_details": (States.payment_details, translate(MessageText.payment_details, lang=lang)),
     }.get(callback, (None, None))

@@ -31,7 +31,9 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
                 format_attributes = get_profile_attributes(role="client", user=client, lang_code=profile.language)
                 text = translate(MessageText.client_profile, lang=profile.language).format(**format_attributes)
             else:
-                text = translate(MessageText.coach_profile, lang=profile.language)  # TODO: ADD FORMAT HERE
+                coach = user_service.storage.get_coach_by_id(profile.id)
+                format_attributes = get_profile_attributes(role="coach", user=coach, lang_code=profile.language)
+                text = translate(MessageText.coach_profile, lang=profile.language).format(**format_attributes)
 
             await callback_query.message.answer(
                 text=text,

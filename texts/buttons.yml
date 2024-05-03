@@ -102,3 +102,18 @@ workout_goals:
   eng: "Workout goals"
   ru: "Тренировочные цели"
   ua: "Тренувальні цілі"
+
+work_experience:
+  eng: "Work experience"
+  ru: "Опыт работы"
+  ua: "Досвід роботи"
+
+payment_details:
+  eng: "Payment details"
+  ru: "Реквизиты оплаты"
+  ua: "Реквізити оплати"
+
+additional_info:
+  eng: "Additional info"
+  ru: "Дополнительная информация"
+  ua: "Додаткова інформація"

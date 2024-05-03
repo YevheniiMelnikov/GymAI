@@ -16,9 +16,11 @@ class States(StatesGroup):
     weight = State()
     workout_experience = State()
     health_notes = State()
+    work_experience = State()
+    additional_info = State()
+    payment_details = State()
 
-    edit_client_profile = State()
-    edit_coach_profile = State()
+    edit_profile = State()
     action_choice = State()
     feedback = State()
     profile = State()

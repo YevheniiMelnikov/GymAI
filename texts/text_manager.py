@@ -25,6 +25,9 @@ class MessageText(Enum):
     weight = auto()
     workout_experience = auto()
     health_notes = auto()
+    work_experience = auto()
+    payment_details = auto()
+    additional_info = auto()
 
     invalid_credentials = auto()
     invalid_content = auto()
@@ -75,6 +78,9 @@ class ButtonText(Enum):
     health_notes = auto()
     workout_goals = auto()
     workout_experience = auto()
+    work_experience = auto()
+    additional_info = auto()
+    payment_details = auto()
 
     def __str__(self) -> str:
         return f"buttons.{self.name}"

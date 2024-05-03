@@ -192,3 +192,18 @@ update_your_data:
   eng: "Enter the current data"
   ru: "Введите актуальные данные"
   ua: "Введіть актуальні дані"
+
+work_experience:
+  eng: "Enter your work experience in years"
+  ru: "Укажите ваш опыт работы в годах"
+  ua: "Вкажіть ваш досвід роботи в роках"
+
+additional_info:
+  eng: "Please provide additional information about yourself. Your education, sports achievements, etc."
+  ru: "Укажите дополнительную информацию о себе. Ваше бразование, спортивные достижения и прочее"
+  ua: "Вкажіть додаткову інформацію про себе. Ваша освіта, спортивні досягнення та інше"
+
+payment_details:
+  eng: "Specify your card number for payments. Payments are made within 7 days after the client purchases the subscription"
+  ru: "Укажите номер вашей карты для выплат. Выплаты производятся в течение 7 дней с приобрения клиентом подписки"
+  ua: "Вкажіть номер вашої картки для виплат. Виплати здійснюються протягом 7 днів з моменту придбання клієнтом підписки"
