@@ -19,7 +19,7 @@ class Profile(Model):
 
     # coach fields:
     name = models.CharField(max_length=50, null=True, blank=True)
-    experience = models.IntegerField(null=True, blank=True, validators=[MaxValueValidator(99)])
+    work_experience = models.IntegerField(null=True, blank=True, validators=[MaxValueValidator(99)])
     additional_info = models.CharField(max_length=250, null=True, blank=True)
     payment_details = models.CharField(max_length=50, null=True, blank=True)  # TODO: ADD RATING FIELD
 
