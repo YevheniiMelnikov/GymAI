@@ -92,7 +92,6 @@ async def health_notes(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await state.update_data(health_notes=message.text)
     await message.answer(translate(MessageText.weight, lang=data["lang"]))
-    await state.set_state(States.weight)
     await update_user_info(message, state, "client")
 
 
@@ -152,7 +151,7 @@ async def payment_details(message: Message, state: FSMContext) -> None:
 
 @questionnaire_router.callback_query(States.edit_profile)
 async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = user_service.storage.get_current_profile_by_tg_id(callback_query.from_user.id)
+    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     await state.update_data(lang=profile.language)
     if callback_query.data == "back":
         await state.set_state(States.main_menu)
@@ -161,10 +160,6 @@ async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> No
 
     state_to_set, message = get_state_and_message(callback_query.data, profile.language)
     await state.update_data(edit_mode=True)
-    if state_to_set == States.workout_experience:  # TODO: FIND BETTER SOLUTION
-        await callback_query.message.answer(
-            message, lang=profile.language, reply_markup=workout_experience_keyboard(profile.language)
-        )
-    else:
-        await callback_query.message.answer(message, lang=profile.language)
+    reply_markup = workout_experience_keyboard(profile.language) if state_to_set == States.workout_experience else None
+    await callback_query.message.answer(message, lang=profile.language, reply_markup=reply_markup)
     await state.set_state(state_to_set)

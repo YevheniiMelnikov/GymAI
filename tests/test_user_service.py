@@ -58,7 +58,7 @@ async def test_get_current_profile_by_tg_id(profile_manager: UserProfileManager)
     profile_manager.redis.hget.return_value = json.dumps(
         [{"id": 1, "status": "client", "is_current": True, "last_used": time.time()}]
     )
-    profile = profile_manager.get_current_profile_by_tg_id(12345)
+    profile = profile_manager.get_current_profile(12345)
     assert profile is not None
     assert profile.id == 1
 

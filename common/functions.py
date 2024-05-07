@@ -20,33 +20,37 @@ bot = Bot(os.environ.get("BOT_TOKEN"))
 BACKEND_URL = os.environ.get("BACKEND_URL")
 
 
-async def update_profile(message: Message, profile: Profile, state: FSMContext) -> None:
+async def show_profile_editing_menu(message: Message, profile: Profile, state: FSMContext) -> None:
     await state.clear()
     await state.update_data(lang=profile.language)
+
     if profile.status == "client":
-        if user_service.storage.get_client_by_id(profile.id):
-            await message.answer(
-                text=translate(MessageText.choose_profile_parameter, lang=profile.language),
-                reply_markup=edit_client_profile(profile.language),
-            )
-            await state.set_state(States.edit_profile)
-        else:
-            await message.answer(text=translate(MessageText.edit_profile, lang=profile.language))
-            await state.set_state(States.gender)
-            await message.answer(
-                translate(MessageText.choose_gender, profile.language), reply_markup=choose_gender(profile.language)
-            )
+        questionnaire = user_service.storage.get_client_by_id(profile.id)
+        reply_markup = edit_client_profile(profile.language) if questionnaire else None
+        state_to_set = States.edit_profile if questionnaire else States.gender
+        response_message = MessageText.choose_profile_parameter if questionnaire else MessageText.edit_profile
     else:
-        if user_service.storage.get_coach_by_id(profile.id):
+        questionnaire = user_service.storage.get_coach_by_id(profile.id)
+        reply_markup = edit_coach_profile(profile.language) if questionnaire else None
+        state_to_set = States.edit_profile if questionnaire else States.name
+        response_message = MessageText.choose_profile_parameter if questionnaire else MessageText.edit_profile
+
+    await message.answer(
+        text=translate(response_message, lang=profile.language),
+        reply_markup=reply_markup
+    )
+    await state.set_state(state_to_set)
+
+    if not questionnaire:
+        if profile.status == "client":
             await message.answer(
-                text=translate(MessageText.choose_profile_parameter, lang=profile.language),
-                reply_markup=edit_coach_profile(profile.language),
+                translate(MessageText.choose_gender, lang=profile.language),
+                reply_markup=choose_gender(profile.language)
             )
-            await state.set_state(States.edit_profile)
         else:
-            await message.answer(text=translate(MessageText.edit_profile, lang=profile.language))
-            await message.answer(text=translate(MessageText.name, lang=profile.language))
-            await state.set_state(States.name)
+            await message.answer(
+                translate(MessageText.name, lang=profile.language)
+            )
 
 
 async def show_main_menu(message: Message, profile: Profile, state: FSMContext) -> None:
@@ -92,7 +96,7 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
         email=message.text,
     )
     await message.answer(text=translate(MessageText.registration_successful, lang=data["lang"]))
-    profile = user_service.storage.get_current_profile_by_tg_id(message.from_user.id)
+    profile = user_service.storage.get_current_profile(message.from_user.id)
     await show_main_menu(message, profile, state)
 
 
@@ -147,28 +151,31 @@ async def update_user_info(message: Message, state: FSMContext, role: str) -> No
     data = await state.get_data()
 
     try:
-        profile = user_service.storage.get_current_profile_by_tg_id(message.chat.id)
+        profile = user_service.storage.get_current_profile(message.chat.id)
+        if not profile:
+            raise ValueError("Profile not found")
+
         if role == "client":
             user_service.storage.set_client_data(profile.id, data)
         else:
             user_service.storage.set_coach_data(profile.id, data)
-        token = user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
-        assert token
+
+        token = user_service.storage.get_profile_info_by_key(message.chat.id, profile.id, "auth_token")
+        if not token:
+            raise ValueError("Authentication token not found")
+
         await user_service.edit_profile(profile.id, data, token)
         await message.answer(translate(MessageText.your_data_updated, lang=data["lang"]))
         await state.clear()
         await state.update_data(profile=Profile.to_dict(profile))
         await state.set_state(States.main_menu)
-        if role == "client":
-            await message.answer(
-                translate(MessageText.main_menu, lang=data["lang"]), reply_markup=client_menu_keyboard(data["lang"])
-            )
-        else:
-            await message.answer(
-                translate(MessageText.main_menu, lang=data["lang"]), reply_markup=coach_menu_keyboard(data["lang"])
-            )
+
+        reply_markup = client_menu_keyboard(data["lang"]) if role == "client" else coach_menu_keyboard(data["lang"])
+        await message.answer(translate(MessageText.main_menu, lang=data["lang"]), reply_markup=reply_markup)
+
     except Exception as e:
         logger.error(f"Error updating profile: {e}")
         await message.answer(translate(MessageText.unexpected_error, lang=data["lang"]))
+
     finally:
         await message.delete()

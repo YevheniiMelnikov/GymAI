@@ -62,22 +62,27 @@ def get_profile_attributes(role: str, user: Optional[Client | Coach], lang_code:
         "male": translate(ButtonText.male, lang=lang_code),
         "female": translate(ButtonText.female, lang=lang_code),
     }
+
+    def get_attr(attr_name):
+        return getattr(user, attr_name, "") if user else ""
+
     if role == "client":
         attributes = {
-            "gender": genders[user.gender] if user and user.gender in genders else "",
-            "birth_date": user.birth_date if user.birth_date else "",
-            "experience": user.workout_experience if user.workout_experience else "",
-            "goals": user.workout_goals if user.workout_goals else "",
-            "weight": user.weight if user.weight else "",
-            "notes": user.health_notes if user.health_notes else "",
+            "gender": genders.get(get_attr("gender"), ""),
+            "birth_date": get_attr("birth_date"),
+            "experience": get_attr("workout_experience"),
+            "goals": get_attr("workout_goals"),
+            "weight": get_attr("weight"),
+            "notes": get_attr("health_notes"),
         }
     else:
         attributes = {
-            "name": user.name if user and user.name else "",
-            "experience": user.work_experience if user and user.work_experience else "",
-            "notes": user.additional_info if user and user.additional_info else "",
-            "payment_details": user.payment_details if user and user.payment_details else "",
+            "name": get_attr("name"),
+            "experience": get_attr("work_experience"),
+            "notes": get_attr("additional_info"),
+            "payment_details": get_attr("payment_details"),
         }
+
     return attributes
 
 

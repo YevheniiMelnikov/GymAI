@@ -5,7 +5,7 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import profile_menu_keyboard
 from bot.states import States
-from common.functions import show_main_menu, update_profile
+from common.functions import show_main_menu, show_profile_editing_menu
 from common.models import Profile
 from common.user_service import user_service
 from common.utils import get_profile_attributes
@@ -18,7 +18,7 @@ logger = loguru.logger
 @main_router.callback_query(States.main_menu)
 async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
-    profile = user_service.storage.get_current_profile_by_tg_id(callback_query.from_user.id) or Profile.from_dict(
+    profile = user_service.storage.get_current_profile(callback_query.from_user.id) or Profile.from_dict(
         data["profile"]
     )
     match callback_query.data:
@@ -54,7 +54,7 @@ async def profile_menu(callback_query: CallbackQuery, state: FSMContext) -> None
     data = await state.get_data()
     profile = Profile.from_dict(data["profile"])
     if callback_query.data == "edit_profile":
-        await update_profile(callback_query.message, profile, state)
+        await show_profile_editing_menu(callback_query.message, profile, state)
     elif callback_query.data == "back":
         await show_main_menu(callback_query.message, profile, state)
 
@@ -80,7 +80,7 @@ async def process_password_reset(message: Message, state: FSMContext) -> None:
 
 @main_router.message(States.feedback)
 async def handle_feedback(message: Message, state: FSMContext) -> None:
-    profile = user_service.storage.get_current_profile_by_tg_id(message.from_user.id)
+    profile = user_service.storage.get_current_profile(message.from_user.id)
     auth_token = user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
     if user_data := await user_service.get_user_data(auth_token):
         if await user_service.send_feedback(user_data.get("email"), user_data.get("username"), message.text):
