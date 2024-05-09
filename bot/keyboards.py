@@ -97,6 +97,7 @@ def edit_coach_profile(lang_code: str) -> InlineKeyboardMarkup:
                 text=translate(ButtonText.payment_details, lang=lang_code), callback_data="payment_details"
             )
         ],
+        [InlineKeyboardButton(text=translate(ButtonText.photo, lang=lang_code), callback_data="photo")],
         [InlineKeyboardButton(text=translate(ButtonText.back, lang=lang_code), callback_data="back")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)

@@ -7,7 +7,8 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import profile_menu_keyboard
 from bot.states import States
-from common.functions import generate_signed_url, show_main_menu, show_profile_editing_menu
+from common.file_manager import file_manager
+from common.functions import show_main_menu, show_profile_editing_menu
 from common.models import Profile
 from common.user_service import user_service
 from common.utils import get_profile_attributes
@@ -39,7 +40,7 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
                 lang=profile.language,
             ).format(**format_attributes)
             if profile.status == "coach" and getattr(user, "profile_photo", None):
-                photo = generate_signed_url(os.getenv("GCS_BUCKET"), user.profile_photo)
+                photo = file_manager.generate_signed_url(user.profile_photo)
                 await callback_query.message.answer_photo(
                     photo, text, reply_markup=profile_menu_keyboard(profile.language)
                 )

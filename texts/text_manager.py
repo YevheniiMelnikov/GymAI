@@ -84,6 +84,7 @@ class ButtonText(Enum):
     work_experience = auto()
     additional_info = auto()
     payment_details = auto()
+    photo = auto()
 
     def __str__(self) -> str:
         return f"buttons.{self.name}"

@@ -1,4 +1,4 @@
-from aiogram import Router
+from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
@@ -100,6 +100,13 @@ async def invalid_additional_info(message: Message, state: FSMContext) -> None:
 
 @invalid_content_router.message(States.payment_details)
 async def invalid_payment_details(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))
+    await message.delete()
+
+
+@invalid_content_router.message(States.profile_photo, F.text)
+async def invalid_profile_photo(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))
     await message.delete()

@@ -117,3 +117,8 @@ additional_info:
   eng: "Additional info"
   ru: "Дополнительная информация"
   ua: "Додаткова інформація"
+
+photo:
+  eng: "Profile photo"
+  ru: "Фото профиля"
+  ua: "Фото профілю"
