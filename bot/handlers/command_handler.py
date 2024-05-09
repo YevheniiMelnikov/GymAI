@@ -16,7 +16,7 @@ cmd_router = Router()
 @cmd_router.message(Command("language"))
 async def cmd_language(message: Message, state: FSMContext) -> None:
     profile = user_service.storage.get_current_profile(message.from_user.id)
-    lang = profile.language if profile else None
+    lang = profile.language if profile else "ua"
     await message.answer(text=translate(MessageText.choose_language, lang=lang), reply_markup=language_choice())
     await state.set_state(States.language_choice)
 

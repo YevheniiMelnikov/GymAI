@@ -3,10 +3,12 @@ from contextlib import suppress
 
 import loguru
 from aiogram import Bot
+from aiogram.client.session import aiohttp
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BotCommand, Message
 from dotenv import load_dotenv
+from google.cloud import storage
 
 from bot.keyboards import *
 from bot.states import States
@@ -35,22 +37,19 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
         state_to_set = States.edit_profile if questionnaire else States.name
         response_message = MessageText.choose_profile_parameter if questionnaire else MessageText.edit_profile
 
-    await message.answer(
-        text=translate(response_message, lang=profile.language),
-        reply_markup=reply_markup
-    )
+    await message.answer(text=translate(response_message, lang=profile.language), reply_markup=reply_markup)
     await state.set_state(state_to_set)
 
     if not questionnaire:
         if profile.status == "client":
             await message.answer(
                 translate(MessageText.choose_gender, lang=profile.language),
-                reply_markup=choose_gender(profile.language)
+                reply_markup=choose_gender(profile.language),
             )
         else:
-            await message.answer(
-                translate(MessageText.name, lang=profile.language)
-            )
+            await message.answer(translate(MessageText.name, lang=profile.language))
+    with suppress(TelegramBadRequest):
+        await message.delete()
 
 
 async def show_main_menu(message: Message, profile: Profile, state: FSMContext) -> None:
@@ -149,7 +148,6 @@ async def set_bot_commands(lang: str = "ua") -> None:
 
 async def update_user_info(message: Message, state: FSMContext, role: str) -> None:
     data = await state.get_data()
-
     try:
         profile = user_service.storage.get_current_profile(message.chat.id)
         if not profile:
@@ -179,3 +177,49 @@ async def update_user_info(message: Message, state: FSMContext, role: str) -> No
 
     finally:
         await message.delete()
+
+
+def upload_image_to_gcs(source_file_name: str) -> bool:
+    try:
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(os.getenv("GCS_BUCKET"))
+        blob = bucket.blob(source_file_name)
+
+        blob.upload_from_filename(f"temp/{source_file_name}")
+        logger.info(f"File {source_file_name} successfully uploaded to GCS.")
+        return True
+
+    except Exception as e:
+        logger.info(f"Failed to upload {source_file_name} to GCS: {e}")
+        return False
+
+
+def clean_up_local_file(file: str) -> None:
+    os.remove(f"temp/{file}")
+    logger.info(f"File {file} successfully deleted")
+
+
+def generate_signed_url(bucket_name: str, blob_name: str, expiration: int = 3600) -> str:
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(bucket_name)
+    blob = bucket.blob(blob_name)
+
+    url = blob.generate_signed_url(version="v4", expiration=expiration, method="GET")
+    return url
+
+
+async def save_profile_photo(message: Message) -> str | None:
+    file_id = message.photo[-1].file_id
+    file = await message.bot.get_file(file_id)
+    file_url = f"https://api.telegram.org/file/bot{message.bot.token}/{file.file_path}"
+    local_file_path = os.path.join("temp", f"{file_id}.jpg")
+    async with aiohttp.ClientSession() as session:
+        async with session.get(file_url) as resp:
+            if resp.status == 200:
+                with open(local_file_path, "wb") as f:
+                    f.write(await resp.read())
+                    logger.info(f"File {file_id} successfully saved locally")
+                    return f"{file_id}.jpg"
+            else:
+                logger.error(f"Error saving file {file_id}")
+                return None

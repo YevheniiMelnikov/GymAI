@@ -1,3 +1,4 @@
+import os
 import re
 from functools import wraps
 from typing import Optional
@@ -96,3 +97,10 @@ def get_state_and_message(callback: str, lang: str) -> tuple[State, str]:
         "additional_info": (States.additional_info, translate(MessageText.additional_info, lang=lang)),
         "payment_details": (States.payment_details, translate(MessageText.payment_details, lang=lang)),
     }.get(callback, (None, None))
+
+
+def check_file_size(file_path: str, max_size_mb: float) -> bool:
+    file_size = os.path.getsize(file_path) / (1024 * 1024)
+    if file_size > max_size_mb:
+        return False
+    return True

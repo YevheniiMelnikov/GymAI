@@ -28,6 +28,8 @@ class MessageText(Enum):
     work_experience = auto()
     payment_details = auto()
     additional_info = auto()
+    upload_photo = auto()
+    photo_uploaded = auto()
 
     invalid_credentials = auto()
     invalid_content = auto()
@@ -38,6 +40,7 @@ class MessageText(Enum):
     reset_password_offer = auto()
     no_profiles_found = auto()
     password_unsafe = auto()
+    photo_upload_fail = auto()
 
     saved = auto()
     your_data_updated = auto()

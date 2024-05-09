@@ -19,6 +19,7 @@ class States(StatesGroup):
     work_experience = State()
     additional_info = State()
     payment_details = State()
+    profile_photo = State()
 
     edit_profile = State()
     action_choice = State()

@@ -68,10 +68,11 @@ class Coach:
     work_experience: int
     additional_info: str
     payment_details: str
+    profile_photo: str
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Coach":
-        fields = ["id", "name", "work_experience", "additional_info", "payment_details"]
+        fields = ["id", "name", "work_experience", "additional_info", "payment_details", "profile_photo"]
         filtered_data = {key: data.get(key) for key in fields}
         return cls(**filtered_data)
 
@@ -82,10 +83,11 @@ class Coach:
             "work_experience": self.work_experience,
             "additional_info": self.additional_info,
             "payment_details": self.payment_details,
+            "profile_photo": self.profile_photo,
         }
 
     def __repr__(self) -> str:
         return (
             f"Coach(id={self.id}, name={self.name}, work_experience={self.work_experience}, additional_info={self.additional_info}, "
-            f"payment_details={self.payment_details})"
+            f"payment_details={self.payment_details}, profile_photo={self.profile_photo})"
         )

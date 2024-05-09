@@ -207,3 +207,18 @@ payment_details:
   eng: "Specify your card number for payments. Payments are made within 7 days after the client purchases the subscription"
   ru: "Укажите номер вашей карты для выплат. Выплаты производятся в течение 7 дней с приобрения клиентом подписки"
   ua: "Вкажіть номер вашої картки для виплат. Виплати здійснюються протягом 7 днів з моменту придбання клієнтом підписки"
+
+upload_photo:
+  eng: "Upload your profile photo. Maximum size is 20 MB"
+  ru: "Загрузите ваше фото. Максимальный размер 20 МБ"
+  ua: "Завантажте ваше фото. Максимальний розмір 20 МБ"
+
+photo_uploaded:
+  eng: "Photo way successfully saved"
+  ru: "Фото было успешно сохранено"
+  ua: "Фото було успішно збережено"
+
+photo_upload_fail:
+  eng: There was an error when uploading the photo. Try again or use the /help command
+  ru: При загрузке фото возникла ошибка. Попробуйте еще раз или воспользуйтесь командой /help
+  ua: Під час завантаження фото виникла помилка. Спробуйте ще раз або скористайтеся командою /help

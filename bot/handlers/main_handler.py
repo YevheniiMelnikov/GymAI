@@ -1,3 +1,5 @@
+import os
+
 import loguru
 from aiogram import Router
 from aiogram.fsm.context import FSMContext
@@ -5,7 +7,7 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import profile_menu_keyboard
 from bot.states import States
-from common.functions import show_main_menu, show_profile_editing_menu
+from common.functions import generate_signed_url, show_main_menu, show_profile_editing_menu
 from common.models import Profile
 from common.user_service import user_service
 from common.utils import get_profile_attributes
@@ -26,19 +28,23 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
             await callback_query.message.answer(text=translate(MessageText.feedback, lang=profile.language))
             await state.set_state(States.feedback)
         case "my_profile":
-            if profile.status == "client":
-                client = user_service.storage.get_client_by_id(profile.id)
-                format_attributes = get_profile_attributes(role="client", user=client, lang_code=profile.language)
-                text = translate(MessageText.client_profile, lang=profile.language).format(**format_attributes)
-            else:
-                coach = user_service.storage.get_coach_by_id(profile.id)
-                format_attributes = get_profile_attributes(role="coach", user=coach, lang_code=profile.language)
-                text = translate(MessageText.coach_profile, lang=profile.language).format(**format_attributes)
-
-            await callback_query.message.answer(
-                text=text,
-                reply_markup=profile_menu_keyboard(profile.language),
+            user = (
+                user_service.storage.get_client_by_id(profile.id)
+                if profile.status == "client"
+                else user_service.storage.get_coach_by_id(profile.id)
             )
+            format_attributes = get_profile_attributes(role=profile.status, user=user, lang_code=profile.language)
+            text = translate(
+                MessageText.client_profile if profile.status == "client" else MessageText.coach_profile,
+                lang=profile.language,
+            ).format(**format_attributes)
+            if profile.status == "coach" and getattr(user, "profile_photo", None):
+                photo = generate_signed_url(os.getenv("GCS_BUCKET"), user.profile_photo)
+                await callback_query.message.answer_photo(
+                    photo, text, reply_markup=profile_menu_keyboard(profile.language)
+                )
+            else:
+                await callback_query.message.answer(text, reply_markup=profile_menu_keyboard(profile.language))
             await state.set_state(States.profile)
         case "my_clients":
             await callback_query.message.answer(text="Ваши клиенты: ")  # TODO: IMPLEMENT

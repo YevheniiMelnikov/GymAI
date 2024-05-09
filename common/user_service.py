@@ -139,7 +139,7 @@ class UserProfileManager:
 
     def set_coach_data(self, profile_id: int, coach_data: dict) -> None:
         try:
-            allowed_fields = ["name", "work_experience", "additional_info", "payment_details"]
+            allowed_fields = ["name", "work_experience", "additional_info", "payment_details", "profile_photo"]
             filtered_coach_data = {key: coach_data[key] for key in allowed_fields if key in coach_data}
             existing_data = json.loads(self.redis.hget("coaches", profile_id) or "{}")
             existing_data.update(filtered_coach_data)
@@ -213,6 +213,7 @@ class UserService:
             "work_experience",
             "additional_info",
             "payment_details",
+            "profile_photo",
             "workout_goals",
             "health_notes",
             "weight",

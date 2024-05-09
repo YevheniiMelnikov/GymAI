@@ -1,3 +1,5 @@
+import os
+
 import loguru
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -5,9 +7,16 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import workout_experience_keyboard
 from bot.states import States
-from common.functions import show_main_menu, update_user_info
+from common.functions import (
+    clean_up_local_file,
+    generate_signed_url,
+    save_profile_photo,
+    show_main_menu,
+    update_user_info,
+    upload_image_to_gcs,
+)
 from common.user_service import user_service
-from common.utils import get_state_and_message, validate_birth_date
+from common.utils import check_file_size, get_state_and_message, validate_birth_date
 from texts.text_manager import MessageText, translate
 
 logger = loguru.logger
@@ -146,7 +155,27 @@ async def payment_details(message: Message, state: FSMContext) -> None:
         return
 
     await state.update_data(payment_details=message.text.replace(" ", ""))
-    await update_user_info(message, state, "coach")
+    await message.answer(translate(MessageText.upload_photo, lang=data["lang"]))
+    await state.set_state(States.profile_photo)
+
+
+@questionnaire_router.message(States.profile_photo, F.photo)
+async def profile_photo(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    local_file = await save_profile_photo(message)
+
+    if local_file and check_file_size(f"temp/{local_file}", 20):
+        if upload_image_to_gcs(local_file):
+            await message.answer(translate(MessageText.photo_uploaded, lang=data["lang"]))
+            await state.update_data(profile_photo=local_file)
+            clean_up_local_file(local_file)
+            await update_user_info(message, state, "coach")
+        else:
+            await message.answer(translate(MessageText.photo_upload_fail, lang=data["lang"]))
+            await state.set_state(States.profile_photo)
+    else:
+        await message.answer(translate(MessageText.photo_upload_fail, lang=data["lang"]))
+        await state.set_state(States.profile_photo)
 
 
 @questionnaire_router.callback_query(States.edit_profile)
