@@ -17,6 +17,7 @@ class MessageText(Enum):
     edit_profile = auto()
     choose_profile_parameter = auto()
     update_your_data = auto()
+    coach_info_message = auto()
 
     name = auto()
     choose_gender = auto()
@@ -43,6 +44,8 @@ class MessageText(Enum):
     photo_upload_fail = auto()
 
     saved = auto()
+    verified = auto()
+    not_verified = auto()
     your_data_updated = auto()
     feedback = auto()
     password_retype = auto()

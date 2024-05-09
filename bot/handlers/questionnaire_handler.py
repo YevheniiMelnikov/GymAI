@@ -101,7 +101,7 @@ async def health_notes(message: Message, state: FSMContext) -> None:
 @questionnaire_router.message(States.name, F.text)
 async def name(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
-    await state.update_data(name=message.text)
+    await state.update_data(name=message.text, verified=False)
     await message.answer(translate(MessageText.work_experience, lang=data["lang"]))
     await state.set_state(States.work_experience)
     await message.delete()

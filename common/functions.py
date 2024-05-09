@@ -1,5 +1,6 @@
 import os
 from contextlib import suppress
+from typing import Any
 
 import loguru
 from aiogram import Bot
@@ -57,6 +58,10 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext) 
     await state.clear()
     await state.set_state(States.main_menu)
     await state.update_data(profile=Profile.to_dict(profile))
+    if profile.status == "coach":
+        coach = user_service.storage.get_coach_by_id(profile.id)
+        if not coach or not coach.verified:
+            await message.answer(translate(MessageText.coach_info_message, lang=profile.language))
     await message.answer(
         text=translate(MessageText.main_menu, lang=profile.language), reply_markup=menu(profile.language)
     )
@@ -156,6 +161,8 @@ async def update_user_info(message: Message, state: FSMContext, role: str) -> No
         if role == "client":
             user_service.storage.set_client_data(profile.id, data)
         else:
+            if not data.get("edit_mode"):
+                await notify_about_new_coach(message.from_user.id, profile, data)  # TODO: IMPLEMENT
             user_service.storage.set_coach_data(profile.id, data)
 
         token = user_service.storage.get_profile_info_by_key(message.chat.id, profile.id, "auth_token")
@@ -177,3 +184,8 @@ async def update_user_info(message: Message, state: FSMContext, role: str) -> No
 
     finally:
         await message.delete()
+
+
+async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, Any]) -> None:
+    pass
+

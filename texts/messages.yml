@@ -144,8 +144,8 @@ client_profile:
   ua: "<b>Стать:</b> {gender}\n<b>Дата народження:</b> {birth_date}\n<b>Тренувальні цілі:</b> {goals}\n<b>Вага (кг):</b> {weight}\n<b>Тренувальний досвід (років):</b> {experience}\n<b>Примітки по здоров'ю:</b> {notes}"
 
 coach_profile:
-  eng: "<b>Name:</b> {name}\n<b>Work experience:</b> {experience}\n<b>Additional information:</b> {notes}\n<b>Payment details:</b> {payment_details}"
-  ru: "<b>Имя:</b> {name}\n<b>Опыт работы:</b> {experience}\n<b>Дополнительная информация:</b> {notes}\n<b>Реквизиты оплаты:</b> {payment_details}"
+  eng: "<b>Name:</b> {name}\n<b>Work experience:</b> {experience}\n<b>Additional information:</b> {notes}\n<b>Payment details:</b> {payment_details}\n<b>Verification status:</b> {verified}"
+  ru: "<b>Имя:</b> {name}\n<b>Опыт работы:</b> {experience}\n<b>Дополнительная информация:</b> {notes}\n<b>Реквизиты оплаты:</b> {payment_details}\n<b>Статус верификации:</b> {verified}"
   ua: "<b>Ім'я:</b> {name}\n<b>Досвід роботи:</b> {experience}\n<b>Додаткова інформація:</b> {notes}\n<b>Реквізити оплати:</b> {payment_details}"
 
 edit_profile:
@@ -222,3 +222,18 @@ photo_upload_fail:
   eng: There was an error when uploading the photo. Try again or use the /help command
   ru: При загрузке фото возникла ошибка. Попробуйте еще раз или воспользуйтесь командой /help
   ua: Під час завантаження фото виникла помилка. Спробуйте ще раз або скористайтеся командою /help
+
+coach_info_message:
+  eng: "To get started you need to wait for administrator verification. Please make sure that you have filled in your personal information in the “My Profile” section"
+  ru: Для начала работы вам надо дождаться верификации администратора. Пожалуйста, убедитесь что у вас заполнена персональная информация в разделе "Мой профиль"
+  ua: "Для початку роботи вам треба дочекатися верифікації адміністратора. Будь ласка, переконайтеся, що у вас заповнена персональна інформація в розділі «Мій профіль»"
+
+verified:
+  eng: "Verified"
+  ru: "Верифицирован"
+  ua: "Верифікований"
+
+not_verified:
+  eng: "Not verified"
+  ru: "Не верифицирован"
+  ua: "Не верифікований"
