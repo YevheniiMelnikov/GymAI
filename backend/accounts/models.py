@@ -21,7 +21,9 @@ class Profile(Model):
     name = models.CharField(max_length=50, null=True, blank=True)
     work_experience = models.IntegerField(null=True, blank=True, validators=[MaxValueValidator(99)])
     additional_info = models.CharField(max_length=250, null=True, blank=True)
-    payment_details = models.CharField(max_length=50, null=True, blank=True)  # TODO: ADD RATING FIELD
+    profile_photo = models.CharField(max_length=250, null=True, blank=True)
+    payment_details = models.CharField(max_length=50, null=True, blank=True)
+    verified = models.BooleanField(default=False)  # TODO: ADD RATING FIELD
 
     class Meta:
         verbose_name = "profile"

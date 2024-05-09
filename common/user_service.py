@@ -65,7 +65,7 @@ class UserProfileManager:
         except Exception as e:
             logger.error(f"Failed to set profile for user {telegram_id}: {e}")
 
-    def get_current_profile_by_tg_id(self, telegram_id: int) -> Profile | None:
+    def get_current_profile(self, telegram_id: int) -> Profile | None:
         try:
             profiles_data = json.loads(self.redis.hget("user_profiles", telegram_id) or "[]")
             current_profiles = [Profile.from_dict(data) for data in profiles_data if data.get("is_current", True)]
@@ -139,7 +139,7 @@ class UserProfileManager:
 
     def set_coach_data(self, profile_id: int, coach_data: dict) -> None:
         try:
-            allowed_fields = ["name", "work_experience", "additional_info", "payment_details"]
+            allowed_fields = ["name", "work_experience", "additional_info", "payment_details", "profile_photo"]
             filtered_coach_data = {key: coach_data[key] for key in allowed_fields if key in coach_data}
             existing_data = json.loads(self.redis.hget("coaches", profile_id) or "{}")
             existing_data.update(filtered_coach_data)
@@ -204,17 +204,21 @@ class UserService:
         return status_code == 201
 
     async def edit_profile(self, profile_id: int, data: dict, token: str) -> bool:
-        editable_fields = [
+        fields = [
             "language",
+            "name",
+            "gender",
+            "birth_date",
             "workout_experience",
             "work_experience",
             "additional_info",
             "payment_details",
+            "profile_photo",
             "workout_goals",
             "health_notes",
             "weight",
         ]
-        filtered_data = {key: data[key] for key in editable_fields if key in data and data[key] is not None}
+        filtered_data = {key: data[key] for key in fields if key in data and data[key] is not None}
         url = f"{self.backend_url}/api/v1/persons/{profile_id}/"
         status_code, _ = await self.api_request("put", url, filtered_data, headers={"Authorization": f"Token {token}"})
         return status_code == 200
@@ -227,7 +231,7 @@ class UserService:
         return None
 
     async def log_out(self, tg_user_id: int) -> bool:
-        current_profile = self.storage.get_current_profile_by_tg_id(tg_user_id)
+        current_profile = self.storage.get_current_profile(tg_user_id)
         if current_profile:
             auth_token = self.storage.get_profile_info_by_key(tg_user_id, current_profile.id, "auth_token")
             url = f"{self.backend_url}/auth/token/logout/"

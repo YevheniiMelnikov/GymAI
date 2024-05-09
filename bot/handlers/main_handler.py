@@ -1,3 +1,5 @@
+import os
+
 import loguru
 from aiogram import Router
 from aiogram.fsm.context import FSMContext
@@ -5,7 +7,8 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import profile_menu_keyboard
 from bot.states import States
-from common.functions import show_main_menu, update_profile
+from common.file_manager import file_manager
+from common.functions import show_main_menu, show_profile_editing_menu
 from common.models import Profile
 from common.user_service import user_service
 from common.utils import get_profile_attributes
@@ -18,7 +21,7 @@ logger = loguru.logger
 @main_router.callback_query(States.main_menu)
 async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
-    profile = user_service.storage.get_current_profile_by_tg_id(callback_query.from_user.id) or Profile.from_dict(
+    profile = user_service.storage.get_current_profile(callback_query.from_user.id) or Profile.from_dict(
         data["profile"]
     )
     match callback_query.data:
@@ -26,19 +29,23 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
             await callback_query.message.answer(text=translate(MessageText.feedback, lang=profile.language))
             await state.set_state(States.feedback)
         case "my_profile":
-            if profile.status == "client":
-                client = user_service.storage.get_client_by_id(profile.id)
-                format_attributes = get_profile_attributes(role="client", user=client, lang_code=profile.language)
-                text = translate(MessageText.client_profile, lang=profile.language).format(**format_attributes)
-            else:
-                coach = user_service.storage.get_coach_by_id(profile.id)
-                format_attributes = get_profile_attributes(role="coach", user=coach, lang_code=profile.language)
-                text = translate(MessageText.coach_profile, lang=profile.language).format(**format_attributes)
-
-            await callback_query.message.answer(
-                text=text,
-                reply_markup=profile_menu_keyboard(profile.language),
+            user = (
+                user_service.storage.get_client_by_id(profile.id)
+                if profile.status == "client"
+                else user_service.storage.get_coach_by_id(profile.id)
             )
+            format_attributes = get_profile_attributes(role=profile.status, user=user, lang_code=profile.language)
+            text = translate(
+                MessageText.client_profile if profile.status == "client" else MessageText.coach_profile,
+                lang=profile.language,
+            ).format(**format_attributes)
+            if profile.status == "coach" and getattr(user, "profile_photo", None):
+                photo = file_manager.generate_signed_url(user.profile_photo)
+                await callback_query.message.answer_photo(
+                    photo, text, reply_markup=profile_menu_keyboard(profile.language)
+                )
+            else:
+                await callback_query.message.answer(text, reply_markup=profile_menu_keyboard(profile.language))
             await state.set_state(States.profile)
         case "my_clients":
             await callback_query.message.answer(text="Ваши клиенты: ")  # TODO: IMPLEMENT
@@ -54,7 +61,7 @@ async def profile_menu(callback_query: CallbackQuery, state: FSMContext) -> None
     data = await state.get_data()
     profile = Profile.from_dict(data["profile"])
     if callback_query.data == "edit_profile":
-        await update_profile(callback_query.message, profile, state)
+        await show_profile_editing_menu(callback_query.message, profile, state)
     elif callback_query.data == "back":
         await show_main_menu(callback_query.message, profile, state)
 
@@ -80,7 +87,7 @@ async def process_password_reset(message: Message, state: FSMContext) -> None:
 
 @main_router.message(States.feedback)
 async def handle_feedback(message: Message, state: FSMContext) -> None:
-    profile = user_service.storage.get_current_profile_by_tg_id(message.from_user.id)
+    profile = user_service.storage.get_current_profile(message.from_user.id)
     auth_token = user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
     if user_data := await user_service.get_user_data(auth_token):
         if await user_service.send_feedback(user_data.get("email"), user_data.get("username"), message.text):

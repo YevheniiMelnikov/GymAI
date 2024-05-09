@@ -1,3 +1,5 @@
+import os
+
 import loguru
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -5,6 +7,7 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import workout_experience_keyboard
 from bot.states import States
+from common.file_manager import file_manager
 from common.functions import show_main_menu, update_user_info
 from common.user_service import user_service
 from common.utils import get_state_and_message, validate_birth_date
@@ -92,7 +95,6 @@ async def health_notes(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await state.update_data(health_notes=message.text)
     await message.answer(translate(MessageText.weight, lang=data["lang"]))
-    await state.set_state(States.weight)
     await update_user_info(message, state, "client")
 
 
@@ -147,12 +149,32 @@ async def payment_details(message: Message, state: FSMContext) -> None:
         return
 
     await state.update_data(payment_details=message.text.replace(" ", ""))
-    await update_user_info(message, state, "coach")
+    await message.answer(translate(MessageText.upload_photo, lang=data["lang"]))
+    await state.set_state(States.profile_photo)
+
+
+@questionnaire_router.message(States.profile_photo, F.photo)
+async def profile_photo(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    local_file = await file_manager.save_profile_photo(message)
+
+    if local_file and file_manager.check_file_size(f"temp/{local_file}", 20):
+        if file_manager.upload_image_to_gcs(local_file):
+            await message.answer(translate(MessageText.photo_uploaded, lang=data["lang"]))
+            await state.update_data(profile_photo=local_file)
+            file_manager.clean_up_local_file(local_file)
+            await update_user_info(message, state, "coach")
+        else:
+            await message.answer(translate(MessageText.photo_upload_fail, lang=data["lang"]))
+            await state.set_state(States.profile_photo)
+    else:
+        await message.answer(translate(MessageText.photo_upload_fail, lang=data["lang"]))
+        await state.set_state(States.profile_photo)
 
 
 @questionnaire_router.callback_query(States.edit_profile)
 async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = user_service.storage.get_current_profile_by_tg_id(callback_query.from_user.id)
+    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     await state.update_data(lang=profile.language)
     if callback_query.data == "back":
         await state.set_state(States.main_menu)
@@ -161,10 +183,6 @@ async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> No
 
     state_to_set, message = get_state_and_message(callback_query.data, profile.language)
     await state.update_data(edit_mode=True)
-    if state_to_set == States.workout_experience:  # TODO: FIND BETTER SOLUTION
-        await callback_query.message.answer(
-            message, lang=profile.language, reply_markup=workout_experience_keyboard(profile.language)
-        )
-    else:
-        await callback_query.message.answer(message, lang=profile.language)
+    reply_markup = workout_experience_keyboard(profile.language) if state_to_set == States.workout_experience else None
+    await callback_query.message.answer(message, lang=profile.language, reply_markup=reply_markup)
     await state.set_state(state_to_set)
