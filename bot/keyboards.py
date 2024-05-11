@@ -110,3 +110,10 @@ def workout_experience_keyboard(lang_code: str) -> InlineKeyboardMarkup:
     kb.button(text=translate(ButtonText.advanced, lang=lang_code), callback_data="3-5")
     kb.button(text=translate(ButtonText.experienced, lang=lang_code), callback_data="5+")
     return kb.as_markup(one_time_keyboard=True)
+
+
+def new_coach_request() -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="Принять", callback_data="coach_approve")
+    kb.button(text="Отклонить", callback_data="coach_decline")
+    return kb.as_markup(one_time_keyboard=True)

@@ -101,7 +101,7 @@ async def health_notes(message: Message, state: FSMContext) -> None:
 @questionnaire_router.message(States.name, F.text)
 async def name(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
-    await state.update_data(name=message.text)
+    await state.update_data(name=message.text, verified=False)
     await message.answer(translate(MessageText.work_experience, lang=data["lang"]))
     await state.set_state(States.work_experience)
     await message.delete()
@@ -151,6 +151,7 @@ async def payment_details(message: Message, state: FSMContext) -> None:
     await state.update_data(payment_details=message.text.replace(" ", ""))
     await message.answer(translate(MessageText.upload_photo, lang=data["lang"]))
     await state.set_state(States.profile_photo)
+    await message.delete()
 
 
 @questionnaire_router.message(States.profile_photo, F.photo)

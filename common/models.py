@@ -69,10 +69,11 @@ class Coach:
     additional_info: str
     payment_details: str
     profile_photo: str
+    verified: bool = False
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Coach":
-        fields = ["id", "name", "work_experience", "additional_info", "payment_details", "profile_photo"]
+        fields = ["id", "name", "work_experience", "additional_info", "payment_details", "profile_photo", "verified"]
         filtered_data = {key: data.get(key) for key in fields}
         return cls(**filtered_data)
 
@@ -84,10 +85,11 @@ class Coach:
             "additional_info": self.additional_info,
             "payment_details": self.payment_details,
             "profile_photo": self.profile_photo,
+            "verified": self.verified,
         }
 
     def __repr__(self) -> str:
         return (
             f"Coach(id={self.id}, name={self.name}, work_experience={self.work_experience}, additional_info={self.additional_info}, "
-            f"payment_details={self.payment_details}, profile_photo={self.profile_photo})"
+            f"payment_details={self.payment_details}, profile_photo={self.profile_photo}), verified={self.verified})"
         )

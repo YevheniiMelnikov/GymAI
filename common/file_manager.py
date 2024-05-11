@@ -5,7 +5,6 @@ import loguru
 from aiogram.types import Message
 from google.cloud import storage
 
-
 logger = loguru.logger
 
 

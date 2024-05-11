@@ -59,13 +59,17 @@ def validate_birth_date(date_str: str) -> bool:
 
 
 def get_profile_attributes(role: str, user: Optional[Client | Coach], lang_code: str) -> dict[str, str]:
+    def get_attr(attr_name):
+        return getattr(user, attr_name, "") if user else ""
+
     genders = {
         "male": translate(ButtonText.male, lang=lang_code),
         "female": translate(ButtonText.female, lang=lang_code),
     }
-
-    def get_attr(attr_name):
-        return getattr(user, attr_name, "") if user else ""
+    verification_status = {
+        True: translate(MessageText.verified, lang=lang_code),
+        False: translate(MessageText.not_verified, lang=lang_code),
+    }
 
     if role == "client":
         attributes = {
@@ -82,6 +86,9 @@ def get_profile_attributes(role: str, user: Optional[Client | Coach], lang_code:
             "experience": get_attr("work_experience"),
             "notes": get_attr("additional_info"),
             "payment_details": get_attr("payment_details"),
+            "verified": verification_status.get(
+                get_attr("verified"), translate(MessageText.not_verified, lang=lang_code)
+            ),
         }
 
     return attributes
