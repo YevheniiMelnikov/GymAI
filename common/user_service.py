@@ -33,12 +33,10 @@ class UserProfileManager:
         is_current: bool = True,
     ) -> None:
         email = email or self.get_profile_info_by_key(telegram_id, profile.id, "email")
+
         try:
             current_profiles_data = self.redis.hget("user_profiles", telegram_id)
-            if current_profiles_data:
-                current_profiles = json.loads(current_profiles_data)
-            else:
-                current_profiles = []
+            current_profiles = json.loads(current_profiles_data) if current_profiles_data else []
 
             profile_data = {
                 "id": profile.id,
@@ -51,9 +49,8 @@ class UserProfileManager:
                 "last_used": time.time(),
             }
 
-            existing_profile_index = next(
-                (index for index, p in enumerate(current_profiles) if p["id"] == profile.id), None
-            )
+            existing_profile_index = next((i for i, p in enumerate(current_profiles) if p["id"] == profile.id), None)
+
             if existing_profile_index is not None:
                 current_profiles[existing_profile_index].update(profile_data)
             else:
@@ -139,7 +136,14 @@ class UserProfileManager:
 
     def set_coach_data(self, profile_id: int, coach_data: dict) -> None:
         try:
-            allowed_fields = ["name", "work_experience", "additional_info", "payment_details", "profile_photo", "verified"]
+            allowed_fields = [
+                "name",
+                "work_experience",
+                "additional_info",
+                "payment_details",
+                "profile_photo",
+                "verified",
+            ]
             filtered_coach_data = {key: coach_data[key] for key in allowed_fields if key in coach_data}
             existing_data = json.loads(self.redis.hget("coaches", profile_id) or "{}")
             existing_data.update(filtered_coach_data)
@@ -261,9 +265,10 @@ class UserService:
         logger.info(f"Failed to retrieve user data. HTTP status: {status_code}")
         return None
 
-    async def reset_password(self, email: str) -> bool:
+    async def reset_password(self, email: str, token: str) -> bool:
+        headers = {"Authorization": f"Token {token}"}
         status_code, _ = await self.api_request(
-            "post", f"{self.backend_url}/api/v1/auth/users/reset_password/", {"email": email}
+            "post", f"{self.backend_url}/api/v1/auth/users/reset_password/", {"email": email}, headers
         )
         logger.info(f"Password reset requested for {email}")
         return status_code == 204

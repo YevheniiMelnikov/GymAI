@@ -86,7 +86,9 @@ def get_profile_attributes(role: str, user: Optional[Client | Coach], lang_code:
             "experience": get_attr("work_experience"),
             "notes": get_attr("additional_info"),
             "payment_details": get_attr("payment_details"),
-            "verified": verification_status.get(get_attr("verified")),
+            "verified": verification_status.get(
+                get_attr("verified"), translate(MessageText.not_verified, lang=lang_code)
+            ),
         }
 
     return attributes

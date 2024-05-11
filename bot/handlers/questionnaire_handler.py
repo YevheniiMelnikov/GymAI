@@ -151,6 +151,7 @@ async def payment_details(message: Message, state: FSMContext) -> None:
     await state.update_data(payment_details=message.text.replace(" ", ""))
     await message.answer(translate(MessageText.upload_photo, lang=data["lang"]))
     await state.set_state(States.profile_photo)
+    await message.delete()
 
 
 @questionnaire_router.message(States.profile_photo, F.photo)

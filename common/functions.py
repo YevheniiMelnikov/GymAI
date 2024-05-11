@@ -4,15 +4,14 @@ from typing import Any
 
 import loguru
 from aiogram import Bot
-from aiogram.client.session import aiohttp
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BotCommand, Message
 from dotenv import load_dotenv
-from google.cloud import storage
 
 from bot.keyboards import *
 from bot.states import States
+from common.file_manager import file_manager
 from common.models import Profile
 from common.user_service import user_service
 from texts.text_manager import MessageText, resource_manager, translate
@@ -21,6 +20,7 @@ logger = loguru.logger
 load_dotenv()
 bot = Bot(os.environ.get("BOT_TOKEN"))
 BACKEND_URL = os.environ.get("BACKEND_URL")
+OWNER_ID = os.environ.get("OWNER_ID")
 
 
 async def show_profile_editing_menu(message: Message, profile: Profile, state: FSMContext) -> None:
@@ -82,15 +82,15 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
         await handle_registration_failure(message, state, data["lang"])
         return
 
-    logger.info(f"User {message.from_user.id} registered")
+    logger.info(f"User {message.text} registered")
     token = await user_service.log_in(username=data["username"], password=data["password"])
 
     if not token:
-        logger.error(f"Login failed for user {message.from_user.id} after registration")
+        logger.error(f"Login failed for user {message.text} after registration")
         await handle_registration_failure(message, state, data["lang"])
         return
 
-    logger.info(f"User {message.from_user.id} logged in")
+    logger.info(f"User {message.text} logged in")
     profile_data = await user_service.get_profile_by_username(data["username"])
     user_service.storage.set_profile(
         profile=profile_data,
@@ -162,7 +162,8 @@ async def update_user_info(message: Message, state: FSMContext, role: str) -> No
             user_service.storage.set_client_data(profile.id, data)
         else:
             if not data.get("edit_mode"):
-                await notify_about_new_coach(message.from_user.id, profile, data)  # TODO: IMPLEMENT
+                await message.answer(translate(MessageText.wait_for_verification, data["lang"]))
+                await notify_about_new_coach(message.from_user.id, profile, data)
             user_service.storage.set_coach_data(profile.id, data)
 
         token = user_service.storage.get_profile_info_by_key(message.chat.id, profile.id, "auth_token")
@@ -187,5 +188,16 @@ async def update_user_info(message: Message, state: FSMContext, role: str) -> No
 
 
 async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, Any]) -> None:
-    pass
-
+    name = data.get("name")
+    experience = data.get("work_experience")
+    info = data.get("additional_info")
+    payment = data.get("payment_details")
+    photo = file_manager.generate_signed_url(data.get("profile_photo"))
+    await bot.send_photo(
+        OWNER_ID,
+        photo,
+        caption=translate(MessageText.new_coach_request, "ru").format(
+            name=name, experience=experience, info=info, payment=payment, tg_id=tg_id, profile_id=profile.id
+        ),
+        reply_markup=new_coach_request(),
+    )

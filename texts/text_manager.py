@@ -31,6 +31,7 @@ class MessageText(Enum):
     additional_info = auto()
     upload_photo = auto()
     photo_uploaded = auto()
+    coach_verified = auto()
 
     invalid_credentials = auto()
     invalid_content = auto()
@@ -42,8 +43,10 @@ class MessageText(Enum):
     no_profiles_found = auto()
     password_unsafe = auto()
     photo_upload_fail = auto()
+    coach_declined = auto()
 
     saved = auto()
+    wait_for_verification = auto()
     verified = auto()
     not_verified = auto()
     your_data_updated = auto()
@@ -52,6 +55,7 @@ class MessageText(Enum):
     password_reset_sent = auto()
     feedback_sent = auto()
     registration_successful = auto()
+    new_coach_request = auto()
     main_menu = auto()
     help = auto()
     start = auto()

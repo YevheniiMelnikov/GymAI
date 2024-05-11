@@ -1,5 +1,3 @@
-import os
-
 import loguru
 from aiogram import Router
 from aiogram.fsm.context import FSMContext
@@ -73,7 +71,10 @@ async def process_password_reset(message: Message, state: FSMContext) -> None:
     if index is not None and data["emails"][index]:
         email = data["emails"][index]
         profile = Profile.from_dict(data["profiles"][index])
-        if await user_service.reset_password(email):
+        token = user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
+        if not token:
+            raise ValueError(f"Authentication token not found for user {profile.id}")
+        if await user_service.reset_password(email, token):
             await message.answer(text=translate(MessageText.password_reset_sent, profile.language).format(email=email))
             await message.answer(text=translate(MessageText.username, profile.language))
             await state.set_state(States.username)
@@ -99,3 +100,21 @@ async def handle_feedback(message: Message, state: FSMContext) -> None:
     else:
         await message.answer(text=translate(MessageText.unexpected_error, lang=profile.language))
         await show_main_menu(message, profile, state)
+
+
+@main_router.callback_query(lambda callback_query: callback_query.data == "coach_approve")  # TODO: FIX
+async def approve_coach(callback_query: CallbackQuery, state: FSMContext):
+    # CHANGE STATUS HERE
+    data = await state.get_data()
+    print(data)
+    await callback_query.answer("Подтверждено")
+    await callback_query.message.answer(translate(MessageText.verified, lang=data["lang"]))
+    logger.info(f"Coach verified")  # add id here
+
+
+@main_router.callback_query(lambda callback_query: callback_query.data == "coach_decline")  # TODO: FIX
+async def decline_coach(callback_query: CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    await callback_query.answer("Отклонено")
+    await callback_query.message.answer(translate(MessageText.coach_declined, lang=data["lang"]))
+    logger.info(f"Coach declined")

@@ -146,7 +146,7 @@ client_profile:
 coach_profile:
   eng: "<b>Name:</b> {name}\n<b>Work experience:</b> {experience}\n<b>Additional information:</b> {notes}\n<b>Payment details:</b> {payment_details}\n<b>Verification status:</b> {verified}"
   ru: "<b>Имя:</b> {name}\n<b>Опыт работы:</b> {experience}\n<b>Дополнительная информация:</b> {notes}\n<b>Реквизиты оплаты:</b> {payment_details}\n<b>Статус верификации:</b> {verified}"
-  ua: "<b>Ім'я:</b> {name}\n<b>Досвід роботи:</b> {experience}\n<b>Додаткова інформація:</b> {notes}\n<b>Реквізити оплати:</b> {payment_details}"
+  ua: "<b>Ім'я:</b> {name}\n<b>Досвід роботи:</b> {experience}\n<b>Додаткова інформація:</b> {notes}\n<b>Реквізити оплати:</b> {payment_details}\n<b>Статус верифікації:</b> {verified}"
 
 edit_profile:
   eng: "There will be a few questions, this won't take long to answer"
@@ -237,3 +237,16 @@ not_verified:
   eng: "Not verified"
   ru: "Не верифицирован"
   ua: "Не верифікований"
+
+new_coach_request: # admin message
+  ru: "Новый тренер ожидает верификации!\n\nИмя: {name}\nОпыт работы: {experience}\nДополнительная инофрмация: {info}\nРеквизиты: {payment}\nТелеграм: {tg_id}\nПрофиль: {profile_id}"
+
+coach_verified:
+  eng: "Congratulations, your profile has been verified! Expect new clients"
+  ru: "Поздравляем, ваш профиль верифицирован! Ожидайте новых клиентов"
+  ua: "Вітаємо, ваш профіль верифіковано! Очікуйте нових клієнтів"
+
+wait_for_verification:
+  eng: "Wait for your account to be verified by the administration"
+  ru: "Ожидайте верификации вашего аккаунта со стороны администрации"
+  ua: "Очікуйте верифікації вашого акаунта з боку адміністрації"
