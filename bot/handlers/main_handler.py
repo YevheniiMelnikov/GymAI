@@ -1,5 +1,5 @@
 import loguru
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
@@ -100,21 +100,3 @@ async def handle_feedback(message: Message, state: FSMContext) -> None:
     else:
         await message.answer(text=translate(MessageText.unexpected_error, lang=profile.language))
         await show_main_menu(message, profile, state)
-
-
-@main_router.callback_query(lambda callback_query: callback_query.data == "coach_approve")  # TODO: FIX
-async def approve_coach(callback_query: CallbackQuery, state: FSMContext):
-    # CHANGE STATUS HERE
-    data = await state.get_data()
-    print(data)
-    await callback_query.answer("Подтверждено")
-    await callback_query.message.answer(translate(MessageText.verified, lang=data["lang"]))
-    logger.info(f"Coach verified")  # add id here
-
-
-@main_router.callback_query(lambda callback_query: callback_query.data == "coach_decline")  # TODO: FIX
-async def decline_coach(callback_query: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    await callback_query.answer("Отклонено")
-    await callback_query.message.answer(translate(MessageText.coach_declined, lang=data["lang"]))
-    logger.info(f"Coach declined")

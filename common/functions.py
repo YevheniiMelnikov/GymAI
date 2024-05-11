@@ -2,11 +2,12 @@ import os
 from contextlib import suppress
 from typing import Any
 
+import aiohttp
 import loguru
-from aiogram import Bot
+from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import BotCommand, Message
+from aiogram.types import BotCommand, CallbackQuery, Message
 from dotenv import load_dotenv
 
 from bot.keyboards import *
@@ -21,6 +22,7 @@ load_dotenv()
 bot = Bot(os.environ.get("BOT_TOKEN"))
 BACKEND_URL = os.environ.get("BACKEND_URL")
 OWNER_ID = os.environ.get("OWNER_ID")
+admin_router = Router()
 
 
 async def show_profile_editing_menu(message: Message, profile: Profile, state: FSMContext) -> None:
@@ -193,11 +195,29 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
     info = data.get("additional_info")
     payment = data.get("payment_details")
     photo = file_manager.generate_signed_url(data.get("profile_photo"))
-    await bot.send_photo(
-        OWNER_ID,
-        photo,
-        caption=translate(MessageText.new_coach_request, "ru").format(
-            name=name, experience=experience, info=info, payment=payment, tg_id=tg_id, profile_id=profile.id
-        ),
-        reply_markup=new_coach_request(),
-    )
+    async with aiohttp.ClientSession():
+        await bot.send_photo(
+            OWNER_ID,
+            photo,
+            caption=translate(MessageText.new_coach_request, "ru").format(
+                name=name, experience=experience, info=info, payment=payment, tg_id=tg_id, profile_id=profile.id
+            ),
+            reply_markup=new_coach_request(),
+        )
+
+    @admin_router.callback_query(F.data == "coach_approve")  # TODO: FIND BETTER SOLUTION
+    async def approve_coach(callback_query: CallbackQuery):
+        token = user_service.storage.get_profile_info_by_key(tg_id, profile.id, "auth_token")
+        await user_service.edit_profile(profile.id, {"verified": True}, token)
+        user_service.storage.set_coach_data(profile.id, {"verified": True})
+        await callback_query.answer("Подтверждено")
+        await bot.send_message(tg_id, translate(MessageText.coach_verified, lang=profile.language))
+        await callback_query.message.delete()
+        logger.info(f"Coach verification for profile_id {profile.id} approved")
+
+    @admin_router.callback_query(F.data == "coach_decline")
+    async def decline_coach(callback_query: CallbackQuery):
+        await callback_query.answer("Отклонено")
+        await bot.send_message(tg_id, translate(MessageText.coach_declined, lang=profile.language))
+        await callback_query.message.delete()
+        logger.info(f"Coach verification for profile_id {profile.id} declined")

@@ -250,3 +250,8 @@ wait_for_verification:
   eng: "Wait for your account to be verified by the administration"
   ru: "Ожидайте верификации вашего аккаунта со стороны администрации"
   ua: "Очікуйте верифікації вашого акаунта з боку адміністрації"
+
+coach_declined:
+  eng: "Unfortunately your verification request has not been accepted. We may contact you later"
+  ru: "К сожалению ваш запрос на верификацию не был принят. Возможно мы свяжемся с вами позже"
+  ua: "На жаль ваш запит на верифікацію не було прийнято. Можливо ми зв'яжемося з вами пізніше"

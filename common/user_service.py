@@ -116,7 +116,7 @@ class UserProfileManager:
             existing_data = json.loads(self.redis.hget("clients", profile_id) or "{}")
             existing_data.update(filtered_client_data)
             self.redis.hset("clients", profile_id, json.dumps(existing_data))
-            logger.info(f"Client data for {profile_id} has been set or updated")
+            logger.info(f"Client data for {profile_id} has been updated: {client_data}")
         except Exception as e:
             logger.error(f"Failed to set or update client data for {profile_id}: {e}")
 
@@ -148,7 +148,7 @@ class UserProfileManager:
             existing_data = json.loads(self.redis.hget("coaches", profile_id) or "{}")
             existing_data.update(filtered_coach_data)
             self.redis.hset("coaches", profile_id, json.dumps(existing_data))
-            logger.info(f"Coach data set or updated for coach ID {profile_id}")
+            logger.info(f"Coach data updated for coach ID {profile_id}: {coach_data}")
         except Exception as e:
             logger.error(f"Failed to set or update coach data for coach ID {profile_id}: {e}")
 
