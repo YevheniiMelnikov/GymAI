@@ -32,11 +32,10 @@ class Profile(Model):
 
 class Subscription(models.Model):
     user = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="subscriptions")
-    subscription_id = models.AutoField(primary_key=True)
     expire_date = models.DateField()
     enabled = models.BooleanField(default=False)
     price = models.DecimalField(max_digits=10, decimal_places=2)
-    training_count = models.IntegerField()
+    type = models.CharField(max_length=50)
 
     class Meta:
         verbose_name = "subscription"

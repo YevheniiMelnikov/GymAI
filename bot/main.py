@@ -11,7 +11,7 @@ from bot.handlers.invalid_content_handler import invalid_content_router
 from bot.handlers.main_handler import main_router
 from bot.handlers.questionnaire_handler import questionnaire_router
 from bot.handlers.registration_handler import register_router
-from common.functions import set_bot_commands
+from common.functions import admin_router, set_bot_commands
 
 load_dotenv()
 logger = loguru.logger
@@ -26,7 +26,9 @@ async def main() -> None:
     bot = Bot(token=bot_token, parse_mode="HTML")
     redis_url = os.getenv("REDIS_URL")
     dp = Dispatcher(storage=RedisStorage.from_url(f"{redis_url}/0"))
-    dp.include_routers(cmd_router, main_router, register_router, questionnaire_router, invalid_content_router)
+    dp.include_routers(
+        admin_router, main_router, cmd_router, register_router, questionnaire_router, invalid_content_router
+    )
 
     logger.info("Starting bot ...")
     try:

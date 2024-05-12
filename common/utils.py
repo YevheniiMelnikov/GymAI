@@ -1,7 +1,7 @@
 import os
 import re
 from functools import wraps
-from typing import Optional
+from typing import Any, Optional
 
 from aiogram.fsm.state import State
 
@@ -105,3 +105,7 @@ def get_state_and_message(callback: str, lang: str) -> tuple[State, str]:
         "payment_details": (States.payment_details, translate(MessageText.payment_details, lang=lang)),
         "photo": (States.profile_photo, translate(MessageText.upload_photo, lang=lang)),
     }.get(callback, (None, None))
+
+
+def get_coach_page(coach: Coach) -> dict[str, Any]:
+    return {"name": coach.name, "experience": coach.work_experience, "additional_info": coach.additional_info}

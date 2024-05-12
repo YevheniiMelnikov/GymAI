@@ -1,12 +1,12 @@
 import loguru
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import profile_menu_keyboard
+from bot.keyboards import choose_coach, profile_menu_keyboard
 from bot.states import States
 from common.file_manager import file_manager
-from common.functions import show_main_menu, show_profile_editing_menu
+from common.functions import show_coaches, show_main_menu, show_profile_editing_menu, show_program, show_subscription
 from common.models import Profile
 from common.user_service import user_service
 from common.utils import get_profile_attributes
@@ -45,12 +45,21 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
             else:
                 await callback_query.message.answer(text, reply_markup=profile_menu_keyboard(profile.language))
             await state.set_state(States.profile)
-        case "my_clients":
-            await callback_query.message.answer(text="Ваши клиенты: ")  # TODO: IMPLEMENT
-        case "my_program":
-            await callback_query.message.answer(text="Программа")  # TODO: IMPLEMENT
-        case "my_subscription":
-            await callback_query.message.answer(text="Подписка")  # TODO: IMPLEMENT
+        case "my_clients":  # TODO: IMPLEMENT
+            await callback_query.message.answer(text="Ваши клиенты: ")
+        case "my_program":  # TODO: IMPLEMENT
+            if program := user_service.storage.get_program(profile.id):
+                await show_program(callback_query.message, program)
+            else:
+                await callback_query.message.answer(
+                    text=translate(MessageText.no_program, lang=profile.language),
+                    reply_markup=choose_coach(profile.language),
+                )
+                await state.set_state(States.choose_coach)
+        case "my_subscription":  # TODO: IMPLEMENT
+            if subscription := user_service.storage.get_subscription(profile.id):
+                await show_subscription(callback_query.message, subscription)
+
     await callback_query.message.delete()
 
 
@@ -102,19 +111,47 @@ async def handle_feedback(message: Message, state: FSMContext) -> None:
         await show_main_menu(message, profile, state)
 
 
-@main_router.callback_query(lambda callback_query: callback_query.data == "coach_approve")  # TODO: FIX
-async def approve_coach(callback_query: CallbackQuery, state: FSMContext):
-    # CHANGE STATUS HERE
-    data = await state.get_data()
-    print(data)
-    await callback_query.answer("Подтверждено")
-    await callback_query.message.answer(translate(MessageText.verified, lang=data["lang"]))
-    logger.info(f"Coach verified")  # add id here
+@main_router.callback_query(States.choose_coach)
+async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext):
+    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+    if callback_query.data == "back":
+        await state.set_state(States.main_menu)
+        await show_main_menu(callback_query.message, profile, state)
+        return
+
+    else:
+        await show_coaches(callback_query.message, state)
 
 
-@main_router.callback_query(lambda callback_query: callback_query.data == "coach_decline")  # TODO: FIX
-async def decline_coach(callback_query: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    await callback_query.answer("Отклонено")
-    await callback_query.message.answer(translate(MessageText.coach_declined, lang=data["lang"]))
-    logger.info(f"Coach declined")
+@main_router.callback_query(States.coach_selection)
+async def handle_coach_interaction(callback_query: CallbackQuery, state: FSMContext):
+    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+    if callback_query.data == "quit":
+        await state.set_state(States.main_menu)
+        await show_main_menu(callback_query.message, profile, state)
+        return
+
+    _, action, index = callback_query.data.split("_")
+    index = int(index)
+
+    coaches = user_service.storage.get_coaches()
+    if not coaches:
+        await callback_query.answer(translate(MessageText.no_coaches, profile.language))
+        return
+
+    if action == "next":
+        index %= len(coaches)
+        await show_coaches(callback_query.message, state, current_index=index)
+
+    elif action == "prev":
+        if index < 0:
+            index = len(coaches) - 1
+        else:
+            index %= len(coaches)
+        await show_coaches(callback_query.message, state, current_index=index)
+
+    elif action == "selected":
+        # Здесь логика обработки выбора тренера
+        await callback_query.message.answer(f"Тренер выбран.")
+
+    await callback_query.message.delete()

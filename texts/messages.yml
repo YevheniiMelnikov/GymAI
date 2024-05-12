@@ -239,7 +239,7 @@ not_verified:
   ua: "Не верифікований"
 
 new_coach_request: # admin message
-  ru: "Новый тренер ожидает верификации!\n\nИмя: {name}\nОпыт работы: {experience}\nДополнительная инофрмация: {info}\nРеквизиты: {payment}\nТелеграм: {tg_id}\nПрофиль: {profile_id}"
+  ru: "Новый тренер ожидает верификации!\n\nИмя: {name}\nОпыт работы: {experience}\nДополнительная инофрмация: {info}\nРеквизиты: {payment}\nТелеграм: {contact}\nID профиля: {profile_id}"
 
 coach_verified:
   eng: "Congratulations, your profile has been verified! Expect new clients"
@@ -250,3 +250,23 @@ wait_for_verification:
   eng: "Wait for your account to be verified by the administration"
   ru: "Ожидайте верификации вашего аккаунта со стороны администрации"
   ua: "Очікуйте верифікації вашого акаунта з боку адміністрації"
+
+coach_declined:
+  eng: "Unfortunately your verification request has not been accepted. We may contact you later"
+  ru: "К сожалению ваш запрос на верификацию не был принят. Возможно мы свяжемся с вами позже"
+  ua: "На жаль ваш запит на верифікацію не було прийнято. Можливо ми зв'яжемося з вами пізніше"
+
+no_program:
+  eng: "You don't have an exercise program yet"
+  ru: "У вас пока нет программы тренировок"
+  ua: "У вас поки що немає програми тренувань"
+
+no_coaches:
+  eng: "There are no active coaches on the platform yet"
+  ru: "На платформе пока нет активных тренеров"
+  ua: "На платформі поки що немає активних тренерів"
+
+coach_page:
+  eng: "<b>Name:</b> {name}\n<b>Work experience (years):</b> {experience}\n<b>Additional information:</b> {additional_info}"
+  ru: "<b>Имя:</b> {name}\n<b>Опыт работы (года):</b> {experience}\n<b>Дополнительная информация:</b> {additional_info}"
+  ua: "<b>Ім'я:</b> {name}\n<b>Досвід роботи (роки):</b> {experience}\n<b>Додаткова інформація:</b> {additional_info}"

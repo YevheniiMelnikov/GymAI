@@ -93,3 +93,16 @@ class Coach:
             f"Coach(id={self.id}, name={self.name}, work_experience={self.work_experience}, additional_info={self.additional_info}, "
             f"payment_details={self.payment_details}, profile_photo={self.profile_photo}), verified={self.verified})"
         )
+
+
+@dataclass
+class Subscription:
+    expire_date: float
+    enabled: bool
+    price: float
+    type: str
+
+
+@dataclass
+class Program:
+    pass
