@@ -122,3 +122,23 @@ photo:
   eng: "Profile photo"
   ru: "Фото профиля"
   ua: "Фото профілю"
+
+select:
+  eng: "Select"
+  ru: "Выбрать"
+  ua: "Обрати"
+
+forward:
+  eng: "Forward"
+  ru: "Далее"
+  ua: "Далі"
+
+choose_coach:
+  eng: "Choose a coach"
+  ru: "Выбрать тренера"
+  ua: "Вибрати тренера"
+
+quit:
+  eng: "Quit"
+  ru: "Выход"
+  ua: "Вихід"

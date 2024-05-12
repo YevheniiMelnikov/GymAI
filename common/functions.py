@@ -7,14 +7,15 @@ import loguru
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import BotCommand, CallbackQuery, Message
+from aiogram.types import BotCommand, CallbackQuery, InputFile, InputMediaPhoto, Message
 from dotenv import load_dotenv
 
 from bot.keyboards import *
 from bot.states import States
 from common.file_manager import file_manager
-from common.models import Profile
+from common.models import Profile, Program, Subscription
 from common.user_service import user_service
+from common.utils import get_coach_page
 from texts.text_manager import MessageText, resource_manager, translate
 
 logger = loguru.logger
@@ -195,12 +196,14 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
     info = data.get("additional_info")
     payment = data.get("payment_details")
     photo = file_manager.generate_signed_url(data.get("profile_photo"))
+    user = await bot.get_chat(tg_id)
+    contact = f"@{user.username}" if user.username else tg_id
     async with aiohttp.ClientSession():
         await bot.send_photo(
             OWNER_ID,
             photo,
             caption=translate(MessageText.new_coach_request, "ru").format(
-                name=name, experience=experience, info=info, payment=payment, tg_id=tg_id, profile_id=profile.id
+                name=name, experience=experience, info=info, payment=payment, contact=contact, profile_id=profile.id
             ),
             reply_markup=new_coach_request(),
         )
@@ -212,12 +215,55 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
         user_service.storage.set_coach_data(profile.id, {"verified": True})
         await callback_query.answer("Подтверждено")
         await bot.send_message(tg_id, translate(MessageText.coach_verified, lang=profile.language))
-        await callback_query.message.delete()
         logger.info(f"Coach verification for profile_id {profile.id} approved")
 
     @admin_router.callback_query(F.data == "coach_decline")
     async def decline_coach(callback_query: CallbackQuery):
         await callback_query.answer("Отклонено")
         await bot.send_message(tg_id, translate(MessageText.coach_declined, lang=profile.language))
-        await callback_query.message.delete()
         logger.info(f"Coach verification for profile_id {profile.id} declined")
+
+
+async def show_coaches(message: Message, state: FSMContext, current_index=0) -> None:
+    profile = user_service.storage.get_current_profile(message.chat.id)
+    coaches = user_service.storage.get_coaches()
+
+    if not coaches:
+        await message.answer(translate(MessageText.no_coaches, lang=profile.language))
+        await state.set_state(States.main_menu)
+        await show_main_menu(message, profile, state)
+        return
+
+    current_index %= len(coaches)
+    current_coach = coaches[current_index]
+    coach_info = get_coach_page(current_coach)
+    text = translate(MessageText.coach_page, profile.language)
+    coach_photo_url = file_manager.generate_signed_url(current_coach.profile_photo)
+    formatted_text = text.format(**coach_info)
+
+    if message.photo:
+        media = InputMediaPhoto(media=coach_photo_url)
+        await message.edit_media(media=media)
+        if message.caption:
+            await message.edit_caption(
+                caption=formatted_text,
+                reply_markup=coach_select_menu(profile.language, current_coach.id, current_index),
+                parse_mode="HTML",
+            )
+    else:
+        await bot.send_photo(
+            message.chat.id,
+            photo=coach_photo_url,
+            caption=formatted_text,
+            reply_markup=coach_select_menu(profile.language, current_coach.id, current_index),
+            parse_mode="HTML",
+        )
+    await state.set_state(States.coach_selection)
+
+
+async def show_subscription(message: Message, subscription: Subscription) -> None:  # TODO: IMPLEMENT
+    pass
+
+
+async def show_program(message: Message, program: Program) -> None:  # TODO: IMPLEMENT
+    pass

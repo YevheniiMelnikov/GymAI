@@ -26,6 +26,8 @@ class States(StatesGroup):
     feedback = State()
     profile = State()
     new_coach_request = State
+    choose_coach = State()
+    coach_selection = State()
 
     password_reset = State()
     password_retype = State()

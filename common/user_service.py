@@ -1,5 +1,6 @@
 import json
 import os
+import random
 import time
 from json import JSONDecodeError
 from typing import Any
@@ -9,7 +10,7 @@ import loguru
 import redis
 
 from common.exceptions import UsernameUnavailable, UserServiceError
-from common.models import Client, Coach, Profile
+from common.models import Client, Coach, Profile, Program, Subscription
 
 logger = loguru.logger
 
@@ -76,6 +77,21 @@ class UserProfileManager:
     def get_profiles(self, telegram_id: int) -> list[Profile]:
         profiles_data = json.loads(self.redis.hget("user_profiles", telegram_id) or "[]")
         return [Profile.from_dict(data) for data in profiles_data]
+
+    def get_coaches(self) -> list[Coach] | None:
+        try:
+            all_coaches = self.redis.hgetall("coaches")
+            coaches_data = []
+            for k, v in all_coaches.items():
+                coach_dict = json.loads(v)
+                coach_dict["id"] = k
+                coach = Coach.from_dict(coach_dict)
+                coaches_data.append(coach)
+            random.shuffle(coaches_data)
+            return coaches_data
+        except Exception as e:
+            logger.error(f"Failed to retrieve coach data: {e}")
+            return []
 
     def deactivate_profiles(self, telegram_id: int) -> None:
         try:
@@ -166,6 +182,12 @@ class UserProfileManager:
             logger.error(f"Failed to get coach data for coach ID {profile_id}: {e}")
             return None
 
+    def get_subscription(self, profile_id: int) -> Subscription | None:  # TODO: IMPLEMENT
+        pass
+
+    def get_program(self, profile_id: int) -> Program | None:
+        pass
+
 
 class UserService:
     def __init__(self, storage: UserProfileManager):
@@ -202,8 +224,8 @@ class UserService:
             "post", url, data=kwargs, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
         if status_code == 400 and "error" in response:
-            if "already exists" in response.text:
-                raise UsernameUnavailable(response.text)
+            if "already exists" in response:
+                raise UsernameUnavailable(response)
 
         return status_code == 201
 

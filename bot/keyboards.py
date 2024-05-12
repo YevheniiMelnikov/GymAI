@@ -117,3 +117,30 @@ def new_coach_request() -> InlineKeyboardMarkup:
     kb.button(text="Принять", callback_data="coach_approve")
     kb.button(text="Отклонить", callback_data="coach_decline")
     return kb.as_markup(one_time_keyboard=True)
+
+
+def choose_coach(lang_code: str) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=translate(ButtonText.back, lang=lang_code), callback_data="back")
+    kb.button(text=translate(ButtonText.choose_coach, lang=lang_code), callback_data="choose_coach")
+    return kb.as_markup(one_time_keyboard=True)
+
+
+def coach_select_menu(lang_code: str, coach_id: int, current_index: int) -> InlineKeyboardMarkup:
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text=translate(ButtonText.select, lang_code), callback_data=f"coach_selected_{coach_id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=translate(ButtonText.back, lang_code), callback_data=f"coach_prev_{current_index - 1}"
+            ),
+            InlineKeyboardButton(
+                text=translate(ButtonText.forward, lang_code), callback_data=f"coach_next_{current_index + 1}"
+            ),
+        ],
+        [InlineKeyboardButton(text=translate(ButtonText.quit, lang_code), callback_data=f"quit")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)

@@ -44,6 +44,9 @@ class MessageText(Enum):
     password_unsafe = auto()
     photo_upload_fail = auto()
     coach_declined = auto()
+    no_program = auto()
+    no_coaches = auto()
+    coach_page = auto()
 
     saved = auto()
     wait_for_verification = auto()
@@ -78,8 +81,12 @@ class ButtonText(Enum):
     sign_in = auto()
     sign_up = auto()
     back = auto()
+    quit = auto()
+    forward = auto
     edit_profile = auto()
     subscription = auto()
+    choose_coach = auto()
+    select = auto()
     beginner = auto()
     intermediate = auto()
     advanced = auto()
