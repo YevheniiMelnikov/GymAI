@@ -91,7 +91,7 @@ class UserProfileManager:
             return coaches_data
         except Exception as e:
             logger.error(f"Failed to retrieve coach data: {e}")
-            return []
+            return
 
     def deactivate_profiles(self, telegram_id: int) -> None:
         try:
