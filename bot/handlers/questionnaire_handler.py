@@ -92,9 +92,7 @@ async def weight(message: Message, state: FSMContext) -> None:
 
 @questionnaire_router.message(States.health_notes, F.text)
 async def health_notes(message: Message, state: FSMContext) -> None:
-    data = await state.get_data()
     await state.update_data(health_notes=message.text)
-    await message.answer(translate(MessageText.weight, lang=data["lang"]))
     await update_user_info(message, state, "client")
 
 
@@ -142,13 +140,17 @@ async def additional_info(message: Message, state: FSMContext) -> None:
 @questionnaire_router.message(States.payment_details, F.text)
 async def payment_details(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
+    await state.update_data(payment_details=message.text.replace(" ", ""))
     card_number = message.text.replace(" ", "")
     if not all(map(lambda x: x.isdigit(), card_number)) or len(card_number) != 16:
         await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))
         await state.set_state(States.payment_details)
         return
 
-    await state.update_data(payment_details=message.text.replace(" ", ""))
+    if data.get("edit_mode"):
+        await update_user_info(message, state, "coach")
+        return
+
     await message.answer(translate(MessageText.upload_photo, lang=data["lang"]))
     await state.set_state(States.profile_photo)
     await message.delete()

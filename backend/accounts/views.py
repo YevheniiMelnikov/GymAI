@@ -5,7 +5,7 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.shortcuts import get_object_or_404, render
 from rest_framework import generics
-from rest_framework.permissions import IsAdminUser, IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import BasePermission, IsAdminUser, IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.status import (
@@ -102,9 +102,14 @@ class SendFeedbackAPIView(APIView):
         return Response({"message": "Feedback sent successfully"}, status=HTTP_200_OK)
 
 
+class IsAuthenticatedButAllowInactive(BasePermission):
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated
+
+
 class ProfileAPIUpdate(APIView):
     serializer_class = ProfileSerializer
-    permission_classes = [HasAPIKey | IsAuthenticated]
+    permission_classes = [HasAPIKey | IsAuthenticatedButAllowInactive]
 
     def get_object(self) -> Profile:
         profile_id = self.kwargs.get("profile_id")

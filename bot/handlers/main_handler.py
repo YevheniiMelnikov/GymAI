@@ -6,7 +6,14 @@ from aiogram.types import CallbackQuery, Message
 from bot.keyboards import choose_coach, profile_menu_keyboard
 from bot.states import States
 from common.file_manager import file_manager
-from common.functions import show_coaches, show_main_menu, show_profile_editing_menu, show_program, show_subscription
+from common.functions import (
+    assign_coach,
+    show_coaches,
+    show_main_menu,
+    show_profile_editing_menu,
+    show_program,
+    show_subscription,
+)
 from common.models import Coach, Profile
 from common.user_service import user_service
 from common.utils import get_profile_attributes
@@ -155,9 +162,11 @@ async def coach_paginator(callback_query: CallbackQuery, state: FSMContext):
         return
 
     if action == "selected":
+        await callback_query.answer(translate(MessageText.saved, profile.language))
         coach_id = callback_query.data.split("_")[1]
         coach = user_service.storage.get_coach_by_id(coach_id)
-        await callback_query.answer(translate(MessageText.saved, profile.language))
+        client = user_service.storage.get_client_by_id(profile.id)
+        await assign_coach(coach, client)
         await callback_query.message.answer(translate(MessageText.coach_selected).format(name=coach.name))
         await state.set_state(States.main_menu)
         await show_main_menu(callback_query.message, profile, state)

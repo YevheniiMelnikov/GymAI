@@ -106,7 +106,7 @@ class UserProfileManager:
     def get_profile_info_by_key(self, telegram_id: int, profile_id: int, key: str) -> str | None:
         profiles = json.loads(self.redis.hget("user_profiles", telegram_id) or "[]")
         for profile_data in profiles:
-            if profile_data.get("id") == profile_id and profile_data.get("is_current", True):
+            if profile_data.get("id") == int(profile_id):
                 return profile_data.get(key)
         return None
 
@@ -127,12 +127,21 @@ class UserProfileManager:
 
     def set_client_data(self, profile_id: int, client_data: dict) -> None:
         try:
-            allowed_fields = ["gender", "birth_date", "workout_experience", "workout_goals", "health_notes", "weight"]
+            allowed_fields = [
+                "gender",
+                "birth_date",
+                "workout_experience",
+                "workout_goals",
+                "health_notes",
+                "weight",
+                "assigned_to",
+                "tg_id",
+            ]
             filtered_client_data = {key: client_data[key] for key in allowed_fields if key in client_data}
             existing_data = json.loads(self.redis.hget("clients", profile_id) or "{}")
             existing_data.update(filtered_client_data)
             self.redis.hset("clients", profile_id, json.dumps(existing_data))
-            logger.info(f"Client data for {profile_id} has been updated: {client_data}")
+            logger.info(f"Client data for profile_id {profile_id} has been updated: {client_data}")
         except Exception as e:
             logger.error(f"Failed to set or update client data for {profile_id}: {e}")
 
@@ -150,7 +159,7 @@ class UserProfileManager:
             logger.error(f"Failed to get client data for client ID {profile_id}: {e}")
             return None
 
-    def set_coach_data(self, profile_id: int, coach_data: dict) -> None:
+    def set_coach_data(self, profile_id: int, profile_data: dict) -> None:
         try:
             allowed_fields = [
                 "name",
@@ -159,14 +168,16 @@ class UserProfileManager:
                 "payment_details",
                 "profile_photo",
                 "verified",
+                "assigned_to",
+                "tg_id",
             ]
-            filtered_coach_data = {key: coach_data[key] for key in allowed_fields if key in coach_data}
+            filtered_coach_data = {key: profile_data[key] for key in allowed_fields if key in profile_data}
             existing_data = json.loads(self.redis.hget("coaches", profile_id) or "{}")
             existing_data.update(filtered_coach_data)
             self.redis.hset("coaches", profile_id, json.dumps(existing_data))
-            logger.info(f"Coach data updated for coach ID {profile_id}: {coach_data}")
+            logger.info(f"Updated profile_data {profile_id}: {profile_data}")
         except Exception as e:
-            logger.error(f"Failed to set or update coach data for coach ID {profile_id}: {e}")
+            logger.error(f"Failed to set data for profile_data {profile_id}: {e}")
 
     def get_coach_by_id(self, profile_id: int) -> Coach | None:
         try:
@@ -176,10 +187,10 @@ class UserProfileManager:
                 data["id"] = profile_id
                 return Coach.from_dict(data)
             else:
-                logger.info(f"No coach data found for coach ID {profile_id}")
+                logger.info(f"No data found for profile_id {profile_id}")
                 return None
         except Exception as e:
-            logger.error(f"Failed to get coach data for coach ID {profile_id}: {e}")
+            logger.error(f"Failed to get data for profile_id {profile_id}: {e}")
             return None
 
     def get_subscription(self, profile_id: int) -> Subscription | None:  # TODO: IMPLEMENT
@@ -229,7 +240,7 @@ class UserService:
 
         return status_code == 201
 
-    async def edit_profile(self, profile_id: int, data: dict, token: str) -> bool:
+    async def edit_profile(self, profile_id: int, data: dict, token: str | None = None) -> bool:
         fields = [
             "language",
             "name",
@@ -244,6 +255,7 @@ class UserService:
             "health_notes",
             "weight",
             "verified",
+            "assigned_to",
         ]
         filtered_data = {key: data[key] for key in fields if key in data and data[key] is not None}
         url = f"{self.backend_url}/api/v1/persons/{profile_id}/"
