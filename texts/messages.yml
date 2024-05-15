@@ -270,3 +270,13 @@ coach_page:
   eng: "<b>Name:</b> {name}\n<b>Work experience (years):</b> {experience}\n<b>Additional information:</b> {additional_info}"
   ru: "<b>Имя:</b> {name}\n<b>Опыт работы (года):</b> {experience}\n<b>Дополнительная информация:</b> {additional_info}"
   ua: "<b>Ім'я:</b> {name}\n<b>Досвід роботи (роки):</b> {experience}\n<b>Додаткова інформація:</b> {additional_info}"
+
+out_of_range:
+  eng: "That's all"
+  ru: "Это всё"
+  ua: "Це все"
+
+coach_selected:
+  eng: "Excellent choice. Expect {name} to contact you via bot"
+  ru: "Прекрасный выбор. Ожидайте, {name} с вами свяжется через бота"
+  ua: "Прекрасний вибір. Чекайте, {name} з вами зв'яжеться через бота"

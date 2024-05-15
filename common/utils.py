@@ -98,7 +98,7 @@ def get_state_and_message(callback: str, lang: str) -> tuple[State, str]:
     return {
         "workout_experience": (States.workout_experience, translate(MessageText.workout_experience, lang=lang)),
         "workout_goals": (States.workout_goals, translate(MessageText.workout_goals, lang=lang)),
-        "weight": (States.weight, translate(MessageText.weight, lang=lang)),
+        "weight": (States.weight, translate(ButtonText.weight, lang=lang)),
         "health_notes": (States.health_notes, translate(MessageText.health_notes, lang=lang)),
         "work_experience": (States.work_experience, translate(MessageText.work_experience, lang=lang)),
         "additional_info": (States.additional_info, translate(MessageText.additional_info, lang=lang)),

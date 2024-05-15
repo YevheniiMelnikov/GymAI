@@ -11,6 +11,7 @@ class MessageText(Enum):
     email = auto()
     client_profile = auto()
     coach_profile = auto()
+    coach_selected = auto()
     choose_action = auto()
     choose_language = auto()
     choose_account_type = auto()
@@ -46,8 +47,9 @@ class MessageText(Enum):
     coach_declined = auto()
     no_program = auto()
     no_coaches = auto()
-    coach_page = auto()
+    out_of_range = auto()
 
+    coach_page = auto()
     saved = auto()
     wait_for_verification = auto()
     verified = auto()

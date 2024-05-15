@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from django.contrib.postgres.fields import ArrayField
 from django.core.validators import MaxValueValidator
 from django.db import models
 from django.db.models import Model
@@ -8,6 +9,7 @@ class Profile(Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     status = models.CharField(max_length=50, default="client")
     language = models.CharField(max_length=50, null=True, blank=True)
+    assigned_to = ArrayField(models.IntegerField())
 
     # client fields:
     gender = models.CharField(max_length=50, null=True, blank=True)
@@ -31,6 +33,7 @@ class Profile(Model):
 
 
 class Subscription(models.Model):
+    id = models.BigAutoField(primary_key=True)
     user = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="subscriptions")
     expire_date = models.DateField()
     enabled = models.BooleanField(default=False)

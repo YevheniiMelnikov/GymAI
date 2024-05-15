@@ -128,19 +128,13 @@ def choose_coach(lang_code: str) -> InlineKeyboardMarkup:
 
 def coach_select_menu(lang_code: str, coach_id: int, current_index: int) -> InlineKeyboardMarkup:
     buttons = [
+        [InlineKeyboardButton(text=translate(ButtonText.select, lang_code), callback_data=f"selected_{coach_id}")],
         [
+            InlineKeyboardButton(text=translate(ButtonText.back, lang_code), callback_data=f"prev_{current_index - 1}"),
             InlineKeyboardButton(
-                text=translate(ButtonText.select, lang_code), callback_data=f"coach_selected_{coach_id}"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text=translate(ButtonText.back, lang_code), callback_data=f"coach_prev_{current_index - 1}"
-            ),
-            InlineKeyboardButton(
-                text=translate(ButtonText.forward, lang_code), callback_data=f"coach_next_{current_index + 1}"
+                text=translate(ButtonText.forward, lang_code), callback_data=f"next_{current_index + 1}"
             ),
         ],
-        [InlineKeyboardButton(text=translate(ButtonText.quit, lang_code), callback_data=f"quit")],
+        [InlineKeyboardButton(text=translate(ButtonText.quit, lang_code), callback_data="quit")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)

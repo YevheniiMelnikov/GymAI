@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from bot.keyboards import *
 from bot.states import States
 from common.file_manager import file_manager
-from common.models import Profile, Program, Subscription
+from common.models import Client, Coach, Profile, Program, Subscription
 from common.user_service import user_service
 from common.utils import get_coach_page
 from texts.text_manager import MessageText, resource_manager, translate
@@ -156,6 +156,7 @@ async def set_bot_commands(lang: str = "ua") -> None:
 
 async def update_user_info(message: Message, state: FSMContext, role: str) -> None:
     data = await state.get_data()
+    data["tg_id"] = message.from_user.id
     try:
         profile = user_service.storage.get_current_profile(message.chat.id)
         if not profile:
@@ -224,16 +225,8 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
         logger.info(f"Coach verification for profile_id {profile.id} declined")
 
 
-async def show_coaches(message: Message, state: FSMContext, current_index=0) -> None:
+async def show_coaches(message: Message, coaches: list[Coach], current_index=0) -> None:
     profile = user_service.storage.get_current_profile(message.chat.id)
-    coaches = user_service.storage.get_coaches()
-
-    if not coaches:
-        await message.answer(translate(MessageText.no_coaches, lang=profile.language))
-        await state.set_state(States.main_menu)
-        await show_main_menu(message, profile, state)
-        return
-
     current_index %= len(coaches)
     current_coach = coaches[current_index]
     coach_info = get_coach_page(current_coach)
@@ -258,7 +251,19 @@ async def show_coaches(message: Message, state: FSMContext, current_index=0) -> 
             reply_markup=coach_select_menu(profile.language, current_coach.id, current_index),
             parse_mode="HTML",
         )
-    await state.set_state(States.coach_selection)
+
+
+async def assign_coach(coach: Coach, client: Client) -> None:
+    coach_clients = coach.assigned_to if isinstance(coach.assigned_to, list) else []
+    if client.id not in coach_clients:
+        coach_clients.append(int(client.id))
+        user_service.storage.set_coach_data(coach.id, {"assigned_to": coach_clients})
+
+    user_service.storage.set_client_data(client.id, {"assigned_to": [int(coach.id)]})
+
+    token = user_service.storage.get_profile_info_by_key(client.tg_id, client.id, "auth_token")
+    await user_service.edit_profile(client.id, {"assigned_to": [coach.id]}, token)
+    await user_service.edit_profile(coach.id, {"assigned_to": [client.id]}, token)
 
 
 async def show_subscription(message: Message, subscription: Subscription) -> None:  # TODO: IMPLEMENT

@@ -6,8 +6,15 @@ from aiogram.types import CallbackQuery, Message
 from bot.keyboards import choose_coach, profile_menu_keyboard
 from bot.states import States
 from common.file_manager import file_manager
-from common.functions import show_coaches, show_main_menu, show_profile_editing_menu, show_program, show_subscription
-from common.models import Profile
+from common.functions import (
+    assign_coach,
+    show_coaches,
+    show_main_menu,
+    show_profile_editing_menu,
+    show_program,
+    show_subscription,
+)
+from common.models import Coach, Profile
 from common.user_service import user_service
 from common.utils import get_profile_attributes
 from texts.text_manager import MessageText, translate
@@ -120,38 +127,48 @@ async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext):
         return
 
     else:
-        await show_coaches(callback_query.message, state)
+        coaches = user_service.storage.get_coaches()
+        if not coaches:
+            await callback_query.message.answer(translate(MessageText.no_coaches, lang=profile.language))
+            await state.set_state(States.main_menu)
+            await show_main_menu(callback_query.message, profile, state)
+            return
+
+        await state.set_state(States.coach_selection)
+        await state.update_data(coaches=[Coach.to_dict(coach) for coach in coaches])
+        await show_coaches(callback_query.message, coaches)
+        await callback_query.message.delete()
 
 
 @main_router.callback_query(States.coach_selection)
-async def handle_coach_interaction(callback_query: CallbackQuery, state: FSMContext):
+async def coach_paginator(callback_query: CallbackQuery, state: FSMContext):
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+
     if callback_query.data == "quit":
         await state.set_state(States.main_menu)
         await show_main_menu(callback_query.message, profile, state)
         return
 
-    _, action, index = callback_query.data.split("_")
+    action, index = callback_query.data.split("_")
     index = int(index)
-
-    coaches = user_service.storage.get_coaches()
+    data = await state.get_data()
+    coaches = [Coach.from_dict(data) for data in data["coaches"]]
     if not coaches:
         await callback_query.answer(translate(MessageText.no_coaches, profile.language))
         return
 
-    if action == "next":
-        index %= len(coaches)
-        await show_coaches(callback_query.message, state, current_index=index)
+    if index < 0 or index >= len(coaches) and action != "selected":
+        await callback_query.answer(translate(MessageText.out_of_range, profile.language))
+        return
 
-    elif action == "prev":
-        if index < 0:
-            index = len(coaches) - 1
-        else:
-            index %= len(coaches)
-        await show_coaches(callback_query.message, state, current_index=index)
-
-    elif action == "selected":
-        # Здесь логика обработки выбора тренера
-        await callback_query.message.answer(f"Тренер выбран.")
-
-    await callback_query.message.delete()
+    if action == "selected":
+        await callback_query.answer(translate(MessageText.saved, profile.language))
+        coach_id = callback_query.data.split("_")[1]
+        coach = user_service.storage.get_coach_by_id(coach_id)
+        client = user_service.storage.get_client_by_id(profile.id)
+        await assign_coach(coach, client)
+        await callback_query.message.answer(translate(MessageText.coach_selected).format(name=coach.name))
+        await state.set_state(States.main_menu)
+        await show_main_menu(callback_query.message, profile, state)
+    else:
+        await show_coaches(callback_query.message, coaches, current_index=index)

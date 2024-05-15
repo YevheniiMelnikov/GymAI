@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -36,10 +36,22 @@ class Client:
     workout_goals: str
     health_notes: str
     weight: int
+    tg_id: int
+    assigned_to: list = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Client":
-        fields = ["id", "gender", "birth_date", "workout_experience", "workout_goals", "health_notes", "weight"]
+        fields = [
+            "id",
+            "gender",
+            "birth_date",
+            "workout_experience",
+            "workout_goals",
+            "health_notes",
+            "weight",
+            "assigned_to",
+            "tg_id",
+        ]
         filtered_data = {key: data.get(key) for key in fields}
         return cls(**filtered_data)
 
@@ -52,12 +64,14 @@ class Client:
             "workout_goals": self.workout_goals,
             "health_notes": self.health_notes,
             "weight": self.weight,
+            "assigned_to": self.assigned_to,
+            "tg_id": self.tg_id,
         }
 
     def __repr__(self) -> str:
         return (
             f"Client(id={self.id}, gender={self.gender}, birth_date={self.birth_date}, workout_experience={self.workout_experience}, "
-            f"workout_goals={self.workout_goals}, health_notes={self.health_notes}, weight={self.weight})"
+            f"workout_goals={self.workout_goals}, health_notes={self.health_notes}, weight={self.weight}), assigned_to={self.assigned_to}, tg_id={self.tg_id}"
         )
 
 
@@ -69,11 +83,23 @@ class Coach:
     additional_info: str
     payment_details: str
     profile_photo: str
+    tg_id: int
+    assigned_to: list = field(default_factory=list)
     verified: bool = False
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Coach":
-        fields = ["id", "name", "work_experience", "additional_info", "payment_details", "profile_photo", "verified"]
+        fields = [
+            "id",
+            "name",
+            "work_experience",
+            "additional_info",
+            "payment_details",
+            "profile_photo",
+            "verified",
+            "assigned_to",
+            "tg_id",
+        ]
         filtered_data = {key: data.get(key) for key in fields}
         return cls(**filtered_data)
 
@@ -86,12 +112,14 @@ class Coach:
             "payment_details": self.payment_details,
             "profile_photo": self.profile_photo,
             "verified": self.verified,
+            "assigned_to": self.assigned_to,
+            "tg_id": self.tg_id,
         }
 
     def __repr__(self) -> str:
         return (
             f"Coach(id={self.id}, name={self.name}, work_experience={self.work_experience}, additional_info={self.additional_info}, "
-            f"payment_details={self.payment_details}, profile_photo={self.profile_photo}), verified={self.verified})"
+            f"payment_details={self.payment_details}, profile_photo={self.profile_photo}), verified={self.verified}), assigned_to={self.assigned_to}, tg_id={self.tg_id}"
         )
 
 
