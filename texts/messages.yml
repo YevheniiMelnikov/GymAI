@@ -139,9 +139,9 @@ password_unsafe:
   ua: "Введений пароль не відповідає вимогам безпеки, спробуйте ще раз"
 
 client_profile:
-  eng: "<b>Gender:</b> {gender}\n<b>Date of birth:</b> {birth_date}\n<b>Workout goals:</b> {goals}\n<b>Weight (kg):</b> {weight}\n<b>Workout experience (years):</b> {experience}\n<b>Health notes:</b> {notes}"
-  ru: "<b>Пол:</b> {gender}\n<b>Дата рождения:</b> {birth_date}\n<b>Тренировочные цели:</b> {goals}\n<b>Вес (кг):</b> {weight}\n<b>Опыт тренировок (лет):</b> {experience}\n<b>Примечания по здоровью:</b> {notes}"
-  ua: "<b>Стать:</b> {gender}\n<b>Дата народження:</b> {birth_date}\n<b>Тренувальні цілі:</b> {goals}\n<b>Вага (кг):</b> {weight}\n<b>Тренувальний досвід (років):</b> {experience}\n<b>Примітки по здоров'ю:</b> {notes}"
+  eng: "Name:</b> {name}\n<b>Gender:</b> {gender}\n<b>Date of birth:</b> {birth_date}\n<b>Workout goals:</b> {goals}\n<b>Weight (kg):</b> {weight}\n<b>Workout experience (years):</b> {experience}\n<b>Health notes:</b> {notes}"
+  ru: "<b>Имя:</b> {name}\n<b>Пол:</b> {gender}\n<b>Дата рождения:</b> {birth_date}\n<b>Тренировочные цели:</b> {goals}\n<b>Вес (кг):</b> {weight}\n<b>Опыт тренировок (лет):</b> {experience}\n<b>Примечания по здоровью:</b> {notes}"
+  ua: "<b>Ім'я:</b> {name}\n<b>Стать:</b> {gender}\n<b>Дата народження:</b> {birth_date}\n<b>Тренувальні цілі:</b> {goals}\n<b>Вага (кг):</b> {weight}\n<b>Тренувальний досвід (років):</b> {experience}\n<b>Примітки по здоров'ю:</b> {notes}"
 
 coach_profile:
   eng: "<b>Name:</b> {name}\n<b>Work experience:</b> {experience}\n<b>Additional information:</b> {notes}\n<b>Payment details:</b> {payment_details}\n<b>Verification status:</b> {verified}"
@@ -224,8 +224,8 @@ photo_upload_fail:
   ua: Під час завантаження фото виникла помилка. Спробуйте ще раз або скористайтеся командою /help
 
 coach_info_message:
-  eng: "To get started you need to wait for administrator verification. Please make sure that you have filled in your personal information in the “My Profile” section"
-  ru: Для начала работы вам надо дождаться верификации администратора. Пожалуйста, убедитесь что у вас заполнена персональная информация в разделе "Мой профиль"
+  eng: "To get started you need to wait for administrator verification. Please make sure that you have filled in your personal information in the «My Profile» section"
+  ru: "Для начала работы вам надо дождаться верификации администратора. Пожалуйста, убедитесь что у вас заполнена персональная информация в разделе «Мой профиль»"
   ua: "Для початку роботи вам треба дочекатися верифікації адміністратора. Будь ласка, переконайтеся, що у вас заповнена персональна інформація в розділі «Мій профіль»"
 
 verified:
@@ -280,3 +280,8 @@ coach_selected:
   eng: "Excellent choice. Expect {name} to contact you via bot"
   ru: "Прекрасный выбор. Ожидайте, {name} с вами свяжется через бота"
   ua: "Прекрасний вибір. Чекайте, {name} з вами зв'яжеться через бота"
+
+no_clients:
+  eng: "На текущий момент за вами не закреплено ни одного клиента"
+  ru: "На текущий момент за вами не закреплено ни одного клиента"
+  ua: "На поточний момент за вами не закріплено жодного клієнта"

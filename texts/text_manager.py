@@ -48,6 +48,7 @@ class MessageText(Enum):
     no_program = auto()
     no_coaches = auto()
     out_of_range = auto()
+    no_clients = auto()
 
     coach_page = auto()
     saved = auto()

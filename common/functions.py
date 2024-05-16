@@ -33,25 +33,20 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
     if profile.status == "client":
         questionnaire = user_service.storage.get_client_by_id(profile.id)
         reply_markup = edit_client_profile(profile.language) if questionnaire else None
-        state_to_set = States.edit_profile if questionnaire else States.gender
-        response_message = MessageText.choose_profile_parameter if questionnaire else MessageText.edit_profile
+        await state.update_data(role="client")
+
     else:
         questionnaire = user_service.storage.get_coach_by_id(profile.id)
         reply_markup = edit_coach_profile(profile.language) if questionnaire else None
-        state_to_set = States.edit_profile if questionnaire else States.name
-        response_message = MessageText.choose_profile_parameter if questionnaire else MessageText.edit_profile
+        await state.update_data(role="coach")
 
+    state_to_set = States.edit_profile if questionnaire else States.name
+    response_message = MessageText.choose_profile_parameter if questionnaire else MessageText.edit_profile
     await message.answer(text=translate(response_message, lang=profile.language), reply_markup=reply_markup)
     await state.set_state(state_to_set)
 
     if not questionnaire:
-        if profile.status == "client":
-            await message.answer(
-                translate(MessageText.choose_gender, lang=profile.language),
-                reply_markup=choose_gender(profile.language),
-            )
-        else:
-            await message.answer(translate(MessageText.name, lang=profile.language))
+        await message.answer(translate(MessageText.name, lang=profile.language))
     with suppress(TelegramBadRequest):
         await message.delete()
 
@@ -184,9 +179,8 @@ async def update_user_info(message: Message, state: FSMContext, role: str) -> No
         await message.answer(translate(MessageText.main_menu, lang=data["lang"]), reply_markup=reply_markup)
 
     except Exception as e:
-        logger.error(f"Error updating profile: {e}")
+        logger.error(f"Unexpected error updating profile: {e}")
         await message.answer(translate(MessageText.unexpected_error, lang=data["lang"]))
-
     finally:
         await message.delete()
 
@@ -264,6 +258,10 @@ async def assign_coach(coach: Coach, client: Client) -> None:
     token = user_service.storage.get_profile_info_by_key(client.tg_id, client.id, "auth_token")
     await user_service.edit_profile(client.id, {"assigned_to": [coach.id]}, token)
     await user_service.edit_profile(coach.id, {"assigned_to": [client.id]}, token)
+
+
+async def show_clients(clients: list[Client], state: FSMContext) -> None:
+    pass
 
 
 async def show_subscription(message: Message, subscription: Subscription) -> None:  # TODO: IMPLEMENT

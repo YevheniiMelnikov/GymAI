@@ -8,13 +8,14 @@ from bot.states import States
 from common.file_manager import file_manager
 from common.functions import (
     assign_coach,
+    show_clients,
     show_coaches,
     show_main_menu,
     show_profile_editing_menu,
     show_program,
     show_subscription,
 )
-from common.models import Coach, Profile
+from common.models import Client, Coach, Profile
 from common.user_service import user_service
 from common.utils import get_profile_attributes
 from texts.text_manager import MessageText, translate
@@ -52,8 +53,18 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
             else:
                 await callback_query.message.answer(text, reply_markup=profile_menu_keyboard(profile.language))
             await state.set_state(States.profile)
-        case "my_clients":  # TODO: IMPLEMENT
-            await callback_query.message.answer(text="Ваши клиенты: ")
+        case "my_clients":
+            coach = user_service.storage.get_coach_by_id(profile.id)
+            assigned_ids = coach.assigned_to if coach.assigned_to != [] else None
+            if assigned_ids:
+                clients = [user_service.storage.get_client_by_id(client) for client in assigned_ids]
+                await show_clients(clients, state)
+            else:
+                if not coach.verified:
+                    await callback_query.message.answer(translate(MessageText.coach_info_message, profile.language))
+                await callback_query.message.answer(translate(MessageText.no_clients, profile.language))
+                await state.set_state(States.main_menu)
+                await show_main_menu(callback_query.message, profile, state)
         case "my_program":  # TODO: IMPLEMENT
             if program := user_service.storage.get_program(profile.id):
                 await show_program(callback_query.message, program)

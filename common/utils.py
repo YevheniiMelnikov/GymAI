@@ -73,6 +73,7 @@ def get_profile_attributes(role: str, user: Optional[Client | Coach], lang_code:
 
     if role == "client":
         attributes = {
+            "name": get_attr("name"),
             "gender": genders.get(get_attr("gender"), ""),
             "birth_date": get_attr("birth_date"),
             "experience": get_attr("workout_experience"),

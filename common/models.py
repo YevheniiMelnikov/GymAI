@@ -30,6 +30,7 @@ class Profile:
 @dataclass
 class Client:
     id: int
+    name: str
     gender: str
     birth_date: str
     workout_experience: str
@@ -43,6 +44,7 @@ class Client:
     def from_dict(cls, data: dict[str, Any]) -> "Client":
         fields = [
             "id",
+            "name",
             "gender",
             "birth_date",
             "workout_experience",
@@ -58,6 +60,7 @@ class Client:
     def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
+            "name": self.name,
             "gender": self.gender,
             "birth_date": self.birth_date,
             "workout_experience": self.workout_experience,
@@ -70,8 +73,10 @@ class Client:
 
     def __repr__(self) -> str:
         return (
-            f"Client(id={self.id}, gender={self.gender}, birth_date={self.birth_date}, workout_experience={self.workout_experience}, "
-            f"workout_goals={self.workout_goals}, health_notes={self.health_notes}, weight={self.weight}), assigned_to={self.assigned_to}, tg_id={self.tg_id}"
+            f"Client(id={self.id}, name={self.name}, gender={self.gender}, birth_date={self.birth_date}, "
+            f"workout_experience={self.workout_experience}, workout_goals={self.workout_goals}, "
+            f"health_notes={self.health_notes}, weight={self.weight}), assigned_to={self.assigned_to}, "
+            f"tg_id={self.tg_id}"
         )
 
 
@@ -118,8 +123,10 @@ class Coach:
 
     def __repr__(self) -> str:
         return (
-            f"Coach(id={self.id}, name={self.name}, work_experience={self.work_experience}, additional_info={self.additional_info}, "
-            f"payment_details={self.payment_details}, profile_photo={self.profile_photo}), verified={self.verified}), assigned_to={self.assigned_to}, tg_id={self.tg_id}"
+            f"Coach(id={self.id}, name={self.name}, work_experience={self.work_experience}, "
+            f"additional_info={self.additional_info}, payment_details={self.payment_details}, "
+            f"profile_photo={self.profile_photo}), verified={self.verified}), "
+            f"assigned_to={self.assigned_to}, tg_id={self.tg_id}"
         )
 
 
