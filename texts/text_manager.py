@@ -48,8 +48,10 @@ class MessageText(Enum):
     no_program = auto()
     no_coaches = auto()
     out_of_range = auto()
+    no_clients = auto()
 
     coach_page = auto()
+    client_page = auto()
     saved = auto()
     wait_for_verification = auto()
     verified = auto()
@@ -86,8 +88,10 @@ class ButtonText(Enum):
     quit = auto()
     forward = auto
     edit_profile = auto()
+    view_program = auto()
     subscription = auto()
     choose_coach = auto()
+    contact_client = auto()
     select = auto()
     beginner = auto()
     intermediate = auto()

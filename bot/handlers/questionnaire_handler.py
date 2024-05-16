@@ -1,11 +1,9 @@
-import os
-
 import loguru
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import workout_experience_keyboard
+from bot.keyboards import choose_gender, workout_experience_keyboard
 from bot.states import States
 from common.file_manager import file_manager
 from common.functions import show_main_menu, update_user_info
@@ -100,8 +98,15 @@ async def health_notes(message: Message, state: FSMContext) -> None:
 async def name(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await state.update_data(name=message.text, verified=False)
-    await message.answer(translate(MessageText.work_experience, lang=data["lang"]))
-    await state.set_state(States.work_experience)
+    state_to_set = States.work_experience if data["role"] == "coach" else States.gender
+    await state.set_state(state_to_set)
+    text = (
+        translate(MessageText.work_experience, data["lang"])
+        if data["role"] == "coach"
+        else translate(MessageText.choose_gender, data["lang"])
+    )
+    reply_markup = choose_gender(data["lang"]) if data["role"] == "client" else None
+    await message.answer(text=text, reply_markup=reply_markup)
     await message.delete()
 
 

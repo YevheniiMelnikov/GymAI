@@ -128,6 +128,7 @@ class UserProfileManager:
     def set_client_data(self, profile_id: int, client_data: dict) -> None:
         try:
             allowed_fields = [
+                "name",
                 "gender",
                 "birth_date",
                 "workout_experience",

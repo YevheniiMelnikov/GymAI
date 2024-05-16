@@ -138,3 +138,26 @@ def coach_select_menu(lang_code: str, coach_id: int, current_index: int) -> Inli
         [InlineKeyboardButton(text=translate(ButtonText.quit, lang_code), callback_data="quit")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
+
+
+def client_select_menu(lang_code: str, client_id: int, current_index: int) -> InlineKeyboardMarkup:
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text=translate(ButtonText.view_program, lang_code), callback_data=f"program_{client_id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text=translate(ButtonText.contact_client, lang_code), callback_data=f"contact_{client_id}"
+            ),
+        ],
+        [
+            InlineKeyboardButton(text=translate(ButtonText.back, lang_code), callback_data=f"prev_{current_index - 1}"),
+            InlineKeyboardButton(
+                text=translate(ButtonText.forward, lang_code), callback_data=f"next_{current_index + 1}"
+            ),
+        ],
+        [InlineKeyboardButton(text=translate(ButtonText.quit, lang_code), callback_data="quit")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)

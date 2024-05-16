@@ -73,6 +73,7 @@ def get_profile_attributes(role: str, user: Optional[Client | Coach], lang_code:
 
     if role == "client":
         attributes = {
+            "name": get_attr("name"),
             "gender": genders.get(get_attr("gender"), ""),
             "birth_date": get_attr("birth_date"),
             "experience": get_attr("workout_experience"),
@@ -109,3 +110,20 @@ def get_state_and_message(callback: str, lang: str) -> tuple[State, str]:
 
 def get_coach_page(coach: Coach) -> dict[str, Any]:
     return {"name": coach.name, "experience": coach.work_experience, "additional_info": coach.additional_info}
+
+
+def get_client_page(client: Client, lang_code: str) -> dict[str, Any]:
+    genders = {
+        "male": translate(ButtonText.male, lang=lang_code),
+        "female": translate(ButtonText.female, lang=lang_code),
+    }
+
+    return {
+        "name": client.name,
+        "gender": genders.get(client.gender, ""),
+        "birth_date": client.birth_date,
+        "workout_experience": client.workout_experience,
+        "workout_goals": client.workout_goals,
+        "health_notes": client.health_notes,
+        "weight": client.weight,
+    }
