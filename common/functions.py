@@ -15,7 +15,7 @@ from bot.states import States
 from common.file_manager import file_manager
 from common.models import Client, Coach, Profile, Program, Subscription
 from common.user_service import user_service
-from common.utils import get_coach_page
+from common.utils import get_client_page, get_coach_page
 from texts.text_manager import MessageText, resource_manager, translate
 
 logger = loguru.logger
@@ -260,8 +260,19 @@ async def assign_coach(coach: Coach, client: Client) -> None:
     await user_service.edit_profile(coach.id, {"assigned_to": [client.id]}, token)
 
 
-async def show_clients(clients: list[Client], state: FSMContext) -> None:
-    pass
+async def show_clients(message: Message, clients: list[Client], state: FSMContext, current_index=0) -> None:
+    profile = user_service.storage.get_current_profile(message.chat.id)
+    current_index %= len(clients)
+    current_client = clients[current_index]
+    client_info = get_client_page(current_client, profile.language)
+    text = translate(MessageText.client_page, profile.language).format(**client_info)
+    await state.set_state(States.view_clients)
+
+    await message.answer(
+        text=text,
+        reply_markup=client_select_menu(profile.language, current_client.id, current_index),
+        parse_mode="HTML",
+    )
 
 
 async def show_subscription(message: Message, subscription: Subscription) -> None:  # TODO: IMPLEMENT

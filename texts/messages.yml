@@ -285,3 +285,8 @@ no_clients:
   eng: "На текущий момент за вами не закреплено ни одного клиента"
   ru: "На текущий момент за вами не закреплено ни одного клиента"
   ua: "На поточний момент за вами не закріплено жодного клієнта"
+
+client_page:
+  eng: "<b>Name:</b> {name}\n<b>Gender:</b> {gender}\n<b>Birth Date:</b> {birth_date}\n<b>Workout Experience:</b> {workout_experience}\n<b>Workout Goals:</b> {workout_goals}\n<b>Health Notes:</b> {health_notes}\n<b>Weight (kg):</b> {weight}"
+  ru: "<b>Имя:</b> {name}\n<b>Пол:</b> {gender}\n<b>Дата рождения:</b> {birth_date}\n<b>Опыт тренировок:</b> {workout_experience}\n<b>Цели тренировок:</b> {workout_goals}\n<b>Приметки по здоровью:</b> {health_notes}\n<b>Вес (кг):</b> {weight}"
+  ua: "<b>Ім'я:</b> {name}\n<b>Стать:</b> {gender}\n<b>Дата народження:</b> {birth_date}\n<b>Досвід тренувань:</b> {workout_experience}\n<b>Цілі тренувань:</b> {workout_goals}\n<b>Примітки щодо здоров'я:</b> {health_notes}\n<b>Вага (кг):</b> {weight}"

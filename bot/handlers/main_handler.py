@@ -58,14 +58,14 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
             assigned_ids = coach.assigned_to if coach.assigned_to != [] else None
             if assigned_ids:
                 clients = [user_service.storage.get_client_by_id(client) for client in assigned_ids]
-                await show_clients(clients, state)
+                await show_clients(callback_query.message, clients, state)
             else:
                 if not coach.verified:
                     await callback_query.message.answer(translate(MessageText.coach_info_message, profile.language))
                 await callback_query.message.answer(translate(MessageText.no_clients, profile.language))
                 await state.set_state(States.main_menu)
                 await show_main_menu(callback_query.message, profile, state)
-        case "my_program":  # TODO: IMPLEMENT
+        case "my_program":
             if program := user_service.storage.get_program(profile.id):
                 await show_program(callback_query.message, program)
             else:
@@ -183,3 +183,28 @@ async def coach_paginator(callback_query: CallbackQuery, state: FSMContext):
         await show_main_menu(callback_query.message, profile, state)
     else:
         await show_coaches(callback_query.message, coaches, current_index=index)
+
+
+@main_router.callback_query(States.view_clients)
+async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
+    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+
+    if callback_query.data == "quit":
+        await state.set_state(States.main_menu)
+        await show_main_menu(callback_query.message, profile, state)
+        return
+
+    action, index = callback_query.data.split("_")
+    index = int(index)
+    data = await state.get_data()
+    clients = [Client.from_dict(data) for data in data["clients"]]
+
+    if not clients:
+        await callback_query.answer(translate(MessageText.no_clients, profile.language))
+        return
+
+    if index < 0 or index >= len(clients):
+        await callback_query.answer(translate(MessageText.out_of_range, profile.language))
+        return
+
+    await show_clients(callback_query.message, clients, state, index)

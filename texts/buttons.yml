@@ -142,3 +142,13 @@ quit:
   eng: "Quit"
   ru: "Выход"
   ua: "Вихід"
+
+view_program:
+  eng: "Program"
+  ru: "Программа"
+  ua: "Програма"
+
+contact_client:
+  eng: "Contact client"
+  ru: "Написать"
+  ua: "Написати"
