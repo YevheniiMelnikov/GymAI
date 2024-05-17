@@ -9,7 +9,7 @@ class Profile(Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     status = models.CharField(max_length=50, default="client")
     language = models.CharField(max_length=50, null=True, blank=True)
-    assigned_to = ArrayField(models.IntegerField())
+    assigned_to = ArrayField(models.IntegerField(), default=list, blank=True)
 
     # client fields:
     gender = models.CharField(max_length=50, null=True, blank=True)
@@ -25,7 +25,7 @@ class Profile(Model):
     additional_info = models.CharField(max_length=250, null=True, blank=True)
     profile_photo = models.CharField(max_length=250, null=True, blank=True)
     payment_details = models.CharField(max_length=50, null=True, blank=True)
-    verified = models.BooleanField(default=False)  # TODO: ADD RATING FIELD
+    verified = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = "profile"

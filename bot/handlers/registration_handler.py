@@ -80,7 +80,7 @@ async def username(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await state.update_data(username=message.text)
     await state.set_state(States.password)
-    await message.answer(translate(MessageText.password, lang=data["lang"]))
+    await message.answer(translate(MessageText.password, lang=data.get("lang", "ua")))
     if data.get("action") == "sign_up":
         await message.answer(text=translate(MessageText.password_requirements, lang=data["lang"]))
     await message.delete()

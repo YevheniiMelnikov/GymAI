@@ -257,7 +257,7 @@ async def assign_coach(coach: Coach, client: Client) -> None:
 
     token = user_service.storage.get_profile_info_by_key(client.tg_id, client.id, "auth_token")
     await user_service.edit_profile(client.id, {"assigned_to": [coach.id]}, token)
-    await user_service.edit_profile(coach.id, {"assigned_to": [client.id]}, token)
+    await user_service.edit_profile(coach.id, {"assigned_to": coach_clients}, token)
 
 
 async def show_clients(message: Message, clients: list[Client], state: FSMContext, current_index=0) -> None:
@@ -266,9 +266,11 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
     current_client = clients[current_index]
     client_info = get_client_page(current_client, profile.language)
     text = translate(MessageText.client_page, profile.language).format(**client_info)
+    client_data = [Client.to_dict(client) for client in clients]
+    await state.update_data(clients=client_data)
     await state.set_state(States.view_clients)
 
-    await message.answer(
+    await message.edit_text(
         text=text,
         reply_markup=client_select_menu(profile.language, current_client.id, current_index),
         parse_mode="HTML",
