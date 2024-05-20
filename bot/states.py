@@ -28,7 +28,9 @@ class States(StatesGroup):
     new_coach_request = State
     choose_coach = State()
     coach_selection = State()
-    view_clients = State()
+    show_clients = State()
+    contact_client = State()
+    contact_coach = State()
 
     password_reset = State()
     password_retype = State()

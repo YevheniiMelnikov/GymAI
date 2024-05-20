@@ -9,146 +9,151 @@ female:
   ua: "Жінка 👩"
 
 client:
-  eng: "As client"
-  ru: "Как клиент"
-  ua: "Як клієнт"
+  eng: "As client 👤"
+  ru: "Как клиент 👤"
+  ua: "Як клієнт 👤"
 
 coach:
-  eng: "As coach"
-  ru: "Как тренер"
-  ua: "Як тренер"
+  eng: "As coach 🏋️‍♂️"
+  ru: "Как тренер 🏋️‍♂️"
+  ua: "Як тренер 🏋️‍♂️"
 
 my_clients:
-  eng: "My clients"
-  ru: "Мои клиенты"
-  ua: "Мої клієнти"
+  eng: "My clients 👥"
+  ru: "Мои клиенты 👥"
+  ua: "Мої клієнти 👥"
 
 feedback:
-  eng: "Give feedback"
-  ru: "Написать отзыв"
-  ua: "Написати відгук"
+  eng: "Give feedback ✍️"
+  ru: "Написать отзыв ✍️"
+  ua: "Написати відгук ✍️"
 
 my_profile:
-  eng: "My profile"
-  ru: "Мой профиль"
-  ua: "Мій профіль"
+  eng: "My profile 👤"
+  ru: "Мой профиль 👤"
+  ua: "Мій профіль 👤"
 
 my_program:
-  eng: "My trainings"
-  ru: "Мои тренировки"
-  ua: "Мої тренування"
+  eng: "My trainings 🏋️"
+  ru: "Мои тренировки 🏋️"
+  ua: "Мої тренування 🏋️"
 
 sign_in:
-  eng: "Sign in"
-  ru: "Вход"
-  ua: "Увійти"
+  eng: "Sign in 🔑"
+  ru: "Вход 🔑"
+  ua: "Увійти 🔑"
 
 sign_up:
-  eng: "Sign up"
-  ru: "Регистрация"
-  ua: "Реєстрація"
+  eng: "Sign up 📝"
+  ru: "Регистрация 📝"
+  ua: "Реєстрація 📝"
 
 back:
-  eng: "Back"
-  ru: "Назад"
-  ua: "Назад"
+  eng: "Back 🔙"
+  ru: "Назад 🔙"
+  ua: "Назад 🔙"
 
 edit_profile:
-  eng: "Edit"
-  ru: "Редактировать"
-  ua: "Редагувати"
+  eng: "Edit ✏️"
+  ru: "Редактировать ✏️"
+  ua: "Редагувати ✏️"
 
 subscription:
-  eng: "Subscription"
-  ru: "Подписка"
-  ua: "Підписка"
+  eng: "Subscription 💳"
+  ru: "Подписка 💳"
+  ua: "Підписка 💳"
 
 beginner:
-  eng: "Beginner"
-  ru: "Новичок"
-  ua: "Новачок"
+  eng: "Beginner 🆕"
+  ru: "Новичок 🆕"
+  ua: "Новачок 🆕"
 
 intermediate:
-  eng: "1-3 years"
-  ru: "1-3 года"
-  ua: "1-3 років"
+  eng: "1-3 years 📈"
+  ru: "1-3 года 📈"
+  ua: "1-3 років 📈"
 
 advanced:
-  eng: "3-5 years"
-  ru: "3-5 лет"
-  ua: "3-5 років"
+  eng: "3-5 years 📊"
+  ru: "3-5 лет 📊"
+  ua: "3-5 років 📊"
 
 experienced:
-  eng: "5+ years"
-  ru: "5+ лет"
-  ua: "5+ років"
+  eng: "5+ years 🏆"
+  ru: "5+ лет 🏆"
+  ua: "5+ років 🏆"
 
 weight:
-  eng: "Weight"
-  ru: "Вес"
-  ua: "Вага"
+  eng: "Weight ⚖️"
+  ru: "Вес ⚖️"
+  ua: "Вага ⚖️"
 
 workout_experience:
-  eng: "Workout experience"
-  ru: "Опыт тренировок"
-  ua: "Тренувальний досвід"
+  eng: "Workout experience 🎓"
+  ru: "Опыт тренировок 🎓"
+  ua: "Тренувальний досвід 🎓"
 
 health_notes:
-  eng: "Health notes"
-  ru: "Примечания по здоровью"
-  ua: "Примітки по здоров'ю"
+  eng: "Health notes 🤕"
+  ru: "Примечания по здоровью 🤕"
+  ua: "Примітки по здоров'ю 🤕"
 
 workout_goals:
-  eng: "Workout goals"
-  ru: "Тренировочные цели"
-  ua: "Тренувальні цілі"
+  eng: "Workout goals 🎯"
+  ru: "Тренировочные цели 🎯"
+  ua: "Тренувальні цілі 🎯"
 
 work_experience:
-  eng: "Work experience"
-  ru: "Опыт работы"
-  ua: "Досвід роботи"
+  eng: "Work experience 💼"
+  ru: "Опыт работы 💼"
+  ua: "Досвід роботи 💼"
 
 payment_details:
-  eng: "Payment details"
-  ru: "Реквизиты оплаты"
-  ua: "Реквізити оплати"
+  eng: "Payment details 💳"
+  ru: "Реквизиты оплаты 💳"
+  ua: "Реквізити оплати 💳"
 
 additional_info:
-  eng: "Additional info"
-  ru: "Дополнительная информация"
-  ua: "Додаткова інформація"
+  eng: "Additional info 📄"
+  ru: "Дополнительная информация 📄"
+  ua: "Додаткова інформація 📄"
 
 photo:
-  eng: "Profile photo"
-  ru: "Фото профиля"
-  ua: "Фото профілю"
+  eng: "Profile photo 📸"
+  ru: "Фото профиля 📸"
+  ua: "Фото профілю 📸"
 
 select:
-  eng: "Select"
-  ru: "Выбрать"
-  ua: "Обрати"
+  eng: "Select ✔️"
+  ru: "Выбрать ✔️"
+  ua: "Обрати ✔️"
 
 forward:
-  eng: "Forward"
-  ru: "Далее"
-  ua: "Далі"
+  eng: "Forward ➡️"
+  ru: "Далее ➡️"
+  ua: "Далі ➡️"
 
 choose_coach:
-  eng: "Choose a coach"
-  ru: "Выбрать тренера"
-  ua: "Вибрати тренера"
+  eng: "Choose a coach 🏋️‍♂️"
+  ru: "Выбрать тренера 🏋️‍♂️"
+  ua: "Вибрати тренера 🏋️‍♂️"
 
 quit:
-  eng: "Quit"
-  ru: "Выход"
-  ua: "Вихід"
+  eng: "Close ❌"
+  ru: "Закрыть ❌"
+  ua: "Закрити ❌"
 
 view_program:
-  eng: "Program"
-  ru: "Программа"
-  ua: "Програма"
+  eng: "Program 🗂"
+  ru: "Программа 🗂"
+  ua: "Програма 🗂"
 
 contact_client:
-  eng: "Contact client"
-  ru: "Написать"
-  ua: "Написати"
+  eng: "Contact client 📩"
+  ru: "Написать 📩"
+  ua: "Написати 📩"
+
+answer:
+  eng: "Answer 💬"
+  ru: "Ответить 💬"
+  ua: "Відповісти 💬"

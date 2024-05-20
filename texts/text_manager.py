@@ -19,6 +19,7 @@ class MessageText(Enum):
     choose_profile_parameter = auto()
     update_your_data = auto()
     coach_info_message = auto()
+    enter_your_message = auto()
 
     name = auto()
     choose_gender = auto()
@@ -33,6 +34,7 @@ class MessageText(Enum):
     upload_photo = auto()
     photo_uploaded = auto()
     coach_verified = auto()
+    message_sent = auto()
 
     invalid_credentials = auto()
     invalid_content = auto()
@@ -63,6 +65,7 @@ class MessageText(Enum):
     feedback_sent = auto()
     registration_successful = auto()
     new_coach_request = auto()
+    incoming_message = auto()
     main_menu = auto()
     help = auto()
     start = auto()
@@ -105,6 +108,7 @@ class ButtonText(Enum):
     additional_info = auto()
     payment_details = auto()
     photo = auto()
+    answer = auto()
 
     def __str__(self) -> str:
         return f"buttons.{self.name}"

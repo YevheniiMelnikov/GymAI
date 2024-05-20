@@ -7,7 +7,7 @@ import loguru
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import BotCommand, CallbackQuery, InputFile, InputMediaPhoto, Message
+from aiogram.types import BotCommand, CallbackQuery, InputMediaPhoto, Message
 from dotenv import load_dotenv
 
 from bot.keyboards import *
@@ -268,7 +268,7 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
     text = translate(MessageText.client_page, profile.language).format(**client_info)
     client_data = [Client.to_dict(client) for client in clients]
     await state.update_data(clients=client_data)
-    await state.set_state(States.view_clients)
+    await state.set_state(States.show_clients)
 
     await message.edit_text(
         text=text,

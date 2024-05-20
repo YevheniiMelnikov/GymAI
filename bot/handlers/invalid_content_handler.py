@@ -32,6 +32,7 @@ async def invalid_language(message: Message) -> None:
 @invalid_content_router.message(States.additional_info)
 @invalid_content_router.message(States.payment_details)
 @invalid_content_router.message(States.profile_photo, F.text)
+@invalid_content_router.message(States.contact_client)
 async def invalid_data_handler(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await handle_invalid_content(message, data["lang"])
