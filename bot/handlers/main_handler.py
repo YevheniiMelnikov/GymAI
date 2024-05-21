@@ -1,10 +1,9 @@
-import aiohttp
 import loguru
-from aiogram import Bot, F, Router
+from aiogram import Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import choose_coach, incoming_message, profile_menu_keyboard
+from bot.keyboards import choose_coach, profile_menu_keyboard
 from bot.states import States
 from common.file_manager import file_manager
 from common.functions import (
@@ -206,8 +205,8 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
         await callback_query.message.delete()
         coach = user_service.storage.get_coach_by_id(profile.id)
         await state.clear()
+        await state.update_data(recipient=index, sender_name=coach.name)
         await state.set_state(States.contact_client)
-        await state.update_data(client_id=index, coach_name=coach.name)
         return
 
     # TODO: HANDLE "PROGRAM" CALLBACK HERE
@@ -225,61 +224,3 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
         return
 
     await show_clients(callback_query.message, clients, state, index)
-
-
-@main_router.message(States.contact_client, F.text)
-async def contact_client(message: Message, state: FSMContext, bot: Bot):
-    data = await state.get_data()
-    client = user_service.storage.get_client_by_id(data["client_id"])
-    language = user_service.storage.get_profile_info_by_key(client.tg_id, data["client_id"], "language")
-    profile = user_service.storage.get_current_profile(message.from_user.id)
-    async with aiohttp.ClientSession():
-        await bot.send_message(
-            chat_id=client.tg_id,
-            text=translate(MessageText.incoming_message, language).format(
-                name=data["coach_name"], message=message.text
-            ),
-            reply_markup=incoming_message(language, profile.id),
-        )
-    await message.answer(translate(MessageText.message_sent, profile.language))
-    await state.set_state(States.main_menu)
-    await show_main_menu(message, profile, state)
-
-    @main_router.callback_query(F.data == "quit")  # TODO: FIND BETTER SOLUTION
-    async def close_notification(callback_query: CallbackQuery):
-        await callback_query.message.delete()
-
-    @main_router.callback_query(F.data.startswith("answer"))
-    async def answer_message(callback_query: CallbackQuery, state: FSMContext):
-        profile = user_service.storage.get_current_profile(callback_query.from_user.id)
-        print(profile)
-        sender = (
-            user_service.storage.get_client_by_id(profile.id)
-            if profile.status == "client"
-            else user_service.storage.get_coach_by_id(profile.id)
-        )
-        print(sender)
-        await callback_query.message.answer(translate(MessageText.enter_your_message, profile.language))
-        await state.clear()
-        await state.set_state(States.contact_coach)
-        print(callback_query.data.split("_"))
-        await state.update_data(recipient=callback_query.data.split("_")[1], sender_name=sender.name)
-
-
-@main_router.message(States.contact_coach, F.text)
-async def contact_coach(message: Message, state: FSMContext, bot: Bot):
-    profile = user_service.storage.get_current_profile(message.from_user.id)
-    data = await state.get_data()
-    coach = user_service.storage.get_coach_by_id(data["coach_id"])
-    language = user_service.storage.get_profile_info_by_key(coach.tg_id, data["coach_id"], "language")
-    async with aiohttp.ClientSession():
-        await bot.send_message(
-            chat_id=coach.tg_id,
-            text=translate(MessageText.incoming_message, language).format(
-                name=data["client_name"], message=message.text
-            ),
-            reply_markup=incoming_message(language, profile.id),
-        )
-    await message.answer(translate(MessageText.message_sent, profile.language))
-    await state.set_state(States.main_menu)
-    await show_main_menu(message, profile, state)

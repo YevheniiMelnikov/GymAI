@@ -6,12 +6,13 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.redis import RedisStorage
 from dotenv import load_dotenv
 
+from bot.handlers.chat_handler import chat_router
 from bot.handlers.command_handler import cmd_router
 from bot.handlers.invalid_content_handler import invalid_content_router
 from bot.handlers.main_handler import main_router
 from bot.handlers.questionnaire_handler import questionnaire_router
 from bot.handlers.registration_handler import register_router
-from common.functions import admin_router, set_bot_commands
+from common.functions import set_bot_commands, sub_router
 
 load_dotenv()
 logger = loguru.logger
@@ -27,7 +28,7 @@ async def main() -> None:
     redis_url = os.getenv("REDIS_URL")
     dp = Dispatcher(storage=RedisStorage.from_url(f"{redis_url}/0"))
     dp.include_routers(
-        admin_router, main_router, cmd_router, register_router, questionnaire_router, invalid_content_router
+        sub_router, main_router, chat_router, cmd_router, register_router, questionnaire_router, invalid_content_router
     )
 
     logger.info("Starting bot ...")
