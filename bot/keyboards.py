@@ -161,3 +161,10 @@ def client_select_menu(lang_code: str, client_id: int, current_index: int) -> In
         [InlineKeyboardButton(text=translate(ButtonText.quit, lang_code), callback_data="quit")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
+
+
+def incoming_message(lang_code: str, profile_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=translate(ButtonText.quit, lang_code), callback_data="quit")
+    kb.button(text=translate(ButtonText.answer, lang_code), callback_data=f"answer_{profile_id}")
+    return kb.as_markup(one_time_keyboard=True)

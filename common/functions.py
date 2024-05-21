@@ -7,7 +7,7 @@ import loguru
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import BotCommand, CallbackQuery, InputFile, InputMediaPhoto, Message
+from aiogram.types import BotCommand, CallbackQuery, InputMediaPhoto, Message
 from dotenv import load_dotenv
 
 from bot.keyboards import *
@@ -23,7 +23,7 @@ load_dotenv()
 bot = Bot(os.environ.get("BOT_TOKEN"))
 BACKEND_URL = os.environ.get("BACKEND_URL")
 OWNER_ID = os.environ.get("OWNER_ID")
-admin_router = Router()
+sub_router = Router()
 
 
 async def show_profile_editing_menu(message: Message, profile: Profile, state: FSMContext) -> None:
@@ -51,7 +51,9 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
         await message.delete()
 
 
-async def show_main_menu(message: Message, profile: Profile, state: FSMContext) -> None:
+async def show_main_menu(
+    message: Message, profile: Profile, state: FSMContext
+) -> None:  # TODO: DELETE MESSAGES IN MAIN MENU
     menu = client_menu_keyboard if profile.status == "client" else coach_menu_keyboard
     await state.clear()
     await state.set_state(States.main_menu)
@@ -203,7 +205,7 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
             reply_markup=new_coach_request(),
         )
 
-    @admin_router.callback_query(F.data == "coach_approve")  # TODO: FIND BETTER SOLUTION
+    @sub_router.callback_query(F.data == "coach_approve")  # TODO: FIND BETTER SOLUTION
     async def approve_coach(callback_query: CallbackQuery):
         token = user_service.storage.get_profile_info_by_key(tg_id, profile.id, "auth_token")
         await user_service.edit_profile(profile.id, {"verified": True}, token)
@@ -212,7 +214,7 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
         await bot.send_message(tg_id, translate(MessageText.coach_verified, lang=profile.language))
         logger.info(f"Coach verification for profile_id {profile.id} approved")
 
-    @admin_router.callback_query(F.data == "coach_decline")
+    @sub_router.callback_query(F.data == "coach_decline")
     async def decline_coach(callback_query: CallbackQuery):
         await callback_query.answer("Отклонено")
         await bot.send_message(tg_id, translate(MessageText.coach_declined, lang=profile.language))
@@ -257,7 +259,7 @@ async def assign_coach(coach: Coach, client: Client) -> None:
 
     token = user_service.storage.get_profile_info_by_key(client.tg_id, client.id, "auth_token")
     await user_service.edit_profile(client.id, {"assigned_to": [coach.id]}, token)
-    await user_service.edit_profile(coach.id, {"assigned_to": [client.id]}, token)
+    await user_service.edit_profile(coach.id, {"assigned_to": coach_clients}, token)
 
 
 async def show_clients(message: Message, clients: list[Client], state: FSMContext, current_index=0) -> None:
@@ -266,13 +268,52 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
     current_client = clients[current_index]
     client_info = get_client_page(current_client, profile.language)
     text = translate(MessageText.client_page, profile.language).format(**client_info)
-    await state.set_state(States.view_clients)
+    client_data = [Client.to_dict(client) for client in clients]
+    await state.update_data(clients=client_data)
+    await state.set_state(States.show_clients)
 
-    await message.answer(
+    await message.edit_text(
         text=text,
         reply_markup=client_select_menu(profile.language, current_client.id, current_index),
         parse_mode="HTML",
     )
+
+
+async def send_message(
+    recipient: Client | Coach, message: Message, bot: Bot, state: FSMContext, sender: Profile
+) -> None:
+    data = await state.get_data()
+    if not isinstance(recipient, (Client, Coach)):
+        raise ValueError("Recipient is not a valid Client or Coach object")
+
+    language = user_service.storage.get_profile_info_by_key(recipient.tg_id, sender.id, "language")
+    async with aiohttp.ClientSession():  # TODO: FIND BETTER SOLUTION
+        await bot.send_message(
+            chat_id=recipient.tg_id,
+            text=translate(MessageText.incoming_message, language).format(
+                name=data.get("sender_name", ""), message=message.text
+            ),
+            reply_markup=incoming_message(language, sender.id),
+        )
+
+    @sub_router.callback_query(F.data == "quit")
+    async def close_notification(callback_query: CallbackQuery):
+        await callback_query.message.delete()
+
+    @sub_router.callback_query(F.data.startswith("answer"))
+    async def answer_message(callback_query: CallbackQuery, state: FSMContext):
+        profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+        sender = (
+            user_service.storage.get_client_by_id(profile.id)
+            if profile.status == "client"
+            else user_service.storage.get_coach_by_id(profile.id)
+        )
+        await callback_query.message.answer(translate(MessageText.enter_your_message, profile.language))
+        await state.clear()
+        status_to_set = States.contact_coach if profile.status == "client" else States.contact_client
+        await state.set_state(status_to_set)
+        recipient_id = int(callback_query.data.split("_")[1])
+        await state.update_data(recipient=recipient_id, sender_name=sender.name)
 
 
 async def show_subscription(message: Message, subscription: Subscription) -> None:  # TODO: IMPLEMENT

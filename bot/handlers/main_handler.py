@@ -1,5 +1,5 @@
 import loguru
-from aiogram import F, Router
+from aiogram import Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
@@ -34,6 +34,7 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
         case "feedback":
             await callback_query.message.answer(text=translate(MessageText.feedback, lang=profile.language))
             await state.set_state(States.feedback)
+
         case "my_profile":
             user = (
                 user_service.storage.get_client_by_id(profile.id)
@@ -53,6 +54,7 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
             else:
                 await callback_query.message.answer(text, reply_markup=profile_menu_keyboard(profile.language))
             await state.set_state(States.profile)
+
         case "my_clients":
             coach = user_service.storage.get_coach_by_id(profile.id)
             assigned_ids = coach.assigned_to if coach.assigned_to != [] else None
@@ -65,6 +67,8 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
                 await callback_query.message.answer(translate(MessageText.no_clients, profile.language))
                 await state.set_state(States.main_menu)
                 await show_main_menu(callback_query.message, profile, state)
+            return
+
         case "my_program":
             if program := user_service.storage.get_program(profile.id):
                 await show_program(callback_query.message, program)
@@ -74,6 +78,7 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
                     reply_markup=choose_coach(profile.language),
                 )
                 await state.set_state(States.choose_coach)
+
         case "my_subscription":  # TODO: IMPLEMENT
             if subscription := user_service.storage.get_subscription(profile.id):
                 await show_subscription(callback_query.message, subscription)
@@ -185,7 +190,7 @@ async def coach_paginator(callback_query: CallbackQuery, state: FSMContext):
         await show_coaches(callback_query.message, coaches, current_index=index)
 
 
-@main_router.callback_query(States.view_clients)
+@main_router.callback_query(States.show_clients)
 async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
 
@@ -195,6 +200,17 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
         return
 
     action, index = callback_query.data.split("_")
+    if action == "contact":
+        await callback_query.message.answer(translate(MessageText.enter_your_message, profile.language))
+        await callback_query.message.delete()
+        coach = user_service.storage.get_coach_by_id(profile.id)
+        await state.clear()
+        await state.update_data(recipient=index, sender_name=coach.name)
+        await state.set_state(States.contact_client)
+        return
+
+    # TODO: HANDLE "PROGRAM" CALLBACK HERE
+
     index = int(index)
     data = await state.get_data()
     clients = [Client.from_dict(data) for data in data["clients"]]
