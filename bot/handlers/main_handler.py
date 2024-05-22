@@ -3,7 +3,7 @@ from aiogram import Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import choose_coach, profile_menu_keyboard, select_program_type
+from bot.keyboards import choose_coach, profile_menu_keyboard, program_manage_menu, select_program_type
 from bot.states import States
 from common.file_manager import file_manager
 from common.functions import (
@@ -204,19 +204,34 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
         await show_main_menu(callback_query.message, profile, state)
         return
 
-    action, index = callback_query.data.split("_")
+    action, client_id = callback_query.data.split("_")
     if action == "contact":
         await callback_query.message.answer(translate(MessageText.enter_your_message, profile.language))
         await callback_query.message.delete()
         coach = user_service.storage.get_coach_by_id(profile.id)
         await state.clear()
-        await state.update_data(recipient=index, sender_name=coach.name)
+        await state.update_data(recipient=client_id, sender_name=coach.name)
         await state.set_state(States.contact_client)
         return
 
-    # TODO: HANDLE "PROGRAM" CALLBACK HERE
+    if action == "program":
+        await callback_query.message.answer(translate(MessageText.program_guide))
+        if program := user_service.storage.get_program(client_id):
+            await callback_query.message.answer(
+                text=translate(MessageText.current_program, lang=profile.language).format(program=program),
+                reply_markup=program_manage_menu(profile.language),
+            )
+        else:
+            await callback_query.message.answer(
+                text=translate(MessageText.no_program, lang=profile.language),
+                reply_markup=program_manage_menu(profile.language),
+            )
+        await state.update_data(client_id=client_id)
+        await state.set_state(States.program_manage)
+        await callback_query.message.delete()
+        return
 
-    index = int(index)
+    index = int(callback_query.data.split("_")[1])
     data = await state.get_data()
     clients = [Client.from_dict(data) for data in data["clients"]]
 

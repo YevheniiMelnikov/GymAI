@@ -20,6 +20,8 @@ class MessageText(Enum):
     update_your_data = auto()
     coach_info_message = auto()
     enter_your_message = auto()
+    enter_exercise = auto()
+    program_guide = auto()
 
     name = auto()
     choose_gender = auto()
@@ -51,6 +53,7 @@ class MessageText(Enum):
     no_coaches = auto()
     out_of_range = auto()
     no_clients = auto()
+    no_exercises_to_save = auto()
 
     coach_page = auto()
     client_page = auto()
@@ -66,8 +69,10 @@ class MessageText(Enum):
     registration_successful = auto()
     new_coach_request = auto()
     incoming_message = auto()
+    new_program = auto()
     main_menu = auto()
     help = auto()
+    current_program = auto()
     start = auto()
     signed_in = auto()
     logout = auto()
@@ -108,6 +113,9 @@ class ButtonText(Enum):
     additional_info = auto()
     payment_details = auto()
     photo = auto()
+    add_exercise = auto()
+    save_program = auto()
+    reset_program = auto()
     answer = auto()
 
     def __str__(self) -> str:
