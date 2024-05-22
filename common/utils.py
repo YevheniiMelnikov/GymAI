@@ -127,3 +127,8 @@ def get_client_page(client: Client, lang_code: str) -> dict[str, Any]:
         "health_notes": client.health_notes,
         "weight": client.weight,
     }
+
+
+# TODO: ADD ALL LANGUAGES
+def format_program(exercises: list[str]) -> str:
+    return f"program: {exercises}"  # TODO: IMPLEMENT

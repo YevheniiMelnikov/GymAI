@@ -30,6 +30,7 @@ class States(StatesGroup):
     coach_selection = State()
     show_clients = State()
     contact_client = State()
+    program_manage = State()
     contact_coach = State()
     select_program_type = State()
 
