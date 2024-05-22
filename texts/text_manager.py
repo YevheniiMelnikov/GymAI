@@ -91,7 +91,7 @@ class ButtonText(Enum):
     quit = auto()
     forward = auto
     edit_profile = auto()
-    view_program = auto()
+    program = auto()
     subscription = auto()
     choose_coach = auto()
     contact_client = auto()

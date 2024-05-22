@@ -31,6 +31,7 @@ class States(StatesGroup):
     show_clients = State()
     contact_client = State()
     contact_coach = State()
+    select_program_type = State()
 
     password_reset = State()
     password_retype = State()

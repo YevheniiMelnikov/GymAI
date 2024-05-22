@@ -143,15 +143,15 @@ quit:
   ru: "Закрыть ❌"
   ua: "Закрити ❌"
 
-view_program:
+program:
   eng: "Program 📃"
   ru: "Программа 📃"
   ua: "Програма 📃"
 
 contact_client:
-  eng: "Contact client ✍️"
-  ru: "Написать ✍️"
-  ua: "Написати ✍️"
+  eng: "Contact ✍️"
+  ru: "Связаться ✍️"
+  ua: "Зв'язатись ✍️"
 
 answer:
   eng: "Answer 💬"

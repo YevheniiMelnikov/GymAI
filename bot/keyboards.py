@@ -32,11 +32,6 @@ def client_menu_keyboard(lang_code: str) -> InlineKeyboardMarkup:
     buttons = [
         [InlineKeyboardButton(text=translate(ButtonText.my_program, lang=lang_code), callback_data="my_program")],
         [InlineKeyboardButton(text=translate(ButtonText.feedback, lang=lang_code), callback_data="feedback")],
-        [
-            InlineKeyboardButton(
-                text=translate(ButtonText.subscription, lang=lang_code), callback_data="my_subscription"
-            )
-        ],
         [InlineKeyboardButton(text=translate(ButtonText.my_profile, lang=lang_code), callback_data="my_profile")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
@@ -142,11 +137,7 @@ def coach_select_menu(lang_code: str, coach_id: int, current_index: int) -> Inli
 
 def client_select_menu(lang_code: str, client_id: int, current_index: int) -> InlineKeyboardMarkup:
     buttons = [
-        [
-            InlineKeyboardButton(
-                text=translate(ButtonText.view_program, lang_code), callback_data=f"program_{client_id}"
-            )
-        ],
+        [InlineKeyboardButton(text=translate(ButtonText.program, lang_code), callback_data=f"program_{client_id}")],
         [
             InlineKeyboardButton(
                 text=translate(ButtonText.contact_client, lang_code), callback_data=f"contact_{client_id}"
@@ -168,3 +159,12 @@ def incoming_message(lang_code: str, profile_id: int) -> InlineKeyboardMarkup:
     kb.button(text=translate(ButtonText.quit, lang_code), callback_data="quit")
     kb.button(text=translate(ButtonText.answer, lang_code), callback_data=f"answer_{profile_id}")
     return kb.as_markup(one_time_keyboard=True)
+
+
+def select_program_type(lang_code: str) -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton(text=translate(ButtonText.subscription, lang_code), callback_data=f"subscription")],
+        [InlineKeyboardButton(text=translate(ButtonText.program, lang_code), callback_data=f"program")],
+        [InlineKeyboardButton(text=translate(ButtonText.quit, lang_code), callback_data="quit")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)

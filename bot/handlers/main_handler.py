@@ -3,7 +3,7 @@ from aiogram import Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import choose_coach, profile_menu_keyboard
+from bot.keyboards import choose_coach, profile_menu_keyboard, select_program_type
 from bot.states import States
 from common.file_manager import file_manager
 from common.functions import (
@@ -70,18 +70,23 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
             return
 
         case "my_program":
-            if program := user_service.storage.get_program(profile.id):
-                await show_program(callback_query.message, program)
-            else:
+            client = user_service.storage.get_client_by_id(profile.id)
+            assigned = client.assigned_to if client.assigned_to != [] else None
+            if not assigned:
                 await callback_query.message.answer(
                     text=translate(MessageText.no_program, lang=profile.language),
                     reply_markup=choose_coach(profile.language),
                 )
                 await state.set_state(States.choose_coach)
-
-        case "my_subscription":  # TODO: IMPLEMENT
-            if subscription := user_service.storage.get_subscription(profile.id):
-                await show_subscription(callback_query.message, subscription)
+            else:
+                if program := user_service.storage.get_program(profile.id):
+                    await show_program(callback_query.message, program)
+                else:
+                    await state.set_state(States.select_program_type)
+                    await callback_query.message.answer(
+                        text=translate(MessageText.no_program, lang=profile.language),
+                        reply_markup=select_program_type(profile.language),
+                    )
 
     await callback_query.message.delete()
 
