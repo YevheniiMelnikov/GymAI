@@ -140,4 +140,26 @@ class Subscription:
 
 @dataclass
 class Program:
-    pass
+    profile_id: int
+    exercises: list[str]
+    created_at: float
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Program":
+        fields = [
+            "profile_id",
+            "exercises",
+            "created_at",
+        ]
+        filtered_data = {key: data.get(key) for key in fields}
+        return cls(**filtered_data)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "profile_id": self.profile_id,
+            "exercises": self.exercises,
+            "created_at": self.created_at,
+        }
+
+    def __repr__(self) -> str:
+        return f"Program(profile_id={self.profile_id}, exercises={self.exercises}, created_at={self.created_at})"

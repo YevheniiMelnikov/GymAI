@@ -155,10 +155,10 @@ class UserProfileManager:
                 return Client.from_dict(data)
             else:
                 logger.info(f"No client data found for client ID {profile_id}")
-                return None
+                raise UserServiceError
         except Exception as e:
             logger.error(f"Failed to get client data for client ID {profile_id}: {e}")
-            return None
+            raise UserServiceError
 
     def set_coach_data(self, profile_id: int, profile_data: dict) -> None:
         try:
@@ -188,16 +188,34 @@ class UserProfileManager:
                 data["id"] = profile_id
                 return Coach.from_dict(data)
             else:
-                logger.info(f"No data found for profile_id {profile_id}")
+                logger.info(f"No data found for profile_id {profile_id} in cache")
+                raise UserServiceError
+        except Exception as e:
+            logger.error(f"Failed to get data for profile_id from cache {profile_id}: {e}")
+            raise UserServiceError
+
+    def save_program(self, client_id: int, exercises: list[str]) -> None:
+        try:
+            self.redis.hset("programs", client_id, json.dumps({"exercises": exercises}))
+            logger.info(f"Program for client {client_id} saved in cache")
+        except Exception as e:
+            logger.error(f"Failed to save program in cache for client {client_id}: {e}")
+
+    def get_program(self, profile_id: int) -> dict | None:
+        try:
+            program_data = self.redis.hget("programs", profile_id)
+            if program_data:
+                data = json.loads(program_data)
+                data["profile"] = profile_id
+                return data
+            else:
+                logger.info(f"No program data found for profile_id {profile_id}")
                 return None
         except Exception as e:
-            logger.error(f"Failed to get data for profile_id {profile_id}: {e}")
+            logger.error(f"Failed to get program for profile_id {profile_id}: {e}")
             return None
 
     def get_subscription(self, profile_id: int) -> Subscription | None:  # TODO: IMPLEMENT
-        pass
-
-    def get_program(self, profile_id: int) -> Program | None:
         pass
 
 
@@ -320,6 +338,20 @@ class UserService:
             },
         )
         return status_code == 200
+
+    async def save_program(self, client_id: int, exercises: list[str]) -> None:
+        self.storage.save_program(client_id, exercises)
+        url = f"{self.backend_url}/api/v1/programs/"
+        data = {
+            "profile": client_id,
+            "exercises": exercises,
+        }
+        status_code, response = await self.api_request(
+            "post", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
+        )
+        if status_code != 201:
+            logger.error(f"Failed to save program for client {client_id}: {response}")
+            raise UserServiceError(f"Failed to save program: {response}")
 
     async def delete_profile(self, profile_id: int) -> bool:  # TODO: NOT USED YET
         url = f"{self.backend_url}/api/v1/persons/{profile_id}/"
