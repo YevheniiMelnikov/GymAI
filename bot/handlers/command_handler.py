@@ -26,9 +26,14 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     logger.info(f"User {message.from_user.id} started bot")
     await state.clear()
     await message.answer(text=translate(MessageText.start))
-    if user_service.storage.get_current_profile(message.from_user.id):
+    if profile := user_service.storage.get_current_profile(message.from_user.id):
         await user_service.log_out(message.from_user.id)
-    await message.delete()
+        await message.answer(text=translate(MessageText.username, profile.language))
+        await state.update_data(lang=profile.language)
+        await state.set_state(States.username)
+        await message.delete()
+        return
+
     await state.set_state(States.language_choice)
     await message.answer(text=translate(MessageText.choose_language), reply_markup=language_choice())
 

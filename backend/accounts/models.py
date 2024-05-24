@@ -32,6 +32,23 @@ class Profile(Model):
         verbose_name_plural = "profiles"
 
 
+class Program(models.Model):
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="programs")
+    exercises = ArrayField(models.CharField(max_length=100), default=list, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Program":
+        profile_id = data.get("profile")
+        exercises = data.get("exercises", [])
+        program = cls(profile_id=profile_id, exercises=exercises)
+        return program
+
+    class Meta:
+        verbose_name = "program"
+        verbose_name_plural = "programs"
+
+
 class Subscription(models.Model):
     id = models.BigAutoField(primary_key=True)
     user = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="subscriptions")

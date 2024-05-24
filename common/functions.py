@@ -51,9 +51,7 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
         await message.delete()
 
 
-async def show_main_menu(
-    message: Message, profile: Profile, state: FSMContext
-) -> None:  # TODO: DELETE MESSAGES IN MAIN MENU
+async def show_main_menu(message: Message, profile: Profile, state: FSMContext) -> None:
     menu = client_menu_keyboard if profile.status == "client" else coach_menu_keyboard
     await state.clear()
     await state.set_state(States.main_menu)
@@ -280,25 +278,39 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
 
 
 async def send_message(
-    recipient: Client | Coach, message: Message, bot: Bot, state: FSMContext, sender: Profile
+    recipient: Client | Coach,
+    text: str,
+    bot: Bot,
+    state: FSMContext,
+    reply_markup=None,
+    include_incoming_message: bool = True,
 ) -> None:
     data = await state.get_data()
     if not isinstance(recipient, (Client, Coach)):
         raise ValueError("Recipient is not a valid Client or Coach object")
 
-    language = user_service.storage.get_profile_info_by_key(recipient.tg_id, sender.id, "language")
-    async with aiohttp.ClientSession():  # TODO: FIND BETTER SOLUTION
+    language = data.get("recipient_language", "ua")
+
+    if include_incoming_message:
+        formatted_text = translate(MessageText.incoming_message, language).format(
+            name=data.get("sender_name", ""), message=text
+        )
+    else:
+        formatted_text = text
+
+    async with aiohttp.ClientSession():
         await bot.send_message(
             chat_id=recipient.tg_id,
-            text=translate(MessageText.incoming_message, language).format(
-                name=data.get("sender_name", ""), message=message.text
-            ),
-            reply_markup=incoming_message(language, sender.id),
+            text=formatted_text,
+            reply_markup=reply_markup,
         )
 
     @sub_router.callback_query(F.data == "quit")
     async def close_notification(callback_query: CallbackQuery):
         await callback_query.message.delete()
+        profile = user_service.storage.get_current_profile(recipient.tg_id)
+        await state.set_state(States.main_menu)
+        await show_main_menu(callback_query.message, profile, state)
 
     @sub_router.callback_query(F.data.startswith("answer"))
     async def answer_message(callback_query: CallbackQuery, state: FSMContext):
@@ -311,14 +323,10 @@ async def send_message(
         await callback_query.message.answer(translate(MessageText.enter_your_message, profile.language))
         await state.clear()
         status_to_set = States.contact_coach if profile.status == "client" else States.contact_client
-        await state.set_state(status_to_set)
         recipient_id = int(callback_query.data.split("_")[1])
-        await state.update_data(recipient=recipient_id, sender_name=sender.name)
+        await state.update_data(recipient_id=recipient_id, sender_name=sender.name)
+        await state.set_state(status_to_set)
 
 
 async def show_subscription(message: Message, subscription: Subscription) -> None:  # TODO: IMPLEMENT
-    pass
-
-
-async def show_program(message: Message, program: Program) -> None:  # TODO: IMPLEMENT
     pass

@@ -5,6 +5,7 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.shortcuts import get_object_or_404, render
 from rest_framework import generics
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import BasePermission, IsAdminUser, IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -16,10 +17,13 @@ from rest_framework.status import (
     HTTP_500_INTERNAL_SERVER_ERROR,
 )
 from rest_framework.views import APIView
+from rest_framework.viewsets import ModelViewSet
 from rest_framework_api_key.permissions import HasAPIKey
 
-from .models import Profile
-from .serializers import ProfileSerializer
+from common.user_service import UserProfileManager
+
+from .models import Profile, Program
+from .serializers import ProfileSerializer, ProgramSerializer
 
 
 class CreateUserView(APIView):
@@ -138,3 +142,66 @@ class ProfileAPIList(generics.ListCreateAPIView):
     serializer_class = ProfileSerializer
     queryset = Profile.objects.all()
     permission_classes = [IsAuthenticatedOrReadOnly | HasAPIKey]
+
+
+class ProgramViewSet(ModelViewSet):
+    queryset = Program.objects.all()
+    serializer_class = ProgramSerializer
+    permission_classes = [HasAPIKey]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        profile = self.request.query_params.get("profile")
+        exercises = self.request.query_params.getlist("exercises")
+
+        if profile is not None:
+            queryset = queryset.filter(profile_id=profile)
+        if exercises:
+            queryset = queryset.filter(exercises__overlap=exercises)
+
+        return queryset
+
+    def perform_create_or_update(self, serializer):
+        api_key = self.request.headers.get("Authorization")
+        profile_id = self.request.data.get("profile")
+        exercises = self.request.data.get("exercises")
+
+        if api_key and HasAPIKey().has_permission(self.request, self):
+            existing_program = Program.objects.filter(profile_id=profile_id).first()
+            if existing_program:
+                existing_program.exercises = exercises
+                existing_program.save()
+                return existing_program
+            else:
+                if not profile_id:
+                    raise PermissionDenied("Profile ID must be provided.")
+                return serializer.save(profile_id=profile_id)
+        else:
+            raise PermissionDenied("API Key must be provided")
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = self.perform_create_or_update(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(ProgramSerializer(instance).data, status=HTTP_201_CREATED, headers=headers)
+
+    def retrieve(self, request, *args, **kwargs):
+        profile_id = kwargs.get("pk")
+        user_profile_manager = UserProfileManager(redis_url=os.environ.get("REDIS_URL"))
+        program_data = user_profile_manager.get_program(profile_id)
+
+        if program_data:
+            program = Program.from_dict(program_data)
+            serializer = ProgramSerializer(program)
+            return Response(serializer.data)
+        else:
+            raise NotFound(detail="Program not found for profile ID {}".format(profile_id))
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create_or_update(serializer)
+        return Response(serializer.data)

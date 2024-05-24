@@ -25,6 +25,7 @@ class States(StatesGroup):
     action_choice = State()
     feedback = State()
     profile = State()
+    program = State()
     new_coach_request = State
     choose_coach = State()
     coach_selection = State()
