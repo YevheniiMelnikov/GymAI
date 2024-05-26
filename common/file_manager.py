@@ -10,9 +10,21 @@ logger = loguru.logger
 
 class FileManager:
     def __init__(self, bucket_name: str):
-        self.bucket_name = bucket_name
-        self.storage_client = storage.Client()
-        self.bucket = self.storage_client.bucket(bucket_name)
+        self._bucket_name = bucket_name
+        self._storage_client = storage.Client()
+        self._bucket = self._storage_client.bucket(bucket_name)
+
+    @property
+    def bucket_name(self) -> str:
+        return self._bucket_name
+
+    @property
+    def storage_client(self) -> storage.Client:
+        return self._storage_client
+
+    @property
+    def bucket(self) -> storage.Bucket:
+        return self._bucket
 
     def upload_image_to_gcs(self, source_file_name: str) -> bool:
         try:
