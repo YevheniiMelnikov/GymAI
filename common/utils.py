@@ -1,4 +1,3 @@
-import os
 import re
 from functools import wraps
 from typing import Any, Optional

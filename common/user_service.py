@@ -10,7 +10,7 @@ import loguru
 import redis
 
 from common.exceptions import UsernameUnavailable, UserServiceError
-from common.models import Client, Coach, Profile, Program, Subscription
+from common.models import Client, Coach, Profile, Subscription
 
 logger = loguru.logger
 

@@ -44,6 +44,7 @@ async def program_manage(callback_query: CallbackQuery, state: FSMContext, bot: 
                 text=translate(MessageText.new_program, lang=client_lang),
                 bot=bot,
                 state=state,
+                include_incoming_message=False,
             )
             await send_message(
                 recipient=client,
@@ -51,6 +52,7 @@ async def program_manage(callback_query: CallbackQuery, state: FSMContext, bot: 
                 bot=bot,
                 state=state,
                 reply_markup=incoming_message(profile.language, profile.id),
+                include_incoming_message=False,
             )
             await state.clear()
             await state.set_state(States.main_menu)

@@ -1,4 +1,8 @@
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    ReplyKeyboardMarkup,
+)
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
 from texts.text_manager import ButtonText, translate
@@ -163,8 +167,8 @@ def incoming_message(lang_code: str, profile_id: int) -> InlineKeyboardMarkup:
 
 def select_program_type(lang_code: str) -> InlineKeyboardMarkup:
     buttons = [
-        [InlineKeyboardButton(text=translate(ButtonText.subscription, lang_code), callback_data=f"subscription")],
-        [InlineKeyboardButton(text=translate(ButtonText.program, lang_code), callback_data=f"program")],
+        [InlineKeyboardButton(text=translate(ButtonText.subscription, lang_code), callback_data="subscription")],
+        [InlineKeyboardButton(text=translate(ButtonText.program, lang_code), callback_data="program")],
         [InlineKeyboardButton(text=translate(ButtonText.quit, lang_code), callback_data="quit")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
@@ -173,9 +177,16 @@ def select_program_type(lang_code: str) -> InlineKeyboardMarkup:
 def program_manage_menu(lang_code: str) -> InlineKeyboardMarkup:
     buttons = [
         [
-            InlineKeyboardButton(text=translate(ButtonText.save_program, lang_code), callback_data=f"save"),
-            InlineKeyboardButton(text=translate(ButtonText.reset_program, lang_code), callback_data=f"reset"),
+            InlineKeyboardButton(text=translate(ButtonText.save_program, lang_code), callback_data="save"),
+            InlineKeyboardButton(text=translate(ButtonText.reset_program, lang_code), callback_data="reset"),
         ],
         [InlineKeyboardButton(text=translate(ButtonText.quit, lang_code), callback_data="quit")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
+
+
+def choose_payment_options(lang_code: str) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=translate(ButtonText.select, lang_code), callback_data="select")
+    kb.button(text=translate(ButtonText.back, lang_code), callback_data="back")
+    return kb.as_markup(one_time_keyboard=True)
