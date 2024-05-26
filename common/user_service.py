@@ -17,8 +17,16 @@ logger = loguru.logger
 
 class UserProfileManager:
     def __init__(self, redis_url: str):
-        self.redis_url = redis_url
-        self.redis = redis.from_url(f"{self.redis_url}/1", encoding="utf-8", decode_responses=True)
+        self._redis_url = redis_url
+        self._redis = redis.from_url(f"{self._redis_url}/1", encoding="utf-8", decode_responses=True)
+
+    @property
+    def redis_url(self) -> str:
+        return self._redis_url
+
+    @property
+    def redis(self) -> redis.Redis:
+        return self._redis
 
     def close_pool(self) -> None:
         if self.redis:
@@ -221,10 +229,26 @@ class UserProfileManager:
 
 class UserService:
     def __init__(self, storage: UserProfileManager):
-        self.backend_url = os.environ.get("BACKEND_URL")
-        self.api_key = os.environ.get("API_KEY")
-        self.storage = storage
-        self.client = httpx.AsyncClient()
+        self._backend_url = os.environ.get("BACKEND_URL")
+        self._api_key = os.environ.get("API_KEY")
+        self._storage = storage
+        self._client = httpx.AsyncClient()
+
+    @property
+    def backend_url(self) -> str:
+        return self._backend_url
+
+    @property
+    def api_key(self) -> str:
+        return self._api_key
+
+    @property
+    def storage(self) -> UserProfileManager:
+        return self._storage
+
+    @property
+    def client(self) -> httpx.AsyncClient:
+        return self._client
 
     async def close(self) -> None:
         await self.client.aclose()
