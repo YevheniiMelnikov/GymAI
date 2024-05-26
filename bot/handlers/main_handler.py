@@ -1,5 +1,6 @@
 import loguru
 from aiogram import Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
@@ -40,9 +41,13 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
             ).format(**format_attributes)
             if profile.status == "coach" and getattr(user, "profile_photo", None):
                 photo = file_manager.generate_signed_url(user.profile_photo)
-                await callback_query.message.answer_photo(
-                    photo, text, reply_markup=profile_menu_keyboard(profile.language)
-                )
+                try:
+                    await callback_query.message.answer_photo(
+                        photo, text, reply_markup=profile_menu_keyboard(profile.language)
+                    )
+                except TelegramBadRequest:
+                    logger.error(f"Profile image of profile_id {profile.id} not found")
+                    await callback_query.message.answer(text, reply_markup=profile_menu_keyboard(profile.language))
             else:
                 await callback_query.message.answer(text, reply_markup=profile_menu_keyboard(profile.language))
             await state.set_state(States.profile)
