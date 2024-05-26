@@ -1,12 +1,29 @@
 import loguru
 from aiogram import Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 
-from bot.keyboards import choose_coach, profile_menu_keyboard, program_manage_menu, select_program_type
+from bot.keyboards import (
+    choose_coach,
+    profile_menu_keyboard,
+    program_manage_menu,
+    select_program_type,
+)
 from bot.states import States
-from common.file_manager import file_manager
-from common.functions import assign_coach, show_clients, show_coaches, show_main_menu, show_profile_editing_menu
+from common.file_manager import avatar_manager
+from common.functions import (
+    assign_coach,
+    show_clients,
+    show_coaches,
+    show_main_menu,
+    show_profile_editing_menu,
+)
 from common.models import Client, Coach, Profile
 from common.user_service import user_service
 from common.utils import format_program, get_profile_attributes
@@ -39,10 +56,14 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
                 lang=profile.language,
             ).format(**format_attributes)
             if profile.status == "coach" and getattr(user, "profile_photo", None):
-                photo = file_manager.generate_signed_url(user.profile_photo)
-                await callback_query.message.answer_photo(
-                    photo, text, reply_markup=profile_menu_keyboard(profile.language)
-                )
+                photo = avatar_manager.generate_signed_url(user.profile_photo)
+                try:
+                    await callback_query.message.answer_photo(
+                        photo, text, reply_markup=profile_menu_keyboard(profile.language)
+                    )
+                except TelegramBadRequest:
+                    logger.error(f"Profile image of profile_id {profile.id} not found")
+                    await callback_query.message.answer(text, reply_markup=profile_menu_keyboard(profile.language))
             else:
                 await callback_query.message.answer(text, reply_markup=profile_menu_keyboard(profile.language))
             await state.set_state(States.profile)
@@ -71,7 +92,8 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
                 )
                 await state.set_state(States.choose_coach)
             else:
-                if exercises := user_service.storage.get_program(profile.id).get("exercises"):
+                exercises = user_service.storage.get_program(profile.id)
+                if exercises and exercises.get("exercises"):
                     program = format_program(exercises)
                     await callback_query.message.answer(
                         text=translate(MessageText.current_program, lang=profile.language).format(program=program),

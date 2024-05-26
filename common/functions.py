@@ -12,8 +12,8 @@ from dotenv import load_dotenv
 
 from bot.keyboards import *
 from bot.states import States
-from common.file_manager import file_manager
-from common.models import Client, Coach, Profile, Program, Subscription
+from common.file_manager import avatar_manager
+from common.models import Client, Coach, Profile, Subscription
 from common.user_service import user_service
 from common.utils import get_client_page, get_coach_page
 from texts.text_manager import MessageText, resource_manager, translate
@@ -190,7 +190,7 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
     experience = data.get("work_experience")
     info = data.get("additional_info")
     payment = data.get("payment_details")
-    photo = file_manager.generate_signed_url(data.get("profile_photo"))
+    photo = avatar_manager.generate_signed_url(data.get("profile_photo"))
     user = await bot.get_chat(tg_id)
     contact = f"@{user.username}" if user.username else tg_id
     async with aiohttp.ClientSession():
@@ -225,7 +225,7 @@ async def show_coaches(message: Message, coaches: list[Coach], current_index=0) 
     current_coach = coaches[current_index]
     coach_info = get_coach_page(current_coach)
     text = translate(MessageText.coach_page, profile.language)
-    coach_photo_url = file_manager.generate_signed_url(current_coach.profile_photo)
+    coach_photo_url = avatar_manager.generate_signed_url(current_coach.profile_photo)
     formatted_text = text.format(**coach_info)
 
     if message.photo:

@@ -57,4 +57,5 @@ class FileManager:
         return file_size <= max_size_mb
 
 
-file_manager = FileManager(os.getenv("GCS_BUCKET"))
+avatar_manager = FileManager("coach_avatars")
+payment_img_manager = FileManager("bot_payment_options")

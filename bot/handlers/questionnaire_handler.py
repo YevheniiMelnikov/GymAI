@@ -5,7 +5,7 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import choose_gender, workout_experience_keyboard
 from bot.states import States
-from common.file_manager import file_manager
+from common.file_manager import avatar_manager
 from common.functions import show_main_menu, update_user_info
 from common.user_service import user_service
 from common.utils import get_state_and_message, validate_birth_date
@@ -164,13 +164,13 @@ async def payment_details(message: Message, state: FSMContext) -> None:
 @questionnaire_router.message(States.profile_photo, F.photo)
 async def profile_photo(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
-    local_file = await file_manager.save_profile_photo(message)
+    local_file = await avatar_manager.save_profile_photo(message)
 
-    if local_file and file_manager.check_file_size(f"temp/{local_file}", 20):
-        if file_manager.upload_image_to_gcs(local_file):
+    if local_file and avatar_manager.check_file_size(f"temp/{local_file}", 20):
+        if avatar_manager.upload_image_to_gcs(local_file):
             await message.answer(translate(MessageText.photo_uploaded, lang=data["lang"]))
             await state.update_data(profile_photo=local_file)
-            file_manager.clean_up_local_file(local_file)
+            avatar_manager.clean_up_local_file(local_file)
             await update_user_info(message, state, "coach")
         else:
             await message.answer(translate(MessageText.photo_upload_fail, lang=data["lang"]))

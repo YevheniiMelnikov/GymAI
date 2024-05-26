@@ -34,6 +34,7 @@ class States(StatesGroup):
     program_manage = State()
     contact_coach = State()
     select_program_type = State()
+    payment_choice = State()
 
     password_reset = State()
     password_retype = State()
