@@ -82,7 +82,7 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
                 await show_main_menu(callback_query.message, profile, state)
             return
 
-        case "my_program":  # TODO: HANDLE SUBSCRIPTION HERE
+        case "my_program":
             client = user_service.storage.get_client_by_id(profile.id)
             assigned = client.assigned_to if client.assigned_to != [] else None
             if not assigned:
@@ -145,8 +145,8 @@ async def process_password_reset(message: Message, state: FSMContext) -> None:
         else:
             await message.answer(text=translate(MessageText.unexpected_error, profile.language))
     else:
-        await message.answer(text=translate(MessageText.no_profiles_found, data["lang"]))
-        await message.answer(text=translate(MessageText.help, data["lang"]))
+        await message.answer(text=translate(MessageText.no_profiles_found, data.get("lang")))
+        await message.answer(text=translate(MessageText.help, data.get("lang")))
     await message.delete()
 
 
