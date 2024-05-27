@@ -21,14 +21,14 @@ logger = loguru.logger
 async def program_type(callback_query: CallbackQuery, state: FSMContext):
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "subscription":
-        subscription_img = payment_img_manager.generate_signed_url(f"subscription_{profile.language}.jpg")
+        subscription_img = payment_img_manager.generate_signed_url(f"subscription_{profile.language}.jpeg")
         await callback_query.message.answer_photo(
             photo=subscription_img,
             reply_markup=choose_payment_options(profile.language),
         )
         await state.set_state(States.payment_choice)
     elif callback_query.data == "program":
-        program_img = payment_img_manager.generate_signed_url(f"program_{profile.language}.jpg")
+        program_img = payment_img_manager.generate_signed_url(f"program_{profile.language}.jpeg")
         await callback_query.message.answer_photo(
             photo=program_img,
             reply_markup=choose_payment_options(profile.language),

@@ -19,6 +19,7 @@ from bot.states import States
 from common.file_manager import avatar_manager
 from common.functions import (
     assign_coach,
+    format_program,
     show_clients,
     show_coaches,
     show_main_menu,
@@ -26,7 +27,7 @@ from common.functions import (
 )
 from common.models import Client, Coach, Profile
 from common.user_service import user_service
-from common.utils import format_program, get_profile_attributes
+from common.utils import get_profile_attributes
 from texts.text_manager import ButtonText, MessageText, translate
 
 main_router = Router()
@@ -94,7 +95,7 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
             else:
                 exercises = user_service.storage.get_program(profile.id)
                 if exercises and exercises.get("exercises"):
-                    program = format_program(exercises)
+                    program = await format_program(exercises)
                     await callback_query.message.answer(
                         text=translate(MessageText.current_program, lang=profile.language).format(program=program),
                         reply_markup=InlineKeyboardMarkup(
@@ -245,7 +246,7 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
         await callback_query.message.answer(translate(MessageText.program_guide))
         exercises = user_service.storage.get_program(profile.id)
         if exercises and exercises.get("exercises"):
-            program = format_program(exercises)
+            program = await format_program(exercises)
             del_msg = await callback_query.message.answer(
                 text=translate(MessageText.current_program, lang=profile.language).format(program=program),
                 reply_markup=program_manage_menu(profile.language),

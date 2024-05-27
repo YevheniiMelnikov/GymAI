@@ -124,9 +124,9 @@ photo:
   ua: "Фото профілю 📸"
 
 select:
-  eng: "Select ✔️"
-  ru: "Выбрать ✔️"
-  ua: "Обрати ✔️"
+  eng: "Select ✅️"
+  ru: "Выбрать ✅"
+  ua: "Обрати ✅"
 
 forward:
   eng: "Forward ➡️"

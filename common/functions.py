@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 from bot.keyboards import *
 from bot.states import States
-from common.file_manager import avatar_manager
+from common.file_manager import FileManager, avatar_manager, gif_manager
 from common.models import Client, Coach, Profile, Subscription
 from common.user_service import user_service
 from common.utils import get_client_page, get_coach_page
@@ -328,3 +328,50 @@ async def send_message(
         recipient_id = int(callback_query.data.split("_")[1])
         await state.update_data(recipient_id=recipient_id, sender_name=sender.name)
         await state.set_state(status_to_set)
+
+
+async def find_related_gif(exercise: str) -> str | None:
+    gif_manager = FileManager(bucket_name="gif_exercises")
+    blobs = list(gif_manager.bucket.list_blobs())
+    matching_blob = next((blob for blob in blobs if blob.name == f"{exercise}.gif"), None)
+
+    if matching_blob:
+        return gif_manager.generate_signed_url(matching_blob.name)
+    else:
+        logger.info(f"No matching file found for exercise: {exercise}")
+        return None
+
+
+async def format_program(exercises: list[tuple[str, str | None]]) -> str:
+    program_lines = []
+    for idx, (exercise, link) in enumerate(exercises):
+        if not link:
+            link = await generate_gif_link(exercise)
+        if link:
+            program_lines.append(f"{idx + 1}. {exercise}\n<a href='{link}'>GIF</a>")
+        else:
+            program_lines.append(f"{idx + 1}. {exercise}")
+    return "\n".join(program_lines)
+
+
+async def generate_gif_link(exercise: str) -> str | None:
+    try:
+        filename = user_service.storage.get_exercise_gif(exercise)
+        if filename:
+            return gif_manager.generate_signed_url(filename.decode("utf-8"))
+    except Exception as e:
+        logger.error(f"Failed to generate gif link for exercise {exercise}: {e}")
+    return None
+
+
+async def short_url(long_url: str | None) -> str:
+    headers = {"Authorization": f"Bearer {os.getenv('BITLY_API_KEY')}", "Content-Type": "application/json"}
+    data = {"long_url": long_url}
+    async with aiohttp.ClientSession() as session:
+        async with session.post("https://api-ssl.bitly.com/v4/shorten", headers=headers, json=data) as response:
+            if response.status == 201:
+                response_data = await response.json()
+                return response_data.get("link")
+            else:
+                logger.error(f"Failed to shorten URL: {response.status}, {await response.text()}")
+                return long_url

@@ -223,6 +223,19 @@ class UserProfileManager:
             logger.error(f"Failed to get program for profile_id {profile_id}: {e}")
             return None
 
+    def cache_gif_filename(self, exercise: str, filename: str) -> None:
+        try:
+            self.redis.hset("exercise_gif_map", exercise, filename)
+        except Exception as e:
+            logger.info(f"Failed to cache gif filename for exercise {exercise}: {e}")
+
+    def get_exercise_gif(self, exercise: str) -> str | None:
+        try:
+            return self.redis.hget("exercise_gif_map", exercise)
+        except Exception as e:
+            logger.info(f"Failed to get gif filename for exercise {exercise}: {e}")
+            return None
+
     def get_subscription(self, profile_id: int) -> Subscription | None:  # TODO: IMPLEMENT
         pass
 

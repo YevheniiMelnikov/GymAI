@@ -126,7 +126,3 @@ def get_client_page(client: Client, lang_code: str) -> dict[str, Any]:
         "health_notes": client.health_notes,
         "weight": client.weight,
     }
-
-
-def format_program(exercises: list[str]) -> str:
-    return "\n".join(f"{idx + 1}. {exercise}" for idx, exercise in enumerate(exercises))
