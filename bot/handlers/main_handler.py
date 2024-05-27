@@ -216,7 +216,7 @@ async def coach_paginator(callback_query: CallbackQuery, state: FSMContext):
         client = user_service.storage.get_client_by_id(profile.id)
         await assign_coach(coach, client)
         await callback_query.message.answer(translate(MessageText.coach_selected).format(name=coach.name))
-        await state.set_state(States.main_menu)
+        await state.set_state(States.main_menu)  # TODO: GIVE FREE CONSULTATION AS GIFT
         await show_main_menu(callback_query.message, profile, state)
     else:
         await show_coaches(callback_query.message, coaches, current_index=index)
@@ -243,7 +243,8 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
 
     if action == "program":
         await callback_query.message.answer(translate(MessageText.program_guide))
-        if exercises := user_service.storage.get_program(client_id)["exercises"]:
+        exercises = user_service.storage.get_program(profile.id)
+        if exercises and exercises.get("exercises"):
             program = format_program(exercises)
             del_msg = await callback_query.message.answer(
                 text=translate(MessageText.current_program, lang=profile.language).format(program=program),

@@ -69,15 +69,10 @@ async def adding_exercise(message: Message, state: FSMContext) -> None:
     exercises.append(message.text)
     program = format_program(exercises)
 
-    if del_msg := data.get("del_msg"):
-        with suppress(TelegramBadRequest):
-            await message.bot.delete_message(message.chat.id, del_msg)
-    if del_msg := data.get("exercise_msg"):
-        with suppress(TelegramBadRequest):
-            await message.bot.delete_message(message.chat.id, del_msg)
-    if del_msg := data.get("program_msg"):
-        with suppress(TelegramBadRequest):
-            await message.bot.delete_message(message.chat.id, del_msg)
+    for msg_key in ["del_msg", "exercise_msg", "program_msg"]:
+        if del_msg := data.get(msg_key):
+            with suppress(TelegramBadRequest):
+                await message.bot.delete_message(message.chat.id, del_msg)
 
     exercise_msg = await message.answer(translate(MessageText.enter_exercise, profile.language))
     program_msg = await exercise_msg.answer(
@@ -89,5 +84,4 @@ async def adding_exercise(message: Message, state: FSMContext) -> None:
         program_msg=program_msg.message_id,
         exercises=exercises,
     )
-
     await message.delete()
