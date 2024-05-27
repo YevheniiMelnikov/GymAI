@@ -6,6 +6,7 @@ from aiogram.types import Message
 
 from bot.keyboards import language_choice
 from bot.states import States
+from common.functions import show_main_menu
 from common.user_service import user_service
 from texts.text_manager import MessageText, translate
 
@@ -19,6 +20,16 @@ async def cmd_language(message: Message, state: FSMContext) -> None:
     lang = profile.language if profile else "ua"
     await message.answer(text=translate(MessageText.choose_language, lang=lang), reply_markup=language_choice())
     await state.set_state(States.language_choice)
+
+
+@cmd_router.message(Command("menu"))
+async def cmd_menu(message: Message, state: FSMContext) -> None:
+    if profile := user_service.storage.get_current_profile(message.from_user.id):
+        await state.set_state(States.main_menu)
+        await show_main_menu(message, profile, state)
+    else:
+        await state.set_state(States.language_choice)
+        await message.answer(text=translate(MessageText.choose_language), reply_markup=language_choice())
 
 
 @cmd_router.message(Command("start"))

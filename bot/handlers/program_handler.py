@@ -7,9 +7,8 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import incoming_message, program_manage_menu
 from bot.states import States
-from common.functions import send_message, show_main_menu
+from common.functions import find_related_gif, format_program, send_message, short_url, show_main_menu
 from common.user_service import user_service
-from common.utils import format_program
 from texts.text_manager import MessageText, translate
 
 program_router = Router()
@@ -37,7 +36,7 @@ async def program_manage(callback_query: CallbackQuery, state: FSMContext, bot: 
             await user_service.save_program(client_id, exercises)
             await callback_query.answer(text=translate(MessageText.saved, lang=profile.language))
             client = user_service.storage.get_client_by_id(client_id)
-            program = format_program(exercises)
+            program = await format_program(exercises)
             client_lang = user_service.storage.get_profile_info_by_key(client.tg_id, client.id, "language")
             await send_message(
                 recipient=client,
@@ -66,28 +65,30 @@ async def adding_exercise(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile = user_service.storage.get_current_profile(message.from_user.id)
     exercises = data.get("exercises", [])
-    exercises.append(message.text)
-    program = format_program(exercises)
+    link_to_gif = await find_related_gif(message.text)
+    shorted_link = await short_url(link_to_gif)
+    exercises.append((message.text, shorted_link))
 
-    if del_msg := data.get("del_msg"):
-        with suppress(TelegramBadRequest):
-            await message.bot.delete_message(message.chat.id, del_msg)
-    if del_msg := data.get("exercise_msg"):
-        with suppress(TelegramBadRequest):
-            await message.bot.delete_message(message.chat.id, del_msg)
-    if del_msg := data.get("program_msg"):
-        with suppress(TelegramBadRequest):
-            await message.bot.delete_message(message.chat.id, del_msg)
+    if link_to_gif:
+        gif_file_name = link_to_gif.split("/")[-1]
+        user_service.storage.cache_gif_filename(message.text, gif_file_name)
+
+    program = await format_program(exercises)
+
+    for msg_key in ["del_msg", "exercise_msg", "program_msg"]:
+        if del_msg := data.get(msg_key):
+            with suppress(TelegramBadRequest):
+                await message.bot.delete_message(message.chat.id, del_msg)
 
     exercise_msg = await message.answer(translate(MessageText.enter_exercise, profile.language))
     program_msg = await exercise_msg.answer(
         text=translate(MessageText.current_program, profile.language).format(program=program),
         reply_markup=program_manage_menu(profile.language),
+        disable_web_page_preview=True,
     )
     await state.update_data(
         exercise_msg=exercise_msg.message_id,
         program_msg=program_msg.message_id,
         exercises=exercises,
     )
-
     await message.delete()

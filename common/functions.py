@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 from bot.keyboards import *
 from bot.states import States
-from common.file_manager import avatar_manager
+from common.file_manager import FileManager, avatar_manager, gif_manager
 from common.models import Client, Coach, Profile, Subscription
 from common.user_service import user_service
 from common.utils import get_client_page, get_coach_page
@@ -77,7 +77,7 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
         language=data["lang"],
     ):
         logger.error(f"Registration failed for user {message.from_user.id}")
-        await handle_registration_failure(message, state, data["lang"])
+        await handle_registration_failure(message, state, data.get("lang"))
         return
 
     logger.info(f"User {message.text} registered")
@@ -85,7 +85,7 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
 
     if not token:
         logger.error(f"Login failed for user {message.text} after registration")
-        await handle_registration_failure(message, state, data["lang"])
+        await handle_registration_failure(message, state, data.get("lang"))
         return
 
     logger.info(f"User {message.text} logged in")
@@ -97,7 +97,7 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
         telegram_id=message.from_user.id,
         email=message.text,
     )
-    await message.answer(text=translate(MessageText.registration_successful, lang=data["lang"]))
+    await message.answer(text=translate(MessageText.registration_successful, lang=data.get("lang")))
     profile = user_service.storage.get_current_profile(message.from_user.id)
     await show_main_menu(message, profile, state)
 
@@ -108,20 +108,20 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
         attempts = data.get("login_attempts", 0) + 1
         await state.update_data(login_attempts=attempts)
         if attempts >= 3:
-            await message.answer(text=translate(MessageText.reset_password_offer, lang=data["lang"]))
+            await message.answer(text=translate(MessageText.reset_password_offer, lang=data.get("lang")))
         else:
-            await message.answer(text=translate(MessageText.invalid_credentials, lang=data["lang"]))
+            await message.answer(text=translate(MessageText.invalid_credentials, lang=data.get("lang")))
             await state.set_state(States.username)
-            await message.answer(text=translate(MessageText.username, lang=data["lang"]))
+            await message.answer(text=translate(MessageText.username, lang=data.get("lang")))
         await message.delete()
         return
 
     logger.info(f"User {message.from_user.id} logged in")
     profile = await user_service.get_profile_by_username(data["username"])
     if not profile:
-        await message.answer(text=translate(MessageText.unexpected_error, lang=data["lang"]))
+        await message.answer(text=translate(MessageText.unexpected_error, lang=data.get("lang")))
         await state.set_state(States.username)
-        await message.answer(text=translate(MessageText.username, lang=data["lang"]))
+        await message.answer(text=translate(MessageText.username, lang=data.get("lang")))
         await message.delete()
         return
 
@@ -130,7 +130,7 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
         profile=profile, username=data["username"], auth_token=token, telegram_id=message.from_user.id
     )
     logger.info(f"profile_id {profile.id} set for user {message.from_user.id}")
-    await message.answer(text=translate(MessageText.signed_in, lang=data["lang"]))
+    await message.answer(text=translate(MessageText.signed_in, lang=data.get("lang")))
     await show_main_menu(message, profile, state)
     with suppress(TelegramBadRequest):
         await message.delete()
@@ -161,7 +161,7 @@ async def update_user_info(message: Message, state: FSMContext, role: str) -> No
             user_service.storage.set_client_data(profile.id, data)
         else:
             if not data.get("edit_mode"):
-                await message.answer(translate(MessageText.wait_for_verification, data["lang"]))
+                await message.answer(translate(MessageText.wait_for_verification, data.get("lang")))
                 await notify_about_new_coach(message.from_user.id, profile, data)
             user_service.storage.set_coach_data(profile.id, data)
 
@@ -170,17 +170,19 @@ async def update_user_info(message: Message, state: FSMContext, role: str) -> No
             raise ValueError("Authentication token not found")
 
         await user_service.edit_profile(profile.id, data, token)
-        await message.answer(translate(MessageText.your_data_updated, lang=data["lang"]))
+        await message.answer(translate(MessageText.your_data_updated, lang=data.get("lang")))
         await state.clear()
         await state.update_data(profile=Profile.to_dict(profile))
         await state.set_state(States.main_menu)
 
-        reply_markup = client_menu_keyboard(data["lang"]) if role == "client" else coach_menu_keyboard(data["lang"])
-        await message.answer(translate(MessageText.main_menu, lang=data["lang"]), reply_markup=reply_markup)
+        reply_markup = (
+            client_menu_keyboard(data.get("lang")) if role == "client" else coach_menu_keyboard(data.get("lang"))
+        )
+        await message.answer(translate(MessageText.main_menu, lang=data.get("lang")), reply_markup=reply_markup)
 
     except Exception as e:
         logger.error(f"Unexpected error updating profile: {e}")
-        await message.answer(translate(MessageText.unexpected_error, lang=data["lang"]))
+        await message.answer(translate(MessageText.unexpected_error, lang=data.get("lang")))
     finally:
         await message.delete()
 
@@ -328,5 +330,48 @@ async def send_message(
         await state.set_state(status_to_set)
 
 
-async def show_subscription(message: Message, subscription: Subscription) -> None:  # TODO: IMPLEMENT
-    pass
+async def find_related_gif(exercise: str) -> str | None:
+    gif_manager = FileManager(bucket_name="gif_exercises")
+    blobs = list(gif_manager.bucket.list_blobs())
+    matching_blob = next((blob for blob in blobs if blob.name == f"{exercise}.gif"), None)
+
+    if matching_blob:
+        return gif_manager.generate_signed_url(matching_blob.name)
+    else:
+        logger.info(f"No matching file found for exercise: {exercise}")
+        return None
+
+
+async def format_program(exercises: list[tuple[str, str | None]]) -> str:
+    program_lines = []
+    for idx, (exercise, link) in enumerate(exercises):
+        if not link:
+            link = await generate_gif_link(exercise)
+        if link:
+            program_lines.append(f"{idx + 1}. {exercise}\n<a href='{link}'>GIF</a>")
+        else:
+            program_lines.append(f"{idx + 1}. {exercise}")
+    return "\n".join(program_lines)
+
+
+async def generate_gif_link(exercise: str) -> str | None:
+    try:
+        filename = user_service.storage.get_exercise_gif(exercise)
+        if filename:
+            return gif_manager.generate_signed_url(filename.decode("utf-8"))
+    except Exception as e:
+        logger.error(f"Failed to generate gif link for exercise {exercise}: {e}")
+    return None
+
+
+async def short_url(long_url: str | None) -> str:
+    headers = {"Authorization": f"Bearer {os.getenv('BITLY_API_KEY')}", "Content-Type": "application/json"}
+    data = {"long_url": long_url}
+    async with aiohttp.ClientSession() as session:
+        async with session.post("https://api-ssl.bitly.com/v4/shorten", headers=headers, json=data) as response:
+            if response.status == 201:
+                response_data = await response.json()
+                return response_data.get("link")
+            else:
+                logger.error(f"Failed to shorten URL: {response.status}, {await response.text()}")
+                return long_url

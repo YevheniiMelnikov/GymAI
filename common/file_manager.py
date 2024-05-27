@@ -71,3 +71,4 @@ class FileManager:
 
 avatar_manager = FileManager("coach_avatars")
 payment_img_manager = FileManager("bot_payment_options")
+gif_manager = FileManager("gif_exercises")

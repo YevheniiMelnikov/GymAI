@@ -51,12 +51,12 @@ async def action(callback_query: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(action=callback_query.data)
 
     if callback_query.data == "sign_in":
-        await callback_query.message.answer(translate(MessageText.username, lang=data["lang"]))
+        await callback_query.message.answer(translate(MessageText.username, lang=data.get("lang")))
         await state.set_state(States.username)
     elif callback_query.data == "sign_up":
         await callback_query.message.answer(
-            translate(MessageText.choose_account_type, lang=data["lang"]),
-            reply_markup=choose_account_type(data["lang"]),
+            translate(MessageText.choose_account_type, lang=data.get("lang")),
+            reply_markup=choose_account_type(data.get("lang")),
         )
         await state.set_state(States.account_type)
 
@@ -66,10 +66,10 @@ async def action(callback_query: CallbackQuery, state: FSMContext) -> None:
 @register_router.callback_query(States.account_type)
 async def account_type(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
-    await callback_query.answer(translate(MessageText.saved, lang=data["lang"]))
+    await callback_query.answer(translate(MessageText.saved, lang=data.get("lang")))
     await state.update_data(account_type=callback_query.data)
     await state.set_state(States.username)
-    await callback_query.message.answer(translate(MessageText.username, lang=data["lang"]))
+    await callback_query.message.answer(translate(MessageText.username, lang=data.get("lang")))
     await callback_query.message.delete()
 
 
@@ -80,7 +80,7 @@ async def username(message: Message, state: FSMContext) -> None:
     await state.set_state(States.password)
     await message.answer(translate(MessageText.password, lang=data.get("lang", "ua")))
     if data.get("action") == "sign_up":
-        await message.answer(text=translate(MessageText.password_requirements, lang=data["lang"]))
+        await message.answer(text=translate(MessageText.password_requirements, lang=data.get("lang")))
     await message.delete()
 
 
@@ -89,11 +89,11 @@ async def password(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     if data.get("action") == "sign_up":
         if not validate_password(message.text):
-            await message.answer(text=translate(MessageText.password_unsafe, lang=data["lang"]))
+            await message.answer(text=translate(MessageText.password_unsafe, lang=data.get("lang")))
             await state.set_state(States.password)
         else:
             await state.update_data(password=message.text)
-            await message.answer(text=translate(MessageText.password_retype, lang=data["lang"]))
+            await message.answer(text=translate(MessageText.password_retype, lang=data.get("lang")))
             await state.set_state(States.password_retype)
         await message.delete()
 
@@ -106,10 +106,10 @@ async def password_retype(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     if message.text == data["password"]:
         await state.set_state(States.email)
-        await message.answer(text=translate(MessageText.email, lang=data["lang"]))
+        await message.answer(text=translate(MessageText.email, lang=data.get("lang")))
     else:
         await state.set_state(States.password)
-        await message.answer(text=translate(MessageText.password_mismatch, lang=data["lang"]))
+        await message.answer(text=translate(MessageText.password_mismatch, lang=data.get("lang")))
     await message.delete()
 
 
@@ -118,7 +118,7 @@ async def email(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
 
     if not validate_email(message.text):
-        await message.answer(text=translate(MessageText.invalid_content, lang=data["lang"]))
+        await message.answer(text=translate(MessageText.invalid_content, lang=data.get("lang")))
         await message.delete()
         return
 
@@ -126,7 +126,7 @@ async def email(message: Message, state: FSMContext) -> None:
         await register_user(message, state, data)
     except UsernameUnavailable:
         await state.set_state(States.username)
-        await message.answer(text=translate(MessageText.username_unavailable, lang=data["lang"]))
+        await message.answer(text=translate(MessageText.username_unavailable, lang=data.get("lang")))
     finally:
         with suppress(TelegramBadRequest):
             await message.delete()

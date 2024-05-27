@@ -19,10 +19,10 @@ questionnaire_router = Router()
 @questionnaire_router.callback_query(States.gender)
 async def gender(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
-    await callback_query.answer(translate(MessageText.saved, lang=data["lang"]))
+    await callback_query.answer(translate(MessageText.saved, lang=data.get("lang")))
     await state.update_data(gender=callback_query.data)
     await state.set_state(States.birth_date)
-    await callback_query.message.answer(text=translate(MessageText.birth_date, lang=data["lang"]))
+    await callback_query.message.answer(text=translate(MessageText.birth_date, lang=data.get("lang")))
     await callback_query.message.delete()
 
 
@@ -31,12 +31,12 @@ async def birth_date(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     if validate_birth_date(message.text):
         await state.update_data(birth_date=message.text)
-        await message.answer(translate(MessageText.workout_goals, lang=data["lang"]))
+        await message.answer(translate(MessageText.workout_goals, lang=data.get("lang")))
         await state.set_state(States.workout_goals)
     else:
         data = await state.get_data()
         await message.answer(message.text)
-        await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))
+        await message.answer(translate(MessageText.invalid_content, lang=data.get("lang")))
     await message.delete()
 
 
@@ -49,8 +49,8 @@ async def workout_goals(message: Message, state: FSMContext) -> None:
         return
 
     await message.answer(
-        translate(MessageText.workout_experience, lang=data["lang"]),
-        reply_markup=workout_experience_keyboard(data["lang"]),
+        translate(MessageText.workout_experience, lang=data.get("lang")),
+        reply_markup=workout_experience_keyboard(data.get("lang")),
     )
     await state.set_state(States.workout_experience)
     await message.delete()
@@ -59,13 +59,13 @@ async def workout_goals(message: Message, state: FSMContext) -> None:
 @questionnaire_router.callback_query(States.workout_experience)
 async def workout_experience(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
-    await callback_query.answer(translate(MessageText.saved, lang=data["lang"]))
+    await callback_query.answer(translate(MessageText.saved, lang=data.get("lang")))
     await state.update_data(workout_experience=callback_query.data)
     if data.get("edit_mode"):
         await update_user_info(callback_query.message, state, "client")
         return
 
-    await callback_query.message.answer(translate(MessageText.weight, lang=data["lang"]))
+    await callback_query.message.answer(translate(MessageText.weight, lang=data.get("lang")))
     await state.set_state(States.weight)
     await callback_query.message.delete()
 
@@ -74,7 +74,7 @@ async def workout_experience(callback_query: CallbackQuery, state: FSMContext) -
 async def weight(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     if not all(map(lambda x: x.isdigit(), message.text.split())):
-        await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))
+        await message.answer(translate(MessageText.invalid_content, lang=data.get("lang")))
         await state.set_state(States.weight)
         return
 
@@ -83,7 +83,7 @@ async def weight(message: Message, state: FSMContext) -> None:
         await update_user_info(message, state, "client")
         return
 
-    await message.answer(translate(MessageText.health_notes, lang=data["lang"]))
+    await message.answer(translate(MessageText.health_notes, lang=data.get("lang")))
     await state.set_state(States.health_notes)
     await message.delete()
 
@@ -98,14 +98,14 @@ async def health_notes(message: Message, state: FSMContext) -> None:
 async def name(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await state.update_data(name=message.text, verified=False)
-    state_to_set = States.work_experience if data["role"] == "coach" else States.gender
+    state_to_set = States.work_experience if data.get("role") == "coach" else States.gender
     await state.set_state(state_to_set)
     text = (
-        translate(MessageText.work_experience, data["lang"])
+        translate(MessageText.work_experience, data.get("lang"))
         if data["role"] == "coach"
-        else translate(MessageText.choose_gender, data["lang"])
+        else translate(MessageText.choose_gender, data.get("lang"))
     )
-    reply_markup = choose_gender(data["lang"]) if data["role"] == "client" else None
+    reply_markup = choose_gender(data.get("lang")) if data["role"] == "client" else None
     await message.answer(text=text, reply_markup=reply_markup)
     await message.delete()
 
@@ -114,8 +114,8 @@ async def name(message: Message, state: FSMContext) -> None:
 async def work_experience(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     if not all(map(lambda x: x.isdigit(), message.text.split())):
-        await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))
-        await message.answer(translate(MessageText.work_experience, lang=data["lang"]))
+        await message.answer(translate(MessageText.invalid_content, lang=data.get("lang")))
+        await message.answer(translate(MessageText.work_experience, lang=data.get("lang")))
         await state.set_state(States.work_experience)
         return
 
@@ -124,7 +124,7 @@ async def work_experience(message: Message, state: FSMContext) -> None:
         await update_user_info(message, state, "coach")
         return
 
-    await message.answer(translate(MessageText.additional_info, lang=data["lang"]))
+    await message.answer(translate(MessageText.additional_info, lang=data.get("lang")))
     await state.set_state(States.additional_info)
     await message.delete()
 
@@ -137,7 +137,7 @@ async def additional_info(message: Message, state: FSMContext) -> None:
         await update_user_info(message, state, "coach")
         return
 
-    await message.answer(translate(MessageText.payment_details, lang=data["lang"]))
+    await message.answer(translate(MessageText.payment_details, lang=data.get("lang")))
     await state.set_state(States.payment_details)
     await message.delete()
 
@@ -148,7 +148,7 @@ async def payment_details(message: Message, state: FSMContext) -> None:
     await state.update_data(payment_details=message.text.replace(" ", ""))
     card_number = message.text.replace(" ", "")
     if not all(map(lambda x: x.isdigit(), card_number)) or len(card_number) != 16:
-        await message.answer(translate(MessageText.invalid_content, lang=data["lang"]))
+        await message.answer(translate(MessageText.invalid_content, lang=data.get("lang")))
         await state.set_state(States.payment_details)
         return
 
@@ -156,7 +156,7 @@ async def payment_details(message: Message, state: FSMContext) -> None:
         await update_user_info(message, state, "coach")
         return
 
-    await message.answer(translate(MessageText.upload_photo, lang=data["lang"]))
+    await message.answer(translate(MessageText.upload_photo, lang=data.get("lang")))
     await state.set_state(States.profile_photo)
     await message.delete()
 
@@ -168,15 +168,15 @@ async def profile_photo(message: Message, state: FSMContext) -> None:
 
     if local_file and avatar_manager.check_file_size(f"temp/{local_file}", 20):
         if avatar_manager.upload_image_to_gcs(local_file):
-            await message.answer(translate(MessageText.photo_uploaded, lang=data["lang"]))
+            await message.answer(translate(MessageText.photo_uploaded, lang=data.get("lang")))
             await state.update_data(profile_photo=local_file)
             avatar_manager.clean_up_local_file(local_file)
             await update_user_info(message, state, "coach")
         else:
-            await message.answer(translate(MessageText.photo_upload_fail, lang=data["lang"]))
+            await message.answer(translate(MessageText.photo_upload_fail, lang=data.get("lang")))
             await state.set_state(States.profile_photo)
     else:
-        await message.answer(translate(MessageText.photo_upload_fail, lang=data["lang"]))
+        await message.answer(translate(MessageText.photo_upload_fail, lang=data.get("lang")))
         await state.set_state(States.profile_photo)
 
 

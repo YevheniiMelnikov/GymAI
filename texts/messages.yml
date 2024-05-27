@@ -109,9 +109,9 @@ reset_password_offer:
   ua: "Щоб скинути пароль, використовуйте команду /reset_password 🔄"
 
 help:
-  eng: "/start - Start bot 🤖 \n/language - Change language 🌐 \n/logout - Logout from bot 🚪 \n/reset_password - Reset password 🔄"
-  ru: "/start - Запустить бота 🤖 \n/language - Изменить язык 🌐 \n/logout - Выйти из бота 🚪 \n/reset_password - Сбросить пароль 🔄"
-  ua: "/start - Запустити бота 🤖 \n/language - Змінити мову 🌐 \n/logout - Вийти з бота 🚪 \n/reset_password - Скинути пароль 🔄"
+  eng: "/start - Start bot 🤖 \n/language - Change language 🌐 \n/logout - Logout from bot 🚪 \n/reset_password - Reset password 🔄 \n/menu - Main menu 🏠"
+  ru: "/start - Запустить бота 🤖 \n/language - Изменить язык 🌐 \n/logout - Выйти из бота 🚪 \n/reset_password - Сбросить пароль 🔄 \n/menu - Главное меню 🏠"
+  ua: "/start - Запустити бота 🤖 \n/language - Змінити мову 🌐 \n/logout - Вийти з бота 🚪 \n/reset_password - Скинути пароль 🔄 \n/menu - Головне меню 🏠"
 
 no_profiles_found:
   eng: "There are no accounts assigned to your Telegram account that meet the conditions of the request ❌"
@@ -141,7 +141,7 @@ password_unsafe:
 client_profile:
   eng: "<b>Name 🆔|</b> {name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Gender|</b> {gender}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Date of birth 🗓|</b> {birth_date}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Workout goals 🎯</b>\n<em>{goals}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Weight (kg) ⚖️|</b> {weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Workout experience (years) 🎓|</b> {experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Health notes 🤕</b>\n<em>{notes}</em>"
   ru: "<b>Имя 🆔|</b> {name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Пол|</b> {gender}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Дата рождения 🗓|</b> {birth_date}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Тренировочные цели 🎯</b>\n<em>{goals}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Вес (кг) ⚖️|</b> {weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Опыт тренировок (лет) 🎓|</b> {experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Примечания по здоровью 🤕</b>\n<em>{notes}</em>"
-  ua: "<b>Ім'я 🆔|</b> {name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Стать|</b> {gender}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Дата народження 🗓|</b> {birth_date}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Тренувальні цілі 🎯</b>\n<em>{goals}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Вага (кг) ⚖️|</b> {weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Тренувальний досвід (років) 🎓|</b> {experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Примітки по здоров'ю 🤕<em>{notes}</em>"
+  ua: "<b>Ім'я 🆔|</b> {name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Стать|</b> {gender}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Дата народження 🗓|</b> {birth_date}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Тренувальні цілі 🎯</b>\n<em>{goals}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Вага (кг) ⚖️|</b> {weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Тренувальний досвід (років) 🎓|</b> {experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Примітки по здоров'ю 🤕</b><em>{notes}</em>"
 
 coach_profile:
   eng: "<b>Name 🆔|</b> {name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Work experience (years) 🎓|</b> {experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Additional information 📄</b>\n<em>{notes}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Payment details 💳</b>\n{payment_details}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Verification status|</b> {verified}"

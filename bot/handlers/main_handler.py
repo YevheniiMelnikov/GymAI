@@ -19,6 +19,7 @@ from bot.states import States
 from common.file_manager import avatar_manager
 from common.functions import (
     assign_coach,
+    format_program,
     show_clients,
     show_coaches,
     show_main_menu,
@@ -26,7 +27,7 @@ from common.functions import (
 )
 from common.models import Client, Coach, Profile
 from common.user_service import user_service
-from common.utils import format_program, get_profile_attributes
+from common.utils import get_profile_attributes
 from texts.text_manager import ButtonText, MessageText, translate
 
 main_router = Router()
@@ -82,7 +83,7 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
                 await show_main_menu(callback_query.message, profile, state)
             return
 
-        case "my_program":  # TODO: HANDLE SUBSCRIPTION HERE
+        case "my_program":
             client = user_service.storage.get_client_by_id(profile.id)
             assigned = client.assigned_to if client.assigned_to != [] else None
             if not assigned:
@@ -94,7 +95,7 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
             else:
                 exercises = user_service.storage.get_program(profile.id)
                 if exercises and exercises.get("exercises"):
-                    program = format_program(exercises)
+                    program = await format_program(exercises)
                     await callback_query.message.answer(
                         text=translate(MessageText.current_program, lang=profile.language).format(program=program),
                         reply_markup=InlineKeyboardMarkup(
@@ -145,8 +146,8 @@ async def process_password_reset(message: Message, state: FSMContext) -> None:
         else:
             await message.answer(text=translate(MessageText.unexpected_error, profile.language))
     else:
-        await message.answer(text=translate(MessageText.no_profiles_found, data["lang"]))
-        await message.answer(text=translate(MessageText.help, data["lang"]))
+        await message.answer(text=translate(MessageText.no_profiles_found, data.get("lang")))
+        await message.answer(text=translate(MessageText.help, data.get("lang")))
     await message.delete()
 
 
@@ -216,7 +217,7 @@ async def coach_paginator(callback_query: CallbackQuery, state: FSMContext):
         client = user_service.storage.get_client_by_id(profile.id)
         await assign_coach(coach, client)
         await callback_query.message.answer(translate(MessageText.coach_selected).format(name=coach.name))
-        await state.set_state(States.main_menu)
+        await state.set_state(States.main_menu)  # TODO: GIVE FREE CONSULTATION AS GIFT
         await show_main_menu(callback_query.message, profile, state)
     else:
         await show_coaches(callback_query.message, coaches, current_index=index)
@@ -243,8 +244,9 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
 
     if action == "program":
         await callback_query.message.answer(translate(MessageText.program_guide))
-        if exercises := user_service.storage.get_program(client_id)["exercises"]:
-            program = format_program(exercises)
+        exercises = user_service.storage.get_program(profile.id)
+        if exercises and exercises.get("exercises"):
+            program = await format_program(exercises)
             del_msg = await callback_query.message.answer(
                 text=translate(MessageText.current_program, lang=profile.language).format(program=program),
                 reply_markup=program_manage_menu(profile.language),
