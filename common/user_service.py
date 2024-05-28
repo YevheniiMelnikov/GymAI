@@ -37,7 +37,7 @@ class UserProfileManager:
         profile: Profile,
         username: str,
         auth_token: str,
-        telegram_id: int,
+        telegram_id: str,
         email: str | None = None,
         is_current: bool = True,
     ) -> None:
@@ -73,7 +73,7 @@ class UserProfileManager:
 
     def get_current_profile(self, telegram_id: int) -> Profile | None:
         try:
-            profiles_data = json.loads(self.redis.hget("user_profiles", telegram_id) or "[]")
+            profiles_data = json.loads(self.redis.hget("user_profiles", str(telegram_id)) or "[]")
             current_profiles = [Profile.from_dict(data) for data in profiles_data if data.get("is_current", True)]
             if current_profiles:
                 return max(current_profiles, key=lambda p: p.last_used)
@@ -82,7 +82,7 @@ class UserProfileManager:
             logger.error(f"Failed to get current profile for user {telegram_id}: {e}")
             return None
 
-    def get_profiles(self, telegram_id: int) -> list[Profile]:
+    def get_profiles(self, telegram_id: str) -> list[Profile]:
         profiles_data = json.loads(self.redis.hget("user_profiles", telegram_id) or "[]")
         return [Profile.from_dict(data) for data in profiles_data]
 
@@ -101,7 +101,7 @@ class UserProfileManager:
             logger.error(f"Failed to retrieve coach data: {e}")
             return
 
-    def deactivate_profiles(self, telegram_id: int) -> None:
+    def deactivate_profiles(self, telegram_id: str) -> None:
         try:
             profiles_data = json.loads(self.redis.hget("user_profiles", telegram_id) or "[]")
             for profile_data in profiles_data:
@@ -111,14 +111,14 @@ class UserProfileManager:
         except Exception as e:
             logger.error(f"Failed to deactivate profiles of user {telegram_id}: {e}")
 
-    def get_profile_info_by_key(self, telegram_id: int, profile_id: int, key: str) -> str | None:
-        profiles = json.loads(self.redis.hget("user_profiles", telegram_id) or "[]")
+    def get_profile_info_by_key(self, telegram_id: int | str, profile_id: int, key: str) -> str | None:
+        profiles = json.loads(self.redis.hget("user_profiles", str(telegram_id)) or "[]")
         for profile_data in profiles:
             if profile_data.get("id") == int(profile_id):
                 return profile_data.get(key)
         return None
 
-    def set_profile_info_by_key(self, telegram_id: int, profile_id: int, key: str, value: Any) -> bool:
+    def set_profile_info_by_key(self, telegram_id: str, profile_id: str, key: str, value: Any) -> bool:
         try:
             profiles_data = json.loads(self.redis.hget("user_profiles", telegram_id) or "[]")
             for profile_data in profiles_data:
@@ -133,7 +133,7 @@ class UserProfileManager:
             logger.error(f"Failed to set profile info for user {telegram_id} and profile {profile_id}: {e}")
             return False
 
-    def set_client_data(self, profile_id: int, client_data: dict) -> None:
+    def set_client_data(self, profile_id: str, client_data: dict) -> None:
         try:
             allowed_fields = [
                 "name",
@@ -156,7 +156,7 @@ class UserProfileManager:
 
     def get_client_by_id(self, profile_id: int) -> Client | None:
         try:
-            client_data = self.redis.hget("clients", profile_id)
+            client_data = self.redis.hget("clients", str(profile_id))
             if client_data:
                 data = json.loads(client_data)
                 data["id"] = profile_id
@@ -168,7 +168,7 @@ class UserProfileManager:
             logger.error(f"Failed to get client data for client ID {profile_id}: {e}")
             raise UserServiceError
 
-    def set_coach_data(self, profile_id: int, profile_data: dict) -> None:
+    def set_coach_data(self, profile_id: str, profile_data: dict) -> None:
         try:
             allowed_fields = [
                 "name",
@@ -190,7 +190,7 @@ class UserProfileManager:
 
     def get_coach_by_id(self, profile_id: int) -> Coach | None:
         try:
-            coach_data = self.redis.hget("coaches", profile_id)
+            coach_data = self.redis.hget("coaches", str(profile_id))
             if coach_data:
                 data = json.loads(coach_data)
                 data["id"] = profile_id
@@ -202,14 +202,14 @@ class UserProfileManager:
             logger.error(f"Failed to get data for profile_id from cache {profile_id}: {e}")
             raise UserServiceError
 
-    def save_program(self, client_id: int, exercises: list[str]) -> None:
+    def save_program(self, client_id: str, exercises: list[str]) -> None:
         try:
             self.redis.hset("programs", client_id, json.dumps({"exercises": exercises}))
             logger.info(f"Program for client {client_id} saved in cache")
         except Exception as e:
             logger.error(f"Failed to save program in cache for client {client_id}: {e}")
 
-    def get_program(self, profile_id: int) -> dict | None:
+    def get_program(self, profile_id: str) -> dict | None:
         try:
             program_data = self.redis.hget("programs", profile_id)
             if program_data:
@@ -332,7 +332,7 @@ class UserService:
             url = f"{self.backend_url}/auth/token/logout/"
             status_code, _ = await self.api_request("post", url, headers={"Authorization": f"Token {auth_token}"})
             if status_code == 204:
-                self.storage.deactivate_profiles(tg_user_id)
+                self.storage.deactivate_profiles(str(tg_user_id))
                 logger.info(f"User with profile_id {current_profile.id} logged out")
                 return True
         return False
@@ -376,7 +376,7 @@ class UserService:
         )
         return status_code == 200
 
-    async def save_program(self, client_id: int, exercises: list[str]) -> None:
+    async def save_program(self, client_id: str, exercises: list[str]) -> None:
         self.storage.save_program(client_id, exercises)
         url = f"{self.backend_url}/api/v1/programs/"
         data = {

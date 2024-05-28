@@ -93,9 +93,9 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
                 )
                 await state.set_state(States.choose_coach)
             else:
-                exercises = user_service.storage.get_program(profile.id)
+                exercises = user_service.storage.get_program(str(profile.id))
                 if exercises and exercises.get("exercises"):
-                    program = await format_program(exercises)
+                    program = await format_program(exercises.get("exercises"))
                     await callback_query.message.answer(
                         text=translate(MessageText.current_program, lang=profile.language).format(program=program),
                         reply_markup=InlineKeyboardMarkup(
@@ -244,14 +244,16 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
 
     if action == "program":
         await callback_query.message.answer(translate(MessageText.program_guide))
-        exercises = user_service.storage.get_program(profile.id)
-        if exercises and exercises.get("exercises"):
-            program = await format_program(exercises)
+        exercises_data = user_service.storage.get_program(str(client_id))
+        exercises = exercises_data.get("exercises")
+        if exercises:
+            exercises_tuples = [(exercise,) if isinstance(exercise, str) else exercise for exercise in exercises]
+            program = await format_program(exercises_tuples)
             del_msg = await callback_query.message.answer(
                 text=translate(MessageText.current_program, lang=profile.language).format(program=program),
-                reply_markup=program_manage_menu(profile.language),
+                reply_markup=program_manage_menu(profile.language), disable_web_page_preview=True,
             )
-            await state.update_data(exercises=exercises)
+            await state.update_data(exercises=exercises_tuples)
         else:
             del_msg = await callback_query.message.answer(
                 text=translate(MessageText.no_program, lang=profile.language),

@@ -197,7 +197,7 @@ class ProgramViewSet(ModelViewSet):
         profile_id = kwargs.get("pk")
         user_profile_manager = UserProfileManager(redis_url=os.environ.get("REDIS_URL"))
         try:
-            program_data = user_profile_manager.get_program(profile_id)
+            program_data = user_profile_manager.get_program(str(profile_id))
             if program_data:
                 program = Program.from_dict(program_data)
                 serializer = ProgramSerializer(program)

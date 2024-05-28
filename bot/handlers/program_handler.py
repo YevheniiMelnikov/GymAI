@@ -33,7 +33,7 @@ async def program_manage(callback_query: CallbackQuery, state: FSMContext, bot: 
 
     elif callback_query.data == "save":
         if exercises := data.get("exercises", []):
-            await user_service.save_program(client_id, exercises)
+            await user_service.save_program(str(client_id), [exercise[0] for exercise in exercises])
             await callback_query.answer(text=translate(MessageText.saved, lang=profile.language))
             client = user_service.storage.get_client_by_id(client_id)
             program = await format_program(exercises)
@@ -65,9 +65,11 @@ async def adding_exercise(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile = user_service.storage.get_current_profile(message.from_user.id)
     exercises = data.get("exercises", [])
-    link_to_gif = await find_related_gif(message.text)
-    shorted_link = await short_url(link_to_gif)
-    exercises.append((message.text, shorted_link))
+    if link_to_gif := await find_related_gif(message.text):
+        shorted_link = await short_url(link_to_gif)
+        exercises.append((message.text, shorted_link))
+    else:
+        exercises.append((message.text,))
 
     if link_to_gif:
         gif_file_name = link_to_gif.split("/")[-1]
