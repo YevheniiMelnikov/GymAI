@@ -331,17 +331,6 @@ async def send_message(
         await state.set_state(status_to_set)
 
 
-async def find_related_gif(exercise: str) -> str | None:
-    blobs = list(gif_manager.bucket.list_blobs())
-    matching_blob = next((blob for blob in blobs if blob.name == f"{exercise}.gif"), None)
-
-    if matching_blob:
-        return gif_manager.generate_signed_url(matching_blob.name)
-    else:
-        logger.info(f"No matching file found for exercise: {exercise}")
-        return None
-
-
 async def format_program(exercises: list[tuple]) -> str:
     program_lines = []
     for idx, exercise in enumerate(exercises):
@@ -362,22 +351,43 @@ async def format_program(exercises: list[tuple]) -> str:
 async def generate_gif_link(exercise: str) -> str | None:
     try:
         filename = user_service.storage.get_exercise_gif(exercise)
-        if isinstance(filename, bytes):
-            filename = filename.decode("utf-8")
         if filename:
-            clean_filename = filename.split('.gif')[0] + '.gif'
-            return gif_manager.generate_signed_url(clean_filename)
+            return f"https://storage.googleapis.com/{gif_manager.bucket_name}/{filename}"
     except Exception as e:
         logger.error(f"Failed to generate gif link for exercise {exercise}: {e}")
     return None
 
 
+async def find_related_gif(exercise: str) -> str | None:
+    try:
+        filename = user_service.storage.get_exercise_gif(exercise)
+        if filename:
+            return f"https://storage.googleapis.com/{gif_manager.bucket_name}/{filename}"
+
+        blobs = list(gif_manager.bucket.list_blobs(prefix=f"{exercise}.gif"))
+        if blobs:
+            matching_blob = blobs[0]
+            if matching_blob.exists():
+                file_url = f"https://storage.googleapis.com/{gif_manager.bucket_name}/{matching_blob.name}"
+                user_service.storage.cache_gif_filename(exercise, matching_blob.name)
+                return file_url
+    except Exception as e:
+        logger.error(f"Failed to find gif for exercise {exercise}: {e}")
+
+    logger.info(f"No matching file found for exercise: {exercise}")
+    return None
+
+
 async def short_url(long_url: str) -> str:
+    if long_url.startswith("https://tinyurl.com/"):
+        return long_url
+
     async with aiohttp.ClientSession() as session:
-        async with session.get("http://tinyurl.com/api-create.php", params={"url": long_url}) as response:
+        params = {"url": long_url}
+        async with session.get("http://tinyurl.com/api-create.php", params=params) as response:
+            response_text = await response.text()
             if response.status == 200:
-                short_url = await response.text()
-                return short_url
+                return response_text
             else:
-                logger.error(f"Failed to shorten URL: {response.status}, {await response.text()}")
+                logger.error(f"Failed to shorten URL: {response.status}, {response_text}")
                 return long_url

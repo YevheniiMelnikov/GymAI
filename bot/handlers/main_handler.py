@@ -244,16 +244,17 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
 
     if action == "program":
         await callback_query.message.answer(translate(MessageText.program_guide))
-        exercises_data = user_service.storage.get_program(str(client_id))
-        exercises = exercises_data.get("exercises")
-        if exercises:
-            exercises_tuples = [(exercise,) if isinstance(exercise, str) else exercise for exercise in exercises]
-            program = await format_program(exercises_tuples)
-            del_msg = await callback_query.message.answer(
-                text=translate(MessageText.current_program, lang=profile.language).format(program=program),
-                reply_markup=program_manage_menu(profile.language), disable_web_page_preview=True,
-            )
-            await state.update_data(exercises=exercises_tuples)
+        if exercises_data := user_service.storage.get_program(str(client_id)):
+            exercises = exercises_data.get("exercises")
+            if exercises:
+                exercises_tuples = [(exercise,) if isinstance(exercise, str) else exercise for exercise in exercises]
+                program = await format_program(exercises_tuples)
+                del_msg = await callback_query.message.answer(
+                    text=translate(MessageText.current_program, lang=profile.language).format(program=program),
+                    reply_markup=program_manage_menu(profile.language),
+                    disable_web_page_preview=True,
+                )
+                await state.update_data(exercises=exercises_tuples)
         else:
             del_msg = await callback_query.message.answer(
                 text=translate(MessageText.no_program, lang=profile.language),
