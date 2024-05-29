@@ -8,7 +8,6 @@ from aiogram.types import CallbackQuery
 
 from bot.keyboards import choose_payment_options, select_program_type
 from bot.states import States
-from common.file_manager import payment_img_manager
 from common.functions import show_main_menu
 from common.user_service import user_service
 from texts.text_manager import MessageText, translate
@@ -21,14 +20,14 @@ logger = loguru.logger
 async def program_type(callback_query: CallbackQuery, state: FSMContext):
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "subscription":
-        subscription_img = payment_img_manager.generate_signed_url(f"subscription_{profile.language}.jpeg")
+        subscription_img = f"https://storage.googleapis.com/bot_payment_options/subscription_{profile.language}.jpeg"
         await callback_query.message.answer_photo(
             photo=subscription_img,
             reply_markup=choose_payment_options(profile.language),
         )
         await state.set_state(States.payment_choice)
     elif callback_query.data == "program":
-        program_img = payment_img_manager.generate_signed_url(f"program_{profile.language}.jpeg")
+        program_img = f"https://storage.googleapis.com/bot_payment_options/program_{profile.language}.jpeg"
         await callback_query.message.answer_photo(
             photo=program_img,
             reply_markup=choose_payment_options(profile.language),

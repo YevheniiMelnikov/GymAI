@@ -4,7 +4,7 @@ format:
 	ruff check --select F . --fix --config=pyproject.toml
 	ruff check --select B . --fix --config=pyproject.toml
 	ruff check --select A . --fix --config=pyproject.toml
-	black . --config=pyproject.toml
+	black .
 
 check:
 	ruff check . --fix --config=pyproject.toml

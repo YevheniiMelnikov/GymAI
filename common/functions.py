@@ -12,10 +12,11 @@ from dotenv import load_dotenv
 
 from bot.keyboards import *
 from bot.states import States
-from common.file_manager import FileManager, avatar_manager, gif_manager
-from common.models import Client, Coach, Profile, Subscription
+from common.file_manager import gif_manager
+from common.models import Client, Coach, Profile
 from common.user_service import user_service
-from common.utils import get_client_page, get_coach_page
+from common.utils import get_client_page, get_coach_page, short_url
+from texts.exercises import exercise_dict
 from texts.text_manager import MessageText, resource_manager, translate
 
 logger = loguru.logger
@@ -192,7 +193,8 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
     experience = data.get("work_experience")
     info = data.get("additional_info")
     payment = data.get("payment_details")
-    photo = avatar_manager.generate_signed_url(data.get("profile_photo"))
+    file_name = data.get("profile_photo")
+    photo = f"https://storage.googleapis.com/coach_avatars/{file_name}"
     user = await bot.get_chat(tg_id)
     contact = f"@{user.username}" if user.username else tg_id
     async with aiohttp.ClientSession():
@@ -227,7 +229,7 @@ async def show_coaches(message: Message, coaches: list[Coach], current_index=0) 
     current_coach = coaches[current_index]
     coach_info = get_coach_page(current_coach)
     text = translate(MessageText.coach_page, profile.language)
-    coach_photo_url = avatar_manager.generate_signed_url(current_coach.profile_photo)
+    coach_photo_url = f"https://storage.googleapis.com/coach_avatars/{current_coach.profile_photo}"
     formatted_text = text.format(**coach_info)
 
     if message.photo:
@@ -360,34 +362,23 @@ async def generate_gif_link(exercise: str) -> str | None:
 
 async def find_related_gif(exercise: str) -> str | None:
     try:
-        filename = user_service.storage.get_exercise_gif(exercise)
-        if filename:
-            return f"https://storage.googleapis.com/{gif_manager.bucket_name}/{filename}"
+        exercise = exercise.lower()
+        for filename, synonyms in exercise_dict.items():
+            if exercise in (syn.lower() for syn in synonyms):
+                cached_filename = user_service.storage.get_exercise_gif(exercise)
+                if cached_filename:
+                    return f"https://storage.googleapis.com/{gif_manager.bucket_name}/{cached_filename}"
 
-        blobs = list(gif_manager.bucket.list_blobs(prefix=f"{exercise}.gif"))
-        if blobs:
-            matching_blob = blobs[0]
-            if matching_blob.exists():
-                file_url = f"https://storage.googleapis.com/{gif_manager.bucket_name}/{matching_blob.name}"
-                user_service.storage.cache_gif_filename(exercise, matching_blob.name)
-                return file_url
+                blobs = list(gif_manager.bucket.list_blobs(prefix=filename))
+                if blobs:
+                    matching_blob = blobs[0]
+                    if matching_blob.exists():
+                        file_url = f"https://storage.googleapis.com/{gif_manager.bucket_name}/{matching_blob.name}"
+                        user_service.storage.cache_gif_filename(exercise, matching_blob.name)
+                        return file_url
+
     except Exception as e:
         logger.error(f"Failed to find gif for exercise {exercise}: {e}")
 
     logger.info(f"No matching file found for exercise: {exercise}")
     return None
-
-
-async def short_url(long_url: str) -> str:
-    if long_url.startswith("https://tinyurl.com/"):
-        return long_url
-
-    async with aiohttp.ClientSession() as session:
-        params = {"url": long_url}
-        async with session.get("http://tinyurl.com/api-create.php", params=params) as response:
-            response_text = await response.text()
-            if response.status == 200:
-                return response_text
-            else:
-                logger.error(f"Failed to shorten URL: {response.status}, {response_text}")
-                return long_url

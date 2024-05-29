@@ -223,6 +223,15 @@ class UserProfileManager:
             logger.error(f"Failed to get program for profile_id {profile_id}: {e}")
             return None
 
+    def delete_program(self, profile_id: str) -> bool:
+        try:
+            self.redis.hdel("programs", profile_id)
+            logger.info(f"Program for profile_id {profile_id} deleted from cache")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete program for profile_id {profile_id}: {e}")
+            return False
+
     def cache_gif_filename(self, exercise: str, filename: str) -> None:
         try:
             self.redis.hset("exercise_gif_map", exercise, filename)
@@ -389,6 +398,12 @@ class UserService:
         if status_code != 201:
             logger.error(f"Failed to save program for client {client_id}: {response}")
             raise UserServiceError(f"Failed to save program: {response}")
+
+    async def delete_program(self, profile_id: str) -> bool:
+        url = f"{self.backend_url}/api/v1/programs/delete_by_profile/{profile_id}/"
+        headers = {"Authorization": f"Api-Key {self.api_key}"}
+        status, _ = await self.api_request("delete", url, headers=headers)
+        return status == 204
 
     async def delete_profile(self, profile_id: int) -> bool:  # TODO: NOT USED YET
         url = f"{self.backend_url}/api/v1/persons/{profile_id}/"

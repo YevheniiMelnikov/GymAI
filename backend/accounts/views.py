@@ -5,6 +5,7 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.shortcuts import get_object_or_404, render
 from rest_framework import generics
+from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import (
     BasePermission,
@@ -17,6 +18,7 @@ from rest_framework.response import Response
 from rest_framework.status import (
     HTTP_200_OK,
     HTTP_201_CREATED,
+    HTTP_204_NO_CONTENT,
     HTTP_400_BAD_REQUEST,
     HTTP_404_NOT_FOUND,
     HTTP_500_INTERNAL_SERVER_ERROR,
@@ -218,3 +220,11 @@ class ProgramViewSet(ModelViewSet):
 
         self.perform_create_or_update(serializer, profile_id, exercises)
         return Response(serializer.data)
+
+    @action(detail=False, methods=["delete"], url_path="delete_by_profile/(?P<profile_id>[^/.]+)")
+    def delete_by_profile(self, request, profile_id=None):
+        program = Program.objects.filter(profile_id=profile_id).first()
+        if program:
+            program.delete()
+            return Response(status=HTTP_204_NO_CONTENT)
+        return Response(status=HTTP_404_NOT_FOUND)

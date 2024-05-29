@@ -117,6 +117,7 @@ class ButtonText(Enum):
     save_program = auto()
     reset_program = auto()
     answer = auto()
+    done = auto()
 
     def __str__(self) -> str:
         return f"buttons.{self.name}"

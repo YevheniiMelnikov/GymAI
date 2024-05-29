@@ -1,5 +1,6 @@
 from contextlib import suppress
 
+import loguru
 from aiogram import Bot, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -7,11 +8,13 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import incoming_message, program_manage_menu
 from bot.states import States
-from common.functions import find_related_gif, format_program, send_message, short_url, show_main_menu
+from common.functions import find_related_gif, format_program, send_message, show_main_menu
 from common.user_service import user_service
-from texts.text_manager import MessageText, translate
+from common.utils import short_url
+from texts.text_manager import ButtonText, MessageText, translate
 
 program_router = Router()
+logger = loguru.logger
 
 
 @program_router.callback_query(States.program_manage)
@@ -25,6 +28,10 @@ async def program_manage(callback_query: CallbackQuery, state: FSMContext, bot: 
         await state.set_state(States.main_menu)
 
     if callback_query.data == "reset":
+        await callback_query.answer(translate(ButtonText.done, profile.language))
+        if await user_service.delete_program(str(client_id)):
+            logger.info(f"Program for profile_id {client_id} deleted from DB")
+            user_service.storage.delete_program(str(client_id))
         await state.clear()
         await callback_query.message.answer(text=translate(MessageText.enter_exercise, lang=profile.language))
         await state.set_state(States.program_manage)

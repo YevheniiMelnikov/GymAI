@@ -16,7 +16,6 @@ from bot.keyboards import (
     select_program_type,
 )
 from bot.states import States
-from common.file_manager import avatar_manager
 from common.functions import (
     assign_coach,
     format_program,
@@ -57,7 +56,7 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
                 lang=profile.language,
             ).format(**format_attributes)
             if profile.status == "coach" and getattr(user, "profile_photo", None):
-                photo = avatar_manager.generate_signed_url(user.profile_photo)
+                photo = f"https://storage.googleapis.com/coach_avatars/{user.profile_photo}"
                 try:
                     await callback_query.message.answer_photo(
                         photo, text, reply_markup=profile_menu_keyboard(profile.language)
@@ -77,7 +76,9 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
                 await show_clients(callback_query.message, clients, state)
             else:
                 if not coach.verified:
-                    await callback_query.message.answer(translate(MessageText.coach_info_message, profile.language))
+                    await callback_query.answer(
+                        text=translate(MessageText.coach_info_message, profile.language), show_alert=True
+                    )
                 await callback_query.message.answer(translate(MessageText.no_clients, profile.language))
                 await state.set_state(States.main_menu)
                 await show_main_menu(callback_query.message, profile, state)
@@ -243,7 +244,7 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
         return
 
     if action == "program":
-        await callback_query.message.answer(translate(MessageText.program_guide))
+        await callback_query.answer(text=translate(MessageText.program_guide), show_alert=True)
         if exercises_data := user_service.storage.get_program(str(client_id)):
             exercises = exercises_data.get("exercises")
             if exercises:
