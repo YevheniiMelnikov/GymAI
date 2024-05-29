@@ -75,7 +75,7 @@ async def cmd_feedback(message: Message, state: FSMContext) -> None:
 
 @cmd_router.message(Command("reset_password"))
 async def cmd_reset_password(message: Message, state: FSMContext) -> None:
-    profiles = user_service.storage.get_profiles(message.from_user.id)
+    profiles = user_service.storage.get_profiles(str(message.from_user.id))
     if profiles:
         usernames = [
             user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "username")

@@ -36,11 +36,6 @@ class FileManager:
             logger.error(f"Failed to upload {source_file_name} to GCS: {e}")
             return False
 
-    def generate_signed_url(self, file_name: str, expiration: int = 3600) -> str:
-        blob = self.bucket.blob(file_name)
-        url = blob.generate_signed_url(version="v4", expiration=expiration, method="GET")
-        return url
-
     @staticmethod
     async def save_profile_photo(message: Message) -> str | None:
         file_id = message.photo[-1].file_id
@@ -70,5 +65,4 @@ class FileManager:
 
 
 avatar_manager = FileManager("coach_avatars")
-payment_img_manager = FileManager("bot_payment_options")
 gif_manager = FileManager("gif_exercises")

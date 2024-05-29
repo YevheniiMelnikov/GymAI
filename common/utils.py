@@ -1,24 +1,15 @@
 import re
-from functools import wraps
 from typing import Any, Optional
 
+import aiohttp
+import loguru
 from aiogram.fsm.state import State
 
 from bot.states import States
 from common.models import Client, Coach
 from texts.text_manager import ButtonText, MessageText, translate
 
-
-def singleton(cls: type) -> object:
-    instances = {}
-
-    @wraps(cls)
-    def get_instance(*args, **kwargs) -> object:
-        if cls not in instances:
-            instances[cls] = cls(*args, **kwargs)
-        return instances[cls]
-
-    return get_instance
+logger = loguru.logger
 
 
 def validate_password(password: str) -> bool:
@@ -126,3 +117,18 @@ def get_client_page(client: Client, lang_code: str) -> dict[str, Any]:
         "health_notes": client.health_notes,
         "weight": client.weight,
     }
+
+
+async def short_url(url: str) -> str:
+    if url.startswith("https://tinyurl.com/"):
+        return url
+
+    async with aiohttp.ClientSession() as session:
+        params = {"url": url}
+        async with session.get("http://tinyurl.com/api-create.php", params=params) as response:
+            response_text = await response.text()
+            if response.status == 200:
+                return response_text
+            else:
+                logger.error(f"Failed to process URL: {response.status}, {response_text}")
+                return url

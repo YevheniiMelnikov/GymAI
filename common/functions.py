@@ -12,10 +12,11 @@ from dotenv import load_dotenv
 
 from bot.keyboards import *
 from bot.states import States
-from common.file_manager import FileManager, avatar_manager, gif_manager
-from common.models import Client, Coach, Profile, Subscription
+from common.file_manager import gif_manager
+from common.models import Client, Coach, Profile
 from common.user_service import user_service
-from common.utils import get_client_page, get_coach_page
+from common.utils import get_client_page, get_coach_page, short_url
+from texts.exercises import exercise_dict
 from texts.text_manager import MessageText, resource_manager, translate
 
 logger = loguru.logger
@@ -94,7 +95,7 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
         profile=profile_data,
         username=data["username"],
         auth_token=token,
-        telegram_id=message.from_user.id,
+        telegram_id=str(message.from_user.id),
         email=message.text,
     )
     await message.answer(text=translate(MessageText.registration_successful, lang=data.get("lang")))
@@ -127,7 +128,7 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
 
     await state.update_data(login_attempts=0)
     user_service.storage.set_profile(
-        profile=profile, username=data["username"], auth_token=token, telegram_id=message.from_user.id
+        profile=profile, username=data["username"], auth_token=token, telegram_id=str(message.from_user.id)
     )
     logger.info(f"profile_id {profile.id} set for user {message.from_user.id}")
     await message.answer(text=translate(MessageText.signed_in, lang=data.get("lang")))
@@ -158,12 +159,12 @@ async def update_user_info(message: Message, state: FSMContext, role: str) -> No
             raise ValueError("Profile not found")
 
         if role == "client":
-            user_service.storage.set_client_data(profile.id, data)
+            user_service.storage.set_client_data(str(profile.id), data)
         else:
             if not data.get("edit_mode"):
                 await message.answer(translate(MessageText.wait_for_verification, data.get("lang")))
                 await notify_about_new_coach(message.from_user.id, profile, data)
-            user_service.storage.set_coach_data(profile.id, data)
+            user_service.storage.set_coach_data(str(profile.id), data)
 
         token = user_service.storage.get_profile_info_by_key(message.chat.id, profile.id, "auth_token")
         if not token:
@@ -192,7 +193,8 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
     experience = data.get("work_experience")
     info = data.get("additional_info")
     payment = data.get("payment_details")
-    photo = avatar_manager.generate_signed_url(data.get("profile_photo"))
+    file_name = data.get("profile_photo")
+    photo = f"https://storage.googleapis.com/coach_avatars/{file_name}"
     user = await bot.get_chat(tg_id)
     contact = f"@{user.username}" if user.username else tg_id
     async with aiohttp.ClientSession():
@@ -209,7 +211,7 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
     async def approve_coach(callback_query: CallbackQuery):
         token = user_service.storage.get_profile_info_by_key(tg_id, profile.id, "auth_token")
         await user_service.edit_profile(profile.id, {"verified": True}, token)
-        user_service.storage.set_coach_data(profile.id, {"verified": True})
+        user_service.storage.set_coach_data(str(profile.id), {"verified": True})
         await callback_query.answer("Подтверждено")
         await bot.send_message(tg_id, translate(MessageText.coach_verified, lang=profile.language))
         logger.info(f"Coach verification for profile_id {profile.id} approved")
@@ -227,7 +229,7 @@ async def show_coaches(message: Message, coaches: list[Coach], current_index=0) 
     current_coach = coaches[current_index]
     coach_info = get_coach_page(current_coach)
     text = translate(MessageText.coach_page, profile.language)
-    coach_photo_url = avatar_manager.generate_signed_url(current_coach.profile_photo)
+    coach_photo_url = f"https://storage.googleapis.com/coach_avatars/{current_coach.profile_photo}"
     formatted_text = text.format(**coach_info)
 
     if message.photo:
@@ -253,9 +255,9 @@ async def assign_coach(coach: Coach, client: Client) -> None:
     coach_clients = coach.assigned_to if isinstance(coach.assigned_to, list) else []
     if client.id not in coach_clients:
         coach_clients.append(int(client.id))
-        user_service.storage.set_coach_data(coach.id, {"assigned_to": coach_clients})
+        user_service.storage.set_coach_data(str(coach.id), {"assigned_to": coach_clients})
 
-    user_service.storage.set_client_data(client.id, {"assigned_to": [int(coach.id)]})
+    user_service.storage.set_client_data(str(client.id), {"assigned_to": [int(coach.id)]})
 
     token = user_service.storage.get_profile_info_by_key(client.tg_id, client.id, "auth_token")
     await user_service.edit_profile(client.id, {"assigned_to": [coach.id]}, token)
@@ -305,6 +307,7 @@ async def send_message(
             chat_id=recipient.tg_id,
             text=formatted_text,
             reply_markup=reply_markup,
+            disable_web_page_preview=True,
         )
 
     @sub_router.callback_query(F.data == "quit")
@@ -330,27 +333,20 @@ async def send_message(
         await state.set_state(status_to_set)
 
 
-async def find_related_gif(exercise: str) -> str | None:
-    gif_manager = FileManager(bucket_name="gif_exercises")
-    blobs = list(gif_manager.bucket.list_blobs())
-    matching_blob = next((blob for blob in blobs if blob.name == f"{exercise}.gif"), None)
-
-    if matching_blob:
-        return gif_manager.generate_signed_url(matching_blob.name)
-    else:
-        logger.info(f"No matching file found for exercise: {exercise}")
-        return None
-
-
-async def format_program(exercises: list[tuple[str, str | None]]) -> str:
+async def format_program(exercises: list[tuple]) -> str:
     program_lines = []
-    for idx, (exercise, link) in enumerate(exercises):
+    for idx, exercise in enumerate(exercises):
+        exercise_name = exercise[0]
+        link = exercise[1] if len(exercise) > 1 else None
         if not link:
-            link = await generate_gif_link(exercise)
+            link = await generate_gif_link(exercise_name)
+
         if link:
-            program_lines.append(f"{idx + 1}. {exercise}\n<a href='{link}'>GIF</a>")
+            shorted_link = await short_url(link)
+            program_lines.append(f"{idx + 1}. {exercise_name} | <a href='{shorted_link}'>GIF</a>")
         else:
-            program_lines.append(f"{idx + 1}. {exercise}")
+            program_lines.append(f"{idx + 1}. {exercise_name}")
+
     return "\n".join(program_lines)
 
 
@@ -358,20 +354,31 @@ async def generate_gif_link(exercise: str) -> str | None:
     try:
         filename = user_service.storage.get_exercise_gif(exercise)
         if filename:
-            return gif_manager.generate_signed_url(filename.decode("utf-8"))
+            return f"https://storage.googleapis.com/{gif_manager.bucket_name}/{filename}"
     except Exception as e:
         logger.error(f"Failed to generate gif link for exercise {exercise}: {e}")
     return None
 
 
-async def short_url(long_url: str | None) -> str:
-    headers = {"Authorization": f"Bearer {os.getenv('BITLY_API_KEY')}", "Content-Type": "application/json"}
-    data = {"long_url": long_url}
-    async with aiohttp.ClientSession() as session:
-        async with session.post("https://api-ssl.bitly.com/v4/shorten", headers=headers, json=data) as response:
-            if response.status == 201:
-                response_data = await response.json()
-                return response_data.get("link")
-            else:
-                logger.error(f"Failed to shorten URL: {response.status}, {await response.text()}")
-                return long_url
+async def find_related_gif(exercise: str) -> str | None:
+    try:
+        exercise = exercise.lower()
+        for filename, synonyms in exercise_dict.items():
+            if exercise in (syn.lower() for syn in synonyms):
+                cached_filename = user_service.storage.get_exercise_gif(exercise)
+                if cached_filename:
+                    return f"https://storage.googleapis.com/{gif_manager.bucket_name}/{cached_filename}"
+
+                blobs = list(gif_manager.bucket.list_blobs(prefix=filename))
+                if blobs:
+                    matching_blob = blobs[0]
+                    if matching_blob.exists():
+                        file_url = f"https://storage.googleapis.com/{gif_manager.bucket_name}/{matching_blob.name}"
+                        user_service.storage.cache_gif_filename(exercise, matching_blob.name)
+                        return file_url
+
+    except Exception as e:
+        logger.error(f"Failed to find gif for exercise {exercise}: {e}")
+
+    logger.info(f"No matching file found for exercise: {exercise}")
+    return None

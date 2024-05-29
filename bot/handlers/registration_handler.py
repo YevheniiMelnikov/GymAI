@@ -30,7 +30,7 @@ async def language(message: Message, state: FSMContext) -> None:
     if profile := user_service.storage.get_current_profile(message.from_user.id):
         token = user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
         await user_service.edit_profile(profile.id, {"language": lang_code}, token)
-        user_service.storage.set_profile_info_by_key(message.from_user.id, profile.id, "language", lang_code)
+        user_service.storage.set_profile_info_by_key(str(message.from_user.id), str(profile.id), "language", lang_code)
         profile.language = lang_code
         await show_main_menu(message, profile, state)
     else:
