@@ -5,6 +5,7 @@ from typing import Any
 import aiohttp
 import loguru
 from aiogram import Bot, F, Router
+from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BotCommand, CallbackQuery, InputMediaPhoto, Message
@@ -232,23 +233,31 @@ async def show_coaches(message: Message, coaches: list[Coach], current_index=0) 
     coach_photo_url = f"https://storage.googleapis.com/coach_avatars/{current_coach.profile_photo}"
     formatted_text = text.format(**coach_info)
 
-    if message.photo:
+    try:
         media = InputMediaPhoto(media=coach_photo_url)
-        await message.edit_media(media=media)
-        if message.caption:
+        if message.photo:
+            await message.edit_media(media=media)
             await message.edit_caption(
                 caption=formatted_text,
                 reply_markup=coach_select_menu(profile.language, current_coach.id, current_index),
-                parse_mode="HTML",
+                parse_mode=ParseMode.HTML,
             )
-    else:
-        await bot.send_photo(
-            message.chat.id,
-            photo=coach_photo_url,
-            caption=formatted_text,
+        else:
+            await bot.send_photo(
+                message.chat.id,
+                photo=coach_photo_url,
+                caption=formatted_text,
+                reply_markup=coach_select_menu(profile.language, current_coach.id, current_index),
+                parse_mode=ParseMode.HTML,
+            )
+    except TelegramBadRequest:
+        await message.answer(
+            text=formatted_text,
             reply_markup=coach_select_menu(profile.language, current_coach.id, current_index),
-            parse_mode="HTML",
+            parse_mode=ParseMode.HTML,
         )
+    with suppress(TelegramBadRequest):
+        await message.delete()
 
 
 async def assign_coach(coach: Coach, client: Client) -> None:
@@ -269,6 +278,9 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
     current_index %= len(clients)
     current_client = clients[current_index]
     client_info = get_client_page(current_client, profile.language)
+    client_info["language"] = user_service.storage.set_profile_info_by_key(
+        current_client.tg_id, current_client.id, "language"
+    )
     text = translate(MessageText.client_page, profile.language).format(**client_info)
     client_data = [Client.to_dict(client) for client in clients]
     await state.update_data(clients=client_data)
@@ -284,7 +296,6 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
 async def send_message(
     recipient: Client | Coach,
     text: str,
-    bot: Bot,
     state: FSMContext,
     reply_markup=None,
     include_incoming_message: bool = True,
@@ -308,9 +319,10 @@ async def send_message(
             text=formatted_text,
             reply_markup=reply_markup,
             disable_web_page_preview=True,
+            parse_mode=ParseMode.HTML,
         )
 
-    @sub_router.callback_query(F.data == "quit")
+    @sub_router.callback_query(F.data in ("quit", "later"))
     async def close_notification(callback_query: CallbackQuery):
         await callback_query.message.delete()
         profile = user_service.storage.get_current_profile(recipient.tg_id)
@@ -382,3 +394,36 @@ async def find_related_gif(exercise: str) -> str | None:
 
     logger.info(f"No matching file found for exercise: {exercise}")
     return None
+
+
+async def new_client_notification(coach: Coach, client: Client, state: FSMContext) -> None:
+    data = await state.get_data()
+    coach_lang = user_service.storage.get_profile_info_by_key(coach.tg_id, coach.id, "language")
+    client_lang = user_service.storage.get_profile_info_by_key(client.tg_id, client.id, "language")
+    await state.update_data(recipient_language=coach_lang)
+
+    workout_types = {
+        "home": translate(ButtonText.home_workout, coach_lang),
+        "street": translate(ButtonText.street_workout, coach_lang),
+        "gym": translate(ButtonText.gym_workout, coach_lang),
+    }
+
+    preferable_workout_type = data.get("workout_type")
+    preferable_type = workout_types.get(preferable_workout_type, "unknown")
+    client_data = get_client_page(client, coach_lang)
+    client_data["language"] = client_lang
+
+    await send_message(
+        recipient=coach,
+        text=translate(MessageText.new_client, coach_lang).format(lang=client_lang, workout_type=preferable_type),
+        state=state,
+        include_incoming_message=False,
+    )
+
+    await send_message(
+        recipient=coach,
+        text=translate(MessageText.client_page, coach_lang).format(**client_data),
+        state=state,
+        reply_markup=new_client(coach_lang, coach.id),
+        include_incoming_message=False,
+    )

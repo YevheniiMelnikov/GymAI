@@ -11,6 +11,7 @@ from aiogram.types import (
 
 from bot.keyboards import (
     choose_coach,
+    gift,
     profile_menu_keyboard,
     program_manage_menu,
     select_program_type,
@@ -94,21 +95,26 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
                 )
                 await state.set_state(States.choose_coach)
             else:
-                exercises = user_service.storage.get_program(str(profile.id))
-                if exercises and exercises.get("exercises"):
-                    program = await format_program(exercises.get("exercises"))
-                    await callback_query.message.answer(
-                        text=translate(MessageText.current_program, lang=profile.language).format(program=program),
-                        reply_markup=InlineKeyboardMarkup(
-                            inline_keyboard=[
-                                [
-                                    InlineKeyboardButton(
-                                        text=translate(ButtonText.back, profile.language), callback_data="back"
-                                    )
-                                ]
-                            ]
-                        ),
-                    )
+                if exercises_data := user_service.storage.get_program(str(profile.id)):
+                    exercises = exercises_data.get("exercises")
+                    if exercises:
+                        exercises_tuples = [
+                            (exercise,) if isinstance(exercise, str) else exercise for exercise in exercises
+                        ]
+                        program = await format_program(exercises_tuples)
+                        await callback_query.message.answer(
+                            text=translate(MessageText.current_program, lang=profile.language).format(program=program),
+                            reply_markup=InlineKeyboardMarkup(
+                                inline_keyboard=[
+                                    [
+                                        InlineKeyboardButton(
+                                            text=translate(ButtonText.back, profile.language), callback_data="back"
+                                        )
+                                    ]
+                                ],
+                            ),
+                            disable_web_page_preview=True,
+                        )
                     await state.set_state(States.program)
                 else:
                     await state.set_state(States.select_program_type)
@@ -187,7 +193,6 @@ async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext):
         await state.set_state(States.coach_selection)
         await state.update_data(coaches=[Coach.to_dict(coach) for coach in coaches])
         await show_coaches(callback_query.message, coaches)
-        await callback_query.message.delete()
 
 
 @main_router.callback_query(States.coach_selection)
@@ -217,9 +222,11 @@ async def coach_paginator(callback_query: CallbackQuery, state: FSMContext):
         coach = user_service.storage.get_coach_by_id(coach_id)
         client = user_service.storage.get_client_by_id(profile.id)
         await assign_coach(coach, client)
-        await callback_query.message.answer(translate(MessageText.coach_selected).format(name=coach.name))
-        await state.set_state(States.main_menu)  # TODO: GIVE FREE CONSULTATION AS GIFT
-        await show_main_menu(callback_query.message, profile, state)
+        await state.update_data(coach=coach.to_dict(), client=client.to_dict())
+        await state.set_state(States.gift)
+        await callback_query.message.answer(
+            translate(MessageText.gift, profile.language), reply_markup=gift(profile.language)
+        )
     else:
         await show_coaches(callback_query.message, coaches, current_index=index)
 
@@ -281,7 +288,7 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
     await show_clients(callback_query.message, clients, state, index)
 
 
-@main_router.callback_query(States.program)
+@main_router.callback_query(States.program)  # TODO: IMPLEMENT
 async def show_program(callback_query: CallbackQuery, state: FSMContext):
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "back":

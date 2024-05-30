@@ -7,12 +7,15 @@ class States(StatesGroup):
     username = State()
     password = State()
     email = State()
+    password_reset = State()
+    password_retype = State()
 
     account_type = State()
     gender = State()
     birth_date = State()
     name = State()
     workout_goals = State()
+    workout_type = State()
     weight = State()
     workout_experience = State()
     health_notes = State()
@@ -20,6 +23,7 @@ class States(StatesGroup):
     additional_info = State()
     payment_details = State()
     profile_photo = State()
+    gift = State()
 
     edit_profile = State()
     action_choice = State()
@@ -35,6 +39,3 @@ class States(StatesGroup):
     contact_coach = State()
     select_program_type = State()
     payment_choice = State()
-
-    password_reset = State()
-    password_retype = State()

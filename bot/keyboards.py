@@ -190,3 +190,25 @@ def choose_payment_options(lang_code: str) -> InlineKeyboardMarkup:
     kb.button(text=translate(ButtonText.back, lang_code), callback_data="back")
     kb.button(text=translate(ButtonText.select, lang_code), callback_data="select")
     return kb.as_markup(one_time_keyboard=True)
+
+
+def new_client(lang_code: str, profile_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=translate(ButtonText.answer, lang_code), callback_data=f"answer_{profile_id}")
+    kb.button(text=translate(ButtonText.later, lang_code), callback_data="later")
+    return kb.as_markup(one_time_keyboard=True)
+
+
+def gift(lang_code: str) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=translate(ButtonText.get, lang_code), callback_data="get")
+    return kb.as_markup(one_time_keyboard=True)
+
+
+def workout_type(lang_code: str) -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton(text=translate(ButtonText.gym_workout, lang_code), callback_data="gym")],
+        [InlineKeyboardButton(text=translate(ButtonText.home_workout, lang_code), callback_data="home")],
+        [InlineKeyboardButton(text=translate(ButtonText.street_workout, lang_code), callback_data="street")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
