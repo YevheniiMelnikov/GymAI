@@ -18,7 +18,7 @@ logger = loguru.logger
 
 
 @program_router.callback_query(States.program_manage)
-async def program_manage(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+async def program_manage(callback_query: CallbackQuery, state: FSMContext) -> None:
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     data = await state.get_data()
     client_id = data.get("client_id")
@@ -48,14 +48,12 @@ async def program_manage(callback_query: CallbackQuery, state: FSMContext, bot: 
             await send_message(
                 recipient=client,
                 text=translate(MessageText.new_program, lang=client_lang),
-                bot=bot,
                 state=state,
                 include_incoming_message=False,
             )
             await send_message(
                 recipient=client,
                 text=translate(MessageText.current_program, lang=profile.language).format(program=program),
-                bot=bot,
                 state=state,
                 reply_markup=incoming_message(profile.language, profile.id),
                 include_incoming_message=False,

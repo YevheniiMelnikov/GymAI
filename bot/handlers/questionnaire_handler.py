@@ -6,7 +6,8 @@ from aiogram.types import CallbackQuery, Message
 from bot.keyboards import choose_gender, workout_experience_keyboard
 from bot.states import States
 from common.file_manager import avatar_manager
-from common.functions import show_main_menu, update_user_info
+from common.functions import new_client_notification, show_main_menu, update_user_info
+from common.models import Client, Coach
 from common.user_service import user_service
 from common.utils import get_state_and_message, validate_birth_date
 from texts.text_manager import MessageText, translate
@@ -194,3 +195,16 @@ async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> No
     reply_markup = workout_experience_keyboard(profile.language) if state_to_set == States.workout_experience else None
     await callback_query.message.answer(message, lang=profile.language, reply_markup=reply_markup)
     await state.set_state(state_to_set)
+
+
+@questionnaire_router.callback_query(States.workout_type)
+async def workout_type(callback_query: CallbackQuery, state: FSMContext):
+    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+    data = await state.get_data()
+    coach = Coach.from_dict(data.get("coach"))
+    client = Client.from_dict(data.get("client"))
+    await state.update_data(workout_type=callback_query.data)
+    await new_client_notification(coach, client, state)
+    await callback_query.answer(translate(MessageText.coach_selected).format(name=coach.name), show_alert=True)
+    await state.set_state(States.main_menu)
+    await show_main_menu(callback_query.message, profile, state)
