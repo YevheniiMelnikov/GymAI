@@ -227,6 +227,7 @@ async def coach_paginator(callback_query: CallbackQuery, state: FSMContext):
         await callback_query.message.answer(
             translate(MessageText.gift, profile.language), reply_markup=gift(profile.language)
         )
+        await callback_query.message.delete()
     else:
         await show_coaches(callback_query.message, coaches, current_index=index)
 

@@ -45,12 +45,12 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
     state_to_set = States.edit_profile if questionnaire else States.name
     response_message = MessageText.choose_profile_parameter if questionnaire else MessageText.edit_profile
     await message.answer(text=translate(response_message, lang=profile.language), reply_markup=reply_markup)
+    with suppress(TelegramBadRequest):
+        await message.delete()
     await state.set_state(state_to_set)
 
     if not questionnaire:
         await message.answer(translate(MessageText.name, lang=profile.language))
-    with suppress(TelegramBadRequest):
-        await message.delete()
 
 
 async def show_main_menu(message: Message, profile: Profile, state: FSMContext) -> None:
@@ -256,8 +256,8 @@ async def show_coaches(message: Message, coaches: list[Coach], current_index=0) 
             reply_markup=coach_select_menu(profile.language, current_coach.id, current_index),
             parse_mode=ParseMode.HTML,
         )
-    with suppress(TelegramBadRequest):
-        await message.delete()
+        with suppress(TelegramBadRequest):
+            await message.delete()
 
 
 async def assign_coach(coach: Coach, client: Client) -> None:
@@ -278,7 +278,7 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
     current_index %= len(clients)
     current_client = clients[current_index]
     client_info = get_client_page(current_client, profile.language)
-    client_info["language"] = user_service.storage.set_profile_info_by_key(
+    client_info["language"] = user_service.storage.get_profile_info_by_key(
         current_client.tg_id, current_client.id, "language"
     )
     text = translate(MessageText.client_page, profile.language).format(**client_info)
@@ -322,7 +322,8 @@ async def send_message(
             parse_mode=ParseMode.HTML,
         )
 
-    @sub_router.callback_query(F.data in ("quit", "later"))
+    @sub_router.callback_query(F.data == "quit")
+    @sub_router.callback_query(F.data == "later")
     async def close_notification(callback_query: CallbackQuery):
         await callback_query.message.delete()
         profile = user_service.storage.get_current_profile(recipient.tg_id)
