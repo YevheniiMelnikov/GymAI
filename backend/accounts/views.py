@@ -46,6 +46,9 @@ class CreateUserView(APIView):
         if not password or not username or not email:
             return Response({"error": "Required fields are missing"}, status=HTTP_400_BAD_REQUEST)
 
+        if User.objects.filter(email=email).exists():
+            return Response({"error": "This email already taken"}, status=HTTP_400_BAD_REQUEST)
+
         try:
             with transaction.atomic():
                 user = User.objects.create_user(username=username, password=password, email=email)

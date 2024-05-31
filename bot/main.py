@@ -30,10 +30,10 @@ async def main() -> None:
     redis_url = os.getenv("REDIS_URL")
     dp = Dispatcher(storage=RedisStorage.from_url(f"{redis_url}/0"))
     dp.include_routers(
+        cmd_router,
         sub_router,
         main_router,
         chat_router,
-        cmd_router,
         register_router,
         questionnaire_router,
         invalid_content_router,

@@ -425,6 +425,6 @@ async def new_client_notification(coach: Coach, client: Client, state: FSMContex
         recipient=coach,
         text=translate(MessageText.client_page, coach_lang).format(**client_data),
         state=state,
-        reply_markup=new_client(coach_lang, coach.id),
+        reply_markup=new_client(coach_lang, client.id),
         include_incoming_message=False,
     )

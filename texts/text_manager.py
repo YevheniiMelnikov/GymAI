@@ -55,6 +55,7 @@ class MessageText(Enum):
     out_of_range = auto()
     no_clients = auto()
     no_exercises_to_save = auto()
+    email_unavailable = auto()
 
     coach_page = auto()
     client_page = auto()

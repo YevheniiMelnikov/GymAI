@@ -9,7 +9,7 @@ import httpx
 import loguru
 import redis
 
-from common.exceptions import UsernameUnavailable, UserServiceError
+from common.exceptions import UsernameUnavailable, UserServiceError, EmailUnavailable
 from common.models import Client, Coach, Profile, Subscription
 
 logger = loguru.logger
@@ -302,7 +302,8 @@ class UserService:
         if status_code == 400 and "error" in response:
             if "already exists" in response:
                 raise UsernameUnavailable(response)
-
+            elif "email" in response:
+                raise EmailUnavailable(response)
         return status_code == 201
 
     async def edit_profile(self, profile_id: int, data: dict, token: str | None = None) -> bool:
@@ -374,6 +375,7 @@ class UserService:
 
     async def send_feedback(self, email: str, username: str, feedback: str) -> bool:
         url = f"{self.backend_url}/api/v1/send-feedback/"
+        headers = {"Authorization": f"Api-Key {self.api_key}"}
         status_code, _ = await self.api_request(
             "post",
             url,
@@ -382,6 +384,7 @@ class UserService:
                 "username": username,
                 "feedback": feedback,
             },
+            headers,
         )
         return status_code == 200
 

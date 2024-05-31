@@ -192,9 +192,9 @@ def choose_payment_options(lang_code: str) -> InlineKeyboardMarkup:
     return kb.as_markup(one_time_keyboard=True)
 
 
-def new_client(lang_code: str, profile_id: int) -> InlineKeyboardMarkup:
+def new_client(lang_code: str, client_id: int) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text=translate(ButtonText.answer, lang_code), callback_data=f"answer_{profile_id}")
+    kb.button(text=translate(ButtonText.answer, lang_code), callback_data=f"answer_{client_id}")
     kb.button(text=translate(ButtonText.later, lang_code), callback_data="later")
     return kb.as_markup(one_time_keyboard=True)
 

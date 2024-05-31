@@ -148,6 +148,8 @@ async def process_password_reset(message: Message, state: FSMContext) -> None:
             raise ValueError(f"Authentication token not found for user {profile.id}")
         if await user_service.reset_password(email, token):
             await message.answer(text=translate(MessageText.password_reset_sent, profile.language).format(email=email))
+            await state.clear()
+            await user_service.log_out(message.from_user.id)
             await message.answer(text=translate(MessageText.username, profile.language))
             await state.set_state(States.username)
         else:
@@ -155,6 +157,7 @@ async def process_password_reset(message: Message, state: FSMContext) -> None:
     else:
         await message.answer(text=translate(MessageText.no_profiles_found, data.get("lang")))
         await message.answer(text=translate(MessageText.help, data.get("lang")))
+        await state.clear()
     await message.delete()
 
 
@@ -164,7 +167,7 @@ async def handle_feedback(message: Message, state: FSMContext) -> None:
     auth_token = user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
     if user_data := await user_service.get_user_data(auth_token):
         if await user_service.send_feedback(user_data.get("email"), user_data.get("username"), message.text):
-            logger.info(f"{user_data.get('username')} sent feedback")
+            logger.info(f"User {profile.id} sent feedback")
             await message.answer(text=translate(MessageText.feedback_sent, lang=profile.language))
         else:
             await message.answer(text=translate(MessageText.unexpected_error, lang=profile.language))
@@ -252,6 +255,7 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
         return
 
     if action == "program":
+        # TODO: CHECK IF CLIENT ALREADY PAID
         await callback_query.answer(text=translate(MessageText.program_guide), show_alert=True)
         if exercises_data := user_service.storage.get_program(str(client_id)):
             exercises = exercises_data.get("exercises")
