@@ -46,6 +46,9 @@ class CreateUserView(APIView):
         if not password or not username or not email:
             return Response({"error": "Required fields are missing"}, status=HTTP_400_BAD_REQUEST)
 
+        if User.objects.filter(email=email).exists():
+            return Response({"error": "This email already taken"}, status=HTTP_400_BAD_REQUEST)
+
         try:
             with transaction.atomic():
                 user = User.objects.create_user(username=username, password=password, email=email)
@@ -199,9 +202,8 @@ class ProgramViewSet(ModelViewSet):
         profile_id = kwargs.get("pk")
         user_profile_manager = UserProfileManager(redis_url=os.environ.get("REDIS_URL"))
         try:
-            program_data = user_profile_manager.get_program(str(profile_id))
-            if program_data:
-                program = Program.from_dict(program_data)
+            program = user_profile_manager.get_program(str(profile_id))
+            if program:
                 serializer = ProgramSerializer(program)
                 return Response(serializer.data)
             else:

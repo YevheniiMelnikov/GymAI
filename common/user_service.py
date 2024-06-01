@@ -9,8 +9,8 @@ import httpx
 import loguru
 import redis
 
-from common.exceptions import UsernameUnavailable, UserServiceError
-from common.models import Client, Coach, Profile, Subscription
+from common.exceptions import EmailUnavailable, UsernameUnavailable, UserServiceError
+from common.models import Client, Coach, Profile, Program, Subscription
 
 logger = loguru.logger
 
@@ -204,18 +204,19 @@ class UserProfileManager:
 
     def save_program(self, client_id: str, exercises: list[str]) -> None:
         try:
-            self.redis.hset("programs", client_id, json.dumps({"exercises": exercises}))
+            self.redis.hset("workout_plans:programs", client_id, json.dumps({"exercises": exercises}))
+            self.reset_program_payment_status(client_id)
             logger.info(f"Program for client {client_id} saved in cache")
         except Exception as e:
             logger.error(f"Failed to save program in cache for client {client_id}: {e}")
 
-    def get_program(self, profile_id: str) -> dict | None:
+    def get_program(self, profile_id: str) -> Program | None:
         try:
-            program_data = self.redis.hget("programs", profile_id)
+            program_data = self.redis.hget("workout_plans:programs", profile_id)
             if program_data:
                 data = json.loads(program_data)
                 data["profile"] = profile_id
-                return data
+                return Program.from_dict(data)
             else:
                 logger.info(f"No program data found for profile_id {profile_id}")
                 return None
@@ -223,13 +224,69 @@ class UserProfileManager:
             logger.error(f"Failed to get program for profile_id {profile_id}: {e}")
             return None
 
+    def set_program_payment_status(self, profile_id: str, paid: bool) -> None:  # TODO: USE AFTER SUCCESSFUL PAYMENT
+        try:
+            self.redis.hset("workout_plans:program_payments", profile_id, json.dumps({"paid": paid}))
+            logger.info(f"Program status for profile_id {profile_id} set to {paid}")
+        except Exception as e:
+            logger.error(f"Failed to set payment status for profile_id {profile_id}: {e}")
+
+    def reset_program_payment_status(self, profile_id: str) -> None:
+        try:
+            self.redis.hdel("workout_plans:program_payments", profile_id)
+            logger.info(f"Payment status for profile_id {profile_id} has been reset")
+        except Exception as e:
+            logger.error(f"Failed to reset payment status for profile_id {profile_id}: {e}")
+
+    def check_program_payment(self, profile_id: str) -> bool:
+        try:
+            payment_status = self.redis.hget("workout_plans:program_payments", profile_id)
+            if payment_status:
+                return json.loads(payment_status).get("paid", False)
+            else:
+                logger.info(f"No payment data found for profile_id {profile_id}")
+                return False
+        except Exception as e:
+            logger.error(f"Failed to check payment status for profile_id {profile_id}: {e}")
+            return False
+
     def delete_program(self, profile_id: str) -> bool:
         try:
-            self.redis.hdel("programs", profile_id)
+            self.redis.hdel("workout_plans:programs", profile_id)
             logger.info(f"Program for profile_id {profile_id} deleted from cache")
             return True
         except Exception as e:
             logger.error(f"Failed to delete program for profile_id {profile_id}: {e}")
+            return False
+
+    def save_subscription(self, profile_id: str, subscription_data: dict) -> None:
+        try:
+            self.redis.hset("workout_plans:subscriptions", profile_id, json.dumps(subscription_data))
+            logger.info(f"Subscription for profile {profile_id} saved in cache")
+        except Exception as e:
+            logger.error(f"Failed to save subscription in cache for profile {profile_id}: {e}")
+
+    def get_subscription(self, profile_id: str) -> Subscription | None:
+        try:
+            subscription_data = self.redis.hget("workout_plans:subscriptions", profile_id)
+            if subscription_data:
+                data = json.loads(subscription_data)
+                data["profile"] = profile_id
+                return Subscription.from_dict(data)
+            else:
+                logger.info(f"No subscription data found for profile_id {profile_id}")
+                return None
+        except Exception as e:
+            logger.error(f"Failed to get subscription for profile_id {profile_id}: {e}")
+            return None
+
+    def delete_subscription(self, profile_id: str) -> bool:  # TODO: NOT USED YET
+        try:
+            self.redis.hdel("workout_plans:subscriptions", profile_id)
+            logger.info(f"Subscription for profile_id {profile_id} deleted from cache")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete subscription for profile_id {profile_id}: {e}")
             return False
 
     def cache_gif_filename(self, exercise: str, filename: str) -> None:
@@ -244,9 +301,6 @@ class UserProfileManager:
         except Exception as e:
             logger.info(f"Failed to get gif filename for exercise {exercise}: {e}")
             return None
-
-    def get_subscription(self, profile_id: int) -> Subscription | None:  # TODO: IMPLEMENT
-        pass
 
 
 class UserService:
@@ -302,7 +356,8 @@ class UserService:
         if status_code == 400 and "error" in response:
             if "already exists" in response:
                 raise UsernameUnavailable(response)
-
+            elif "email" in response:
+                raise EmailUnavailable(response)
         return status_code == 201
 
     async def edit_profile(self, profile_id: int, data: dict, token: str | None = None) -> bool:
@@ -374,6 +429,7 @@ class UserService:
 
     async def send_feedback(self, email: str, username: str, feedback: str) -> bool:
         url = f"{self.backend_url}/api/v1/send-feedback/"
+        headers = {"Authorization": f"Api-Key {self.api_key}"}
         status_code, _ = await self.api_request(
             "post",
             url,
@@ -382,6 +438,7 @@ class UserService:
                 "username": username,
                 "feedback": feedback,
             },
+            headers,
         )
         return status_code == 200
 

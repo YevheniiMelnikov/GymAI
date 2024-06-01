@@ -59,6 +59,7 @@ class Program(BaseEntity):
     profile_id: int
     exercises: list[str]
     created_at: float
+    profile: int
 
 
 @dataclass
@@ -67,3 +68,4 @@ class Subscription(BaseEntity):
     enabled: bool
     price: float
     type: str
+    profile: int

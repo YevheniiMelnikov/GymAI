@@ -8,7 +8,7 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import *
 from bot.states import States
-from common.exceptions import UsernameUnavailable
+from common.exceptions import EmailUnavailable, UsernameUnavailable
 from common.functions import register_user, set_bot_commands, show_main_menu, sign_in
 from common.user_service import user_service
 from common.utils import validate_email, validate_password
@@ -127,6 +127,9 @@ async def email(message: Message, state: FSMContext) -> None:
     except UsernameUnavailable:
         await state.set_state(States.username)
         await message.answer(text=translate(MessageText.username_unavailable, lang=data.get("lang")))
+    except EmailUnavailable:
+        await state.set_state(States.username)
+        await message.answer(text=translate(MessageText.email_unavailable, lang=data.get("lang")))
     finally:
         with suppress(TelegramBadRequest):
             await message.delete()

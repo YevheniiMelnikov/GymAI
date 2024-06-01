@@ -39,3 +39,4 @@ class States(StatesGroup):
     contact_coach = State()
     select_program_type = State()
     payment_choice = State()
+    handle_payment = State()

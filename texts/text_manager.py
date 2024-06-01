@@ -17,11 +17,14 @@ class MessageText(Enum):
     choose_account_type = auto()
     edit_profile = auto()
     choose_profile_parameter = auto()
+    payment_required = auto()
+    payment_success = auto()
     update_your_data = auto()
     coach_info_message = auto()
     enter_your_message = auto()
     enter_exercise = auto()
     program_guide = auto()
+    payment_link = auto()
 
     name = auto()
     choose_gender = auto()
@@ -55,6 +58,7 @@ class MessageText(Enum):
     out_of_range = auto()
     no_clients = auto()
     no_exercises_to_save = auto()
+    email_unavailable = auto()
 
     coach_page = auto()
     client_page = auto()

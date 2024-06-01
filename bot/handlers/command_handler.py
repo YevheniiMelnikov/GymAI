@@ -92,3 +92,4 @@ async def cmd_reset_password(message: Message, state: FSMContext) -> None:
         await state.set_state(States.password_reset)
     else:
         await message.answer(text=translate(MessageText.no_profiles_found))
+        await state.clear()
