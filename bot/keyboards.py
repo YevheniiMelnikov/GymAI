@@ -185,10 +185,10 @@ def program_manage_menu(lang_code: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
 
 
-def choose_payment_options(lang_code: str) -> InlineKeyboardMarkup:
+def choose_payment_options(lang_code: str, option: str) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text=translate(ButtonText.back, lang_code), callback_data="back")
-    kb.button(text=translate(ButtonText.select, lang_code), callback_data="select")
+    kb.button(text=translate(ButtonText.select, lang_code), callback_data=f"select_{option}")
     return kb.as_markup(one_time_keyboard=True)
 
 

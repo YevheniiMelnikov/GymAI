@@ -96,7 +96,7 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
                 await state.set_state(States.choose_coach)
             else:
                 if exercises_data := user_service.storage.get_program(str(profile.id)):
-                    exercises = exercises_data.get("exercises")
+                    exercises = exercises_data.exercises
                     if exercises:
                         exercises_tuples = [
                             (exercise,) if isinstance(exercise, str) else exercise for exercise in exercises
@@ -255,19 +255,25 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
         return
 
     if action == "program":
-        # TODO: CHECK IF CLIENT ALREADY PAID
-        await callback_query.answer(text=translate(MessageText.program_guide), show_alert=True)
-        if exercises_data := user_service.storage.get_program(str(client_id)):
-            exercises = exercises_data.get("exercises")
-            if exercises:
-                exercises_tuples = [(exercise,) if isinstance(exercise, str) else exercise for exercise in exercises]
-                program = await format_program(exercises_tuples)
-                del_msg = await callback_query.message.answer(
-                    text=translate(MessageText.current_program, lang=profile.language).format(program=program),
-                    reply_markup=program_manage_menu(profile.language),
-                    disable_web_page_preview=True,
-                )
-                await state.update_data(exercises=exercises_tuples)
+        subscription = user_service.storage.get_subscription(client_id)
+        program_paid = user_service.storage.check_program_payment(client_id)
+
+        if not subscription and not program_paid:
+            await callback_query.answer(
+                text=translate(MessageText.payment_required, lang=profile.language), show_alert=True
+            )
+            return
+
+        await callback_query.answer(text=translate(MessageText.program_guide, lang=profile.language), show_alert=True)
+        if exercises := user_service.storage.get_program(str(client_id)).exercises:
+            exercises_tuples = [(exercise,) if isinstance(exercise, str) else exercise for exercise in exercises]
+            program = await format_program(exercises_tuples)
+            del_msg = await callback_query.message.answer(
+                text=translate(MessageText.current_program, lang=profile.language).format(program=program),
+                reply_markup=program_manage_menu(profile.language),
+                disable_web_page_preview=True,
+            )
+            await state.update_data(exercises=exercises_tuples)
         else:
             del_msg = await callback_query.message.answer(
                 text=translate(MessageText.no_program, lang=profile.language),

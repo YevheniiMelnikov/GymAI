@@ -8,7 +8,7 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import *
 from bot.states import States
-from common.exceptions import UsernameUnavailable, EmailUnavailable
+from common.exceptions import EmailUnavailable, UsernameUnavailable
 from common.functions import register_user, set_bot_commands, show_main_menu, sign_in
 from common.user_service import user_service
 from common.utils import validate_email, validate_password
