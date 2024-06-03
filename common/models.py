@@ -64,8 +64,7 @@ class Program(BaseEntity):
 
 @dataclass
 class Subscription(BaseEntity):
-    expire_date: float
+    payment_date: float
     enabled: bool
     price: float
-    type: str
     profile: int

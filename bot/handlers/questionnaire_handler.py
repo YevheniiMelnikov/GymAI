@@ -1,12 +1,12 @@
 import loguru
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from bot.keyboards import choose_gender, workout_experience_keyboard
 from bot.states import States
 from common.file_manager import avatar_manager
-from common.functions import new_client_notification, show_main_menu, update_user_info
+from common.functions import client_request, show_main_menu, update_user_info
 from common.models import Client, Coach
 from common.user_service import user_service
 from common.utils import get_state_and_message, validate_birth_date
@@ -200,11 +200,23 @@ async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> No
 @questionnaire_router.callback_query(States.workout_type)
 async def workout_type(callback_query: CallbackQuery, state: FSMContext):
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+    await state.update_data(workout_type=callback_query.data)
     data = await state.get_data()
     coach = Coach.from_dict(data.get("coach"))
     client = Client.from_dict(data.get("client"))
-    await state.update_data(workout_type=callback_query.data)
-    await new_client_notification(coach, client, state)
-    await callback_query.answer(translate(MessageText.coach_selected).format(name=coach.name), show_alert=True)
-    await state.set_state(States.main_menu)
-    await show_main_menu(callback_query.message, profile, state)
+    if data.get("new_client"):
+        await client_request(coach, client, state)
+        await callback_query.answer(translate(MessageText.coach_selected).format(name=coach.name), show_alert=True)
+        await state.set_state(States.main_menu)
+        await show_main_menu(callback_query.message, profile, state)
+    else:
+        # TODO: PROCESS PAYMENT LINK HERE
+        # link = payment_service.program_link() if action == "program" else payment_service.subscription()
+        # await callback_query.message.answer(translate(MessageText.payment_link, profile.language).format(link=link))
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="💰", callback_data=data.get("request_type"))]]
+        )
+        await callback_query.message.answer("click to pay 👇", reply_markup=kb)  # payment mock
+        await state.update_data(price=f"{50}$")
+        await state.set_state(States.handle_payment)
+    await callback_query.message.delete()

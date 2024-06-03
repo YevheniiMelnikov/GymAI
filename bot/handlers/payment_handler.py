@@ -7,9 +7,10 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
 
-from bot.keyboards import choose_payment_options, select_program_type
+from bot.keyboards import choose_payment_options, select_program_type, workout_type
 from bot.states import States
-from common.functions import show_main_menu
+from common.functions import client_request, show_main_menu
+from common.models import Client, Coach
 from common.user_service import user_service
 from texts.text_manager import MessageText, translate
 
@@ -54,28 +55,41 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
         await callback_query.message.delete()
         return
 
-    action = callback_query.data.split("_")[1]
-
-    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="💰", callback_data=action)]])  # payment mock
-    await callback_query.message.answer("click to pay 👇", reply_markup=kb)
-    await state.set_state(States.handle_payment)
-
-    # link = payment_service.program_link() if action == "program" else payment_service.subscription()
-    # await callback_query.message.answer(translate(MessageText.payment_link, profile.language).format(link=link))
+    option = callback_query.data.split("_")[1]
+    client = user_service.storage.get_client_by_id(profile.id)
+    coach_id = client.assigned_to[0]
+    coach = user_service.storage.get_coach_by_id(coach_id)
+    await state.update_data(request_type=option, client=Client.to_dict(client), coach=Coach.to_dict(coach))
+    await callback_query.message.answer(
+        translate(MessageText.workout_type), reply_markup=workout_type(profile.language)
+    )
+    await state.set_state(States.workout_type)
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()
 
 
 @payment_router.callback_query(States.handle_payment)  # payment mock
 async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
     # TODO: HANDLE PAYMENT FAILURE
-    await callback_query.answer("✅")
+    data = await state.get_data()
+    coach = Coach.from_dict(data.get("coach"))
+    client = Client.from_dict(data.get("client"))
+    await client_request(coach, client, state)
+    await callback_query.answer(translate(MessageText.coach_selected).format(name=coach.name), show_alert=True)
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "subscription":
-        subscription_data = {"created_at": datetime.date.today().isoformat()}
+        await user_service.create_subscription(client.id, data.get("price"))
+        subscription_data = {
+            "payment_date": datetime.date.today().isoformat(),
+            "enabled": True,
+            "price": data.get("price"),
+        }
         user_service.storage.save_subscription(profile.id, subscription_data)
+        user_service.storage.set_program_payment_status(profile.id, True)
     else:
         user_service.storage.set_program_payment_status(profile.id, True)
-
-    # TODO: ALSO UPDATE POSTGRES DATA
     await callback_query.message.answer(translate(MessageText.payment_success, profile.language))
     await state.set_state(States.main_menu)
     await show_main_menu(callback_query.message, profile, state)
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()
