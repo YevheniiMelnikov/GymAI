@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 import loguru
 import redis
+from dateutil.parser import parse
 
 from common.exceptions import EmailUnavailable, UsernameUnavailable, UserServiceError
 from common.models import Client, Coach, Profile, Program, Subscription
@@ -226,21 +227,21 @@ class UserProfileManager:
 
     def set_program_payment_status(self, profile_id: str, paid: bool) -> None:  # TODO: USE AFTER SUCCESSFUL PAYMENT
         try:
-            self.redis.hset("workout_plans:program_payments", profile_id, json.dumps({"paid": paid}))
+            self.redis.hset("workout_plans:payments", profile_id, json.dumps({"paid": paid}))
             logger.info(f"Program status for profile_id {profile_id} set to {paid}")
         except Exception as e:
             logger.error(f"Failed to set payment status for profile_id {profile_id}: {e}")
 
     def reset_program_payment_status(self, profile_id: str) -> None:
         try:
-            self.redis.hdel("workout_plans:program_payments", profile_id)
+            self.redis.hdel("workout_plans:payments", profile_id)
             logger.info(f"Payment status for profile_id {profile_id} has been reset")
         except Exception as e:
             logger.error(f"Failed to reset payment status for profile_id {profile_id}: {e}")
 
     def check_program_payment(self, profile_id: str) -> bool:
         try:
-            payment_status = self.redis.hget("workout_plans:program_payments", profile_id)
+            payment_status = self.redis.hget("workout_plans:payments", profile_id)
             if payment_status:
                 return json.loads(payment_status).get("paid", False)
             else:
@@ -272,6 +273,11 @@ class UserProfileManager:
             if subscription_data:
                 data = json.loads(subscription_data)
                 data["profile"] = profile_id
+                if isinstance(data["payment_date"], str):
+                    payment_date = parse(data["payment_date"])
+                    data["payment_date"] = payment_date.timestamp()
+                else:
+                    data["payment_date"] = float(data["payment_date"])
                 return Subscription.from_dict(data)
             else:
                 logger.info(f"No subscription data found for profile_id {profile_id}")
@@ -461,6 +467,38 @@ class UserService:
         headers = {"Authorization": f"Api-Key {self.api_key}"}
         status, _ = await self.api_request("delete", url, headers=headers)
         return status == 204
+
+    async def create_subscription(self, user_id: int, price: float) -> bool:
+        url = f"{self.backend_url}/api/v1/subscriptions/"
+        data = {
+            "user": user_id,
+            "enabled": True,
+            "price": price,
+        }
+        status_code, response = await self.api_request(
+            "post", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
+        )
+        return status_code == 201
+
+    async def get_subscription(self, user_id: int) -> Subscription | None:
+        url = f"{self.backend_url}/api/v1/subscriptions/?user={user_id}"
+        status_code, subscriptions = await self.api_request(
+            "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
+        )
+        if status_code == 200 and subscriptions:
+            return Subscription.from_dict(subscriptions[0])
+        logger.info(f"Failed to retrieve subscription for user {user_id}. HTTP status: {status_code}")
+        return None
+
+    async def delete_subscription(self, user_id: int) -> bool:  # TODO: NOT USED YET
+        url = f"{self.backend_url}/api/v1/subscriptions/delete_by_user/{user_id}/"
+        status_code, _ = await self.api_request("delete", url, headers={"Authorization": f"Api-Key {self.api_key}"})
+        return status_code == 204
+
+    async def update_subscription(self, subscription_id: int, data: dict) -> bool:  # TODO: NOT USED YET
+        url = f"{self.backend_url}/api/v1/subscriptions/{subscription_id}/"
+        status_code, _ = await self.api_request("put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"})
+        return status_code == 200
 
     async def delete_profile(self, profile_id: int) -> bool:  # TODO: NOT USED YET
         url = f"{self.backend_url}/api/v1/persons/{profile_id}/"

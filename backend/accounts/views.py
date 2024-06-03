@@ -27,10 +27,8 @@ from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 from rest_framework_api_key.permissions import HasAPIKey
 
-from common.user_service import UserProfileManager
-
-from .models import Profile, Program
-from .serializers import ProfileSerializer, ProgramSerializer
+from .models import Profile, Program, Subscription
+from .serializers import ProfileSerializer, ProgramSerializer, SubscriptionSerializer
 
 
 class CreateUserView(APIView):
@@ -198,19 +196,6 @@ class ProgramViewSet(ModelViewSet):
         headers = self.get_success_headers(serializer.data)
         return Response(ProgramSerializer(instance).data, status=HTTP_201_CREATED, headers=headers)
 
-    def retrieve(self, request, *args, **kwargs):
-        profile_id = kwargs.get("pk")
-        user_profile_manager = UserProfileManager(redis_url=os.environ.get("REDIS_URL"))
-        try:
-            program = user_profile_manager.get_program(str(profile_id))
-            if program:
-                serializer = ProgramSerializer(program)
-                return Response(serializer.data)
-            else:
-                raise NotFound(detail=f"Program not found for profile ID {profile_id}")
-        except Exception as e:
-            raise NotFound(detail=f"Error retrieving program for profile ID {profile_id}: {str(e)}")
-
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", False)
         instance = self.get_object()
@@ -228,5 +213,28 @@ class ProgramViewSet(ModelViewSet):
         program = Program.objects.filter(profile_id=profile_id).first()
         if program:
             program.delete()
+            return Response(status=HTTP_204_NO_CONTENT)
+        return Response(status=HTTP_404_NOT_FOUND)
+
+
+class SubscriptionViewSet(ModelViewSet):
+    queryset = Subscription.objects.all().select_related("user")
+    serializer_class = SubscriptionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset().select_related("user")
+        user = self.request.query_params.get("user")
+
+        if user is not None:
+            queryset = queryset.filter(user_id=user)
+
+        return queryset
+
+    @action(detail=False, methods=["delete"], url_path="delete_by_user/(?P<user_id>[^/.]+)")
+    def delete_by_user(self, request, user_id=None):
+        subscriptions = Subscription.objects.filter(user_id=user_id)
+        if subscriptions.exists():
+            subscriptions.delete()
             return Response(status=HTTP_204_NO_CONTENT)
         return Response(status=HTTP_404_NOT_FOUND)

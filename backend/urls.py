@@ -10,6 +10,8 @@ api_info = openapi.Info(title="Admin Rest", default_version="0.1")
 schema_view = get_schema_view(api_info, public=True, url="", permission_classes=[permissions.IsAuthenticated])
 program_router = DefaultRouter()
 program_router.register(r"programs", ProgramViewSet)
+subscription_router = DefaultRouter()
+subscription_router.register(r"subscriptions", SubscriptionViewSet)
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -26,4 +28,5 @@ urlpatterns = [
     path("api/v1/current-user/", CurrentUserView.as_view(), name="current-user"),
     path("api/v1/send-feedback/", SendFeedbackAPIView.as_view(), name="send-feedback"),
     path("api/v1/", include(program_router.urls)),
+    path("", include(subscription_router.urls)),
 ]

@@ -71,5 +71,6 @@ async def get_the_gift(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.message.answer(
         translate(MessageText.workout_type), reply_markup=workout_type(profile.language)
     )
+    await state.update_data(new_client=True)
     await state.set_state(States.workout_type)
     await callback_query.message.delete()

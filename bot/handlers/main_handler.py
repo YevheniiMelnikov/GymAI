@@ -1,3 +1,5 @@
+from contextlib import suppress
+
 import loguru
 from aiogram import Router
 from aiogram.exceptions import TelegramBadRequest
@@ -8,6 +10,7 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     Message,
 )
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.keyboards import (
     choose_coach,
@@ -24,6 +27,7 @@ from common.functions import (
     show_coaches,
     show_main_menu,
     show_profile_editing_menu,
+    show_subscription_page,
 )
 from common.models import Client, Coach, Profile
 from common.user_service import user_service
@@ -94,36 +98,41 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
                     reply_markup=choose_coach(profile.language),
                 )
                 await state.set_state(States.choose_coach)
-            else:
-                if exercises_data := user_service.storage.get_program(str(profile.id)):
-                    exercises = exercises_data.exercises
-                    if exercises:
-                        exercises_tuples = [
-                            (exercise,) if isinstance(exercise, str) else exercise for exercise in exercises
-                        ]
-                        program = await format_program(exercises_tuples)
-                        await callback_query.message.answer(
-                            text=translate(MessageText.current_program, lang=profile.language).format(program=program),
-                            reply_markup=InlineKeyboardMarkup(
-                                inline_keyboard=[
-                                    [
-                                        InlineKeyboardButton(
-                                            text=translate(ButtonText.back, profile.language), callback_data="back"
-                                        )
-                                    ]
-                                ],
-                            ),
-                            disable_web_page_preview=True,
-                        )
-                    await state.set_state(States.program)
-                else:
-                    await state.set_state(States.select_program_type)
-                    await callback_query.message.answer(
-                        text=translate(MessageText.no_program, lang=profile.language),
-                        reply_markup=select_program_type(profile.language),
-                    )
+                return
 
-    await callback_query.message.delete()
+            subscription = user_service.storage.get_subscription(profile.id)
+            program_paid = user_service.storage.check_program_payment(profile.id)
+            if not subscription and not program_paid:
+                await state.set_state(States.select_program_type)
+                await callback_query.message.answer(
+                    text=translate(MessageText.no_program, lang=profile.language),
+                    reply_markup=select_program_type(profile.language),
+                )
+                return
+
+            if program_paid:
+                await callback_query.answer(translate(MessageText.program_not_ready, profile.language), show_alert=True)
+
+            if subscription:
+                await show_subscription_page(callback_query, state, subscription)
+
+            exercises_data = user_service.storage.get_program(str(profile.id))
+            if exercises_data and exercises_data.exercises:
+                exercises_tuples = [
+                    (exercise,) if isinstance(exercise, str) else exercise for exercise in exercises_data.exercises
+                ]
+                program = await format_program(exercises_tuples)
+                kb = InlineKeyboardBuilder()
+                kb.button(text=translate(ButtonText.back, profile.language), callback_data="back")
+                await callback_query.message.answer(
+                    text=translate(MessageText.current_program, lang=profile.language).format(program=program),
+                    reply_markup=kb.as_markup(one_time_keyboard=True),
+                    disable_web_page_preview=True,
+                )
+                await state.set_state(States.program)
+
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()
 
 
 @main_router.callback_query(States.profile)
@@ -299,7 +308,7 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
     await show_clients(callback_query.message, clients, state, index)
 
 
-@main_router.callback_query(States.program)  # TODO: IMPLEMENT
+@main_router.callback_query(States.program)
 async def show_program(callback_query: CallbackQuery, state: FSMContext):
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "back":

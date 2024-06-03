@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Profile, Program
+from .models import Profile, Program, Subscription
 
 
 class ProfileSerializer(serializers.ModelSerializer):
@@ -20,4 +20,10 @@ class ProfileSerializer(serializers.ModelSerializer):
 class ProgramSerializer(serializers.ModelSerializer):
     class Meta:
         model = Program
+        fields = "__all__"
+
+
+class SubscriptionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Subscription
         fields = "__all__"

@@ -1,5 +1,6 @@
 import os
 from contextlib import suppress
+from datetime import datetime
 from typing import Any
 
 import aiohttp
@@ -9,12 +10,13 @@ from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BotCommand, CallbackQuery, InputMediaPhoto, Message
+from dateutil.relativedelta import relativedelta
 from dotenv import load_dotenv
 
 from bot.keyboards import *
 from bot.states import States
 from common.file_manager import gif_manager
-from common.models import Client, Coach, Profile
+from common.models import Client, Coach, Profile, Subscription
 from common.user_service import user_service
 from common.utils import get_client_page, get_coach_page, short_url
 from texts.exercises import exercise_dict
@@ -397,7 +399,7 @@ async def find_related_gif(exercise: str) -> str | None:
     return None
 
 
-async def new_client_notification(coach: Coach, client: Client, state: FSMContext) -> None:
+async def client_request(coach: Coach, client: Client, state: FSMContext) -> None:
     data = await state.get_data()
     coach_lang = user_service.storage.get_profile_info_by_key(coach.tg_id, coach.id, "language")
     client_lang = user_service.storage.get_profile_info_by_key(client.tg_id, client.id, "language")
@@ -409,14 +411,29 @@ async def new_client_notification(coach: Coach, client: Client, state: FSMContex
         "gym": translate(ButtonText.gym_workout, coach_lang),
     }
 
+    service_types = {
+        "subscription": translate(ButtonText.subscription, coach_lang),
+        "program": translate(ButtonText.program, coach_lang),
+    }
+
     preferable_workout_type = data.get("workout_type")
     preferable_type = workout_types.get(preferable_workout_type, "unknown")
     client_data = get_client_page(client, coach_lang)
     client_data["language"] = client_lang
+    if data.get("new_client"):
+        message_template = translate(MessageText.new_client, coach_lang).format(
+            lang=client_lang, workout_type=preferable_type
+        )
+    else:
+        service_type = data.get("request_type")
+        service = service_types.get(service_type)
+        message_template = translate(MessageText.incoming_request, coach_lang).format(
+            service=service, lang=client_lang, workout_type=preferable_type
+        )
 
     await send_message(
         recipient=coach,
-        text=translate(MessageText.new_client, coach_lang).format(lang=client_lang, workout_type=preferable_type),
+        text=message_template,
         state=state,
         include_incoming_message=False,
     )
@@ -425,6 +442,25 @@ async def new_client_notification(coach: Coach, client: Client, state: FSMContex
         recipient=coach,
         text=translate(MessageText.client_page, coach_lang).format(**client_data),
         state=state,
-        reply_markup=new_client(coach_lang, client.id),
+        reply_markup=incoming_request(coach_lang, client.id),
         include_incoming_message=False,
     )
+
+
+async def show_subscription_page(callback_query: CallbackQuery, state: FSMContext, subscription: Subscription) -> None:
+    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+    payment_date = datetime.fromtimestamp(subscription.payment_date)
+    next_payment_date = payment_date + relativedelta(months=1)
+    next_payment_date_str = next_payment_date.strftime("%Y-%m-%d")
+    enabled_status = "✅" if subscription.enabled else "❌"
+    kb = InlineKeyboardBuilder()
+    kb.button(text=translate(ButtonText.back, profile.language), callback_data="back")
+    await state.set_state(States.program)
+    await callback_query.message.answer(
+        translate(MessageText.subscription_page, profile.language).format(
+            next_payment_date=next_payment_date_str, enabled=enabled_status, price=subscription.price
+        ),
+        reply_markup=kb.as_markup(one_time_keyboard=True),
+    )
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()
