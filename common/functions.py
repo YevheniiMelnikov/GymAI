@@ -279,20 +279,18 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
     profile = user_service.storage.get_current_profile(message.chat.id)
     current_index %= len(clients)
     current_client = clients[current_index]
-    client_info = get_client_page(current_client, profile.language)
-    client_info["language"] = user_service.storage.get_profile_info_by_key(
-        current_client.tg_id, current_client.id, "language"
-    )
-    text = translate(MessageText.client_page, profile.language).format(**client_info)
+    subscription = True if user_service.storage.get_subscription(current_client.id) else False
+    payment_status = user_service.storage.check_program_payment(current_client.id)
+    client_info = get_client_page(current_client, profile.language, subscription, payment_status)
     client_data = [Client.to_dict(client) for client in clients]
-    await state.update_data(clients=client_data)
-    await state.set_state(States.show_clients)
 
+    await state.update_data(clients=client_data)
     await message.edit_text(
-        text=text,
+        text=translate(MessageText.client_page, profile.language).format(**client_info),
         reply_markup=client_select_menu(profile.language, current_client.id, current_index),
         parse_mode="HTML",
     )
+    await state.set_state(States.show_clients)
 
 
 async def send_message(
@@ -326,7 +324,7 @@ async def send_message(
 
     @sub_router.callback_query(F.data == "quit")
     @sub_router.callback_query(F.data == "later")
-    async def close_notification(callback_query: CallbackQuery):
+    async def close_notification(callback_query: CallbackQuery, state: FSMContext):
         await callback_query.message.delete()
         profile = user_service.storage.get_current_profile(recipient.tg_id)
         await state.set_state(States.main_menu)
@@ -411,20 +409,21 @@ async def client_request(coach: Coach, client: Client, state: FSMContext) -> Non
         "gym": translate(ButtonText.gym_workout, coach_lang),
     }
 
-    service_types = {
-        "subscription": translate(ButtonText.subscription, coach_lang),
-        "program": translate(ButtonText.program, coach_lang),
-    }
-
     preferable_workout_type = data.get("workout_type")
     preferable_type = workout_types.get(preferable_workout_type, "unknown")
-    client_data = get_client_page(client, coach_lang)
-    client_data["language"] = client_lang
+    subscription = True if user_service.storage.get_subscription(client.id) else False
+    waiting_program = user_service.storage.check_program_payment(client.id)
+    client_data = get_client_page(client, coach_lang, subscription, waiting_program)
+
     if data.get("new_client"):
         message_template = translate(MessageText.new_client, coach_lang).format(
             lang=client_lang, workout_type=preferable_type
         )
     else:
+        service_types = {
+            "subscription": translate(ButtonText.subscription, coach_lang),
+            "program": translate(ButtonText.program, coach_lang),
+        }
         service_type = data.get("request_type")
         service = service_types.get(service_type)
         message_template = translate(MessageText.incoming_request, coach_lang).format(

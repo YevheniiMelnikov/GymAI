@@ -74,7 +74,6 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     coach = Coach.from_dict(data.get("coach"))
     client = Client.from_dict(data.get("client"))
-    await client_request(coach, client, state)
     await callback_query.answer(translate(MessageText.coach_selected).format(name=coach.name), show_alert=True)
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "subscription":
@@ -89,6 +88,7 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
     else:
         user_service.storage.set_program_payment_status(profile.id, True)
     await callback_query.message.answer(translate(MessageText.payment_success, profile.language))
+    await client_request(coach, client, state)
     await state.set_state(States.main_menu)
     await show_main_menu(callback_query.message, profile, state)
     with suppress(TelegramBadRequest):
