@@ -70,6 +70,8 @@ class MessageText(Enum):
     verified = auto()
     not_verified = auto()
     your_data_updated = auto()
+    waiting = auto()
+    program_compiled = auto()
     feedback = auto()
     password_retype = auto()
     password_reset_sent = auto()
@@ -133,6 +135,8 @@ class ButtonText(Enum):
     home_workout = auto()
     street_workout = auto()
     later = auto()
+    enabled = auto()
+    disabled = auto()
 
     def __str__(self) -> str:
         return f"buttons.{self.name}"

@@ -7,6 +7,7 @@ from aiogram.fsm.state import State
 
 from bot.states import States
 from common.models import Client, Coach
+from common.user_service import user_service
 from texts.text_manager import ButtonText, MessageText, translate
 
 logger = loguru.logger
@@ -102,20 +103,27 @@ def get_coach_page(coach: Coach) -> dict[str, Any]:
     return {"name": coach.name, "experience": coach.work_experience, "additional_info": coach.additional_info}
 
 
-def get_client_page(client: Client, lang_code: str) -> dict[str, Any]:
-    genders = {
+def get_client_page(client: Client, lang_code: str, subscription: bool, payment_status: bool) -> dict[str, Any]:
+    texts = {
         "male": translate(ButtonText.male, lang=lang_code),
         "female": translate(ButtonText.female, lang=lang_code),
+        "enabled": translate(ButtonText.enabled, lang=lang_code),
+        "disabled": translate(ButtonText.disabled, lang=lang_code),
+        "waiting": translate(MessageText.waiting, lang=lang_code),
+        "ok": translate(MessageText.program_compiled, lang=lang_code),
     }
 
     return {
         "name": client.name,
-        "gender": genders.get(client.gender, ""),
+        "gender": texts.get(client.gender, ""),
         "birth_date": client.birth_date,
         "workout_experience": client.workout_experience,
         "workout_goals": client.workout_goals,
         "health_notes": client.health_notes,
         "weight": client.weight,
+        "language": user_service.storage.get_profile_info_by_key(client.tg_id, client.id, "language"),
+        "subscription": texts.get("enabled") if subscription else texts.get("disabled"),
+        "status": texts.get("waiting") if payment_status else texts.get("ok"),
     }
 
 

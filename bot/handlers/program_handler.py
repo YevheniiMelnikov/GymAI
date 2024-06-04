@@ -33,9 +33,10 @@ async def program_manage(callback_query: CallbackQuery, state: FSMContext) -> No
             logger.info(f"Program for profile_id {client_id} deleted from DB")
             user_service.storage.delete_program(str(client_id))
         await state.clear()
+        user_service.storage.reset_program_payment_status(client_id)
         await callback_query.message.answer(text=translate(MessageText.enter_exercise, lang=profile.language))
-        await state.set_state(States.program_manage)
         await state.update_data(client_id=client_id, exercises=[])
+        await state.set_state(States.program_manage)
         await callback_query.message.delete()
 
     elif callback_query.data == "save":
