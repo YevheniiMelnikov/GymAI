@@ -1,7 +1,7 @@
 from contextlib import suppress
 
 import loguru
-from aiogram import Bot, Router
+from aiogram import Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message

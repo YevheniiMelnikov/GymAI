@@ -13,11 +13,6 @@ async def handle_invalid_content(message: Message, lang: str) -> None:
     await message.delete()
 
 
-@invalid_content_router.message(States.language_choice)
-async def invalid_language(message: Message) -> None:
-    await handle_invalid_content(message, "ua")
-
-
 @invalid_content_router.message(States.username)
 @invalid_content_router.message(States.password)
 @invalid_content_router.message(States.birth_date)
@@ -37,6 +32,6 @@ async def invalid_language(message: Message) -> None:
 @invalid_content_router.message(States.contact_client)
 @invalid_content_router.message(States.main_menu)
 @invalid_content_router.message(States.gift)
-async def invalid_data_handler(message: Message, state: FSMContext) -> None:  # TODO: FIND BETTER SOLUTION
+async def invalid_data_handler(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await handle_invalid_content(message, data.get("lang", "ua"))

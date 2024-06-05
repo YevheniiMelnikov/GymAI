@@ -5,7 +5,7 @@ import loguru
 from aiogram import Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import CallbackQuery
 
 from bot.keyboards import choose_payment_options, select_program_type, workout_type
 from bot.states import States

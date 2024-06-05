@@ -225,7 +225,7 @@ class UserProfileManager:
             logger.error(f"Failed to get program for profile_id {profile_id}: {e}")
             return None
 
-    def set_program_payment_status(self, profile_id: str, paid: bool) -> None:  # TODO: USE AFTER SUCCESSFUL PAYMENT
+    def set_program_payment_status(self, profile_id: str, paid: bool) -> None:
         try:
             self.redis.hset("workout_plans:payments", profile_id, json.dumps({"paid": paid}))
             logger.info(f"Program status for profile_id {profile_id} set to {paid}")

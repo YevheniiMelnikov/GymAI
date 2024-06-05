@@ -1,38 +1,21 @@
-from contextlib import suppress
-
 import loguru
 from aiogram import Router
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import (
-    CallbackQuery,
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    Message,
-)
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import (
-    choose_coach,
-    gift,
-    profile_menu_keyboard,
-    program_manage_menu,
-    select_program_type,
-)
+from bot.keyboards import gift
 from bot.states import States
 from common.functions import (
     assign_coach,
-    format_program,
-    show_clients,
     show_coaches,
     show_main_menu,
     show_profile_editing_menu,
-    show_subscription_page,
+    handle_contact_action, handle_program_action, handle_pagination, handle_my_profile, handle_my_clients,
+    handle_my_program,
 )
-from common.models import Client, Coach, Profile
+from common.models import Coach, Profile
 from common.user_service import user_service
-from common.utils import get_profile_attributes
-from texts.text_manager import ButtonText, MessageText, translate
+from texts.text_manager import MessageText, translate
 
 main_router = Router()
 logger = loguru.logger
@@ -50,89 +33,13 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
             await state.set_state(States.feedback)
 
         case "my_profile":
-            user = (
-                user_service.storage.get_client_by_id(profile.id)
-                if profile.status == "client"
-                else user_service.storage.get_coach_by_id(profile.id)
-            )
-            format_attributes = get_profile_attributes(role=profile.status, user=user, lang_code=profile.language)
-            text = translate(
-                MessageText.client_profile if profile.status == "client" else MessageText.coach_profile,
-                lang=profile.language,
-            ).format(**format_attributes)
-            if profile.status == "coach" and getattr(user, "profile_photo", None):
-                photo = f"https://storage.googleapis.com/coach_avatars/{user.profile_photo}"
-                try:
-                    await callback_query.message.answer_photo(
-                        photo, text, reply_markup=profile_menu_keyboard(profile.language)
-                    )
-                except TelegramBadRequest:
-                    logger.error(f"Profile image of profile_id {profile.id} not found")
-                    await callback_query.message.answer(text, reply_markup=profile_menu_keyboard(profile.language))
-            else:
-                await callback_query.message.answer(text, reply_markup=profile_menu_keyboard(profile.language))
-            await state.set_state(States.profile)
+            await handle_my_profile(callback_query, profile, state)
 
         case "my_clients":
-            coach = user_service.storage.get_coach_by_id(profile.id)
-            assigned_ids = coach.assigned_to if coach.assigned_to != [] else None
-            if assigned_ids:
-                clients = [user_service.storage.get_client_by_id(client) for client in assigned_ids]
-                await show_clients(callback_query.message, clients, state)
-            else:
-                if not coach.verified:
-                    await callback_query.answer(
-                        text=translate(MessageText.coach_info_message, profile.language), show_alert=True
-                    )
-                await callback_query.message.answer(translate(MessageText.no_clients, profile.language))
-                await state.set_state(States.main_menu)
-                await show_main_menu(callback_query.message, profile, state)
-            return
+            await handle_my_clients(callback_query, profile, state)
 
         case "my_program":
-            client = user_service.storage.get_client_by_id(profile.id)
-            assigned = client.assigned_to if client.assigned_to != [] else None
-            if not assigned:
-                await callback_query.message.answer(
-                    text=translate(MessageText.no_program, lang=profile.language),
-                    reply_markup=choose_coach(profile.language),
-                )
-                await state.set_state(States.choose_coach)
-                return
-
-            subscription = user_service.storage.get_subscription(profile.id)
-            program_paid = user_service.storage.check_program_payment(profile.id)
-            if not subscription and not program_paid:
-                await state.set_state(States.select_program_type)
-                await callback_query.message.answer(
-                    text=translate(MessageText.no_program, lang=profile.language),
-                    reply_markup=select_program_type(profile.language),
-                )
-                return
-
-            if program_paid:
-                await callback_query.answer(translate(MessageText.program_not_ready, profile.language), show_alert=True)
-
-            if subscription:
-                await show_subscription_page(callback_query, state, subscription)
-
-            exercises_data = user_service.storage.get_program(str(profile.id))
-            if exercises_data and exercises_data.exercises:
-                exercises_tuples = [
-                    (exercise,) if isinstance(exercise, str) else exercise for exercise in exercises_data.exercises
-                ]
-                program = await format_program(exercises_tuples)
-                kb = InlineKeyboardBuilder()
-                kb.button(text=translate(ButtonText.back, profile.language), callback_data="back")
-                await callback_query.message.answer(
-                    text=translate(MessageText.current_program, lang=profile.language).format(program=program),
-                    reply_markup=kb.as_markup(one_time_keyboard=True),
-                    disable_web_page_preview=True,
-                )
-                await state.set_state(States.program)
-
-    with suppress(TelegramBadRequest):
-        await callback_query.message.delete()
+            await handle_my_program(callback_query, profile, state)
 
 
 @main_router.callback_query(States.profile)
@@ -255,60 +162,20 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
 
     action, client_id = callback_query.data.split("_")
     if action == "contact":
-        await callback_query.message.answer(translate(MessageText.enter_your_message, profile.language))
-        await callback_query.message.delete()
-        coach = user_service.storage.get_coach_by_id(profile.id)
-        await state.clear()
-        await state.update_data(recipient_id=client_id, sender_name=coach.name)
-        await state.set_state(States.contact_client)
+        await handle_contact_action(callback_query, profile, client_id, state)
         return
 
     if action == "program":
-        subscription = user_service.storage.get_subscription(client_id)
-        program_paid = user_service.storage.check_program_payment(client_id)
-
-        if not subscription and not program_paid:
-            await callback_query.answer(
-                text=translate(MessageText.payment_required, lang=profile.language), show_alert=True
-            )
-            return
-
-        await callback_query.answer(text=translate(MessageText.program_guide, lang=profile.language), show_alert=True)
-        if workout_data := user_service.storage.get_program(str(client_id)):
-            if workout_data and workout_data.exercises:
-                exercises_tuples = [
-                    (exercise,) if isinstance(exercise, str) else exercise for exercise in workout_data.exercises
-                ]
-                program = await format_program(exercises_tuples)
-                del_msg = await callback_query.message.answer(
-                    text=translate(MessageText.current_program, lang=profile.language).format(program=program),
-                    reply_markup=program_manage_menu(profile.language),
-                    disable_web_page_preview=True,
-                )
-                await state.update_data(exercises=exercises_tuples)
-        else:
-            del_msg = await callback_query.message.answer(
-                text=translate(MessageText.no_program, lang=profile.language),
-                reply_markup=program_manage_menu(profile.language),
-            )
-        await state.update_data(client_id=client_id, del_msg=del_msg.message_id)
-        await callback_query.message.delete()
-        await state.set_state(States.program_manage)
+        await handle_program_action(callback_query, profile, client_id, state)
         return
 
-    index = int(callback_query.data.split("_")[1])
-    data = await state.get_data()
-    clients = [Client.from_dict(data) for data in data["clients"]]
-
-    if not clients:
-        await callback_query.answer(translate(MessageText.no_clients, profile.language))
-        return
-
-    if index < 0 or index >= len(clients):
+    try:
+        index = int(client_id)
+    except ValueError:
         await callback_query.answer(translate(MessageText.out_of_range, profile.language))
         return
 
-    await show_clients(callback_query.message, clients, state, index)
+    await handle_pagination(callback_query, profile, index, state)
 
 
 @main_router.callback_query(States.program)

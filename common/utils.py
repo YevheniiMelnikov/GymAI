@@ -140,3 +140,32 @@ async def short_url(url: str) -> str:
             else:
                 logger.error(f"Failed to process URL: {response.status}, {response_text}")
                 return url
+
+
+async def format_message(data: dict[str, Any], coach_lang: str, client_lang: str, preferable_type: str) -> str:
+    if data.get("new_client"):
+        return translate(MessageText.new_client, coach_lang).format(
+            lang=client_lang, workout_type=preferable_type
+        )
+    else:
+        service_types = await get_service_types(coach_lang)
+        service_type = data.get("request_type")
+        service = service_types.get(service_type)
+        return translate(MessageText.incoming_request, coach_lang).format(
+            service=service, lang=client_lang, workout_type=preferable_type
+        )
+
+
+async def get_workout_types(language: str) -> dict:
+    return {
+        "home": translate(ButtonText.home_workout, language),
+        "street": translate(ButtonText.street_workout, language),
+        "gym": translate(ButtonText.gym_workout, language),
+    }
+
+
+async def get_service_types(language: str) -> dict:
+    return {
+        "subscription": translate(ButtonText.subscription, language),
+        "program": translate(ButtonText.program, language),
+    }
