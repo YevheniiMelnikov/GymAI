@@ -15,10 +15,17 @@ from dotenv import load_dotenv
 
 from bot.keyboards import *
 from bot.states import States
-from common.file_manager import gif_manager
+from common.file_manager import avatar_manager, gif_manager
 from common.models import Client, Coach, Profile, Subscription
 from common.user_service import user_service
-from common.utils import get_client_page, get_coach_page, short_url
+from common.utils import (
+    format_message,
+    get_client_page,
+    get_coach_page,
+    get_profile_attributes,
+    get_workout_types,
+    short_url,
+)
 from texts.exercises import exercise_dict
 from texts.text_manager import MessageText, resource_manager, translate
 
@@ -74,18 +81,18 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext) 
 async def register_user(message: Message, state: FSMContext, data: dict) -> None:
     await state.update_data(email=message.text)
     if not await user_service.sign_up(
-        username=data["username"],
-        password=data["password"],
+        username=data.get("username"),
+        password=data.get("password"),
         email=message.text,
-        status=data["account_type"],
-        language=data["lang"],
+        status=data.get("account_type"),
+        language=data.get("lang"),
     ):
         logger.error(f"Registration failed for user {message.from_user.id}")
         await handle_registration_failure(message, state, data.get("lang"))
         return
 
     logger.info(f"User {message.text} registered")
-    token = await user_service.log_in(username=data["username"], password=data["password"])
+    token = await user_service.log_in(username=data.get("username"), password=data.get("password"))
 
     if not token:
         logger.error(f"Login failed for user {message.text} after registration")
@@ -93,10 +100,10 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
         return
 
     logger.info(f"User {message.text} logged in")
-    profile_data = await user_service.get_profile_by_username(data["username"])
+    profile_data = await user_service.get_profile_by_username(data.get("username"))
     user_service.storage.set_profile(
         profile=profile_data,
-        username=data["username"],
+        username=data.get("username"),
         auth_token=token,
         telegram_id=str(message.from_user.id),
         email=message.text,
@@ -104,6 +111,13 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
     await message.answer(text=translate(MessageText.registration_successful, lang=data.get("lang")))
     profile = user_service.storage.get_current_profile(message.from_user.id)
     await show_main_menu(message, profile, state)
+
+
+async def handle_registration_failure(message: Message, state: FSMContext, lang: str) -> None:
+    await message.answer(text=translate(MessageText.unexpected_error, lang=lang))
+    await state.clear()
+    await state.set_state(States.username)
+    await message.answer(text=translate(MessageText.username, lang=lang))
 
 
 async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
@@ -138,13 +152,6 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
     await show_main_menu(message, profile, state)
     with suppress(TelegramBadRequest):
         await message.delete()
-
-
-async def handle_registration_failure(message: Message, state: FSMContext, lang: str) -> None:
-    await message.answer(text=translate(MessageText.unexpected_error, lang=lang))
-    await state.clear()
-    await state.set_state(States.username)
-    await message.answer(text=translate(MessageText.username, lang=lang))
 
 
 async def set_bot_commands(lang: str = "ua") -> None:
@@ -197,7 +204,7 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
     info = data.get("additional_info")
     payment = data.get("payment_details")
     file_name = data.get("profile_photo")
-    photo = f"https://storage.googleapis.com/coach_avatars/{file_name}"
+    photo = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{file_name}"
     user = await bot.get_chat(tg_id)
     contact = f"@{user.username}" if user.username else tg_id
     async with aiohttp.ClientSession():
@@ -215,13 +222,13 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
         token = user_service.storage.get_profile_info_by_key(tg_id, profile.id, "auth_token")
         await user_service.edit_profile(profile.id, {"verified": True}, token)
         user_service.storage.set_coach_data(str(profile.id), {"verified": True})
-        await callback_query.answer("Подтверждено")
+        await callback_query.answer("👍")
         await bot.send_message(tg_id, translate(MessageText.coach_verified, lang=profile.language))
         logger.info(f"Coach verification for profile_id {profile.id} approved")
 
     @sub_router.callback_query(F.data == "coach_decline")
     async def decline_coach(callback_query: CallbackQuery):
-        await callback_query.answer("Отклонено")
+        await callback_query.answer("👎")
         await bot.send_message(tg_id, translate(MessageText.coach_declined, lang=profile.language))
         logger.info(f"Coach verification for profile_id {profile.id} declined")
 
@@ -232,7 +239,7 @@ async def show_coaches(message: Message, coaches: list[Coach], current_index=0) 
     current_coach = coaches[current_index]
     coach_info = get_coach_page(current_coach)
     text = translate(MessageText.coach_page, profile.language)
-    coach_photo_url = f"https://storage.googleapis.com/coach_avatars/{current_coach.profile_photo}"
+    coach_photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{current_coach.profile_photo}"
     formatted_text = text.format(**coach_info)
 
     try:
@@ -269,10 +276,154 @@ async def assign_coach(coach: Coach, client: Client) -> None:
         user_service.storage.set_coach_data(str(coach.id), {"assigned_to": coach_clients})
 
     user_service.storage.set_client_data(str(client.id), {"assigned_to": [int(coach.id)]})
-
     token = user_service.storage.get_profile_info_by_key(client.tg_id, client.id, "auth_token")
     await user_service.edit_profile(client.id, {"assigned_to": [coach.id]}, token)
     await user_service.edit_profile(coach.id, {"assigned_to": coach_clients}, token)
+
+
+async def handle_contact_action(callback_query: CallbackQuery, profile, client_id: str, state: FSMContext) -> None:
+    await callback_query.message.answer(translate(MessageText.enter_your_message, profile.language))
+    await callback_query.message.delete()
+    coach = user_service.storage.get_coach_by_id(profile.id)
+    await state.clear()
+    await state.update_data(recipient_id=client_id, sender_name=coach.name)
+    await state.set_state(States.contact_client)
+
+
+async def handle_program_action(callback_query: CallbackQuery, profile, client_id: str, state: FSMContext) -> None:
+    subscription = user_service.storage.get_subscription(client_id)
+    program_paid = user_service.storage.check_program_payment(client_id)
+
+    if not subscription and not program_paid:
+        await callback_query.answer(
+            text=translate(MessageText.payment_required, lang=profile.language), show_alert=True
+        )
+        return
+
+    await callback_query.answer(text=translate(MessageText.program_guide, lang=profile.language), show_alert=True)
+    workout_data = user_service.storage.get_program(str(client_id))
+
+    if workout_data and workout_data.exercises:
+        exercises_tuples = [
+            (exercise,) if isinstance(exercise, str) else exercise for exercise in workout_data.exercises
+        ]
+        program = await format_program(exercises_tuples)
+        del_msg = await callback_query.message.answer(
+            text=translate(MessageText.current_program, lang=profile.language).format(program=program),
+            reply_markup=program_manage_menu(profile.language),
+            disable_web_page_preview=True,
+        )
+        await state.update_data(exercises=exercises_tuples)
+    else:
+        del_msg = await callback_query.message.answer(
+            text=translate(MessageText.no_program, lang=profile.language),
+            reply_markup=program_manage_menu(profile.language),
+        )
+
+    await state.update_data(client_id=client_id, del_msg=del_msg.message_id)
+    await callback_query.message.delete()
+    await state.set_state(States.program_manage)
+
+
+async def handle_pagination(callback_query: CallbackQuery, profile, index: int, state: FSMContext) -> None:
+    data = await state.get_data()
+    clients = [Client.from_dict(data) for data in data["clients"]]
+
+    if not clients:
+        await callback_query.answer(translate(MessageText.no_clients, profile.language))
+        return
+
+    if index < 0 or index >= len(clients):
+        await callback_query.answer(translate(MessageText.out_of_range, profile.language))
+        return
+
+    await show_clients(callback_query.message, clients, state, index)
+
+
+async def handle_my_profile(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    user = (
+        user_service.storage.get_client_by_id(profile.id)
+        if profile.status == "client"
+        else user_service.storage.get_coach_by_id(profile.id)
+    )
+    format_attributes = get_profile_attributes(role=profile.status, user=user, lang_code=profile.language)
+    text = translate(
+        MessageText.client_profile if profile.status == "client" else MessageText.coach_profile,
+        lang=profile.language,
+    ).format(**format_attributes)
+    if profile.status == "coach" and getattr(user, "profile_photo", None):
+        photo = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{user.profile_photo}"
+        try:
+            await callback_query.message.answer_photo(photo, text, reply_markup=profile_menu_keyboard(profile.language))
+        except TelegramBadRequest:
+            logger.error(f"Profile image of profile_id {profile.id} not found")
+            await callback_query.message.answer(text, reply_markup=profile_menu_keyboard(profile.language))
+    else:
+        await callback_query.message.answer(text, reply_markup=profile_menu_keyboard(profile.language))
+    await state.set_state(States.profile)
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()
+
+
+async def handle_my_clients(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    coach = user_service.storage.get_coach_by_id(profile.id)
+    assigned_ids = coach.assigned_to if coach.assigned_to else None
+    if assigned_ids:
+        clients = [user_service.storage.get_client_by_id(client) for client in assigned_ids]
+        await show_clients(callback_query.message, clients, state)
+    else:
+        if not coach.verified:
+            await callback_query.answer(
+                text=translate(MessageText.coach_info_message, profile.language), show_alert=True
+            )
+        await callback_query.message.answer(translate(MessageText.no_clients, profile.language))
+        await state.set_state(States.main_menu)
+        await show_main_menu(callback_query.message, profile, state)
+
+
+async def handle_my_program(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    client = user_service.storage.get_client_by_id(profile.id)
+    assigned = client.assigned_to if client.assigned_to else None
+    if not assigned:
+        await callback_query.message.answer(
+            text=translate(MessageText.no_program, lang=profile.language),
+            reply_markup=choose_coach(profile.language),
+        )
+        await state.set_state(States.choose_coach)
+        return
+
+    subscription = user_service.storage.get_subscription(profile.id)
+    program_paid = user_service.storage.check_program_payment(profile.id)
+    if not subscription and not program_paid:
+        await state.set_state(States.select_program_type)
+        await callback_query.message.answer(
+            text=translate(MessageText.no_program, lang=profile.language),
+            reply_markup=select_program_type(profile.language),
+        )
+        with suppress(TelegramBadRequest):
+            await callback_query.message.delete()
+        return
+
+    if program_paid:
+        await callback_query.answer(translate(MessageText.program_not_ready, profile.language), show_alert=True)
+
+    if subscription:
+        await show_subscription_page(callback_query, state, subscription)
+
+    exercises_data = user_service.storage.get_program(str(profile.id))
+    if exercises_data and exercises_data.exercises:
+        exercises_tuples = [
+            (exercise,) if isinstance(exercise, str) else exercise for exercise in exercises_data.exercises
+        ]
+        program = await format_program(exercises_tuples)
+        kb = InlineKeyboardBuilder()
+        kb.button(text=translate(ButtonText.back, profile.language), callback_data="back")
+        await callback_query.message.answer(
+            text=translate(MessageText.current_program, lang=profile.language).format(program=program),
+            reply_markup=kb.as_markup(one_time_keyboard=True),
+            disable_web_page_preview=True,
+        )
+        await state.set_state(States.program)
 
 
 async def show_clients(message: Message, clients: list[Client], state: FSMContext, current_index=0) -> None:
@@ -403,36 +554,17 @@ async def client_request(coach: Coach, client: Client, state: FSMContext) -> Non
     client_lang = user_service.storage.get_profile_info_by_key(client.tg_id, client.id, "language")
     await state.update_data(recipient_language=coach_lang)
 
-    workout_types = {
-        "home": translate(ButtonText.home_workout, coach_lang),
-        "street": translate(ButtonText.street_workout, coach_lang),
-        "gym": translate(ButtonText.gym_workout, coach_lang),
-    }
-
+    workout_types = await get_workout_types(coach_lang)
     preferable_workout_type = data.get("workout_type")
     preferable_type = workout_types.get(preferable_workout_type, "unknown")
-    subscription = True if user_service.storage.get_subscription(client.id) else False
+    subscription = user_service.storage.get_subscription(client.id)
     waiting_program = user_service.storage.check_program_payment(client.id)
     client_data = get_client_page(client, coach_lang, subscription, waiting_program)
-
-    if data.get("new_client"):
-        message_template = translate(MessageText.new_client, coach_lang).format(
-            lang=client_lang, workout_type=preferable_type
-        )
-    else:
-        service_types = {
-            "subscription": translate(ButtonText.subscription, coach_lang),
-            "program": translate(ButtonText.program, coach_lang),
-        }
-        service_type = data.get("request_type")
-        service = service_types.get(service_type)
-        message_template = translate(MessageText.incoming_request, coach_lang).format(
-            service=service, lang=client_lang, workout_type=preferable_type
-        )
+    text = await format_message(data, coach_lang, client_lang, preferable_type)
 
     await send_message(
         recipient=coach,
-        text=message_template,
+        text=text,
         state=state,
         include_incoming_message=False,
     )
