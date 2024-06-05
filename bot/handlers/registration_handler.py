@@ -18,31 +18,28 @@ logger = loguru.logger
 register_router = Router()
 
 
-@register_router.message(States.language_choice, F.text)
-async def language(message: Message, state: FSMContext) -> None:
-    lang_code = codes.get(message.text)
-    if not lang_code:
-        await message.answer(translate(MessageText.invalid_content))
-        await message.delete()
-        return
-
+@register_router.callback_query(States.language_choice)
+async def language(callback_query: CallbackQuery, state: FSMContext) -> None:
+    lang_code = callback_query.data
     await set_bot_commands(lang_code)
-    if profile := user_service.storage.get_current_profile(message.from_user.id):
-        token = user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
+    if profile := user_service.storage.get_current_profile(callback_query.from_user.id):
+        token = user_service.storage.get_profile_info_by_key(callback_query.from_user.id, profile.id, "auth_token")
         await user_service.edit_profile(profile.id, {"language": lang_code}, token)
-        user_service.storage.set_profile_info_by_key(str(message.from_user.id), str(profile.id), "language", lang_code)
+        user_service.storage.set_profile_info_by_key(
+            str(callback_query.from_user.id), str(profile.id), "language", lang_code
+        )
         profile.language = lang_code
-        await show_main_menu(message, profile, state)
+        await show_main_menu(callback_query.message, profile, state)
     else:
         await state.update_data(lang=lang_code)
-        await message.answer(
+        await callback_query.message.answer(
             text=translate(MessageText.choose_action, lang=lang_code),
             reply_markup=action_choice_keyboard(lang_code),
         )
         await state.set_state(States.action_choice)
 
     with suppress(TelegramBadRequest):
-        await message.delete()
+        await callback_query.message.delete()
 
 
 @register_router.callback_query(States.action_choice)

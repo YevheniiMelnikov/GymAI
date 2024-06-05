@@ -1,21 +1,16 @@
-from aiogram.types import (
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
-    ReplyKeyboardMarkup,
-)
-from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from texts.text_manager import ButtonText, translate
 
-codes = {"Українська": "ua", "English": "eng", "Русский": "ru"}  # TODO: FIND BETTER SOLUTION
 
-
-def language_choice() -> ReplyKeyboardMarkup:
-    kb = ReplyKeyboardBuilder()
-    kb.button(text="Українська")
-    kb.button(text="English")
-    kb.button(text="Русский")
-    return kb.as_markup(resize_keyboard=True, one_time_keyboard=True)
+def language_choice() -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton(text="Українська", callback_data="ua")],
+        [InlineKeyboardButton(text="Русский", callback_data="ru")],
+        [InlineKeyboardButton(text="English", callback_data="eng")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
 
 
 def choose_gender(lang_code: str) -> InlineKeyboardMarkup:
