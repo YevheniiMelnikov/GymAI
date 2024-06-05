@@ -33,6 +33,13 @@ class UserProfileManager:
         if self.redis:
             self.redis.close()
 
+    def _get_profile_data(self, telegram_id: int | str) -> list[dict[str, Any]]:
+        profiles_data = self.redis.hget("user_profiles", str(telegram_id)) or "[]"
+        return json.loads(profiles_data)
+
+    def _update_profile_data(self, telegram_id: int | str, profiles_data: list[dict[str, Any]]) -> None:
+        self.redis.hset("user_profiles", str(telegram_id), json.dumps(profiles_data))
+
     def set_profile(
         self,
         profile: Profile,
@@ -45,9 +52,7 @@ class UserProfileManager:
         email = email or self.get_profile_info_by_key(telegram_id, profile.id, "email")
 
         try:
-            current_profiles_data = self.redis.hget("user_profiles", telegram_id)
-            current_profiles = json.loads(current_profiles_data) if current_profiles_data else []
-
+            current_profiles = self._get_profile_data(telegram_id)
             profile_data = {
                 "id": profile.id,
                 "status": profile.status,
@@ -66,7 +71,7 @@ class UserProfileManager:
             else:
                 current_profiles.append(profile_data)
 
-            self.redis.hset("user_profiles", telegram_id, json.dumps(current_profiles))
+            self._update_profile_data(telegram_id, current_profiles)
             logger.info(f"Profile {profile.id} set for user {telegram_id}")
 
         except Exception as e:
@@ -74,8 +79,9 @@ class UserProfileManager:
 
     def get_current_profile(self, telegram_id: int) -> Profile | None:
         try:
-            profiles_data = json.loads(self.redis.hget("user_profiles", str(telegram_id)) or "[]")
-            current_profiles = [Profile.from_dict(data) for data in profiles_data if data.get("is_current", True)]
+            current_profiles = [
+                Profile.from_dict(data) for data in self._get_profile_data(telegram_id) if data.get("is_current", True)
+            ]
             if current_profiles:
                 return max(current_profiles, key=lambda p: p.last_used)
             return None
@@ -84,8 +90,7 @@ class UserProfileManager:
             return None
 
     def get_profiles(self, telegram_id: str) -> list[Profile]:
-        profiles_data = json.loads(self.redis.hget("user_profiles", telegram_id) or "[]")
-        return [Profile.from_dict(data) for data in profiles_data]
+        return [Profile.from_dict(data) for data in self._get_profile_data(telegram_id)]
 
     def get_coaches(self) -> list[Coach] | None:
         try:
@@ -104,56 +109,59 @@ class UserProfileManager:
 
     def deactivate_profiles(self, telegram_id: str) -> None:
         try:
-            profiles_data = json.loads(self.redis.hget("user_profiles", telegram_id) or "[]")
+            profiles_data = self._get_profile_data(telegram_id)
             for profile_data in profiles_data:
                 profile_data["is_current"] = False
-            self.redis.hset("user_profiles", telegram_id, json.dumps(profiles_data))
+            self._update_profile_data(telegram_id, profiles_data)
             logger.info(f"Profiles of user {telegram_id} deactivated")
         except Exception as e:
             logger.error(f"Failed to deactivate profiles of user {telegram_id}: {e}")
 
     def get_profile_info_by_key(self, telegram_id: int | str, profile_id: int, key: str) -> str | None:
-        profiles = json.loads(self.redis.hget("user_profiles", str(telegram_id)) or "[]")
+        profiles = self._get_profile_data(telegram_id)
         for profile_data in profiles:
-            if profile_data.get("id") == int(profile_id):
+            if int(profile_data.get("id")) == int(profile_id):
                 return profile_data.get(key)
         return None
 
     def set_profile_info_by_key(self, telegram_id: str, profile_id: str, key: str, value: Any) -> bool:
         try:
-            profiles_data = json.loads(self.redis.hget("user_profiles", telegram_id) or "[]")
+            profiles_data = self._get_profile_data(telegram_id)
             for profile_data in profiles_data:
                 if profile_data.get("id") == profile_id:
                     profile_data[key] = value
                     break
             else:
                 return False
-            self.redis.hset("user_profiles", telegram_id, json.dumps(profiles_data))
+            self._update_profile_data(telegram_id, profiles_data)
             return True
         except Exception as e:
             logger.error(f"Failed to set profile info for user {telegram_id} and profile {profile_id}: {e}")
             return False
 
-    def set_client_data(self, profile_id: str, client_data: dict) -> None:
+    def _set_data(self, key: str, profile_id: str, data: dict[str, Any], allowed_fields: list[str]) -> None:
         try:
-            allowed_fields = [
-                "name",
-                "gender",
-                "birth_date",
-                "workout_experience",
-                "workout_goals",
-                "health_notes",
-                "weight",
-                "assigned_to",
-                "tg_id",
-            ]
-            filtered_client_data = {key: client_data[key] for key in allowed_fields if key in client_data}
-            existing_data = json.loads(self.redis.hget("clients", profile_id) or "{}")
-            existing_data.update(filtered_client_data)
-            self.redis.hset("clients", profile_id, json.dumps(existing_data))
-            logger.info(f"Client data for profile_id {profile_id} has been updated: {client_data}")
+            filtered_data = {k: data[k] for k in allowed_fields if k in data}
+            existing_data = json.loads(self.redis.hget(key, profile_id) or "{}")
+            existing_data.update(filtered_data)
+            self.redis.hset(key, profile_id, json.dumps(existing_data))
+            logger.info(f"Data for {profile_id} has been updated in {key}: {filtered_data}")
         except Exception as e:
-            logger.error(f"Failed to set or update client data for {profile_id}: {e}")
+            logger.error(f"Failed to set or update data for {profile_id} in {key}", e)
+
+    def set_client_data(self, profile_id: str, client_data: dict) -> None:
+        allowed_fields = [
+            "name",
+            "gender",
+            "birth_date",
+            "workout_experience",
+            "workout_goals",
+            "health_notes",
+            "weight",
+            "assigned_to",
+            "tg_id",
+        ]
+        self._set_data("clients", profile_id, client_data, allowed_fields)
 
     def get_client_by_id(self, profile_id: int) -> Client | None:
         try:
@@ -170,24 +178,17 @@ class UserProfileManager:
             raise UserServiceError
 
     def set_coach_data(self, profile_id: str, profile_data: dict) -> None:
-        try:
-            allowed_fields = [
-                "name",
-                "work_experience",
-                "additional_info",
-                "payment_details",
-                "profile_photo",
-                "verified",
-                "assigned_to",
-                "tg_id",
-            ]
-            filtered_coach_data = {key: profile_data[key] for key in allowed_fields if key in profile_data}
-            existing_data = json.loads(self.redis.hget("coaches", profile_id) or "{}")
-            existing_data.update(filtered_coach_data)
-            self.redis.hset("coaches", profile_id, json.dumps(existing_data))
-            logger.info(f"Updated profile_data {profile_id}: {profile_data}")
-        except Exception as e:
-            logger.error(f"Failed to set data for profile_data {profile_id}: {e}")
+        allowed_fields = [
+            "name",
+            "work_experience",
+            "additional_info",
+            "payment_details",
+            "profile_photo",
+            "verified",
+            "assigned_to",
+            "tg_id",
+        ]
+        self._set_data("coaches", profile_id, profile_data, allowed_fields)
 
     def get_coach_by_id(self, profile_id: int) -> Coach | None:
         try:
@@ -197,7 +198,7 @@ class UserProfileManager:
                 data["id"] = profile_id
                 return Coach.from_dict(data)
             else:
-                logger.info(f"No data found for profile_id {profile_id} in cache")
+                logger.error(f"No data found for profile_id {profile_id} in cache")
                 raise UserServiceError
         except Exception as e:
             logger.error(f"Failed to get data for profile_id from cache {profile_id}: {e}")

@@ -7,11 +7,15 @@ from bot.keyboards import gift
 from bot.states import States
 from common.functions import (
     assign_coach,
+    handle_contact_action,
+    handle_my_clients,
+    handle_my_profile,
+    handle_my_program,
+    handle_pagination,
+    handle_program_action,
     show_coaches,
     show_main_menu,
     show_profile_editing_menu,
-    handle_contact_action, handle_program_action, handle_pagination, handle_my_profile, handle_my_clients,
-    handle_my_program,
 )
 from common.models import Coach, Profile
 from common.user_service import user_service

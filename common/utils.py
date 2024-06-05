@@ -144,9 +144,7 @@ async def short_url(url: str) -> str:
 
 async def format_message(data: dict[str, Any], coach_lang: str, client_lang: str, preferable_type: str) -> str:
     if data.get("new_client"):
-        return translate(MessageText.new_client, coach_lang).format(
-            lang=client_lang, workout_type=preferable_type
-        )
+        return translate(MessageText.new_client, coach_lang).format(lang=client_lang, workout_type=preferable_type)
     else:
         service_types = await get_service_types(coach_lang)
         service_type = data.get("request_type")

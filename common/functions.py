@@ -15,11 +15,17 @@ from dotenv import load_dotenv
 
 from bot.keyboards import *
 from bot.states import States
-from common.file_manager import gif_manager, avatar_manager
+from common.file_manager import avatar_manager, gif_manager
 from common.models import Client, Coach, Profile, Subscription
 from common.user_service import user_service
-from common.utils import get_client_page, get_coach_page, short_url, get_workout_types, format_message, \
-    get_profile_attributes
+from common.utils import (
+    format_message,
+    get_client_page,
+    get_coach_page,
+    get_profile_attributes,
+    get_workout_types,
+    short_url,
+)
 from texts.exercises import exercise_dict
 from texts.text_manager import MessageText, resource_manager, translate
 
@@ -348,9 +354,7 @@ async def handle_my_profile(callback_query: CallbackQuery, profile: Profile, sta
     if profile.status == "coach" and getattr(user, "profile_photo", None):
         photo = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{user.profile_photo}"
         try:
-            await callback_query.message.answer_photo(
-                photo, text, reply_markup=profile_menu_keyboard(profile.language)
-            )
+            await callback_query.message.answer_photo(photo, text, reply_markup=profile_menu_keyboard(profile.language))
         except TelegramBadRequest:
             logger.error(f"Profile image of profile_id {profile.id} not found")
             await callback_query.message.answer(text, reply_markup=profile_menu_keyboard(profile.language))
