@@ -204,9 +204,12 @@ class UserProfileManager:
             logger.error(f"Failed to get data for profile_id from cache {profile_id}: {e}")
             raise UserServiceError
 
-    def save_program(self, client_id: str, exercises: list[str]) -> None:
+    def save_program(
+        self, client_id: str, exercises_by_day: dict[int, list[tuple[str, str]]], split_number: int
+    ) -> None:
         try:
-            self.redis.hset("workout_plans:programs", client_id, json.dumps({"exercises": exercises}))
+            program_data = {"exercises_by_day": exercises_by_day, "split_number": split_number}
+            self.redis.hset("workout_plans:programs", client_id, json.dumps(program_data))
             self.reset_program_payment_status(client_id)
             logger.info(f"Program for client {client_id} saved in cache")
         except Exception as e:
@@ -336,7 +339,7 @@ class UserService:
     async def close(self) -> None:
         await self.client.aclose()
 
-    async def api_request(self, method: str, url: str, data: dict = None, headers: dict = None) -> tuple:
+    async def _api_request(self, method: str, url: str, data: dict = None, headers: dict = None) -> tuple:
         logger.info(f"Executing {method.upper()} request to {url} with data: {data} and headers: {headers}")
         try:
             response = await self.client.request(method, url, json=data, headers=headers)
@@ -357,7 +360,7 @@ class UserService:
 
     async def sign_up(self, **kwargs) -> bool:
         url = f"{self.backend_url}/api/v1/persons/create/"
-        status_code, response = await self.api_request(
+        status_code, response = await self._api_request(
             "post", url, data=kwargs, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
         if status_code == 400 and "error" in response:
@@ -386,12 +389,12 @@ class UserService:
         ]
         filtered_data = {key: data[key] for key in fields if key in data and data[key] is not None}
         url = f"{self.backend_url}/api/v1/persons/{profile_id}/"
-        status_code, _ = await self.api_request("put", url, filtered_data, headers={"Authorization": f"Token {token}"})
+        status_code, _ = await self._api_request("put", url, filtered_data, headers={"Authorization": f"Token {token}"})
         return status_code == 200
 
     async def log_in(self, username: str, password: str) -> str | None:
         url = f"{self.backend_url}/auth/token/login/"
-        status_code, response = await self.api_request("post", url, {"username": username, "password": password})
+        status_code, response = await self._api_request("post", url, {"username": username, "password": password})
         if status_code == 200 and "auth_token" in response:
             return response["auth_token"]
         return None
@@ -401,7 +404,7 @@ class UserService:
         if current_profile:
             auth_token = self.storage.get_profile_info_by_key(tg_user_id, current_profile.id, "auth_token")
             url = f"{self.backend_url}/auth/token/logout/"
-            status_code, _ = await self.api_request("post", url, headers={"Authorization": f"Token {auth_token}"})
+            status_code, _ = await self._api_request("post", url, headers={"Authorization": f"Token {auth_token}"})
             if status_code == 204:
                 self.storage.deactivate_profiles(str(tg_user_id))
                 logger.info(f"User with profile_id {current_profile.id} logged out")
@@ -410,7 +413,7 @@ class UserService:
 
     async def get_profile_by_username(self, username: str) -> Profile | None:
         url = f"{self.backend_url}/api/v1/persons/{username}/"
-        status_code, user_data = await self.api_request(
+        status_code, user_data = await self._api_request(
             "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
         if status_code == 200:
@@ -420,7 +423,7 @@ class UserService:
 
     async def get_user_data(self, token: str) -> dict[str, str] | None:
         url = f"{self.backend_url}/api/v1/current-user/"
-        status_code, response = await self.api_request("get", url, headers={"Authorization": f"Token {token}"})
+        status_code, response = await self._api_request("get", url, headers={"Authorization": f"Token {token}"})
         if status_code == 200:
             return response
         logger.info(f"Failed to retrieve user data. HTTP status: {status_code}")
@@ -428,7 +431,7 @@ class UserService:
 
     async def reset_password(self, email: str, token: str) -> bool:
         headers = {"Authorization": f"Token {token}"}
-        status_code, _ = await self.api_request(
+        status_code, _ = await self._api_request(
             "post", f"{self.backend_url}/api/v1/auth/users/reset_password/", {"email": email}, headers
         )
         logger.info(f"Password reset requested for {email}")
@@ -437,7 +440,7 @@ class UserService:
     async def send_feedback(self, email: str, username: str, feedback: str) -> bool:
         url = f"{self.backend_url}/api/v1/send-feedback/"
         headers = {"Authorization": f"Api-Key {self.api_key}"}
-        status_code, _ = await self.api_request(
+        status_code, _ = await self._api_request(
             "post",
             url,
             {
@@ -449,14 +452,17 @@ class UserService:
         )
         return status_code == 200
 
-    async def save_program(self, client_id: str, exercises: list[str]) -> None:
-        self.storage.save_program(client_id, exercises)
+    async def save_program(
+        self, client_id: str, exercises_by_day: dict[int, list[tuple[str, str]]], split_number: int
+    ) -> None:
+        self.storage.save_program(client_id, exercises_by_day, split_number)
         url = f"{self.backend_url}/api/v1/programs/"
         data = {
             "profile": client_id,
-            "exercises": exercises,
+            "exercises_by_day": exercises_by_day,
+            "split_number": split_number,
         }
-        status_code, response = await self.api_request(
+        status_code, response = await self._api_request(
             "post", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
         if status_code != 201:
@@ -466,24 +472,25 @@ class UserService:
     async def delete_program(self, profile_id: str) -> bool:
         url = f"{self.backend_url}/api/v1/programs/delete_by_profile/{profile_id}/"
         headers = {"Authorization": f"Api-Key {self.api_key}"}
-        status, _ = await self.api_request("delete", url, headers=headers)
+        status, _ = await self._api_request("delete", url, headers=headers)
         return status == 204
 
-    async def create_subscription(self, user_id: int, price: float) -> bool:
+    async def create_subscription(self, user_id: int, price: float, workout_days: list[str]) -> bool:
         url = f"{self.backend_url}/api/v1/subscriptions/"
         data = {
             "user": user_id,
             "enabled": True,
             "price": price,
+            "workout_days": workout_days,
         }
-        status_code, response = await self.api_request(
+        status_code, response = await self._api_request(
             "post", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
         return status_code == 201
 
     async def get_subscription(self, user_id: int) -> Subscription | None:
         url = f"{self.backend_url}/api/v1/subscriptions/?user={user_id}"
-        status_code, subscriptions = await self.api_request(
+        status_code, subscriptions = await self._api_request(
             "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
         if status_code == 200 and subscriptions:
@@ -493,17 +500,17 @@ class UserService:
 
     async def delete_subscription(self, user_id: int) -> bool:  # TODO: NOT USED YET
         url = f"{self.backend_url}/api/v1/subscriptions/delete_by_user/{user_id}/"
-        status_code, _ = await self.api_request("delete", url, headers={"Authorization": f"Api-Key {self.api_key}"})
+        status_code, _ = await self._api_request("delete", url, headers={"Authorization": f"Api-Key {self.api_key}"})
         return status_code == 204
 
     async def update_subscription(self, subscription_id: int, data: dict) -> bool:  # TODO: NOT USED YET
         url = f"{self.backend_url}/api/v1/subscriptions/{subscription_id}/"
-        status_code, _ = await self.api_request("put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"})
+        status_code, _ = await self._api_request("put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"})
         return status_code == 200
 
     async def delete_profile(self, profile_id: int) -> bool:  # TODO: NOT USED YET
         url = f"{self.backend_url}/api/v1/persons/{profile_id}/"
-        status_code, _ = await self.api_request("delete", url, headers={"Authorization": f"Api-Key {self.api_key}"})
+        status_code, _ = await self._api_request("delete", url, headers={"Authorization": f"Api-Key {self.api_key}"})
         return status_code == 404 if status_code else False
 
 

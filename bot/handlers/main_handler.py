@@ -5,18 +5,7 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import gift
 from bot.states import States
-from common.functions import (
-    assign_coach,
-    handle_contact_action,
-    handle_my_clients,
-    handle_my_profile,
-    handle_my_program,
-    handle_pagination,
-    handle_program_action,
-    show_coaches,
-    show_main_menu,
-    show_profile_editing_menu,
-)
+from common.functions import *
 from common.models import Coach, Profile
 from common.user_service import user_service
 from texts.text_manager import MessageText, translate
@@ -171,6 +160,10 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
 
     if action == "program":
         await handle_program_action(callback_query, profile, client_id, state)
+        return
+
+    if action == "subscription":
+        await handle_subscription_action(callback_query, profile, client_id, state)
         return
 
     try:

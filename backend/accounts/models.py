@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from django.contrib.postgres.fields import ArrayField
 from django.core.validators import MaxValueValidator
 from django.db import models
-from django.db.models import Model
+from django.db.models import Model, JSONField
 
 
 class Profile(Model):
@@ -34,14 +34,16 @@ class Profile(Model):
 
 class Program(models.Model):
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="programs")
-    exercises = ArrayField(models.CharField(max_length=100), default=list, blank=True)
+    exercises_by_day = JSONField(default=dict, blank=True)
+    split_number = models.IntegerField(null=True, blank=True, validators=[MaxValueValidator(7)])
     created_at = models.DateTimeField(auto_now_add=True)
 
     @classmethod
     def from_dict(cls, data: dict) -> "Program":
         profile_id = data.get("profile")
-        exercises = data.get("exercises", [])
-        program = cls(profile_id=profile_id, exercises=exercises)
+        exercises_by_day = data.get("exercises_by_day", {})
+        split_number = data.get("split_number", 1)
+        program = cls(profile_id=profile_id, exercises_by_day=exercises_by_day, split_number=split_number)
         return program
 
     class Meta:
@@ -55,6 +57,7 @@ class Subscription(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     enabled = models.BooleanField(default=False)
     price = models.DecimalField(max_digits=10, decimal_places=2)
+    workout_days = ArrayField(models.CharField(max_length=100), default=list, blank=True)
 
     class Meta:
         verbose_name = "subscription"
