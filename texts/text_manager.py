@@ -23,6 +23,7 @@ class MessageText(Enum):
     update_your_data = auto()
     coach_info_message = auto()
     enter_your_message = auto()
+    enter_daily_program = auto()
     enter_exercise = auto()
     program_guide = auto()
     payment_link = auto()
@@ -42,6 +43,8 @@ class MessageText(Enum):
     photo_uploaded = auto()
     coach_verified = auto()
     message_sent = auto()
+    workouts_number = auto()
+    select_days = auto()
 
     invalid_credentials = auto()
     invalid_content = auto()
@@ -61,6 +64,7 @@ class MessageText(Enum):
     no_exercises_to_save = auto()
     email_unavailable = auto()
     program_not_ready = auto()
+    complete_all_days = auto()
 
     coach_page = auto()
     client_page = auto()
@@ -84,7 +88,7 @@ class MessageText(Enum):
     new_program = auto()
     main_menu = auto()
     help = auto()
-    current_program = auto()
+    program_page = auto()
     start = auto()
     signed_in = auto()
     logout = auto()
@@ -126,7 +130,8 @@ class ButtonText(Enum):
     payment_details = auto()
     photo = auto()
     add_exercise = auto()
-    save_program = auto()
+    save = auto()
+    next_day = auto()
     reset_program = auto()
     answer = auto()
     done = auto()
@@ -137,6 +142,13 @@ class ButtonText(Enum):
     later = auto()
     enabled = auto()
     disabled = auto()
+    monday = auto()
+    tuesday = auto()
+    wednesday = auto()
+    thursday = auto()
+    friday = auto()
+    saturday = auto()
+    sunday = auto()
 
     def __str__(self) -> str:
         return f"buttons.{self.name}"

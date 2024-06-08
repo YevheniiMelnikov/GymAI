@@ -3,7 +3,7 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from bot.keyboards import choose_gender, workout_experience_keyboard
+from bot.keyboards import choose_gender, workout_experience_keyboard, select_days
 from bot.states import States
 from common.file_manager import avatar_manager
 from common.functions import client_request, show_main_menu, update_user_info
@@ -213,10 +213,50 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
         # TODO: PROCESS PAYMENT LINK HERE
         # link = payment_service.program_link() if action == "program" else payment_service.subscription()
         # await callback_query.message.answer(translate(MessageText.payment_link, profile.language).format(link=link))
-        kb = InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text="💰", callback_data=data.get("request_type"))]]
-        )
-        await callback_query.message.answer("click to pay 👇", reply_markup=kb)  # payment mock
-        await state.update_data(price=f"{50}$")
-        await state.set_state(States.handle_payment)
+
+        if data.get("request_type") == "subscription":
+            await state.set_state(States.workout_days)
+            await callback_query.message.answer(
+                translate(MessageText.select_days, profile.language), reply_markup=select_days(profile.language, [])
+            )
+        else:
+            kb = InlineKeyboardMarkup(
+                inline_keyboard=[[InlineKeyboardButton(text="💰", callback_data=data.get("request_type"))]]
+            )
+            await callback_query.message.answer("click to pay 👇", reply_markup=kb)  # TODO: REPLACE WITH PAYMENT LINK
+            await state.update_data(price=f"{50}$")
+            await state.set_state(States.handle_payment)
     await callback_query.message.delete()
+
+
+@questionnaire_router.callback_query(States.workout_days)
+async def workout_days(callback_query: CallbackQuery, state: FSMContext):
+    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+    data = await state.get_data()
+    days = data.get("workout_days", [])
+
+    if callback_query.data == "complete":
+        if days:
+            await state.update_data(workout_days=days)
+            kb = InlineKeyboardMarkup(
+                inline_keyboard=[[InlineKeyboardButton(text="💰", callback_data=data.get("request_type"))]]
+            )
+            await callback_query.message.answer("click to pay 👇", reply_markup=kb)  # TODO: REPLACE WITH PAYMENT LINK
+            await state.update_data(price=f"{50}$")
+            await state.set_state(States.handle_payment)
+            await callback_query.message.delete()
+        else:
+            await callback_query.answer("❌")
+    else:
+        if callback_query.data not in days:
+            days.append(callback_query.data)
+        else:
+            await callback_query.answer("❌")
+
+        await state.update_data(workout_days=days)
+        reply_markup = select_days(profile.language, days)
+
+        if callback_query.message.reply_markup != reply_markup:
+            await callback_query.message.edit_reply_markup(reply_markup=reply_markup)
+
+        await state.set_state(States.workout_days)

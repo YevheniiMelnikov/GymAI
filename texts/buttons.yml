@@ -163,7 +163,7 @@ add_exercise:
   ru: "Добавить тренировку ➕"
   ua: "Додати тренування ➕"
 
-save_program:
+save:
   eng: "Save ✅"
   ru: "Сохранить ✅"
   ua: "Зберегти ✅"
@@ -212,3 +212,43 @@ disabled:
   eng: "Disabled ❌"
   ru: "Неактивна ❌"
   ua: "Неактивна ❌"
+
+monday:
+  eng: "Monday"
+  ru: "Понедельник"
+  ua: "Понеділок"
+
+tuesday:
+  eng: "Tuesday"
+  ru: "Вторник"
+  ua: "Вівторок"
+
+wednesday:
+  eng: "Wednesday"
+  ru: "Среда"
+  ua: "Середа"
+
+thursday:
+  eng: "Thursday"
+  ru: "Четверг"
+  ua: "Четвер"
+
+friday:
+  eng: "Friday"
+  ru: "Пятница"
+  ua: "П'ятниця"
+
+saturday:
+  eng: "Saturday"
+  ru: "Суббота"
+  ua: "Субота"
+
+sunday:
+  eng: "Sunday"
+  ru: "Воскресенье"
+  ua: "Неділя"
+
+next_day:
+  eng: "Next day ⏭"
+  ru: "Следующий день ⏭"
+  ua: "Наступний день ⏭"

@@ -56,10 +56,10 @@ class Coach(BaseEntity):
 
 @dataclass
 class Program(BaseEntity):
-    profile_id: int
-    exercises: list[str]
+    exercises_by_day: dict[str, list]
     created_at: float
     profile: int
+    split_number: int
 
 
 @dataclass
@@ -68,3 +68,4 @@ class Subscription(BaseEntity):
     enabled: bool
     price: float
     profile: int
+    workout_days: list[str] = field(default_factory=list)

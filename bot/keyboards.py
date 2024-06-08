@@ -139,6 +139,11 @@ def client_select_menu(lang_code: str, client_id: int, current_index: int) -> In
         [InlineKeyboardButton(text=translate(ButtonText.program, lang_code), callback_data=f"program_{client_id}")],
         [
             InlineKeyboardButton(
+                text=translate(ButtonText.subscription, lang_code), callback_data=f"subscription_{client_id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
                 text=translate(ButtonText.contact_client, lang_code), callback_data=f"contact_{client_id}"
             ),
         ],
@@ -155,8 +160,8 @@ def client_select_menu(lang_code: str, client_id: int, current_index: int) -> In
 
 def incoming_message(lang_code: str, profile_id: int) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text=translate(ButtonText.quit, lang_code), callback_data="quit")
     kb.button(text=translate(ButtonText.answer, lang_code), callback_data=f"answer_{profile_id}")
+    kb.button(text=translate(ButtonText.quit, lang_code), callback_data="quit")
     return kb.as_markup(one_time_keyboard=True)
 
 
@@ -172,9 +177,10 @@ def select_program_type(lang_code: str) -> InlineKeyboardMarkup:
 def program_manage_menu(lang_code: str) -> InlineKeyboardMarkup:
     buttons = [
         [
-            InlineKeyboardButton(text=translate(ButtonText.save_program, lang_code), callback_data="save"),
+            InlineKeyboardButton(text=translate(ButtonText.save, lang_code), callback_data="save"),
             InlineKeyboardButton(text=translate(ButtonText.reset_program, lang_code), callback_data="reset"),
         ],
+        [InlineKeyboardButton(text=translate(ButtonText.next_day, lang_code), callback_data="next")],
         [InlineKeyboardButton(text=translate(ButtonText.quit, lang_code), callback_data="quit")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
@@ -205,5 +211,38 @@ def workout_type(lang_code: str) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=translate(ButtonText.gym_workout, lang_code), callback_data="gym")],
         [InlineKeyboardButton(text=translate(ButtonText.home_workout, lang_code), callback_data="home")],
         [InlineKeyboardButton(text=translate(ButtonText.street_workout, lang_code), callback_data="street")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+
+
+def select_days(lang_code: str, selected_days: list) -> InlineKeyboardMarkup:
+    days_of_week = {
+        "monday": ButtonText.monday,
+        "tuesday": ButtonText.tuesday,
+        "wednesday": ButtonText.wednesday,
+        "thursday": ButtonText.thursday,
+        "friday": ButtonText.friday,
+        "saturday": ButtonText.saturday,
+        "sunday": ButtonText.sunday,
+    }
+    buttons = []
+
+    for day, button_text in days_of_week.items():
+        text = f"✔️ {translate(button_text, lang_code)}" if day in selected_days else translate(button_text, lang_code)
+        buttons.append([InlineKeyboardButton(text=text, callback_data=day)])
+
+    complete_button = [InlineKeyboardButton(text=translate(ButtonText.save, lang_code), callback_data="complete")]
+    buttons.append(complete_button)
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def program_view_kb(lang_code: str) -> InlineKeyboardMarkup:
+    buttons = [
+        [
+            InlineKeyboardButton(text=translate(ButtonText.back, lang_code), callback_data=f"prev_day"),
+            InlineKeyboardButton(text=translate(ButtonText.forward, lang_code), callback_data="next_day"),
+        ],
+        [InlineKeyboardButton(text=translate(ButtonText.quit, lang_code), callback_data="quit")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)

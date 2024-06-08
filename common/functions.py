@@ -281,7 +281,9 @@ async def assign_coach(coach: Coach, client: Client) -> None:
     await user_service.edit_profile(coach.id, {"assigned_to": coach_clients}, token)
 
 
-async def handle_contact_action(callback_query: CallbackQuery, profile, client_id: str, state: FSMContext) -> None:
+async def handle_contact_action(
+    callback_query: CallbackQuery, profile: Profile, client_id: str, state: FSMContext
+) -> None:
     await callback_query.message.answer(translate(MessageText.enter_your_message, profile.language))
     await callback_query.message.delete()
     coach = user_service.storage.get_coach_by_id(profile.id)
@@ -290,39 +292,46 @@ async def handle_contact_action(callback_query: CallbackQuery, profile, client_i
     await state.set_state(States.contact_client)
 
 
-async def handle_program_action(callback_query: CallbackQuery, profile, client_id: str, state: FSMContext) -> None:
-    subscription = user_service.storage.get_subscription(client_id)
+async def handle_program_action(
+    callback_query: CallbackQuery, profile: Profile, client_id: str, state: FSMContext
+) -> None:
     program_paid = user_service.storage.check_program_payment(client_id)
+    workout_data = user_service.storage.get_program(str(client_id))
 
-    if not subscription and not program_paid:
+    if not program_paid and not workout_data:
         await callback_query.answer(
             text=translate(MessageText.payment_required, lang=profile.language), show_alert=True
         )
         return
 
-    await callback_query.answer(text=translate(MessageText.program_guide, lang=profile.language), show_alert=True)
-    workout_data = user_service.storage.get_program(str(client_id))
-
     if workout_data and workout_data.exercises:
-        exercises_tuples = [
-            (exercise,) if isinstance(exercise, str) else exercise for exercise in workout_data.exercises
-        ]
-        program = await format_program(exercises_tuples)
+        exercises = user_service.storage.get_program(str(client_id)).exercises_by_day
+        program = await format_program(exercises, 1)
         del_msg = await callback_query.message.answer(
-            text=translate(MessageText.current_program, lang=profile.language).format(program=program),
+            text=translate(MessageText.program_page, lang=profile.language).format(program=program, day=1),
             reply_markup=program_manage_menu(profile.language),
             disable_web_page_preview=True,
         )
-        await state.update_data(exercises=exercises_tuples)
+        await state.update_data(exercises=exercises)
     else:
-        del_msg = await callback_query.message.answer(
-            text=translate(MessageText.no_program, lang=profile.language),
-            reply_markup=program_manage_menu(profile.language),
-        )
+        del_msg = await callback_query.message.answer(text=translate(MessageText.no_program, lang=profile.language))
 
-    await state.update_data(client_id=client_id, del_msg=del_msg.message_id)
+    await state.update_data(del_msg=del_msg.message_id)
+    await state.update_data(client_id=client_id)
+    await callback_query.message.answer(translate(MessageText.workouts_number, profile.language))
+    await state.set_state(States.workouts_number)
     await callback_query.message.delete()
-    await state.set_state(States.program_manage)
+
+
+async def handle_subscription_action(
+    callback_query: CallbackQuery, profile: Profile, client_id: str, state: FSMContext
+) -> None:
+    if subscription := user_service.storage.get_subscription(client_id):
+        await callback_query.answer("will be added soon")
+        # await state.update_data(split_number=len(subscription.workout_days), client_id=client_id)
+        # await state.set_state(States.subscription_manage)  # TODO: IMPLEMENT
+    else:
+        await callback_query.answer(translate(MessageText.payment_required, profile.language))
 
 
 async def handle_pagination(callback_query: CallbackQuery, profile, index: int, state: FSMContext) -> None:
@@ -395,7 +404,7 @@ async def handle_my_program(callback_query: CallbackQuery, profile: Profile, sta
     subscription = user_service.storage.get_subscription(profile.id)
     program_paid = user_service.storage.check_program_payment(profile.id)
     if not subscription and not program_paid:
-        await state.set_state(States.select_program_type)
+        await state.set_state(States.select_service)
         await callback_query.message.answer(
             text=translate(MessageText.no_program, lang=profile.language),
             reply_markup=select_program_type(profile.language),
@@ -412,14 +421,12 @@ async def handle_my_program(callback_query: CallbackQuery, profile: Profile, sta
 
     exercises_data = user_service.storage.get_program(str(profile.id))
     if exercises_data and exercises_data.exercises:
-        exercises_tuples = [
-            (exercise,) if isinstance(exercise, str) else exercise for exercise in exercises_data.exercises
-        ]
-        program = await format_program(exercises_tuples)
+        exercises = user_service.storage.get_program(str(profile.id)).exercises_by_day
+        program = await format_program(exercises, 1)
         kb = InlineKeyboardBuilder()
         kb.button(text=translate(ButtonText.back, profile.language), callback_data="back")
         await callback_query.message.answer(
-            text=translate(MessageText.current_program, lang=profile.language).format(program=program),
+            text=translate(MessageText.program_page, lang=profile.language).format(program=program, day=1),
             reply_markup=kb.as_markup(one_time_keyboard=True),
             disable_web_page_preview=True,
         )
@@ -496,9 +503,45 @@ async def send_message(
         await state.update_data(recipient_id=recipient_id, sender_name=sender.name)
         await state.set_state(status_to_set)
 
+    @sub_router.callback_query(F.data == "prev_day")
+    @sub_router.callback_query(F.data == "next_day")
+    async def navigate_days(callback_query: CallbackQuery, state: FSMContext):
+        profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+        data = await state.get_data()
+        program = user_service.storage.get_program(str(profile.id))
+        current_day = int(data.get("current_day", 1))
 
-async def format_program(exercises: list[tuple]) -> str:
+        if callback_query.data == "prev_day":
+            new_day = current_day - 1
+        else:
+            new_day = current_day + 1
+
+        if new_day < 1 or new_day > program.split_number:
+            await callback_query.answer(translate(MessageText.out_of_range, profile.language))
+
+            if new_day < 1:
+                new_day = 1
+            elif new_day > program.split_number:
+                new_day = program.split_number
+
+            await state.update_data(current_day=new_day)
+            return
+
+        program_text = await format_program(program.exercises_by_day, new_day)
+        await callback_query.message.edit_text(
+            text=translate(MessageText.program_page, profile.language).format(program=program_text, day=new_day),
+            reply_markup=program_view_kb(profile.language),
+            disable_web_page_preview=True,
+        )
+        await state.update_data(current_day=new_day)
+        await callback_query.answer()
+
+
+async def format_program(exercises_by_day: dict[str, list[tuple[str, str]]], day: int) -> str:
     program_lines = []
+    day_key = str(day)
+    exercises = exercises_by_day.get(day_key, [])
+
     for idx, exercise in enumerate(exercises):
         exercise_name = exercise[0]
         link = exercise[1] if len(exercise) > 1 else None
@@ -507,9 +550,9 @@ async def format_program(exercises: list[tuple]) -> str:
 
         if link:
             shorted_link = await short_url(link)
-            program_lines.append(f"{idx + 1}. {exercise_name} | <a href='{shorted_link}'>GIF</a>")
+            program_lines.append(f"  {idx + 1}. {exercise_name} | <a href='{shorted_link}'>GIF</a>")
         else:
-            program_lines.append(f"{idx + 1}. {exercise_name}")
+            program_lines.append(f"  {idx + 1}. {exercise_name}")
 
     return "\n".join(program_lines)
 

@@ -18,7 +18,7 @@ payment_router = Router()
 logger = loguru.logger
 
 
-@payment_router.callback_query(States.select_program_type)
+@payment_router.callback_query(States.select_service)
 async def program_type(callback_query: CallbackQuery, state: FSMContext):
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "subscription":
@@ -47,7 +47,7 @@ async def program_type(callback_query: CallbackQuery, state: FSMContext):
 async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "back":
-        await state.set_state(States.select_program_type)
+        await state.set_state(States.select_service)
         await callback_query.message.answer(
             text=translate(MessageText.no_program, lang=profile.language),
             reply_markup=select_program_type(profile.language),
@@ -77,11 +77,12 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.answer(translate(MessageText.coach_selected).format(name=coach.name), show_alert=True)
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "subscription":
-        await user_service.create_subscription(client.id, data.get("price"))
+        await user_service.create_subscription(client.id, data.get("price"), data.get("workout_days"))
         subscription_data = {
             "payment_date": datetime.date.today().isoformat(),
             "enabled": True,
             "price": data.get("price"),
+            "workout_days": data.get("workout_days"),
         }
         user_service.storage.save_subscription(profile.id, subscription_data)
         user_service.storage.set_program_payment_status(profile.id, True)
