@@ -176,6 +176,42 @@ async def adding_exercise(message: Message, state: FSMContext) -> None:
         await message.delete()
 
 
+@program_router.callback_query(States.workout_survey)
+async def workout_results(callback_query: CallbackQuery, state: FSMContext):
+    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+    if callback_query.data == "answer_yes":
+        await callback_query.answer(translate(MessageText.keep_going, profile.language), show_alert=True)
+        client = user_service.storage.get_client_by_id(profile.id)
+        coach = user_service.storage.get_coach_by_id(client.assigned_to.pop())
+        await send_message(
+            recipient=coach,
+            text="text",
+            state=state,
+            reply_markup=None,  # TODO: ADD KEYBOARD
+            include_incoming_message=False,
+        )
+    else:
+        await callback_query.answer(translate(MessageText.workout_description, profile.language), show_alert=True)
+        await state.set_state(States.workout_description)
+
+
+@program_router.message(States.workout_description)
+async def workout_description(message: Message, state: FSMContext):
+    profile = user_service.storage.get_current_profile(message.from_user.id)
+    client = user_service.storage.get_client_by_id(profile.id)
+    coach = user_service.storage.get_coach_by_id(client.assigned_to.pop())
+    await send_message(
+        recipient=coach,
+        text=message.text,  # TODO: FORMAT
+        state=state,
+        reply_markup=None,  # TODO: ADD KEYBOARD
+        include_incoming_message=False,
+    )
+    await message.answer(translate(MessageText.keep_going, profile.language))
+    await show_main_menu(message, profile, state)
+    await state.set_state(States.main_menu)
+
+
 @program_router.callback_query(States.subscription_manage)  # TODO: IMPLEMENT
 async def manage_subscription(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.answer("will be added soon")

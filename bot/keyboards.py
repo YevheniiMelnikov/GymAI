@@ -246,3 +246,19 @@ def program_view_kb(lang_code: str) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=translate(ButtonText.quit, lang_code), callback_data="quit")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+
+
+def workout_survey_keyboard(lang_code: str) -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton(text=translate(ButtonText.answer_yes, lang_code), callback_data="yes")],
+        [InlineKeyboardButton(text=translate(ButtonText.answer_no, lang_code), callback_data="no")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
+
+
+def workout_results(lang_code: str) -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton(text=translate(ButtonText.answer_yes, lang_code), callback_data="answer_yes")],
+        [InlineKeyboardButton(text=translate(ButtonText.answer_no, lang_code), callback_data="answer_no")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)

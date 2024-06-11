@@ -2,6 +2,7 @@ import json
 import os
 import random
 import time
+from datetime import datetime, timedelta
 from json import JSONDecodeError
 from typing import Any
 
@@ -289,6 +290,22 @@ class UserProfileManager:
         except Exception as e:
             logger.error(f"Failed to get subscription for profile_id {profile_id}: {e}")
             return None
+
+    def get_clients_to_survey(self) -> list[int]:
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
+        clients_with_workout = []
+
+        all_clients = self.redis.hgetall("clients")
+        for client_id, _ in all_clients.items():
+            subscription = self.get_subscription(client_id)
+            if (
+                subscription
+                and subscription.enabled
+                and yesterday in [day.lower() for day in subscription.workout_days]
+            ):
+                clients_with_workout.append(client_id)
+
+        return clients_with_workout
 
     def delete_subscription(self, profile_id: str) -> bool:  # TODO: NOT USED YET
         try:

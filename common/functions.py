@@ -304,15 +304,14 @@ async def handle_program_action(
         )
         return
 
-    if workout_data and workout_data.exercises:
-        exercises = user_service.storage.get_program(str(client_id)).exercises_by_day
-        program = await format_program(exercises, 1)
+    if workout_data and workout_data.exercises_by_day:
+        program = await format_program(workout_data.exercises_by_day, 1)
         del_msg = await callback_query.message.answer(
             text=translate(MessageText.program_page, lang=profile.language).format(program=program, day=1),
             reply_markup=program_manage_menu(profile.language),
             disable_web_page_preview=True,
         )
-        await state.update_data(exercises=exercises)
+        await state.update_data(exercises=workout_data.exercises_by_day)
     else:
         del_msg = await callback_query.message.answer(text=translate(MessageText.no_program, lang=profile.language))
 
@@ -326,7 +325,7 @@ async def handle_program_action(
 async def handle_subscription_action(
     callback_query: CallbackQuery, profile: Profile, client_id: str, state: FSMContext
 ) -> None:
-    if subscription := user_service.storage.get_subscription(client_id):
+    if user_service.storage.get_subscription(client_id):
         await callback_query.answer("will be added soon")
         # await state.update_data(split_number=len(subscription.workout_days), client_id=client_id)
         # await state.set_state(States.subscription_manage)  # TODO: IMPLEMENT
@@ -535,6 +534,26 @@ async def send_message(
         )
         await state.update_data(current_day=new_day)
         await callback_query.answer()
+
+    @sub_router.callback_query(F.data == "answer_yes")
+    @sub_router.callback_query(F.data == "answer_no")
+    async def handle_survey_response(callback_query: CallbackQuery, state: FSMContext):
+        response = callback_query.data
+        profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+
+        if response == "answer_yes":
+            result = "attended"
+        else:
+            result = "missed"
+
+        user_service.storage.redis.hset("workout_results", profile.id, result)
+        await callback_query.message.delete()
+        await callback_query.answer("Thank you for your response!", show_alert=True)
+
+    @sub_router.callback_query(F.data == "later")
+    async def handle_survey_later(callback_query: CallbackQuery, state: FSMContext):
+        await callback_query.message.delete()
+        await callback_query.answer("You can respond later.", show_alert=True)
 
 
 async def format_program(exercises_by_day: dict[str, list[tuple[str, str]]], day: int) -> str:

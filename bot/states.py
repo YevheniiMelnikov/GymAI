@@ -43,3 +43,5 @@ class States(StatesGroup):
     subscription_manage = State()
     payment_choice = State()
     handle_payment = State()
+    workout_survey = State()
+    workout_description = State()
