@@ -7,7 +7,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
-from bot.keyboards import choose_payment_options, select_program_type, workout_type
+from bot.keyboards import choose_payment_options, select_service, workout_type
 from bot.states import States
 from common.functions import client_request, show_main_menu
 from common.models import Client, Coach
@@ -18,39 +18,14 @@ payment_router = Router()
 logger = loguru.logger
 
 
-@payment_router.callback_query(States.select_service)
-async def program_type(callback_query: CallbackQuery, state: FSMContext):
-    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
-    if callback_query.data == "subscription":
-        subscription_img = f"https://storage.googleapis.com/bot_payment_options/subscription_{profile.language}.jpeg"
-        await callback_query.message.answer_photo(
-            photo=subscription_img,
-            reply_markup=choose_payment_options(profile.language, "subscription"),
-        )
-        await state.set_state(States.payment_choice)
-    elif callback_query.data == "program":
-        program_img = f"https://storage.googleapis.com/bot_payment_options/program_{profile.language}.jpeg"
-        await callback_query.message.answer_photo(
-            photo=program_img,
-            reply_markup=choose_payment_options(profile.language, "program"),
-        )
-        await state.set_state(States.payment_choice)
-    else:
-        await state.set_state(States.main_menu)
-        await show_main_menu(callback_query.message, profile, state)
-
-    with suppress(TelegramBadRequest):
-        await callback_query.message.delete()
-
-
 @payment_router.callback_query(States.payment_choice)
 async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "back":
         await state.set_state(States.select_service)
         await callback_query.message.answer(
-            text=translate(MessageText.no_program, lang=profile.language),
-            reply_markup=select_program_type(profile.language),
+            text=translate(MessageText.select_service, lang=profile.language),
+            reply_markup=select_service(profile.language),
         )
         await callback_query.message.delete()
         return

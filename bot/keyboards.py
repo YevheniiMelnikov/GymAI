@@ -165,7 +165,7 @@ def incoming_message(lang_code: str, profile_id: int) -> InlineKeyboardMarkup:
     return kb.as_markup(one_time_keyboard=True)
 
 
-def select_program_type(lang_code: str) -> InlineKeyboardMarkup:
+def select_service(lang_code: str) -> InlineKeyboardMarkup:
     buttons = [
         [InlineKeyboardButton(text=translate(ButtonText.subscription, lang_code), callback_data="subscription")],
         [InlineKeyboardButton(text=translate(ButtonText.program, lang_code), callback_data="program")],
@@ -246,3 +246,48 @@ def program_view_kb(lang_code: str) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=translate(ButtonText.quit, lang_code), callback_data="quit")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+
+
+def workout_survey_keyboard(lang_code: str) -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton(text=translate(ButtonText.answer_yes, lang_code), callback_data="yes")],
+        [InlineKeyboardButton(text=translate(ButtonText.answer_no, lang_code), callback_data="no")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
+
+
+def workout_results(lang_code: str) -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton(text=translate(ButtonText.answer_yes, lang_code), callback_data="answer_yes")],
+        [InlineKeyboardButton(text=translate(ButtonText.answer_no, lang_code), callback_data="answer_no")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
+
+
+def sets_number() -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton(text="1", callback_data="1"), InlineKeyboardButton(text="2", callback_data="2")],
+        [InlineKeyboardButton(text="3", callback_data="3"), InlineKeyboardButton(text="4", callback_data="4")],
+        [InlineKeyboardButton(text="5", callback_data="5")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=2)
+
+
+def reps_number() -> InlineKeyboardMarkup:
+    buttons = [
+        [InlineKeyboardButton(text="1-3", callback_data="1-3"), InlineKeyboardButton(text="3-5", callback_data="3-5")],
+        [
+            InlineKeyboardButton(text="5-8", callback_data="5-8"),
+            InlineKeyboardButton(text="8-10", callback_data="8-10"),
+        ],
+        [
+            InlineKeyboardButton(text="10-12", callback_data="10-12"),
+            InlineKeyboardButton(text="12-15", callback_data="12-15"),
+        ],
+        [
+            InlineKeyboardButton(text="15-20", callback_data="15-20"),
+            InlineKeyboardButton(text="20-30", callback_data="20-30"),
+        ],
+        [InlineKeyboardButton(text="30+", callback_data="30+")],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=2)

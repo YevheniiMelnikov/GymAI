@@ -252,3 +252,13 @@ next_day:
   eng: "Next day ⏭"
   ru: "Следующий день ⏭"
   ua: "Наступний день ⏭"
+
+answer_yes:
+  eng: "Yes ✅"
+  ru: "Да ✅"
+  ua: "Так ✅"
+
+answer_no:
+  eng: "No ❌"
+  ru: "Нет ❌"
+  ua: "Ні ❌"

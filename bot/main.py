@@ -15,6 +15,7 @@ from bot.handlers.workouts_handler import program_router
 from bot.handlers.questionnaire_handler import questionnaire_router
 from bot.handlers.registration_handler import register_router
 from common.functions import set_bot_commands, sub_router
+from common.workout_scheduler import workout_scheduler, survey_router
 
 load_dotenv()
 logger = loguru.logger
@@ -32,6 +33,7 @@ async def main() -> None:
     dp.include_routers(
         cmd_router,
         sub_router,
+        survey_router,
         main_router,
         chat_router,
         register_router,
@@ -40,6 +42,8 @@ async def main() -> None:
         program_router,
         payment_router,
     )
+
+    await workout_scheduler()
 
     logger.info("Starting bot ...")
     try:
