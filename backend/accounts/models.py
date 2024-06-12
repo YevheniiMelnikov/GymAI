@@ -58,6 +58,7 @@ class Subscription(models.Model):
     enabled = models.BooleanField(default=False)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     workout_days = ArrayField(models.CharField(max_length=100), default=list, blank=True)
+    exercises = JSONField(default=dict, blank=True, null=True)
 
     class Meta:
         verbose_name = "subscription"

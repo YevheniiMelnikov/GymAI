@@ -25,6 +25,9 @@ class MessageText(Enum):
     enter_your_message = auto()
     enter_daily_program = auto()
     enter_exercise = auto()
+    enter_sets = auto()
+    enter_reps = auto()
+    exercise_weight = auto()
     program_guide = auto()
     payment_link = auto()
 
@@ -45,6 +48,7 @@ class MessageText(Enum):
     message_sent = auto()
     workouts_number = auto()
     select_days = auto()
+    select_service = auto()
 
     invalid_credentials = auto()
     invalid_content = auto()

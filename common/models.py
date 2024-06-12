@@ -69,3 +69,4 @@ class Subscription(BaseEntity):
     price: float
     profile: int
     workout_days: list[str] = field(default_factory=list)
+    exercises: dict[str, list[tuple[str, int]]] = field(default_factory=dict)

@@ -316,6 +316,25 @@ class UserProfileManager:
             logger.error(f"Failed to delete subscription for profile_id {profile_id}: {e}")
             return False
 
+    # def add_exercise(self, profile_id: str, day: str, exercise: str, weight: int, is_subscription: bool) -> None:
+    #     key = "workout_plans:subscriptions" if is_subscription else "workout_plans:programs"
+    #     data = json.loads(self.redis.hget(key, profile_id) or "{}")
+    #     exercises = data.setdefault("exercises", {})
+    #     if day not in exercises:
+    #         exercises[day] = []
+    #     exercises[day].append((exercise, weight))
+    #     self.redis.hset(key, profile_id, json.dumps(data))
+    #
+    # def edit_exercise(
+    #     self, profile_id: str, day: str, exercise_index: int, new_weight: int, is_subscription: bool
+    # ) -> None:
+    #     key = "workout_plans:subscriptions" if is_subscription else "workout_plans:programs"
+    #     data = json.loads(self.redis.hget(key, profile_id) or "{}")
+    #     exercises = data["exercises"]
+    #     if day in exercises and exercise_index < len(exercises[day]):
+    #         exercises[day][exercise_index] = (exercises[day][exercise_index][0], new_weight)
+    #         self.redis.hset(key, profile_id, json.dumps(data))
+
     def cache_gif_filename(self, exercise: str, filename: str) -> None:
         try:
             self.redis.hset("exercise_gif_map", exercise, filename)
@@ -499,6 +518,7 @@ class UserService:
             "enabled": True,
             "price": price,
             "workout_days": workout_days,
+            "exercises": {},
         }
         status_code, response = await self._api_request(
             "post", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}

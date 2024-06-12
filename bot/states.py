@@ -45,3 +45,7 @@ class States(StatesGroup):
     handle_payment = State()
     workout_survey = State()
     workout_description = State()
+    program_view = State()
+    exercise_weight = State()
+    enter_sets = State()
+    enter_reps = State()
