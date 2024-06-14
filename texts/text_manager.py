@@ -47,6 +47,7 @@ class MessageText(Enum):
     coach_verified = auto()
     message_sent = auto()
     workouts_number = auto()
+    workouts_per_week = auto()
     select_days = auto()
     select_service = auto()
 

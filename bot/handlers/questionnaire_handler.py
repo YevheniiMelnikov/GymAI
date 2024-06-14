@@ -3,7 +3,7 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from bot.keyboards import choose_gender, workout_experience_keyboard, select_days
+from bot.keyboards import choose_gender, select_days, workout_experience_keyboard
 from bot.states import States
 from common.file_manager import avatar_manager
 from common.functions import client_request, show_main_menu, update_user_info
@@ -224,7 +224,7 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
                 inline_keyboard=[[InlineKeyboardButton(text="💰", callback_data=data.get("request_type"))]]
             )
             await callback_query.message.answer("click to pay 👇", reply_markup=kb)  # TODO: REPLACE WITH PAYMENT LINK
-            await state.update_data(price=f"{50}$")
+            await state.update_data(price=50)
             await state.set_state(States.handle_payment)
     await callback_query.message.delete()
 
@@ -242,7 +242,7 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
                 inline_keyboard=[[InlineKeyboardButton(text="💰", callback_data=data.get("request_type"))]]
             )
             await callback_query.message.answer("click to pay 👇", reply_markup=kb)  # TODO: REPLACE WITH PAYMENT LINK
-            await state.update_data(price=f"{50}$")
+            await state.update_data(price=50)
             await state.set_state(States.handle_payment)
             await callback_query.message.delete()
         else:

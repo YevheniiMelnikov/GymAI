@@ -52,15 +52,21 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.answer(translate(MessageText.coach_selected).format(name=coach.name), show_alert=True)
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "subscription":
-        await user_service.create_subscription(client.id, data.get("price"), data.get("workout_days"))
-        subscription_data = {
-            "payment_date": datetime.date.today().isoformat(),
-            "enabled": True,
-            "price": data.get("price"),
-            "workout_days": data.get("workout_days"),
-        }
-        user_service.storage.save_subscription(profile.id, subscription_data)
-        user_service.storage.set_program_payment_status(profile.id, True)
+        try:
+            subscription_id = await user_service.create_subscription(
+                client.id, data.get("price"), data.get("workout_days")
+            )
+            subscription_data = {
+                "id": subscription_id,
+                "payment_date": datetime.date.today().isoformat(),
+                "enabled": True,
+                "price": data.get("price"),
+                "workout_days": data.get("workout_days"),
+            }
+            user_service.storage.save_subscription(profile.id, subscription_data)
+            user_service.storage.set_program_payment_status(profile.id, True)
+        except Exception as e:
+            logger.error(f"Subscription does not created for profile_id {profile.id}: {e}")
     else:
         user_service.storage.set_program_payment_status(profile.id, True)
     await callback_query.message.answer(translate(MessageText.payment_success, profile.language))

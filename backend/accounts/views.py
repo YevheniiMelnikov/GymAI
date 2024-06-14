@@ -220,7 +220,7 @@ class ProgramViewSet(ModelViewSet):
 class SubscriptionViewSet(ModelViewSet):
     queryset = Subscription.objects.all().select_related("user")
     serializer_class = SubscriptionSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated | HasAPIKey]
 
     def get_queryset(self):
         queryset = super().get_queryset().select_related("user")

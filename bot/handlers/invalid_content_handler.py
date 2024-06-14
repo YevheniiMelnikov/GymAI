@@ -28,7 +28,6 @@ async def handle_invalid_content(message: Message, lang: str) -> None:
 @invalid_content_router.message(States.work_experience)
 @invalid_content_router.message(States.additional_info)
 @invalid_content_router.message(States.payment_details)
-@invalid_content_router.message(States.subscription_manage)
 @invalid_content_router.message(States.profile_photo, F.text)
 @invalid_content_router.message(States.contact_client)
 @invalid_content_router.message(States.main_menu)
