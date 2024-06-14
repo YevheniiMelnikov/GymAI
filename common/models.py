@@ -66,7 +66,7 @@ class Program(BaseEntity):
 class Subscription(BaseEntity):
     payment_date: float
     enabled: bool
-    price: float
+    price: int
     profile: int
     workout_days: list[str] = field(default_factory=list)
     exercises: dict[str, list[tuple[str, int]]] = field(default_factory=dict)

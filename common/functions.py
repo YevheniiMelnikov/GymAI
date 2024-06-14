@@ -18,13 +18,7 @@ from bot.states import States
 from common.file_manager import avatar_manager, gif_manager
 from common.models import Client, Coach, Profile, Subscription
 from common.user_service import user_service
-from common.utils import (
-    format_message,
-    get_client_page,
-    get_coach_page,
-    get_profile_attributes,
-    get_workout_types,
-)
+from common.utils import *
 from texts.exercises import exercise_dict
 from texts.text_manager import MessageText, resource_manager, translate
 
@@ -332,19 +326,25 @@ async def handle_subscription_action(
 
     if not subscription.exercises:
         await callback_query.message.answer(translate(MessageText.no_program, profile.language))
-        await state.update_data(client_id=client_id)
         workouts_per_week = len(subscription.workout_days)
+        await callback_query.message.answer(
+            translate(MessageText.workouts_per_week, lang=profile.language).format(days=workouts_per_week)
+        )
         await callback_query.message.answer(text=translate(MessageText.program_guide, lang=profile.language))
         day_1_msg = await callback_query.message.answer(
             translate(MessageText.enter_daily_program, profile.language).format(day=1),
             reply_markup=program_manage_menu(profile.language),
         )
-        with suppress(TelegramBadRequest):
-            await callback_query.message.delete()
         await state.update_data(
-            day_1_msg=day_1_msg.message_id, split=workouts_per_week, completed_days=0, exercises_by_day={}
+            day_1_msg=day_1_msg.message_id,
+            split=workouts_per_week,
+            completed_days=0,
+            exercises_by_day={},
+            client_id=client_id,
+            subscription=True,
         )
-        await state.set_state(States.subscription_manage)
+        await state.set_state(States.program_manage)
+
     else:
         program = await format_program(subscription.exercises, 1)
         del_msg = await callback_query.message.answer(
@@ -353,8 +353,9 @@ async def handle_subscription_action(
             disable_web_page_preview=True,
         )
         await state.update_data(del_msg=del_msg.message_id, exercises=subscription.exercises, client_id=client_id)
-        with suppress(TelegramBadRequest):
-            await callback_query.message.delete()
+
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()
 
 
 async def handle_pagination(callback_query: CallbackQuery, profile, index: int, state: FSMContext) -> None:
@@ -507,6 +508,7 @@ async def send_message(
     @sub_router.callback_query(F.data == "next_day")  # TODO: REPLACE WITH program_view HANDLER
     async def navigate_days(callback_query: CallbackQuery, state: FSMContext):
         profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+
         if callback_query.data == "quit":
             await state.set_state(States.select_service)
             await callback_query.message.answer(
@@ -518,6 +520,14 @@ async def send_message(
 
         data = await state.get_data()
         program = user_service.storage.get_program(str(profile.id))
+        subscription = None
+
+        if program:
+            split_number = program.split_number
+        else:
+            subscription = user_service.storage.get_subscription(str(profile.id))
+            split_number = len(subscription.workout_days)
+
         current_day = int(data.get("current_day", 1))
 
         if callback_query.data == "prev_day":
@@ -525,18 +535,17 @@ async def send_message(
         else:
             new_day = current_day + 1
 
-        if new_day < 1 or new_day > program.split_number:
+        if new_day < 1 or new_day > split_number:
             await callback_query.answer(translate(MessageText.out_of_range, profile.language))
-
-            if new_day < 1:
-                new_day = 1
-            elif new_day > program.split_number:
-                new_day = program.split_number
-
+            new_day = max(1, min(new_day, split_number))
             await state.update_data(current_day=new_day)
             return
 
-        program_text = await format_program(program.exercises_by_day, new_day)
+        if program:
+            program_text = await format_program(program.exercises_by_day, new_day)
+        else:
+            program_text = await format_program(subscription.exercises, new_day)
+
         await callback_query.message.edit_text(
             text=translate(MessageText.program_page, profile.language).format(program=program_text, day=new_day),
             reply_markup=program_view_kb(profile.language),
@@ -685,14 +694,7 @@ async def save_exercise(
 
     program = await format_program(exercises_by_day, current_day)
 
-    if "program_msg" in data:
-        with suppress(TelegramBadRequest):
-            if isinstance(input_data, Message):
-                await input_data.bot.delete_message(input_data.chat.id, data["program_msg"])
-            else:
-                await input_data.message.bot.delete_message(input_data.message.chat.id, data["program_msg"])
-
-    for msg_key in ["del_msg", "exercise_msg", "program_msg", "day_1_msg"]:
+    for msg_key in ["del_msg", "exercise_msg", "program_msg", "day_1_msg", "weight_msg"]:
         if del_msg := data.get(msg_key):
             with suppress(TelegramBadRequest):
                 if isinstance(input_data, Message):

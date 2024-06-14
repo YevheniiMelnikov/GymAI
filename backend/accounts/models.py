@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from django.contrib.postgres.fields import ArrayField
 from django.core.validators import MaxValueValidator
 from django.db import models
-from django.db.models import Model, JSONField
+from django.db.models import JSONField, Model
 
 
 class Profile(Model):

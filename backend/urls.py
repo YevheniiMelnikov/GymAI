@@ -28,5 +28,5 @@ urlpatterns = [
     path("api/v1/current-user/", CurrentUserView.as_view(), name="current-user"),
     path("api/v1/send-feedback/", SendFeedbackAPIView.as_view(), name="send-feedback"),
     path("api/v1/", include(program_router.urls)),
-    path("", include(subscription_router.urls)),
+    path("api/v1/", include(subscription_router.urls)),
 ]

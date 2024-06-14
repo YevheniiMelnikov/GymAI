@@ -365,14 +365,14 @@ payment_link:
   ua: "Пройдіть за посиланням для здійснення оплати 💳</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{link}</em>"
 
 payment_success:
-  eng: "Your payment successful, thank you for your trust 🙏"
-  ru: "Ваш платеж успешен, благодарим вас за доверие 🙏"
-  ua: "Ваш платіж успішний, дякуємо вам за довіру 🙏"
+  eng: "Your payment is successful. Wait, thank you for your trust 🙏"
+  ru: "Ваш платеж успешен. Ожидайте, благодарим вас за доверие 🙏"
+  ua: "Ваш платіж успішний. Очікуйте, дякуємо вам за довіру 🙏"
 
 subscription_page:
-  eng: "<b>Subscription Information:</b>\n\n<b>Status:</b> {enabled}\n<b>Price:</b> {price}\n<b>Date of charge-off:</b> {next_payment_date}"
-  ru: "<b>Информация о подписке:</b>\n\n<b>Статус:</b> {enabled}\n<b>Цена:</b> {price}\n<b>Дата наступного списания:</b> {next_payment_date}"
-  ua: "<b>Інформація про підписку:</b>\n\n<b>Статус:</b> {enabled}\n<b>Ціна:</b> {price}\n<b>Дата следующего списання:</b> {next_payment_date}"
+  eng: "<b>Subscription Information:</b>\n\n<b>Status:</b> {enabled}\n<b>Price:</b> {price} $\n<b>Date of charge-off:</b> {next_payment_date}"
+  ru: "<b>Информация о подписке:</b>\n\n<b>Статус:</b> {enabled}\n<b>Цена:</b> {price} $\n<b>Дата наступного списания:</b> {next_payment_date}"
+  ua: "<b>Інформація про підписку:</b>\n\n<b>Статус:</b> {enabled}\n<b>Ціна:</b> {price} $\n<b>Дата следующего списання:</b> {next_payment_date}"
 
 program_not_ready:
   eng: "Your program has not yet been written. Please wait for a notification when it is ready 🙂"
@@ -450,6 +450,11 @@ enter_reps:
   ua: "Виберіть кількість повторів для вправи 👇"
 
 exercise_weight:
-  eng: "Enter the weight of the weights, or close this window ❌"
-  ru: "Введите вес отягощения, либо закройте это окно ❌"
-  ua: "Введіть вагу обтяження, або закрийте це вікно ❌"
+  eng: "Enter the weight of the weights, or close this window"
+  ru: "Введите вес отягощения, либо закройте это окно"
+  ua: "Введіть вагу обтяження, або закрийте це вікно"
+  
+workouts_per_week:
+  eng: "The desired number of training days is {days}❕️"
+  ru: "Желаемое количество тренировочных дней - {days} ❕ "
+  ua: "Бажана кількість тренувальних днів - {days} ❕️"

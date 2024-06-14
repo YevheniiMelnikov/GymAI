@@ -1,16 +1,15 @@
-from aiogram import Router, F
+import loguru
+from aiogram import F, Router
 from aiogram.client.session import aiohttp
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-import loguru
-
-from bot.keyboards import workout_survey_keyboard, workout_results
+from bot.keyboards import workout_results, workout_survey_keyboard
 from bot.states import States
 from common.functions import bot
 from common.user_service import user_session
-from texts.text_manager import translate, MessageText
+from texts.text_manager import MessageText, translate
 
 logger = loguru.logger
 survey_router = Router()

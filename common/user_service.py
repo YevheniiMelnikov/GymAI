@@ -137,7 +137,7 @@ class UserProfileManager:
             self._update_profile_data(telegram_id, profiles_data)
             return True
         except Exception as e:
-            logger.error(f"Failed to set profile info for user {telegram_id} and profile {profile_id}: {e}")
+            logger.error(f"Failed to set profile info for profile {profile_id}: {e}")
             return False
 
     def _set_data(self, key: str, profile_id: str, data: dict[str, Any], allowed_fields: list[str]) -> None:
@@ -307,34 +307,6 @@ class UserProfileManager:
 
         return clients_with_workout
 
-    def delete_subscription(self, profile_id: str) -> bool:  # TODO: NOT USED YET
-        try:
-            self.redis.hdel("workout_plans:subscriptions", profile_id)
-            logger.info(f"Subscription for profile_id {profile_id} deleted from cache")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to delete subscription for profile_id {profile_id}: {e}")
-            return False
-
-    # def add_exercise(self, profile_id: str, day: str, exercise: str, weight: int, is_subscription: bool) -> None:
-    #     key = "workout_plans:subscriptions" if is_subscription else "workout_plans:programs"
-    #     data = json.loads(self.redis.hget(key, profile_id) or "{}")
-    #     exercises = data.setdefault("exercises", {})
-    #     if day not in exercises:
-    #         exercises[day] = []
-    #     exercises[day].append((exercise, weight))
-    #     self.redis.hset(key, profile_id, json.dumps(data))
-    #
-    # def edit_exercise(
-    #     self, profile_id: str, day: str, exercise_index: int, new_weight: int, is_subscription: bool
-    # ) -> None:
-    #     key = "workout_plans:subscriptions" if is_subscription else "workout_plans:programs"
-    #     data = json.loads(self.redis.hget(key, profile_id) or "{}")
-    #     exercises = data["exercises"]
-    #     if day in exercises and exercise_index < len(exercises[day]):
-    #         exercises[day][exercise_index] = (exercises[day][exercise_index][0], new_weight)
-    #         self.redis.hset(key, profile_id, json.dumps(data))
-
     def cache_gif_filename(self, exercise: str, filename: str) -> None:
         try:
             self.redis.hset("exercise_gif_map", exercise, filename)
@@ -379,13 +351,16 @@ class UserService:
         logger.info(f"Executing {method.upper()} request to {url} with data: {data} and headers: {headers}")
         try:
             response = await self.client.request(method, url, json=data, headers=headers)
-            if response.status_code in (204, 200):
+            if response.status_code in (204, 200, 201):
                 try:
                     json_data = response.json()
                     return response.status_code, json_data
                 except JSONDecodeError:
                     return response.status_code, None
             else:
+                logger.error(
+                    f"Request to {url} failed with status code {response.status_code} and response: {response.text}"
+                )
                 return response.status_code, response.text
         except httpx.HTTPError as e:
             logger.error(f"HTTP error occurred: {e}")
@@ -511,7 +486,7 @@ class UserService:
         status, _ = await self._api_request("delete", url, headers=headers)
         return status == 204
 
-    async def create_subscription(self, user_id: int, price: float, workout_days: list[str]) -> bool:
+    async def create_subscription(self, user_id: int, price: int, workout_days: list[str]) -> int | None:
         url = f"{self.backend_url}/api/v1/subscriptions/"
         data = {
             "user": user_id,
@@ -523,7 +498,9 @@ class UserService:
         status_code, response = await self._api_request(
             "post", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
-        return status_code == 201
+        if status_code == 201 and response:
+            return response.get("id")
+        return None
 
     async def get_subscription(self, user_id: int) -> Subscription | None:
         url = f"{self.backend_url}/api/v1/subscriptions/?user={user_id}"
@@ -535,20 +512,12 @@ class UserService:
         logger.info(f"Failed to retrieve subscription for user {user_id}. HTTP status: {status_code}")
         return None
 
-    async def delete_subscription(self, user_id: int) -> bool:  # TODO: NOT USED YET
-        url = f"{self.backend_url}/api/v1/subscriptions/delete_by_user/{user_id}/"
-        status_code, _ = await self._api_request("delete", url, headers={"Authorization": f"Api-Key {self.api_key}"})
-        return status_code == 204
-
-    async def update_subscription(self, subscription_id: int, data: dict) -> bool:  # TODO: NOT USED YET
+    async def update_subscription(self, subscription_id: int, data: dict) -> bool:
         url = f"{self.backend_url}/api/v1/subscriptions/{subscription_id}/"
-        status_code, _ = await self._api_request("put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"})
+        status_code, response = await self._api_request(
+            "put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
+        )
         return status_code == 200
-
-    async def delete_profile(self, profile_id: int) -> bool:  # TODO: NOT USED YET
-        url = f"{self.backend_url}/api/v1/persons/{profile_id}/"
-        status_code, _ = await self._api_request("delete", url, headers={"Authorization": f"Api-Key {self.api_key}"})
-        return status_code == 404 if status_code else False
 
 
 user_session = UserProfileManager(os.getenv("REDIS_URL"))
