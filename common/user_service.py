@@ -230,23 +230,23 @@ class UserProfileManager:
             logger.error(f"Failed to get program for profile_id {profile_id}: {e}")
             return None
 
-    def set_program_payment_status(self, profile_id: str, paid: bool) -> None:
+    def set_payment_status(self, profile_id: str, paid: bool, service_type: str) -> None:
         try:
-            self.redis.hset("workout_plans:payments", profile_id, json.dumps({"paid": paid}))
+            self.redis.hset(f"workout_plans:payments:{service_type}", profile_id, json.dumps({"paid": paid}))
             logger.info(f"Program status for profile_id {profile_id} set to {paid}")
         except Exception as e:
             logger.error(f"Failed to set payment status for profile_id {profile_id}: {e}")
 
-    def reset_program_payment_status(self, profile_id: str) -> None:
+    def reset_program_payment_status(self, profile_id: str, service_type: str) -> None:
         try:
-            self.redis.hdel("workout_plans:payments", profile_id)
+            self.redis.hdel(f"workout_plans:payments:{service_type}", profile_id)
             logger.info(f"Payment status for profile_id {profile_id} has been reset")
         except Exception as e:
             logger.error(f"Failed to reset payment status for profile_id {profile_id}: {e}")
 
-    def check_program_payment(self, profile_id: str) -> bool:
+    def check_payment_status(self, profile_id: str, service_type: str) -> bool:
         try:
-            payment_status = self.redis.hget("workout_plans:payments", profile_id)
+            payment_status = self.redis.hget(f"workout_plans:payments:{service_type}", profile_id)
             if payment_status:
                 return json.loads(payment_status).get("paid", False)
             else:

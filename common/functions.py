@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 
 from bot.keyboards import *
 from bot.states import States
+from common.exceptions import UserServiceError
 from common.file_manager import avatar_manager, gif_manager
 from common.models import Client, Coach, Profile, Subscription
 from common.user_service import user_service
@@ -288,7 +289,7 @@ async def handle_contact_action(
 async def handle_program_action(
     callback_query: CallbackQuery, profile: Profile, client_id: str, state: FSMContext
 ) -> None:
-    program_paid = user_service.storage.check_program_payment(client_id)
+    program_paid = user_service.storage.check_payment_status(client_id, "program")
     workout_data = user_service.storage.get_program(str(client_id))
 
     if not program_paid and not workout_data:
@@ -399,8 +400,14 @@ async def handle_my_profile(callback_query: CallbackQuery, profile: Profile, sta
 
 
 async def handle_my_clients(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    coach = user_service.storage.get_coach_by_id(profile.id)
-    assigned_ids = coach.assigned_to if coach.assigned_to else None
+    try:
+        coach = user_service.storage.get_coach_by_id(profile.id)
+        assigned_ids = coach.assigned_to if coach.assigned_to else None
+    except UserServiceError as e:
+        logger.error(f"Could not get coach profile for {profile.id}: {e}")
+        await callback_query.message.answer(translate(MessageText.unexpected_error, profile.language))
+        return
+
     if assigned_ids:
         clients = [user_service.storage.get_client_by_id(client) for client in assigned_ids]
         await show_clients(callback_query.message, clients, state)
@@ -439,8 +446,10 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
     current_index %= len(clients)
     current_client = clients[current_index]
     subscription = True if user_service.storage.get_subscription(current_client.id) else False
-    payment_status = user_service.storage.check_program_payment(current_client.id)
-    client_info = get_client_page(current_client, profile.language, subscription, payment_status)
+    waiting_program = user_service.storage.check_payment_status(current_client.id, "program")
+    waiting_subscription = user_service.storage.check_payment_status(current_client.id, "subscription")
+    status = True if waiting_program or waiting_subscription else False
+    client_info = get_client_page(current_client, profile.language, subscription, status)
     client_data = [Client.to_dict(client) for client in clients]
 
     await state.update_data(clients=client_data)
@@ -485,7 +494,7 @@ async def send_message(
     @sub_router.callback_query(F.data == "later")
     async def close_notification(callback_query: CallbackQuery, state: FSMContext):
         await callback_query.message.delete()
-        profile = user_service.storage.get_current_profile(recipient.tg_id)
+        profile = user_service.storage.get_current_profile(callback_query.from_user.id)
         await state.set_state(States.main_menu)
         await show_main_menu(callback_query.message, profile, state)
 
@@ -508,16 +517,6 @@ async def send_message(
     @sub_router.callback_query(F.data == "next_day")  # TODO: REPLACE WITH program_view HANDLER
     async def navigate_days(callback_query: CallbackQuery, state: FSMContext):
         profile = user_service.storage.get_current_profile(callback_query.from_user.id)
-
-        if callback_query.data == "quit":
-            await state.set_state(States.select_service)
-            await callback_query.message.answer(
-                text=translate(MessageText.select_service, lang=profile.language),
-                reply_markup=select_service(profile.language),
-            )
-            await callback_query.message.delete()
-            return
-
         data = await state.get_data()
         program = user_service.storage.get_program(str(profile.id))
         subscription = None
@@ -564,17 +563,17 @@ async def send_message(
         else:
             result = "missed"
 
-        user_service.storage.redis.hset("workout_results", profile.id, result)
+        # TODO: NOTIFY COACH
+
         await callback_query.message.delete()
-        await callback_query.answer("Thank you for your response!", show_alert=True)
 
     @sub_router.callback_query(F.data == "later")
     async def handle_survey_later(callback_query: CallbackQuery, state: FSMContext):
         await callback_query.message.delete()
-        await callback_query.answer("You can respond later.", show_alert=True)
+        await state.clear()
 
 
-async def format_program(exercises_by_day: dict[str, list[tuple[str, str, str, str, str]]], day: int) -> str:
+async def format_program(exercises_by_day: dict[str, Any], day: int) -> str:
     program_lines = []
     day_key = str(day)
     exercises = exercises_by_day.get(day_key, [])
@@ -641,8 +640,10 @@ async def client_request(coach: Coach, client: Client, state: FSMContext) -> Non
     preferable_workout_type = data.get("workout_type")
     preferable_type = workout_types.get(preferable_workout_type, "unknown")
     subscription = user_service.storage.get_subscription(client.id)
-    waiting_program = user_service.storage.check_program_payment(client.id)
-    client_data = get_client_page(client, coach_lang, subscription, waiting_program)
+    waiting_program = user_service.storage.check_payment_status(client.id, "program")
+    waiting_subscription = user_service.storage.check_payment_status(client.id, "subscription")
+    status = True if waiting_program or waiting_subscription else False
+    client_data = get_client_page(client, coach_lang, subscription, status)
     text = await format_message(data, coach_lang, client_lang, preferable_type)
 
     await send_message(

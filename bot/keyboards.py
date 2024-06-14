@@ -275,19 +275,18 @@ def sets_number() -> InlineKeyboardMarkup:
 
 def reps_number() -> InlineKeyboardMarkup:
     buttons = [
-        [InlineKeyboardButton(text="1-3", callback_data="1-3"), InlineKeyboardButton(text="3-5", callback_data="3-5")],
         [
+            InlineKeyboardButton(text="1-3", callback_data="1-3"),
+            InlineKeyboardButton(text="3-5", callback_data="3-5"),
             InlineKeyboardButton(text="5-8", callback_data="5-8"),
             InlineKeyboardButton(text="8-10", callback_data="8-10"),
         ],
         [
-            InlineKeyboardButton(text="10-12", callback_data="10-12"),
             InlineKeyboardButton(text="12-15", callback_data="12-15"),
-        ],
-        [
             InlineKeyboardButton(text="15-20", callback_data="15-20"),
             InlineKeyboardButton(text="20-30", callback_data="20-30"),
+            InlineKeyboardButton(text="30+", callback_data="30+"),
         ],
-        [InlineKeyboardButton(text="30+", callback_data="30+")],
     ]
+
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=2)

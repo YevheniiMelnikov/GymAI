@@ -64,11 +64,11 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
                 "workout_days": data.get("workout_days"),
             }
             user_service.storage.save_subscription(profile.id, subscription_data)
-            user_service.storage.set_program_payment_status(profile.id, True)
+            user_service.storage.set_payment_status(profile.id, True, "subscription")
         except Exception as e:
             logger.error(f"Subscription does not created for profile_id {profile.id}: {e}")
     else:
-        user_service.storage.set_program_payment_status(profile.id, True)
+        user_service.storage.set_payment_status(profile.id, True, "program")
     await callback_query.message.answer(translate(MessageText.payment_success, profile.language))
     await client_request(coach, client, state)
     await state.set_state(States.main_menu)

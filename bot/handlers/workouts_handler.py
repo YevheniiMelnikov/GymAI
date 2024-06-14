@@ -52,7 +52,7 @@ async def program_type(callback_query: CallbackQuery, state: FSMContext):
 
     elif callback_query.data == "program":
         if exercises := user_service.storage.get_program(profile.id):
-            program_paid = user_service.storage.check_program_payment(profile.id)
+            program_paid = user_service.storage.check_payment_status(profile.id, "program")
             if program_paid:
                 await callback_query.answer(translate(MessageText.program_not_ready, profile.language), show_alert=True)
                 return
