@@ -1,5 +1,8 @@
+from contextlib import suppress
+
 import loguru
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
@@ -237,14 +240,27 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
 
     if callback_query.data == "complete":
         if days:
+            await callback_query.answer(translate(MessageText.saved, lang=profile.language))
             await state.update_data(workout_days=days)
-            kb = InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text="💰", callback_data=data.get("request_type"))]]
-            )
-            await callback_query.message.answer("click to pay 👇", reply_markup=kb)  # TODO: REPLACE WITH PAYMENT LINK
-            await state.update_data(price=50)
-            await state.set_state(States.handle_payment)
-            await callback_query.message.delete()
+            if data.get("edit_mode"):
+                subscription_data = user_service.storage.get_subscription(profile.id).to_dict()
+                exercises_by_day = subscription_data.get("exercises", {})
+                updated_exercises_by_day = {days[i]: exercises for i, exercises in enumerate(exercises_by_day.values())}
+                subscription_data.update(user=profile.id, exercises=updated_exercises_by_day)
+                user_service.storage.save_subscription(profile.id, subscription_data)
+                await user_service.update_subscription(subscription_data.get("id"), subscription_data)
+                await state.set_state(States.main_menu)
+                await show_main_menu(callback_query.message, profile, state)
+                with suppress(TelegramBadRequest):
+                    await callback_query.message.delete()
+            else:
+                kb = InlineKeyboardMarkup(
+                    inline_keyboard=[[InlineKeyboardButton(text="💰", callback_data=data.get("request_type"))]]
+                )  # TODO: REPLACE WITH PAYMENT LINK
+                await callback_query.message.answer("click to pay 👇", reply_markup=kb)
+                await state.update_data(price=50)
+                await state.set_state(States.handle_payment)
+                await callback_query.message.delete()
         else:
             await callback_query.answer("❌")
     else:

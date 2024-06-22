@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 import loguru
 from aiogram import F, Router
 from aiogram.client.session import aiohttp
@@ -33,6 +35,10 @@ async def send_daily_survey():
         async def have_you_trained(callback_query: CallbackQuery, state: FSMContext):
             profile = user_session.get_current_profile(callback_query.from_user.id)
             if callback_query.data == "yes":
+                subscription_data = user_session.get_subscription(profile.id)
+                yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
+                exercises = subscription_data.exercises.get(yesterday)
+                await state.update_data(exercises=exercises, day=yesterday)
                 await callback_query.answer("🔥")
                 await callback_query.message.answer(
                     translate(MessageText.workout_results), reply_markup=workout_results(profile.language)

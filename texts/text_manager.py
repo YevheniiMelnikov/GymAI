@@ -30,6 +30,11 @@ class MessageText(Enum):
     exercise_weight = auto()
     program_guide = auto()
     payment_link = auto()
+    workout_feedback = auto()
+    workout_completed = auto()
+    continue_editing = auto()
+    select_exercise = auto()
+    parameter_to_edit = auto()
 
     name = auto()
     choose_gender = auto()
@@ -120,7 +125,7 @@ class ButtonText(Enum):
     back = auto()
     quit = auto()
     forward = auto
-    edit_profile = auto()
+    edit = auto()
     program = auto()
     subscription = auto()
     choose_coach = auto()
@@ -160,6 +165,12 @@ class ButtonText(Enum):
     sunday = auto()
     answer_yes = auto()
     answer_no = auto()
+    edit_exercise = auto()
+    delete_exercise = auto()
+    contact_coach = auto()
+    sets = auto()
+    reps = auto()
+    exercises = auto()
 
     def __str__(self) -> str:
         return f"buttons.{self.name}"

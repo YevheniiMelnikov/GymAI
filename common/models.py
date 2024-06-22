@@ -11,7 +11,7 @@ class BaseEntity:
     @classmethod
     def from_dict(cls: Type[T], data: dict[str, Any]) -> T:
         fields = {field.name for field in cls.__dataclass_fields__.values()}
-        filtered_data = {key: data.get(key) for key in fields}
+        filtered_data = {key: data.get(key) for key in fields if key in data}
         return cls(**filtered_data)
 
     def to_dict(self) -> dict[str, Any]:
@@ -70,3 +70,12 @@ class Subscription(BaseEntity):
     profile: int
     workout_days: list[str] = field(default_factory=list)
     exercises: dict[str, list[tuple[str, int]]] = field(default_factory=dict)
+
+
+@dataclass
+class Exercise:
+    name: str
+    sets: str
+    reps: str
+    gif_link: str | None
+    weight: str | None

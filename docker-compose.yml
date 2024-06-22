@@ -1,4 +1,4 @@
-version: '3'
+version: '3.8'
 
 services:
   redis:
@@ -45,8 +45,10 @@ services:
     depends_on:
       - backend
       - db
+      - redis
     volumes:
       - .:/opt:z
+      - ./google_creds.json:/opt/google_creds.json:z
     ports:
       - "8080:8000"
     env_file:
