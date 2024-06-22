@@ -167,3 +167,16 @@ async def get_service_types(language: str) -> dict:
         "subscription": translate(ButtonText.subscription, language),
         "program": translate(ButtonText.program, language),
     }
+
+
+def get_translated_week_day(lang_code: str, day: str) -> str:
+    days = {
+        "monday": translate(ButtonText.monday, lang_code),
+        "tuesday": translate(ButtonText.tuesday, lang_code),
+        "wednesday": translate(ButtonText.wednesday, lang_code),
+        "thursday": translate(ButtonText.thursday, lang_code),
+        "friday": translate(ButtonText.friday, lang_code),
+        "saturday": translate(ButtonText.saturday, lang_code),
+        "sunday": translate(ButtonText.sunday, lang_code),
+    }
+    return days.get(day)

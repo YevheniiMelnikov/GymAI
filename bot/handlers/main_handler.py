@@ -175,9 +175,37 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
     await handle_pagination(callback_query, profile, index, state)
 
 
-@main_router.callback_query(States.program)
+@main_router.callback_query(States.show_subscription)
 async def show_program(callback_query: CallbackQuery, state: FSMContext):
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "back":
         await state.set_state(States.main_menu)
         await show_main_menu(callback_query.message, profile, state)
+
+    elif callback_query.data == "edit":
+        await state.update_data(edit_mode=True)
+        await state.set_state(States.workout_days)
+        await callback_query.message.answer(
+            translate(MessageText.select_days, profile.language), reply_markup=select_days(profile.language, [])
+        )
+
+    elif callback_query.data == "contact":
+        client = user_service.storage.get_client_by_id(profile.id)
+        coach_id = client.assigned_to.pop()
+        await state.update_data(recipient_id=coach_id, sender_name=client.name)
+        await state.set_state(States.contact_coach)
+        await callback_query.message.answer(translate(MessageText.enter_your_message, profile.language))
+
+    else:
+        data = await state.get_data()
+        exercises = data.get("exercises", {})  # TODO: refactor
+        program = await format_program(exercises, 1)
+        await callback_query.message.answer(
+            text=translate(MessageText.program_page, lang=profile.language).format(program=program, day=1),
+            reply_markup=program_view_kb(profile.language),
+            disable_web_page_preview=True,
+        )
+        await state.set_state(States.program_view)
+
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()

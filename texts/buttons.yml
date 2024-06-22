@@ -53,7 +53,7 @@ back:
   ru: "Назад ⬅️"
   ua: "Назад ⬅️"
 
-edit_profile:
+edit:
   eng: "Edit ✏️"
   ru: "Редактировать ✏️"
   ua: "Редагувати ✏️"
@@ -160,8 +160,13 @@ answer:
 
 add_exercise:
   eng: "Add exercise ➕"
-  ru: "Добавить тренировку ➕"
-  ua: "Додати тренування ➕"
+  ru: "Добавить упражнение ➕"
+  ua: "Додати вправу ➕"
+
+edit_exercise:
+  eng: "Edit exercise ✏️"
+  ru: "Редактировать упражнение ✏️"
+  ua: "Редагувати вправу ✏️"
 
 save:
   eng: "Save ✅"
@@ -262,3 +267,28 @@ answer_no:
   eng: "No ❌"
   ru: "Нет ❌"
   ua: "Ні ❌"
+
+delete_exercise:
+  eng: "Delete exercise ❌"
+  ru: "Удалить упражнение ❌"
+  ua: "Видалити вправу ❌"
+
+contact_coach:
+  eng: "Contact coach ✍️"
+  ru: "Связаться с тренером ✍️"
+  ua: "Зв'язатись з тренером ✍️"
+
+sets:
+  eng: "Sets 💪"
+  ru: "Подходы 💪"
+  ua: "Підходи 💪"
+
+reps:
+  eng: "Reps 🔄"
+  ru: "Повторения 🔄"
+  ua: "Повтори 🔄"
+
+exercises:
+  eng: "Exercises 🏋️‍♂️"
+  ru: "Упражнения 🏋️‍♂️"
+  ua: "Вправи 🏋️‍♂️"

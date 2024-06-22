@@ -26,10 +26,15 @@ class States(StatesGroup):
     gift = State()
 
     edit_profile = State()
+    edit_exercise = State()
+    edit_exercise_parameter = State()
+    program_edit = State()
     action_choice = State()
     feedback = State()
     profile = State()
-    program = State()
+    show_subscription = State()
+    subscription_manage = State()
+    delete_exercise = State()
     new_coach_request = State
     choose_coach = State()
     coach_selection = State()
@@ -48,3 +53,4 @@ class States(StatesGroup):
     exercise_weight = State()
     enter_sets = State()
     enter_reps = State()
+    add_exercise_name = State()

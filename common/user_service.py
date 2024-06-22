@@ -12,7 +12,7 @@ import redis
 from dateutil.parser import parse
 
 from common.exceptions import EmailUnavailable, UsernameUnavailable, UserServiceError
-from common.models import Client, Coach, Profile, Program, Subscription
+from common.models import Client, Coach, Exercise, Profile, Program, Subscription
 
 logger = loguru.logger
 
@@ -36,7 +36,11 @@ class UserProfileManager:
 
     def _get_profile_data(self, telegram_id: int | str) -> list[dict[str, Any]]:
         profiles_data = self.redis.hget("user_profiles", str(telegram_id)) or "[]"
-        return json.loads(profiles_data)
+        try:
+            return json.loads(profiles_data)
+        except JSONDecodeError as e:
+            logger.error(f"JSON decode error: {e}")
+            return []
 
     def _update_profile_data(self, telegram_id: int | str, profiles_data: list[dict[str, Any]]) -> None:
         self.redis.hset("user_profiles", str(telegram_id), json.dumps(profiles_data))
@@ -205,13 +209,11 @@ class UserProfileManager:
             logger.error(f"Failed to get data for profile_id from cache {profile_id}: {e}")
             raise UserServiceError
 
-    def save_program(
-        self, client_id: str, exercises_by_day: dict[int, list[tuple[str, str]]], split_number: int
-    ) -> None:
+    def save_program(self, client_id: str, exercises_by_day: dict[int, Exercise], split_number: int) -> None:
         try:
             program_data = {"exercises_by_day": exercises_by_day, "split_number": split_number}
             self.redis.hset("workout_plans:programs", client_id, json.dumps(program_data))
-            self.reset_program_payment_status(client_id)
+            self.reset_program_payment_status(client_id, "program")
             logger.info(f"Program for client {client_id} saved in cache")
         except Exception as e:
             logger.error(f"Failed to save program in cache for client {client_id}: {e}")
@@ -230,23 +232,23 @@ class UserProfileManager:
             logger.error(f"Failed to get program for profile_id {profile_id}: {e}")
             return None
 
-    def set_program_payment_status(self, profile_id: str, paid: bool) -> None:
+    def set_payment_status(self, profile_id: str, paid: bool, service_type: str) -> None:
         try:
-            self.redis.hset("workout_plans:payments", profile_id, json.dumps({"paid": paid}))
+            self.redis.hset(f"workout_plans:payments:{service_type}", profile_id, json.dumps({"paid": paid}))
             logger.info(f"Program status for profile_id {profile_id} set to {paid}")
         except Exception as e:
             logger.error(f"Failed to set payment status for profile_id {profile_id}: {e}")
 
-    def reset_program_payment_status(self, profile_id: str) -> None:
+    def reset_program_payment_status(self, profile_id: str, service_type: str) -> None:
         try:
-            self.redis.hdel("workout_plans:payments", profile_id)
+            self.redis.hdel(f"workout_plans:payments:{service_type}", profile_id)
             logger.info(f"Payment status for profile_id {profile_id} has been reset")
         except Exception as e:
             logger.error(f"Failed to reset payment status for profile_id {profile_id}: {e}")
 
-    def check_program_payment(self, profile_id: str) -> bool:
+    def check_payment_status(self, profile_id: str, service_type: str) -> bool:
         try:
-            payment_status = self.redis.hget("workout_plans:payments", profile_id)
+            payment_status = self.redis.hget(f"workout_plans:payments:{service_type}", profile_id)
             if payment_status:
                 return json.loads(payment_status).get("paid", False)
             else:
@@ -268,6 +270,7 @@ class UserProfileManager:
     def save_subscription(self, profile_id: str, subscription_data: dict) -> None:
         try:
             self.redis.hset("workout_plans:subscriptions", profile_id, json.dumps(subscription_data))
+            self.reset_program_payment_status(profile_id, "subscription")
             logger.info(f"Subscription for profile {profile_id} saved in cache")
         except Exception as e:
             logger.error(f"Failed to save subscription in cache for profile {profile_id}: {e}")
@@ -301,23 +304,24 @@ class UserProfileManager:
             if (
                 subscription
                 and subscription.enabled
+                and subscription.exercises
                 and yesterday in [day.lower() for day in subscription.workout_days]
             ):
                 clients_with_workout.append(client_id)
 
         return clients_with_workout
 
-    def cache_gif_filename(self, exercise: str, filename: str) -> None:
+    def cache_gif_filename(self, exercise_name: str, filename: str) -> None:
         try:
-            self.redis.hset("exercise_gif_map", exercise, filename)
+            self.redis.hset("exercise_gif_map", exercise_name, filename)
         except Exception as e:
-            logger.info(f"Failed to cache gif filename for exercise {exercise}: {e}")
+            logger.info(f"Failed to cache gif filename for exercise {exercise_name}: {e}")
 
-    def get_exercise_gif(self, exercise: str) -> str | None:
+    def get_exercise_gif(self, exercise_name: str) -> str | None:
         try:
-            return self.redis.hget("exercise_gif_map", exercise)
+            return self.redis.hget("exercise_gif_map", exercise_name)
         except Exception as e:
-            logger.info(f"Failed to get gif filename for exercise {exercise}: {e}")
+            logger.info(f"Failed to get gif filename for exercise {exercise_name}: {e}")
             return None
 
 
@@ -463,9 +467,7 @@ class UserService:
         )
         return status_code == 200
 
-    async def save_program(
-        self, client_id: str, exercises_by_day: dict[int, list[tuple[str, str]]], split_number: int
-    ) -> None:
+    async def save_program(self, client_id: str, exercises_by_day: dict[int, Exercise], split_number: int) -> None:
         self.storage.save_program(client_id, exercises_by_day, split_number)
         url = f"{self.backend_url}/api/v1/programs/"
         data = {
