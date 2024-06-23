@@ -225,11 +225,12 @@ async def enter_sets(callback_query: CallbackQuery, state: FSMContext) -> None:
     await callback_query.answer(translate(MessageText.saved, profile.language))
     data = await state.get_data()
     if data.get("edit_mode"):
-        exercises = data.get("exercises", {})
-        exercise_index = data.get("exercise_index")
-        updated_exercise = exercises[exercise_index]
-        updated_exercise["sets"] = callback_query.data
-        exercises[exercise_index] = updated_exercise
+        day_index = data.get("day_index")
+        selected_exercise = data.get("selected_exercise")
+        selected_exercise["sets"] = callback_query.data
+        exercises = data.get("exercises", [])
+        exercise_index = data.get("exercise_index", 0)
+        exercises[day_index][exercise_index] = selected_exercise
         await state.update_data(exercises=exercises)
         await state.set_state(States.program_edit)
         await callback_query.message.answer(
@@ -249,11 +250,12 @@ async def enter_reps(callback_query: CallbackQuery, state: FSMContext) -> None:
     await callback_query.answer(translate(MessageText.saved, profile.language))
     data = await state.get_data()
     if data.get("edit_mode"):
-        exercises = data.get("exercises", {})
-        exercise_index = data.get("exercise_index")
-        updated_exercise = exercises[exercise_index]
-        updated_exercise["reps"] = callback_query.data
-        exercises[exercise_index] = updated_exercise
+        day_index = data.get("day_index")
+        selected_exercise = data.get("selected_exercise")
+        selected_exercise["reps"] = callback_query.data
+        exercises = data.get("exercises", [])
+        exercise_index = data.get("exercise_index", 0)
+        exercises[day_index][exercise_index] = selected_exercise
         await state.update_data(exercises=exercises)
         await state.set_state(States.program_edit)
         await callback_query.message.answer(
@@ -296,11 +298,11 @@ async def handle_exercise_weight(input_data: CallbackQuery | Message, state: FSM
             return
 
     if data.get("edit_mode"):
-        exercises = data.get("exercises", {})
-        exercise_index = data.get("exercise_index")
-        updated_exercise = exercises[exercise_index]
-        updated_exercise["weight"] = weight
-        exercises[exercise_index] = updated_exercise
+        selected_exercise = data.get("selected_exercise")
+        selected_exercise["weight"] = weight
+        exercises = data.get("exercises", [])
+        exercise_index = data.get("exercise_index", 0)
+        exercises[day_index][exercise_index] = selected_exercise
         await state.update_data(exercises=exercises)
         await state.set_state(States.program_edit)
         await input_data.answer(
@@ -319,7 +321,7 @@ async def workout_results(callback_query: CallbackQuery, state: FSMContext):
     day = data.get("day")
     exercises = data.get("exercises")
 
-    program = await format_program({"1": exercises}, 1)  # TODO: REPLACE WITH WEEK DAY
+    program = await format_program({"1": exercises}, 1)
     if callback_query.data == "answer_yes":
         await callback_query.answer(translate(MessageText.keep_going, profile.language), show_alert=True)
         client = user_service.storage.get_client_by_id(profile.id)
@@ -348,7 +350,7 @@ async def workout_description(message: Message, state: FSMContext):
     data = await state.get_data()
     day = data.get("day")
     exercises = data.get("exercises")
-    program = await format_program({"1": exercises}, 1)  # TODO: REPLACE WITH WEEK DAY
+    program = await format_program({"1": exercises}, 1)
     await send_message(
         recipient=coach,
         text=translate(MessageText.workout_feedback, coach_lang).format(
@@ -367,8 +369,9 @@ async def workout_description(message: Message, state: FSMContext):
 async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     data = await state.get_data()
-    exercises = data.get("exercises_by_day", [])
+    exercises = data.get("exercises", [])
     client_id = data.get("client_id")
+    day_index = int(data.get("day_index"))
 
     if callback_query.data == "exercise_add":
         await state.update_data(exercise_index=len(exercises) + 1, exercises_by_day=exercises)
@@ -376,13 +379,13 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
         await state.set_state(States.add_exercise_name)
     elif callback_query.data == "exercise_delete":
         await callback_query.message.answer(
-            translate(MessageText.select_exercise, profile.language), reply_markup=select_exercise(exercises)
+            translate(MessageText.select_exercise, profile.language), reply_markup=select_exercise(exercises[day_index])
         )
         await state.set_state(States.delete_exercise)
     elif callback_query.data == "exercise_edit":
         await state.update_data(edit_mode=True)
         await callback_query.message.answer(
-            translate(MessageText.select_exercise, profile.language), reply_markup=select_exercise(exercises)
+            translate(MessageText.select_exercise, profile.language), reply_markup=select_exercise(exercises[day_index])
         )
         await state.set_state(States.edit_exercise)
     elif callback_query.data == "finish_editing":
@@ -404,8 +407,16 @@ async def select_exercise_to_edit(callback_query: CallbackQuery, state: FSMConte
     data = await state.get_data()
     exercises = data.get("exercises")
     exercise_index = int(callback_query.data)
-    selected_exercise = exercises[exercise_index]
-    await state.update_data(exercise=selected_exercise, exercise_index=exercise_index)
+    current_index = 0
+    selected_exercise = None
+
+    for _, sublist in enumerate(exercises):
+        if current_index + len(sublist) > exercise_index:
+            selected_exercise = sublist[exercise_index - current_index]
+            break
+        current_index += len(sublist)
+
+    await state.update_data(selected_exercise=selected_exercise, exercise_index=exercise_index)
     await callback_query.message.answer(
         translate(MessageText.parameter_to_edit, profile.language), reply_markup=edit_exercise_data(profile.language)
     )

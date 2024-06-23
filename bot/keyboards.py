@@ -332,6 +332,14 @@ def select_exercise(exercises: list[dict]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
 
 
+# def select_exercise(exercises: list[list[dict]]) -> InlineKeyboardMarkup:
+#     buttons = []
+#     for sublist in exercises:
+#         for index, exercise in enumerate(sublist):
+#             buttons.append([InlineKeyboardButton(text=exercise.get("name"), callback_data=str(index))])
+#     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+
+
 def edit_exercise_data(lang_code: str) -> InlineKeyboardMarkup:
     buttons = [
         [InlineKeyboardButton(text=translate(ButtonText.sets, lang_code), callback_data="sets")],
