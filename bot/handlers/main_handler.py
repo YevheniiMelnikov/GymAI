@@ -24,6 +24,7 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
         case "feedback":
             await callback_query.message.answer(text=translate(MessageText.feedback, lang=profile.language))
             await state.set_state(States.feedback)
+            await callback_query.message.delete()
 
         case "my_profile":
             await handle_my_profile(callback_query, profile, state)
@@ -172,15 +173,18 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
         await callback_query.answer(translate(MessageText.out_of_range, profile.language))
         return
 
-    await handle_pagination(callback_query, profile, index, state)
+    await handle_client_pagination(callback_query, profile, index, state)
 
 
 @main_router.callback_query(States.show_subscription)
-async def show_program(callback_query: CallbackQuery, state: FSMContext):
+async def show_subscription(callback_query: CallbackQuery, state: FSMContext):
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "back":
-        await state.set_state(States.main_menu)
-        await show_main_menu(callback_query.message, profile, state)
+        await state.set_state(States.select_service)
+        await callback_query.message.answer(
+            text=translate(MessageText.select_service, lang=profile.language),
+            reply_markup=select_service(profile.language),
+        )
 
     elif callback_query.data == "edit":
         await state.update_data(edit_mode=True)
@@ -197,15 +201,10 @@ async def show_program(callback_query: CallbackQuery, state: FSMContext):
         await callback_query.message.answer(translate(MessageText.enter_your_message, profile.language))
 
     else:
-        data = await state.get_data()
-        exercises = data.get("exercises", {})  # TODO: refactor
-        program = await format_program(exercises, 1)
-        await callback_query.message.answer(
-            text=translate(MessageText.program_page, lang=profile.language).format(program=program, day=1),
-            reply_markup=program_view_kb(profile.language),
-            disable_web_page_preview=True,
-        )
-        await state.set_state(States.program_view)
+        subscription = user_service.storage.get_subscription(profile.id)
+        workout_days = subscription.workout_days
+        await state.update_data(exercises=subscription.exercises, days=workout_days, split=len(workout_days))
+        await show_exercises(callback_query, state, profile)
 
     with suppress(TelegramBadRequest):
         await callback_query.message.delete()

@@ -171,6 +171,7 @@ class ButtonText(Enum):
     sets = auto()
     reps = auto()
     exercises = auto()
+    view = auto()
 
     def __str__(self) -> str:
         return f"buttons.{self.name}"

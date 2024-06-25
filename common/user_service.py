@@ -209,9 +209,8 @@ class UserProfileManager:
             logger.error(f"Failed to get data for profile_id from cache {profile_id}: {e}")
             raise UserServiceError
 
-    def save_program(self, client_id: str, exercises_by_day: dict[int, Exercise], split_number: int) -> None:
+    def save_program(self, client_id: str, program_data: dict) -> None:
         try:
-            program_data = {"exercises_by_day": exercises_by_day, "split_number": split_number}
             self.redis.hset("workout_plans:programs", client_id, json.dumps(program_data))
             self.reset_program_payment_status(client_id, "program")
             logger.info(f"Program for client {client_id} saved in cache")
@@ -467,12 +466,11 @@ class UserService:
         )
         return status_code == 200
 
-    async def save_program(self, client_id: str, exercises_by_day: dict[int, Exercise], split_number: int) -> None:
-        self.storage.save_program(client_id, exercises_by_day, split_number)
+    async def save_program(self, client_id: str, exercises: dict[int, Exercise], split_number: int) -> None:
         url = f"{self.backend_url}/api/v1/programs/"
         data = {
             "profile": client_id,
-            "exercises_by_day": exercises_by_day,
+            "exercises_by_day": exercises,
             "split_number": split_number,
         }
         status_code, response = await self._api_request(
@@ -481,6 +479,15 @@ class UserService:
         if status_code != 201:
             logger.error(f"Failed to save program for client {client_id}: {response}")
             raise UserServiceError(f"Failed to save program: {response}")
+
+        program_data = dict(
+            id=response.get("id"),
+            split_number=split_number,
+            exercises_by_day=exercises,
+            created_at=response.get("created_at"),
+            profile=client_id,
+        )
+        self.storage.save_program(client_id, program_data)
 
     async def delete_program(self, profile_id: str) -> bool:
         url = f"{self.backend_url}/api/v1/programs/delete_by_profile/{profile_id}/"

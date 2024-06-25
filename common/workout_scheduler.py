@@ -37,8 +37,15 @@ async def send_daily_survey():
             if callback_query.data == "yes":
                 subscription_data = user_session.get_subscription(profile.id)
                 yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
+                workout_days = subscription_data.get("workout_days", [])
+
+                try:
+                    day_index = workout_days.index(yesterday)
+                except ValueError:
+                    day_index = -1
+
                 exercises = subscription_data.exercises.get(yesterday)
-                await state.update_data(exercises=exercises, day=yesterday)
+                await state.update_data(exercises=exercises, day=yesterday, day_index=day_index)
                 await callback_query.answer("🔥")
                 await callback_query.message.answer(
                     translate(MessageText.workout_results), reply_markup=workout_results(profile.language)
