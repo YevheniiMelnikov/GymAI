@@ -9,7 +9,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from bot.keyboards import choose_gender, select_days, workout_experience_keyboard
 from bot.states import States
 from common.file_manager import avatar_manager
-from common.functions import client_request, show_main_menu, update_user_info
+from common.functions import client_request, show_main_menu, update_user_info, show_subscription_page
 from common.models import Client, Coach
 from common.user_service import user_service
 from common.utils import get_state_and_message, validate_birth_date
@@ -241,16 +241,17 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
     if callback_query.data == "complete":
         if days:
             await callback_query.answer(translate(MessageText.saved, lang=profile.language))
+            subscription = user_service.storage.get_subscription(profile.id)
             await state.update_data(workout_days=days)
             if data.get("edit_mode"):
-                subscription_data = user_service.storage.get_subscription(profile.id).to_dict()
-                exercises_by_day = subscription_data.get("exercises", {})
-                updated_exercises_by_day = {days[i]: exercises for i, exercises in enumerate(exercises_by_day.values())}
-                subscription_data.update(user=profile.id, exercises=updated_exercises_by_day)
+                subscription_data = subscription.to_dict()
+                exercises = subscription_data.get("exercises", {})
+                updated_exercises = {days[i]: exercises for i, exercises in enumerate(exercises.values())}
+                subscription_data.update(user=profile.id, exercises=updated_exercises)
                 user_service.storage.save_subscription(profile.id, subscription_data)
                 await user_service.update_subscription(subscription_data.get("id"), subscription_data)
-                await state.set_state(States.main_menu)
-                await show_main_menu(callback_query.message, profile, state)
+                await state.set_state(States.show_subscription)
+                await show_subscription_page(callback_query, state, subscription)
                 with suppress(TelegramBadRequest):
                     await callback_query.message.delete()
             else:
