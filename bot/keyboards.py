@@ -193,9 +193,16 @@ def choose_payment_options(lang_code: str, option: str) -> InlineKeyboardMarkup:
     return kb.as_markup(one_time_keyboard=True)
 
 
-def incoming_request(lang_code: str, client_id: int) -> InlineKeyboardMarkup:
+def new_incoming_request(lang_code: str, client_id: int) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
     kb.button(text=translate(ButtonText.answer, lang_code), callback_data=f"answer_{client_id}")
+    kb.button(text=translate(ButtonText.later, lang_code), callback_data="later")
+    return kb.as_markup(one_time_keyboard=True)
+
+
+def incoming_request(lang_code: str, service: str, client_id: int) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=translate(ButtonText.create, lang_code), callback_data=f"create_{service}_{client_id}")
     kb.button(text=translate(ButtonText.later, lang_code), callback_data="later")
     return kb.as_markup(one_time_keyboard=True)
 
@@ -248,10 +255,10 @@ def program_view_kb(lang_code: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
 
 
-def workout_survey_keyboard(lang_code: str) -> InlineKeyboardMarkup:
+def workout_survey_keyboard(lang_code: str, day: str) -> InlineKeyboardMarkup:
     buttons = [
-        [InlineKeyboardButton(text=translate(ButtonText.answer_yes, lang_code), callback_data="yes")],
-        [InlineKeyboardButton(text=translate(ButtonText.answer_no, lang_code), callback_data="no")],
+        [InlineKeyboardButton(text=translate(ButtonText.answer_yes, lang_code), callback_data=f"yes_{day}")],
+        [InlineKeyboardButton(text=translate(ButtonText.answer_no, lang_code), callback_data=f"no_{day}")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
 
@@ -314,9 +321,13 @@ def program_edit_kb(lang_code: str) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=translate(ButtonText.add_exercise, lang_code), callback_data="exercise_add")],
         [InlineKeyboardButton(text=translate(ButtonText.edit_exercise, lang_code), callback_data="exercise_edit")],
         [InlineKeyboardButton(text=translate(ButtonText.delete_exercise, lang_code), callback_data="exercise_delete")],
-        [InlineKeyboardButton(text=translate(ButtonText.save, lang_code), callback_data="finish_editing")],
+        [
+            InlineKeyboardButton(text=translate(ButtonText.save, lang_code), callback_data="finish_editing"),
+            InlineKeyboardButton(text=translate(ButtonText.reset_program, lang_code), callback_data="reset"),
+        ],
         [InlineKeyboardButton(text=translate(ButtonText.quit, lang_code), callback_data="quit")],
     ]
+
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 

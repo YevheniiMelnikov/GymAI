@@ -22,29 +22,29 @@ async def send_daily_survey():
     for client_id in clients:
         client = user_session.get_client_by_id(client_id)
         client_lang = user_session.get_profile_info_by_key(client.tg_id, client_id, "language")
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
         async with aiohttp.ClientSession():
             await bot.send_message(
                 chat_id=client.tg_id,
                 text=translate(MessageText.have_you_trained, client_lang),
-                reply_markup=workout_survey_keyboard(client_lang),
+                reply_markup=workout_survey_keyboard(client_lang, yesterday),
                 disable_notification=True,
             )
 
-        @survey_router.callback_query(F.data == "yes")
-        @survey_router.callback_query(F.data == "no")
+        @survey_router.callback_query(F.data.startswith("yes"))
+        @survey_router.callback_query(F.data.startswith("no"))
         async def have_you_trained(callback_query: CallbackQuery, state: FSMContext):
             profile = user_session.get_current_profile(callback_query.from_user.id)
-            if callback_query.data == "yes":
-                subscription_data = user_session.get_subscription(profile.id)
-                yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
-                workout_days = subscription_data.get("workout_days", [])
-
+            subscription = user_session.get_subscription(profile.id)
+            workout_days = subscription.get("workout_days", [])
+            if callback_query.data.startswith("yes"):
                 try:
-                    day_index = workout_days.index(yesterday)
+                    day = callback_query.data.split("_")[1]
+                    day_index = workout_days.index(day)
                 except ValueError:
                     day_index = -1
 
-                exercises = subscription_data.exercises.get(yesterday)
+                exercises = subscription.exercises.get(yesterday)
                 await state.update_data(exercises=exercises, day=yesterday, day_index=day_index)
                 await callback_query.answer("🔥")
                 await callback_query.message.answer(
@@ -62,4 +62,3 @@ async def workout_scheduler():
     scheduler = AsyncIOScheduler()
     scheduler.add_job(send_daily_survey, "cron", hour=9, minute=0)
     scheduler.start()
-    await send_daily_survey()  # TODO: REMOVE
