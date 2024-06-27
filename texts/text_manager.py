@@ -75,6 +75,8 @@ class MessageText(Enum):
     email_unavailable = auto()
     program_not_ready = auto()
     complete_all_days = auto()
+    questionnaire_not_completed = auto()
+    image_error = auto()
 
     coach_page = auto()
     client_page = auto()

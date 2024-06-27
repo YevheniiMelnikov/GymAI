@@ -4,7 +4,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
-from bot.keyboards import language_choice
+from bot.keyboards import language_choice, action_choice_keyboard
 from bot.states import States
 from common.functions import show_main_menu
 from common.user_service import user_service
@@ -16,8 +16,10 @@ cmd_router = Router()
 
 @cmd_router.message(Command("language"))
 async def cmd_language(message: Message, state: FSMContext) -> None:
-    profile = user_service.storage.get_current_profile(message.from_user.id)
-    lang = profile.language if profile else "ua"
+    if profile := user_service.storage.get_current_profile(message.from_user.id):
+        lang = profile.language
+    else:
+        lang = "ua"
     await message.answer(text=translate(MessageText.choose_language, lang=lang), reply_markup=language_choice())
     await state.set_state(States.language_choice)
 
@@ -39,9 +41,12 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     await message.answer(text=translate(MessageText.start))
     if profile := user_service.storage.get_current_profile(message.from_user.id):
         await user_service.log_out(message.from_user.id)
-        await message.answer(text=translate(MessageText.username, profile.language))
         await state.update_data(lang=profile.language)
-        await state.set_state(States.username)
+        await message.answer(
+            text=translate(MessageText.choose_action, lang=profile.language),
+            reply_markup=action_choice_keyboard(profile.language),
+        )
+        await state.set_state(States.action_choice)
         await message.delete()
         return
 

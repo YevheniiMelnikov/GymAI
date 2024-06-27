@@ -37,12 +37,18 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
     await state.update_data(lang=profile.language)
 
     if profile.status == "client":
-        questionnaire = user_service.storage.get_client_by_id(profile.id)
+        try:
+            questionnaire = user_service.storage.get_client_by_id(profile.id)
+        except UserServiceError:
+            questionnaire = None
         reply_markup = edit_client_profile(profile.language) if questionnaire else None
         await state.update_data(role="client")
 
     else:
-        questionnaire = user_service.storage.get_coach_by_id(profile.id)
+        try:
+            questionnaire = user_service.storage.get_coach_by_id(profile.id)
+        except UserServiceError:
+            questionnaire = None
         reply_markup = edit_coach_profile(profile.language) if questionnaire else None
         await state.update_data(role="coach")
 
@@ -393,11 +399,16 @@ async def handle_client_pagination(callback_query: CallbackQuery, profile, index
 
 
 async def handle_my_profile(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    user = (
-        user_service.storage.get_client_by_id(profile.id)
-        if profile.status == "client"
-        else user_service.storage.get_coach_by_id(profile.id)
-    )
+    try:
+        user = (
+            user_service.storage.get_client_by_id(profile.id)
+            if profile.status == "client"
+            else user_service.storage.get_coach_by_id(profile.id)
+        )
+    except UserServiceError:
+        await show_profile_editing_menu(callback_query.message, profile, state)
+        return
+
     format_attributes = get_profile_attributes(role=profile.status, user=user, lang_code=profile.language)
     text = translate(
         MessageText.client_profile if profile.status == "client" else MessageText.coach_profile,
@@ -440,7 +451,13 @@ async def handle_my_clients(callback_query: CallbackQuery, profile: Profile, sta
 
 
 async def handle_my_program(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    client = user_service.storage.get_client_by_id(profile.id)
+    try:
+        client = user_service.storage.get_client_by_id(profile.id)
+    except UserServiceError:
+        await callback_query.message.answer(translate(MessageText.questionnaire_not_completed, profile.language))
+        await show_profile_editing_menu(callback_query.message, profile, state)
+        return
+
     assigned = client.assigned_to if client.assigned_to else None
     if not assigned:
         await callback_query.message.answer(
