@@ -502,6 +502,7 @@ async def send_message(
     state: FSMContext,
     reply_markup=None,
     include_incoming_message: bool = True,
+    photo=None,
 ) -> None:
     data = await state.get_data()
     language = data.get("recipient_language", "ua")
@@ -514,21 +515,27 @@ async def send_message(
         formatted_text = text
 
     async with aiohttp.ClientSession():
-        await bot.send_message(
-            chat_id=recipient.tg_id,
-            text=formatted_text,
-            reply_markup=reply_markup,
-            disable_web_page_preview=True,
-            parse_mode=ParseMode.HTML,
-        )
+        if photo:
+            await bot.send_photo(
+                chat_id=recipient.tg_id,
+                photo=photo.file_id,
+                caption=formatted_text,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.HTML,
+            )
+        else:
+            await bot.send_message(
+                chat_id=recipient.tg_id,
+                text=formatted_text,
+                reply_markup=reply_markup,
+                disable_web_page_preview=True,
+                parse_mode=ParseMode.HTML,
+            )
 
     @sub_router.callback_query(F.data == "quit")
     @sub_router.callback_query(F.data == "later")
-    async def close_notification(callback_query: CallbackQuery, state: FSMContext):
+    async def close_notification(callback_query: CallbackQuery):
         await callback_query.message.delete()
-        profile = user_service.storage.get_current_profile(callback_query.from_user.id)
-        await state.set_state(States.main_menu)
-        await show_main_menu(callback_query.message, profile, state)
 
     @sub_router.callback_query(F.data == "view")
     async def view_subscription(callback_query: CallbackQuery, state: FSMContext):
