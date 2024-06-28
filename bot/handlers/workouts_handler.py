@@ -27,12 +27,18 @@ async def program_type(callback_query: CallbackQuery, state: FSMContext):
         subscription = user_service.storage.get_subscription(profile.id)
         if not subscription or not subscription.enabled:
             subscription_img = (
-                f"https://storage.googleapis.com/bot_payment_options/subscription_{profile.language}.jpeg"
+                f"https://storage.googleapis.com/bot_payment_options/subscriptions_{profile.language}.jpeg"
             )
-            await callback_query.message.answer_photo(
-                photo=subscription_img,
-                reply_markup=choose_payment_options(profile.language, "subscription"),
-            )
+            try:
+                await callback_query.message.answer_photo(
+                    photo=subscription_img,
+                    reply_markup=choose_payment_options(profile.language, "subscription"),
+                )
+            except TelegramBadRequest:
+                await callback_query.message.answer(
+                    translate(MessageText.image_error, profile.language),
+                    reply_markup=choose_payment_options(profile.language, "subscription"),
+                )
             await state.set_state(States.payment_choice)
         else:
             if exercises := subscription.exercises:
@@ -63,10 +69,16 @@ async def program_type(callback_query: CallbackQuery, state: FSMContext):
                 await state.set_state(States.program_view)
         else:
             program_img = f"https://storage.googleapis.com/bot_payment_options/program_{profile.language}.jpeg"
-            await callback_query.message.answer_photo(
-                photo=program_img,
-                reply_markup=choose_payment_options(profile.language, "program"),
-            )
+            try:
+                await callback_query.message.answer_photo(
+                    photo=program_img,
+                    reply_markup=choose_payment_options(profile.language, "program"),
+                )
+            except TelegramBadRequest:
+                await callback_query.message.answer(
+                    translate(MessageText.image_error, profile.language),
+                    reply_markup=choose_payment_options(profile.language, "program"),
+                )
             await state.set_state(States.payment_choice)
         with suppress(TelegramBadRequest):
             await callback_query.message.delete()

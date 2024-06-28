@@ -26,7 +26,7 @@ async def language(callback_query: CallbackQuery, state: FSMContext) -> None:
         token = user_service.storage.get_profile_info_by_key(callback_query.from_user.id, profile.id, "auth_token")
         await user_service.edit_profile(profile.id, {"language": lang_code}, token)
         user_service.storage.set_profile_info_by_key(
-            str(callback_query.from_user.id), str(profile.id), "language", lang_code
+            str(callback_query.from_user.id), profile.id, "language", lang_code
         )
         profile.language = lang_code
         await show_main_menu(callback_query.message, profile, state)

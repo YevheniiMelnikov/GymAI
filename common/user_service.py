@@ -129,7 +129,7 @@ class UserProfileManager:
                 return profile_data.get(key)
         return None
 
-    def set_profile_info_by_key(self, telegram_id: str, profile_id: str, key: str, value: Any) -> bool:
+    def set_profile_info_by_key(self, telegram_id: str, profile_id: int, key: str, value: Any) -> bool:
         try:
             profiles_data = self._get_profile_data(telegram_id)
             for profile_data in profiles_data:
