@@ -493,3 +493,8 @@ image_error:
   eng: "An error occurred while uploading the image 😕"
   ru: "При загрузке изображения возникла ошибка 😕"
   ua: "Під час завантаження зображення виникла помилка 😕"
+
+payment_failure:
+  eng: "An error occurred during your payment, please try again later 🫤"
+  ru: "Во время вашего платежа возникла ошибка, повторите попытку позже 🫤"
+  ua: "Під час вашого платежу виникла помилка, повторіть спробу пізніше 🫤"
