@@ -1,4 +1,3 @@
-import datetime
 from contextlib import suppress
 
 import loguru
@@ -7,10 +6,11 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
-from bot.keyboards import choose_payment_options, select_service, workout_type
+from bot.keyboards import select_service, workout_type
 from bot.states import States
 from common.functions import client_request, show_main_menu
 from common.models import Client, Coach
+from common.payment_service import payment_service
 from common.user_service import user_service
 from texts.text_manager import MessageText, translate
 
@@ -43,35 +43,23 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
         await callback_query.message.delete()
 
 
-@payment_router.callback_query(States.handle_payment)  # payment mock
+@payment_router.callback_query(States.handle_payment)
 async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
-    # TODO: HANDLE PAYMENT FAILURE
     data = await state.get_data()
     coach = Coach.from_dict(data.get("coach"))
     client = Client.from_dict(data.get("client"))
-    await callback_query.answer(translate(MessageText.coach_selected).format(name=coach.name), show_alert=True)
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "subscription":
-        try:
-            subscription_id = await user_service.create_subscription(
-                client.id, data.get("price"), data.get("workout_days")
-            )
-            subscription_data = {
-                "id": subscription_id,
-                "payment_date": datetime.date.today().isoformat(),
-                "enabled": True,
-                "price": data.get("price"),
-                "workout_days": data.get("workout_days"),
-            }
-            user_service.storage.save_subscription(profile.id, subscription_data)
-            user_service.storage.set_payment_status(profile.id, True, "subscription")
-        except Exception as e:
-            logger.error(f"Subscription does not created for profile_id {profile.id}: {e}")
+        payment_success = await payment_service.process_subscription_payment(state, profile)
     else:
-        user_service.storage.set_payment_status(profile.id, True, "program")
-    await callback_query.message.answer(translate(MessageText.payment_success, profile.language))
-    await client_request(coach, client, state)
-    await state.set_state(States.main_menu)
-    await show_main_menu(callback_query.message, profile, state)
+        payment_success = await payment_service.process_program_payment(state, profile)
+    if payment_success:
+        await callback_query.message.answer(translate(MessageText.payment_success, profile.language))
+        await client_request(coach, client, state)
+        await state.set_state(States.main_menu)
+        await show_main_menu(callback_query.message, profile, state)
+    else:
+        await callback_query.message.answer(translate(MessageText.payment_failure, profile.language))
+        # TODO: HANDLE PAYMENT FAILURE
     with suppress(TelegramBadRequest):
         await callback_query.message.delete()

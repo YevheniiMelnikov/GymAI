@@ -213,10 +213,6 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
         await state.set_state(States.main_menu)
         await show_main_menu(callback_query.message, profile, state)
     else:
-        # TODO: PROCESS PAYMENT LINK HERE
-        # link = payment_service.program_link() if action == "program" else payment_service.subscription()
-        # await callback_query.message.answer(translate(MessageText.payment_link, profile.language).format(link=link))
-
         if data.get("request_type") == "subscription":
             await state.set_state(States.workout_days)
             await callback_query.message.answer(
@@ -226,7 +222,7 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
             kb = InlineKeyboardMarkup(
                 inline_keyboard=[[InlineKeyboardButton(text="💰", callback_data=data.get("request_type"))]]
             )
-            await callback_query.message.answer("click to pay 👇", reply_markup=kb)  # TODO: REPLACE WITH PAYMENT LINK
+            await callback_query.message.answer("click to pay 👇", reply_markup=kb)
             await state.update_data(price=50)
             await state.set_state(States.handle_payment)
     await callback_query.message.delete()
