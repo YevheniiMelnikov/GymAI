@@ -20,6 +20,7 @@ logger = loguru.logger
 
 @payment_router.callback_query(States.payment_choice)
 async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
+    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "back":
         await state.set_state(States.select_service)
@@ -45,6 +46,7 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
 
 @payment_router.callback_query(States.handle_payment)
 async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
+    await callback_query.answer()
     data = await state.get_data()
     coach = Coach.from_dict(data.get("coach"))
     client = Client.from_dict(data.get("client"))

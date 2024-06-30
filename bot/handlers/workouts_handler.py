@@ -22,6 +22,7 @@ logger = loguru.logger
 
 @program_router.callback_query(States.select_service)
 async def program_type(callback_query: CallbackQuery, state: FSMContext):
+    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "subscription":
         subscription = user_service.storage.get_subscription(profile.id)
@@ -113,6 +114,7 @@ async def workouts_number_choice(message: Message, state: FSMContext):
 
 @program_router.callback_query(States.program_manage)
 async def program_manage(callback_query: CallbackQuery, state: FSMContext) -> None:
+    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     data = await state.get_data()
     split_number = data.get("split")
@@ -127,7 +129,7 @@ async def program_manage(callback_query: CallbackQuery, state: FSMContext) -> No
     elif callback_query.data == "next":
         if exercises:
             if completed_days < split_number:
-                await callback_query.answer("⏭")
+                await callback_query.answer(translate(ButtonText.prev_menu))
 
                 if "program_msg" in data:
                     with suppress(TelegramBadRequest):
@@ -231,6 +233,7 @@ async def add_exercise_name(message: Message, state: FSMContext) -> None:
 
 @program_router.callback_query(States.enter_sets)
 async def enter_sets(callback_query: CallbackQuery, state: FSMContext) -> None:
+    await callback_query.answer()
     await state.update_data(sets=callback_query.data)
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     await callback_query.answer(translate(MessageText.saved, profile.language))
@@ -257,6 +260,7 @@ async def enter_sets(callback_query: CallbackQuery, state: FSMContext) -> None:
 
 @program_router.callback_query(States.enter_reps)
 async def enter_reps(callback_query: CallbackQuery, state: FSMContext) -> None:
+    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     await callback_query.answer(translate(MessageText.saved, profile.language))
     data = await state.get_data()
@@ -326,6 +330,7 @@ async def handle_exercise_weight(input_data: CallbackQuery | Message, state: FSM
 
 @program_router.callback_query(States.workout_survey)
 async def workout_results(callback_query: CallbackQuery, state: FSMContext):
+    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     data = await state.get_data()
     day = data.get("day")
@@ -379,6 +384,7 @@ async def workout_description(message: Message, state: FSMContext):
 
 @program_router.callback_query(States.program_edit)
 async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
+    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     data = await state.get_data()
     exercises = data.get("exercises", {})
@@ -453,6 +459,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
 
 @program_router.callback_query(States.edit_exercise)
 async def select_exercise_to_edit(callback_query: CallbackQuery, state: FSMContext):
+    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     data = await state.get_data()
     exercises = data.get("exercises")
@@ -476,6 +483,7 @@ async def select_exercise_to_edit(callback_query: CallbackQuery, state: FSMConte
 
 @program_router.callback_query(States.edit_exercise_parameter)
 async def exercise_edit_options(callback_query: CallbackQuery, state: FSMContext):
+    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "weight":
         kb = InlineKeyboardBuilder()
@@ -500,6 +508,7 @@ async def exercise_edit_options(callback_query: CallbackQuery, state: FSMContext
 
 @program_router.callback_query(States.delete_exercise)
 async def delete_exercise(callback_query: CallbackQuery, state: FSMContext):
+    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     data = await state.get_data()
     exercises = data.get("exercises")
@@ -517,6 +526,7 @@ async def delete_exercise(callback_query: CallbackQuery, state: FSMContext):
 
 @program_router.callback_query(States.subscription_manage)
 async def subscription_manage(callback_query: CallbackQuery, state: FSMContext):
+    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     data = await state.get_data()
     days = data.get("days", [])
@@ -546,6 +556,7 @@ async def subscription_manage(callback_query: CallbackQuery, state: FSMContext):
 
 @program_router.callback_query(States.program_view)
 async def program_view(callback_query: CallbackQuery, state: FSMContext):
+    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     data = await state.get_data()
     if callback_query.data == "quit":

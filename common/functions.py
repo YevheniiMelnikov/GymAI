@@ -69,8 +69,9 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext) 
     await state.set_state(States.main_menu)
     await state.update_data(profile=Profile.to_dict(profile))
     if profile.status == "coach":
-        coach = user_service.storage.get_coach_by_id(profile.id)
-        if not coach or not coach.verified:
+        try:
+            user_service.storage.get_coach_by_id(profile.id)
+        except UserServiceError:
             await message.answer(translate(MessageText.coach_info_message, lang=profile.language))
     await message.answer(
         text=translate(MessageText.main_menu, lang=profile.language), reply_markup=menu(profile.language)
@@ -285,6 +286,7 @@ async def assign_coach(coach: Coach, client: Client) -> None:
 async def handle_contact_action(
     callback_query: CallbackQuery, profile: Profile, client_id: str, state: FSMContext
 ) -> None:
+    await callback_query.answer()
     await callback_query.message.answer(translate(MessageText.enter_your_message, profile.language))
     await callback_query.message.delete()
     coach = user_service.storage.get_coach_by_id(profile.id)
@@ -331,6 +333,7 @@ async def handle_program_action(
 async def handle_subscription_action(
     callback_query: CallbackQuery, profile: Profile, client_id: str, state: FSMContext
 ) -> None:
+    await callback_query.answer()
     subscription = user_service.storage.get_subscription(client_id)
 
     if not subscription or not subscription.enabled:
@@ -384,6 +387,7 @@ async def handle_subscription_action(
 
 
 async def handle_client_pagination(callback_query: CallbackQuery, profile, index: int, state: FSMContext) -> None:
+    await callback_query.answer()
     data = await state.get_data()
     clients = [Client.from_dict(data) for data in data["clients"]]
 
@@ -399,6 +403,7 @@ async def handle_client_pagination(callback_query: CallbackQuery, profile, index
 
 
 async def handle_my_profile(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    await callback_query.answer()
     try:
         user = (
             user_service.storage.get_client_by_id(profile.id)
@@ -429,6 +434,7 @@ async def handle_my_profile(callback_query: CallbackQuery, profile: Profile, sta
 
 
 async def handle_my_clients(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    await callback_query.answer()
     try:
         coach = user_service.storage.get_coach_by_id(profile.id)
         assigned_ids = coach.assigned_to if coach.assigned_to else None
@@ -692,6 +698,7 @@ async def client_request(coach: Coach, client: Client, state: FSMContext) -> Non
 
 
 async def show_subscription_page(callback_query: CallbackQuery, state: FSMContext, subscription: Subscription) -> None:
+    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     payment_date = datetime.fromtimestamp(subscription.payment_date)
     next_payment_date = payment_date + relativedelta(months=1)
@@ -758,6 +765,7 @@ async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Messa
 
 
 async def handle_program_pagination(state: FSMContext, callback_query: CallbackQuery) -> None:
+    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
 
     if callback_query.data == "quit":
