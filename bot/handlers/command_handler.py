@@ -57,7 +57,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
 @cmd_router.message(Command("logout"))
 async def cmd_logout(message: Message, state: FSMContext) -> None:
     profile = user_service.storage.get_current_profile(message.from_user.id)
-    language = profile.language if profile else None
+    language = profile.language if profile else "ua"
     await state.clear()
     await user_service.log_out(message.from_user.id)
     await message.answer(text=translate(MessageText.logout, lang=language))

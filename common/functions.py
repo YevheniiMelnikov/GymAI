@@ -69,8 +69,9 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext) 
     await state.set_state(States.main_menu)
     await state.update_data(profile=Profile.to_dict(profile))
     if profile.status == "coach":
-        coach = user_service.storage.get_coach_by_id(profile.id)
-        if not coach or not coach.verified:
+        try:
+            user_service.storage.get_coach_by_id(profile.id)
+        except UserServiceError:
             await message.answer(translate(MessageText.coach_info_message, lang=profile.language))
     await message.answer(
         text=translate(MessageText.main_menu, lang=profile.language), reply_markup=menu(profile.language)
