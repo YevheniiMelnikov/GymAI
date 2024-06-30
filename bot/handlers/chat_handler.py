@@ -84,6 +84,7 @@ async def contact_coach(message: Message, state: FSMContext):
 
 @chat_router.callback_query(States.gift, F.data == "get")
 async def get_the_gift(callback_query: CallbackQuery, state: FSMContext):
+    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     await callback_query.answer(translate(ButtonText.done, profile.language))
     await callback_query.message.answer(

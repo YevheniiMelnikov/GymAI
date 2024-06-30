@@ -22,6 +22,7 @@ questionnaire_router = Router()
 
 @questionnaire_router.callback_query(States.gender)
 async def gender(callback_query: CallbackQuery, state: FSMContext) -> None:
+    await callback_query.answer()
     data = await state.get_data()
     await callback_query.answer(translate(MessageText.saved, lang=data.get("lang")))
     await state.update_data(gender=callback_query.data)
@@ -62,6 +63,7 @@ async def workout_goals(message: Message, state: FSMContext) -> None:
 
 @questionnaire_router.callback_query(States.workout_experience)
 async def workout_experience(callback_query: CallbackQuery, state: FSMContext) -> None:
+    await callback_query.answer()
     data = await state.get_data()
     await callback_query.answer(translate(MessageText.saved, lang=data.get("lang")))
     await state.update_data(workout_experience=callback_query.data)
@@ -186,6 +188,7 @@ async def profile_photo(message: Message, state: FSMContext) -> None:
 
 @questionnaire_router.callback_query(States.edit_profile)
 async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> None:
+    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     await state.update_data(lang=profile.language)
     if callback_query.data == "back":
@@ -202,6 +205,7 @@ async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> No
 
 @questionnaire_router.callback_query(States.workout_type)
 async def workout_type(callback_query: CallbackQuery, state: FSMContext):
+    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     await state.update_data(workout_type=callback_query.data)
     data = await state.get_data()
@@ -230,6 +234,7 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
 
 @questionnaire_router.callback_query(States.workout_days)
 async def workout_days(callback_query: CallbackQuery, state: FSMContext):
+    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     data = await state.get_data()
     days = data.get("workout_days", [])

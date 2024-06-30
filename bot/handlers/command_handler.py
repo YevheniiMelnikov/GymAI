@@ -36,10 +36,10 @@ async def cmd_menu(message: Message, state: FSMContext) -> None:
 
 @cmd_router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext) -> None:
-    logger.info(f"User {message.from_user.id} started bot")
     await state.clear()
     await message.answer(text=translate(MessageText.start))
     if profile := user_service.storage.get_current_profile(message.from_user.id):
+        logger.info(f"User with profile_id {profile.id} started bot")
         await user_service.log_out(message.from_user.id)
         await state.update_data(lang=profile.language)
         await message.answer(
@@ -50,6 +50,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         await message.delete()
         return
 
+    logger.info(f"Telegram user {message.from_user.id} started bot")
     await state.set_state(States.language_choice)
     await message.answer(text=translate(MessageText.choose_language), reply_markup=language_choice())
 
@@ -73,7 +74,7 @@ async def cmd_help(message: Message) -> None:
 @cmd_router.message(Command("feedback"))
 async def cmd_feedback(message: Message, state: FSMContext) -> None:
     profile = user_service.storage.get_current_profile(message.from_user.id)
-    language = profile.language if profile else None
+    language = profile.language if profile else "ua"
     await message.answer(text=translate(MessageText.feedback, lang=language))
     await state.set_state(States.feedback)
 
@@ -91,7 +92,7 @@ async def cmd_reset_password(message: Message, state: FSMContext) -> None:
             for profile in profiles
         ]
         profiles_data = [profile.to_dict() for profile in profiles]
-        language = profiles[0].language if profiles[0].language else None
+        language = profiles[0].language if profiles[0].language else "ua"
         await state.update_data(lang=language, profiles=profiles_data, usernames=usernames, emails=emails)
         await message.answer(text=translate(MessageText.username, language))
         await state.set_state(States.password_reset)

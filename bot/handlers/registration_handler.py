@@ -20,6 +20,7 @@ register_router = Router()
 
 @register_router.callback_query(States.language_choice)
 async def language(callback_query: CallbackQuery, state: FSMContext) -> None:
+    await callback_query.answer()
     lang_code = callback_query.data
     await set_bot_commands(lang_code)
     if profile := user_service.storage.get_current_profile(callback_query.from_user.id):
@@ -44,6 +45,7 @@ async def language(callback_query: CallbackQuery, state: FSMContext) -> None:
 
 @register_router.callback_query(States.action_choice)
 async def action(callback_query: CallbackQuery, state: FSMContext) -> None:
+    await callback_query.answer()
     data = await state.get_data()
     await state.update_data(action=callback_query.data)
 
@@ -62,6 +64,7 @@ async def action(callback_query: CallbackQuery, state: FSMContext) -> None:
 
 @register_router.callback_query(States.account_type)
 async def account_type(callback_query: CallbackQuery, state: FSMContext) -> None:
+    await callback_query.answer()
     data = await state.get_data()
     await callback_query.answer(translate(MessageText.saved, lang=data.get("lang")))
     await state.update_data(account_type=callback_query.data)
