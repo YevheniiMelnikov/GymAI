@@ -9,9 +9,10 @@ from aiogram.types import CallbackQuery, Message
 from bot.keyboards import *
 from bot.states import States
 from common.exceptions import EmailUnavailable, UsernameUnavailable
-from common.functions import register_user, set_bot_commands, show_main_menu, sign_in
+from common.functions.menus import show_main_menu
+from common.functions.profiles import sign_in, register_user
 from common.user_service import user_service
-from common.utils import validate_email, validate_password
+from common.utils import validate_email, validate_password, set_bot_commands
 from texts.text_manager import MessageText, translate
 
 logger = loguru.logger
@@ -19,7 +20,7 @@ register_router = Router()
 
 
 @register_router.callback_query(States.language_choice)
-async def language(callback_query: CallbackQuery, state: FSMContext) -> None:
+async def language_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
     await callback_query.answer()
     lang_code = callback_query.data
     await set_bot_commands(lang_code)
@@ -44,7 +45,7 @@ async def language(callback_query: CallbackQuery, state: FSMContext) -> None:
 
 
 @register_router.callback_query(States.action_choice)
-async def action(callback_query: CallbackQuery, state: FSMContext) -> None:
+async def action_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
     await callback_query.answer()
     data = await state.get_data()
     await state.update_data(action=callback_query.data)
@@ -64,7 +65,6 @@ async def action(callback_query: CallbackQuery, state: FSMContext) -> None:
 
 @register_router.callback_query(States.account_type)
 async def account_type(callback_query: CallbackQuery, state: FSMContext) -> None:
-    await callback_query.answer()
     data = await state.get_data()
     await callback_query.answer(translate(MessageText.saved, lang=data.get("lang")))
     await state.update_data(account_type=callback_query.data)

@@ -8,7 +8,8 @@ from aiogram.types import CallbackQuery
 
 from bot.keyboards import select_service, workout_type
 from bot.states import States
-from common.functions import client_request, show_main_menu
+from common.functions.communication import client_request
+from common.functions.menus import show_main_menu
 from common.models import Client, Coach
 from common.payment_service import payment_service
 from common.user_service import user_service

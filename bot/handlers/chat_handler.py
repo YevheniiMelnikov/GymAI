@@ -6,7 +6,8 @@ from aiogram.types import CallbackQuery, Message
 from bot.keyboards import incoming_message, workout_type
 from bot.states import States
 from common.exceptions import UserServiceError
-from common.functions import send_message, show_main_menu
+from common.functions.communication import send_message
+from common.functions.menus import show_main_menu
 from common.user_service import user_service
 from texts.text_manager import ButtonText, MessageText, translate
 
@@ -84,7 +85,6 @@ async def contact_coach(message: Message, state: FSMContext):
 
 @chat_router.callback_query(States.gift, F.data == "get")
 async def get_the_gift(callback_query: CallbackQuery, state: FSMContext):
-    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     await callback_query.answer(translate(ButtonText.done, profile.language))
     await callback_query.message.answer(

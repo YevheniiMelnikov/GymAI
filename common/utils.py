@@ -1,16 +1,20 @@
+import os
 import re
 from typing import Any, Optional
 
 import aiohttp
 import loguru
+from aiogram import Bot
 from aiogram.fsm.state import State
+from aiogram.types import BotCommand
 
 from bot.states import States
-from common.models import Client, Coach
+from common.models import Client, Coach, Exercise
 from common.user_service import user_service
-from texts.text_manager import ButtonText, MessageText, translate
+from texts.text_manager import ButtonText, MessageText, translate, resource_manager
 
 logger = loguru.logger
+bot = Bot(os.environ.get("BOT_TOKEN"))
 
 
 def validate_password(password: str) -> bool:
@@ -180,3 +184,25 @@ def get_translated_week_day(lang_code: str, day: str) -> str:
         "sunday": translate(ButtonText.sunday, lang_code),
     }
     return days.get(day)
+
+
+async def format_program(exercises: dict[str, any], day: int) -> str:
+    program_lines = []
+    exercises_data = exercises.get(str(day), [])
+    exercises = [Exercise(**e) if isinstance(e, dict) else e for e in exercises_data]
+
+    for idx, exercise in enumerate(exercises):
+        line = f"{idx + 1}. {exercise.name} | {exercise.sets} x {exercise.reps}"
+        if exercise.weight:
+            line += f" | {exercise.weight} kg"
+        if exercise.gif_link:
+            line += f" | <a href='{exercise.gif_link}'>GIF</a>"
+        program_lines.append(line)
+
+    return "\n".join(program_lines)
+
+
+async def set_bot_commands(lang: str = "ua") -> None:
+    command_texts = resource_manager.commands
+    commands = [BotCommand(command=cmd, description=desc[lang]) for cmd, desc in command_texts.items()]
+    await bot.set_my_commands(commands)
