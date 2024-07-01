@@ -14,7 +14,8 @@ from bot.handlers.payment_handler import payment_router
 from bot.handlers.questionnaire_handler import questionnaire_router
 from bot.handlers.registration_handler import register_router
 from bot.handlers.workouts_handler import program_router
-from common.functions import set_bot_commands, sub_router
+from common.functions.communication import sub_router
+from common.utils import set_bot_commands
 from common.workout_scheduler import survey_router, workout_scheduler
 
 load_dotenv()

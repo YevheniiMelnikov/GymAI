@@ -9,7 +9,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from bot.keyboards import workout_results, workout_survey_keyboard
 from bot.states import States
-from common.functions import bot
+from common.functions.communication import bot
 from common.user_service import user_session
 from texts.text_manager import MessageText, translate
 

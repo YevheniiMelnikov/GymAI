@@ -1,19 +1,11 @@
-from contextlib import suppress
-from dataclasses import asdict
+from aiogram.types import Message
 
-import loguru
-from aiogram import F, Router
-from aiogram.exceptions import TelegramBadRequest
-from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
-from aiogram.utils.keyboard import InlineKeyboardBuilder
-
-from bot.keyboards import *
-from bot.states import States
-from common.functions import *
+from common.functions.communication import *
+from common.functions.menus import show_subscription_page, show_main_menu, handle_my_clients
+from common.functions.exercise_managing import handle_program_pagination, save_exercise, find_related_gif
 from common.models import Exercise
 from common.user_service import user_service
-from common.utils import short_url
+from common.utils import short_url, format_program
 from texts.text_manager import ButtonText, MessageText, translate
 
 program_router = Router()
@@ -22,7 +14,6 @@ logger = loguru.logger
 
 @program_router.callback_query(States.select_service)
 async def program_type(callback_query: CallbackQuery, state: FSMContext):
-    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "subscription":
         subscription = user_service.storage.get_subscription(profile.id)
@@ -114,7 +105,6 @@ async def workouts_number_choice(message: Message, state: FSMContext):
 
 @program_router.callback_query(States.program_manage)
 async def program_manage(callback_query: CallbackQuery, state: FSMContext) -> None:
-    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     data = await state.get_data()
     split_number = data.get("split")
@@ -123,6 +113,7 @@ async def program_manage(callback_query: CallbackQuery, state: FSMContext) -> No
     exercises = data.get("exercises", {})
 
     if callback_query.data == "quit":
+        await callback_query.answer()
         await show_main_menu(callback_query.message, profile, state)
         await state.set_state(States.main_menu)
 
@@ -233,7 +224,6 @@ async def add_exercise_name(message: Message, state: FSMContext) -> None:
 
 @program_router.callback_query(States.enter_sets)
 async def enter_sets(callback_query: CallbackQuery, state: FSMContext) -> None:
-    await callback_query.answer()
     await state.update_data(sets=callback_query.data)
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     await callback_query.answer(translate(MessageText.saved, profile.language))
@@ -260,7 +250,6 @@ async def enter_sets(callback_query: CallbackQuery, state: FSMContext) -> None:
 
 @program_router.callback_query(States.enter_reps)
 async def enter_reps(callback_query: CallbackQuery, state: FSMContext) -> None:
-    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     await callback_query.answer(translate(MessageText.saved, profile.language))
     data = await state.get_data()
@@ -330,7 +319,6 @@ async def handle_exercise_weight(input_data: CallbackQuery | Message, state: FSM
 
 @program_router.callback_query(States.workout_survey)
 async def workout_results(callback_query: CallbackQuery, state: FSMContext):
-    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     data = await state.get_data()
     day = data.get("day")
@@ -339,6 +327,7 @@ async def workout_results(callback_query: CallbackQuery, state: FSMContext):
 
     program = await format_program(exercises, day_index)
     if callback_query.data == "answer_yes":
+        await callback_query.answer()
         await callback_query.answer(translate(MessageText.keep_going, profile.language), show_alert=True)
         client = user_service.storage.get_client_by_id(profile.id)
         coach = user_service.storage.get_coach_by_id(client.assigned_to.pop())
@@ -384,7 +373,6 @@ async def workout_description(message: Message, state: FSMContext):
 
 @program_router.callback_query(States.program_edit)
 async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
-    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     data = await state.get_data()
     exercises = data.get("exercises", {})
@@ -392,11 +380,13 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
     day_index = str(data.get("day_index"))
 
     if callback_query.data == "exercise_add":
+        await callback_query.answer()
         await state.update_data(exercise_index=len(exercises) + 1, exercises=exercises)
         await callback_query.message.answer(translate(MessageText.enter_exercise, profile.language))
         await state.set_state(States.add_exercise_name)
 
     elif callback_query.data == "quit":
+        await callback_query.answer()
         await handle_my_clients(callback_query, profile, state)
         return
 
@@ -415,6 +405,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
         await state.update_data(client_id=client_id, exercises=[], day_index=0)
 
     elif callback_query.data == "exercise_delete":
+        await callback_query.answer()
         await callback_query.message.answer(
             translate(MessageText.select_exercise, profile.language), reply_markup=select_exercise(exercises[day_index])
         )
@@ -428,6 +419,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
         await state.set_state(States.edit_exercise)
 
     elif callback_query.data == "finish_editing":
+        await callback_query.answer()
         if data.get("subscription"):
             subscription_data = user_service.storage.get_subscription(client_id).to_dict()
             subscription_data.update(user=client_id, exercises=exercises)
@@ -442,6 +434,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
         return
 
     else:
+        await callback_query.answer()
         if data.get("subscription"):
             subscription = user_service.storage.get_subscription(client_id)
             split_number = len(subscription.workout_days)

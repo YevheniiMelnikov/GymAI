@@ -53,10 +53,16 @@ def action_choice_keyboard(lang_code: str) -> InlineKeyboardMarkup:
 
 
 def profile_menu_keyboard(lang_code: str) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardBuilder()
-    kb.button(text=translate(ButtonText.prev_menu), callback_data="back")
-    kb.button(text=translate(ButtonText.edit, lang=lang_code), callback_data="edit_profile")
-    return kb.as_markup(one_time_keyboard=True)
+    buttons = [
+        [
+            InlineKeyboardButton(text=translate(ButtonText.edit, lang=lang_code), callback_data="edit_profile"),
+        ],
+        [
+            InlineKeyboardButton(text=translate(ButtonText.prev_menu), callback_data="back"),
+        ],
+    ]
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
 
 
 def edit_client_profile(lang_code: str) -> InlineKeyboardMarkup:
@@ -136,6 +142,12 @@ def coach_select_menu(lang_code: str, coach_id: int, current_index: int) -> Inli
 
 def client_select_menu(lang_code: str, client_id: int, current_index: int) -> InlineKeyboardMarkup:
     buttons = [
+        [
+            InlineKeyboardButton(text=translate(ButtonText.back, lang_code), callback_data=f"prev_{current_index - 1}"),
+            InlineKeyboardButton(
+                text=translate(ButtonText.forward, lang_code), callback_data=f"next_{current_index + 1}"
+            ),
+        ],
         [InlineKeyboardButton(text=translate(ButtonText.program, lang_code), callback_data=f"program_{client_id}")],
         [
             InlineKeyboardButton(
@@ -145,12 +157,6 @@ def client_select_menu(lang_code: str, client_id: int, current_index: int) -> In
         [
             InlineKeyboardButton(
                 text=translate(ButtonText.contact_client, lang_code), callback_data=f"contact_{client_id}"
-            ),
-        ],
-        [
-            InlineKeyboardButton(text=translate(ButtonText.back, lang_code), callback_data=f"prev_{current_index - 1}"),
-            InlineKeyboardButton(
-                text=translate(ButtonText.forward, lang_code), callback_data=f"next_{current_index + 1}"
             ),
         ],
         [InlineKeyboardButton(text=translate(ButtonText.prev_menu), callback_data="back")],
@@ -256,7 +262,7 @@ def program_view_kb(lang_code: str) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text=translate(ButtonText.back, lang_code), callback_data=f"prev_day"),
             InlineKeyboardButton(text=translate(ButtonText.forward, lang_code), callback_data="next_day"),
         ],
-        [InlineKeyboardButton(text=translate(ButtonText.quit, lang_code), callback_data="quit")],
+        [InlineKeyboardButton(text=translate(ButtonText.prev_menu), callback_data="quit")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
 

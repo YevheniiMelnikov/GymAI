@@ -1,0 +1,244 @@
+import os
+from contextlib import suppress
+from datetime import datetime
+
+import loguru
+from aiogram import Bot
+from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message, InputMediaPhoto
+from dateutil.relativedelta import relativedelta
+
+from bot.keyboards import *
+from bot.keyboards import choose_coach, select_service
+from bot.states import States
+from common.exceptions import UserServiceError
+from common.file_manager import avatar_manager
+
+from common.models import Client, Subscription, Profile, Coach
+from common.user_service import user_service
+from common.utils import get_client_page, get_coach_page, get_profile_attributes
+from texts.text_manager import translate, MessageText
+
+
+logger = loguru.logger
+bot = Bot(os.environ.get("BOT_TOKEN"))
+
+
+async def show_subscription_page(callback_query: CallbackQuery, state: FSMContext, subscription: Subscription) -> None:
+    await callback_query.answer()
+    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+    payment_date = datetime.fromtimestamp(subscription.payment_date)
+    next_payment_date = payment_date + relativedelta(months=1)
+    next_payment_date_str = next_payment_date.strftime("%Y-%m-%d")
+    enabled_status = "✅" if subscription.enabled else "❌"
+    await state.set_state(States.show_subscription)
+    await callback_query.message.answer(
+        translate(MessageText.subscription_page, profile.language).format(
+            next_payment_date=next_payment_date_str, enabled=enabled_status, price=subscription.price
+        ),
+        reply_markup=show_subscriptions_kb(profile.language),
+    )
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()
+
+
+async def show_profile_editing_menu(message: Message, profile: Profile, state: FSMContext) -> None:
+    await state.clear()
+    await state.update_data(lang=profile.language)
+
+    if profile.status == "client":
+        try:
+            questionnaire = user_service.storage.get_client_by_id(profile.id)
+        except UserServiceError:
+            questionnaire = None
+        reply_markup = edit_client_profile(profile.language) if questionnaire else None
+        await state.update_data(role="client")
+
+    else:
+        try:
+            questionnaire = user_service.storage.get_coach_by_id(profile.id)
+        except UserServiceError:
+            questionnaire = None
+        reply_markup = edit_coach_profile(profile.language) if questionnaire else None
+        await state.update_data(role="coach")
+
+    state_to_set = States.edit_profile if questionnaire else States.name
+    response_message = MessageText.choose_profile_parameter if questionnaire else MessageText.edit_profile
+    await message.answer(text=translate(response_message, lang=profile.language), reply_markup=reply_markup)
+    with suppress(TelegramBadRequest):
+        await message.delete()
+    await state.set_state(state_to_set)
+
+    if not questionnaire:
+        await message.answer(translate(MessageText.name, lang=profile.language))
+
+
+async def show_main_menu(message: Message, profile: Profile, state: FSMContext) -> None:
+    menu = client_menu_keyboard if profile.status == "client" else coach_menu_keyboard
+    await state.clear()
+    await state.set_state(States.main_menu)
+    await state.update_data(profile=Profile.to_dict(profile))
+    if profile.status == "coach":
+        try:
+            user_service.storage.get_coach_by_id(profile.id)
+        except UserServiceError:
+            await message.answer(translate(MessageText.coach_info_message, lang=profile.language))
+    await message.answer(
+        text=translate(MessageText.main_menu, lang=profile.language), reply_markup=menu(profile.language)
+    )
+    with suppress(TelegramBadRequest):
+        await message.delete()
+
+
+async def show_clients_menu(message: Message, clients: list[Client], state: FSMContext, current_index=0) -> None:
+    profile = user_service.storage.get_current_profile(message.chat.id)
+    current_index %= len(clients)
+    current_client = clients[current_index]
+    subscription = True if user_service.storage.get_subscription(current_client.id) else False
+    waiting_program = user_service.storage.check_payment_status(current_client.id, "program")
+    waiting_subscription = user_service.storage.check_payment_status(current_client.id, "subscription")
+    status = True if waiting_program or waiting_subscription else False
+    client_info = get_client_page(current_client, profile.language, subscription, status)
+    client_data = [Client.to_dict(client) for client in clients]
+
+    await state.update_data(clients=client_data)
+    await message.edit_text(
+        text=translate(MessageText.client_page, profile.language).format(**client_info),
+        reply_markup=client_select_menu(profile.language, current_client.id, current_index),
+        parse_mode="HTML",
+    )
+    await state.set_state(States.show_clients)
+
+
+async def show_coaches_menu(message: Message, coaches: list[Coach], current_index=0) -> None:
+    profile = user_service.storage.get_current_profile(message.chat.id)
+    current_index %= len(coaches)
+    current_coach = coaches[current_index]
+    coach_info = get_coach_page(current_coach)
+    text = translate(MessageText.coach_page, profile.language)
+    coach_photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{current_coach.profile_photo}"
+    formatted_text = text.format(**coach_info)
+
+    try:
+        media = InputMediaPhoto(media=coach_photo_url)
+        if message.photo:
+            await message.edit_media(media=media)
+            await message.edit_caption(
+                caption=formatted_text,
+                reply_markup=coach_select_menu(profile.language, current_coach.id, current_index),
+                parse_mode=ParseMode.HTML,
+            )
+        else:
+            await bot.send_photo(
+                message.chat.id,
+                photo=coach_photo_url,
+                caption=formatted_text,
+                reply_markup=coach_select_menu(profile.language, current_coach.id, current_index),
+                parse_mode=ParseMode.HTML,
+            )
+    except TelegramBadRequest:
+        await message.answer(
+            text=formatted_text,
+            reply_markup=coach_select_menu(profile.language, current_coach.id, current_index),
+            parse_mode=ParseMode.HTML,
+        )
+        with suppress(TelegramBadRequest):
+            await message.delete()
+
+
+async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    await callback_query.answer()
+    try:
+        user = (
+            user_service.storage.get_client_by_id(profile.id)
+            if profile.status == "client"
+            else user_service.storage.get_coach_by_id(profile.id)
+        )
+    except UserServiceError:
+        await show_profile_editing_menu(callback_query.message, profile, state)
+        return
+
+    format_attributes = get_profile_attributes(role=profile.status, user=user, lang_code=profile.language)
+    text = translate(
+        MessageText.client_profile if profile.status == "client" else MessageText.coach_profile,
+        lang=profile.language,
+    ).format(**format_attributes)
+    if profile.status == "coach" and getattr(user, "profile_photo", None):
+        photo = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{user.profile_photo}"
+        try:
+            await callback_query.message.answer_photo(photo, text, reply_markup=profile_menu_keyboard(profile.language))
+        except TelegramBadRequest:
+            logger.error(f"Profile image of profile_id {profile.id} not found")
+            await callback_query.message.answer(text, reply_markup=profile_menu_keyboard(profile.language))
+    else:
+        await callback_query.message.answer(text, reply_markup=profile_menu_keyboard(profile.language))
+    await state.set_state(States.profile)
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()
+
+
+async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    try:
+        client = user_service.storage.get_client_by_id(profile.id)
+    except UserServiceError:
+        await callback_query.message.answer(translate(MessageText.questionnaire_not_completed, profile.language))
+        await show_profile_editing_menu(callback_query.message, profile, state)
+        return
+
+    assigned = client.assigned_to if client.assigned_to else None
+    if not assigned:
+        await callback_query.message.answer(
+            text=translate(MessageText.no_program, lang=profile.language),
+            reply_markup=choose_coach(profile.language),
+        )
+        await state.set_state(States.choose_coach)
+        return
+
+    await state.set_state(States.select_service)
+    await callback_query.message.answer(
+        text=translate(MessageText.select_service, lang=profile.language),
+        reply_markup=select_service(profile.language),
+    )
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()
+
+
+async def handle_my_clients(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    try:
+        coach = user_service.storage.get_coach_by_id(profile.id)
+        assigned_ids = coach.assigned_to if coach.assigned_to else None
+    except UserServiceError as e:
+        logger.error(f"Could not get coach profile for {profile.id}: {e}")
+        await callback_query.answer()
+        await callback_query.message.answer(translate(MessageText.unexpected_error, profile.language))
+        return
+
+    if assigned_ids:
+        await callback_query.answer()
+        clients = [user_service.storage.get_client_by_id(client) for client in assigned_ids]
+        await show_clients_menu(callback_query.message, clients, state)
+    else:
+        if not coach.verified:
+            await callback_query.answer(
+                text=translate(MessageText.coach_info_message, profile.language), show_alert=True
+            )
+        await callback_query.message.answer(translate(MessageText.no_clients, profile.language))
+        await state.set_state(States.main_menu)
+        await show_main_menu(callback_query.message, profile, state)
+
+
+async def handle_clients_pagination(callback_query: CallbackQuery, profile, index: int, state: FSMContext) -> None:
+    data = await state.get_data()
+    clients = [Client.from_dict(data) for data in data["clients"]]
+
+    if not clients:
+        await callback_query.answer(translate(MessageText.no_clients, profile.language))
+        return
+
+    if index < 0 or index >= len(clients):
+        await callback_query.answer(translate(MessageText.out_of_range, profile.language))
+        return
+
+    await show_clients_menu(callback_query.message, clients, state, index)
