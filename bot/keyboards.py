@@ -331,7 +331,7 @@ def program_edit_kb(lang_code: str) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text=translate(ButtonText.save, lang_code), callback_data="finish_editing"),
             InlineKeyboardButton(text=translate(ButtonText.reset_program, lang_code), callback_data="reset"),
         ],
-        [InlineKeyboardButton(text=translate(ButtonText.quit, lang_code), callback_data="quit")],
+        [InlineKeyboardButton(text=translate(ButtonText.prev_menu), callback_data="quit")],
     ]
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
@@ -369,8 +369,8 @@ def subscription_manage_menu(lang_code: str) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text=translate(ButtonText.back, lang_code), callback_data="prev_day"),
             InlineKeyboardButton(text=translate(ButtonText.forward, lang_code), callback_data="next_day"),
         ],
-        [InlineKeyboardButton(text=translate(ButtonText.edit, lang_code), callback_data="edit")],
-        [InlineKeyboardButton(text=translate(ButtonText.quit, lang_code), callback_data="back")],
+        [InlineKeyboardButton(text=translate(ButtonText.edit), callback_data="edit")],
+        [InlineKeyboardButton(text=translate(ButtonText.prev_menu, lang_code), callback_data="back")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
 
