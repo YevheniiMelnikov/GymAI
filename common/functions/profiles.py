@@ -1,16 +1,19 @@
 from contextlib import suppress
 
+import loguru
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from bot.keyboards import client_menu_keyboard, coach_menu_keyboard
 from bot.states import States
-from common.functions.communication import logger, notify_about_new_coach
+from common.functions.chat import notify_about_new_coach
 from common.functions.menus import show_main_menu
-from common.models import Profile, Coach, Client
+from common.models import Client, Coach, Profile
 from common.user_service import user_service
-from texts.text_manager import translate, MessageText
+from texts.text_manager import MessageText, translate
+
+logger = loguru.logger
 
 
 async def update_user_info(message: Message, state: FSMContext, role: str) -> None:
@@ -107,7 +110,10 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
         language=data.get("lang"),
     ):
         logger.error(f"Registration failed for user {message.from_user.id}")
-        await handle_registration_failure(message, state, data.get("lang"))
+        await message.answer(text=translate(MessageText.unexpected_error, data.get("lang")))
+        await state.clear()
+        await state.set_state(States.username)
+        await message.answer(text=translate(MessageText.username, data.get("lang")))
         return
 
     logger.info(f"User {message.text} registered")
@@ -115,7 +121,10 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
 
     if not token:
         logger.error(f"Login failed for user {message.text} after registration")
-        await handle_registration_failure(message, state, data.get("lang"))
+        await message.answer(text=translate(MessageText.unexpected_error, data.get("lang")))
+        await state.clear()
+        await state.set_state(States.username)
+        await message.answer(text=translate(MessageText.username, data.get("lang")))
         return
 
     logger.info(f"User {message.text} logged in")
@@ -130,10 +139,3 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
     await message.answer(text=translate(MessageText.registration_successful, lang=data.get("lang")))
     profile = user_service.storage.get_current_profile(message.from_user.id)
     await show_main_menu(message, profile, state)
-
-
-async def handle_registration_failure(message: Message, state: FSMContext, lang: str) -> None:
-    await message.answer(text=translate(MessageText.unexpected_error, lang=lang))
-    await state.clear()
-    await state.set_state(States.username)
-    await message.answer(text=translate(MessageText.username, lang=lang))

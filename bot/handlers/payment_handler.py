@@ -1,22 +1,34 @@
 from contextlib import suppress
 
 import loguru
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
 from bot.keyboards import select_service, workout_type
 from bot.states import States
-from common.functions.communication import client_request
+from common.functions.chat import client_request
 from common.functions.menus import show_main_menu
 from common.models import Client, Coach
 from common.payment_service import payment_service
 from common.user_service import user_service
-from texts.text_manager import MessageText, translate
+from texts.text_manager import ButtonText, MessageText, translate
 
 payment_router = Router()
 logger = loguru.logger
+
+
+@payment_router.callback_query(States.gift, F.data == "get")
+async def get_the_gift(callback_query: CallbackQuery, state: FSMContext):
+    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+    await callback_query.answer(translate(ButtonText.done, profile.language))
+    await callback_query.message.answer(
+        translate(MessageText.workout_type), reply_markup=workout_type(profile.language)
+    )
+    await state.update_data(new_client=True)
+    await state.set_state(States.workout_type)
+    await callback_query.message.delete()
 
 
 @payment_router.callback_query(States.payment_choice)

@@ -7,20 +7,24 @@ from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message, InputMediaPhoto
+from aiogram.types import CallbackQuery, InputMediaPhoto, Message
 from dateutil.relativedelta import relativedelta
 
 from bot.keyboards import *
-from bot.keyboards import choose_coach, select_service
+from bot.keyboards import choose_coach, program_manage_menu, program_view_kb, select_service, subscription_manage_menu
 from bot.states import States
 from common.exceptions import UserServiceError
 from common.file_manager import avatar_manager
-
-from common.models import Client, Subscription, Profile, Coach
+from common.functions.text_utils import (
+    format_program,
+    get_client_page,
+    get_coach_page,
+    get_profile_attributes,
+    get_translated_week_day,
+)
+from common.models import Client, Coach, Profile, Subscription
 from common.user_service import user_service
-from common.utils import get_client_page, get_coach_page, get_profile_attributes
-from texts.text_manager import translate, MessageText
-
+from texts.text_manager import MessageText, translate
 
 logger = loguru.logger
 bot = Bot(os.environ.get("BOT_TOKEN"))
@@ -92,7 +96,7 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext) 
         await message.delete()
 
 
-async def show_clients_menu(message: Message, clients: list[Client], state: FSMContext, current_index=0) -> None:
+async def show_clients(message: Message, clients: list[Client], state: FSMContext, current_index=0) -> None:
     profile = user_service.storage.get_current_profile(message.chat.id)
     current_index %= len(clients)
     current_client = clients[current_index]
@@ -179,7 +183,31 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
         await callback_query.message.delete()
 
 
-async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+async def my_clients_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    try:
+        coach = user_service.storage.get_coach_by_id(profile.id)
+        assigned_ids = coach.assigned_to if coach.assigned_to else None
+    except UserServiceError as e:
+        logger.error(f"Could not get coach profile for {profile.id}: {e}")
+        await callback_query.answer()
+        await callback_query.message.answer(translate(MessageText.unexpected_error, profile.language))
+        return
+
+    if assigned_ids:
+        await callback_query.answer()
+        clients = [user_service.storage.get_client_by_id(client) for client in assigned_ids]
+        await show_clients(callback_query.message, clients, state)
+    else:
+        if not coach.verified:
+            await callback_query.answer(
+                text=translate(MessageText.coach_info_message, profile.language), show_alert=True
+            )
+        await callback_query.message.answer(translate(MessageText.no_clients, profile.language))
+        await state.set_state(States.main_menu)
+        await show_main_menu(callback_query.message, profile, state)
+
+
+async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     try:
         client = user_service.storage.get_client_by_id(profile.id)
     except UserServiceError:
@@ -205,40 +233,135 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
         await callback_query.message.delete()
 
 
-async def handle_my_clients(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    try:
-        coach = user_service.storage.get_coach_by_id(profile.id)
-        assigned_ids = coach.assigned_to if coach.assigned_to else None
-    except UserServiceError as e:
-        logger.error(f"Could not get coach profile for {profile.id}: {e}")
-        await callback_query.answer()
-        await callback_query.message.answer(translate(MessageText.unexpected_error, profile.language))
-        return
-
-    if assigned_ids:
-        await callback_query.answer()
-        clients = [user_service.storage.get_client_by_id(client) for client in assigned_ids]
-        await show_clients_menu(callback_query.message, clients, state)
-    else:
-        if not coach.verified:
-            await callback_query.answer(
-                text=translate(MessageText.coach_info_message, profile.language), show_alert=True
+async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    subscription = user_service.storage.get_subscription(profile.id)
+    if not subscription or not subscription.enabled:
+        subscription_img = f"https://storage.googleapis.com/bot_payment_options/subscriptions_{profile.language}.jpeg"
+        try:
+            await callback_query.message.answer_photo(
+                photo=subscription_img,
+                reply_markup=choose_payment_options(profile.language, "subscription"),
             )
-        await callback_query.message.answer(translate(MessageText.no_clients, profile.language))
-        await state.set_state(States.main_menu)
-        await show_main_menu(callback_query.message, profile, state)
+        except TelegramBadRequest:
+            await callback_query.message.answer(
+                translate(MessageText.image_error, profile.language),
+                reply_markup=choose_payment_options(profile.language, "subscription"),
+            )
+        await state.set_state(States.payment_choice)
+    else:
+        if exercises := subscription.exercises:
+            await state.update_data(exercises=exercises)
+            await show_subscription_page(callback_query, state, subscription)
+        else:
+            await callback_query.answer(translate(MessageText.program_not_ready, profile.language), show_alert=True)
+            return
+
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()
 
 
-async def handle_clients_pagination(callback_query: CallbackQuery, profile, index: int, state: FSMContext) -> None:
+async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    if program := user_service.storage.get_program(profile.id):
+        program_paid = user_service.storage.check_payment_status(profile.id, "program")
+        if program_paid:
+            await callback_query.answer(translate(MessageText.program_not_ready, profile.language), show_alert=True)
+            return
+        else:
+            program_text = await format_program(program.exercises_by_day, 0)
+            await callback_query.message.answer(
+                text=translate(MessageText.program_page, lang=profile.language).format(program=program_text, day=1),
+                reply_markup=program_view_kb(profile.language),
+                disable_web_page_preview=True,
+            )
+            with suppress(TelegramBadRequest):
+                await callback_query.message.delete()
+            await state.update_data(exercises=program.exercises_by_day, split=program.split_number, client=True)
+            await state.set_state(States.program_view)
+    else:
+        program_img = f"https://storage.googleapis.com/bot_payment_options/program_{profile.language}.jpeg"
+        try:
+            await callback_query.message.answer_photo(
+                photo=program_img,
+                reply_markup=choose_payment_options(profile.language, "program"),
+            )
+        except TelegramBadRequest:
+            await callback_query.message.answer(
+                translate(MessageText.image_error, profile.language),
+                reply_markup=choose_payment_options(profile.language, "program"),
+            )
+        await state.set_state(States.payment_choice)
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()
+
+
+async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, profile: Profile) -> None:
     data = await state.get_data()
-    clients = [Client.from_dict(data) for data in data["clients"]]
+    exercises = data.get("exercises", {})
+    updated_exercises = {str(index): exercise for index, exercise in enumerate(exercises.values())}
+    program = await format_program(updated_exercises, day=0)
 
-    if not clients:
-        await callback_query.answer(translate(MessageText.no_clients, profile.language))
+    await callback_query.message.answer(
+        text=translate(MessageText.program_page, lang=profile.language).format(program=program, day=1),
+        reply_markup=program_view_kb(profile.language),
+        disable_web_page_preview=True,
+    )
+
+    await state.update_data(client=True)
+    await state.set_state(States.program_view)
+    await callback_query.message.delete()
+
+
+async def show_manage_subscription_menu(
+    callback_query: CallbackQuery, lang: str, client_id: str, state: FSMContext
+) -> None:
+    subscription = user_service.storage.get_subscription(client_id)
+
+    if not subscription or not subscription.enabled:
+        await callback_query.answer(translate(MessageText.payment_required, lang))
         return
 
-    if index < 0 or index >= len(clients):
-        await callback_query.answer(translate(MessageText.out_of_range, profile.language))
-        return
+    await callback_query.answer()
+    days = subscription.workout_days
 
-    await show_clients_menu(callback_query.message, clients, state, index)
+    if not subscription.exercises:
+        await callback_query.message.answer(translate(MessageText.no_program, lang))
+        workouts_per_week = len(subscription.workout_days)
+        await callback_query.message.answer(
+            translate(MessageText.workouts_per_week, lang).format(days=workouts_per_week)
+        )
+        await callback_query.message.answer(text=translate(MessageText.program_guide, lang))
+        day_1_msg = await callback_query.message.answer(
+            translate(MessageText.enter_daily_program, lang).format(day=1),
+            reply_markup=program_manage_menu(lang),
+        )
+        await state.update_data(
+            day_1_msg=day_1_msg.message_id,
+            split=workouts_per_week,
+            days=days,
+            day_index=0,
+            exercises={},
+            client_id=client_id,
+            subscription=True,
+        )
+        await state.set_state(States.program_manage)
+
+    else:
+        program_text = await format_program({days[0]: subscription.exercises["0"]}, days[0])
+        week_day = get_translated_week_day(lang, days[0])
+        del_msg = await callback_query.message.answer(
+            text=translate(MessageText.program_page, lang).format(program=program_text, day=week_day),
+            reply_markup=subscription_manage_menu(lang),
+            disable_web_page_preview=True,
+        )
+        await state.update_data(
+            del_msg=del_msg.message_id,
+            exercises=subscription.exercises,
+            days=days,
+            client_id=client_id,
+            day_index=0,
+            subscription=True,
+        )
+        await state.set_state(States.subscription_manage)
+
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()

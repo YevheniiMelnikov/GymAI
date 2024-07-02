@@ -4,7 +4,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
-from bot.keyboards import language_choice, action_choice_keyboard
+from bot.keyboards import action_choice_keyboard, language_choice
 from bot.states import States
 from common.functions.menus import show_main_menu
 from common.user_service import user_service

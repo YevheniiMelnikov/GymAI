@@ -9,12 +9,12 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from bot.keyboards import choose_gender, select_days, workout_experience_keyboard
 from bot.states import States
 from common.file_manager import avatar_manager
-from common.functions.communication import client_request
-from common.functions.menus import show_subscription_page, show_main_menu
+from common.functions.chat import client_request
+from common.functions.menus import show_main_menu, show_subscription_page
 from common.functions.profiles import update_user_info
+from common.functions.text_utils import get_state_and_message, validate_birth_date
 from common.models import Client, Coach
 from common.user_service import user_service
-from common.utils import get_state_and_message, validate_birth_date
 from texts.text_manager import MessageText, translate
 
 logger = loguru.logger
@@ -221,7 +221,7 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
             await callback_query.message.answer(
                 translate(MessageText.select_days, profile.language), reply_markup=select_days(profile.language, [])
             )
-        else:
+        elif data.get("request_type") == "program":
             kb = InlineKeyboardMarkup(
                 inline_keyboard=[[InlineKeyboardButton(text="💰", callback_data=data.get("request_type"))]]
             )

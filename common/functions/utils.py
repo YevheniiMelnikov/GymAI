@@ -1,0 +1,100 @@
+import os
+from contextlib import suppress
+
+import aiohttp
+import loguru
+from aiogram import Bot
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.fsm.context import FSMContext
+from aiogram.types import BotCommand, CallbackQuery
+
+from bot.keyboards import program_edit_kb, program_view_kb
+from bot.states import States
+from common.functions.menus import my_clients_menu, show_clients
+from common.functions.text_utils import format_program
+from common.models import Client
+from common.user_service import user_service
+from texts.text_manager import MessageText, resource_manager, translate
+
+logger = loguru.logger
+bot = Bot(os.environ.get("BOT_TOKEN"))
+
+
+async def short_url(url: str) -> str:
+    if url.startswith("https://tinyurl.com/"):
+        return url
+
+    async with aiohttp.ClientSession() as session:
+        params = {"url": url}
+        async with session.get("http://tinyurl.com/api-create.php", params=params) as response:
+            response_text = await response.text()
+            if response.status == 200:
+                return response_text
+            else:
+                logger.error(f"Failed to process URL: {response.status}, {response_text}")
+                return url
+
+
+async def set_bot_commands(lang: str = "ua") -> None:
+    command_texts = resource_manager.commands
+    commands = [BotCommand(command=cmd, description=desc[lang]) for cmd, desc in command_texts.items()]
+    await bot.set_my_commands(commands)
+
+
+async def program_menu_pagination(state: FSMContext, callback_query: CallbackQuery) -> None:
+    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+
+    if callback_query.data == "quit":
+        await my_clients_menu(callback_query, profile, state)
+        return
+
+    data = await state.get_data()
+    current_day = data.get("day_index", 0)
+    exercises = data.get("exercises", {})
+    split_number = data.get("split")
+
+    if callback_query.data == "previous":
+        current_day -= 1
+    else:
+        current_day += 1
+
+    if current_day < 0 or current_day >= split_number:
+        await callback_query.answer(translate(MessageText.out_of_range, profile.language))
+        current_day = max(0, min(current_day, split_number - 1))
+
+    await state.update_data(day_index=current_day)
+    program_text = await format_program(exercises, current_day)
+
+    if data.get("client"):
+        reply_markup = program_view_kb(profile.language)
+        state_to_set = States.program_view
+    else:
+        reply_markup = program_edit_kb(profile.language)
+        state_to_set = States.program_edit
+
+    with suppress(TelegramBadRequest):
+        await callback_query.message.edit_text(
+            text=translate(MessageText.program_page, profile.language).format(
+                program=program_text, day=current_day + 1
+            ),
+            reply_markup=reply_markup,
+            disable_web_page_preview=True,
+        )
+
+    await state.set_state(state_to_set)
+    await callback_query.answer()
+
+
+async def handle_clients_pagination(callback_query: CallbackQuery, profile, index: int, state: FSMContext) -> None:
+    data = await state.get_data()
+    clients = [Client.from_dict(data) for data in data["clients"]]
+
+    if not clients:
+        await callback_query.answer(translate(MessageText.no_clients, profile.language))
+        return
+
+    if index < 0 or index >= len(clients):
+        await callback_query.answer(translate(MessageText.out_of_range, profile.language))
+        return
+
+    await show_clients(callback_query.message, clients, state, index)

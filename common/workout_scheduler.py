@@ -1,20 +1,24 @@
+import os
 from datetime import datetime, timedelta
 
 import loguru
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.client.session import aiohttp
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+import common.functions.chat
+import common.functions.workout_plans
 from bot.keyboards import workout_results, workout_survey_keyboard
 from bot.states import States
-from common.functions.communication import bot
+from common.functions.chat import send_message
 from common.user_service import user_session
 from texts.text_manager import MessageText, translate
 
 logger = loguru.logger
 survey_router = Router()
+bot = Bot(os.environ.get("BOT_TOKEN"))
 
 
 async def send_daily_survey():
