@@ -1,15 +1,15 @@
 import loguru
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import Message
 
-from bot.keyboards import incoming_message, workout_type
+from bot.keyboards import incoming_message
 from bot.states import States
 from common.exceptions import UserServiceError
-from common.functions.communication import send_message
+from common.functions.chat import send_message
 from common.functions.menus import show_main_menu
 from common.user_service import user_service
-from texts.text_manager import ButtonText, MessageText, translate
+from texts.text_manager import MessageText, translate
 
 logger = loguru.logger
 chat_router = Router()
@@ -81,15 +81,3 @@ async def contact_coach(message: Message, state: FSMContext):
     logger.info(f"Client {sender.id} sent message to coach {recipient.id}")
     await state.set_state(States.main_menu)
     await show_main_menu(message, sender, state)
-
-
-@chat_router.callback_query(States.gift, F.data == "get")
-async def get_the_gift(callback_query: CallbackQuery, state: FSMContext):
-    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
-    await callback_query.answer(translate(ButtonText.done, profile.language))
-    await callback_query.message.answer(
-        translate(MessageText.workout_type), reply_markup=workout_type(profile.language)
-    )
-    await state.update_data(new_client=True)
-    await state.set_state(States.workout_type)
-    await callback_query.message.delete()

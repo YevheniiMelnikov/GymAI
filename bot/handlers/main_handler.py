@@ -1,17 +1,8 @@
-from aiogram.types import Message
-
-from common.functions.exercise_managing import manage_program
-from common.functions.communication import *
-from common.functions.menus import (
-    handle_clients_pagination,
-    show_profile_editing_menu,
-    show_main_menu,
-    show_coaches_menu,
-    show_my_profile_menu,
-    show_my_program_menu,
-    handle_my_clients,
-)
+from common.functions.chat import *
+from common.functions.menus import *
 from common.functions.profiles import assign_coach
+from common.functions.utils import handle_clients_pagination
+from common.functions.workout_plans import manage_program
 from common.models import Coach, Profile
 from common.user_service import user_service
 from texts.text_manager import MessageText, translate
@@ -34,10 +25,10 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
             await show_my_profile_menu(callback_query, profile, state)
 
         case "my_clients":
-            await handle_my_clients(callback_query, profile, state)
+            await my_clients_menu(callback_query, profile, state)
 
-        case "my_program":
-            await show_my_program_menu(callback_query, profile, state)
+        case "my_workouts":
+            await show_my_workouts_menu(callback_query, profile, state)
 
 
 @main_router.callback_query(States.profile)
@@ -45,7 +36,7 @@ async def profile_menu(callback_query: CallbackQuery, state: FSMContext) -> None
     await callback_query.answer()
     data = await state.get_data()
     profile = Profile.from_dict(data["profile"])
-    if callback_query.data == "edit_profile":
+    if callback_query.data == "profile_edit":
         await show_profile_editing_menu(callback_query.message, profile, state)
     elif callback_query.data == "back":
         await show_main_menu(callback_query.message, profile, state)
@@ -171,7 +162,7 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
         return
 
     if action == "subscription":
-        await handle_subscription_action(callback_query, profile, client_id, state)
+        await show_manage_subscription_menu(callback_query, profile.language, client_id, state)
         return
 
     try:
@@ -184,7 +175,7 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
 
 
 @main_router.callback_query(States.show_subscription)
-async def show_subscription(callback_query: CallbackQuery, state: FSMContext):
+async def show_subscription_actions(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "back":
@@ -212,7 +203,7 @@ async def show_subscription(callback_query: CallbackQuery, state: FSMContext):
         subscription = user_service.storage.get_subscription(profile.id)
         workout_days = subscription.workout_days
         await state.update_data(exercises=subscription.exercises, days=workout_days, split=len(workout_days))
-        await show_exercises(callback_query, state, profile)
+        await show_exercises_menu(callback_query, state, profile)
 
     with suppress(TelegramBadRequest):
         await callback_query.message.delete()

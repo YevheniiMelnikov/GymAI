@@ -10,9 +10,10 @@ from bot.keyboards import *
 from bot.states import States
 from common.exceptions import EmailUnavailable, UsernameUnavailable
 from common.functions.menus import show_main_menu
-from common.functions.profiles import sign_in, register_user
+from common.functions.profiles import register_user, sign_in
+from common.functions.text_utils import validate_email, validate_password
+from common.functions.utils import set_bot_commands
 from common.user_service import user_service
-from common.utils import validate_email, validate_password, set_bot_commands
 from texts.text_manager import MessageText, translate
 
 logger = loguru.logger

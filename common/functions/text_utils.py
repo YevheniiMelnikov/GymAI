@@ -1,20 +1,12 @@
-import os
 import re
 from typing import Any, Optional
 
-import aiohttp
-import loguru
-from aiogram import Bot
 from aiogram.fsm.state import State
-from aiogram.types import BotCommand
 
 from bot.states import States
 from common.models import Client, Coach, Exercise
 from common.user_service import user_service
-from texts.text_manager import ButtonText, MessageText, translate, resource_manager
-
-logger = loguru.logger
-bot = Bot(os.environ.get("BOT_TOKEN"))
+from texts.text_manager import ButtonText, MessageText, translate
 
 
 def validate_password(password: str) -> bool:
@@ -131,22 +123,9 @@ def get_client_page(client: Client, lang_code: str, subscription: bool, payment_
     }
 
 
-async def short_url(url: str) -> str:
-    if url.startswith("https://tinyurl.com/"):
-        return url
-
-    async with aiohttp.ClientSession() as session:
-        params = {"url": url}
-        async with session.get("http://tinyurl.com/api-create.php", params=params) as response:
-            response_text = await response.text()
-            if response.status == 200:
-                return response_text
-            else:
-                logger.error(f"Failed to process URL: {response.status}, {response_text}")
-                return url
-
-
-async def format_message(data: dict[str, Any], coach_lang: str, client_lang: str, preferable_type: str) -> str:
+async def format_new_client_message(
+    data: dict[str, Any], coach_lang: str, client_lang: str, preferable_type: str
+) -> str:
     if data.get("new_client"):
         return translate(MessageText.new_client, coach_lang).format(lang=client_lang, workout_type=preferable_type)
     else:
@@ -158,18 +137,18 @@ async def format_message(data: dict[str, Any], coach_lang: str, client_lang: str
         )
 
 
+async def get_service_types(language: str) -> dict:
+    return {
+        "subscription": translate(ButtonText.subscription, language),
+        "program": translate(ButtonText.program, language),
+    }
+
+
 async def get_workout_types(language: str) -> dict:
     return {
         "home": translate(ButtonText.home_workout, language),
         "street": translate(ButtonText.street_workout, language),
         "gym": translate(ButtonText.gym_workout, language),
-    }
-
-
-async def get_service_types(language: str) -> dict:
-    return {
-        "subscription": translate(ButtonText.subscription, language),
-        "program": translate(ButtonText.program, language),
     }
 
 
@@ -200,9 +179,3 @@ async def format_program(exercises: dict[str, any], day: int) -> str:
         program_lines.append(line)
 
     return "\n".join(program_lines)
-
-
-async def set_bot_commands(lang: str = "ua") -> None:
-    command_texts = resource_manager.commands
-    commands = [BotCommand(command=cmd, description=desc[lang]) for cmd, desc in command_texts.items()]
-    await bot.set_my_commands(commands)

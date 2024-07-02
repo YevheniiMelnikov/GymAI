@@ -29,7 +29,7 @@ def choose_account_type(lang_code: str) -> InlineKeyboardMarkup:
 
 def client_menu_keyboard(lang_code: str) -> InlineKeyboardMarkup:
     buttons = [
-        [InlineKeyboardButton(text=translate(ButtonText.my_program, lang=lang_code), callback_data="my_program")],
+        [InlineKeyboardButton(text=translate(ButtonText.my_program, lang=lang_code), callback_data="my_workouts")],
         [InlineKeyboardButton(text=translate(ButtonText.feedback, lang=lang_code), callback_data="feedback")],
         [InlineKeyboardButton(text=translate(ButtonText.my_profile, lang=lang_code), callback_data="my_profile")],
     ]
@@ -55,7 +55,7 @@ def action_choice_keyboard(lang_code: str) -> InlineKeyboardMarkup:
 def profile_menu_keyboard(lang_code: str) -> InlineKeyboardMarkup:
     buttons = [
         [
-            InlineKeyboardButton(text=translate(ButtonText.edit, lang=lang_code), callback_data="edit_profile"),
+            InlineKeyboardButton(text=translate(ButtonText.edit, lang=lang_code), callback_data="profile_edit"),
         ],
         [
             InlineKeyboardButton(text=translate(ButtonText.prev_menu), callback_data="back"),
@@ -259,8 +259,8 @@ def select_days(lang_code: str, selected_days: list) -> InlineKeyboardMarkup:
 def program_view_kb(lang_code: str) -> InlineKeyboardMarkup:
     buttons = [
         [
-            InlineKeyboardButton(text=translate(ButtonText.back, lang_code), callback_data=f"prev_day"),
-            InlineKeyboardButton(text=translate(ButtonText.forward, lang_code), callback_data="next_day"),
+            InlineKeyboardButton(text=translate(ButtonText.back, lang_code), callback_data="previous"),
+            InlineKeyboardButton(text=translate(ButtonText.forward, lang_code), callback_data="next"),
         ],
         [InlineKeyboardButton(text=translate(ButtonText.prev_menu), callback_data="quit")],
     ]
