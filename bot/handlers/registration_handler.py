@@ -129,7 +129,6 @@ async def email(message: Message, state: FSMContext) -> None:
         await state.set_state(States.username)
         await message.answer(text=translate(MessageText.username_unavailable, lang=data.get("lang")))
     except EmailUnavailable:
-        await state.set_state(States.username)
         await message.answer(text=translate(MessageText.email_unavailable, lang=data.get("lang")))
     finally:
         with suppress(TelegramBadRequest):

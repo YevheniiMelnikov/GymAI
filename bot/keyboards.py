@@ -104,12 +104,13 @@ def edit_coach_profile(lang_code: str) -> InlineKeyboardMarkup:
 
 
 def workout_experience_keyboard(lang_code: str) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardBuilder()
-    kb.button(text=translate(ButtonText.beginner, lang=lang_code), callback_data="0-1")
-    kb.button(text=translate(ButtonText.intermediate, lang=lang_code), callback_data="1-3")
-    kb.button(text=translate(ButtonText.advanced, lang=lang_code), callback_data="3-5")
-    kb.button(text=translate(ButtonText.experienced, lang=lang_code), callback_data="5+")
-    return kb.as_markup(one_time_keyboard=True)
+    buttons = [
+        [InlineKeyboardButton(text=translate(ButtonText.beginner, lang=lang_code), callback_data="0-1")],
+        [InlineKeyboardButton(text=translate(ButtonText.intermediate, lang=lang_code), callback_data="1-3")],
+        [InlineKeyboardButton(text=translate(ButtonText.advanced, lang=lang_code), callback_data="3-5")],
+        [InlineKeyboardButton(text=translate(ButtonText.experienced, lang=lang_code), callback_data="5+")],
+        ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
 
 
 def new_coach_request() -> InlineKeyboardMarkup:
@@ -120,10 +121,13 @@ def new_coach_request() -> InlineKeyboardMarkup:
 
 
 def choose_coach(lang_code: str) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardBuilder()
-    kb.button(text=translate(ButtonText.prev_menu), callback_data="back")
-    kb.button(text=translate(ButtonText.choose_coach, lang=lang_code), callback_data="choose_coach")
-    return kb.as_markup(one_time_keyboard=True)
+    buttons = [
+        [InlineKeyboardButton(text=translate(ButtonText.choose_coach, lang=lang_code), callback_data="choose_coach")],
+        [
+            InlineKeyboardButton(text=translate(ButtonText.prev_menu), callback_data="back"),
+        ],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
 
 
 def coach_select_menu(lang_code: str, coach_id: int, current_index: int) -> InlineKeyboardMarkup:
