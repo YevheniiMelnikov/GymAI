@@ -200,6 +200,7 @@ async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> No
     reply_markup = workout_experience_keyboard(profile.language) if state_to_set == States.workout_experience else None
     await callback_query.message.answer(message, lang=profile.language, reply_markup=reply_markup)
     await state.set_state(state_to_set)
+    await callback_query.message.delete()
 
 
 @questionnaire_router.callback_query(States.workout_type)
