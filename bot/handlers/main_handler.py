@@ -13,10 +13,10 @@ logger = loguru.logger
 
 @main_router.callback_query(States.main_menu)
 async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
-    await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     match callback_query.data:
         case "feedback":
+            await callback_query.answer()
             await callback_query.message.answer(text=translate(MessageText.feedback, lang=profile.language))
             await state.set_state(States.feedback)
             await callback_query.message.delete()

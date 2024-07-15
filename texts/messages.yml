@@ -199,9 +199,9 @@ update_your_data:
   ua: "Введіть актуальні дані ✏️"
 
 work_experience:
-  eng: "Enter your work experience in years 💼"
-  ru: "Укажите ваш опыт работы в годах 💼"
-  ua: "Вкажіть ваш досвід роботи в роках 💼"
+  eng: "Enter your work experience in years"
+  ru: "Укажите ваш опыт работы в годах"
+  ua: "Вкажіть ваш досвід роботи в роках"
 
 additional_info:
   eng: "Please provide additional information about yourself. Your education, sports achievements, etc. 📄"

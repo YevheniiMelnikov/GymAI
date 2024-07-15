@@ -42,6 +42,7 @@ class FileManager:
         file = await message.bot.get_file(file_id)
         file_url = f"https://api.telegram.org/file/bot{message.bot.token}/{file.file_path}"
         local_file_path = os.path.join("temp", f"{file_id}.jpg")
+        os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
         async with aiohttp.ClientSession() as session:
             async with session.get(file_url) as resp:
                 if resp.status == 200:

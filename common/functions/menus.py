@@ -84,11 +84,6 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext) 
     await state.clear()
     await state.set_state(States.main_menu)
     await state.update_data(profile=Profile.to_dict(profile))
-    if profile.status == "coach":
-        try:
-            user_service.storage.get_coach_by_id(profile.id)
-        except UserServiceError:
-            await message.answer(translate(MessageText.coach_info_message, lang=profile.language))
     await message.answer(
         text=translate(MessageText.main_menu, lang=profile.language), reply_markup=menu(profile.language)
     )
@@ -187,10 +182,8 @@ async def my_clients_menu(callback_query: CallbackQuery, profile: Profile, state
     try:
         coach = user_service.storage.get_coach_by_id(profile.id)
         assigned_ids = coach.assigned_to if coach.assigned_to else None
-    except UserServiceError as e:
-        logger.error(f"Could not get coach profile for {profile.id}: {e}")
-        await callback_query.answer()
-        await callback_query.message.answer(translate(MessageText.unexpected_error, profile.language))
+    except UserServiceError:
+        await callback_query.answer(translate(MessageText.coach_info_message, lang=profile.language), show_alert=True)
         return
 
     if assigned_ids:
@@ -202,9 +195,9 @@ async def my_clients_menu(callback_query: CallbackQuery, profile: Profile, state
             await callback_query.answer(
                 text=translate(MessageText.coach_info_message, profile.language), show_alert=True
             )
-        await callback_query.message.answer(translate(MessageText.no_clients, profile.language))
+        await callback_query.answer(translate(MessageText.no_clients, profile.language), show_alert=True)
         await state.set_state(States.main_menu)
-        await show_main_menu(callback_query.message, profile, state)
+        return
 
 
 async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
