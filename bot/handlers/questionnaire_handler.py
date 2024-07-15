@@ -229,7 +229,8 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
             await callback_query.message.answer("click to pay 👇", reply_markup=kb)
             await state.update_data(price=50)
             await state.set_state(States.handle_payment)
-    await callback_query.message.delete()
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()
 
 
 @questionnaire_router.callback_query(States.workout_days)
