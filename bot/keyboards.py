@@ -109,7 +109,7 @@ def workout_experience_keyboard(lang_code: str) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=translate(ButtonText.intermediate, lang=lang_code), callback_data="1-3")],
         [InlineKeyboardButton(text=translate(ButtonText.advanced, lang=lang_code), callback_data="3-5")],
         [InlineKeyboardButton(text=translate(ButtonText.experienced, lang=lang_code), callback_data="5+")],
-        ]
+    ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
 
 
@@ -139,7 +139,7 @@ def coach_select_menu(lang_code: str, coach_id: int, current_index: int) -> Inli
                 text=translate(ButtonText.forward, lang_code), callback_data=f"next_{current_index + 1}"
             ),
         ],
-        [InlineKeyboardButton(text=translate(ButtonText.quit, lang_code), callback_data="quit")],
+        [InlineKeyboardButton(text=translate(ButtonText.prev_menu, lang_code), callback_data="quit")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
 
