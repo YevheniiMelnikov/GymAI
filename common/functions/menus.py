@@ -208,20 +208,19 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
         await show_profile_editing_menu(callback_query.message, profile, state)
         return
 
-    assigned = client.assigned_to if client.assigned_to else None
-    if not assigned:
+    if not client.assigned_to:
         await callback_query.message.answer(
             text=translate(MessageText.no_program, lang=profile.language),
             reply_markup=choose_coach(profile.language),
         )
         await state.set_state(States.choose_coach)
-        return
+    else:
+        await state.set_state(States.select_service)
+        await callback_query.message.answer(
+            text=translate(MessageText.select_service, lang=profile.language),
+            reply_markup=select_service(profile.language),
+        )
 
-    await state.set_state(States.select_service)
-    await callback_query.message.answer(
-        text=translate(MessageText.select_service, lang=profile.language),
-        reply_markup=select_service(profile.language),
-    )
     with suppress(TelegramBadRequest):
         await callback_query.message.delete()
 

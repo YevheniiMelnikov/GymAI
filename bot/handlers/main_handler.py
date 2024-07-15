@@ -85,12 +85,11 @@ async def handle_feedback(message: Message, state: FSMContext) -> None:
 
 @main_router.callback_query(States.choose_coach)
 async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext):
-    await callback_query.answer()
+    # await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "back":
         await state.set_state(States.main_menu)
         await show_main_menu(callback_query.message, profile, state)
-        return
 
     else:
         coaches = user_service.storage.get_coaches()
@@ -104,14 +103,21 @@ async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext):
         await state.update_data(coaches=[Coach.to_dict(coach) for coach in coaches])
         await show_coaches_menu(callback_query.message, coaches)
 
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()
+
 
 @main_router.callback_query(States.coach_selection)
 async def coach_paginator(callback_query: CallbackQuery, state: FSMContext):
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
 
     if callback_query.data == "quit":
-        await state.set_state(States.main_menu)
-        await show_main_menu(callback_query.message, profile, state)
+        await callback_query.message.answer(
+            text=translate(MessageText.no_program, lang=profile.language),
+            reply_markup=choose_coach(profile.language),
+        )
+        await state.set_state(States.choose_coach)
+        await callback_query.message.delete()
         return
 
     action, index = callback_query.data.split("_")
