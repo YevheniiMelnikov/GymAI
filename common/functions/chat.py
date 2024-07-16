@@ -88,12 +88,15 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
         )
 
     @sub_router.callback_query(F.data == "coach_approve")
-    async def approve_coach(callback_query: CallbackQuery):
+    async def approve_coach(callback_query: CallbackQuery, state: FSMContext):
         token = user_service.storage.get_profile_info_by_key(tg_id, profile.id, "auth_token")
         await user_service.edit_profile(profile.id, {"verified": True}, token)
         user_service.storage.set_coach_data(str(profile.id), {"verified": True})
         await callback_query.answer("👍")
-        await bot.send_message(tg_id, translate(MessageText.coach_verified, lang=profile.language))
+        coach = user_service.storage.get_coach_by_id(profile.id)
+        await send_message(
+            coach, translate(MessageText.coach_verified, lang=profile.language), state, include_incoming_message=False
+        )
         logger.info(f"Coach verification for profile_id {profile.id} approved")
 
     @sub_router.callback_query(F.data == "coach_decline")

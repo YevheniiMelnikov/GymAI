@@ -56,6 +56,9 @@ def profile_menu_keyboard(lang_code: str) -> InlineKeyboardMarkup:
     buttons = [
         [
             InlineKeyboardButton(text=translate(ButtonText.edit, lang=lang_code), callback_data="profile_edit"),
+            InlineKeyboardButton(
+                text=translate(ButtonText.delete_profile, lang=lang_code), callback_data="profile_delete"
+            ),
         ],
         [
             InlineKeyboardButton(text=translate(ButtonText.prev_menu), callback_data="back"),
@@ -391,3 +394,10 @@ def subscription_view_kb(lang_code: str) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=translate(ButtonText.later, lang_code), callback_data="later")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+
+
+def yes_no(lang_code) -> InlineKeyboardMarkup:
+    kb = InlineKeyboardBuilder()
+    kb.button(text=translate(ButtonText.answer_yes, lang_code), callback_data="yes")
+    kb.button(text=translate(ButtonText.answer_no, lang_code), callback_data="no")
+    return kb.as_markup(one_time_keyboard=True)

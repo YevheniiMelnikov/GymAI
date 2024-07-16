@@ -35,6 +35,7 @@ class MessageText(Enum):
     continue_editing = auto()
     select_exercise = auto()
     parameter_to_edit = auto()
+    delete_confirmation = auto()
 
     name = auto()
     choose_gender = auto()
@@ -109,6 +110,9 @@ class MessageText(Enum):
     start = auto()
     signed_in = auto()
     logout = auto()
+    profile_deleted = auto()
+    accept_policy = auto()
+    contract_info_message = auto()
 
     def __str__(self) -> str:
         return f"messages.{self.name}"
@@ -177,6 +181,7 @@ class ButtonText(Enum):
     view = auto()
     create = auto()
     prev_menu = auto()
+    delete_profile = auto()
 
     def __str__(self) -> str:
         return f"buttons.{self.name}"

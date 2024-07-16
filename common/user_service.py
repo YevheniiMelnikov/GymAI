@@ -323,6 +323,22 @@ class UserProfileManager:
             logger.info(f"Failed to get gif filename for exercise {exercise_name}: {e}")
             return None
 
+    def delete_profile(self, telegram_id: int | str, profile_id: int) -> bool:
+        try:
+            profiles_data = self._get_profile_data(telegram_id)
+            updated_profiles_data = [p for p in profiles_data if p["id"] != profile_id]
+
+            if not updated_profiles_data:
+                self.redis.hdel("user_profiles", str(telegram_id))
+            else:
+                self._update_profile_data(telegram_id, updated_profiles_data)
+
+            logger.info(f"Profile {profile_id} deleted for user {telegram_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete profile {profile_id} for user {telegram_id}: {e}")
+            return False
+
 
 class UserService:
     def __init__(self, storage: UserProfileManager):
@@ -527,6 +543,13 @@ class UserService:
             "put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
         return status_code == 200
+
+    async def delete_profile(self, telegram_id, profile_id: int, token: str | None = None) -> bool:
+        url = f"{self.backend_url}/api/v1/persons/{profile_id}/delete/"
+        headers = {"Authorization": f"Token {token}"} if token else {}
+        status_code, _ = await self._api_request("delete", url, headers=headers)
+        if status_code == 204:
+            return self.storage.delete_profile(telegram_id, profile_id)
 
 
 user_session = UserProfileManager(os.getenv("REDIS_URL"))

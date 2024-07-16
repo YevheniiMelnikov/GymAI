@@ -114,9 +114,9 @@ reset_password_offer:
   ua: "Щоб скинути пароль, використовуйте команду /reset_password 🔄"
 
 help:
-  eng: "/start - Start bot 🤖 \n/language - Change language 🌐 \n/logout - Logout from bot 🚪 \n/reset_password - Reset password 🔄 \n/menu - Main menu 🏠"
-  ru: "/start - Запустить бота 🤖 \n/language - Изменить язык 🌐 \n/logout - Выйти из бота 🚪 \n/reset_password - Сбросить пароль 🔄 \n/menu - Главное меню 🏠"
-  ua: "/start - Запустити бота 🤖 \n/language - Змінити мову 🌐 \n/logout - Вийти з бота 🚪 \n/reset_password - Скинути пароль 🔄 \n/menu - Головне меню 🏠"
+  eng: "/start - Start bot 🤖 \n/language - Change language 🌐 \n/logout - Logout from bot 🚪 \n/reset_password - Reset password 🔄\n/menu - Main menu 🏠\n/policy - Privacy policy 📜"
+  ru: "/start - Запустить бота 🤖 \n/language - Изменить язык 🌐 \n/logout - Выйти из бота 🚪 \n/reset_password - Сбросить пароль 🔄\n/menu - Главное меню 🏠\n/policy - Политика конфиденциальности 📜"
+  ua: "/start - Запустити бота 🤖 \n/language - Змінити мову 🌐 \n/logout - Вийти з бота 🚪 \n/reset_password - Скинути пароль 🔄\n/menu - Головне меню 🏠\n/policy - Політика конфіденційності 📜"
 
 no_profiles_found:
   eng: "There are no accounts assigned to your Telegram account that meet the conditions of the request ❌"
@@ -273,9 +273,9 @@ no_coaches:
 
 
 coach_page:
-  eng: "<b>Name 🆔</b> {name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Work experience (years) 🎓</b> {experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Additional information 📄</b> {additional_info}"
-  ru: "<b>Имя 🆔</b> {name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Опыт работы (лет) 🎓</b> {experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Дополнительная информация 📄</b> {additional_info}"
-  ua: "<b>Ім'я 🆔</b> {name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Досвід роботи (років) 🎓</b> {experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Додаткова інформація 📄</b> {additional_info}"
+  eng: "<b>Name 🆔</b> {name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Work experience (years) 🎓</b> {experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Additional information 📄</b>\n<em>{additional_info}</em>"
+  ru: "<b>Имя 🆔</b> {name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Опыт работы (лет) 🎓</b> {experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Дополнительная информация 📄</b>\n<em>{additional_info}</em>"
+  ua: "<b>Ім'я 🆔</b> {name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Досвід роботи (років) 🎓</b> {experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Додаткова інформація 📄</b>\n<em>{additional_info}</em>"
 
 
 out_of_range:
@@ -295,9 +295,9 @@ no_clients:
 
 
 client_page:
-  eng: "<b>Name 🆔️</b> {name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Gender </b> {gender}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Birth Date 🗓</b> {birth_date}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Workout Experience (years) 🎓</b> {workout_experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Workout Goals 🎯</b> {workout_goals}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Health Notes 🤕</b> {health_notes}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Weight (kg) ⚖️</b> {weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Language 💬️</b> {language}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Subscription </b> {subscription}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Status </b> {status}"
-  ru: "<b>Имя 🆔</b> {name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Пол </b> {gender}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Дата рождения 🗓</b> {birth_date}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Опыт тренировок (лет) 🎓</b> {workout_experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Цели тренировок 🎯</b> {workout_goals}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Приметки по здоровью 🤕</b> {health_notes}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Вес (кг) ⚖️</b> {weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Язык 💬️</b> {language}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Подписка </b> {subscription}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Статус </b> {status}"
-  ua: "<b>Ім'я 🆔️</b> {name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Стать </b> {gender}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Дата народження 🗓</b> {birth_date}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Досвід тренувань (років) 🎓</b> {workout_experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Цілі тренувань 🎯</b> {workout_goals}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Примітки по здоров'ю 🤕</b> {health_notes}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Вага (кг) ⚖️</b> {weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Мова 💬️</b> {language}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Підписка </b> {subscription}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Статус </b> {status}"
+  eng: "<b>Name 🆔️</b> {name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Gender </b> {gender}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Birth Date 🗓</b> {birth_date}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Workout Experience (years) 🎓</b> {workout_experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Workout Goals 🎯</b> {workout_goals}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Health Notes 🤕</b> {health_notes}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Weight (kg) ⚖️</b> {weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Language 💬️</b> {language}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Subscription </b> {subscription}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Status </b> {status}"
+  ru: "<b>Имя 🆔</b> {name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Пол </b> {gender}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Дата рождения 🗓</b> {birth_date}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Опыт тренировок (лет) 🎓</b> {workout_experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Цели тренировок 🎯</b> {workout_goals}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Приметки по здоровью 🤕</b> {health_notes}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Вес (кг) ⚖️</b> {weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Язык 💬️</b> {language}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Подписка </b> {subscription}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Статус </b> {status}"
+  ua: "<b>Ім'я 🆔️</b> {name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Стать </b> {gender}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Дата народження 🗓</b> {birth_date}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Досвід тренувань (років) 🎓</b> {workout_experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Цілі тренувань 🎯</b> {workout_goals}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Примітки по здоров'ю 🤕</b> {health_notes}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Вага (кг) ⚖️</b> {weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Мова 💬️</b> {language}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Підписка </b> {subscription}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Статус </b> {status}"
 
 enter_your_message:
   eng: "Enter your message 💬\nYou can attach an image if you wish 📎"
@@ -305,9 +305,9 @@ enter_your_message:
   ua: "Введіть ваше повідомлення 💬\nЗа бажанням можете прикріпити зображення 📎"
 
 incoming_message:
-  eng: "Incoming message from {name} 📩\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{message}</em>"
-  ru: "Входящее сообщение от {name} 📩\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{message}</em>"
-  ua: "Повідомлення від {name} 📩\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{message}</em>"
+  eng: "Incoming message from {name} 📩\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{message}</em>"
+  ru: "Входящее сообщение от {name} 📩\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{message}</em>"
+  ua: "Повідомлення від {name} 📩\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{message}</em>"
 
 message_sent:
   eng: "Message sent ✅"
@@ -320,9 +320,9 @@ enter_exercise:
   ua: "Введіть назву вправи 🏋️‍♂️"
 
 program_page:
-  eng: "<b>Workout program for day {day}</b> \n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{program}</em>"
-  ru: "<b>Программа тренировок на день {day}</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{program}</em>"
-  ua: "<b>Програма тренувань на день {day}</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{program}</em>"
+  eng: "<b>Workout program for day {day}</b> \n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{program}</em>"
+  ru: "<b>Программа тренировок на день {day}</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{program}</em>"
+  ua: "<b>Програма тренувань на день {day}</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{program}</em>"
 
 no_exercises_to_save:
   eng: "No exercises ❗️"
@@ -360,9 +360,9 @@ payment_required:
   ua: "Клієнт поки що не оплатив послугу 💵"
 
 payment_link:
-  eng: "Follow the link to make your payment 💳</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{link}</em>"
-  ru: "Пройдите по ссылке для совершения оплаты 💳</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{link}</em>"
-  ua: "Пройдіть за посиланням для здійснення оплати 💳</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{link}</em>"
+  eng: "Follow the link to make your payment 💳</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{link}</em>"
+  ru: "Пройдите по ссылке для совершения оплаты 💳</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{link}</em>"
+  ua: "Пройдіть за посиланням для здійснення оплати 💳</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{link}</em>"
 
 payment_success:
   eng: "Your payment is successful. Wait, thank you for your trust 🙏"
@@ -460,14 +460,14 @@ workouts_per_week:
   ua: "Бажана кількість тренувальних днів - {days} ❕️"
 
 workout_feedback:
-  eng: "{name} about his yesterday workout:\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{feedback}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>Program 👇</em>\n<em>{program}</em>"
-  ru: "{name} о своей вчерашней тренировке:\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{feedback}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>Программа 👇</em>\n<em>{program}</em>"
-  ua: "{name} про своє вчорашнє тренування:\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{feedback}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>Програма 👇</em>\n<em>{program}</em>"
+  eng: "{name} about his yesterday workout:\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{feedback}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>Program 👇</em>\n<em>{program}</em>"
+  ru: "{name} о своей вчерашней тренировке:\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{feedback}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>Программа 👇</em>\n<em>{program}</em>"
+  ua: "{name} про своє вчорашнє тренування:\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{feedback}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>Програма 👇</em>\n<em>{program}</em>"
 
 workout_completed:
-  eng: "Yesterday's client {name}'s training session was completely done 👏\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{program}</em>"
-  ru: "Вчерашняя тренировка клиента {name} была полностью выполнена 👏\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{program}</em>"
-  ua: "Вчорашнє тренування клієнта {name} було повністю виконано 👏\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{program}</em>"
+  eng: "Yesterday's client {name}'s training session was completely done 👏\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{program}</em>"
+  ru: "Вчерашняя тренировка клиента {name} была полностью выполнена 👏\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{program}</em>"
+  ua: "Вчорашнє тренування клієнта {name} було повністю виконано 👏\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{program}</em>"
 
 continue_editing:
   eng: "Would you like to continue editing? 🤔"
@@ -498,3 +498,23 @@ payment_failure:
   eng: "An error occurred during your payment, please try again later 🫤"
   ru: "Во время вашего платежа возникла ошибка, повторите попытку позже 🫤"
   ua: "Під час вашого платежу виникла помилка, повторіть спробу пізніше 🫤"
+
+delete_confirmation:
+  eng: "Are you sure you want to delete your profile? In this case you will lose all your data, this action is irreversible 🗑"
+  ru: "Вы уверены что хотите удалить свой профиль? В таком случае вы утратите все ваши данные, это действие необратимо 🗑"
+  ua: "Ви впевнені що хочете видалити свій профіль? У такому випадку ви втратите всі ваші дані, ця дія незворотна 🗑"
+
+profile_deleted:
+  eng: "Your profile has been deleted 😢"
+  ru: "Ваш профиль был удален 😢"
+  ua: "Ваш профіль було видалено 😢"
+
+contract_info_message:
+  eng: "Familiarize yourself with the public offer agreement 👇\n{public_offer}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nAnd with a privacy policy 👇\n{privacy_policy}"
+  ru: "Ознакомьтесь с договором публичной оферты 👇\n{public_offer}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nИ с политикой конфиденциальности 👇\n{privacy_policy}"
+  ua: "Ознайомтеся з договором публічної оферти 👇\n{public_offer}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nІ з політикою конфіденційності 👇\n{privacy_policy}"
+
+accept_policy:
+  eng: "I accept the terms of service and privacy policy 📜"
+  ru: "Я принимаю условия использования и политику конфиденциальности 📜"
+  ua: "Я приймаю умови використання та політику конфіденційності 📜"

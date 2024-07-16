@@ -101,11 +101,11 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
 
 
 async def register_user(message: Message, state: FSMContext, data: dict) -> None:
-    await state.update_data(email=message.text)
+    email = data.get("email")
     if not await user_service.sign_up(
         username=data.get("username"),
         password=data.get("password"),
-        email=message.text,
+        email=email,
         status=data.get("account_type"),
         language=data.get("lang"),
     ):
@@ -116,25 +116,25 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
         await message.answer(text=translate(MessageText.username, data.get("lang")))
         return
 
-    logger.info(f"User {message.text} registered")
+    logger.info(f"User {email} registered")
     token = await user_service.log_in(username=data.get("username"), password=data.get("password"))
 
     if not token:
-        logger.error(f"Login failed for user {message.text} after registration")
+        logger.error(f"Login failed for user {email} after registration")
         await message.answer(text=translate(MessageText.unexpected_error, data.get("lang")))
         await state.clear()
         await state.set_state(States.username)
         await message.answer(text=translate(MessageText.username, data.get("lang")))
         return
 
-    logger.info(f"User {message.text} logged in")
     profile_data = await user_service.get_profile_by_username(data.get("username"))
+    logger.info(f"User {profile_data.id} logged in")
     user_service.storage.set_profile(
         profile=profile_data,
         username=data.get("username"),
         auth_token=token,
         telegram_id=str(message.from_user.id),
-        email=message.text,
+        email=email,
     )
     await message.answer(text=translate(MessageText.registration_successful, lang=data.get("lang")))
     profile = user_service.storage.get_current_profile(message.from_user.id)

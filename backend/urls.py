@@ -21,7 +21,7 @@ urlpatterns = [
     re_path(r"^auth/", include("djoser.urls.authtoken")),
     path("api/v1/persons/", ProfileAPIList.as_view(), name="profile_list"),
     path("api/v1/persons/<int:profile_id>/", ProfileAPIUpdate.as_view(), name="profile-update"),
-    path("api/v1/persons/<int:profile_id>/delete/", ProfileAPIDestroy.as_view(), name="profile-delete"),
+    path("api/v1/persons/<int:id>/delete/", ProfileAPIDestroy.as_view(), name="profile-delete"),
     path("api/v1/persons/create/", CreateUserView.as_view(), name="profile-create"),
     path("api/v1/persons/<str:username>/", UserProfileView.as_view(), name="user-profile"),
     path("password-reset/<uidb64>/<token>/", reset_password_request_view, name="password-reset-confirm"),
