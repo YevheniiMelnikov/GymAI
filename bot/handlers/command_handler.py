@@ -1,3 +1,5 @@
+import os
+
 import loguru
 from aiogram import Router
 from aiogram.filters import Command
@@ -99,3 +101,16 @@ async def cmd_reset_password(message: Message, state: FSMContext) -> None:
     else:
         await message.answer(text=translate(MessageText.no_profiles_found))
         await state.clear()
+
+
+@cmd_router.message(Command("policy"))
+async def cmd_policy(message: Message) -> None:
+    profile = user_service.storage.get_current_profile(message.from_user.id)
+    language = profile.language if profile else "ua"
+    public_offer = os.getenv("PUBLIC_OFFER")
+    privacy_policy = os.getenv("PRIVACY_POLICY")
+    await message.answer(
+        translate(MessageText.contract_info_message, language).format(
+            public_offer=public_offer, privacy_policy=privacy_policy
+        )
+    )

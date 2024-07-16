@@ -40,6 +40,12 @@ async def profile_menu(callback_query: CallbackQuery, state: FSMContext) -> None
         await show_profile_editing_menu(callback_query.message, profile, state)
     elif callback_query.data == "back":
         await show_main_menu(callback_query.message, profile, state)
+    else:
+        await callback_query.message.answer(
+            text=translate(MessageText.delete_confirmation, profile.language), reply_markup=yes_no(profile.language)
+        )
+        await callback_query.message.delete()
+        await state.set_state(States.profile_delete)
 
 
 @main_router.message(States.password_reset)
@@ -85,7 +91,6 @@ async def handle_feedback(message: Message, state: FSMContext) -> None:
 
 @main_router.callback_query(States.choose_coach)
 async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext):
-    # await callback_query.answer()
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "back":
         await state.set_state(States.main_menu)

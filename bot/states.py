@@ -24,6 +24,7 @@ class States(StatesGroup):
     payment_details = State()
     profile_photo = State()
     gift = State()
+    accept_policy = State()
 
     edit_profile = State()
     edit_exercise = State()
@@ -32,6 +33,7 @@ class States(StatesGroup):
     action_choice = State()
     feedback = State()
     profile = State()
+    profile_delete = State()
     show_subscription = State()
     subscription_manage = State()
     delete_exercise = State()

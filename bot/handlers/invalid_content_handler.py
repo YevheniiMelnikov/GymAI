@@ -31,6 +31,7 @@ async def handle_invalid_content(message: Message, lang: str) -> None:
 @invalid_content_router.message(States.profile_photo, F.text)
 @invalid_content_router.message(States.contact_client)
 @invalid_content_router.message(States.main_menu)
+@invalid_content_router.message(States.profile_delete)
 @invalid_content_router.message(States.gift)
 @invalid_content_router.message(States.program_edit)
 async def invalid_data_handler(message: Message, state: FSMContext) -> None:

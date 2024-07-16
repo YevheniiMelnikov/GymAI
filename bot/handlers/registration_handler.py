@@ -1,3 +1,4 @@
+import os
 from contextlib import suppress
 
 import loguru
@@ -9,7 +10,7 @@ from aiogram.types import CallbackQuery, Message
 from bot.keyboards import *
 from bot.states import States
 from common.exceptions import EmailUnavailable, UsernameUnavailable
-from common.functions.menus import show_main_menu
+from common.functions.menus import show_main_menu, show_my_profile_menu
 from common.functions.profiles import register_user, sign_in
 from common.functions.text_utils import validate_email, validate_password
 from common.functions.utils import set_bot_commands
@@ -123,13 +124,63 @@ async def email(message: Message, state: FSMContext) -> None:
         await message.delete()
         return
 
-    try:
-        await register_user(message, state, data)
-    except UsernameUnavailable:
-        await state.set_state(States.username)
-        await message.answer(text=translate(MessageText.username_unavailable, lang=data.get("lang")))
-    except EmailUnavailable:
-        await message.answer(text=translate(MessageText.email_unavailable, lang=data.get("lang")))
-    finally:
-        with suppress(TelegramBadRequest):
-            await message.delete()
+    await state.update_data(email=message.text)
+    public_offer = os.getenv("PUBLIC_OFFER")
+    privacy_policy = os.getenv("PRIVACY_POLICY")
+    await message.answer(
+        translate(MessageText.contract_info_message, data.get("lang")).format(
+            public_offer=public_offer, privacy_policy=privacy_policy
+        )
+    )
+    await message.answer(
+        translate(MessageText.accept_policy, lang=data.get("lang")), reply_markup=yes_no(data.get("lang"))
+    )
+    await state.set_state(States.accept_policy)
+
+
+@register_router.callback_query(States.accept_policy)
+async def accept_policy(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    lang = data.get("lang")
+
+    if callback_query.data == "yes":
+        try:
+            await register_user(callback_query.message, state, data)
+        except UsernameUnavailable:
+            await state.set_state(States.username)
+            await callback_query.message.answer(text=translate(MessageText.username_unavailable, lang=lang))
+        except EmailUnavailable:
+            await callback_query.message.answer(text=translate(MessageText.email_unavailable, lang=lang))
+        finally:
+            with suppress(TelegramBadRequest):
+                await callback_query.message.delete()
+    else:
+        await callback_query.message.answer(
+            text=translate(MessageText.choose_action, lang=lang),
+            reply_markup=action_choice_keyboard(lang_code=lang),
+        )
+        await state.clear()
+        await state.update_data(lang=lang)
+        await state.set_state(States.action_choice)
+
+
+@register_router.callback_query(States.profile_delete)
+async def delete_profile_confirmation(callback_query: CallbackQuery, state: FSMContext) -> None:
+    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+    lang = profile.language
+    if callback_query.data == "yes":
+        token = user_service.storage.get_profile_info_by_key(callback_query.from_user.id, profile.id, "auth_token")
+        if await user_service.delete_profile(callback_query.from_user.id, profile.id, token):
+            await callback_query.message.answer(translate(MessageText.profile_deleted, profile.language))
+            await callback_query.message.answer(
+                text=translate(MessageText.choose_action, lang=lang),
+                reply_markup=action_choice_keyboard(lang_code=lang),
+            )
+            await callback_query.message.delete()
+            await state.clear()
+            await state.update_data(lang=lang)
+            await state.set_state(States.action_choice)
+        else:
+            await callback_query.message.answer(translate(MessageText.unexpected_error, lang=lang))
+    else:
+        await show_my_profile_menu(callback_query, profile, state)

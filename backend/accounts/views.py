@@ -143,7 +143,8 @@ def reset_password_request_view(request, uidb64: str, token: str) -> render:
 class ProfileAPIDestroy(generics.RetrieveDestroyAPIView):
     serializer_class = ProfileSerializer
     queryset = Profile.objects.all()
-    permission_classes = [IsAdminUser | HasAPIKey]
+    permission_classes = [IsAuthenticated | HasAPIKey]
+    lookup_field = "id"
 
 
 class ProfileAPIList(generics.ListCreateAPIView):
