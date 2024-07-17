@@ -111,6 +111,6 @@ async def cmd_policy(message: Message) -> None:
     privacy_policy = os.getenv("PRIVACY_POLICY")
     await message.answer(
         translate(MessageText.contract_info_message, language).format(
-            public_offer=public_offer, privacy_policy=privacy_policy
-        )
+            public_offer=public_offer, privacy_policy=privacy_policy,
+        ), disable_web_page_preview=True,
     )
