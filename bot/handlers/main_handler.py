@@ -99,9 +99,7 @@ async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext):
     else:
         coaches = user_service.storage.get_coaches()
         if not coaches:
-            await callback_query.message.answer(translate(MessageText.no_coaches, lang=profile.language))
-            await state.set_state(States.main_menu)
-            await show_main_menu(callback_query.message, profile, state)
+            await callback_query.answer(translate(MessageText.no_coaches, lang=profile.language), show_alert=True)
             return
 
         await state.set_state(States.coach_selection)
@@ -129,10 +127,6 @@ async def coach_paginator(callback_query: CallbackQuery, state: FSMContext):
     index = int(index)
     data = await state.get_data()
     coaches = [Coach.from_dict(data) for data in data["coaches"]]
-    if not coaches:
-        await callback_query.answer(translate(MessageText.no_coaches, profile.language))
-        return
-
     if index < 0 or index >= len(coaches) and action != "selected":
         await callback_query.answer(translate(MessageText.out_of_range, profile.language))
         return
