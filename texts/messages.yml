@@ -510,9 +510,9 @@ profile_deleted:
   ua: "Ваш профіль було видалено 😢"
 
 contract_info_message:
-  eng: "Familiarize yourself with the public offer agreement 👇\n{public_offer}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nAnd with a privacy policy 👇\n{privacy_policy}"
-  ru: "Ознакомьтесь с договором публичной оферты 👇\n{public_offer}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nИ с политикой конфиденциальности 👇\n{privacy_policy}"
-  ua: "Ознайомтеся з договором публічної оферти 👇\n{public_offer}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nІ з політикою конфіденційності 👇\n{privacy_policy}"
+  eng: "Familiarize yourself with the <a href='{public_offer}'>public offer agreement</a> and with the <a href='{privacy_policy}'>privacy policy</a> 📄"
+  ru: "Ознакомьтесь с <a href='{public_offer}'>договором публичной оферты</a> и с <a href='{privacy_policy}'>политикой конфиденциальности</a> 📄"
+  ua: "Ознайомтеся з <a href='{public_offer}'>договором публічної оферти</a> та з <a href='{privacy_policy}'>політикою конфіденційності</a> 📄"
 
 accept_policy:
   eng: "I accept the terms of service and privacy policy 📜"
