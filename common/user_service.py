@@ -342,7 +342,7 @@ class UserProfileManager:
 
 class UserService:
     def __init__(self, storage: UserProfileManager):
-        self._backend_url = os.environ.get("BACKEND_URL")
+        self._backend_url = "https://{}".format(os.environ.get("BACKEND_URL"))
         self._api_key = os.environ.get("API_KEY")
         self._storage = storage
         self._client = httpx.AsyncClient()
@@ -389,7 +389,7 @@ class UserService:
             raise UserServiceError(f"Unexpected error occurred: {e}")
 
     async def sign_up(self, **kwargs) -> bool:
-        url = f"{self.backend_url}/api/v1/persons/create/"
+        url = f"{self.backend_url}api/v1/persons/create/"
         status_code, response = await self._api_request(
             "post", url, data=kwargs, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
@@ -418,12 +418,12 @@ class UserService:
             "assigned_to",
         ]
         filtered_data = {key: data[key] for key in fields if key in data and data[key] is not None}
-        url = f"{self.backend_url}/api/v1/persons/{profile_id}/"
+        url = f"{self.backend_url}api/v1/persons/{profile_id}/"
         status_code, _ = await self._api_request("put", url, filtered_data, headers={"Authorization": f"Token {token}"})
         return status_code == 200
 
     async def log_in(self, username: str, password: str) -> str | None:
-        url = f"{self.backend_url}/auth/token/login/"
+        url = f"{self.backend_url}auth/token/login/"
         status_code, response = await self._api_request("post", url, {"username": username, "password": password})
         if status_code == 200 and "auth_token" in response:
             return response["auth_token"]
@@ -433,7 +433,7 @@ class UserService:
         current_profile = self.storage.get_current_profile(tg_user_id)
         if current_profile:
             auth_token = self.storage.get_profile_info_by_key(tg_user_id, current_profile.id, "auth_token")
-            url = f"{self.backend_url}/auth/token/logout/"
+            url = f"{self.backend_url}auth/token/logout/"
             status_code, _ = await self._api_request("post", url, headers={"Authorization": f"Token {auth_token}"})
             if status_code == 204:
                 self.storage.deactivate_profiles(str(tg_user_id))
@@ -442,7 +442,7 @@ class UserService:
         return False
 
     async def get_profile_by_username(self, username: str) -> Profile | None:
-        url = f"{self.backend_url}/api/v1/persons/{username}/"
+        url = f"{self.backend_url}api/v1/persons/{username}/"
         status_code, user_data = await self._api_request(
             "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
@@ -452,7 +452,7 @@ class UserService:
         return None
 
     async def get_user_data(self, token: str) -> dict[str, str] | None:
-        url = f"{self.backend_url}/api/v1/current-user/"
+        url = f"{self.backend_url}api/v1/current-user/"
         status_code, response = await self._api_request("get", url, headers={"Authorization": f"Token {token}"})
         if status_code == 200:
             return response
@@ -462,13 +462,13 @@ class UserService:
     async def reset_password(self, email: str, token: str) -> bool:
         headers = {"Authorization": f"Token {token}"}
         status_code, _ = await self._api_request(
-            "post", f"{self.backend_url}/api/v1/auth/users/reset_password/", {"email": email}, headers
+            "post", f"{self.backend_url}api/v1/auth/users/reset_password/", {"email": email}, headers
         )
         logger.info(f"Password reset requested for {email}")
         return status_code == 204
 
     async def send_feedback(self, email: str, username: str, feedback: str) -> bool:
-        url = f"{self.backend_url}/api/v1/send-feedback/"
+        url = f"{self.backend_url}api/v1/send-feedback/"
         headers = {"Authorization": f"Api-Key {self.api_key}"}
         status_code, _ = await self._api_request(
             "post",
@@ -483,7 +483,7 @@ class UserService:
         return status_code == 200
 
     async def save_program(self, client_id: str, exercises: dict[int, Exercise], split_number: int) -> None:
-        url = f"{self.backend_url}/api/v1/programs/"
+        url = f"{self.backend_url}api/v1/programs/"
         data = {
             "profile": client_id,
             "exercises_by_day": exercises,
@@ -506,13 +506,13 @@ class UserService:
         self.storage.save_program(client_id, program_data)
 
     async def delete_program(self, profile_id: str) -> bool:
-        url = f"{self.backend_url}/api/v1/programs/delete_by_profile/{profile_id}/"
+        url = f"{self.backend_url}api/v1/programs/delete_by_profile/{profile_id}/"
         headers = {"Authorization": f"Api-Key {self.api_key}"}
         status, _ = await self._api_request("delete", url, headers=headers)
         return status == 204
 
     async def create_subscription(self, user_id: int, price: int, workout_days: list[str]) -> int | None:
-        url = f"{self.backend_url}/api/v1/subscriptions/"
+        url = f"{self.backend_url}api/v1/subscriptions/"
         data = {
             "user": user_id,
             "enabled": True,
@@ -528,7 +528,7 @@ class UserService:
         return None
 
     async def get_subscription(self, user_id: int) -> Subscription | None:
-        url = f"{self.backend_url}/api/v1/subscriptions/?user={user_id}"
+        url = f"{self.backend_url}api/v1/subscriptions/?user={user_id}"
         status_code, subscriptions = await self._api_request(
             "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
@@ -538,14 +538,14 @@ class UserService:
         return None
 
     async def update_subscription(self, subscription_id: int, data: dict) -> bool:
-        url = f"{self.backend_url}/api/v1/subscriptions/{subscription_id}/"
+        url = f"{self.backend_url}api/v1/subscriptions/{subscription_id}/"
         status_code, response = await self._api_request(
             "put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
         return status_code == 200
 
     async def delete_profile(self, telegram_id, profile_id: int, token: str | None = None) -> bool:
-        url = f"{self.backend_url}/api/v1/persons/{profile_id}/delete/"
+        url = f"{self.backend_url}api/v1/persons/{profile_id}/delete/"
         headers = {"Authorization": f"Token {token}"} if token else {}
         status_code, _ = await self._api_request("delete", url, headers=headers)
         if status_code == 204:
