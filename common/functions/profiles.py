@@ -3,7 +3,7 @@ from contextlib import suppress
 import loguru
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery
 
 from bot.keyboards import client_menu_keyboard, coach_menu_keyboard
 from bot.states import States
@@ -100,7 +100,7 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
         await message.delete()
 
 
-async def register_user(message: Message, state: FSMContext, data: dict) -> None:
+async def register_user(callback_query: CallbackQuery, state: FSMContext, data: dict) -> None:
     email = data.get("email")
     if not await user_service.sign_up(
         username=data.get("username"),
@@ -109,11 +109,11 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
         status=data.get("account_type"),
         language=data.get("lang"),
     ):
-        logger.error(f"Registration failed for user {message.from_user.id}")
-        await message.answer(text=translate(MessageText.unexpected_error, data.get("lang")))
+        logger.error(f"Registration failed for user {callback_query.from_user.id}")
+        await callback_query.message.answer(text=translate(MessageText.unexpected_error, data.get("lang")))
         await state.clear()
         await state.set_state(States.username)
-        await message.answer(text=translate(MessageText.username, data.get("lang")))
+        await callback_query.message.answer(text=translate(MessageText.username, data.get("lang")))
         return
 
     logger.info(f"User {email} registered")
@@ -121,10 +121,10 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
 
     if not token:
         logger.error(f"Login failed for user {email} after registration")
-        await message.answer(text=translate(MessageText.unexpected_error, data.get("lang")))
+        await callback_query.message.answer(text=translate(MessageText.unexpected_error, data.get("lang")))
         await state.clear()
         await state.set_state(States.username)
-        await message.answer(text=translate(MessageText.username, data.get("lang")))
+        await callback_query.message.answer(text=translate(MessageText.username, data.get("lang")))
         return
 
     profile_data = await user_service.get_profile_by_username(data.get("username"))
@@ -133,9 +133,21 @@ async def register_user(message: Message, state: FSMContext, data: dict) -> None
         profile=profile_data,
         username=data.get("username"),
         auth_token=token,
-        telegram_id=str(message.from_user.id),
+        telegram_id=str(callback_query.from_user.id),
         email=email,
     )
-    await message.answer(text=translate(MessageText.registration_successful, lang=data.get("lang")))
-    profile = user_service.storage.get_current_profile(message.from_user.id)
-    await show_main_menu(message, profile, state)
+    await callback_query.message.answer(text=translate(MessageText.registration_successful, lang=data.get("lang")))
+    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+    await show_main_menu(callback_query.message, profile, state)
+
+
+async def check_assigned_clients(profile_id: int) -> bool:
+    coach = user_service.storage.get_coach_by_id(profile_id)
+    assigned_clients = coach.assigned_to
+    for client in assigned_clients:
+        subscription = user_service.storage.get_subscription(client.id)
+        waiting_program = user_service.storage.check_payment_status(client.id, "program")
+        if subscription.enabled or waiting_program:
+            return True
+
+    return False

@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             if (response.status === 204) {
                 alert('Пароль успішно скинуто');
-                window.location.href = 'https://t.me/my_another_useless_test_bot';
+                window.location.href = 'https://t.me/achieve_together_bot';
             } else {
                 const responseData = await response.json();
                 if (response.ok) {

@@ -11,7 +11,7 @@ from bot.keyboards import *
 from bot.states import States
 from common.exceptions import EmailUnavailable, UsernameUnavailable
 from common.functions.menus import show_main_menu, show_my_profile_menu
-from common.functions.profiles import register_user, sign_in
+from common.functions.profiles import register_user, sign_in, check_assigned_clients
 from common.functions.text_utils import validate_email, validate_password
 from common.functions.utils import set_bot_commands
 from common.user_service import user_service
@@ -130,11 +130,12 @@ async def email(message: Message, state: FSMContext) -> None:
     await message.answer(
         translate(MessageText.contract_info_message, data.get("lang")).format(
             public_offer=public_offer, privacy_policy=privacy_policy
-        )
+        ), disable_web_page_preview=True,
     )
     await message.answer(
         translate(MessageText.accept_policy, lang=data.get("lang")), reply_markup=yes_no(data.get("lang"))
     )
+    await message.delete()
     await state.set_state(States.accept_policy)
 
 
@@ -145,12 +146,13 @@ async def accept_policy(callback_query: CallbackQuery, state: FSMContext) -> Non
 
     if callback_query.data == "yes":
         try:
-            await register_user(callback_query.message, state, data)
+            await register_user(callback_query, state, data)
         except UsernameUnavailable:
             await state.set_state(States.username)
             await callback_query.message.answer(text=translate(MessageText.username_unavailable, lang=lang))
         except EmailUnavailable:
             await callback_query.message.answer(text=translate(MessageText.email_unavailable, lang=lang))
+            await state.set_state(States.email)
         finally:
             with suppress(TelegramBadRequest):
                 await callback_query.message.delete()
@@ -169,6 +171,10 @@ async def delete_profile_confirmation(callback_query: CallbackQuery, state: FSMC
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     lang = profile.language
     if callback_query.data == "yes":
+        if profile.status == "coach":
+            if await check_assigned_clients(profile.id):
+                await callback_query.answer(translate(MessageText.unable_to_delete_profile, lang=lang))
+                return
         token = user_service.storage.get_profile_info_by_key(callback_query.from_user.id, profile.id, "auth_token")
         if await user_service.delete_profile(callback_query.from_user.id, profile.id, token):
             await callback_query.message.answer(translate(MessageText.profile_deleted, profile.language))
