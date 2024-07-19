@@ -5,7 +5,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get("SECRET_KEY")
 
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = ["*"]
 
@@ -91,7 +91,7 @@ USE_I18N = True
 
 USE_TZ = True
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 STATICFILES_DIRS = [
     BASE_DIR / "backend/static",
 ]
@@ -116,7 +116,7 @@ REST_FRAMEWORK = {
     ],
 }
 
-DOMAIN = os.getenv("BACKEND_URL")
+DOMAIN = os.getenv("DOMAIN")
 SITE_NAME = "AchieveTogether"
 CORS_ALLOWED_ORIGINS = ["*"]
 

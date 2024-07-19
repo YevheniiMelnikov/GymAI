@@ -90,11 +90,15 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
         return
 
     await state.update_data(login_attempts=0)
+    email = user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "email")
     user_service.storage.set_profile(
-        profile=profile, username=data["username"], auth_token=token, telegram_id=str(message.from_user.id)
+        profile=profile, username=data["username"], auth_token=token, telegram_id=str(message.from_user.id), email=email
     )
     logger.info(f"profile_id {profile.id} set for user {message.from_user.id}")
     await message.answer(text=translate(MessageText.signed_in, lang=data.get("lang")))
+    if data.get("lang") != profile.language:
+        user_service.storage.set_profile_info_by_key(message.from_user.id, profile.id, "language", data.get("lang"))
+        profile.language = data.get("lang")
     await show_main_menu(message, profile, state)
     with suppress(TelegramBadRequest):
         await message.delete()

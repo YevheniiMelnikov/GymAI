@@ -3,6 +3,11 @@
   ru: "Запустить бота"
   ua: "Запустити бота"
 
+/menu:
+  eng: "Main menu"
+  ru: "Главное меню"
+  ua: "Головне меню"
+
 /language:
   eng: "Change language"
   ru: "Изменить язык"
@@ -27,11 +32,6 @@
   eng: "Give a feedback"
   ru: "Оставить отзыв"
   ua: "Залишити відгук"
-
-/menu:
-  eng: "Main menu"
-  ru: "Главное меню"
-  ua: "Головне меню"
 
 /policy:
   eng: "Privacy policy"

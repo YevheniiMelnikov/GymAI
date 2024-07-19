@@ -39,11 +39,11 @@ async def cmd_menu(message: Message, state: FSMContext) -> None:
 @cmd_router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
-    await message.answer(text=translate(MessageText.start))
     if profile := user_service.storage.get_current_profile(message.from_user.id):
         logger.info(f"User with profile_id {profile.id} started bot")
         await user_service.log_out(message.from_user.id)
         await state.update_data(lang=profile.language)
+        await message.answer(text=translate(MessageText.start, profile.language))
         await message.answer(
             text=translate(MessageText.choose_action, lang=profile.language),
             reply_markup=action_choice_keyboard(profile.language),
@@ -53,6 +53,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         return
 
     logger.info(f"Telegram user {message.from_user.id} started bot")
+    await message.answer(text=translate(MessageText.start))
     await state.set_state(States.language_choice)
     await message.answer(text=translate(MessageText.choose_language), reply_markup=language_choice())
 
@@ -83,8 +84,7 @@ async def cmd_feedback(message: Message, state: FSMContext) -> None:
 
 @cmd_router.message(Command("reset_password"))
 async def cmd_reset_password(message: Message, state: FSMContext) -> None:
-    profiles = user_service.storage.get_profiles(str(message.from_user.id))
-    if profiles:
+    if profiles := user_service.storage.get_profiles(str(message.from_user.id)):
         usernames = [
             user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "username")
             for profile in profiles
@@ -111,6 +111,8 @@ async def cmd_policy(message: Message) -> None:
     privacy_policy = os.getenv("PRIVACY_POLICY")
     await message.answer(
         translate(MessageText.contract_info_message, language).format(
-            public_offer=public_offer, privacy_policy=privacy_policy,
-        ), disable_web_page_preview=True,
+            public_offer=public_offer,
+            privacy_policy=privacy_policy,
+        ),
+        disable_web_page_preview=True,
     )
