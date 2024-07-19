@@ -9,8 +9,10 @@ from typing import Any
 import httpx
 import loguru
 import redis
+from cryptography.fernet import InvalidToken
 from dateutil.parser import parse
 
+from common.encrypter import Encrypter, encrypter
 from common.exceptions import EmailUnavailable, UsernameUnavailable, UserServiceError
 from common.models import Client, Coach, Exercise, Profile, Program, Subscription
 
@@ -18,9 +20,10 @@ logger = loguru.logger
 
 
 class UserProfileManager:
-    def __init__(self, redis_url: str):
+    def __init__(self, redis_url: str, encrypt_helper: Encrypter):
         self._redis_url = redis_url
         self._redis = redis.from_url(f"{self._redis_url}/1", encoding="utf-8", decode_responses=True)
+        self.encrypter = encrypt_helper
 
     @property
     def redis_url(self) -> str:
@@ -51,11 +54,9 @@ class UserProfileManager:
         username: str,
         auth_token: str,
         telegram_id: str,
-        email: str | None = None,
+        email: str,
         is_current: bool = True,
     ) -> None:
-        email = email or self.get_profile_info_by_key(telegram_id, profile.id, "email")
-
         try:
             current_profiles = self._get_profile_data(telegram_id)
             profile_data = {
@@ -150,7 +151,7 @@ class UserProfileManager:
             existing_data = json.loads(self.redis.hget(key, profile_id) or "{}")
             existing_data.update(filtered_data)
             self.redis.hset(key, profile_id, json.dumps(existing_data))
-            logger.info(f"Data for {profile_id} has been updated in {key}: {filtered_data}")
+            logger.info(f"Data for profile {profile_id} has been updated in {key}: {filtered_data}")
         except Exception as e:
             logger.error(f"Failed to set or update data for {profile_id} in {key}", e)
 
@@ -193,6 +194,8 @@ class UserProfileManager:
             "assigned_to",
             "tg_id",
         ]
+        if "payment_details" in profile_data:
+            profile_data["payment_details"] = self.encrypter.encrypt(profile_data["payment_details"])
         self._set_data("coaches", profile_id, profile_data, allowed_fields)
 
     def get_coach_by_id(self, profile_id: int) -> Coach | None:
@@ -201,6 +204,8 @@ class UserProfileManager:
             if coach_data:
                 data = json.loads(coach_data)
                 data["id"] = profile_id
+                if "payment_details" in data:
+                    data["payment_details"] = self.encrypter.decrypt(data["payment_details"])
                 return Coach.from_dict(data)
             else:
                 logger.error(f"No data found for profile_id {profile_id} in cache")
@@ -342,7 +347,7 @@ class UserProfileManager:
 
 class UserService:
     def __init__(self, storage: UserProfileManager):
-        self._backend_url = "https://{}".format(os.environ.get("BACKEND_URL"))
+        self._backend_url = os.environ.get("BACKEND_URL")
         self._api_key = os.environ.get("API_KEY")
         self._storage = storage
         self._client = httpx.AsyncClient()
@@ -417,6 +422,8 @@ class UserService:
             "verified",
             "assigned_to",
         ]
+        if "payment_details" in data:
+            data["payment_details"] = self.storage.encrypter.encrypt(data["payment_details"])
         filtered_data = {key: data[key] for key in fields if key in data and data[key] is not None}
         url = f"{self.backend_url}api/v1/persons/{profile_id}/"
         status_code, _ = await self._api_request("put", url, filtered_data, headers={"Authorization": f"Token {token}"})
@@ -447,6 +454,12 @@ class UserService:
             "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
         if status_code == 200:
+            if "payment_details" in user_data and user_data["payment_details"]:
+                try:
+                    user_data["payment_details"] = self.storage.encrypter.decrypt(user_data["payment_details"])
+                except InvalidToken:
+                    logger.error(f"Failed to decrypt payment details for user {username}")
+                    user_data["payment_details"] = "Invalid encrypted data"
             return Profile.from_dict(user_data)
         logger.info(f"Failed to retrieve profile for {username}. HTTP status: {status_code}")
         return None
@@ -552,5 +565,5 @@ class UserService:
             return self.storage.delete_profile(telegram_id, profile_id)
 
 
-user_session = UserProfileManager(os.getenv("REDIS_URL"))
+user_session = UserProfileManager(os.getenv("REDIS_URL"), encrypter)
 user_service = UserService(user_session)

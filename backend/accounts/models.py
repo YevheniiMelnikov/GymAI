@@ -24,7 +24,7 @@ class Profile(Model):
     work_experience = models.IntegerField(null=True, blank=True, validators=[MaxValueValidator(99)])
     additional_info = models.CharField(max_length=250, null=True, blank=True)
     profile_photo = models.CharField(max_length=250, null=True, blank=True)
-    payment_details = models.CharField(max_length=50, null=True, blank=True)
+    payment_details = models.CharField(max_length=250, null=True, blank=True)
     verified = models.BooleanField(default=False)
 
     class Meta:

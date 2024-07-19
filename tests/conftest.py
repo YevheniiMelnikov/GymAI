@@ -11,14 +11,14 @@ import pytest
 from common.user_service import UserProfileManager, UserService
 
 
-@pytest.fixture
+@pytest.fixture  # broken
 def user_service(monkeypatch: pytest.MonkeyPatch) -> UserService:
     with monkeypatch.context() as m:
         m.setattr(redis, "from_url", AsyncMock())
         yield UserService(storage=UserProfileManager(os.getenv("REDIS_URL")))
 
 
-@pytest.fixture
+@pytest.fixture  # broken
 def profile_manager() -> UserProfileManager:
     manager = UserProfileManager(os.getenv("REDIS_URL"))
     manager.redis = MagicMock()

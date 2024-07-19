@@ -76,8 +76,10 @@ class UserProfileView(APIView):
     def get(self, request: Request, username) -> Response:
         try:
             user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return Response({"error": "User not found"}, status=HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response({"error": e}, status=HTTP_404_NOT_FOUND)
+            return Response({"error": str(e)}, status=HTTP_404_NOT_FOUND)
 
         profile = getattr(user, "profile", None)
         if profile:

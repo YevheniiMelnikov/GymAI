@@ -78,11 +78,17 @@ async def account_type(callback_query: CallbackQuery, state: FSMContext) -> None
 @register_router.message(States.username, F.text)
 async def username(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
+    if data.get("action") == "sign_up":
+        if await user_service.get_profile_by_username(message.text):
+            await state.set_state(States.username)
+            await message.answer(text=translate(MessageText.username_unavailable, lang=data.get("lang")))
+            return
+        else:
+            await message.answer(text=translate(MessageText.password_requirements, lang=data.get("lang")))
+
     await state.update_data(username=message.text)
     await state.set_state(States.password)
     await message.answer(translate(MessageText.password, lang=data.get("lang", "ua")))
-    if data.get("action") == "sign_up":
-        await message.answer(text=translate(MessageText.password_requirements, lang=data.get("lang")))
     await message.delete()
 
 
@@ -130,7 +136,8 @@ async def email(message: Message, state: FSMContext) -> None:
     await message.answer(
         translate(MessageText.contract_info_message, data.get("lang")).format(
             public_offer=public_offer, privacy_policy=privacy_policy
-        ), disable_web_page_preview=True,
+        ),
+        disable_web_page_preview=True,
     )
     await message.answer(
         translate(MessageText.accept_policy, lang=data.get("lang")), reply_markup=yes_no(data.get("lang"))
