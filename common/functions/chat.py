@@ -97,12 +97,17 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
         await send_message(
             coach, translate(MessageText.coach_verified, lang=profile.language), state, include_incoming_message=False
         )
+        await callback_query.message.delete()
         logger.info(f"Coach verification for profile_id {profile.id} approved")
 
     @sub_router.callback_query(F.data == "coach_decline")
-    async def decline_coach(callback_query: CallbackQuery):
+    async def decline_coach(callback_query: CallbackQuery, state: FSMContext):
         await callback_query.answer("👎")
-        await bot.send_message(tg_id, translate(MessageText.coach_declined, lang=profile.language))
+        coach = user_service.storage.get_coach_by_id(profile.id)
+        await send_message(
+            coach, translate(MessageText.coach_declined, lang=profile.language), state, include_incoming_message=False
+        )
+        await callback_query.message.delete()
         logger.info(f"Coach verification for profile_id {profile.id} declined")
 
 

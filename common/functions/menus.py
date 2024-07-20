@@ -204,7 +204,9 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
     try:
         client = user_service.storage.get_client_by_id(profile.id)
     except UserServiceError:
-        await callback_query.message.answer(translate(MessageText.questionnaire_not_completed, profile.language))
+        await callback_query.answer(
+            translate(MessageText.questionnaire_not_completed, profile.language), show_alert=True
+        )
         await show_profile_editing_menu(callback_query.message, profile, state)
         return
 

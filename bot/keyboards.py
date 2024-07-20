@@ -56,9 +56,7 @@ def profile_menu_keyboard(lang_code: str) -> InlineKeyboardMarkup:
     buttons = [
         [
             InlineKeyboardButton(text=translate(ButtonText.edit, lang=lang_code), callback_data="profile_edit"),
-            InlineKeyboardButton(
-                text=translate(ButtonText.delete_profile, lang=lang_code), callback_data="profile_delete"
-            ),
+            InlineKeyboardButton(text=translate(ButtonText.delete, lang=lang_code), callback_data="profile_delete"),
         ],
         [
             InlineKeyboardButton(text=translate(ButtonText.prev_menu), callback_data="back"),

@@ -182,7 +182,7 @@ class ButtonText(Enum):
     view = auto()
     create = auto()
     prev_menu = auto()
-    delete_profile = auto()
+    delete = auto()
 
     def __str__(self) -> str:
         return f"buttons.{self.name}"
