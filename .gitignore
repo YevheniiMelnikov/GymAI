@@ -154,3 +154,4 @@ cython_debug/
 #.idea/
 database.db
 google_creds.json
+/docker-compose_dev.yml
