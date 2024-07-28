@@ -4,7 +4,17 @@ ENV APP_HOME=/opt
 ENV PYTHONPATH=$APP_HOME
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends gcc python3-dev
+    && apt-get install -y --no-install-recommends \
+       gcc \
+       python3-dev \
+       wget \
+       gnupg2
+
+RUN sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list' \
+    && wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - \
+    && apt-get update \
+    && apt-get install -y postgresql-client-16 \
+    && apt-get clean
 
 WORKDIR $APP_HOME
 
