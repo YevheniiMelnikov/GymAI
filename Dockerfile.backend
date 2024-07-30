@@ -17,3 +17,5 @@ WORKDIR $APP_HOME/backend
 RUN python manage.py collectstatic --noinput
 
 EXPOSE 8000
+
+CMD ["bash", "-c", "echo 'Starting migrations...' && python manage.py migrate && echo 'Starting server...' && python manage.py runserver 0.0.0.0:8000"]

@@ -144,6 +144,7 @@ async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMCon
             await input_data.delete()
             return
 
+    await message.delete()
     if data.get("edit_mode"):
         await update_exercise_data(message, state, profile.language, {"weight": weight})
         return
