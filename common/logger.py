@@ -1,6 +1,12 @@
 import sys
-
 from loguru import logger
 
-if not logger._core.handlers:
-    logger.add(sys.stdout, level="INFO", format="{time} - {level} - {message}")
+logger.configure(
+    handlers=[
+        {
+            "sink": sys.stdout,
+            "level": "INFO",
+            "format": "{time:YYYY-MM-DD HH:mm:ss} - {level} - {message}"
+        }
+    ]
+)

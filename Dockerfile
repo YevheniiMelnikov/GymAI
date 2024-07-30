@@ -2,6 +2,7 @@ FROM python:3.12
 
 ENV APP_HOME=/opt
 ENV PYTHONPATH=$APP_HOME
+ENV TZ=Europe/Kyiv
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
