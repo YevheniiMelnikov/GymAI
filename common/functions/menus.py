@@ -230,7 +230,7 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
 async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     subscription = user_service.storage.get_subscription(profile.id)
     if not subscription or not subscription.enabled:
-        subscription_img = f"https://storage.googleapis.com/bot_payment_options/subscription_v2_{profile.language}.jpeg"
+        subscription_img = f"https://storage.googleapis.com/bot_payment_options/sub_v2_{profile.language}.jpeg"
         try:
             await callback_query.message.answer_photo(
                 photo=subscription_img,
@@ -272,7 +272,7 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
             await state.update_data(exercises=program.exercises_by_day, split=program.split_number, client=True)
             await state.set_state(States.program_view)
     else:
-        program_img = f"https://storage.googleapis.com/bot_payment_options/program_v2_{profile.language}.jpeg"
+        program_img = f"https://storage.googleapis.com/bot_payment_options/prog_v2_{profile.language}.jpeg"
         try:
             await callback_query.message.answer_photo(
                 photo=program_img,
