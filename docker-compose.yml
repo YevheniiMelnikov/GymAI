@@ -7,7 +7,11 @@ services:
     env_file:
       - ./.env
     volumes:
-      - ./pgdata:/var/lib/postgresql/data:rw
+      - type: bind
+        source: ./pgdata
+        target: /var/lib/postgresql/data
+        bind:
+          propagation: rprivate
     networks:
       - monitoring
     healthcheck:
@@ -22,8 +26,16 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - ./redisdata:/data:rw
-      - ./redis.conf:/usr/local/etc/redis/redis.conf:rw
+      - type: bind
+        source: ./redisdata
+        target: /data
+        bind:
+          propagation: rprivate
+      - type: bind
+        source: ./redis.conf
+        target: /usr/local/etc/redis/redis.conf
+        bind:
+          propagation: rprivate
     networks:
       - monitoring
     command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
@@ -41,7 +53,11 @@ services:
     env_file:
       - ./.env
     volumes:
-      - ./backend:/opt/backend:rw
+      - type: bind
+        source: ./backend
+        target: /opt/backend
+        bind:
+          propagation: rprivate
     logging:
       driver: loki
       options:
@@ -60,8 +76,16 @@ services:
       - db
       - redis
     volumes:
-      - .:/opt:rw
-      - ./google_creds.json:/opt/google_creds.json:rw
+      - type: bind
+        source: .
+        target: /opt
+        bind:
+          propagation: rprivate
+      - type: bind
+        source: ./google_creds.json
+        target: /opt/google_creds.json
+        bind:
+          propagation: rprivate
     ports:
       - "8080:8000"
     logging:
