@@ -20,12 +20,9 @@ logger = loguru.logger
 
 
 class UserProfileManager:
-    def __init__(self, redis_url: str, redis_pass: str, encrypt_helper: Encrypter):
+    def __init__(self, redis_url: str, encrypt_helper: Encrypter):
         self._redis_url = redis_url
-        self._redis_pass = redis_pass
-        self._redis = redis.from_url(
-            f"{self._redis_url}/1", password=self._redis_pass, encoding="utf-8", decode_responses=True
-        )
+        self._redis = redis.from_url(f"{self._redis_url}/1", encoding="utf-8", decode_responses=True)
         self.encrypter = encrypt_helper
 
     @property
@@ -568,5 +565,5 @@ class UserService:
             return self.storage.delete_profile(telegram_id, profile_id)
 
 
-user_session = UserProfileManager(os.getenv("REDIS_URL"), os.getenv("REDIS_PASSWORD"), encrypter)
+user_session = UserProfileManager(os.getenv("REDIS_URL"), encrypter)
 user_service = UserService(user_session)
