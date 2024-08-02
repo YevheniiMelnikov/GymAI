@@ -6,19 +6,16 @@ services:
       - "5432:5432"
     env_file:
       - ./.env
-    volumes:
-      - type: bind
-        source: ./pgdata
-        target: /var/lib/postgresql/data
-        bind:
-          propagation: rprivate
     networks:
       - monitoring
+    volumes:
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: always
 
   redis:
     image: "redis:latest"
@@ -26,19 +23,12 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - type: bind
-        source: ./redisdata
-        target: /data
-        bind:
-          propagation: rprivate
-      - type: bind
-        source: ./redis.conf
-        target: /usr/local/etc/redis/redis.conf
-        bind:
-          propagation: rprivate
+      - redisdata:/data
+      - ./redis.conf:/usr/local/etc/redis/redis.conf
     networks:
       - monitoring
     command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    restart: always
 
   backend:
     container_name: backend
@@ -52,12 +42,6 @@ services:
       - "8000:8000"
     env_file:
       - ./.env
-    volumes:
-      - type: bind
-        source: ./backend
-        target: /opt/backend
-        bind:
-          propagation: rprivate
     logging:
       driver: loki
       options:
@@ -65,6 +49,7 @@ services:
         loki-external-labels: "job=backend,app=gym_bot"
     networks:
       - monitoring
+    restart: always
 
   bot:
     container_name: bot
@@ -75,17 +60,6 @@ services:
       - backend
       - db
       - redis
-    volumes:
-      - type: bind
-        source: .
-        target: /opt
-        bind:
-          propagation: rprivate
-      - type: bind
-        source: ./google_creds.json
-        target: /opt/google_creds.json
-        bind:
-          propagation: rprivate
     ports:
       - "8080:8000"
     logging:
@@ -101,10 +75,21 @@ services:
       - main.py
     networks:
       - monitoring
+    restart: always
 
 volumes:
   pgdata:
+    driver: local
+    driver_opts:
+      o: bind
+      type: none
+      device: /opt/postgres/data/
   redisdata:
+    driver: local
+    driver_opts:
+      o: bind
+      type: none
+      device: /opt/redis/data/
 
 networks:
   monitoring:
