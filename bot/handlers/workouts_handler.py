@@ -393,7 +393,8 @@ async def program_view(callback_query: CallbackQuery, state: FSMContext):
             text=translate(MessageText.select_service, lang=profile.language),
             reply_markup=select_service(profile.language),
         )
-        await callback_query.message.delete()
+        with suppress(TelegramBadRequest):
+            await callback_query.message.delete()
         return
 
     exercises = data.get("exercises")
