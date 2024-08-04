@@ -523,3 +523,8 @@ unable_to_delete_profile:
   eng: "You currently have clients with an active subscription. If you wish to delete your account, please write to us via /feedback ✍️"
   ru: "У вас на текущий момент есть клиенты с активной подпиской. Если вы желаете удалить аккаунт - напишите нам через команду /feedback ✍️"
   ua: "У вас на поточний момент є клієнти з активною підпискою. Якщо ви бажаєте видалити акаунт - напишіть нам через команду /feedback ✍️"
+
+waiting_for_text:
+  eng: "Awaiting your counseling ⏳"
+  ru: "Ожидает вашей консультации ⏳"
+  ua: "Очікує вашої консультації ⏳"

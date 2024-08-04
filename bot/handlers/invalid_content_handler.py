@@ -14,6 +14,7 @@ async def handle_invalid_content(message: Message, lang: str) -> None:
 
 
 @invalid_content_router.message(States.username)
+@invalid_content_router.message(States.language_choice)
 @invalid_content_router.message(States.password)
 @invalid_content_router.message(States.birth_date)
 @invalid_content_router.message(States.account_type)

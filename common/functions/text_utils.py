@@ -1,6 +1,7 @@
 import re
 from typing import Any, Optional
 
+from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State
 
 from bot.states import States
@@ -99,7 +100,9 @@ def get_coach_page(coach: Coach) -> dict[str, Any]:
     return {"name": coach.name, "experience": coach.work_experience, "additional_info": coach.additional_info}
 
 
-def get_client_page(client: Client, lang_code: str, subscription: bool, payment_status: bool) -> dict[str, Any]:
+async def get_client_page(
+    client: Client, lang_code: str, subscription: bool, payment_status: bool, state: FSMContext
+) -> dict[str, Any]:
     texts = {
         "male": translate(ButtonText.male, lang=lang_code),
         "female": translate(ButtonText.female, lang=lang_code),
@@ -107,9 +110,10 @@ def get_client_page(client: Client, lang_code: str, subscription: bool, payment_
         "disabled": translate(ButtonText.disabled, lang=lang_code),
         "waiting": translate(MessageText.waiting, lang=lang_code),
         "ok": translate(MessageText.program_compiled, lang=lang_code),
+        "waiting_for_text": translate(MessageText.waiting_for_text, lang=lang_code),
     }
 
-    return {
+    page = {
         "name": client.name,
         "gender": texts.get(client.gender, ""),
         "birth_date": client.birth_date,
@@ -121,6 +125,10 @@ def get_client_page(client: Client, lang_code: str, subscription: bool, payment_
         "subscription": texts.get("enabled") if subscription else texts.get("disabled"),
         "status": texts.get("waiting") if payment_status else texts.get("ok"),
     }
+    data = await state.get_data()
+    if data.get("new_client"):
+        page["status"] = texts.get("waiting_for_text")
+    return page
 
 
 async def format_new_client_message(

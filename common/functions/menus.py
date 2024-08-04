@@ -23,6 +23,7 @@ from common.functions.text_utils import (
     get_translated_week_day,
 )
 from common.models import Client, Coach, Profile, Subscription
+from common.settings import BOT_PAYMENT_OPTIONS
 from common.user_service import user_service
 from texts.text_manager import MessageText, translate
 
@@ -99,7 +100,7 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
     waiting_program = user_service.storage.check_payment_status(current_client.id, "program")
     waiting_subscription = user_service.storage.check_payment_status(current_client.id, "subscription")
     status = True if waiting_program or waiting_subscription else False
-    client_info = get_client_page(current_client, profile.language, subscription, status)
+    client_info = await get_client_page(current_client, profile.language, subscription, status, state)
     client_data = [Client.to_dict(client) for client in clients]
 
     await state.update_data(clients=client_data)
@@ -230,7 +231,7 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
 async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     subscription = user_service.storage.get_subscription(profile.id)
     if not subscription or not subscription.enabled:
-        subscription_img = f"https://storage.googleapis.com/bot_payment_options/sub_v2_{profile.language}.jpeg"
+        subscription_img = BOT_PAYMENT_OPTIONS + f"subscription_{profile.language}.jpeg"
         try:
             await callback_query.message.answer_photo(
                 photo=subscription_img,
@@ -272,7 +273,7 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
             await state.update_data(exercises=program.exercises_by_day, split=program.split_number, client=True)
             await state.set_state(States.program_view)
     else:
-        program_img = f"https://storage.googleapis.com/bot_payment_options/prog_v2_{profile.language}.jpeg"
+        program_img = BOT_PAYMENT_OPTIONS + f"program_{profile.language}.jpeg"
         try:
             await callback_query.message.answer_photo(
                 photo=program_img,

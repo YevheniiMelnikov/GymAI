@@ -439,13 +439,13 @@ class UserService:
     async def log_out(self, tg_user_id: int) -> bool:
         current_profile = self.storage.get_current_profile(tg_user_id)
         if current_profile:
-            auth_token = self.storage.get_profile_info_by_key(tg_user_id, current_profile.id, "auth_token")
-            url = f"{self.backend_url}auth/token/logout/"
-            status_code, _ = await self._api_request("post", url, headers={"Authorization": f"Token {auth_token}"})
-            if status_code == 204:
-                self.storage.deactivate_profiles(str(tg_user_id))
-                logger.info(f"User with profile_id {current_profile.id} logged out")
-                return True
+            if auth_token := self.storage.get_profile_info_by_key(tg_user_id, current_profile.id, "auth_token"):
+                url = f"{self.backend_url}auth/token/logout/"
+                status_code, _ = await self._api_request("post", url, headers={"Authorization": f"Token {auth_token}"})
+                if status_code == 204:
+                    self.storage.deactivate_profiles(str(tg_user_id))
+                    logger.info(f"User with profile_id {current_profile.id} logged out")
+                    return True
         return False
 
     async def get_profile_by_username(self, username: str) -> Profile | None:

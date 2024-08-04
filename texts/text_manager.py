@@ -90,6 +90,7 @@ class MessageText(Enum):
     not_verified = auto()
     your_data_updated = auto()
     waiting = auto()
+    waiting_for_text = auto()
     program_compiled = auto()
     feedback = auto()
     password_retype = auto()

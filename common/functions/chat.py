@@ -39,13 +39,13 @@ async def client_request(coach: Coach, client: Client, state: FSMContext) -> Non
     workout_types = await get_workout_types(coach_lang)
     preferable_workout_type = data.get("workout_type")
     service = data.get("request_type")
-    preferable_type = workout_types.get(preferable_workout_type, "unknown")
+    preferable_workouts_type = workout_types.get(preferable_workout_type, "unknown")
     subscription = user_service.storage.get_subscription(client.id)
     waiting_program = user_service.storage.check_payment_status(client.id, "program")
     waiting_subscription = user_service.storage.check_payment_status(client.id, "subscription")
     status = True if waiting_program or waiting_subscription else False
-    client_data = get_client_page(client, coach_lang, subscription, status)
-    text = await format_new_client_message(data, coach_lang, client_lang, preferable_type)
+    client_data = await get_client_page(client, coach_lang, subscription, status, state)
+    text = await format_new_client_message(data, coach_lang, client_lang, preferable_workouts_type)
     reply_markup = (
         new_incoming_request(coach_lang, client.id)
         if data.get("new_client")
