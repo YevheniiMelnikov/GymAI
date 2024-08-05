@@ -189,7 +189,13 @@ async def my_clients_menu(callback_query: CallbackQuery, profile: Profile, state
 
     if assigned_ids:
         await callback_query.answer()
-        clients = [user_service.storage.get_client_by_id(client) for client in assigned_ids]
+        try:
+            clients = [user_service.storage.get_client_by_id(client) for client in assigned_ids]
+        except UserServiceError:
+            clients = []
+            for profile_id in assigned_ids:
+                if profile := await user_service.get_profile(profile_id):
+                    clients.append(user_service.storage.get_client_by_id(profile.id))
         await show_clients(callback_query.message, clients, state)
     else:
         if not coach.verified:
