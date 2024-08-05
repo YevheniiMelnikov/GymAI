@@ -52,24 +52,25 @@ async def profile_menu(callback_query: CallbackQuery, state: FSMContext) -> None
 async def process_password_reset(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     index = next((i for i, username in enumerate(data["usernames"]) if username == message.text), None)
-    if index is not None and data["emails"][index]:
-        email = data["emails"][index]
+    if index is not None:
         profile = Profile.from_dict(data["profiles"][index])
-        token = user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
-        if not token:
-            raise ValueError(f"Authentication token not found for user {profile.id}")
-        if await user_service.reset_password(email, token):
-            await message.answer(text=translate(MessageText.password_reset_sent, profile.language).format(email=email))
-            await state.clear()
-            await user_service.log_out(message.from_user.id)
-            await message.answer(text=translate(MessageText.username, profile.language))
-            await state.set_state(States.username)
+        email = await user_service.get_user_email(profile.id)
+        if email:
+            token = user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
+            if await user_service.reset_password(email, token):
+                await message.answer(
+                    text=translate(MessageText.password_reset_sent, profile.language).format(email=email)
+                )
+                await state.clear()
+                await user_service.log_out(message.from_user.id)
+                await message.answer(text=translate(MessageText.username, profile.language))
+                await state.set_state(States.username)
+            else:
+                await message.answer(text=translate(MessageText.unexpected_error, profile.language))
         else:
-            await message.answer(text=translate(MessageText.unexpected_error, profile.language))
+            await message.answer(text=translate(MessageText.no_profiles_found, data.get("lang")))
     else:
         await message.answer(text=translate(MessageText.no_profiles_found, data.get("lang")))
-        await message.answer(text=translate(MessageText.help, data.get("lang")))
-        await state.clear()
     await message.delete()
 
 
