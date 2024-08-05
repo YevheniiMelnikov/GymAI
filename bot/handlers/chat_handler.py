@@ -26,7 +26,6 @@ async def contact_client(message: Message, state: FSMContext):
     except UserServiceError as error:
         logger.error(f"Can't get data from cache: {error}")
         await message.answer(translate(MessageText.unexpected_error, sender.language))
-        await state.set_state(States.main_menu)
         await show_main_menu(message, sender, state)
         return
 
@@ -45,7 +44,6 @@ async def contact_client(message: Message, state: FSMContext):
 
     await message.answer(translate(MessageText.message_sent, sender.language))
     logger.info(f"Coach {sender.id} sent message to client {recipient.id}")
-    await state.set_state(States.main_menu)
     await show_main_menu(message, sender, state)
 
 
@@ -60,7 +58,6 @@ async def contact_coach(message: Message, state: FSMContext):
     except UserServiceError as error:
         logger.error(f"Can't get data from cache: {error}")
         await message.answer(translate(MessageText.unexpected_error, sender.language))
-        await state.set_state(States.main_menu)
         await show_main_menu(message, sender, state)
         return
 
@@ -79,5 +76,4 @@ async def contact_coach(message: Message, state: FSMContext):
 
     await message.answer(translate(MessageText.message_sent, sender.language))
     logger.info(f"Client {sender.id} sent message to coach {recipient.id}")
-    await state.set_state(States.main_menu)
     await show_main_menu(message, sender, state)

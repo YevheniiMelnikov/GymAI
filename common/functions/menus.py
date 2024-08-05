@@ -83,8 +83,8 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
 async def show_main_menu(message: Message, profile: Profile, state: FSMContext) -> None:
     menu = client_menu_keyboard if profile.status == "client" else coach_menu_keyboard
     await state.clear()
-    await state.set_state(States.main_menu)
     await state.update_data(profile=Profile.to_dict(profile))
+    await state.set_state(States.main_menu)
     await message.answer(
         text=translate(MessageText.main_menu, lang=profile.language), reply_markup=menu(profile.language)
     )

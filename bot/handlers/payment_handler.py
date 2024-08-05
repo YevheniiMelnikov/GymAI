@@ -71,7 +71,6 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
     if payment_success:
         await callback_query.message.answer(translate(MessageText.payment_success, profile.language))
         await client_request(coach, client, state)
-        await state.set_state(States.main_menu)
         await show_main_menu(callback_query.message, profile, state)
     else:
         await callback_query.message.answer(translate(MessageText.payment_failure, profile.language))

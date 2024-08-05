@@ -23,7 +23,6 @@ async def program_type(callback_query: CallbackQuery, state: FSMContext):
         await show_my_program_menu(callback_query, profile, state)
 
     else:
-        await state.set_state(States.main_menu)
         await show_main_menu(callback_query.message, profile, state)
 
 
@@ -57,7 +56,6 @@ async def program_manage(callback_query: CallbackQuery, state: FSMContext) -> No
         await callback_query.answer()
         profile = user_service.storage.get_current_profile(callback_query.from_user.id)
         await show_main_menu(callback_query.message, profile, state)
-        await state.set_state(States.main_menu)
 
     elif callback_query.data == "next":
         await next_day_workout_plan(callback_query, state)
@@ -176,7 +174,6 @@ async def workout_results(callback_query: CallbackQuery, state: FSMContext):
             include_incoming_message=False,
         )
         await show_main_menu(callback_query.message, profile, state)
-        await state.set_state(States.main_menu)
     else:
         await callback_query.answer(translate(MessageText.workout_description, profile.language), show_alert=True)
         await state.set_state(States.workout_description)
@@ -204,7 +201,6 @@ async def workout_description(message: Message, state: FSMContext):
     )
     await message.answer(translate(MessageText.keep_going, profile.language))
     await show_main_menu(message, profile, state)
-    await state.set_state(States.main_menu)
 
 
 @program_router.callback_query(States.program_edit)
@@ -266,7 +262,6 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
             await user_service.save_program(client_id, exercises, split_number)
         await callback_query.message.answer(translate(MessageText.program_compiled, profile.language))
         await show_main_menu(callback_query.message, profile, state)
-        await state.set_state(States.main_menu)
         return
 
     else:

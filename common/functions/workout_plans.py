@@ -54,7 +54,6 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
                     include_incoming_message=False,
                 )
             await state.clear()
-            await state.set_state(States.main_menu)
             await show_main_menu(callback_query.message, profile, state)
         else:
             await callback_query.answer(translate(MessageText.complete_all_days, profile.language), show_alert=True)

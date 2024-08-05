@@ -29,7 +29,6 @@ async def cmd_language(message: Message, state: FSMContext) -> None:
 @cmd_router.message(Command("menu"))
 async def cmd_menu(message: Message, state: FSMContext) -> None:
     if profile := user_service.storage.get_current_profile(message.from_user.id):
-        await state.set_state(States.main_menu)
         await show_main_menu(message, profile, state)
     else:
         await state.set_state(States.language_choice)
