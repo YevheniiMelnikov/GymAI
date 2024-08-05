@@ -13,22 +13,23 @@ logger = loguru.logger
 
 @main_router.callback_query(States.main_menu)
 async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
-    match callback_query.data:
-        case "feedback":
-            await callback_query.answer()
-            await callback_query.message.answer(text=translate(MessageText.feedback, lang=profile.language))
-            await state.set_state(States.feedback)
-            await callback_query.message.delete()
+    data = await state.get_data()
+    if profile := Profile.from_dict(data.get("profile")):
+        match callback_query.data:
+            case "feedback":
+                await callback_query.answer()
+                await callback_query.message.answer(text=translate(MessageText.feedback, lang=profile.language))
+                await state.set_state(States.feedback)
+                await callback_query.message.delete()
 
-        case "my_profile":
-            await show_my_profile_menu(callback_query, profile, state)
+            case "my_profile":
+                await show_my_profile_menu(callback_query, profile, state)
 
-        case "my_clients":
-            await my_clients_menu(callback_query, profile, state)
+            case "my_clients":
+                await my_clients_menu(callback_query, profile, state)
 
-        case "my_workouts":
-            await show_my_workouts_menu(callback_query, profile, state)
+            case "my_workouts":
+                await show_my_workouts_menu(callback_query, profile, state)
 
 
 @main_router.callback_query(States.profile)
@@ -94,7 +95,6 @@ async def handle_feedback(message: Message, state: FSMContext) -> None:
 async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext):
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     if callback_query.data == "back":
-        await state.set_state(States.main_menu)
         await show_main_menu(callback_query.message, profile, state)
 
     else:
@@ -155,7 +155,6 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
     if callback_query.data == "back":
         await callback_query.answer()
         await show_main_menu(callback_query.message, profile, state)
-        await state.set_state(States.main_menu)
         return
 
     action, client_id = callback_query.data.split("_")

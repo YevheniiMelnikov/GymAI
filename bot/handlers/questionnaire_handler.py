@@ -191,7 +191,6 @@ async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> No
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     await state.update_data(lang=profile.language)
     if callback_query.data == "back":
-        await state.set_state(States.main_menu)
         await show_main_menu(callback_query.message, profile, state)
         return
 
@@ -213,7 +212,6 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
     if data.get("new_client"):
         await client_request(coach, client, state)
         await callback_query.answer(translate(MessageText.coach_selected).format(name=coach.name), show_alert=True)
-        await state.set_state(States.main_menu)
         await show_main_menu(callback_query.message, profile, state)
     else:
         await callback_query.answer()
