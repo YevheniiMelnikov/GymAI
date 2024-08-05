@@ -99,20 +99,18 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
 
     if profile.status == "coach":
         try:
-            coach_profile = user_service.storage.get_coach_by_id(profile.id)
+            user_service.storage.get_coach_by_id(profile.id)
         except UserServiceError:
             coach_data = await user_service.get_profile_data(profile.id)
-            coach_profile = Coach.from_dict(coach_data)
-        if coach_profile.tg_id != message.from_user.id:
-            user_service.storage.set_coach_data(profile.id, {"tg_id": message.from_user.id})
+            coach_data["tg_id"] = message.from_user.id
+            user_service.storage.set_coach_data(profile.id, coach_data)
     else:
         try:
-            client_profile = user_service.storage.get_client_by_id(profile.id)
+            user_service.storage.get_client_by_id(profile.id)
         except UserServiceError:
             client_data = await user_service.get_profile_data(profile.id)
-            client_profile = Client.from_dict(client_data)
-        if client_profile.tg_id != message.from_user.id:
-            user_service.storage.set_client_data(profile.id, {"tg_id": message.from_user.id})
+            client_data["tg_id"] = message.from_user.id
+            user_service.storage.set_client_data(profile.id, client_data)
 
     await message.answer(text=translate(MessageText.signed_in, lang=data.get("lang")))
     if data.get("lang") != profile.language:
