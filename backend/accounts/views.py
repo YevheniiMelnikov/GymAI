@@ -129,6 +129,11 @@ class ProfileAPIUpdate(APIView):
         profile_id = self.kwargs.get("profile_id")
         return get_object_or_404(Profile, pk=profile_id)
 
+    def get(self, request: Request, profile_id: int, format=None) -> Response:
+        profile = self.get_object()
+        serializer = ProfileSerializer(profile)
+        return Response(serializer.data)
+
     def put(self, request: Request, profile_id: int, format=None) -> Response:
         profile = self.get_object()
         serializer = ProfileSerializer(profile, data=request.data, context={"request": request})

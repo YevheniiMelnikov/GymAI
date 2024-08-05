@@ -1,10 +1,17 @@
+from django.contrib.auth.models import User
 from rest_framework import serializers
 
 from .models import Profile, Program, Subscription
 
 
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ("username", "email")
+
+
 class ProfileSerializer(serializers.ModelSerializer):
-    user = serializers.HiddenField(default=serializers.CurrentUserDefault())
+    user = UserSerializer(read_only=True)
     assigned_to = serializers.ListField(child=serializers.IntegerField(), required=False, allow_null=True, default=list)
 
     class Meta:

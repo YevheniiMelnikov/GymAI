@@ -84,18 +84,16 @@ async def cmd_feedback(message: Message, state: FSMContext) -> None:
 
 @cmd_router.message(Command("reset_password"))
 async def cmd_reset_password(message: Message, state: FSMContext) -> None:
-    if profiles := user_service.storage.get_profiles(str(message.from_user.id)):
+    profiles = user_service.storage.get_profiles(str(message.from_user.id))
+    if profiles:
         usernames = [
             user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "username")
             for profile in profiles
         ]
-        emails = [
-            user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "email")
-            for profile in profiles
-        ]
-        profiles_data = [profile.to_dict() for profile in profiles]
         language = profiles[0].language if profiles[0].language else "ua"
-        await state.update_data(lang=language, profiles=profiles_data, usernames=usernames, emails=emails)
+        await state.update_data(
+            lang=language, profiles=[profile.to_dict() for profile in profiles], usernames=usernames
+        )
         await message.answer(text=translate(MessageText.username, language))
         await state.set_state(States.password_reset)
     else:

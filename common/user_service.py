@@ -564,6 +564,18 @@ class UserService:
         if status_code == 204:
             return self.storage.delete_profile(telegram_id, profile_id)
 
+    async def get_user_email(self, profile_id: int) -> str | None:
+        url = f"{self.backend_url}api/v1/persons/{profile_id}/"
+        status_code, user_data = await self._api_request(
+            "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
+        )
+        if status_code == 200 and user_data:
+            user = user_data.get("user")
+            if user:
+                return user.get("email")
+        logger.info(f"Failed to retrieve email for profile_id {profile_id}. HTTP status: {status_code}")
+        return None
+
 
 user_session = UserProfileManager(os.getenv("REDIS_URL"), encrypter)
 user_service = UserService(user_session)

@@ -90,7 +90,7 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
         return
 
     await state.update_data(login_attempts=0)
-    email = user_service.storage.get_profile_info_by_key(message.from_user.id, profile.id, "email")
+    email = user_service.get_user_email(profile.id)
     user_service.storage.set_profile(
         profile=profile, username=data["username"], auth_token=token, telegram_id=str(message.from_user.id), email=email
     )
