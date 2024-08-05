@@ -7,6 +7,7 @@ from aiogram.types import Message, CallbackQuery
 
 from bot.keyboards import client_menu_keyboard, coach_menu_keyboard
 from bot.states import States
+from common.exceptions import UserServiceError
 from common.functions.chat import notify_about_new_coach
 from common.functions.menus import show_main_menu
 from common.models import Client, Coach, Profile
@@ -95,14 +96,24 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
         profile=profile, username=data["username"], auth_token=token, telegram_id=str(message.from_user.id), email=email
     )
     logger.info(f"profile_id {profile.id} set for user {message.from_user.id}")
+
     if profile.status == "coach":
-        coach_profile = user_service.storage.get_coach_by_id(profile.id)
+        try:
+            coach_profile = user_service.storage.get_coach_by_id(profile.id)
+        except UserServiceError:
+            coach_data = await user_service.get_profile_data(profile.id)
+            coach_profile = Coach.from_dict(coach_data)
         if coach_profile.tg_id != message.from_user.id:
             user_service.storage.set_coach_data(profile.id, {"tg_id": message.from_user.id})
     else:
-        client_profile = user_service.storage.get_client_by_id(profile.id)
+        try:
+            client_profile = user_service.storage.get_client_by_id(profile.id)
+        except UserServiceError:
+            client_data = await user_service.get_profile_data(profile.id)
+            client_profile = Client.from_dict(client_data)
         if client_profile.tg_id != message.from_user.id:
             user_service.storage.set_client_data(profile.id, {"tg_id": message.from_user.id})
+
     await message.answer(text=translate(MessageText.signed_in, lang=data.get("lang")))
     if data.get("lang") != profile.language:
         user_service.storage.set_profile_info_by_key(message.from_user.id, profile.id, "language", data.get("lang"))
