@@ -194,8 +194,8 @@ async def my_clients_menu(callback_query: CallbackQuery, profile: Profile, state
         except UserServiceError:
             clients = []
             for profile_id in assigned_ids:
-                if profile := await user_service.get_profile(profile_id):
-                    clients.append(user_service.storage.get_client_by_id(profile.id))
+                if profile_data := await user_service.get_profile_data(profile_id):
+                    clients.append(Client.from_dict(profile_data))
         await show_clients(callback_query.message, clients, state)
     else:
         if not coach.verified:

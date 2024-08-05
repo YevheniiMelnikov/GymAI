@@ -576,13 +576,13 @@ class UserService:
         logger.info(f"Failed to retrieve email for profile_id {profile_id}. HTTP status: {status_code}")
         return None
 
-    async def get_profile(self, profile_id: int) -> Profile | None:
+    async def get_profile_data(self, profile_id: int) -> dict[str, Any] | None:
         url = f"{self.backend_url}api/v1/persons/{profile_id}/"
         status_code, user_data = await self._api_request(
             "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
         if status_code == 200 and user_data:
-            return Profile.from_dict(user_data)
+            return user_data
 
         logger.info(f"Failed to retrieve email for profile_id {profile_id}. HTTP status: {status_code}")
         return None
