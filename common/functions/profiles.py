@@ -95,6 +95,14 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
         profile=profile, username=data["username"], auth_token=token, telegram_id=str(message.from_user.id), email=email
     )
     logger.info(f"profile_id {profile.id} set for user {message.from_user.id}")
+    if profile.status == "coach":
+        coach_profile = user_service.storage.get_coach_by_id(profile.id)
+        if coach_profile.tg_id != message.from_user.id:
+            user_service.storage.set_coach_data(profile.id, {"tg_id": message.from_user.id})
+    else:
+        client_profile = user_service.storage.get_client_by_id(profile.id)
+        if client_profile.tg_id != message.from_user.id:
+            user_service.storage.set_client_data(profile.id, {"tg_id": message.from_user.id})
     await message.answer(text=translate(MessageText.signed_in, lang=data.get("lang")))
     if data.get("lang") != profile.language:
         user_service.storage.set_profile_info_by_key(message.from_user.id, profile.id, "language", data.get("lang"))
