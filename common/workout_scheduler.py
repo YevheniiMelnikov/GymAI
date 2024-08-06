@@ -13,7 +13,7 @@ import common.functions.workout_plans
 from bot.keyboards import workout_results, workout_survey_keyboard
 from bot.states import States
 from common.functions.chat import send_message
-from common.user_service import user_session
+from common.user_service import cache_manager
 from texts.text_manager import MessageText, translate
 
 logger = loguru.logger
@@ -22,10 +22,10 @@ bot = Bot(os.environ.get("BOT_TOKEN"))
 
 
 async def send_daily_survey():
-    clients = user_session.get_clients_to_survey()
+    clients = cache_manager.get_clients_to_survey()
     for client_id in clients:
-        client = user_session.get_client_by_id(client_id)
-        client_lang = user_session.get_profile_info_by_key(client.tg_id, client_id, "language")
+        client = cache_manager.get_client_by_id(client_id)
+        client_lang = cache_manager.get_profile_info_by_key(client.tg_id, client_id, "language")
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
         async with aiohttp.ClientSession():
             await bot.send_message(
@@ -38,8 +38,8 @@ async def send_daily_survey():
         @survey_router.callback_query(F.data.startswith("yes"))
         @survey_router.callback_query(F.data.startswith("no"))
         async def have_you_trained(callback_query: CallbackQuery, state: FSMContext):
-            profile = user_session.get_current_profile(callback_query.from_user.id)
-            subscription = user_session.get_subscription(profile.id)
+            profile = cache_manager.get_current_profile(callback_query.from_user.id)
+            subscription = cache_manager.get_subscription(profile.id)
             workout_days = subscription.get("workout_days", [])
             if callback_query.data.startswith("yes"):
                 try:
