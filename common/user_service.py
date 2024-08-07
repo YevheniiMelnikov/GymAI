@@ -100,9 +100,12 @@ class UserService:
 
     async def log_in(self, username: str, password: str) -> str | None:
         url = f"{self.backend_url}auth/token/login/"
-        status_code, response = await self._api_request("post", url, {"username": username, "password": password})
+        status_code, response = await self._api_request(
+            "post", url, {"username": username, "password": password}, {"Authorization": f"Api-Key {self.api_key}"}
+        )
         if status_code == 200 and "auth_token" in response:
             return response["auth_token"]
+        logger.error(f"Failed to log in with username: {username}, status code: {status_code}, response: {response}")
         return None
 
     async def log_out(self, tg_user_id: int) -> bool:

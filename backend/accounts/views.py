@@ -1,5 +1,6 @@
 import os
 
+import loguru
 from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.db import transaction
@@ -31,6 +32,9 @@ from .models import Profile, Program, Subscription
 from .serializers import ProfileSerializer, ProgramSerializer, SubscriptionSerializer
 
 
+logger = loguru.logger
+
+
 class CreateUserView(APIView):
     permission_classes = [HasAPIKey | IsAuthenticated]
 
@@ -50,22 +54,14 @@ class CreateUserView(APIView):
         try:
             with transaction.atomic():
                 user = User.objects.create_user(username=username, password=password, email=email)
-
-                profile_data = {}
-                if status:
-                    profile_data["status"] = status
-                if language:
-                    profile_data["language"] = language
-
+                profile_data = {"status": status, "language": language}
                 Profile.objects.create(user=user, **profile_data)
+                logger.info(f"User {username} created successfully")
         except Exception as e:
+            logger.error(f"Error creating user {username}: {e}")
             return Response({"error": str(e)}, status=HTTP_400_BAD_REQUEST)
 
-        user_data = {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
-        }
+        user_data = {"id": user.id, "username": user.username, "email": user.email}
         return Response(user_data, status=HTTP_201_CREATED)
 
 

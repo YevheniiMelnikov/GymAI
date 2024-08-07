@@ -10,6 +10,7 @@ from bot.states import States
 from common.exceptions import UserServiceError
 from common.functions.chat import notify_about_new_coach
 from common.functions.menus import show_main_menu
+from common.functions.utils import delete_messages
 from common.models import Client, Coach, Profile
 from common.user_service import user_service
 from texts.text_manager import MessageText, translate
@@ -113,6 +114,7 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
             user_service.storage.set_client_data(profile.id, client_data)
 
     await message.answer(text=translate(MessageText.signed_in, lang=data.get("lang")))
+    await delete_messages(state)
     if data.get("lang") != profile.language:
         user_service.storage.set_profile_info_by_key(message.from_user.id, profile.id, "language", data.get("lang"))
         profile.language = data.get("lang")
@@ -123,9 +125,12 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
 
 async def register_user(callback_query: CallbackQuery, state: FSMContext, data: dict) -> None:
     email = data.get("email")
+    username = data.get("username")
+    password = data.get("password")
+
     if not await user_service.sign_up(
-        username=data.get("username"),
-        password=data.get("password"),
+        username=username,
+        password=password,
         email=email,
         status=data.get("account_type"),
         language=data.get("lang"),
@@ -137,22 +142,22 @@ async def register_user(callback_query: CallbackQuery, state: FSMContext, data: 
         await callback_query.message.answer(text=translate(MessageText.username, data.get("lang")))
         return
 
-    logger.info(f"User {email} registered")
-    token = await user_service.log_in(username=data.get("username"), password=data.get("password"))
+    logger.info(f"User {email} registered successfully.")
+    token = await user_service.log_in(username=username, password=password)
 
     if not token:
-        logger.error(f"Login failed for user {email} after registration")
+        logger.error(f"Login failed for user {username} after registration")
         await callback_query.message.answer(text=translate(MessageText.unexpected_error, data.get("lang")))
         await state.clear()
         await state.set_state(States.username)
         await callback_query.message.answer(text=translate(MessageText.username, data.get("lang")))
         return
 
-    profile_data = await user_service.get_profile_by_username(data.get("username"))
+    profile_data = await user_service.get_profile_by_username(username)
     logger.info(f"User {profile_data.id} logged in")
     user_service.storage.set_profile(
         profile=profile_data,
-        username=data.get("username"),
+        username=username,
         auth_token=token,
         telegram_id=str(callback_query.from_user.id),
         email=email,

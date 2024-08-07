@@ -98,3 +98,12 @@ async def handle_clients_pagination(callback_query: CallbackQuery, profile, inde
         return
 
     await show_clients(callback_query.message, clients, state, index)
+
+
+async def delete_messages(state: FSMContext) -> None:
+    data = await state.get_data()
+    message_ids = data.get("message_ids", [])
+    for message_id in message_ids:
+        with suppress(TelegramBadRequest):
+            await bot.delete_message(chat_id=data["chat_id"], message_id=message_id)
+    await state.update_data(message_ids=[])
