@@ -104,9 +104,9 @@ logout:
   ua: "Ви вийшли із системи. Щоб продовжити роботу скористайтеся командою /start 👈"
 
 start:
-  eng: "Greetings. With my help, you can achieve success in training 💪"
-  ru: "Приветствую. С моей помощью вы можете достичь успеха в тренировках 💪"
-  ua: "Вітаю. З моєю допомогою ви можете досягти успіху в тренуваннях 💪"
+  eng: "Greetings! 👋"
+  ru: "Приветствую! 👋"
+  ua: "Вітаю! 👋"
 
 reset_password_offer:
   eng: "To reset your password, use the /reset_password command 🔄"

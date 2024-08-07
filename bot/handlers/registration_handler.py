@@ -13,7 +13,7 @@ from common.exceptions import EmailUnavailable, UsernameUnavailable
 from common.functions.menus import show_main_menu, show_my_profile_menu
 from common.functions.profiles import register_user, sign_in, check_assigned_clients
 from common.functions.text_utils import validate_email, validate_password
-from common.functions.utils import set_bot_commands
+from common.functions.utils import set_bot_commands, delete_messages
 from common.user_service import user_service
 from texts.text_manager import MessageText, translate
 
@@ -24,6 +24,7 @@ register_router = Router()
 @register_router.callback_query(States.language_choice)
 async def language_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
     await callback_query.answer()
+    await delete_messages(state)
     lang_code = callback_query.data
     await set_bot_commands(lang_code)
     if profile := user_service.storage.get_current_profile(callback_query.from_user.id):
@@ -49,11 +50,13 @@ async def language_choice(callback_query: CallbackQuery, state: FSMContext) -> N
 @register_router.callback_query(States.action_choice)
 async def action_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
     await callback_query.answer()
+    await delete_messages(state)
     data = await state.get_data()
     await state.update_data(action=callback_query.data)
 
     if callback_query.data == "sign_in":
-        await callback_query.message.answer(translate(MessageText.username, lang=data.get("lang")))
+        username_message = await callback_query.message.answer(translate(MessageText.username, lang=data.get("lang")))
+        await state.update_data(message_ids=[username_message.message_id])
         await state.set_state(States.username)
     elif callback_query.data == "sign_up":
         await callback_query.message.answer(
@@ -62,7 +65,8 @@ async def action_choice(callback_query: CallbackQuery, state: FSMContext) -> Non
         )
         await state.set_state(States.account_type)
 
-    await callback_query.message.delete()
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()
 
 
 @register_router.callback_query(States.account_type)
@@ -71,29 +75,36 @@ async def account_type(callback_query: CallbackQuery, state: FSMContext) -> None
     await callback_query.answer(translate(MessageText.saved, lang=data.get("lang")))
     await state.update_data(account_type=callback_query.data)
     await state.set_state(States.username)
-    await callback_query.message.answer(translate(MessageText.username, lang=data.get("lang")))
+    username_message = await callback_query.message.answer(translate(MessageText.username, lang=data.get("lang")))
+    await state.update_data(message_ids=[username_message.message_id])
     await callback_query.message.delete()
 
 
 @register_router.message(States.username, F.text)
 async def username(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
+    await delete_messages(state)
     if data.get("action") == "sign_up":
         if await user_service.get_profile_by_username(message.text):
             await state.set_state(States.username)
             await message.answer(text=translate(MessageText.username_unavailable, lang=data.get("lang")))
             return
         else:
-            await message.answer(text=translate(MessageText.password_requirements, lang=data.get("lang")))
+            password_requirements_message = await message.answer(
+                text=translate(MessageText.password_requirements, lang=data.get("lang"))
+            )
+            await state.update_data(message_ids=[password_requirements_message.message_id])
+            await delete_messages(state)
 
-    await state.update_data(username=message.text)
+    password_message = await message.answer(translate(MessageText.password, lang=data.get("lang", "ua")))
+    await state.update_data(username=message.text, message_ids=[password_message.message_id])
     await state.set_state(States.password)
-    await message.answer(translate(MessageText.password, lang=data.get("lang", "ua")))
     await message.delete()
 
 
 @register_router.message(States.password, F.text)
 async def password(message: Message, state: FSMContext) -> None:
+    await delete_messages(state)
     data = await state.get_data()
     if data.get("action") == "sign_up":
         if not validate_password(message.text):
@@ -101,7 +112,10 @@ async def password(message: Message, state: FSMContext) -> None:
             await state.set_state(States.password)
         else:
             await state.update_data(password=message.text)
-            await message.answer(text=translate(MessageText.password_retype, lang=data.get("lang")))
+            password_retype_message = await message.answer(
+                text=translate(MessageText.password_retype, lang=data.get("lang"))
+            )
+            await state.update_data(message_ids=[password_retype_message.message_id])
             await state.set_state(States.password_retype)
         await message.delete()
 
@@ -112,18 +126,24 @@ async def password(message: Message, state: FSMContext) -> None:
 @register_router.message(States.password_retype, F.text)
 async def password_retype(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
+    await delete_messages(state)
     if message.text == data["password"]:
+        email_message = await message.answer(text=translate(MessageText.email, lang=data.get("lang")))
+        await state.update_data(message_ids=[email_message.message_id])
         await state.set_state(States.email)
-        await message.answer(text=translate(MessageText.email, lang=data.get("lang")))
     else:
+        password_mismatch_message = await message.answer(
+            text=translate(MessageText.password_mismatch, lang=data.get("lang"))
+        )
+        await state.update_data(message_ids=[password_mismatch_message.message_id])
         await state.set_state(States.password)
-        await message.answer(text=translate(MessageText.password_mismatch, lang=data.get("lang")))
     await message.delete()
 
 
 @register_router.message(States.email, F.text)
 async def email(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
+    await delete_messages(state)
 
     if not validate_email(message.text):
         await message.answer(text=translate(MessageText.invalid_content, lang=data.get("lang")))
@@ -133,7 +153,7 @@ async def email(message: Message, state: FSMContext) -> None:
     await state.update_data(email=message.text)
     public_offer = os.getenv("PUBLIC_OFFER")
     privacy_policy = os.getenv("PRIVACY_POLICY")
-    await message.answer(
+    contract_info_message = await message.answer(
         translate(MessageText.contract_info_message, data.get("lang")).format(
             public_offer=public_offer, privacy_policy=privacy_policy
         ),
@@ -142,6 +162,7 @@ async def email(message: Message, state: FSMContext) -> None:
     await message.answer(
         translate(MessageText.accept_policy, lang=data.get("lang")), reply_markup=yes_no(data.get("lang"))
     )
+    await state.update_data(message_ids=[contract_info_message.message_id])
     await message.delete()
     await state.set_state(States.accept_policy)
 
@@ -150,26 +171,33 @@ async def email(message: Message, state: FSMContext) -> None:
 async def accept_policy(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     lang = data.get("lang")
+    await delete_messages(state)
 
     if callback_query.data == "yes":
         try:
             await register_user(callback_query, state, data)
         except UsernameUnavailable:
             await state.set_state(States.username)
-            await callback_query.message.answer(text=translate(MessageText.username_unavailable, lang=lang))
+            username_unavailable_message = await callback_query.message.answer(
+                text=translate(MessageText.username_unavailable, lang=lang)
+            )
+            await state.update_data(message_ids=[username_unavailable_message.message_id])
         except EmailUnavailable:
-            await callback_query.message.answer(text=translate(MessageText.email_unavailable, lang=lang))
+            email_unavailable_message = await callback_query.message.answer(
+                text=translate(MessageText.email_unavailable, lang=lang)
+            )
+            await state.update_data(message_ids=[email_unavailable_message.message_id])
             await state.set_state(States.email)
         finally:
             with suppress(TelegramBadRequest):
                 await callback_query.message.delete()
     else:
-        await callback_query.message.answer(
+        action_message = await callback_query.message.answer(
             text=translate(MessageText.choose_action, lang=lang),
             reply_markup=action_choice_keyboard(lang_code=lang),
         )
         await state.clear()
-        await state.update_data(lang=lang)
+        await state.update_data(lang=lang, message_ids=[action_message.message_id])
         await state.set_state(States.action_choice)
 
 

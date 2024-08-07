@@ -38,23 +38,27 @@ async def cmd_menu(message: Message, state: FSMContext) -> None:
 @cmd_router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
+    await state.update_data(chat_id=message.chat.id)
     if profile := user_service.storage.get_current_profile(message.from_user.id):
         logger.info(f"User with profile_id {profile.id} started bot")
         await user_service.log_out(message.from_user.id)
         await state.update_data(lang=profile.language)
-        await message.answer(text=translate(MessageText.start, profile.language))
+        start_message = await message.answer(text=translate(MessageText.start, profile.language))
         await message.answer(
             text=translate(MessageText.choose_action, lang=profile.language),
             reply_markup=action_choice_keyboard(profile.language),
         )
+        await state.update_data(message_ids=[start_message.message_id])
         await state.set_state(States.action_choice)
         await message.delete()
         return
 
     logger.info(f"Telegram user {message.from_user.id} started bot")
-    await message.answer(text=translate(MessageText.start))
+    start_message = await message.answer(text=translate(MessageText.start))
+    await state.update_data(message_ids=[start_message.message_id])
     await state.set_state(States.language_choice)
-    await message.answer(text=translate(MessageText.choose_language), reply_markup=language_choice())
+    language_message = await message.answer(text=translate(MessageText.choose_language), reply_markup=language_choice())
+    await state.update_data(message_ids=[start_message.message_id, language_message.message_id])
 
 
 @cmd_router.message(Command("logout"))
