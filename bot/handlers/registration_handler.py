@@ -56,7 +56,7 @@ async def action_choice(callback_query: CallbackQuery, state: FSMContext) -> Non
 
     if callback_query.data == "sign_in":
         username_message = await callback_query.message.answer(translate(MessageText.username, lang=data.get("lang")))
-        await state.update_data(message_ids=[username_message.message_id])
+        await state.update_data(message_ids=[username_message.message_id], chat_id=callback_query.message.chat.id)
         await state.set_state(States.username)
     elif callback_query.data == "sign_up":
         await callback_query.message.answer(

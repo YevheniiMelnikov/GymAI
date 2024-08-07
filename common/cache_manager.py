@@ -192,7 +192,7 @@ class CacheManager:
             "assigned_to",
             "tg_id",
         ]
-        if "payment_details" in profile_data:
+        if profile_data.get("payment_details"):
             profile_data["payment_details"] = self.encrypter.encrypt(profile_data["payment_details"])
         self._set_data("coaches", profile_id, profile_data, allowed_fields)
 
