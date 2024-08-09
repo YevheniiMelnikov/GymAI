@@ -21,6 +21,7 @@ logger = loguru.logger
 async def update_user_info(message: Message, state: FSMContext, role: str) -> None:
     data = await state.get_data()
     data["tg_id"] = message.from_user.id
+    await delete_messages(state)
     try:
         profile = user_service.storage.get_current_profile(message.chat.id)
         if not profile:
