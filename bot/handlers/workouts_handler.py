@@ -28,6 +28,7 @@ async def program_type(callback_query: CallbackQuery, state: FSMContext):
 
 @program_router.message(States.workouts_number, F.text)
 async def workouts_number_choice(message: Message, state: FSMContext):
+    await delete_messages(state)
     profile = user_service.storage.get_current_profile(message.from_user.id)
     try:
         workouts_per_week = int(message.text)
@@ -46,12 +47,13 @@ async def workouts_number_choice(message: Message, state: FSMContext):
     )
     with suppress(TelegramBadRequest):
         await message.delete()
-    await state.update_data(day_1_msg=day_1_msg.message_id, day_index=0)
+    await state.update_data(chat_id=message.chat.id, message_ids=[day_1_msg.message_id], day_index=0)
     await state.set_state(States.program_manage)
 
 
 @program_router.callback_query(States.program_manage)
 async def program_manage(callback_query: CallbackQuery, state: FSMContext) -> None:
+    await delete_messages(state)
     if callback_query.data == "quit":
         await callback_query.answer()
         profile = user_service.storage.get_current_profile(callback_query.from_user.id)
@@ -70,6 +72,7 @@ async def program_manage(callback_query: CallbackQuery, state: FSMContext) -> No
 @program_router.message(States.program_manage)
 @program_router.message(States.add_exercise_name)
 async def set_exercise_name(message: Message, state: FSMContext) -> None:
+    await delete_messages(state)
     profile = user_service.storage.get_current_profile(message.from_user.id)
 
     link_to_gif = await find_exercise_gif(message.text)
@@ -114,7 +117,9 @@ async def set_exercise_reps(callback_query: CallbackQuery, state: FSMContext) ->
     weight_message = await callback_query.message.answer(
         translate(MessageText.exercise_weight, profile.language), reply_markup=kb.as_markup(one_time_keyboard=True)
     )
-    await state.update_data(weight_msg=weight_message.message_id, reps=callback_query.data)
+    await state.update_data(
+        chat_id=callback_query.message.chat.id, message_ids=[weight_message.message_id], reps=callback_query.data
+    )
     await callback_query.message.delete()
     await state.set_state(States.exercise_weight)
 
@@ -128,6 +133,7 @@ async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMCon
     sets = data.get("sets")
     reps = data.get("reps")
     gif_link = data.get("gif_link")
+    await delete_messages(state)
 
     if isinstance(input_data, CallbackQuery):
         weight = None
@@ -142,7 +148,8 @@ async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMCon
             await input_data.delete()
             return
 
-    await message.delete()
+    with suppress(TelegramBadRequest):
+        await message.delete()
     if data.get("edit_mode"):
         await update_exercise_data(message, state, profile.language, {"weight": weight})
         return
@@ -213,8 +220,13 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
 
     if callback_query.data == "exercise_add":
         await callback_query.answer()
-        await state.update_data(exercise_index=len(exercises) + 1, exercises=exercises)
-        await callback_query.message.answer(translate(MessageText.enter_exercise, profile.language))
+        exercise_msg = await callback_query.message.answer(translate(MessageText.enter_exercise, profile.language))
+        await state.update_data(
+            exercise_index=len(exercises) + 1,
+            exercises=exercises,
+            message_ids=[exercise_msg.message_id],
+            chat_id=callback_query.message.chat.id,
+        )
         await state.set_state(States.add_exercise_name)
 
     elif callback_query.data == "quit":
@@ -355,6 +367,7 @@ async def subscription_manage(callback_query: CallbackQuery, state: FSMContext):
     day_index = data.get("day_index", 0)
     exercises = data.get("exercises", {})
     await state.update_data(subscription=True)
+    await delete_messages(state)
 
     if callback_query.data == "back":
         await my_clients_menu(callback_query, profile, state)

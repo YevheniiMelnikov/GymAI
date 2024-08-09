@@ -12,6 +12,7 @@ from bot.keyboards import program_edit_kb, program_manage_menu
 from bot.states import States
 from common.file_manager import gif_manager
 from common.functions.text_utils import format_program, get_translated_week_day
+from common.functions.utils import delete_messages
 from common.models import Exercise
 from common.user_service import user_service
 from texts.exercises import exercise_dict
@@ -23,14 +24,7 @@ logger = loguru.logger
 
 async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Message | CallbackQuery) -> None:
     data = await state.get_data()
-
-    for msg_key in ["del_msg", "exercise_msg", "program_msg", "day_1_msg", "weight_msg"]:
-        if del_msg := data.get(msg_key):
-            with suppress(TelegramBadRequest):
-                await input_data.bot.delete_message(
-                    input_data.chat.id if isinstance(input_data, Message) else input_data.message.chat.id, del_msg
-                )
-
+    await delete_messages(state)
     profile = user_service.storage.get_current_profile(input_data.from_user.id)
     day_index = data.get("day_index", 0)
     exercises = data.get("exercises", {})
@@ -62,8 +56,8 @@ async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Messa
     )
 
     await state.update_data(
-        exercise_msg=exercise_msg.message_id,
-        program_msg=program_msg.message_id,
+        chat_id=input_data.chat.id if isinstance(input_data, Message) else input_data.message.chat.id,
+        message_ids=[exercise_msg.message_id, program_msg.message_id],
         exercises=exercises,
         day_index=day_index + 1,
     )

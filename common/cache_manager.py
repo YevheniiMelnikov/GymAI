@@ -108,7 +108,7 @@ class CacheManager:
             random.shuffle(coaches_data)
             return coaches_data
         except Exception as e:
-            logger.error(f"Failed to retrieve coach data: {e}")
+            logger.info(f"Failed to retrieve coach data: {e}")
             return
 
     def deactivate_profiles(self, telegram_id: str) -> None:
@@ -178,7 +178,7 @@ class CacheManager:
                 logger.info(f"No client data found for client ID {profile_id}")
                 raise UserServiceError
         except Exception as e:
-            logger.error(f"Failed to get client data for client ID {profile_id}: {e}")
+            logger.info(f"Failed to get client data for client ID {profile_id}: {e}")
             raise UserServiceError
 
     def set_coach_data(self, profile_id: str, profile_data: dict) -> None:
@@ -206,10 +206,10 @@ class CacheManager:
                     data["payment_details"] = self.encrypter.decrypt(data["payment_details"])
                 return Coach.from_dict(data)
             else:
-                logger.error(f"No data found for profile_id {profile_id} in cache")
+                logger.info(f"No data found for profile_id {profile_id} in cache")
                 raise UserServiceError
         except Exception as e:
-            logger.error(f"Failed to get data for profile_id from cache {profile_id}: {e}")
+            logger.info(f"Failed to get data for profile_id from cache {profile_id}: {e}")
             raise UserServiceError
 
     def save_program(self, client_id: str, program_data: dict) -> None:
@@ -231,7 +231,7 @@ class CacheManager:
                 logger.info(f"No program data found for profile_id {profile_id}")
                 return None
         except Exception as e:
-            logger.error(f"Failed to get program for profile_id {profile_id}: {e}")
+            logger.info(f"Failed to get program for profile_id {profile_id}: {e}")
             return None
 
     def set_payment_status(self, profile_id: str, paid: bool, service_type: str) -> None:
@@ -257,7 +257,7 @@ class CacheManager:
                 logger.info(f"No payment data found for profile_id {profile_id}")
                 return False
         except Exception as e:
-            logger.error(f"Failed to check payment status for profile_id {profile_id}: {e}")
+            logger.info(f"Failed to check payment status for profile_id {profile_id}: {e}")
             return False
 
     def delete_program(self, profile_id: str) -> bool:
@@ -293,7 +293,7 @@ class CacheManager:
                 logger.info(f"No subscription data found for profile_id {profile_id}")
                 return None
         except Exception as e:
-            logger.error(f"Failed to get subscription for profile_id {profile_id}: {e}")
+            logger.info(f"Failed to get subscription for profile_id {profile_id}: {e}")
             return None
 
     def get_clients_to_survey(self) -> list[int]:

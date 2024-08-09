@@ -84,6 +84,7 @@ async def account_type(callback_query: CallbackQuery, state: FSMContext) -> None
 async def username(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await delete_messages(state)
+    password_requirements_message = None
     if data.get("action") == "sign_up":
         if await user_service.get_profile_by_username(message.text):
             await state.set_state(States.username)
@@ -94,10 +95,11 @@ async def username(message: Message, state: FSMContext) -> None:
                 text=translate(MessageText.password_requirements, lang=data.get("lang"))
             )
             await state.update_data(message_ids=[password_requirements_message.message_id])
-            await delete_messages(state)
 
     password_message = await message.answer(translate(MessageText.password, lang=data.get("lang", "ua")))
     await state.update_data(username=message.text, message_ids=[password_message.message_id])
+    if password_requirements_message:
+        await state.update_data(message_ids=[password_message.message_id, password_requirements_message.message_id])
     await state.set_state(States.password)
     await message.delete()
 

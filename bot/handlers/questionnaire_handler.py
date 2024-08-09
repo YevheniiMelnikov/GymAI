@@ -13,6 +13,7 @@ from common.functions.chat import client_request
 from common.functions.menus import show_main_menu, show_subscription_page
 from common.functions.profiles import update_user_info
 from common.functions.text_utils import get_state_and_message, validate_birth_date
+from common.functions.utils import delete_messages
 from common.models import Client, Coach
 from common.user_service import user_service
 from texts.text_manager import MessageText, translate
@@ -26,18 +27,21 @@ questionnaire_router = Router()
 async def gender(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     await callback_query.answer(translate(MessageText.saved, lang=data.get("lang")))
-    await state.update_data(gender=callback_query.data)
-    await state.set_state(States.birth_date)
-    await callback_query.message.answer(text=translate(MessageText.birth_date, lang=data.get("lang")))
+    age_msg = await callback_query.message.answer(text=translate(MessageText.birth_date, lang=data.get("lang")))
+    await state.update_data(
+        gender=callback_query.data, chat_id=callback_query.message.chat.id, message_ids=[age_msg.message_id]
+    )
     await callback_query.message.delete()
+    await state.set_state(States.birth_date)
 
 
 @questionnaire_router.message(States.birth_date, F.text)
 async def birth_date(message: Message, state: FSMContext) -> None:
+    await delete_messages(state)
     data = await state.get_data()
     if validate_birth_date(message.text):
-        await state.update_data(birth_date=message.text)
-        await message.answer(translate(MessageText.workout_goals, lang=data.get("lang")))
+        goals_msg = await message.answer(translate(MessageText.workout_goals, lang=data.get("lang")))
+        await state.update_data(birth_date=message.text, chat_id=message.chat.id, message_ids=[goals_msg.message_id])
         await state.set_state(States.workout_goals)
     else:
         data = await state.get_data()
@@ -48,22 +52,25 @@ async def birth_date(message: Message, state: FSMContext) -> None:
 
 @questionnaire_router.message(States.workout_goals, F.text)
 async def workout_goals(message: Message, state: FSMContext) -> None:
-    data = await state.get_data()
+    await delete_messages(state)
     await state.update_data(workout_goals=message.text)
+    data = await state.get_data()
     if data.get("edit_mode"):
         await update_user_info(message, state, "client")
         return
 
-    await message.answer(
+    experience_msg = await message.answer(
         translate(MessageText.workout_experience, lang=data.get("lang")),
         reply_markup=workout_experience_keyboard(data.get("lang")),
     )
+    await state.update_data(chat_id=message.chat.id, message_ids=[experience_msg.message_id])
     await state.set_state(States.workout_experience)
     await message.delete()
 
 
 @questionnaire_router.callback_query(States.workout_experience)
 async def workout_experience(callback_query: CallbackQuery, state: FSMContext) -> None:
+    await delete_messages(state)
     data = await state.get_data()
     await callback_query.answer(translate(MessageText.saved, lang=data.get("lang")))
     await state.update_data(workout_experience=callback_query.data)
@@ -71,7 +78,8 @@ async def workout_experience(callback_query: CallbackQuery, state: FSMContext) -
         await update_user_info(callback_query.message, state, "client")
         return
 
-    await callback_query.message.answer(translate(MessageText.weight, lang=data.get("lang")))
+    weight_msg = await callback_query.message.answer(translate(MessageText.weight, lang=data.get("lang")))
+    await state.update_data(chat_id=callback_query.message.chat.id, message_ids=[weight_msg.message_id])
     await state.set_state(States.weight)
     await callback_query.message.delete()
 
@@ -79,6 +87,7 @@ async def workout_experience(callback_query: CallbackQuery, state: FSMContext) -
 @questionnaire_router.message(States.weight, F.text)
 async def weight(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
+    await delete_messages(state)
     if not all(map(lambda x: x.isdigit(), message.text.split())):
         await message.answer(translate(MessageText.invalid_content, lang=data.get("lang")))
         await state.set_state(States.weight)
@@ -89,21 +98,23 @@ async def weight(message: Message, state: FSMContext) -> None:
         await update_user_info(message, state, "client")
         return
 
-    await message.answer(translate(MessageText.health_notes, lang=data.get("lang")))
+    health_msg = await message.answer(translate(MessageText.health_notes, lang=data.get("lang")))
+    await state.update_data(chat_id=message.chat.id, message_ids=[health_msg.message_id])
     await state.set_state(States.health_notes)
     await message.delete()
 
 
 @questionnaire_router.message(States.health_notes, F.text)
 async def health_notes(message: Message, state: FSMContext) -> None:
+    await delete_messages(state)
     await state.update_data(health_notes=message.text)
     await update_user_info(message, state, "client")
 
 
 @questionnaire_router.message(States.name, F.text)
 async def name(message: Message, state: FSMContext) -> None:
+    await delete_messages(state)
     data = await state.get_data()
-    await state.update_data(name=message.text, verified=False)
     state_to_set = States.work_experience if data.get("role") == "coach" else States.gender
     await state.set_state(state_to_set)
     text = (
@@ -112,12 +123,14 @@ async def name(message: Message, state: FSMContext) -> None:
         else translate(MessageText.choose_gender, data.get("lang"))
     )
     reply_markup = choose_gender(data.get("lang")) if data["role"] == "client" else None
-    await message.answer(text=text, reply_markup=reply_markup)
+    msg = await message.answer(text=text, reply_markup=reply_markup)
+    await state.update_data(chat_id=message.chat.id, message_ids=[msg.message_id], name=message.text, verified=False)
     await message.delete()
 
 
 @questionnaire_router.message(States.work_experience, F.text)
 async def work_experience(message: Message, state: FSMContext) -> None:
+    await delete_messages(state)
     data = await state.get_data()
     if not all(map(lambda x: x.isdigit(), message.text.split())):
         await message.answer(translate(MessageText.invalid_content, lang=data.get("lang")))
@@ -130,7 +143,8 @@ async def work_experience(message: Message, state: FSMContext) -> None:
         await update_user_info(message, state, "coach")
         return
 
-    await message.answer(translate(MessageText.additional_info, lang=data.get("lang")))
+    additional_info_msg = await message.answer(translate(MessageText.additional_info, lang=data.get("lang")))
+    await state.update_data(chat_id=message.chat.id, message_ids=[additional_info_msg.message_id])
     await state.set_state(States.additional_info)
     await message.delete()
 
@@ -138,12 +152,14 @@ async def work_experience(message: Message, state: FSMContext) -> None:
 @questionnaire_router.message(States.additional_info, F.text)
 async def additional_info(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
+    await delete_messages(state)
     await state.update_data(additional_info=message.text)
     if data.get("edit_mode"):
         await update_user_info(message, state, "coach")
         return
 
-    await message.answer(translate(MessageText.payment_details, lang=data.get("lang")))
+    payment_details_msg = await message.answer(translate(MessageText.payment_details, lang=data.get("lang")))
+    await state.update_data(chat_id=message.chat.id, message_ids=[payment_details_msg.message_id])
     await state.set_state(States.payment_details)
     await message.delete()
 
@@ -151,6 +167,7 @@ async def additional_info(message: Message, state: FSMContext) -> None:
 @questionnaire_router.message(States.payment_details, F.text)
 async def payment_details(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
+    await delete_messages(state)
     card_number = message.text.replace(" ", "")
     if not all(map(lambda x: x.isdigit(), card_number)) or len(card_number) != 16:
         await message.answer(translate(MessageText.invalid_content, lang=data.get("lang")))
@@ -162,20 +179,24 @@ async def payment_details(message: Message, state: FSMContext) -> None:
         return
 
     await state.update_data(payment_details=message.text.replace(" ", ""))
-    await message.answer(translate(MessageText.upload_photo, lang=data.get("lang")))
+    photo_msg = await message.answer(translate(MessageText.upload_photo, lang=data.get("lang")))
+    await state.update_data(chat_id=message.chat.id, message_ids=[photo_msg.message_id])
     await state.set_state(States.profile_photo)
     await message.delete()
 
 
 @questionnaire_router.message(States.profile_photo, F.photo)
 async def profile_photo(message: Message, state: FSMContext) -> None:
+    await delete_messages(state)
     data = await state.get_data()
     local_file = await avatar_manager.save_profile_photo(message)
 
     if local_file and avatar_manager.check_file_size(f"temp/{local_file}", 20):
         if avatar_manager.upload_image_to_gcs(local_file):
-            await message.answer(translate(MessageText.photo_uploaded, lang=data.get("lang")))
-            await state.update_data(profile_photo=local_file)
+            uploaded_msg = await message.answer(translate(MessageText.photo_uploaded, lang=data.get("lang")))
+            await state.update_data(
+                profile_photo=local_file, chat_id=message.chat.id, message_ids=[uploaded_msg.message_id]
+            )
             avatar_manager.clean_up_local_file(local_file)
             await update_user_info(message, state, "coach")
         else:
@@ -189,6 +210,7 @@ async def profile_photo(message: Message, state: FSMContext) -> None:
 @questionnaire_router.callback_query(States.edit_profile)
 async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> None:
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+    await delete_messages(state)
     await state.update_data(lang=profile.language)
     if callback_query.data == "back":
         await show_main_menu(callback_query.message, profile, state)

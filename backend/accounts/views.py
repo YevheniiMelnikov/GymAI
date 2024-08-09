@@ -31,8 +31,6 @@ from .models import Profile, Program, Subscription
 from .serializers import ProfileSerializer, ProgramSerializer, SubscriptionSerializer
 
 
-
-
 class CreateUserView(APIView):
     permission_classes = [HasAPIKey | IsAuthenticated]
 

@@ -124,22 +124,30 @@ async def manage_program(callback_query: CallbackQuery, profile: Profile, client
 
     if workout_data and workout_data.exercises_by_day:
         program = await format_program(workout_data.exercises_by_day, 0)
-        del_msg = await callback_query.message.answer(
+        program_msg = await callback_query.message.answer(
             text=translate(MessageText.program_page, lang=profile.language).format(program=program, day=1),
             reply_markup=program_edit_kb(profile.language),
             disable_web_page_preview=True,
         )
         await state.update_data(
-            exercises=workout_data.exercises_by_day, del_msg=del_msg.message_id, client_id=client_id, day_index=0
+            chat_id=callback_query.message.chat.id,
+            message_ids=[program_msg.message_id],
+            exercises=workout_data.exercises_by_day,
+            client_id=client_id,
+            day_index=0,
         )
         await state.set_state(States.program_edit)
         await callback_query.message.delete()
         return
 
     else:
-        del_msg = await callback_query.message.answer(text=translate(MessageText.no_program, lang=profile.language))
+        no_program_msg = await callback_query.message.answer(
+            text=translate(MessageText.no_program, lang=profile.language)
+        )
 
-    await state.update_data(del_msg=del_msg.message_id, client_id=client_id)
+    await state.update_data(
+        chat_id=callback_query.message.chat.id, message_ids=[no_program_msg.message_id], client_id=client_id
+    )
     await callback_query.message.answer(translate(MessageText.workouts_number, profile.language))
     await state.set_state(States.workouts_number)
     await callback_query.message.delete()

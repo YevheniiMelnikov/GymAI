@@ -71,13 +71,17 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
 
     state_to_set = States.edit_profile if questionnaire else States.name
     response_message = MessageText.choose_profile_parameter if questionnaire else MessageText.edit_profile
-    await message.answer(text=translate(response_message, lang=profile.language), reply_markup=reply_markup)
+    profile_msg = await message.answer(
+        text=translate(response_message, lang=profile.language), reply_markup=reply_markup
+    )
     with suppress(TelegramBadRequest):
         await message.delete()
+    await state.update_data(message_ids=[profile_msg.message_id], chat_id=message.chat.id)
     await state.set_state(state_to_set)
 
     if not questionnaire:
-        await message.answer(translate(MessageText.name, lang=profile.language))
+        name_msg = await message.answer(translate(MessageText.name, lang=profile.language))
+        await state.update_data(message_ids=[profile_msg.message_id, name_msg.message_id])
 
 
 async def show_main_menu(message: Message, profile: Profile, state: FSMContext) -> None:
@@ -336,7 +340,8 @@ async def show_manage_subscription_menu(
             reply_markup=program_manage_menu(lang),
         )
         await state.update_data(
-            day_1_msg=day_1_msg.message_id,
+            chat_id=callback_query.message.chat.id,
+            message_ids=[day_1_msg.message_id],
             split=workouts_per_week,
             days=days,
             day_index=0,
@@ -349,13 +354,14 @@ async def show_manage_subscription_menu(
     else:
         program_text = await format_program({days[0]: subscription.exercises["0"]}, days[0])
         week_day = get_translated_week_day(lang, days[0])
-        del_msg = await callback_query.message.answer(
+        program_msg = await callback_query.message.answer(
             text=translate(MessageText.program_page, lang).format(program=program_text, day=week_day),
             reply_markup=subscription_manage_menu(lang),
             disable_web_page_preview=True,
         )
         await state.update_data(
-            del_msg=del_msg.message_id,
+            chat_id=callback_query.message.chat.id,
+            message_ids=[program_msg.message_id],
             exercises=subscription.exercises,
             days=days,
             client_id=client_id,
