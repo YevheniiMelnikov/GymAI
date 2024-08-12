@@ -38,7 +38,9 @@ class CacheManager:
     def _get_profile_data(self, telegram_id: int | str) -> list[dict[str, Any]]:
         profiles_data = self.redis.hget("user_profiles", str(telegram_id)) or "[]"
         try:
-            return json.loads(profiles_data)
+            profile = json.loads(profiles_data)
+            profile["current_tg_id"] = telegram_id
+            return profile
         except JSONDecodeError as e:
             logger.error(f"JSON decode error: {e}")
             return []
