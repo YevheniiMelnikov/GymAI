@@ -40,6 +40,7 @@ class CreateUserView(APIView):
         email = request.data.get("email")
         status = request.data.get("status")
         language = request.data.get("language")
+        tg_id = request.data.get("current_tg_id")
 
         if not password or not username or not email:
             return Response({"error": "Required fields are missing"}, status=HTTP_400_BAD_REQUEST)
@@ -50,12 +51,12 @@ class CreateUserView(APIView):
         try:
             with transaction.atomic():
                 user = User.objects.create_user(username=username, password=password, email=email)
-                profile_data = {"status": status, "language": language}
+                profile_data = {"status": status, "language": language, "current_tg_id": tg_id}
                 Profile.objects.create(user=user, **profile_data)
         except Exception as e:
             return Response({"error": str(e)}, status=HTTP_400_BAD_REQUEST)
 
-        user_data = {"id": user.id, "username": user.username, "email": user.email}
+        user_data = {"id": user.id, "username": user.username, "email": user.email, "current_tg_id": tg_id}
         return Response(user_data, status=HTTP_201_CREATED)
 
 
@@ -84,7 +85,15 @@ class CurrentUserView(APIView):
 
     def get(self, request):
         user = request.user
-        return Response({"username": user.username, "email": user.email})
+        profile = getattr(user, "profile", None)
+        if profile:
+            serializer = ProfileSerializer(profile)
+            data = serializer.data
+            return Response(
+                {"username": user.username, "email": user.email, "current_tg_id": data.get("current_tg_id")}
+            )
+        else:
+            return Response({"error": "User not found"}, status=HTTP_404_NOT_FOUND)
 
 
 class SendFeedbackAPIView(APIView):

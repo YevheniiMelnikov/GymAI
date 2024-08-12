@@ -76,6 +76,7 @@ class UserService:
 
     async def edit_profile(self, profile_id: int, data: dict, token: str | None = None) -> bool:
         fields = [
+            "current_tg_id",
             "language",
             "name",
             "gender",
