@@ -366,8 +366,6 @@ async def subscription_manage(callback_query: CallbackQuery, state: FSMContext):
     days = data.get("days", [])
     day_index = data.get("day_index", 0)
     exercises = data.get("exercises", {})
-    await state.update_data(subscription=True)
-    await delete_messages(state)
 
     if callback_query.data == "back":
         await my_clients_menu(callback_query, profile, state)
@@ -377,7 +375,7 @@ async def subscription_manage(callback_query: CallbackQuery, state: FSMContext):
         await callback_query.answer()
         program_text = await format_program({str(day_index): exercises[str(day_index)]}, day_index)
         await state.set_state(States.program_edit)
-        week_day = get_translated_week_day(profile.language, days[day_index])
+        week_day = get_translated_week_day(profile.language, days[day_index]).lower()
         await callback_query.message.answer(
             text=translate(MessageText.program_page, profile.language).format(program=program_text, day=week_day),
             disable_web_page_preview=True,

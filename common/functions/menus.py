@@ -255,7 +255,7 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
         await state.set_state(States.payment_choice)
     else:
         if exercises := subscription.exercises:
-            await state.update_data(exercises=exercises)
+            await state.update_data(exercises=exercises, subscription=True)
             await show_subscription_page(callback_query, state, subscription)
         else:
             await callback_query.answer(translate(MessageText.program_not_ready, profile.language), show_alert=True)
@@ -304,14 +304,16 @@ async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, 
     exercises = data.get("exercises", {})
     updated_exercises = {str(index): exercise for index, exercise in enumerate(exercises.values())}
     program = await format_program(updated_exercises, day=0)
+    days = data.get("days", [])
+    week_day = get_translated_week_day(profile.language, days[0]).lower()
 
     await callback_query.message.answer(
-        text=translate(MessageText.program_page, lang=profile.language).format(program=program, day=1),
+        text=translate(MessageText.program_page, lang=profile.language).format(program=program, day=week_day),
         reply_markup=program_view_kb(profile.language),
         disable_web_page_preview=True,
     )
 
-    await state.update_data(client=True)
+    await state.update_data(client=True, day_index=0)
     await state.set_state(States.program_view)
     await callback_query.message.delete()
 
@@ -319,6 +321,7 @@ async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, 
 async def show_manage_subscription_menu(
     callback_query: CallbackQuery, lang: str, client_id: str, state: FSMContext
 ) -> None:
+    await state.clear()
     subscription = user_service.storage.get_subscription(client_id)
 
     if not subscription or not subscription.enabled:
@@ -354,14 +357,12 @@ async def show_manage_subscription_menu(
     else:
         program_text = await format_program({days[0]: subscription.exercises["0"]}, days[0])
         week_day = get_translated_week_day(lang, days[0])
-        program_msg = await callback_query.message.answer(
+        await callback_query.message.answer(
             text=translate(MessageText.program_page, lang).format(program=program_text, day=week_day),
             reply_markup=subscription_manage_menu(lang),
             disable_web_page_preview=True,
         )
         await state.update_data(
-            chat_id=callback_query.message.chat.id,
-            message_ids=[program_msg.message_id],
             exercises=subscription.exercises,
             days=days,
             client_id=client_id,

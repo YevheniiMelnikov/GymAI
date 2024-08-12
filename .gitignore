@@ -155,3 +155,10 @@ cython_debug/
 database.db
 google_creds.json
 /docker-compose_dev.yml
+.backup/dumps/
+.nohup.out
+.pgdata/
+redis.conf
+.redisdata/
+test_redis_connection.py
+

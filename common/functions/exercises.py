@@ -32,7 +32,7 @@ async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Messa
     if data.get("subscription"):
         days = data.get("days")
         current_day = days[day_index]
-        day = get_translated_week_day(profile.language, current_day)
+        day = get_translated_week_day(profile.language, current_day).lower()
         if current_day not in exercises:
             exercises[day_index] = [asdict(exercise)]
         else:
