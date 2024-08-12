@@ -167,6 +167,7 @@ async def additional_info(message: Message, state: FSMContext) -> None:
 
 @questionnaire_router.message(States.payment_details, F.text)
 async def payment_details(message: Message, state: FSMContext) -> None:
+    await state.update_data(payment_details=message.text.replace(" ", ""))
     data = await state.get_data()
     await delete_messages(state)
     card_number = message.text.replace(" ", "")
@@ -179,7 +180,6 @@ async def payment_details(message: Message, state: FSMContext) -> None:
         await update_user_info(message, state, "coach")
         return
 
-    await state.update_data(payment_details=message.text.replace(" ", ""))
     photo_msg = await message.answer(translate(MessageText.upload_photo, lang=data.get("lang")))
     await state.update_data(chat_id=message.chat.id, message_ids=[photo_msg.message_id])
     await state.set_state(States.profile_photo)
