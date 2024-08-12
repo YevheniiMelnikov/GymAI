@@ -167,7 +167,6 @@ async def register_user(callback_query: CallbackQuery, state: FSMContext, data: 
         email=email,
     )
     await callback_query.message.answer(text=translate(MessageText.registration_successful, lang=data.get("lang")))
-    # profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     await show_main_menu(callback_query.message, profile_data, state)
 
 
