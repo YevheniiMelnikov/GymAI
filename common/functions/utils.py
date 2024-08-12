@@ -8,10 +8,10 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BotCommand, CallbackQuery
 
-from bot.keyboards import program_edit_kb, program_view_kb
+from bot.keyboards import program_edit_kb, program_view_kb, subscription_manage_menu
 from bot.states import States
 from common.functions.menus import my_clients_menu, show_clients
-from common.functions.text_utils import format_program
+from common.functions.text_utils import format_program, get_translated_week_day
 from common.models import Client
 from common.user_service import user_service
 from texts.text_manager import MessageText, resource_manager, translate
@@ -53,14 +53,17 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
     exercises = data.get("exercises", {})
     split_number = data.get("split")
 
-    if callback_query.data == "previous":
+    if callback_query.data == "prev_day" or callback_query.data == "previous":
         current_day -= 1
     else:
         current_day += 1
 
-    if current_day < 0 or current_day >= split_number:
+    if current_day < 0:
+        current_day = 0
         await callback_query.answer(translate(MessageText.out_of_range, profile.language))
-        current_day = max(0, min(current_day, split_number - 1))
+    elif current_day >= split_number:
+        current_day = split_number - 1
+        await callback_query.answer(translate(MessageText.out_of_range, profile.language))
 
     await state.update_data(day_index=current_day)
     program_text = await format_program(exercises, current_day)
@@ -69,14 +72,22 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
         reply_markup = program_view_kb(profile.language)
         state_to_set = States.program_view
     else:
-        reply_markup = program_edit_kb(profile.language)
-        state_to_set = States.program_edit
+        reply_markup = (
+            subscription_manage_menu(profile.language)
+            if data.get("subscription")
+            else program_edit_kb(profile.language)
+        )
+        state_to_set = States.subscription_manage if data.get("subscription") else States.program_edit
 
+    days = data.get("days", [])
+    next_day = (
+        get_translated_week_day(profile.language, days[current_day]).lower()
+        if data.get("subscription")
+        else current_day + 1
+    )
     with suppress(TelegramBadRequest):
         await callback_query.message.edit_text(
-            text=translate(MessageText.program_page, profile.language).format(
-                program=program_text, day=current_day + 1
-            ),
+            text=translate(MessageText.program_page, profile.language).format(program=program_text, day=next_day),
             reply_markup=reply_markup,
             disable_web_page_preview=True,
         )
