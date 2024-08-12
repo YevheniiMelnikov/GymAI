@@ -38,9 +38,7 @@ class CacheManager:
     def _get_profile_data(self, telegram_id: int | str) -> list[dict[str, Any]]:
         profiles_data = self.redis.hget("user_profiles", str(telegram_id)) or "[]"
         try:
-            profile = json.loads(profiles_data)
-            profile["current_tg_id"] = telegram_id
-            return profile
+            return json.loads(profiles_data)
         except JSONDecodeError as e:
             logger.error(f"JSON decode error: {e}")
             return []
@@ -68,6 +66,7 @@ class CacheManager:
                 "email": email,
                 "is_current": is_current,
                 "last_used": time.time(),
+                "current_tg_id": telegram_id,
             }
 
             existing_profile_index = next((i for i, p in enumerate(current_profiles) if p["id"] == profile.id), None)
