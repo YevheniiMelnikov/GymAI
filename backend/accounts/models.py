@@ -10,6 +10,7 @@ class Profile(Model):
     status = models.CharField(max_length=50, default="client")
     language = models.CharField(max_length=50, null=True, blank=True)
     assigned_to = ArrayField(models.IntegerField(), default=list, blank=True)
+    current_tg_id = models.BigIntegerField(blank=True)
 
     # client fields:
     gender = models.CharField(max_length=50, null=True, blank=True)

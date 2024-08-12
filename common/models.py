@@ -25,6 +25,7 @@ class BaseEntity:
 @dataclass
 class Profile(BaseEntity):
     status: str
+    current_tg_id: int
     language: str | None = None
     last_used: float | None = None
 

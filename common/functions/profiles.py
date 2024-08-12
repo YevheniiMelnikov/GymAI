@@ -98,6 +98,8 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
         profile=profile, username=data["username"], auth_token=token, telegram_id=str(message.from_user.id), email=email
     )
     logger.info(f"profile_id {profile.id} set for user {message.from_user.id}")
+    await user_service.edit_profile(profile_id=profile.id, data={"current_tg_id": message.from_user.id}, token=token)
+    logger.info(f"tg_id {message.from_user.id} set for profile_id {profile.id}")
 
     if profile.status == "coach":
         try:
@@ -130,6 +132,7 @@ async def register_user(callback_query: CallbackQuery, state: FSMContext, data: 
     password = data.get("password")
 
     if not await user_service.sign_up(
+        current_tg_id=callback_query.from_user.id,
         username=username,
         password=password,
         email=email,
@@ -164,8 +167,8 @@ async def register_user(callback_query: CallbackQuery, state: FSMContext, data: 
         email=email,
     )
     await callback_query.message.answer(text=translate(MessageText.registration_successful, lang=data.get("lang")))
-    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
-    await show_main_menu(callback_query.message, profile, state)
+    # profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+    await show_main_menu(callback_query.message, profile_data, state)
 
 
 async def check_assigned_clients(profile_id: int) -> bool:
