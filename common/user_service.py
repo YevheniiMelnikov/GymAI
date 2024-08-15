@@ -102,14 +102,16 @@ class UserService:
     async def get_user_token(self, profile_id: int) -> str | None:
         url = f"{self.backend_url}api/v1/get-user-token/"
         data = {"profile_id": profile_id}
-        status_code, response = await self._api_request("post", url, data=data,
-                                                        headers={"Authorization": f"Api-Key {self.api_key}"})
+        status_code, response = await self._api_request(
+            "post", url, data=data, headers={"Authorization": f"Api-Key {self.api_key}"}
+        )
 
-        if status_code == 200 and 'auth_token' in response:
-            return response['auth_token']
+        if status_code == 200 and "auth_token" in response:
+            return response["auth_token"]
         else:
             logger.error(
-                f"Failed to retrieve token for profile_id {profile_id}. Status code: {status_code}, response: {response}")
+                f"Failed to retrieve token for profile_id {profile_id}. Status code: {status_code}, response: {response}"
+            )
             return None
 
     async def log_in(self, username: str, password: str) -> str | None:

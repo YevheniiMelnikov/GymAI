@@ -59,7 +59,7 @@ async def program_manage(callback_query: CallbackQuery, state: FSMContext) -> No
         profile = user_service.storage.get_current_profile(callback_query.from_user.id)
         await show_main_menu(callback_query.message, profile, state)
 
-    elif callback_query.data == "next":
+    elif callback_query.data == "add_next_day":
         await next_day_workout_plan(callback_query, state)
 
     elif callback_query.data == "reset":
@@ -74,7 +74,6 @@ async def program_manage(callback_query: CallbackQuery, state: FSMContext) -> No
 async def set_exercise_name(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     profile = user_service.storage.get_current_profile(message.from_user.id)
-
     link_to_gif = await find_exercise_gif(message.text)
     shorted_link = await short_url(link_to_gif) if link_to_gif else None
 
@@ -153,6 +152,16 @@ async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMCon
     if data.get("edit_mode"):
         await update_exercise_data(message, state, profile.language, {"weight": weight})
         return
+
+    exercises = data.get("exercises", {})
+    day_index = data.get("day_index", 0)
+    if str(day_index) not in exercises:
+        exercises[str(day_index)] = [dict(gif_link=gif_link, name=exercise_name, reps=reps, sets=sets, weight=weight)]
+    else:
+        exercises[str(day_index)].append(
+            dict(gif_link=gif_link, name=exercise_name, reps=reps, sets=sets, weight=weight)
+        )
+    await state.update_data(exercises=exercises)
 
     exercise = Exercise(exercise_name, sets, reps, gif_link, weight)
     await save_exercise(state, exercise, input_data)
