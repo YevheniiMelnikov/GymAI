@@ -5,11 +5,11 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.shortcuts import get_object_or_404, render
 from rest_framework import generics
+from rest_framework.authtoken.models import Token
 from rest_framework.decorators import action
-from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import (
     BasePermission,
-    IsAdminUser,
     IsAuthenticated,
     IsAuthenticatedOrReadOnly,
 )
@@ -245,3 +245,20 @@ class SubscriptionViewSet(ModelViewSet):
             subscriptions.delete()
             return Response(status=HTTP_204_NO_CONTENT)
         return Response(status=HTTP_404_NOT_FOUND)
+
+
+class GetUserTokenView(APIView):
+    permission_classes = [HasAPIKey]
+
+    def post(self, request, *args, **kwargs):
+        profile_id = request.data.get("profile_id")
+        if not profile_id:
+            return Response({"error": "Profile ID is required"}, status=400)
+
+        try:
+            profile = Profile.objects.get(id=profile_id)
+            user = profile.user
+            token, created = Token.objects.get_or_create(user=user)
+            return Response({"profile_id": profile_id, "username": user.username, "auth_token": token.key})
+        except Profile.DoesNotExist:
+            return Response({"error": "Profile not found"}, status=404)

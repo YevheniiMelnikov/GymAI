@@ -1,6 +1,6 @@
 from django.contrib.auth.models import User
 from django.contrib.postgres.fields import ArrayField
-from django.core.validators import MaxValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models import JSONField, Model
 
@@ -14,7 +14,7 @@ class Profile(Model):
 
     # client fields:
     gender = models.CharField(max_length=50, null=True, blank=True)
-    birth_date = models.DateField(null=True, blank=True)
+    born_in = models.IntegerField(null=True, blank=True, validators=[MaxValueValidator(2025), MinValueValidator(1900)])
     workout_experience = models.CharField(max_length=50, null=True, blank=True)
     workout_goals = models.CharField(max_length=250, null=True, blank=True)
     health_notes = models.CharField(max_length=250, null=True, blank=True)

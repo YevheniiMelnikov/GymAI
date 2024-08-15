@@ -29,6 +29,8 @@ async def language_choice(callback_query: CallbackQuery, state: FSMContext) -> N
     await set_bot_commands(lang_code)
     if profile := user_service.storage.get_current_profile(callback_query.from_user.id):
         token = user_service.storage.get_profile_info_by_key(callback_query.from_user.id, profile.id, "auth_token")
+        if not token:
+            token = await user_service.get_user_token(profile.id)
         await user_service.edit_profile(profile.id, {"language": lang_code}, token)
         user_service.storage.set_profile_info_by_key(
             str(callback_query.from_user.id), profile.id, "language", lang_code
@@ -213,6 +215,8 @@ async def delete_profile_confirmation(callback_query: CallbackQuery, state: FSMC
                 await callback_query.answer(translate(MessageText.unable_to_delete_profile, lang=lang))
                 return
         token = user_service.storage.get_profile_info_by_key(callback_query.from_user.id, profile.id, "auth_token")
+        if not token:
+            token = await user_service.get_user_token(profile.id)
         if await user_service.delete_profile(callback_query.from_user.id, profile.id, token):
             await callback_query.message.answer(translate(MessageText.profile_deleted, profile.language))
             await callback_query.message.answer(

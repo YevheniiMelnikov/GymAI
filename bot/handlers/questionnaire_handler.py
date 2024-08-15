@@ -82,7 +82,8 @@ async def workout_experience(callback_query: CallbackQuery, state: FSMContext) -
     weight_msg = await callback_query.message.answer(translate(MessageText.weight, lang=data.get("lang")))
     await state.update_data(chat_id=callback_query.message.chat.id, message_ids=[weight_msg.message_id])
     await state.set_state(States.weight)
-    await callback_query.message.delete()
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()
 
 
 @questionnaire_router.message(States.weight, F.text)
