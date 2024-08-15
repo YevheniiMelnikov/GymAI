@@ -37,7 +37,7 @@ async def update_user_info(message: Message, state: FSMContext, role: str) -> No
 
         token = user_service.storage.get_profile_info_by_key(message.chat.id, profile.id, "auth_token")
         if not token:
-            raise ValueError("Authentication token not found")
+            token = await user_service.get_user_token(profile.id)
 
         await user_service.edit_profile(profile.id, data, token)
         await message.answer(translate(MessageText.your_data_updated, lang=data.get("lang")))
@@ -65,6 +65,8 @@ async def assign_coach(coach: Coach, client: Client) -> None:
 
     user_service.storage.set_client_data(str(client.id), {"assigned_to": [int(coach.id)]})
     token = user_service.storage.get_profile_info_by_key(client.tg_id, client.id, "auth_token")
+    if not token:
+        token = await user_service.get_user_token(client.id)
     await user_service.edit_profile(client.id, {"assigned_to": [coach.id]}, token)
     await user_service.edit_profile(coach.id, {"assigned_to": coach_clients}, token)
 

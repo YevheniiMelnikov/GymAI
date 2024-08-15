@@ -90,6 +90,8 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
     @sub_router.callback_query(F.data == "coach_approve")
     async def approve_coach(callback_query: CallbackQuery, state: FSMContext):
         token = user_service.storage.get_profile_info_by_key(tg_id, profile.id, "auth_token")
+        if not token:
+            token = await user_service.get_user_token(profile.id)
         await user_service.edit_profile(profile.id, {"verified": True}, token)
         user_service.storage.set_coach_data(str(profile.id), {"verified": True})
         await callback_query.answer("👍")
@@ -178,8 +180,8 @@ async def send_message(
         await state.update_data(recipient_id=recipient_id, sender_name=sender.name)
         await state.set_state(status_to_set)
 
-    @sub_router.callback_query(F.data == "prev_day")
-    @sub_router.callback_query(F.data == "next_day")
+    @sub_router.callback_query(F.data == "previous")
+    @sub_router.callback_query(F.data == "next")
     async def navigate_days(callback_query: CallbackQuery, state: FSMContext):
         profile = user_service.storage.get_current_profile(callback_query.from_user.id)
         program = user_service.storage.get_program(str(profile.id))

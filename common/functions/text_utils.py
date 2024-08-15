@@ -26,24 +26,15 @@ def validate_email(email: str) -> bool:
     return bool(re.match(pattern, email))
 
 
-def validate_birth_date(date_str: str) -> bool:
-    pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-    if not pattern.match(date_str):
+def validate_birth_date(year: str) -> bool:
+    try:
+        year = int(year)
+    except ValueError:
         return False
 
-    year, month, day = map(int, date_str.split("-"))
-    if not (1900 <= year <= 2100 and 1 <= month <= 12):
-        return False
-
-    if month in [4, 6, 9, 11] and day > 30:
-        return False
-    elif month == 2:
-        if (year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)) and day > 29:
-            return False
-        elif day > 28:
-            return False
-
-    return 1 <= day <= 31
+    if not (1900 <= year <= 2025):
+        raise ValueError("Invalid year")
+    return True
 
 
 def get_profile_attributes(role: str, user: Optional[Client | Coach], lang_code: str) -> dict[str, str]:

@@ -80,7 +80,7 @@ class UserService:
             "language",
             "name",
             "gender",
-            "birth_date",
+            "born_in",
             "workout_experience",
             "work_experience",
             "additional_info",
@@ -98,6 +98,19 @@ class UserService:
         url = f"{self.backend_url}api/v1/persons/{profile_id}/"
         status_code, _ = await self._api_request("put", url, filtered_data, headers={"Authorization": f"Token {token}"})
         return status_code == 200
+
+    async def get_user_token(self, profile_id: int) -> str | None:
+        url = f"{self.backend_url}api/v1/get-user-token/"
+        data = {"profile_id": profile_id}
+        status_code, response = await self._api_request("post", url, data=data,
+                                                        headers={"Authorization": f"Api-Key {self.api_key}"})
+
+        if status_code == 200 and 'auth_token' in response:
+            return response['auth_token']
+        else:
+            logger.error(
+                f"Failed to retrieve token for profile_id {profile_id}. Status code: {status_code}, response: {response}")
+            return None
 
     async def log_in(self, username: str, password: str) -> str | None:
         url = f"{self.backend_url}auth/token/login/"
