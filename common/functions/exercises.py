@@ -46,7 +46,8 @@ async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Messa
         if str(day_index) not in exercises:
             exercises[str(day_index)] = [asdict(exercise)]
         else:
-            exercises[str(day_index)].append(asdict(exercise))
+            if not any(ex["name"] == exercise.name for ex in exercises[str(day_index)]):
+                exercises[str(day_index)].append(asdict(exercise))
         program = await format_program({str(day_index): exercises[str(day_index)]}, day_index)
 
     exercise_msg = await (input_data.answer if isinstance(input_data, Message) else input_data.message.answer)(
