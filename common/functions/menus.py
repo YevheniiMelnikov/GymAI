@@ -302,8 +302,7 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
 async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, profile: Profile) -> None:
     data = await state.get_data()
     exercises = data.get("exercises", {})
-    updated_exercises = {str(index): exercise for index, exercise in enumerate(exercises.values())}
-    program = await format_program(updated_exercises, day=0)
+    program = await format_program(exercises, day=0)
     days = data.get("days", [])
     week_day = get_translated_week_day(profile.language, days[0]).lower()
 
@@ -330,6 +329,7 @@ async def show_manage_subscription_menu(
 
     await callback_query.answer()
     days = subscription.workout_days
+    week_day = get_translated_week_day(lang, days[0]).lower()
 
     if not subscription.exercises:
         await callback_query.message.answer(translate(MessageText.no_program, lang))
@@ -339,7 +339,7 @@ async def show_manage_subscription_menu(
         )
         await callback_query.message.answer(text=translate(MessageText.program_guide, lang))
         day_1_msg = await callback_query.message.answer(
-            translate(MessageText.enter_daily_program, lang).format(day=1),
+            translate(MessageText.enter_daily_program, lang).format(day=week_day),
             reply_markup=program_manage_menu(lang),
         )
         await state.update_data(
@@ -356,7 +356,6 @@ async def show_manage_subscription_menu(
 
     else:
         program_text = await format_program({days[0]: subscription.exercises["0"]}, days[0])
-        week_day = get_translated_week_day(lang, days[0])
         await callback_query.message.answer(
             text=translate(MessageText.program_page, lang).format(program=program_text, day=week_day),
             reply_markup=subscription_manage_menu(lang),

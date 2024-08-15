@@ -162,6 +162,7 @@ async def send_message(
             exercises=subscription_data.exercises,
             split=len(subscription_data.workout_days),
             days=subscription_data.workout_days,
+            subscription=True,
         )
         await show_exercises_menu(callback_query, state, profile)
 
@@ -185,15 +186,14 @@ async def send_message(
     async def navigate_days(callback_query: CallbackQuery, state: FSMContext):
         profile = user_service.storage.get_current_profile(callback_query.from_user.id)
         program = user_service.storage.get_program(str(profile.id))
-
-        if program:
-            split_number = program.split_number
-            exercises = program.exercises_by_day
-        else:
+        data = await state.get_data()
+        if data.get("subscription"):
             subscription = user_service.storage.get_subscription(str(profile.id))
             split_number = len(subscription.workout_days)
             exercises = subscription.exercises
-
+        else:
+            split_number = program.split_number
+            exercises = program.exercises_by_day
         await state.update_data(exercises=exercises, split=split_number, client=True)
         await program_menu_pagination(state, callback_query)
 

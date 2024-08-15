@@ -33,18 +33,21 @@ async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Messa
         days = data.get("days")
         current_day = days[day_index]
         day = get_translated_week_day(profile.language, current_day).lower()
-        if current_day not in exercises:
-            exercises[day_index] = [asdict(exercise)]
+
+        if str(day_index) not in exercises:
+            exercises[str(day_index)] = [asdict(exercise)]
         else:
-            exercises[day_index].append(asdict(exercise))
-        program = await format_program({days[day_index]: exercises[day_index]}, days[day_index])
+            if not any(ex["name"] == exercise.name for ex in exercises[str(day_index)]):
+                exercises[str(day_index)].append(asdict(exercise))
+
+        program = await format_program({days[day_index]: exercises[str(day_index)]}, days[day_index])
     else:
         day = day_index + 1
-        if day_index not in exercises:
-            exercises[day_index] = [asdict(exercise)]
+        if str(day_index) not in exercises:
+            exercises[str(day_index)] = [asdict(exercise)]
         else:
-            exercises[day_index].append(asdict(exercise))
-        program = await format_program({str(day_index): exercises[day_index]}, day_index)
+            exercises[str(day_index)].append(asdict(exercise))
+        program = await format_program({str(day_index): exercises[str(day_index)]}, day_index)
 
     exercise_msg = await (input_data.answer if isinstance(input_data, Message) else input_data.message.answer)(
         translate(MessageText.enter_exercise, profile.language)
@@ -59,7 +62,7 @@ async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Messa
         chat_id=input_data.chat.id if isinstance(input_data, Message) else input_data.message.chat.id,
         message_ids=[exercise_msg.message_id, program_msg.message_id],
         exercises=exercises,
-        day_index=day_index + 1,
+        day_index=day_index,
     )
     await state.set_state(States.program_manage)
 

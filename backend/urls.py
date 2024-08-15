@@ -29,5 +29,5 @@ urlpatterns = [
     path("api/v1/send-feedback/", SendFeedbackAPIView.as_view(), name="send-feedback"),
     path("api/v1/", include(program_router.urls)),
     path("api/v1/", include(subscription_router.urls)),
-    path('api/v1/get-user-token/', GetUserTokenView.as_view(), name='get-user-token'),
+    path("api/v1/get-user-token/", GetUserTokenView.as_view(), name="get-user-token"),
 ]
