@@ -19,8 +19,11 @@ async def create_backup():
     filename = f"{DB_NAME}_backup_{datetime.now().strftime('%Y%m%d%H%M%S')}.sql"
     filepath = os.path.join(BACKUP_DIR, filename)
     command = f"pg_dump -h {DB_HOST} -U {DB_USER} -F c {DB_NAME} > {filepath}"
-    subprocess.run(command, shell=True)
-    logger.info(f"Backup created: {filename}")
+    result = subprocess.run(command, shell=True, capture_output=True, text=True)
+    if result.returncode == 0:
+        logger.info(f"Backup {filename} saved to {filepath}")
+    else:
+        logger.error(f"Backup {filename} failed: {result.stderr}")
 
 
 async def delete_old_backups():

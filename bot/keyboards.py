@@ -274,16 +274,20 @@ def program_view_kb(lang_code: str) -> InlineKeyboardMarkup:
 
 def workout_survey_keyboard(lang_code: str, day: str) -> InlineKeyboardMarkup:
     buttons = [
-        [InlineKeyboardButton(text=translate(ButtonText.answer_yes, lang_code), callback_data=f"yes_{day}")],
-        [InlineKeyboardButton(text=translate(ButtonText.answer_no, lang_code), callback_data=f"no_{day}")],
+        [
+            InlineKeyboardButton(text=translate(ButtonText.answer_yes, lang_code), callback_data=f"yes_{day}"),
+            InlineKeyboardButton(text=translate(ButtonText.answer_no, lang_code), callback_data=f"no_{day}"),
+        ]
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
+    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=2)
 
 
 def workout_results(lang_code: str) -> InlineKeyboardMarkup:
     buttons = [
-        [InlineKeyboardButton(text=translate(ButtonText.answer_yes, lang_code), callback_data="answer_yes")],
-        [InlineKeyboardButton(text=translate(ButtonText.answer_no, lang_code), callback_data="answer_no")],
+        [
+            InlineKeyboardButton(text=translate(ButtonText.answer_yes, lang_code), callback_data="answer_yes"),
+            InlineKeyboardButton(text=translate(ButtonText.answer_no, lang_code), callback_data="answer_no"),
+        ],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
 
@@ -395,7 +399,10 @@ def subscription_view_kb(lang_code: str) -> InlineKeyboardMarkup:
 
 
 def yes_no(lang_code) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardBuilder()
-    kb.button(text=translate(ButtonText.answer_yes, lang_code), callback_data="yes")
-    kb.button(text=translate(ButtonText.answer_no, lang_code), callback_data="no")
-    return kb.as_markup(one_time_keyboard=True)
+    buttons = [
+        [
+            InlineKeyboardButton(text=translate(ButtonText.answer_yes, lang_code), callback_data="yes"),
+            InlineKeyboardButton(text=translate(ButtonText.answer_no, lang_code), callback_data="no"),
+        ],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)

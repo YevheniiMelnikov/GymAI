@@ -175,7 +175,7 @@ async def workout_results(callback_query: CallbackQuery, state: FSMContext):
     exercises = data.get("exercises", {})
     day_index = data.get("day_index", 0)
 
-    program = await format_program(exercises, day_index)
+    program = await format_program({str(day_index): exercises}, day_index)
     if callback_query.data == "answer_yes":
         await callback_query.answer()
         await callback_query.answer(translate(MessageText.keep_going, profile.language), show_alert=True)
@@ -225,7 +225,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     exercises = data.get("exercises", {})
     client_id = data.get("client_id")
-    day_index = str(data.get("day_index"))
+    day_index = str(data.get("day_index", 0))
 
     if callback_query.data == "exercise_add":
         await callback_query.answer()
@@ -273,14 +273,38 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
 
     elif callback_query.data == "finish_editing":
         await callback_query.answer()
+        client = user_service.storage.get_client_by_id(client_id)
+        client_lang = user_service.storage.get_profile_info_by_key(client.tg_id, client.id, "language")
         if data.get("subscription"):
             subscription_data = user_service.storage.get_subscription(client_id).to_dict()
             subscription_data.update(user=client_id, exercises=exercises)
             await user_service.update_subscription(subscription_data.get("id"), subscription_data)
             user_service.storage.save_subscription(client_id, subscription_data)
+            await send_message(
+                recipient=client,
+                text=translate(MessageText.new_program, lang=client_lang),
+                state=state,
+                reply_markup=subscription_view_kb(client_lang),
+                include_incoming_message=False,
+            )
         else:
             split_number = user_service.storage.get_program(client_id).split_number
             await user_service.save_program(client_id, exercises, split_number)
+            program = await format_program(exercises, 0)
+            await user_service.save_program(str(client_id), exercises, split_number)
+            await send_message(
+                recipient=client,
+                text=translate(MessageText.new_program, lang=client_lang),
+                state=state,
+                include_incoming_message=False,
+            )
+            await send_message(
+                recipient=client,
+                text=translate(MessageText.program_page, lang=client_lang).format(program=program, day=1),
+                state=state,
+                reply_markup=program_view_kb(client_lang),
+                include_incoming_message=False,
+            )
         await callback_query.message.answer(translate(MessageText.program_compiled, profile.language))
         await show_main_menu(callback_query.message, profile, state)
         return
@@ -311,11 +335,18 @@ async def select_exercise_to_edit(callback_query: CallbackQuery, state: FSMConte
     current_index = 0
     selected_exercise = None
 
-    for _, sublist in enumerate(exercises):
-        if current_index + len(sublist) > exercise_index:
-            selected_exercise = sublist[exercise_index - current_index]
-            break
-        current_index += len(sublist)
+    for sublist in exercises:
+        if isinstance(sublist, dict):
+            keys = list(sublist.keys())
+            if current_index + len(keys) > exercise_index:
+                selected_exercise = sublist.get(keys[exercise_index - current_index])
+                break
+            current_index += len(keys)
+        elif isinstance(sublist, list):
+            if current_index + len(sublist) > exercise_index:
+                selected_exercise = sublist[exercise_index - current_index]
+                break
+            current_index += len(sublist)
 
     await state.update_data(selected_exercise=selected_exercise, exercise_index=exercise_index)
     await callback_query.message.answer(

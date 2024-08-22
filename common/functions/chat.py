@@ -199,7 +199,8 @@ async def send_message(
 
     @sub_router.callback_query(F.data.startswith("edit_"))
     async def edit_subscription(callback_query: CallbackQuery, state: FSMContext):
-        await edit_subscription_exercises(callback_query, state)
+        day_index = data.get("day_index", 0)
+        await edit_subscription_exercises(callback_query, state, day_index)
 
     @sub_router.callback_query(F.data.startswith("create"))
     async def create_workouts(callback_query: CallbackQuery, state: FSMContext):

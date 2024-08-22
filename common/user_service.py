@@ -226,6 +226,7 @@ class UserService:
         )
         if status_code == 201 and response:
             return response.get("id")
+        logger.error(f"Failed to create subscription for user {user_id}. HTTP status: {status_code}")
         return None
 
     async def get_subscription(self, user_id: int) -> Subscription | None:
@@ -243,7 +244,10 @@ class UserService:
         status_code, response = await self._api_request(
             "put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
-        return status_code == 200
+        if status_code == 200:
+            return True
+        logger.error(f"Failed to update subscription {subscription_id}. HTTP status: {status_code}")
+        return False
 
     async def delete_profile(self, telegram_id, profile_id: int, token: str | None = None) -> bool:
         url = f"{self.backend_url}api/v1/persons/{profile_id}/delete/"

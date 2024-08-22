@@ -20,16 +20,23 @@ class PaymentService:
             subscription_id = await self.user_service.create_subscription(
                 profile.id, data.get("price"), data.get("workout_days")
             )
+            if subscription_id is None:
+                raise ValueError("Subscription ID is None, creation failed.")
+
             subscription_data = {
                 "id": subscription_id,
-                "payment_date": datetime.today().isoformat(),
+                "payment_date": datetime.now().isoformat(),
                 "enabled": True,
                 "price": data.get("price"),
                 "workout_days": data.get("workout_days"),
+                "exercises": data.get("exercises", {}),
+                "user": profile.id,
             }
+
             self.user_service.storage.save_subscription(profile.id, subscription_data)
             self.user_service.storage.set_payment_status(profile.id, True, "subscription")
             return True
+
         except Exception as e:
             logger.error(f"Subscription not created for profile_id {profile.id}: {e}")
             return False

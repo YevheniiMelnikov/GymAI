@@ -15,7 +15,7 @@ from common.functions.profiles import update_user_info
 from common.functions.text_utils import get_state_and_message, validate_birth_date
 from common.functions.utils import delete_messages
 from common.models import Client, Coach
-from common.settings import PROGRAM_PRICE
+from common.settings import PROGRAM_PRICE, SUBSCRIPTION_PRICE
 from common.user_service import user_service
 from texts.text_manager import MessageText, translate
 
@@ -285,7 +285,7 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
                     inline_keyboard=[[InlineKeyboardButton(text="💰", callback_data=data.get("request_type"))]]
                 )  # TODO: REPLACE WITH PAYMENT LINK
                 await callback_query.message.answer("click to pay 👇", reply_markup=kb)
-                await state.update_data(price=50)
+                await state.update_data(price=SUBSCRIPTION_PRICE)
                 await state.set_state(States.handle_payment)
                 await callback_query.message.delete()
         else:

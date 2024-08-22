@@ -10,7 +10,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 import common.functions.chat
 import common.functions.workout_plans
-from bot.keyboards import workout_results, workout_survey_keyboard
+from bot.keyboards import workout_survey_keyboard, yes_no, workout_results
 from bot.states import States
 from common.functions.chat import send_message
 from common.user_service import cache_manager
@@ -40,7 +40,7 @@ async def send_daily_survey():
         async def have_you_trained(callback_query: CallbackQuery, state: FSMContext):
             profile = cache_manager.get_current_profile(callback_query.from_user.id)
             subscription = cache_manager.get_subscription(profile.id)
-            workout_days = subscription.get("workout_days", [])
+            workout_days = subscription.workout_days
             if callback_query.data.startswith("yes"):
                 try:
                     day = callback_query.data.split("_")[1]
@@ -48,7 +48,7 @@ async def send_daily_survey():
                 except ValueError:
                     day_index = -1
 
-                exercises = subscription.exercises.get(yesterday)
+                exercises = subscription.exercises.get(str(day_index))
                 await state.update_data(exercises=exercises, day=yesterday, day_index=day_index)
                 await callback_query.answer("🔥")
                 await callback_query.message.answer(
