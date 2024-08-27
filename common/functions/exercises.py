@@ -28,6 +28,7 @@ async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Messa
     profile = user_service.storage.get_current_profile(input_data.from_user.id)
     day_index = data.get("day_index", 0)
     exercises = data.get("exercises", {})
+    client_id = data.get("client_id")
 
     if data.get("subscription"):
         days = data.get("days")
@@ -39,7 +40,8 @@ async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Messa
         else:
             if not any(ex["name"] == exercise.name for ex in exercises[str(day_index)]):
                 exercises[str(day_index)].append(asdict(exercise))
-
+        subscription_data = user_service.storage.get_subscription(client_id)
+        split_number = len(subscription_data.workout_days)
         program = await format_program({days[day_index]: exercises[str(day_index)]}, days[day_index])
     else:
         day = day_index + 1
@@ -48,6 +50,8 @@ async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Messa
         else:
             if not any(ex["name"] == exercise.name for ex in exercises[str(day_index)]):
                 exercises[str(day_index)].append(asdict(exercise))
+        program_data = user_service.storage.get_program(client_id)
+        split_number = program_data.split_number
         program = await format_program({str(day_index): exercises[str(day_index)]}, day_index)
 
     exercise_msg = await (input_data.answer if isinstance(input_data, Message) else input_data.message.answer)(
@@ -64,6 +68,7 @@ async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Messa
         message_ids=[exercise_msg.message_id, program_msg.message_id],
         exercises=exercises,
         day_index=day_index,
+        split=split_number,
     )
     await state.set_state(States.program_manage)
 
@@ -97,7 +102,7 @@ async def update_exercise_data(message: Message, state: FSMContext, lang: str, u
     exercises = data.get("exercises", {})
     day_index = str(data.get("day_index"))
     exercise_index = data.get("exercise_index", 0)
-    selected_exercise = exercises[str(day_index)][exercise_index]
+    selected_exercise = exercises[day_index][exercise_index]
     updated_key = list(updated_option.keys())[0]
     updated_value = list(updated_option.values())[0]
     selected_exercise[updated_key] = updated_value
@@ -108,14 +113,15 @@ async def update_exercise_data(message: Message, state: FSMContext, lang: str, u
     await message.delete()
 
 
-async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMContext) -> None:
+async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMContext, day_index: int) -> None:
     profile = user_service.storage.get_current_profile(callback_query.from_user.id)
     client_id = callback_query.data.split("_")[1]
     day = callback_query.data.split("_")[2]
     subscription = user_service.storage.get_subscription(client_id)
     program_text = await format_program(subscription.exercises, 0)
-    exercises = subscription.exercises.get(day)
-    await state.update_data(exercises=exercises, client_id=client_id, day=day, subscription=True)
+    await state.update_data(
+        exercises=subscription.exercises, client_id=client_id, day=day, subscription=True, day_index=day_index
+    )
     await state.set_state(States.program_edit)
     await callback_query.message.answer(
         text=translate(MessageText.program_page, profile.language).format(program=program_text, day=day),

@@ -1,4 +1,5 @@
 from contextlib import suppress
+from datetime import datetime
 
 import loguru
 from aiogram import F, Router
@@ -6,7 +7,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from bot.keyboards import choose_gender, select_days, workout_experience_keyboard
+from bot.keyboards import choose_gender, select_days, workout_experience_keyboard, payment_keyboard
 from bot.states import States
 from common.file_manager import avatar_manager
 from common.functions.chat import client_request
@@ -15,9 +16,10 @@ from common.functions.profiles import update_user_info
 from common.functions.text_utils import get_state_and_message, validate_birth_date
 from common.functions.utils import delete_messages
 from common.models import Client, Coach
-from common.settings import PROGRAM_PRICE
+from common.payment_service import payment_service
+from common.settings import PROGRAM_PRICE, SUBSCRIPTION_PRICE
 from common.user_service import user_service
-from texts.text_manager import MessageText, translate
+from texts.text_manager import MessageText, translate, ButtonText
 
 logger = loguru.logger
 
@@ -246,12 +248,15 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
                 translate(MessageText.select_days, profile.language), reply_markup=select_days(profile.language, [])
             )
         elif data.get("request_type") == "program":
-            kb = InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text="💰", callback_data=data.get("request_type"))]]
-            )
-            await callback_query.message.answer("click to pay 👇", reply_markup=kb)
-            await state.update_data(price=PROGRAM_PRICE)
-            await state.set_state(States.handle_payment)
+            timestamp = datetime.now().timestamp()
+            if payment_link := await payment_service.get_program_link(f"id_{profile.id}_program_{timestamp}"):
+                await callback_query.message.answer(
+                    translate(MessageText.follow_link, profile.language),
+                    reply_markup=payment_keyboard(profile.language, payment_link, "program"),
+                )
+                await state.set_state(States.handle_payment)
+            else:
+                await callback_query.message.answer(translate(MessageText.unexpected_error, profile.language))
     with suppress(TelegramBadRequest):
         await callback_query.message.delete()
 
@@ -281,12 +286,17 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
                     await callback_query.message.delete()
             else:
                 await callback_query.answer()
-                kb = InlineKeyboardMarkup(
-                    inline_keyboard=[[InlineKeyboardButton(text="💰", callback_data=data.get("request_type"))]]
-                )  # TODO: REPLACE WITH PAYMENT LINK
-                await callback_query.message.answer("click to pay 👇", reply_markup=kb)
-                await state.update_data(price=50)
-                await state.set_state(States.handle_payment)
+                timestamp = datetime.now().timestamp()
+                if payment_link := await payment_service.get_subscription_link(
+                    f"id_{profile.id}_subscription_{timestamp}"
+                ):
+                    await callback_query.message.answer(
+                        translate(MessageText.follow_link, profile.language),
+                        reply_markup=payment_keyboard(profile.language, payment_link, "subscription"),
+                    )
+                    await state.set_state(States.handle_payment)
+                else:
+                    await callback_query.message.answer(translate(MessageText.unexpected_error, profile.language))
                 await callback_query.message.delete()
         else:
             await callback_query.answer("❌")

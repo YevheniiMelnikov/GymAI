@@ -115,6 +115,7 @@ class MessageText(Enum):
     profile_deleted = auto()
     accept_policy = auto()
     contract_info_message = auto()
+    follow_link = auto()
 
     def __str__(self) -> str:
         return f"messages.{self.name}"
@@ -184,6 +185,7 @@ class ButtonText(Enum):
     create = auto()
     prev_menu = auto()
     delete = auto()
+    pay = auto()
 
     def __str__(self) -> str:
         return f"buttons.{self.name}"
