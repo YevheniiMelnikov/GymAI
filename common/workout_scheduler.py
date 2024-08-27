@@ -35,8 +35,8 @@ async def send_daily_survey():
                 disable_notification=True,
             )
 
-        @survey_router.callback_query(F.data.startswith("yes"))
-        @survey_router.callback_query(F.data.startswith("no"))
+        @survey_router.callback_query(F.data.startswith("yes_"))
+        @survey_router.callback_query(F.data.startswith("no_"))
         async def have_you_trained(callback_query: CallbackQuery, state: FSMContext):
             profile = cache_manager.get_current_profile(callback_query.from_user.id)
             subscription = cache_manager.get_subscription(profile.id)

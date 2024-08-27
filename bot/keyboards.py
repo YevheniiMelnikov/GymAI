@@ -398,7 +398,7 @@ def subscription_view_kb(lang_code: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
 
 
-def yes_no(lang_code) -> InlineKeyboardMarkup:
+def yes_no(lang_code: str) -> InlineKeyboardMarkup:
     buttons = [
         [
             InlineKeyboardButton(text=translate(ButtonText.answer_yes, lang_code), callback_data="yes"),
@@ -406,3 +406,13 @@ def yes_no(lang_code) -> InlineKeyboardMarkup:
         ],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+
+
+def payment_keyboard(lang_code: str, link: str, request_type: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=translate(ButtonText.pay, lang_code), callback_data=request_type, url=link),
+            ]
+        ]
+    )

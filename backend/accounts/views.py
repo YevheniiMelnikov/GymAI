@@ -262,3 +262,40 @@ class GetUserTokenView(APIView):
             return Response({"profile_id": profile_id, "username": user.username, "auth_token": token.key})
         except Profile.DoesNotExist:
             return Response({"error": "Profile not found"}, status=404)
+
+
+class PaymentWebhookView(APIView):
+    def post(self, request, *args, **kwargs):
+        try:
+            data = request.data
+
+            if "shopBillId" not in data or "status" not in data:
+                return Response({"detail": "Missing required fields."}, status=HTTP_400_BAD_REQUEST)
+
+            # Извлечение данных
+            shop_bill_id = data.get("shopBillId")
+            status_payment = data.get("status")
+            amount = data.get("billAmount")
+
+            # Обработка статуса платежа
+            if status_payment == "PAYED":
+                # Логика обработки успешного платежа
+                self.process_successful_payment(shop_bill_id, amount)
+                return Response({"status": "success"}, status=HTTP_200_OK)
+            else:
+                # Логика обработки неуспешного платежа
+                self.process_failed_payment(shop_bill_id)
+                return Response({"status": "failure"}, status=HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"detail": "Invalid webhook data"}, status=HTTP_400_BAD_REQUEST)
+
+    def process_successful_payment(self, shop_bill_id, amount):
+        pass
+        # Ваша логика обработки успешного платежа
+        # Обновление статуса заказа в базе данных и другие необходимые действия
+
+    def process_failed_payment(self, shop_bill_id):
+        pass
+        # Ваша логика обработки неуспешного платежа
+        # Обновление статуса заказа или уведомление пользователя
