@@ -279,6 +279,20 @@ class BackendService:
         logger.info(f"Failed to retrieve email for profile_id {profile_id}. HTTP status: {status_code}")
         return None
 
+    async def send_welcome_email(self, email: str, username: str) -> bool:
+        url = f"{self.backend_url}/api/v1/send-welcome-email/"
+        data = {
+            "email": email,
+            "username": username
+        }
+        status_code, response = await self._api_request(
+            "post", url, data=data, headers={"Authorization": f"Api-Key {self.api_key}"}
+        )
+        if status_code == 200:
+            return True
+        logger.error(f"Failed to send welcome email. Status code: {status_code}, response: {response}")
+        return False
+
     async def create_payment(self, profile_id: int, payment_option: str, order_number: str, amount: int) -> bool:
         url = f"{self.backend_url}/api/v1/payments/"
         data = {
