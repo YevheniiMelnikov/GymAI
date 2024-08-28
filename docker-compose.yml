@@ -76,6 +76,8 @@ services:
     networks:
       - monitoring
     restart: always
+    volumes:
+      - ./backup/dumps:/opt/backup/dumps
 
 #  certbot:
 #    image: certbot/certbot

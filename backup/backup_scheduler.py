@@ -13,6 +13,8 @@ DB_HOST = os.getenv("DB_HOST")
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 BACKUP_DIR = os.path.join(CURRENT_DIR, "dumps")
 os.environ["PGPASSWORD"] = DB_PASSWORD
+if not os.path.exists(BACKUP_DIR):
+    os.makedirs(BACKUP_DIR)
 
 
 async def create_backup():
