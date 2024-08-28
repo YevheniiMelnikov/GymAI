@@ -168,6 +168,8 @@ async def register_user(callback_query: CallbackQuery, state: FSMContext, data: 
         telegram_id=str(callback_query.from_user.id),
         email=email,
     )
+    if not await backend_service.send_welcome_email(email=email, username=username):
+        logger.error(f"Failed to send welcome email to {email}")
     await callback_query.message.answer(text=translate(MessageText.registration_successful, lang=data.get("lang")))
     await show_main_menu(callback_query.message, profile_data, state)
 
