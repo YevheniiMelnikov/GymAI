@@ -5,10 +5,10 @@ from aiogram.types import Message
 
 from bot.keyboards import incoming_message
 from bot.states import States
+from common.backend_service import backend_service
 from common.exceptions import UserServiceError
 from common.functions.chat import send_message
 from common.functions.menus import show_main_menu
-from common.user_service import user_service
 from texts.text_manager import MessageText, translate
 
 logger = loguru.logger
@@ -18,11 +18,11 @@ chat_router = Router()
 @chat_router.message(States.contact_client, F.text | F.photo)
 async def contact_client(message: Message, state: FSMContext):
     data = await state.get_data()
-    sender = user_service.storage.get_current_profile(message.from_user.id)
+    sender = backend_service.cache.get_current_profile(message.from_user.id)
 
     try:
-        recipient = user_service.storage.get_client_by_id(data.get("recipient_id"))
-        sender_name = user_service.storage.get_coach_by_id(sender.id).name
+        recipient = backend_service.cache.get_client_by_id(data.get("recipient_id"))
+        sender_name = backend_service.cache.get_coach_by_id(sender.id).name
     except UserServiceError as error:
         logger.error(f"Can't get data from cache: {error}")
         await message.answer(translate(MessageText.unexpected_error, sender.language))
@@ -30,7 +30,7 @@ async def contact_client(message: Message, state: FSMContext):
         return
 
     await state.update_data(sender_name=sender_name)
-    recipient_language = user_service.storage.get_profile_info_by_key(recipient.tg_id, recipient.id, "language")
+    recipient_language = backend_service.cache.get_profile_info_by_key(recipient.tg_id, recipient.id, "language")
     await state.update_data(recipient_language=recipient_language)
 
     if message.photo:
@@ -50,11 +50,11 @@ async def contact_client(message: Message, state: FSMContext):
 @chat_router.message(States.contact_coach, F.text | F.photo)
 async def contact_coach(message: Message, state: FSMContext):
     data = await state.get_data()
-    sender = user_service.storage.get_current_profile(message.from_user.id)
+    sender = backend_service.cache.get_current_profile(message.from_user.id)
 
     try:
-        recipient = user_service.storage.get_coach_by_id(data.get("recipient_id"))
-        sender_name = user_service.storage.get_client_by_id(sender.id).name
+        recipient = backend_service.cache.get_coach_by_id(data.get("recipient_id"))
+        sender_name = backend_service.cache.get_client_by_id(sender.id).name
     except UserServiceError as error:
         logger.error(f"Can't get data from cache: {error}")
         await message.answer(translate(MessageText.unexpected_error, sender.language))
@@ -62,7 +62,7 @@ async def contact_coach(message: Message, state: FSMContext):
         return
 
     await state.update_data(sender_name=sender_name)
-    recipient_language = user_service.storage.get_profile_info_by_key(recipient.tg_id, recipient.id, "language")
+    recipient_language = backend_service.cache.get_profile_info_by_key(recipient.tg_id, recipient.id, "language")
     await state.update_data(recipient_language=recipient_language)
 
     if message.photo:

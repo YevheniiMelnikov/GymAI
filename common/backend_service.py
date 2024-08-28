@@ -14,7 +14,7 @@ from common.models import Exercise, Profile, Subscription
 logger = loguru.logger
 
 
-class UserService:
+class BackendService:
     def __init__(self, storage: CacheManager):
         self._backend_url = os.environ.get("BACKEND_URL")
         self._api_key = os.environ.get("API_KEY")
@@ -30,7 +30,7 @@ class UserService:
         return self._api_key
 
     @property
-    def storage(self) -> CacheManager:
+    def cache(self) -> CacheManager:
         return self._storage
 
     @property
@@ -93,7 +93,7 @@ class UserService:
             "assigned_to",
         ]
         if "payment_details" in data:
-            data["payment_details"] = self.storage.encrypter.encrypt(data["payment_details"])
+            data["payment_details"] = self.cache.encrypter.encrypt(data["payment_details"])
         filtered_data = {key: data[key] for key in fields if key in data and data[key] is not None}
         url = f"{self.backend_url}api/v1/persons/{profile_id}/"
         status_code, _ = await self._api_request("put", url, filtered_data, headers={"Authorization": f"Token {token}"})
@@ -125,13 +125,13 @@ class UserService:
         return None
 
     async def log_out(self, tg_user_id: int) -> bool:
-        current_profile = self.storage.get_current_profile(tg_user_id)
+        current_profile = self.cache.get_current_profile(tg_user_id)
         if current_profile:
-            if auth_token := self.storage.get_profile_info_by_key(tg_user_id, current_profile.id, "auth_token"):
+            if auth_token := self.cache.get_profile_info_by_key(tg_user_id, current_profile.id, "auth_token"):
                 url = f"{self.backend_url}auth/token/logout/"
                 status_code, _ = await self._api_request("post", url, headers={"Authorization": f"Token {auth_token}"})
                 if status_code == 204:
-                    self.storage.deactivate_profiles(str(tg_user_id))
+                    self.cache.deactivate_profiles(str(tg_user_id))
                     logger.info(f"User with profile_id {current_profile.id} logged out")
                     return True
         return False
@@ -144,7 +144,7 @@ class UserService:
         if status_code == 200:
             if "payment_details" in user_data and user_data["payment_details"]:
                 try:
-                    user_data["payment_details"] = self.storage.encrypter.decrypt(user_data["payment_details"])
+                    user_data["payment_details"] = self.cache.encrypter.decrypt(user_data["payment_details"])
                 except InvalidToken:
                     logger.error(f"Failed to decrypt payment details for user {username}")
                     user_data["payment_details"] = "Invalid encrypted data"
@@ -204,7 +204,7 @@ class UserService:
             created_at=response.get("created_at"),
             profile=client_id,
         )
-        self.storage.save_program(client_id, program_data)
+        self.cache.save_program(client_id, program_data)
 
     async def delete_program(self, profile_id: str) -> bool:
         url = f"{self.backend_url}api/v1/programs/delete_by_profile/{profile_id}/"
@@ -254,7 +254,7 @@ class UserService:
         headers = {"Authorization": f"Token {token}"} if token else {}
         status_code, _ = await self._api_request("delete", url, headers=headers)
         if status_code == 204:
-            return self.storage.delete_profile(telegram_id, profile_id)
+            return self.cache.delete_profile(telegram_id, profile_id)
 
     async def get_user_email(self, profile_id: int) -> str | None:
         url = f"{self.backend_url}api/v1/persons/{profile_id}/"
@@ -279,6 +279,20 @@ class UserService:
         logger.info(f"Failed to retrieve email for profile_id {profile_id}. HTTP status: {status_code}")
         return None
 
+    async def create_payment(self, profile_id: int, payment_option: str, order_number: str, amount: int) -> bool:
+        url = f"{self.backend_url}/api/v1/payments/"
+        data = {
+            "profile": profile_id,
+            "order_number": order_number,
+            "payment_option": payment_option,
+            "amount": amount,
+            "status": "PENDING",
+        }
+        status_code, response = await self._api_request(
+            "post", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
+        )
+        return status_code == 201
+
 
 cache_manager = CacheManager(os.getenv("REDIS_URL"), encrypter)
-user_service = UserService(cache_manager)
+backend_service = BackendService(cache_manager)

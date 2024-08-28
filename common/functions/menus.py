@@ -13,6 +13,7 @@ from dateutil.relativedelta import relativedelta
 from bot.keyboards import *
 from bot.keyboards import choose_coach, program_manage_menu, program_view_kb, select_service, subscription_manage_menu
 from bot.states import States
+from common.backend_service import backend_service
 from common.exceptions import UserServiceError
 from common.file_manager import avatar_manager
 from common.functions.text_utils import (
@@ -24,7 +25,6 @@ from common.functions.text_utils import (
 )
 from common.models import Client, Coach, Profile, Subscription
 from common.settings import BOT_PAYMENT_OPTIONS
-from common.user_service import user_service
 from texts.text_manager import MessageText, translate
 
 logger = loguru.logger
@@ -33,7 +33,7 @@ bot = Bot(os.environ.get("BOT_TOKEN"))
 
 async def show_subscription_page(callback_query: CallbackQuery, state: FSMContext, subscription: Subscription) -> None:
     await callback_query.answer()
-    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+    profile = backend_service.cache.get_current_profile(callback_query.from_user.id)
     payment_date = datetime.fromtimestamp(subscription.payment_date)
     next_payment_date = payment_date + relativedelta(months=1)
     next_payment_date_str = next_payment_date.strftime("%Y-%m-%d")
@@ -55,7 +55,7 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
 
     if profile.status == "client":
         try:
-            questionnaire = user_service.storage.get_client_by_id(profile.id)
+            questionnaire = backend_service.cache.get_client_by_id(profile.id)
         except UserServiceError:
             questionnaire = None
         reply_markup = edit_client_profile(profile.language) if questionnaire else None
@@ -63,7 +63,7 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
 
     else:
         try:
-            questionnaire = user_service.storage.get_coach_by_id(profile.id)
+            questionnaire = backend_service.cache.get_coach_by_id(profile.id)
         except UserServiceError:
             questionnaire = None
         reply_markup = edit_coach_profile(profile.language) if questionnaire else None
@@ -97,12 +97,12 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext) 
 
 
 async def show_clients(message: Message, clients: list[Client], state: FSMContext, current_index=0) -> None:
-    profile = user_service.storage.get_current_profile(message.chat.id)
+    profile = backend_service.cache.get_current_profile(message.chat.id)
     current_index %= len(clients)
     current_client = clients[current_index]
-    subscription = True if user_service.storage.get_subscription(current_client.id) else False
-    waiting_program = user_service.storage.check_payment_status(current_client.id, "program")
-    waiting_subscription = user_service.storage.check_payment_status(current_client.id, "subscription")
+    subscription = True if backend_service.cache.get_subscription(current_client.id) else False
+    waiting_program = backend_service.cache.check_payment_status(current_client.id, "program")
+    waiting_subscription = backend_service.cache.check_payment_status(current_client.id, "subscription")
     status = True if waiting_program or waiting_subscription else False
     client_info = await get_client_page(current_client, profile.language, subscription, status, state)
     client_data = [Client.to_dict(client) for client in clients]
@@ -117,7 +117,7 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
 
 
 async def show_coaches_menu(message: Message, coaches: list[Coach], current_index=0) -> None:
-    profile = user_service.storage.get_current_profile(message.chat.id)
+    profile = backend_service.cache.get_current_profile(message.chat.id)
     current_index %= len(coaches)
     current_coach = coaches[current_index]
     coach_info = get_coach_page(current_coach)
@@ -156,9 +156,9 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
     await callback_query.answer()
     try:
         user = (
-            user_service.storage.get_client_by_id(profile.id)
+            backend_service.cache.get_client_by_id(profile.id)
             if profile.status == "client"
-            else user_service.storage.get_coach_by_id(profile.id)
+            else backend_service.cache.get_coach_by_id(profile.id)
         )
     except UserServiceError:
         await show_profile_editing_menu(callback_query.message, profile, state)
@@ -185,7 +185,7 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
 
 async def my_clients_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     try:
-        coach = user_service.storage.get_coach_by_id(profile.id)
+        coach = backend_service.cache.get_coach_by_id(profile.id)
         assigned_ids = coach.assigned_to if coach.assigned_to else None
     except UserServiceError:
         await callback_query.answer(translate(MessageText.coach_info_message, lang=profile.language), show_alert=True)
@@ -194,11 +194,11 @@ async def my_clients_menu(callback_query: CallbackQuery, profile: Profile, state
     if assigned_ids:
         await callback_query.answer()
         try:
-            clients = [user_service.storage.get_client_by_id(client) for client in assigned_ids]
+            clients = [backend_service.cache.get_client_by_id(client) for client in assigned_ids]
         except UserServiceError:
             clients = []
             for profile_id in assigned_ids:
-                if profile_data := await user_service.get_profile_data(profile_id):
+                if profile_data := await backend_service.get_profile_data(profile_id):
                     clients.append(Client.from_dict(profile_data))
         await show_clients(callback_query.message, clients, state)
     else:
@@ -213,7 +213,7 @@ async def my_clients_menu(callback_query: CallbackQuery, profile: Profile, state
 
 async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     try:
-        client = user_service.storage.get_client_by_id(profile.id)
+        client = backend_service.cache.get_client_by_id(profile.id)
     except UserServiceError:
         await callback_query.answer(
             translate(MessageText.questionnaire_not_completed, profile.language), show_alert=True
@@ -239,7 +239,7 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
 
 
 async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    subscription = user_service.storage.get_subscription(profile.id)
+    subscription = backend_service.cache.get_subscription(profile.id)
     if not subscription or not subscription.enabled:
         subscription_img = BOT_PAYMENT_OPTIONS + f"subscription_{profile.language}.jpeg"
         try:
@@ -266,8 +266,8 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
 
 
 async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    if program := user_service.storage.get_program(profile.id):
-        program_paid = user_service.storage.check_payment_status(profile.id, "program")
+    if program := backend_service.cache.get_program(profile.id):
+        program_paid = backend_service.cache.check_payment_status(profile.id, "program")
         if program_paid:
             await callback_query.answer(translate(MessageText.program_not_ready, profile.language), show_alert=True)
             return
@@ -321,7 +321,7 @@ async def show_manage_subscription_menu(
     callback_query: CallbackQuery, lang: str, client_id: str, state: FSMContext
 ) -> None:
     await state.clear()
-    subscription = user_service.storage.get_subscription(client_id)
+    subscription = backend_service.cache.get_subscription(client_id)
 
     if not subscription or not subscription.enabled:
         await callback_query.answer(translate(MessageText.payment_required, lang))

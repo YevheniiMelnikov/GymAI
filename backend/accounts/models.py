@@ -64,3 +64,18 @@ class Subscription(models.Model):
     class Meta:
         verbose_name = "subscription"
         verbose_name_plural = "subscriptions"
+
+
+class Payment(models.Model):
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="payments")
+    shop_order_number = models.CharField(max_length=100, unique=True)
+    shop_bill_id = models.CharField(max_length=100, null=True, blank=True)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(max_length=50, default="PENDING")
+    error = models.CharField(max_length=250, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "payment"
+        verbose_name_plural = "payments"

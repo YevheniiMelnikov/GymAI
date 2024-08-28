@@ -10,10 +10,10 @@ from aiogram.types import BotCommand, CallbackQuery
 
 from bot.keyboards import program_edit_kb, program_view_kb, subscription_manage_menu
 from bot.states import States
+from common.backend_service import backend_service
 from common.functions.menus import my_clients_menu, show_clients
 from common.functions.text_utils import format_program, get_translated_week_day
 from common.models import Client
-from common.user_service import user_service
 from texts.text_manager import MessageText, resource_manager, translate
 
 logger = loguru.logger
@@ -42,7 +42,7 @@ async def set_bot_commands(lang: str = "ua") -> None:
 
 
 async def program_menu_pagination(state: FSMContext, callback_query: CallbackQuery) -> None:
-    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+    profile = backend_service.cache.get_current_profile(callback_query.from_user.id)
 
     if callback_query.data == "quit":
         await my_clients_menu(callback_query, profile, state)

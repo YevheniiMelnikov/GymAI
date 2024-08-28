@@ -5,10 +5,11 @@ import loguru
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import choose_gender, select_days, workout_experience_keyboard, payment_keyboard
+from bot.keyboards import choose_gender, payment_keyboard, select_days, workout_experience_keyboard
 from bot.states import States
+from common.backend_service import backend_service
 from common.file_manager import avatar_manager
 from common.functions.chat import client_request
 from common.functions.menus import show_main_menu, show_subscription_page
@@ -18,8 +19,7 @@ from common.functions.utils import delete_messages
 from common.models import Client, Coach
 from common.payment_service import payment_service
 from common.settings import PROGRAM_PRICE, SUBSCRIPTION_PRICE
-from common.user_service import user_service
-from texts.text_manager import MessageText, translate, ButtonText
+from texts.text_manager import ButtonText, MessageText, translate
 
 logger = loguru.logger
 
@@ -213,7 +213,7 @@ async def profile_photo(message: Message, state: FSMContext) -> None:
 
 @questionnaire_router.callback_query(States.edit_profile)
 async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+    profile = backend_service.cache.get_current_profile(callback_query.from_user.id)
     await delete_messages(state)
     await state.update_data(lang=profile.language)
     if callback_query.data == "back":
@@ -231,7 +231,7 @@ async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> No
 
 @questionnaire_router.callback_query(States.workout_type)
 async def workout_type(callback_query: CallbackQuery, state: FSMContext):
-    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+    profile = backend_service.cache.get_current_profile(callback_query.from_user.id)
     await state.update_data(workout_type=callback_query.data)
     data = await state.get_data()
     coach = Coach.from_dict(data.get("coach"))
@@ -249,7 +249,9 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
             )
         elif data.get("request_type") == "program":
             timestamp = datetime.now().timestamp()
-            if payment_link := await payment_service.get_program_link(f"id_{profile.id}_program_{timestamp}"):
+            order_number = f"id_{profile.id}_program_{timestamp}"
+            await state.update_data(order_number=order_number, amount=PROGRAM_PRICE)
+            if payment_link := await payment_service.get_program_link(order_number):
                 await callback_query.message.answer(
                     translate(MessageText.follow_link, profile.language),
                     reply_markup=payment_keyboard(profile.language, payment_link, "program"),
@@ -264,22 +266,22 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
 @questionnaire_router.callback_query(States.workout_days)
 async def workout_days(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.answer()
-    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+    profile = backend_service.cache.get_current_profile(callback_query.from_user.id)
     data = await state.get_data()
     days = data.get("workout_days", [])
 
     if callback_query.data == "complete":
         if days:
             await callback_query.answer(translate(MessageText.saved, lang=profile.language))
-            subscription = user_service.storage.get_subscription(profile.id)
+            subscription = backend_service.cache.get_subscription(profile.id)
             await state.update_data(workout_days=days)
             if data.get("edit_mode"):
                 subscription_data = subscription.to_dict()
                 exercises = subscription_data.get("exercises", {})
                 updated_exercises = {days[i]: exercises for i, exercises in enumerate(exercises.values())}
                 subscription_data.update(user=profile.id, exercises=updated_exercises)
-                user_service.storage.save_subscription(profile.id, subscription_data)
-                await user_service.update_subscription(subscription_data.get("id"), subscription_data)
+                backend_service.cache.save_subscription(profile.id, subscription_data)
+                await backend_service.update_subscription(subscription_data.get("id"), subscription_data)
                 await state.set_state(States.show_subscription)
                 await show_subscription_page(callback_query, state, subscription)
                 with suppress(TelegramBadRequest):
@@ -287,9 +289,9 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
             else:
                 await callback_query.answer()
                 timestamp = datetime.now().timestamp()
-                if payment_link := await payment_service.get_subscription_link(
-                    f"id_{profile.id}_subscription_{timestamp}"
-                ):
+                order_number = f"id_{profile.id}_subscription_{timestamp}"
+                await state.update_data(order_number=order_number, amount=SUBSCRIPTION_PRICE)
+                if payment_link := await payment_service.get_subscription_link(order_number):
                     await callback_query.message.answer(
                         translate(MessageText.follow_link, profile.language),
                         reply_markup=payment_keyboard(profile.language, payment_link, "subscription"),

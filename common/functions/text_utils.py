@@ -5,8 +5,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State
 
 from bot.states import States
+from common.backend_service import backend_service
 from common.models import Client, Coach, Exercise
-from common.user_service import user_service
 from texts.text_manager import ButtonText, MessageText, translate
 
 
@@ -112,7 +112,7 @@ async def get_client_page(
         "workout_goals": client.workout_goals,
         "health_notes": client.health_notes,
         "weight": client.weight,
-        "language": user_service.storage.get_profile_info_by_key(client.tg_id, client.id, "language"),
+        "language": backend_service.cache.get_profile_info_by_key(client.tg_id, client.id, "language"),
         "subscription": texts.get("enabled") if subscription else texts.get("disabled"),
         "status": texts.get("waiting") if payment_status else texts.get("ok"),
     }

@@ -11,8 +11,7 @@ from dateutil.parser import parse
 
 from common.encrypter import Encrypter
 from common.exceptions import UserServiceError
-from common.models import Profile, Coach, Client, Program, Subscription
-
+from common.models import Client, Coach, Profile, Program, Subscription
 
 logger = loguru.logger
 
