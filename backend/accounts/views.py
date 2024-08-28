@@ -4,31 +4,19 @@ from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.db import transaction
 from django.shortcuts import get_object_or_404, render
-from rest_framework import generics
+from rest_framework import generics, status
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
-from rest_framework.permissions import (
-    BasePermission,
-    IsAuthenticated,
-    IsAuthenticatedOrReadOnly,
-)
+from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.status import (
-    HTTP_200_OK,
-    HTTP_201_CREATED,
-    HTTP_204_NO_CONTENT,
-    HTTP_400_BAD_REQUEST,
-    HTTP_404_NOT_FOUND,
-    HTTP_500_INTERNAL_SERVER_ERROR,
-)
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 from rest_framework_api_key.permissions import HasAPIKey
 
-from .models import Profile, Program, Subscription
-from .serializers import ProfileSerializer, ProgramSerializer, SubscriptionSerializer
+from .models import Payment, Profile, Program, Subscription
+from .serializers import PaymentSerializer, ProfileSerializer, ProgramSerializer, SubscriptionSerializer
 
 
 class CreateUserView(APIView):
@@ -38,26 +26,26 @@ class CreateUserView(APIView):
         username = request.data.get("username")
         password = request.data.get("password")
         email = request.data.get("email")
-        status = request.data.get("status")
+        user_status = request.data.get("status")
         language = request.data.get("language")
         tg_id = request.data.get("current_tg_id")
 
         if not password or not username or not email:
-            return Response({"error": "Required fields are missing"}, status=HTTP_400_BAD_REQUEST)
+            return Response({"error": "Required fields are missing"}, status=status.HTTP_400_BAD_REQUEST)
 
         if User.objects.filter(email=email).exists():
-            return Response({"error": "This email already taken"}, status=HTTP_400_BAD_REQUEST)
+            return Response({"error": "This email already taken"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             with transaction.atomic():
                 user = User.objects.create_user(username=username, password=password, email=email)
-                profile_data = {"status": status, "language": language, "current_tg_id": tg_id}
+                profile_data = {"status": user_status, "language": language, "current_tg_id": tg_id}
                 Profile.objects.create(user=user, **profile_data)
         except Exception as e:
-            return Response({"error": str(e)}, status=HTTP_400_BAD_REQUEST)
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         user_data = {"id": user.id, "username": user.username, "email": user.email, "current_tg_id": tg_id}
-        return Response(user_data, status=HTTP_201_CREATED)
+        return Response(user_data, status=status.HTTP_201_CREATED)
 
 
 class UserProfileView(APIView):
@@ -68,16 +56,16 @@ class UserProfileView(APIView):
         try:
             user = User.objects.get(username=username)
         except User.DoesNotExist:
-            return Response({"error": "User not found"}, status=HTTP_404_NOT_FOUND)
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response({"error": str(e)}, status=HTTP_404_NOT_FOUND)
+            return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
 
         profile = getattr(user, "profile", None)
         if profile:
             serializer = self.serializer_class(profile)
             return Response(serializer.data)
         else:
-            return Response({"error": "Profile not found"}, status=HTTP_404_NOT_FOUND)
+            return Response({"error": "Profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
 class CurrentUserView(APIView):
@@ -93,7 +81,7 @@ class CurrentUserView(APIView):
                 {"username": user.username, "email": user.email, "current_tg_id": data.get("current_tg_id")}
             )
         else:
-            return Response({"error": "User not found"}, status=HTTP_404_NOT_FOUND)
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
 class SendFeedbackAPIView(APIView):
@@ -110,9 +98,9 @@ class SendFeedbackAPIView(APIView):
         try:
             send_mail(subject, message, os.getenv("EMAIL_HOST_USER"), [os.getenv("EMAIL_HOST_USER")])
         except Exception:
-            return Response({"message": "Failed to send feedback"}, status=HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({"message": "Failed to send feedback"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        return Response({"message": "Feedback sent successfully"}, status=HTTP_200_OK)
+        return Response({"message": "Feedback sent successfully"}, status=status.HTTP_200_OK)
 
 
 class IsAuthenticatedButAllowInactive(BasePermission):
@@ -139,7 +127,7 @@ class ProfileAPIUpdate(APIView):
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data)
-        return Response(serializer.errors, status=HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 def reset_password_request_view(request, uidb64: str, token: str) -> render:
@@ -201,7 +189,7 @@ class ProgramViewSet(ModelViewSet):
 
         instance = self.perform_create_or_update(serializer, profile_id, exercises)
         headers = self.get_success_headers(serializer.data)
-        return Response(ProgramSerializer(instance).data, status=HTTP_201_CREATED, headers=headers)
+        return Response(ProgramSerializer(instance).data, status=status.HTTP_201_CREATED, headers=headers)
 
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", False)
@@ -220,8 +208,8 @@ class ProgramViewSet(ModelViewSet):
         program = Program.objects.filter(profile_id=profile_id).first()
         if program:
             program.delete()
-            return Response(status=HTTP_204_NO_CONTENT)
-        return Response(status=HTTP_404_NOT_FOUND)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(status=status.HTTP_404_NOT_FOUND)
 
 
 class SubscriptionViewSet(ModelViewSet):
@@ -243,8 +231,8 @@ class SubscriptionViewSet(ModelViewSet):
         subscriptions = Subscription.objects.filter(user_id=user_id)
         if subscriptions.exists():
             subscriptions.delete()
-            return Response(status=HTTP_204_NO_CONTENT)
-        return Response(status=HTTP_404_NOT_FOUND)
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        return Response(status=status.HTTP_404_NOT_FOUND)
 
 
 class GetUserTokenView(APIView):
@@ -265,37 +253,43 @@ class GetUserTokenView(APIView):
 
 
 class PaymentWebhookView(APIView):
+    permission_classes = [AllowAny]
+
     def post(self, request, *args, **kwargs):
         try:
             data = request.data
 
             if "shopBillId" not in data or "status" not in data:
-                return Response({"detail": "Missing required fields."}, status=HTTP_400_BAD_REQUEST)
+                return Response({"detail": "Missing required fields."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Извлечение данных
             shop_bill_id = data.get("shopBillId")
-            status_payment = data.get("status")
-            amount = data.get("billAmount")
+            shop_order_number = data.get("shopOrderNumber")
+            payment_status = data.get("status")
+            error = data.get("error")
+            self.process_payment(shop_order_number, shop_bill_id, error, payment_status)
 
-            # Обработка статуса платежа
-            if status_payment == "PAYED":
-                # Логика обработки успешного платежа
-                self.process_successful_payment(shop_bill_id, amount)
-                return Response({"status": "success"}, status=HTTP_200_OK)
+            if payment_status == "PAYED":
+                return Response({"status": "success"}, status=status.HTTP_200_OK)
             else:
-                # Логика обработки неуспешного платежа
-                self.process_failed_payment(shop_bill_id)
-                return Response({"status": "failure"}, status=HTTP_200_OK)
+                return Response({"status": "failure"}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"detail": "Invalid webhook data"}, status=HTTP_400_BAD_REQUEST)
+            return Response({"detail": f"Invalid webhook data: {e}"}, status=status.HTTP_400_BAD_REQUEST)
 
-    def process_successful_payment(self, shop_bill_id, amount):
-        pass
-        # Ваша логика обработки успешного платежа
-        # Обновление статуса заказа в базе данных и другие необходимые действия
+    @staticmethod
+    def process_payment(shop_order_number, shop_bill_id, error, payment_status):
+        try:
+            payment = get_object_or_404(Payment, shop_order_number=shop_order_number)
+            payment.shop_bill_id = shop_bill_id
+            payment.status = payment_status
+            payment.error = error
+            payment.save()
 
-    def process_failed_payment(self, shop_bill_id):
-        pass
-        # Ваша логика обработки неуспешного платежа
-        # Обновление статуса заказа или уведомление пользователя
+        except Payment.DoesNotExist:
+            raise NotFound(detail="Payment not found", code=status.HTTP_404_NOT_FOUND)
+
+
+class PaymentCreateView(generics.CreateAPIView):
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    permission_classes = [IsAuthenticated | HasAPIKey]

@@ -1,5 +1,4 @@
 import asyncio
-import base64
 import datetime
 import hashlib
 import hmac
@@ -9,18 +8,17 @@ from typing import Any
 
 import httpx
 import loguru
-from aiogram.fsm.context import FSMContext
 
+from common.backend_service import BackendService, backend_service
 from common.models import Profile
-from common.settings import SUBSCRIPTION_PRICE, PROGRAM_PRICE
-from common.user_service import user_service, UserService
+from common.settings import PROGRAM_PRICE, SUBSCRIPTION_PRICE
 
 logger = loguru.logger
 
 
 class PaymentService:
-    def __init__(self, user_service: UserService):
-        self.user_service = user_service
+    def __init__(self, api_service: BackendService):
+        self.backend_service = api_service
         self.payee_id = os.environ.get("PORTMONE_PAYEE_ID")
         self.login = os.environ.get("PORTMONE_LOGIN")
         self.password = os.environ.get("PORTMONE_PASSWORD")
@@ -66,7 +64,7 @@ class PaymentService:
 
     async def process_subscription_payment(self, data: dict[str, Any], profile: Profile) -> bool:
         try:
-            subscription_id = await self.user_service.create_subscription(
+            subscription_id = await self.backend_service.create_subscription(
                 profile.id, SUBSCRIPTION_PRICE, data.get("workout_days")
             )
             subscription_data = {
@@ -76,8 +74,8 @@ class PaymentService:
                 "price": SUBSCRIPTION_PRICE,
                 "workout_days": data.get("workout_days"),
             }
-            self.user_service.storage.save_subscription(str(profile.id), subscription_data)
-            self.user_service.storage.set_payment_status(str(profile.id), True, "subscription")
+            self.backend_service.cache.save_subscription(str(profile.id), subscription_data)
+            self.backend_service.cache.set_payment_status(str(profile.id), True, "subscription")
             return True
         except Exception as e:
             logger.error(f"Subscription not created for profile_id {profile.id}: {e}")
@@ -85,7 +83,7 @@ class PaymentService:
 
     async def process_program_payment(self, profile: Profile) -> bool:
         try:
-            self.user_service.storage.set_payment_status(str(profile.id), True, "program")
+            self.backend_service.cache.set_payment_status(str(profile.id), True, "program")
             return True
         except Exception as e:
             logger.error(f"Program payment failed for profile_id {profile.id}: {e}")
@@ -114,7 +112,7 @@ class PaymentService:
             data["status"] = "PAYED"  # TODO: REMOVE AFTER TESTING
             payment_status = data.get("status")
             if payment_status == "PAYED":
-                if data.get("payment_options") == "subscription":
+                if data.get("payment_option") == "subscription":
                     return await payment_service.process_subscription_payment(data, profile)
                 return await payment_service.process_program_payment(profile)
             else:
@@ -153,8 +151,8 @@ class PaymentService:
         ]
 
     async def update_payment_status(self, profile_id: str, service_type: str, status: bool):
-        self.user_service.storage.set_payment_status(profile_id, status, service_type)
+        self.backend_service.cache.set_payment_status(profile_id, status, service_type)
         logger.info(f"Payment status for profile_id {profile_id} updated to {status}")
 
 
-payment_service = PaymentService(user_service)
+payment_service = PaymentService(backend_service)

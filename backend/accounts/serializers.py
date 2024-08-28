@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
-from .models import Profile, Program, Subscription
+from .models import Payment, Profile, Program, Subscription
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -33,4 +33,10 @@ class ProgramSerializer(serializers.ModelSerializer):
 class SubscriptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subscription
+        fields = "__all__"
+
+
+class PaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Payment
         fields = "__all__"

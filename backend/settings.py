@@ -5,9 +5,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get("SECRET_KEY")
 
-DEBUG = False
+DEBUG = os.environ.get("DEBUG_STATUS")
 
-ALLOWED_HOSTS = [os.getenv("DOMAIN")]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "achieve-together.org.ua", "www.achieve-together.org.ua"]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -121,7 +121,7 @@ SITE_NAME = "AchieveTogether"
 CORS_ALLOWED_ORIGINS = ["*"]
 
 DJOSER = {
-    "PASSWORD_RESET_CONFIRM_URL": "password-reset/{uid}/{token}",
+    "PASSWORD_RESET_CONFIRM_URL": "/password-reset/{uid}/{token}",
     "PASSWORD_RESET_CONFIRM_RETYPE": True,
     "PASSWORD_RESET_SHOW_EMAIL_NOT_FOUND": True,
     "SEND_ACTIVATION_EMAIL": True,

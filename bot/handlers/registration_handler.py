@@ -9,12 +9,12 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import *
 from bot.states import States
+from common.backend_service import backend_service
 from common.exceptions import EmailUnavailable, UsernameUnavailable
 from common.functions.menus import show_main_menu, show_my_profile_menu
-from common.functions.profiles import register_user, sign_in, check_assigned_clients
+from common.functions.profiles import check_assigned_clients, register_user, sign_in
 from common.functions.text_utils import validate_email, validate_password
-from common.functions.utils import set_bot_commands, delete_messages
-from common.user_service import user_service
+from common.functions.utils import delete_messages, set_bot_commands
 from texts.text_manager import MessageText, translate
 
 logger = loguru.logger
@@ -27,12 +27,12 @@ async def language_choice(callback_query: CallbackQuery, state: FSMContext) -> N
     await delete_messages(state)
     lang_code = callback_query.data
     await set_bot_commands(lang_code)
-    if profile := user_service.storage.get_current_profile(callback_query.from_user.id):
-        token = user_service.storage.get_profile_info_by_key(callback_query.from_user.id, profile.id, "auth_token")
+    if profile := backend_service.cache.get_current_profile(callback_query.from_user.id):
+        token = backend_service.cache.get_profile_info_by_key(callback_query.from_user.id, profile.id, "auth_token")
         if not token:
-            token = await user_service.get_user_token(profile.id)
-        await user_service.edit_profile(profile.id, {"language": lang_code}, token)
-        user_service.storage.set_profile_info_by_key(
+            token = await backend_service.get_user_token(profile.id)
+        await backend_service.edit_profile(profile.id, {"language": lang_code}, token)
+        backend_service.cache.set_profile_info_by_key(
             str(callback_query.from_user.id), profile.id, "language", lang_code
         )
         profile.language = lang_code
@@ -88,7 +88,7 @@ async def username(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     password_requirements_message = None
     if data.get("action") == "sign_up":
-        if await user_service.get_profile_by_username(message.text):
+        if await backend_service.get_profile_by_username(message.text):
             await state.set_state(States.username)
             await message.answer(text=translate(MessageText.username_unavailable, lang=data.get("lang")))
             return
@@ -108,6 +108,7 @@ async def username(message: Message, state: FSMContext) -> None:
 
 @register_router.message(States.password, F.text)
 async def password(message: Message, state: FSMContext) -> None:
+    await state.update_data(chat_id=message.chat.id)
     await delete_messages(state)
     data = await state.get_data()
     if data.get("action") == "sign_up":
@@ -207,17 +208,17 @@ async def accept_policy(callback_query: CallbackQuery, state: FSMContext) -> Non
 
 @register_router.callback_query(States.profile_delete)
 async def delete_profile_confirmation(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+    profile = backend_service.cache.get_current_profile(callback_query.from_user.id)
     lang = profile.language
     if callback_query.data == "yes":
         if profile.status == "coach":
             if await check_assigned_clients(profile.id):
                 await callback_query.answer(translate(MessageText.unable_to_delete_profile, lang=lang))
                 return
-        token = user_service.storage.get_profile_info_by_key(callback_query.from_user.id, profile.id, "auth_token")
+        token = backend_service.cache.get_profile_info_by_key(callback_query.from_user.id, profile.id, "auth_token")
         if not token:
-            token = await user_service.get_user_token(profile.id)
-        if await user_service.delete_profile(callback_query.from_user.id, profile.id, token):
+            token = await backend_service.get_user_token(profile.id)
+        if await backend_service.delete_profile(callback_query.from_user.id, profile.id, token):
             await callback_query.message.answer(translate(MessageText.profile_deleted, profile.language))
             await callback_query.message.answer(
                 text=translate(MessageText.choose_action, lang=lang),

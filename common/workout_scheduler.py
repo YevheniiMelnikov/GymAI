@@ -10,10 +10,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 import common.functions.chat
 import common.functions.workout_plans
-from bot.keyboards import workout_survey_keyboard, yes_no, workout_results
+from bot.keyboards import workout_results, workout_survey_keyboard, yes_no
 from bot.states import States
+from common.backend_service import cache_manager
 from common.functions.chat import send_message
-from common.user_service import cache_manager
 from texts.text_manager import MessageText, translate
 
 logger = loguru.logger

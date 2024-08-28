@@ -10,11 +10,11 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import program_edit_kb, program_manage_menu
 from bot.states import States
+from common.backend_service import backend_service
 from common.file_manager import gif_manager
 from common.functions.text_utils import format_program, get_translated_week_day
 from common.functions.utils import delete_messages
 from common.models import Exercise
-from common.user_service import user_service
 from texts.exercises import exercise_dict
 from texts.text_manager import MessageText, translate
 
@@ -25,7 +25,7 @@ logger = loguru.logger
 async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Message | CallbackQuery) -> None:
     data = await state.get_data()
     await delete_messages(state)
-    profile = user_service.storage.get_current_profile(input_data.from_user.id)
+    profile = backend_service.cache.get_current_profile(input_data.from_user.id)
     day_index = data.get("day_index", 0)
     exercises = data.get("exercises", {})
     client_id = data.get("client_id")
@@ -40,7 +40,7 @@ async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Messa
         else:
             if not any(ex["name"] == exercise.name for ex in exercises[str(day_index)]):
                 exercises[str(day_index)].append(asdict(exercise))
-        subscription_data = user_service.storage.get_subscription(client_id)
+        subscription_data = backend_service.cache.get_subscription(client_id)
         split_number = len(subscription_data.workout_days)
         program = await format_program({days[day_index]: exercises[str(day_index)]}, days[day_index])
     else:
@@ -50,7 +50,7 @@ async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Messa
         else:
             if not any(ex["name"] == exercise.name for ex in exercises[str(day_index)]):
                 exercises[str(day_index)].append(asdict(exercise))
-        program_data = user_service.storage.get_program(client_id)
+        program_data = backend_service.cache.get_program(client_id)
         split_number = program_data.split_number
         program = await format_program({str(day_index): exercises[str(day_index)]}, day_index)
 
@@ -78,7 +78,7 @@ async def find_exercise_gif(exercise: str) -> str | None:
         exercise = exercise.lower()
         for filename, synonyms in exercise_dict.items():
             if exercise in (syn.lower() for syn in synonyms):
-                cached_filename = user_service.storage.get_exercise_gif(exercise)
+                cached_filename = backend_service.cache.get_exercise_gif(exercise)
                 if cached_filename:
                     return f"https://storage.googleapis.com/{gif_manager.bucket_name}/{cached_filename}"
 
@@ -87,7 +87,7 @@ async def find_exercise_gif(exercise: str) -> str | None:
                     matching_blob = blobs[0]
                     if matching_blob.exists():
                         file_url = f"https://storage.googleapis.com/{gif_manager.bucket_name}/{matching_blob.name}"
-                        user_service.storage.cache_gif_filename(exercise, matching_blob.name)
+                        backend_service.cache.cache_gif_filename(exercise, matching_blob.name)
                         return file_url
 
     except Exception as e:
@@ -114,10 +114,10 @@ async def update_exercise_data(message: Message, state: FSMContext, lang: str, u
 
 
 async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMContext, day_index: int) -> None:
-    profile = user_service.storage.get_current_profile(callback_query.from_user.id)
+    profile = backend_service.cache.get_current_profile(callback_query.from_user.id)
     client_id = callback_query.data.split("_")[1]
     day = callback_query.data.split("_")[2]
-    subscription = user_service.storage.get_subscription(client_id)
+    subscription = backend_service.cache.get_subscription(client_id)
     program_text = await format_program(subscription.exercises, 0)
     await state.update_data(
         exercises=subscription.exercises, client_id=client_id, day=day, subscription=True, day_index=day_index

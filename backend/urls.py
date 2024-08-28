@@ -30,5 +30,6 @@ urlpatterns = [
     path("api/v1/", include(program_router.urls)),
     path("api/v1/", include(subscription_router.urls)),
     path("api/v1/get-user-token/", GetUserTokenView.as_view(), name="get-user-token"),
-    path('payment-webhook/', PaymentWebhookView.as_view(), name='payment-webhook'),
+    path("api/v1/payments/", PaymentCreateView.as_view(), name="payments"),
+    path("payment-webhook/", PaymentWebhookView.as_view(), name="payment-webhook"),
 ]
