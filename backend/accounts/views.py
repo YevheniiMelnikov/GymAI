@@ -1,7 +1,7 @@
 import os
 
 from django.contrib.auth.models import User
-from django.core.mail import send_mail, EmailMultiAlternatives
+from django.core.mail import EmailMultiAlternatives, send_mail
 from django.db import transaction
 from django.shortcuts import get_object_or_404, render
 from django.template.loader import render_to_string
@@ -10,7 +10,9 @@ from rest_framework import generics, status
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied
-from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import (AllowAny, BasePermission,
+                                        IsAuthenticated,
+                                        IsAuthenticatedOrReadOnly)
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -18,7 +20,13 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework_api_key.permissions import HasAPIKey
 
 from .models import Payment, Profile, Program, Subscription
-from .serializers import PaymentSerializer, ProfileSerializer, ProgramSerializer, SubscriptionSerializer
+from .serializers import (PaymentSerializer, ProfileSerializer,
+                          ProgramSerializer, SubscriptionSerializer)
+
+
+class IsAuthenticatedButAllowInactive(BasePermission):
+    def has_permission(self, request, view):
+        return request.user and request.user.is_authenticated
 
 
 class CreateUserView(APIView):
@@ -86,6 +94,34 @@ class CurrentUserView(APIView):
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
+class ProfileByTelegramIDView(APIView):
+    permission_classes = [HasAPIKey | IsAuthenticated]
+    serializer_class = ProfileSerializer
+
+    def get(self, request: Request, telegram_id: int) -> Response:
+        try:
+            profile = Profile.objects.get(current_tg_id=telegram_id)
+        except Profile.DoesNotExist:
+            return Response({"error": "Profile not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = self.serializer_class(profile)
+        return Response(serializer.data)
+
+
+class ResetTelegramIDView(APIView):
+    permission_classes = [HasAPIKey | IsAuthenticated]
+
+    def post(self, request: Request, profile_id: int) -> Response:
+        try:
+            profile = get_object_or_404(Profile, id=profile_id)
+            Profile.objects.filter(user=profile.user).exclude(id=profile_id).update(current_tg_id=None)
+            profile.current_tg_id = request.data.get("telegram_id")
+            profile.save()
+            return Response({"status": "success"}, status=status.HTTP_200_OK)
+        except Profile.DoesNotExist:
+            return Response({"error": "Profile not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
 class SendFeedbackAPIView(APIView):
     permission_classes = [HasAPIKey | IsAuthenticated]
 
@@ -104,6 +140,7 @@ class SendFeedbackAPIView(APIView):
 
         return Response({"message": "Feedback sent successfully"}, status=status.HTTP_200_OK)
 
+
 class SendWelcomeEmailAPIView(APIView):
     permission_classes = [HasAPIKey | IsAuthenticated]
 
@@ -111,23 +148,17 @@ class SendWelcomeEmailAPIView(APIView):
         email = request.data.get("email")
         username = request.data.get("username")
 
-        subject = "Ласкаво просимо до нашого сервісу!"
         html_content = render_to_string("email/welcome_email.html", {"username": username})
         text_content = strip_tags(html_content)
 
         try:
-            msg = EmailMultiAlternatives(subject, text_content, os.getenv("EMAIL_HOST_USER"), [email])
+            msg = EmailMultiAlternatives("", text_content, os.getenv("EMAIL_HOST_USER"), [email])
             msg.attach_alternative(html_content, "text/html")
             msg.send()
         except Exception:
             return Response({"message": "Failed to send welcome email"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response({"message": "Welcome email sent successfully"}, status=status.HTTP_200_OK)
-
-
-class IsAuthenticatedButAllowInactive(BasePermission):
-    def has_permission(self, request, view):
-        return request.user and request.user.is_authenticated
 
 
 class ProfileAPIUpdate(APIView):
@@ -305,10 +336,38 @@ class PaymentWebhookView(APIView):
             payment.shop_bill_id = shop_bill_id
             payment.status = payment_status
             payment.error = error
+            payment.handled = False
             payment.save()
 
         except Payment.DoesNotExist:
             raise NotFound(detail="Payment not found", code=status.HTTP_404_NOT_FOUND)
+
+
+class PaymentListView(generics.ListAPIView):
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    permission_classes = [IsAuthenticated | HasAPIKey]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        status = self.request.query_params.get("status", None)
+        if status:
+            queryset = queryset.filter(status=status)
+        return queryset
+
+
+class PaymentDetailView(generics.RetrieveUpdateAPIView):
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    permission_classes = [IsAuthenticated | HasAPIKey]
+
+    def patch(self, request, *args, **kwargs):
+        kwargs["partial"] = True
+        return self.update(request, *args, **kwargs)
+
+    def put(self, request, *args, **kwargs):
+        kwargs["partial"] = True
+        return self.update(request, *args, **kwargs)
 
 
 class PaymentCreateView(generics.CreateAPIView):

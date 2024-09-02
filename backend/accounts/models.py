@@ -67,6 +67,8 @@ class Subscription(models.Model):
 
 
 class Payment(models.Model):
+    payment_type = models.CharField(max_length=50)
+    handled = models.BooleanField(default=False)
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="payments")
     shop_order_number = models.CharField(max_length=100, unique=True)
     shop_bill_id = models.CharField(max_length=100, null=True, blank=True)

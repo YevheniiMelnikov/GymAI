@@ -6,8 +6,6 @@ T = TypeVar("T", bound="BaseEntity")
 
 @dataclass
 class BaseEntity:
-    id: int
-
     @classmethod
     def from_dict(cls: Type[T], data: dict[str, Any]) -> T:
         fields = {field.name for field in cls.__dataclass_fields__.values()}
@@ -24,39 +22,41 @@ class BaseEntity:
 
 @dataclass
 class Profile(BaseEntity):
+    id: int
     status: str
-    current_tg_id: int
+    current_tg_id: int | None = None
     language: str | None = None
     last_used: float | None = None
 
 
 @dataclass
 class Client(BaseEntity):
+    id: int
     name: str
     gender: str
-    birth_date: str
+    born_in: str
     workout_experience: str
     workout_goals: str
     health_notes: str
     weight: int
-    tg_id: int
     assigned_to: list[int] = field(default_factory=list)
 
 
 @dataclass
 class Coach(BaseEntity):
+    id: int
     name: str
     work_experience: int
     additional_info: str
     payment_details: str
     profile_photo: str
-    tg_id: int
     assigned_to: list[int] = field(default_factory=list)
     verified: bool = False
 
 
 @dataclass
 class Program(BaseEntity):
+    id: int
     exercises_by_day: dict[str, list]
     created_at: float
     profile: int
@@ -65,7 +65,8 @@ class Program(BaseEntity):
 
 @dataclass
 class Subscription(BaseEntity):
-    payment_date: float
+    id: int
+    payment_date: str
     enabled: bool
     price: int
     profile: int
@@ -74,9 +75,23 @@ class Subscription(BaseEntity):
 
 
 @dataclass
-class Exercise:
+class Exercise(BaseEntity):
     name: str
     sets: str
     reps: str
     gif_link: str | None
     weight: str | None
+
+
+@dataclass
+class Payment(BaseEntity):
+    profile: int
+    payment_type: str
+    shop_order_number: str
+    shop_bill_id: str
+    amount: int
+    status: str
+    created_at: float
+    updated_at: float
+    handled: bool = False
+    error: str | None = None

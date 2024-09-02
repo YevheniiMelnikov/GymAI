@@ -1,7 +1,8 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from texts.text_manager import ButtonText, translate
+from texts.resources import ButtonText
+from texts.text_manager import translate
 
 
 def language_choice() -> InlineKeyboardMarkup:
