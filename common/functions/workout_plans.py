@@ -1,4 +1,5 @@
 from contextlib import suppress
+from datetime import datetime
 
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -44,9 +45,13 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
                     include_incoming_message=False,
                 )
             else:
-                program = await format_program(exercises, 0)
+                program_text = await format_program(exercises, 0)
                 if program_data := await backend_service.save_program(client_id, exercises, split_number):
-                    await cache_manager.save_program(client_id, program_data)
+                    current_program = cache_manager.get_program(client_id)
+                    program_data.update(workout_type=current_program.workout_type)
+                    cache_manager.set_program(client_id, program_data)
+                    cache_manager.reset_program_payment_status(client_id, "program")
+
                 await send_message(
                     recipient=client,
                     text=translate(MessageText.new_program, lang=client_lang),
@@ -55,7 +60,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
                 )
                 await send_message(
                     recipient=client,
-                    text=translate(MessageText.program_page, lang=client_lang).format(program=program, day=1),
+                    text=translate(MessageText.program_page, lang=client_lang).format(program=program_text, day=1),
                     state=state,
                     reply_markup=program_view_kb(client_lang),
                     include_incoming_message=False,
@@ -77,7 +82,7 @@ async def reset_workout_plan(callback_query: CallbackQuery, state: FSMContext) -
         subscription_data = cache_manager.get_subscription(client_id).to_dict()
         subscription_data.update(user=client_id, exercises=None)
         await backend_service.update_subscription(subscription_data.get("id"), subscription_data)
-        await cache_manager.save_subscription(client_id, subscription_data)
+        cache_manager.save_subscription(client_id, subscription_data)
     else:
         if await backend_service.delete_program(client_id):
             cache_manager.delete_program(client_id)
@@ -162,3 +167,15 @@ async def manage_program(callback_query: CallbackQuery, profile: Profile, client
     )
     await state.set_state(States.workouts_number)
     await callback_query.message.delete()
+
+
+def cache_program_data(data: dict, profile_id: int) -> None:
+    program_data = {
+        "id": 1,
+        "workout_type": data.get("workout_type"),
+        "exercises_by_day": {},
+        "created_at": datetime.now().timestamp(),
+        "profile": profile_id,
+        "split_number": 1,
+    }
+    cache_manager.set_program(profile_id, program_data)

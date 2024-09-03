@@ -100,7 +100,7 @@ def get_coach_page(coach: Coach) -> dict[str, Any]:
 
 
 async def get_client_page(
-    client: Client, lang_code: str, subscription: bool, payment_status: bool, state: FSMContext
+    client: Client, lang_code: str, subscription: bool, payment_status: bool, data: dict[str, Any]
 ) -> dict[str, Any]:
     texts = {
         "male": translate(ButtonText.male, lang=lang_code),
@@ -125,7 +125,6 @@ async def get_client_page(
         "subscription": texts.get("enabled") if subscription else texts.get("disabled"),
         "status": texts.get("waiting") if payment_status else texts.get("ok"),
     }
-    data = await state.get_data()
     if data.get("new_client"):
         page["status"] = texts.get("waiting_for_text")
     return page

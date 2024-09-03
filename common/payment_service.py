@@ -7,9 +7,6 @@ from typing import Any
 import httpx
 import loguru
 
-from common.backend_service import backend_service
-from common.cache_manager import cache_manager
-from common.models import Profile
 from common.settings import PROGRAM_PRICE
 
 logger = loguru.logger
@@ -75,27 +72,6 @@ class PaymentService:
         #     return response.status_code, response.json()
         # else:
         #     return response.status_code, response.text
-
-    async def process_subscription_payment(self, profile: Profile) -> None:
-        try:
-            subscription = cache_manager.get_subscription(profile.id)
-            subscription_data = subscription.to_dict()
-            subscription_data.update({"enabled": True, "payment_date": datetime.today().isoformat()})
-            await backend_service.update_subscription(
-                subscription.id, {"enabled": True, "payment_date": datetime.today().isoformat()}
-            )
-            cache_manager.set_payment_status(profile.id, True, "subscription")
-            cache_manager.save_subscription(profile.id, subscription_data)
-        except Exception as e:
-            logger.error(f"Subscription not created for profile_id {profile.id}: {e}")
-
-    async def process_program_payment(self, profile: Profile) -> bool:
-        try:
-            cache_manager.set_payment_status(profile.id, True, "program")
-            return True
-        except Exception as e:
-            logger.error(f"Program payment failed for profile_id {profile.id}: {e}")
-            return False
 
 
 payment_service = PaymentService()

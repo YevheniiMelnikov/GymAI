@@ -291,8 +291,8 @@ class BackendService:
         data = {
             "profile": profile_id,
             "handled": False,
-            "order_number": order_number,
-            "payment_option": payment_option,
+            "shop_order_number": order_number,
+            "payment_type": payment_option,
             "amount": amount,
             "status": "PENDING",
         }

@@ -208,10 +208,9 @@ class CacheManager:
             logger.info(f"Failed to get data for profile_id from cache {profile_id}: {e}")
             raise UserServiceError
 
-    def save_program(self, client_id: int, program_data: dict) -> None:
+    def set_program(self, client_id: int, program_data: dict) -> None:
         try:
             self.redis.hset("workout_plans:programs", str(client_id), json.dumps(program_data))
-            self.reset_program_payment_status(client_id, "program")
             logger.debug(f"Program for client {client_id} saved in cache")
         except Exception as e:
             logger.error(f"Failed to save program in cache for client {client_id}: {e}")

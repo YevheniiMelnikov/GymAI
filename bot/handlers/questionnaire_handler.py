@@ -14,7 +14,7 @@ from common.cache_manager import cache_manager
 from common.file_manager import avatar_manager
 from common.functions.chat import client_request
 from common.functions.exercises import (create_new_subscription,
-                                        edit_subscription)
+                                        edit_subscription_days)
 from common.functions.menus import show_main_menu
 from common.functions.profiles import get_or_load_profile, update_user_info
 from common.functions.text_utils import (get_state_and_message,
@@ -241,7 +241,7 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
     client = cache_manager.get_client_by_id(profile.id)
     coach = cache_manager.get_coach_by_id(client.assigned_to.pop())
     if data.get("new_client"):
-        await client_request(coach, client, state)
+        await client_request(coach, client, data)
         await callback_query.answer(translate(MessageText.coach_selected).format(name=coach.name), show_alert=True)
         await show_main_menu(callback_query.message, profile, state)
     else:
@@ -256,11 +256,11 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
             order_number = f"id_{profile.id}_program_{timestamp}"
             await state.update_data(order_number=order_number, amount=PROGRAM_PRICE)
             if payment_link := await payment_service.get_program_link(order_number):
+                await state.set_state(States.handle_payment)
                 await callback_query.message.answer(
                     translate(MessageText.follow_link, profile.language),
                     reply_markup=payment_keyboard(profile.language, payment_link, "program"),
                 )
-                await state.set_state(States.handle_payment)
             else:
                 await callback_query.message.answer(translate(MessageText.unexpected_error, profile.language))
     with suppress(TelegramBadRequest):
@@ -277,10 +277,12 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
     if callback_query.data == "complete":
         if days:
             await callback_query.answer(translate(MessageText.saved, lang=profile.language))
-            subscription = cache_manager.get_subscription(profile.id)
             await state.update_data(workout_days=days)
             if data.get("edit_mode"):
-                await edit_subscription(callback_query, days, profile, state, subscription)
+                subscription = cache_manager.get_subscription(profile.id)
+                print(len(subscription.workout_days))
+                print(len(days))
+                await edit_subscription_days(callback_query, days, profile, state, subscription)
             else:
                 await create_new_subscription(callback_query, days, profile, state)
         else:

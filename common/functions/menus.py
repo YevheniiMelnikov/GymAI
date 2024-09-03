@@ -98,7 +98,8 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
     waiting_program = cache_manager.check_payment_status(current_client.id, "program")
     waiting_subscription = cache_manager.check_payment_status(current_client.id, "subscription")
     status = True if waiting_program or waiting_subscription else False
-    client_info = await get_client_page(current_client, profile.language, subscription, status, state)
+    data = await state.get_data()
+    client_info = await get_client_page(current_client, profile.language, subscription, status, data)
     client_data = [Client.to_dict(client) for client in clients]
 
     await state.update_data(clients=client_data)

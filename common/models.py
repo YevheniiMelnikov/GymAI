@@ -61,6 +61,7 @@ class Program(BaseEntity):
     created_at: float
     profile: int
     split_number: int
+    workout_type: str
 
 
 @dataclass
@@ -69,7 +70,8 @@ class Subscription(BaseEntity):
     payment_date: str
     enabled: bool
     price: int
-    profile: int
+    user: int
+    workout_type: str
     workout_days: list[str] = field(default_factory=list)
     exercises: dict[str, list[tuple[str, int]]] = field(default_factory=dict)
 
@@ -85,6 +87,7 @@ class Exercise(BaseEntity):
 
 @dataclass
 class Payment(BaseEntity):
+    id: int
     profile: int
     payment_type: str
     shop_order_number: str

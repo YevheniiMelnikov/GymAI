@@ -128,7 +128,7 @@ async def set_exercise_reps(callback_query: CallbackQuery, state: FSMContext) ->
 @program_router.message(States.exercise_weight)
 @program_router.callback_query(States.exercise_weight, F.data == "skip_weight")
 async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMContext) -> None:
-    profile = get_or_load_profile(input_data.from_user.id)
+    profile = await get_or_load_profile(input_data.from_user.id)
     data = await state.get_data()
     exercise_name = data.get("exercise_name")
     sets = data.get("sets")
@@ -253,7 +253,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
             subscription_data = cache_manager.get_subscription(client_id).to_dict()
             subscription_data.update(user=client_id, exercises=None)
             await backend_service.update_subscription(subscription_data.get("id"), subscription_data)
-            await cache_manager.save_subscription(client_id, subscription_data)
+            cache_manager.save_subscription(client_id, subscription_data)
         else:
             if await backend_service.delete_program(client_id):
                 cache_manager.delete_program(client_id)
@@ -293,10 +293,13 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
                 include_incoming_message=False,
             )
         else:
-            split_number = cache_manager.get_program(client_id).split_number
+            current_program = cache_manager.get_program(client_id)
+            split_number = current_program.split_number
+            workout_type = current_program.workout_type
             program = await format_program(exercises, 0)
             if program_data := await backend_service.save_program(client_id, exercises, split_number):
-                await cache_manager.save_program(client_id, program_data)
+                program_data.update(workout_type=workout_type)
+                cache_manager.set_program(client_id, program_data)
             await send_message(
                 recipient=client,
                 text=translate(MessageText.new_program, lang=client_lang),

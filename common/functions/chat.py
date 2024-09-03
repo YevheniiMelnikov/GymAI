@@ -36,22 +36,21 @@ async def contact_client(callback_query: CallbackQuery, profile: Profile, client
     await state.set_state(States.contact_client)
 
 
-async def client_request(coach: Coach, client: Client, state: FSMContext) -> None:
-    data = await state.get_data()
+async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> None:
     coach_data = await backend_service.get_profile(coach.id)
     coach_lang = cache_manager.get_profile_info_by_key(coach_data.get("current_tg_id"), coach.id, "language")
+    data["recipient_language"] = coach_lang
+    service = data.get("request_type")
+    preferable_workout_type = data.get("workout_type")
     client_data = await backend_service.get_profile(client.id)
     client_lang = cache_manager.get_profile_info_by_key(client_data.get("current_tg_id"), client.id, "language")
-    await state.update_data(recipient_language=coach_lang)
     workout_types = await get_workout_types(coach_lang)
-    preferable_workout_type = data.get("workout_type")
-    service = data.get("request_type")
     preferable_workouts_type = workout_types.get(preferable_workout_type, "unknown")
     subscription = cache_manager.get_subscription(client.id)
     waiting_program = cache_manager.check_payment_status(client.id, "program")
     waiting_subscription = cache_manager.check_payment_status(client.id, "subscription")
     status = True if waiting_program or waiting_subscription else False
-    client_page = await get_client_page(client, coach_lang, subscription, status, state)
+    client_page = await get_client_page(client, coach_lang, subscription, status, data)
     text = await format_new_client_message(data, coach_lang, client_lang, preferable_workouts_type)
     reply_markup = (
         new_incoming_request(coach_lang, client.id)
@@ -62,14 +61,14 @@ async def client_request(coach: Coach, client: Client, state: FSMContext) -> Non
     await send_message(
         recipient=coach,
         text=text,
-        state=state,
+        state=None,
         include_incoming_message=False,
     )
 
     await send_message(
         recipient=coach,
         text=translate(MessageText.client_page, coach_lang).format(**client_page),
-        state=state,
+        state=None,
         reply_markup=reply_markup,
         include_incoming_message=False,
     )
@@ -123,19 +122,23 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
 async def send_message(
     recipient: Client | Coach,
     text: str,
-    state: FSMContext,
+    state: FSMContext = None,
     reply_markup=None,
     include_incoming_message: bool = True,
     photo=None,
 ) -> None:
-    data = await state.get_data()
-    language = data.get("recipient_language", "ua")
+    if state:
+        data = await state.get_data()
+        language = data.get("recipient_language", "ua")
+        sender_name = data.get("sender_name", "")
+    else:
+        language = "ua"
+        sender_name = ""
+
     recipient_data = await backend_service.get_profile(recipient.id)
 
     if include_incoming_message:
-        formatted_text = translate(MessageText.incoming_message, language).format(
-            name=data.get("sender_name", ""), message=text
-        )
+        formatted_text = translate(MessageText.incoming_message, language).format(name=sender_name, message=text)
     else:
         formatted_text = text
 

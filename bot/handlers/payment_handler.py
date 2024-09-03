@@ -1,4 +1,5 @@
 from contextlib import suppress
+from datetime import datetime
 
 import loguru
 from aiogram import F, Router
@@ -12,6 +13,7 @@ from common.backend_service import backend_service
 from common.cache_manager import cache_manager
 from common.functions.menus import show_main_menu
 from common.functions.profiles import get_or_load_profile
+from common.functions.workout_plans import cache_program_data
 from common.models import Client, Coach
 from texts.resources import ButtonText, MessageText
 from texts.text_manager import translate
@@ -58,14 +60,17 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
         await callback_query.message.delete()
 
 
-@payment_router.callback_query(States.handle_payment)
+@payment_router.callback_query(States.handle_payment, F.data == "done")
 async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
-    await callback_query.answer()
     profile = await get_or_load_profile(callback_query.from_user.id)
+    await callback_query.answer()
     data = await state.get_data()
     order_number = data.get("order_number")
     amount = data.get("amount")
-    await backend_service.create_payment(profile.id, callback_query.from_user.id, order_number, amount)
+    if data.get("request_type") == "program":
+        cache_program_data(data, profile.id)
+    await backend_service.create_payment(profile.id, data.get("request_type"), order_number, amount)
+    await callback_query.message.answer(translate(MessageText.payment_in_progress, profile.language))
     await show_main_menu(callback_query.message, profile, state)
     with suppress(TelegramBadRequest):
         await callback_query.message.delete()

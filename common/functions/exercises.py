@@ -33,7 +33,7 @@ logger = loguru.logger
 async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Message | CallbackQuery) -> None:
     data = await state.get_data()
     await delete_messages(state)
-    profile = get_or_load_profile(input_data.from_user.id)
+    profile = await get_or_load_profile(input_data.from_user.id)
     day_index = data.get("day_index", 0)
     exercises = data.get("exercises", {})
     client_id = data.get("client_id")
@@ -139,7 +139,7 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
     await callback_query.message.delete()
 
 
-async def edit_subscription(
+async def edit_subscription_days(
     callback_query: CallbackQuery, days: list[str], profile: Profile, state: FSMContext, subscription: Subscription
 ) -> None:
     subscription_data = subscription.to_dict()
@@ -157,13 +157,16 @@ async def edit_subscription(
 async def create_new_subscription(
     callback_query: CallbackQuery, days: list[str], profile: Profile, state: FSMContext
 ) -> None:
+    data = await state.get_data()
     subscription_id = await backend_service.create_subscription(profile.id, SUBSCRIPTION_PRICE, days)
     subscription_data = {
         "id": subscription_id,
-        "payment_date": datetime.today().isoformat(),
-        "enabled": True,
+        "payment_date": "",
+        "enabled": False,
         "price": SUBSCRIPTION_PRICE,
+        "user": profile.id,
         "workout_days": days,
+        "workout_type": data.get("workout_type"),
     }
     cache_manager.save_subscription(profile.id, subscription_data)
     await callback_query.answer()
@@ -171,11 +174,11 @@ async def create_new_subscription(
     order_number = f"id_{profile.id}_subscription_{timestamp}"
     await state.update_data(order_number=order_number, amount=SUBSCRIPTION_PRICE)
     if payment_link := await payment_service.get_subscription_link(order_number):
+        await state.set_state(States.handle_payment)
         await callback_query.message.answer(
             translate(MessageText.follow_link, profile.language),
             reply_markup=payment_keyboard(profile.language, payment_link, "subscription"),
         )
-        await state.set_state(States.handle_payment)
     else:
         await callback_query.message.answer(translate(MessageText.unexpected_error, profile.language))
     await callback_query.message.delete()
