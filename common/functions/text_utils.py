@@ -71,11 +71,15 @@ def get_profile_attributes(role: str, user: Optional[Client | Coach], lang_code:
                 get_attr("verified"), translate(MessageText.not_verified, lang=lang_code)
             ),
         }
-        decrypted_details = cache_manager.encrypter.decrypt(
-            cache_manager.encrypter.decrypt(get_attr("payment_details"))
-        )
-        if decrypted_details:
-            attributes["payment_details"] = decrypted_details
+
+        payment_details = get_attr("payment_details")
+        if payment_details:
+            decrypted_once = cache_manager.encrypter.decrypt(payment_details)
+
+            if decrypted_once:
+                decrypted_details = cache_manager.encrypter.decrypt(decrypted_once)
+                if decrypted_details:
+                    attributes["payment_details"] = decrypted_details
 
     return attributes
 
