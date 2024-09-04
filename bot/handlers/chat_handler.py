@@ -18,7 +18,7 @@ logger = loguru.logger
 chat_router = Router()
 
 
-@chat_router.message(States.contact_client, F.text | F.photo)
+@chat_router.message(States.contact_client, F.text | F.photo | F.video)
 async def contact_client(message: Message, state: FSMContext):
     data = await state.get_data()
     coach = cache_manager.get_current_profile(message.from_user.id)
@@ -45,6 +45,12 @@ async def contact_client(message: Message, state: FSMContext):
         await send_message(
             client, caption, state, reply_markup=incoming_message(client_language, coach.id), photo=photo
         )
+    elif message.video:
+        video = message.video
+        caption = message.caption if message.caption else ""
+        await send_message(
+            client, caption, state, reply_markup=incoming_message(client_language, coach.id), video=video
+        )
     else:
         await send_message(client, message.text, state, reply_markup=incoming_message(client_language, coach.id))
 
@@ -53,7 +59,7 @@ async def contact_client(message: Message, state: FSMContext):
     await show_main_menu(message, coach, state)
 
 
-@chat_router.message(States.contact_coach, F.text | F.photo)
+@chat_router.message(States.contact_coach, F.text | F.photo | F.video)
 async def contact_coach(message: Message, state: FSMContext):
     data = await state.get_data()
     client = cache_manager.get_current_profile(message.from_user.id)
@@ -76,6 +82,10 @@ async def contact_coach(message: Message, state: FSMContext):
         photo = message.photo[-1]
         caption = message.caption if message.caption else ""
         await send_message(coach, caption, state, reply_markup=incoming_message(coach_lang, client.id), photo=photo)
+    elif message.video:
+        video = message.video
+        caption = message.caption if message.caption else ""
+        await send_message(coach, caption, state, reply_markup=incoming_message(coach_lang, client.id), video=video)
     else:
         await send_message(coach, message.text, state, reply_markup=incoming_message(coach_lang, client.id))
 

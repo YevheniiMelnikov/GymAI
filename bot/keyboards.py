@@ -30,18 +30,20 @@ def choose_account_type(lang_code: str) -> InlineKeyboardMarkup:
 
 def client_menu_keyboard(lang_code: str) -> InlineKeyboardMarkup:
     buttons = [
+        [InlineKeyboardButton(text=translate(ButtonText.my_profile, lang=lang_code), callback_data="my_profile")],
         [InlineKeyboardButton(text=translate(ButtonText.my_program, lang=lang_code), callback_data="my_workouts")],
         [InlineKeyboardButton(text=translate(ButtonText.feedback, lang=lang_code), callback_data="feedback")],
-        [InlineKeyboardButton(text=translate(ButtonText.my_profile, lang=lang_code), callback_data="my_profile")],
+        [InlineKeyboardButton(text=translate(ButtonText.logout, lang=lang_code), callback_data="logout")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
 
 
 def coach_menu_keyboard(lang_code: str) -> InlineKeyboardMarkup:
     buttons = [
+        [InlineKeyboardButton(text=translate(ButtonText.my_profile, lang=lang_code), callback_data="my_profile")],
         [InlineKeyboardButton(text=translate(ButtonText.my_clients, lang=lang_code), callback_data="my_clients")],
         [InlineKeyboardButton(text=translate(ButtonText.feedback, lang=lang_code), callback_data="feedback")],
-        [InlineKeyboardButton(text=translate(ButtonText.my_profile, lang=lang_code), callback_data="my_profile")],
+        [InlineKeyboardButton(text=translate(ButtonText.logout, lang=lang_code), callback_data="logout")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
 

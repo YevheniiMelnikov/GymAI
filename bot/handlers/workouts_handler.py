@@ -5,9 +5,7 @@ from common.functions.menus import *
 from common.functions.profiles import get_or_load_profile
 from common.functions.text_utils import format_program, get_translated_week_day
 from common.functions.utils import program_menu_pagination, short_url
-from common.functions.workout_plans import (next_day_workout_plan,
-                                            reset_workout_plan,
-                                            save_workout_plan)
+from common.functions.workout_plans import next_day_workout_plan, reset_workout_plan, save_workout_plan
 from common.models import Exercise
 from texts.resources import ButtonText, MessageText
 from texts.text_manager import translate

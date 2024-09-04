@@ -5,7 +5,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import client_menu_keyboard, coach_menu_keyboard
+from bot.keyboards import action_choice_keyboard, client_menu_keyboard, coach_menu_keyboard
 from bot.states import States
 from common.backend_service import backend_service
 from common.cache_manager import cache_manager
@@ -85,8 +85,9 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
         await message.delete()
         return
 
-    logger.info(f"User {message.from_user.id} logged in")
     profile = await backend_service.get_profile_by_username(data["username"])
+    logger.info(f"Telegram user {message.from_user.id} logged in into profile {profile.id}")
+
     if not profile:
         await message.answer(text=translate(MessageText.unexpected_error, lang=data.get("lang")))
         await state.set_state(States.username)
@@ -206,3 +207,17 @@ async def get_or_load_profile(telegram_id: int) -> Profile:
             raise ProfileNotFoundError(f"Profile not found for user {telegram_id}")
 
     return profile
+
+
+async def handle_logout(callback_query, profile, state):
+    await callback_query.answer("🏃")
+    auth_token = cache_manager.get_profile_info_by_key(callback_query.message.from_user.id, profile.id, "auth_token")
+    await backend_service.log_out(profile, auth_token)
+    cache_manager.deactivate_profiles(profile.current_tg_id)
+    await state.update_data(lang=profile.language)
+    await callback_query.message.answer(
+        text=translate(MessageText.choose_action, lang=profile.language),
+        reply_markup=action_choice_keyboard(profile.language),
+    )
+    await state.set_state(States.action_choice)
+    await callback_query.message.delete()

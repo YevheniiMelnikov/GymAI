@@ -68,14 +68,21 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
 
 @cmd_router.message(Command("logout"))
 async def cmd_logout(message: Message, state: FSMContext) -> None:
-    profile = await get_or_load_profile(message.from_user.id)
-    language = profile.language if profile else "ua"
     await state.clear()
-    if profile:
+    if profile := await get_or_load_profile(message.from_user.id):
+        language = profile.language if profile.language else "ua"
         auth_token = cache_manager.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
         await backend_service.log_out(profile, auth_token)
         cache_manager.deactivate_profiles(profile.current_tg_id)
-    await message.answer(text=translate(MessageText.logout, lang=language))
+        await state.update_data(lang=language)
+        await message.answer(
+            text=translate(MessageText.choose_action, lang=language),
+            reply_markup=action_choice_keyboard(language),
+        )
+        await state.set_state(States.action_choice)
+
+    else:
+        await message.answer(text=translate(MessageText.logout, lang="ua"))
 
 
 @cmd_router.message(Command("help"))
