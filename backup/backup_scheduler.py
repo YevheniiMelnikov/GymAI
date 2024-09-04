@@ -40,7 +40,7 @@ async def delete_old_backups():
 
 
 async def backup_scheduler():
-    logger.info("Starting backup scheduler ...")
+    logger.debug("Starting backup scheduler ...")
     scheduler = AsyncIOScheduler()
     scheduler.add_job(create_backup, "cron", hour=2, minute=0)
     scheduler.add_job(delete_old_backups, "cron", hour=2, minute=10)

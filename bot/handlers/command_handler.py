@@ -9,8 +9,11 @@ from aiogram.types import Message
 from bot.keyboards import action_choice_keyboard, language_choice
 from bot.states import States
 from common.backend_service import backend_service
+from common.cache_manager import cache_manager
 from common.functions.menus import show_main_menu
-from texts.text_manager import MessageText, translate
+from common.functions.profiles import get_or_load_profile
+from texts.resources import MessageText
+from texts.text_manager import translate
 
 logger = loguru.logger
 cmd_router = Router()
@@ -18,7 +21,7 @@ cmd_router = Router()
 
 @cmd_router.message(Command("language"))
 async def cmd_language(message: Message, state: FSMContext) -> None:
-    if profile := backend_service.cache.get_current_profile(message.from_user.id):
+    if profile := await get_or_load_profile(message.from_user.id):
         lang = profile.language
     else:
         lang = "ua"
@@ -28,7 +31,7 @@ async def cmd_language(message: Message, state: FSMContext) -> None:
 
 @cmd_router.message(Command("menu"))
 async def cmd_menu(message: Message, state: FSMContext) -> None:
-    if profile := backend_service.cache.get_current_profile(message.from_user.id):
+    if profile := await get_or_load_profile(message.from_user.id):
         await show_main_menu(message, profile, state)
     else:
         await state.set_state(States.language_choice)
@@ -39,9 +42,11 @@ async def cmd_menu(message: Message, state: FSMContext) -> None:
 async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
     await state.update_data(chat_id=message.chat.id)
-    if profile := backend_service.cache.get_current_profile(message.from_user.id):
+    if profile := await get_or_load_profile(message.from_user.id):
         logger.info(f"User with profile_id {profile.id} started bot")
-        await backend_service.log_out(message.from_user.id)
+        auth_token = cache_manager.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
+        await backend_service.log_out(profile, auth_token)
+        cache_manager.deactivate_profiles(profile.current_tg_id)
         await state.update_data(lang=profile.language)
         start_message = await message.answer(text=translate(MessageText.start, profile.language))
         await message.answer(
@@ -63,23 +68,26 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
 
 @cmd_router.message(Command("logout"))
 async def cmd_logout(message: Message, state: FSMContext) -> None:
-    profile = backend_service.cache.get_current_profile(message.from_user.id)
+    profile = await get_or_load_profile(message.from_user.id)
     language = profile.language if profile else "ua"
     await state.clear()
-    await backend_service.log_out(message.from_user.id)
+    if profile:
+        auth_token = cache_manager.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
+        await backend_service.log_out(profile, auth_token)
+        cache_manager.deactivate_profiles(profile.current_tg_id)
     await message.answer(text=translate(MessageText.logout, lang=language))
 
 
 @cmd_router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
-    profile = backend_service.cache.get_current_profile(message.from_user.id)
+    profile = await get_or_load_profile(message.from_user.id)
     language = profile.language if profile else "ua"
     await message.answer(text=translate(MessageText.help, lang=language))
 
 
 @cmd_router.message(Command("feedback"))
 async def cmd_feedback(message: Message, state: FSMContext) -> None:
-    profile = backend_service.cache.get_current_profile(message.from_user.id)
+    profile = await get_or_load_profile(message.from_user.id)
     language = profile.language if profile else "ua"
     await message.answer(text=translate(MessageText.feedback, lang=language))
     await state.set_state(States.feedback)
@@ -87,11 +95,10 @@ async def cmd_feedback(message: Message, state: FSMContext) -> None:
 
 @cmd_router.message(Command("reset_password"))
 async def cmd_reset_password(message: Message, state: FSMContext) -> None:
-    profiles = backend_service.cache.get_profiles(str(message.from_user.id))
+    profiles = cache_manager.get_profiles(message.from_user.id)
     if profiles:
         usernames = [
-            backend_service.cache.get_profile_info_by_key(message.from_user.id, profile.id, "username")
-            for profile in profiles
+            cache_manager.get_profile_info_by_key(message.from_user.id, profile.id, "username") for profile in profiles
         ]
         language = profiles[0].language if profiles[0].language else "ua"
         await state.update_data(
@@ -106,7 +113,7 @@ async def cmd_reset_password(message: Message, state: FSMContext) -> None:
 
 @cmd_router.message(Command("policy"))
 async def cmd_policy(message: Message) -> None:
-    profile = backend_service.cache.get_current_profile(message.from_user.id)
+    profile = await get_or_load_profile(message.from_user.id)
     language = profile.language if profile else "ua"
     public_offer = os.getenv("PUBLIC_OFFER")
     privacy_policy = os.getenv("PRIVACY_POLICY")

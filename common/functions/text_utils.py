@@ -1,13 +1,14 @@
 import re
 from typing import Any, Optional
 
-from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State
 
 from bot.states import States
 from common.backend_service import backend_service
+from common.cache_manager import cache_manager
 from common.models import Client, Coach, Exercise
-from texts.text_manager import ButtonText, MessageText, translate
+from texts.resources import ButtonText, MessageText
+from texts.text_manager import translate
 
 
 def validate_password(password: str) -> bool:
@@ -54,7 +55,7 @@ def get_profile_attributes(role: str, user: Optional[Client | Coach], lang_code:
         attributes = {
             "name": get_attr("name"),
             "gender": genders.get(get_attr("gender"), ""),
-            "birth_date": get_attr("birth_date"),
+            "born_in": get_attr("born_in"),
             "experience": get_attr("workout_experience"),
             "goals": get_attr("workout_goals"),
             "weight": get_attr("weight"),
@@ -70,6 +71,11 @@ def get_profile_attributes(role: str, user: Optional[Client | Coach], lang_code:
                 get_attr("verified"), translate(MessageText.not_verified, lang=lang_code)
             ),
         }
+        decrypted_details = cache_manager.encrypter.decrypt(
+            cache_manager.encrypter.decrypt(get_attr("payment_details"))
+        )
+        if decrypted_details:
+            attributes["payment_details"] = decrypted_details
 
     return attributes
 
@@ -91,32 +97,31 @@ def get_coach_page(coach: Coach) -> dict[str, Any]:
     return {"name": coach.name, "experience": coach.work_experience, "additional_info": coach.additional_info}
 
 
-async def get_client_page(
-    client: Client, lang_code: str, subscription: bool, payment_status: bool, state: FSMContext
-) -> dict[str, Any]:
+async def get_client_page(client: Client, lang_code: str, subscription: bool, data: dict[str, Any]) -> dict[str, Any]:
     texts = {
         "male": translate(ButtonText.male, lang=lang_code),
         "female": translate(ButtonText.female, lang=lang_code),
         "enabled": translate(ButtonText.enabled, lang=lang_code),
         "disabled": translate(ButtonText.disabled, lang=lang_code),
-        "waiting": translate(MessageText.waiting, lang=lang_code),
-        "ok": translate(MessageText.program_compiled, lang=lang_code),
+        "waiting_for_subscription": translate(MessageText.waiting_for_subscription, lang=lang_code),
+        "waiting_for_program": translate(MessageText.waiting_for_program, lang=lang_code),
+        "default": translate(MessageText.client_default_status, lang=lang_code),
         "waiting_for_text": translate(MessageText.waiting_for_text, lang=lang_code),
     }
 
+    client_data = await backend_service.get_profile(client.id)
     page = {
         "name": client.name,
         "gender": texts.get(client.gender, ""),
-        "birth_date": client.birth_date,
+        "born_in": client.born_in,
         "workout_experience": client.workout_experience,
         "workout_goals": client.workout_goals,
         "health_notes": client.health_notes,
         "weight": client.weight,
-        "language": backend_service.cache.get_profile_info_by_key(client.tg_id, client.id, "language"),
+        "language": cache_manager.get_profile_info_by_key(client_data.get("current_tg_id"), client.id, "language"),
         "subscription": texts.get("enabled") if subscription else texts.get("disabled"),
-        "status": texts.get("waiting") if payment_status else texts.get("ok"),
+        "status": texts.get(client.status),
     }
-    data = await state.get_data()
     if data.get("new_client"):
         page["status"] = texts.get("waiting_for_text")
     return page

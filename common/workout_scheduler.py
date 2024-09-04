@@ -8,13 +8,13 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-import common.functions.chat
-import common.functions.workout_plans
-from bot.keyboards import workout_results, workout_survey_keyboard, yes_no
+from bot.keyboards import workout_results, workout_survey_keyboard
 from bot.states import States
-from common.backend_service import cache_manager
-from common.functions.chat import send_message
-from texts.text_manager import MessageText, translate
+from common.backend_service import backend_service
+from common.cache_manager import cache_manager
+from common.functions.profiles import get_or_load_profile
+from texts.resources import MessageText
+from texts.text_manager import translate
 
 logger = loguru.logger
 survey_router = Router()
@@ -24,12 +24,14 @@ bot = Bot(os.environ.get("BOT_TOKEN"))
 async def send_daily_survey():
     clients = cache_manager.get_clients_to_survey()
     for client_id in clients:
-        client = cache_manager.get_client_by_id(client_id)
-        client_lang = cache_manager.get_profile_info_by_key(client.tg_id, client_id, "language")
+        client_data = await backend_service.get_profile(client_id.id)
+        client_lang = (
+            cache_manager.get_profile_info_by_key(client_data.get("current_tg_id"), client_id, "language") or "ua"
+        )
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
         async with aiohttp.ClientSession():
             await bot.send_message(
-                chat_id=client.tg_id,
+                chat_id=client_data.get("current_tg_id"),
                 text=translate(MessageText.have_you_trained, client_lang),
                 reply_markup=workout_survey_keyboard(client_lang, yesterday),
                 disable_notification=True,
@@ -38,7 +40,7 @@ async def send_daily_survey():
         @survey_router.callback_query(F.data.startswith("yes_"))
         @survey_router.callback_query(F.data.startswith("no_"))
         async def have_you_trained(callback_query: CallbackQuery, state: FSMContext):
-            profile = cache_manager.get_current_profile(callback_query.from_user.id)
+            profile = await get_or_load_profile(callback_query.from_user.id)
             subscription = cache_manager.get_subscription(profile.id)
             workout_days = subscription.workout_days
             if callback_query.data.startswith("yes"):
@@ -62,7 +64,7 @@ async def send_daily_survey():
 
 
 async def workout_scheduler():
-    logger.info("Starting workout scheduler ...")
+    logger.debug("Starting workout scheduler ...")
     scheduler = AsyncIOScheduler()
     scheduler.add_job(send_daily_survey, "cron", hour=9, minute=0)
     scheduler.start()

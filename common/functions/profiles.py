@@ -8,34 +8,34 @@ from aiogram.types import CallbackQuery, Message
 from bot.keyboards import client_menu_keyboard, coach_menu_keyboard
 from bot.states import States
 from common.backend_service import backend_service
-from common.exceptions import UserServiceError
-from common.functions.chat import notify_about_new_coach
-from common.functions.menus import show_main_menu
+from common.cache_manager import cache_manager
+from common.exceptions import ProfileNotFoundError, UserServiceError
+from common.functions import chat, menus
 from common.functions.utils import delete_messages
 from common.models import Client, Coach, Profile
-from texts.text_manager import MessageText, translate
+from texts.resources import MessageText
+from texts.text_manager import translate
 
 logger = loguru.logger
 
 
 async def update_user_info(message: Message, state: FSMContext, role: str) -> None:
     data = await state.get_data()
-    data["tg_id"] = message.from_user.id
     await delete_messages(state)
     try:
-        profile = backend_service.cache.get_current_profile(message.chat.id)
+        profile = await get_or_load_profile(message.chat.id)
         if not profile:
             raise ValueError("Profile not found")
 
         if role == "client":
-            backend_service.cache.set_client_data(str(profile.id), data)
+            cache_manager.set_client_data(profile.id, data)
         else:
             if not data.get("edit_mode"):
                 await message.answer(translate(MessageText.wait_for_verification, data.get("lang")))
-                await notify_about_new_coach(message.from_user.id, profile, data)
-            backend_service.cache.set_coach_data(str(profile.id), data)
+                await chat.notify_about_new_coach(message.from_user.id, profile, data)
+            cache_manager.set_coach_data(profile.id, data)
 
-        token = backend_service.cache.get_profile_info_by_key(message.chat.id, profile.id, "auth_token")
+        token = cache_manager.get_profile_info_by_key(message.chat.id, profile.id, "auth_token")
         if not token:
             token = await backend_service.get_user_token(profile.id)
 
@@ -57,14 +57,14 @@ async def update_user_info(message: Message, state: FSMContext, role: str) -> No
         await message.delete()
 
 
-async def assign_coach(coach: Coach, client: Client) -> None:
+async def assign_coach(coach: Coach, client: Client, telegram_id: int) -> None:
     coach_clients = coach.assigned_to if isinstance(coach.assigned_to, list) else []
     if client.id not in coach_clients:
         coach_clients.append(int(client.id))
-        backend_service.cache.set_coach_data(str(coach.id), {"assigned_to": coach_clients})
+        cache_manager.set_coach_data(coach.id, {"assigned_to": coach_clients})
 
-    backend_service.cache.set_client_data(str(client.id), {"assigned_to": [int(coach.id)]})
-    token = backend_service.cache.get_profile_info_by_key(client.tg_id, client.id, "auth_token")
+    cache_manager.set_client_data(client.id, {"assigned_to": [coach.id]})
+    token = cache_manager.get_profile_info_by_key(telegram_id, client.id, "auth_token")
     if not token:
         token = await backend_service.get_user_token(client.id)
     await backend_service.edit_profile(client.id, {"assigned_to": [coach.id]}, token)
@@ -96,34 +96,32 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
 
     await state.update_data(login_attempts=0)
     email = await backend_service.get_user_email(profile.id)
-    backend_service.cache.set_profile(
-        profile=profile, username=data["username"], auth_token=token, telegram_id=str(message.from_user.id), email=email
+    cache_manager.set_profile(
+        profile=profile, username=data["username"], auth_token=token, telegram_id=message.from_user.id, email=email
     )
-    logger.info(f"profile_id {profile.id} set for user {message.from_user.id}")
+    await backend_service.reset_telegram_id(profile.id, message.from_user.id)
+    logger.debug(f"profile_id {profile.id} set for user {message.from_user.id}")
     await backend_service.edit_profile(profile_id=profile.id, data={"current_tg_id": message.from_user.id}, token=token)
-    logger.info(f"tg_id {message.from_user.id} set for profile_id {profile.id}")
 
     if profile.status == "coach":
         try:
-            backend_service.cache.get_coach_by_id(profile.id)
+            cache_manager.get_coach_by_id(profile.id)
         except UserServiceError:
-            coach_data = await backend_service.get_profile_data(profile.id)
-            coach_data["tg_id"] = message.from_user.id
-            backend_service.cache.set_coach_data(profile.id, coach_data)
+            coach_data = await backend_service.get_profile(profile.id)
+            cache_manager.set_coach_data(profile.id, coach_data)
     else:
         try:
-            backend_service.cache.get_client_by_id(profile.id)
+            cache_manager.get_client_by_id(profile.id)
         except UserServiceError:
-            client_data = await backend_service.get_profile_data(profile.id)
-            client_data["tg_id"] = message.from_user.id
-            backend_service.cache.set_client_data(profile.id, client_data)
+            client_data = await backend_service.get_profile(profile.id)
+            cache_manager.set_client_data(profile.id, client_data)
 
     await message.answer(text=translate(MessageText.signed_in, lang=data.get("lang")))
     await delete_messages(state)
     if data.get("lang") != profile.language:
-        backend_service.cache.set_profile_info_by_key(message.from_user.id, profile.id, "language", data.get("lang"))
+        cache_manager.set_profile_info_by_key(message.from_user.id, profile.id, "language", data.get("lang"))
         profile.language = data.get("lang")
-    await show_main_menu(message, profile, state)
+    await menus.show_main_menu(message, profile, state)
     with suppress(TelegramBadRequest):
         await message.delete()
 
@@ -161,26 +159,50 @@ async def register_user(callback_query: CallbackQuery, state: FSMContext, data: 
 
     profile_data = await backend_service.get_profile_by_username(username)
     logger.info(f"User {profile_data.id} logged in")
-    backend_service.cache.set_profile(
+    await backend_service.reset_telegram_id(profile_data.id, callback_query.from_user.id)
+    cache_manager.set_profile(
         profile=profile_data,
         username=username,
         auth_token=token,
-        telegram_id=str(callback_query.from_user.id),
+        telegram_id=callback_query.from_user.id,
         email=email,
     )
     if not await backend_service.send_welcome_email(email=email, username=username):
         logger.error(f"Failed to send welcome email to {email}")
     await callback_query.message.answer(text=translate(MessageText.registration_successful, lang=data.get("lang")))
-    await show_main_menu(callback_query.message, profile_data, state)
+    await menus.show_main_menu(callback_query.message, profile_data, state)
 
 
 async def check_assigned_clients(profile_id: int) -> bool:
-    coach = backend_service.cache.get_coach_by_id(profile_id)
+    coach = cache_manager.get_coach_by_id(profile_id)
     assigned_clients = coach.assigned_to
     for client in assigned_clients:
-        subscription = backend_service.cache.get_subscription(client.id)
-        waiting_program = backend_service.cache.check_payment_status(client.id, "program")
+        subscription = cache_manager.get_subscription(client.id)
+        waiting_program = cache_manager.check_payment_status(client.id, "program")
         if subscription.enabled or waiting_program:
             return True
 
     return False
+
+
+async def get_or_load_profile(telegram_id: int) -> Profile:
+    try:
+        return cache_manager.get_current_profile(telegram_id)
+    except ProfileNotFoundError:
+        profile_data = await backend_service.get_profile_by_telegram_id(telegram_id)
+        if profile_data:
+            profile = Profile.from_dict(profile_data)
+            await backend_service.reset_telegram_id(profile.id, telegram_id)
+            token = await backend_service.get_user_token(profile.id)
+            cache_manager.set_profile(
+                profile=profile,
+                username=profile_data.get("username", ""),
+                auth_token=token,
+                telegram_id=telegram_id,
+                email=profile_data.get("email", ""),
+                is_current=True,
+            )
+        else:
+            raise ProfileNotFoundError(f"Profile not found for user {telegram_id}")
+
+    return profile

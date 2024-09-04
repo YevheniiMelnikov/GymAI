@@ -8,3 +8,7 @@ class EmailUnavailable(Exception):
 
 class UserServiceError(Exception):
     pass
+
+
+class ProfileNotFoundError(Exception):
+    pass

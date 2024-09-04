@@ -1,11 +1,11 @@
-from common.backend_service import backend_service
 from common.functions.chat import *
 from common.functions.menus import *
-from common.functions.profiles import assign_coach
+from common.functions.profiles import assign_coach, get_or_load_profile
 from common.functions.utils import handle_clients_pagination
 from common.functions.workout_plans import manage_program
 from common.models import Coach, Profile
-from texts.text_manager import MessageText, translate
+from texts.resources import MessageText
+from texts.text_manager import translate
 
 main_router = Router()
 logger = loguru.logger
@@ -57,7 +57,7 @@ async def process_password_reset(message: Message, state: FSMContext) -> None:
         profile = Profile.from_dict(data["profiles"][index])
         email = await backend_service.get_user_email(profile.id)
         if email:
-            token = backend_service.cache.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
+            token = cache_manager.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
             if not token:
                 token = await backend_service.get_user_token(profile.id)
             if await backend_service.reset_password(email, token):
@@ -65,7 +65,8 @@ async def process_password_reset(message: Message, state: FSMContext) -> None:
                     text=translate(MessageText.password_reset_sent, profile.language).format(email=email)
                 )
                 await state.clear()
-                await backend_service.log_out(message.from_user.id)
+                await backend_service.log_out(profile, token)
+                cache_manager.deactivate_profiles(profile.current_tg_id)
                 await message.answer(text=translate(MessageText.username, profile.language))
                 await state.set_state(States.username)
             else:
@@ -79,8 +80,8 @@ async def process_password_reset(message: Message, state: FSMContext) -> None:
 
 @main_router.message(States.feedback)
 async def handle_feedback(message: Message, state: FSMContext) -> None:
-    profile = backend_service.cache.get_current_profile(message.from_user.id)
-    token = backend_service.cache.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
+    profile = await get_or_load_profile(message.from_user.id)
+    token = cache_manager.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
     if not token:
         token = await backend_service.get_user_token(profile.id)
     if user_data := await backend_service.get_user_data(token):
@@ -97,12 +98,12 @@ async def handle_feedback(message: Message, state: FSMContext) -> None:
 
 @main_router.callback_query(States.choose_coach)
 async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext):
-    profile = backend_service.cache.get_current_profile(callback_query.from_user.id)
+    profile = await get_or_load_profile(callback_query.from_user.id)
     if callback_query.data == "back":
         await show_main_menu(callback_query.message, profile, state)
 
     else:
-        coaches = backend_service.cache.get_coaches()
+        coaches = cache_manager.get_coaches()
         if not coaches:
             await callback_query.answer(translate(MessageText.no_coaches, lang=profile.language), show_alert=True)
             return
@@ -117,7 +118,7 @@ async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext):
 
 @main_router.callback_query(States.coach_selection)
 async def coach_paginator(callback_query: CallbackQuery, state: FSMContext):
-    profile = backend_service.cache.get_current_profile(callback_query.from_user.id)
+    profile = await get_or_load_profile(callback_query.from_user.id)
 
     if callback_query.data == "quit":
         await callback_query.message.answer(
@@ -139,10 +140,9 @@ async def coach_paginator(callback_query: CallbackQuery, state: FSMContext):
     if action == "selected":
         await callback_query.answer(translate(MessageText.saved, profile.language))
         coach_id = callback_query.data.split("_")[1]
-        coach = backend_service.cache.get_coach_by_id(coach_id)
-        client = backend_service.cache.get_client_by_id(profile.id)
-        await assign_coach(coach, client)
-        await state.update_data(coach=coach.to_dict(), client=client.to_dict())
+        coach = cache_manager.get_coach_by_id(coach_id)
+        client = cache_manager.get_client_by_id(profile.id)
+        await assign_coach(coach, client, callback_query.from_user.id)
         await state.set_state(States.gift)
         await callback_query.message.answer(
             translate(MessageText.gift, profile.language), reply_markup=gift(profile.language)
@@ -154,7 +154,7 @@ async def coach_paginator(callback_query: CallbackQuery, state: FSMContext):
 
 @main_router.callback_query(States.show_clients)
 async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
-    profile = backend_service.cache.get_current_profile(callback_query.from_user.id)
+    profile = await get_or_load_profile(callback_query.from_user.id)
 
     if callback_query.data == "back":
         await callback_query.answer()
@@ -185,16 +185,17 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
 
 @main_router.callback_query(States.show_subscription)
 async def show_subscription_actions(callback_query: CallbackQuery, state: FSMContext):
-    await callback_query.answer()
-    profile = backend_service.cache.get_current_profile(callback_query.from_user.id)
+    profile = await get_or_load_profile(callback_query.from_user.id)
     if callback_query.data == "back":
+        await callback_query.answer()
         await state.set_state(States.select_service)
         await callback_query.message.answer(
             text=translate(MessageText.select_service, lang=profile.language),
             reply_markup=select_service(profile.language),
         )
 
-    elif callback_query.data == "edit":
+    elif callback_query.data == "edit_days":
+        await callback_query.answer()
         await state.update_data(edit_mode=True)
         await state.set_state(States.workout_days)
         await callback_query.message.answer(
@@ -202,14 +203,20 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         )
 
     elif callback_query.data == "contact":
-        client = backend_service.cache.get_client_by_id(profile.id)
+        await callback_query.answer()
+        client = cache_manager.get_client_by_id(profile.id)
         coach_id = client.assigned_to.pop()
         await state.update_data(recipient_id=coach_id, sender_name=client.name)
         await state.set_state(States.contact_coach)
         await callback_query.message.answer(translate(MessageText.enter_your_message, profile.language))
 
+    elif callback_query.data == "delete":  # TODO: IMPLEMENT THIS
+        await callback_query.answer("This option is not available yet", show_alert=True)
+        return
+
     else:
-        subscription = backend_service.cache.get_subscription(profile.id)
+        await callback_query.answer()
+        subscription = cache_manager.get_subscription(profile.id)
         workout_days = subscription.workout_days
         await state.update_data(exercises=subscription.exercises, days=workout_days, split=len(workout_days))
         await show_exercises_menu(callback_query, state, profile)

@@ -1,7 +1,8 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from texts.text_manager import ButtonText, translate
+from texts.resources import ButtonText
+from texts.text_manager import translate
 
 
 def language_choice() -> InlineKeyboardMarkup:
@@ -356,7 +357,8 @@ def show_subscriptions_kb(lang_code: str) -> InlineKeyboardMarkup:
     buttons = [
         [InlineKeyboardButton(text=translate(ButtonText.exercises, lang_code), callback_data="exercises")],
         [InlineKeyboardButton(text=translate(ButtonText.contact_coach, lang_code), callback_data="contact")],
-        [InlineKeyboardButton(text=translate(ButtonText.edit, lang_code), callback_data="edit")],
+        [InlineKeyboardButton(text=translate(ButtonText.edit_days, lang_code), callback_data="edit_days")],
+        [InlineKeyboardButton(text=translate(ButtonText.delete, lang_code), callback_data="delete")],
         [InlineKeyboardButton(text=translate(ButtonText.prev_menu), callback_data="back")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
@@ -413,6 +415,10 @@ def payment_keyboard(lang_code: str, link: str, request_type: str) -> InlineKeyb
         inline_keyboard=[
             [
                 InlineKeyboardButton(text=translate(ButtonText.pay, lang_code), callback_data=request_type, url=link),
-            ]
+                InlineKeyboardButton(text=translate(ButtonText.done, lang_code), callback_data="done"),
+            ],
+            [
+                InlineKeyboardButton(text=translate(ButtonText.prev_menu, lang_code), callback_data="back"),
+            ],
         ]
     )

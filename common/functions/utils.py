@@ -8,13 +8,13 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BotCommand, CallbackQuery
 
-from bot.keyboards import program_edit_kb, program_view_kb, subscription_manage_menu
+from bot.keyboards import (program_edit_kb, program_view_kb,
+                           subscription_manage_menu)
 from bot.states import States
-from common.backend_service import backend_service
-from common.functions.menus import my_clients_menu, show_clients
-from common.functions.text_utils import format_program, get_translated_week_day
+from common.functions import menus, profiles, text_utils
 from common.models import Client
-from texts.text_manager import MessageText, resource_manager, translate
+from texts.resources import MessageText
+from texts.text_manager import resource_manager, translate
 
 logger = loguru.logger
 bot = Bot(os.environ.get("BOT_TOKEN"))
@@ -42,10 +42,10 @@ async def set_bot_commands(lang: str = "ua") -> None:
 
 
 async def program_menu_pagination(state: FSMContext, callback_query: CallbackQuery) -> None:
-    profile = backend_service.cache.get_current_profile(callback_query.from_user.id)
+    profile = await profiles.get_or_load_profile(callback_query.from_user.id)
 
     if callback_query.data == "quit":
-        await my_clients_menu(callback_query, profile, state)
+        await menus.my_clients_menu(callback_query, profile, state)
         return
 
     data = await state.get_data()
@@ -66,7 +66,7 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
         await callback_query.answer(translate(MessageText.out_of_range, profile.language))
 
     await state.update_data(day_index=current_day)
-    program_text = await format_program(exercises, current_day)
+    program_text = await text_utils.format_program(exercises, current_day)
 
     if data.get("client"):
         reply_markup = program_view_kb(profile.language)
@@ -81,7 +81,7 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
 
     days = data.get("days", [])
     next_day = (
-        get_translated_week_day(profile.language, days[current_day]).lower()
+        text_utils.get_translated_week_day(profile.language, days[current_day]).lower()
         if data.get("subscription")
         else current_day + 1
     )
@@ -108,7 +108,7 @@ async def handle_clients_pagination(callback_query: CallbackQuery, profile, inde
         await callback_query.answer(translate(MessageText.out_of_range, profile.language))
         return
 
-    await show_clients(callback_query.message, clients, state, index)
+    await menus.show_clients(callback_query.message, clients, state, index)
 
 
 async def delete_messages(state: FSMContext) -> None:
