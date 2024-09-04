@@ -414,9 +414,10 @@ def payment_keyboard(lang_code: str, link: str, request_type: str) -> InlineKeyb
         inline_keyboard=[
             [
                 InlineKeyboardButton(text=translate(ButtonText.pay, lang_code), callback_data=request_type, url=link),
+                InlineKeyboardButton(text=translate(ButtonText.done, lang_code), callback_data="done"),
             ],
             [
-                InlineKeyboardButton(text=translate(ButtonText.done, lang_code), callback_data="done"),
+                InlineKeyboardButton(text=translate(ButtonText.prev_menu, lang_code), callback_data="back"),
             ],
         ]
     )

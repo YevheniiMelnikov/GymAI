@@ -5,9 +5,7 @@ from common.functions.menus import *
 from common.functions.profiles import get_or_load_profile
 from common.functions.text_utils import format_program, get_translated_week_day
 from common.functions.utils import program_menu_pagination, short_url
-from common.functions.workout_plans import (next_day_workout_plan,
-                                            reset_workout_plan,
-                                            save_workout_plan)
+from common.functions.workout_plans import next_day_workout_plan, reset_workout_plan, save_workout_plan
 from common.models import Exercise
 from texts.resources import ButtonText, MessageText
 from texts.text_manager import translate
@@ -248,12 +246,12 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
         return
 
     elif callback_query.data == "reset":
-        await callback_query.answer(translate(ButtonText.done, profile.language))
+        await callback_query.answer()
         if data.get("subscription"):
             subscription_data = cache_manager.get_subscription(client_id).to_dict()
             subscription_data.update(user=client_id, exercises=None)
             await backend_service.update_subscription(subscription_data.get("id"), subscription_data)
-            cache_manager.save_subscription(client_id, subscription_data)
+            cache_manager.update_subscription_data(client_id, {"exercises": None, "user": client_id})
         else:
             if await backend_service.delete_program(client_id):
                 cache_manager.delete_program(client_id)
@@ -276,7 +274,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
         await state.set_state(States.edit_exercise)
 
     elif callback_query.data == "finish_editing":
-        await callback_query.answer()
+        await callback_query.answer(translate(ButtonText.done, profile.language))
         client = cache_manager.get_client_by_id(client_id)
         client_data = await backend_service.get_profile(client_id)
         client_lang = cache_manager.get_profile_info_by_key(client_data.get("current_tg_id"), client.id, "language")
@@ -284,7 +282,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
             subscription_data = cache_manager.get_subscription(client_id).to_dict()
             subscription_data.update(user=client_id, exercises=exercises)
             await backend_service.update_subscription(subscription_data.get("id"), subscription_data)
-            cache_manager.save_subscription(client_id, subscription_data)
+            cache_manager.update_subscription_data(client_id, {"exercises": exercises, "user": client_id})
             await send_message(
                 recipient=client,
                 text=translate(MessageText.new_program, lang=client_lang),
@@ -313,7 +311,8 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
                 reply_markup=program_view_kb(client_lang),
                 include_incoming_message=False,
             )
-        await callback_query.message.answer(translate(MessageText.program_compiled, profile.language))
+
+        cache_manager.set_client_data(client_id, {"status": "default"})
         await show_main_menu(callback_query.message, profile, state)
         return
 

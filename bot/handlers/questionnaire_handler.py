@@ -7,18 +7,15 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import (choose_gender, payment_keyboard, select_days,
-                           workout_experience_keyboard)
+from bot.keyboards import choose_gender, payment_keyboard, select_days, workout_experience_keyboard
 from bot.states import States
 from common.cache_manager import cache_manager
 from common.file_manager import avatar_manager
 from common.functions.chat import client_request
-from common.functions.exercises import (create_new_subscription,
-                                        edit_subscription_days)
+from common.functions.exercises import edit_subscription_days, process_new_subscription
 from common.functions.menus import show_main_menu
 from common.functions.profiles import get_or_load_profile, update_user_info
-from common.functions.text_utils import (get_state_and_message,
-                                         validate_birth_date)
+from common.functions.text_utils import get_state_and_message, validate_birth_date
 from common.functions.utils import delete_messages
 from common.payment_service import payment_service
 from common.settings import PROGRAM_PRICE
@@ -280,11 +277,9 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
             await state.update_data(workout_days=days)
             if data.get("edit_mode"):
                 subscription = cache_manager.get_subscription(profile.id)
-                print(len(subscription.workout_days))
-                print(len(days))
                 await edit_subscription_days(callback_query, days, profile, state, subscription)
             else:
-                await create_new_subscription(callback_query, days, profile, state)
+                await process_new_subscription(callback_query, profile, state)
         else:
             await callback_query.answer("❌")
     else:

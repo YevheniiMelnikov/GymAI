@@ -1,13 +1,11 @@
 import re
 from typing import Any, Optional
 
-from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State
 
 from bot.states import States
 from common.backend_service import backend_service
 from common.cache_manager import cache_manager
-from common.functions.profiles import get_or_load_profile
 from common.models import Client, Coach, Exercise
 from texts.resources import ButtonText, MessageText
 from texts.text_manager import translate
@@ -99,16 +97,15 @@ def get_coach_page(coach: Coach) -> dict[str, Any]:
     return {"name": coach.name, "experience": coach.work_experience, "additional_info": coach.additional_info}
 
 
-async def get_client_page(
-    client: Client, lang_code: str, subscription: bool, payment_status: bool, data: dict[str, Any]
-) -> dict[str, Any]:
+async def get_client_page(client: Client, lang_code: str, subscription: bool, data: dict[str, Any]) -> dict[str, Any]:
     texts = {
         "male": translate(ButtonText.male, lang=lang_code),
         "female": translate(ButtonText.female, lang=lang_code),
         "enabled": translate(ButtonText.enabled, lang=lang_code),
         "disabled": translate(ButtonText.disabled, lang=lang_code),
-        "waiting": translate(MessageText.waiting, lang=lang_code),
-        "ok": translate(MessageText.program_compiled, lang=lang_code),
+        "waiting_for_subscription": translate(MessageText.waiting_for_subscription, lang=lang_code),
+        "waiting_for_program": translate(MessageText.waiting_for_program, lang=lang_code),
+        "default": translate(MessageText.client_default_status, lang=lang_code),
         "waiting_for_text": translate(MessageText.waiting_for_text, lang=lang_code),
     }
 
@@ -123,7 +120,7 @@ async def get_client_page(
         "weight": client.weight,
         "language": cache_manager.get_profile_info_by_key(client_data.get("current_tg_id"), client.id, "language"),
         "subscription": texts.get("enabled") if subscription else texts.get("disabled"),
-        "status": texts.get("waiting") if payment_status else texts.get("ok"),
+        "status": texts.get(client.status),
     }
     if data.get("new_client"):
         page["status"] = texts.get("waiting_for_text")

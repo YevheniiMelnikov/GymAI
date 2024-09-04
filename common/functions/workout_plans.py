@@ -5,8 +5,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
-from bot.keyboards import (program_edit_kb, program_manage_menu,
-                           program_view_kb, subscription_view_kb)
+from bot.keyboards import program_edit_kb, program_manage_menu, program_view_kb, subscription_view_kb
 from bot.states import States
 from common.backend_service import backend_service
 from common.cache_manager import cache_manager
@@ -35,7 +34,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
             if data.get("subscription"):
                 subscription_data = cache_manager.get_subscription(client_id).to_dict()
                 subscription_data.update(user=client_id, exercises=exercises)
-                cache_manager.save_subscription(client_id, subscription_data)
+                cache_manager.update_subscription_data(client_id, {"exercises": exercises, "user": client_id})
                 await backend_service.update_subscription(subscription_data.get("id"), subscription_data)
                 await send_message(
                     recipient=client,
@@ -65,7 +64,8 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
                     reply_markup=program_view_kb(client_lang),
                     include_incoming_message=False,
                 )
-            await state.clear()
+
+            cache_manager.set_client_data(client_id, {"status": "default"})
             await show_main_menu(callback_query.message, profile, state)
         else:
             await callback_query.answer(translate(MessageText.complete_all_days, profile.language), show_alert=True)
@@ -82,7 +82,7 @@ async def reset_workout_plan(callback_query: CallbackQuery, state: FSMContext) -
         subscription_data = cache_manager.get_subscription(client_id).to_dict()
         subscription_data.update(user=client_id, exercises=None)
         await backend_service.update_subscription(subscription_data.get("id"), subscription_data)
-        cache_manager.save_subscription(client_id, subscription_data)
+        cache_manager.update_subscription_data(client_id, {"exercises": None, "user": client_id})
     else:
         if await backend_service.delete_program(client_id):
             cache_manager.delete_program(client_id)

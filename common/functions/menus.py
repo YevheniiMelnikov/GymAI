@@ -6,15 +6,16 @@ import loguru
 from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InputMediaPhoto, Message
 from dateutil.relativedelta import relativedelta
 
 from bot.keyboards import *
-from bot.keyboards import (choose_coach, program_manage_menu, program_view_kb,
-                           select_service, subscription_manage_menu)
+from bot.keyboards import choose_coach, program_manage_menu, program_view_kb, select_service, subscription_manage_menu
 from common.backend_service import backend_service
 from common.exceptions import UserServiceError
 from common.file_manager import avatar_manager
+from common.functions.profiles import get_or_load_profile
 from common.functions.text_utils import *
 from common.models import Client, Coach, Profile, Subscription
 from common.settings import BOT_PAYMENT_OPTIONS
@@ -91,15 +92,12 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext) 
 
 
 async def show_clients(message: Message, clients: list[Client], state: FSMContext, current_index=0) -> None:
-    profile = await get_or_load_profile(message.from_user.id)
+    profile = await get_or_load_profile(message.chat.id)
     current_index %= len(clients)
     current_client = clients[current_index]
     subscription = True if cache_manager.get_subscription(current_client.id) else False
-    waiting_program = cache_manager.check_payment_status(current_client.id, "program")
-    waiting_subscription = cache_manager.check_payment_status(current_client.id, "subscription")
-    status = True if waiting_program or waiting_subscription else False
     data = await state.get_data()
-    client_info = await get_client_page(current_client, profile.language, subscription, status, data)
+    client_info = await get_client_page(current_client, profile.language, subscription, data)
     client_data = [Client.to_dict(client) for client in clients]
 
     await state.update_data(clients=client_data)

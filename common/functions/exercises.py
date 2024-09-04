@@ -9,8 +9,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import (payment_keyboard, program_edit_kb,
-                           program_manage_menu)
+from bot.keyboards import payment_keyboard, program_edit_kb, program_manage_menu
 from bot.states import States
 from common.backend_service import backend_service
 from common.cache_manager import cache_manager
@@ -146,7 +145,7 @@ async def edit_subscription_days(
     exercises = subscription_data.get("exercises", {})
     updated_exercises = {days[i]: exercises for i, exercises in enumerate(exercises.values())}
     subscription_data.update(user=profile.id, exercises=updated_exercises)
-    cache_manager.save_subscription(profile.id, subscription_data)
+    cache_manager.update_subscription_data(profile.id, {"exercises": updated_exercises, "user": profile.id})
     await backend_service.update_subscription(subscription_data.get("id"), subscription_data)
     await state.set_state(States.show_subscription)
     await show_subscription_page(callback_query, state, subscription)
@@ -154,21 +153,7 @@ async def edit_subscription_days(
         await callback_query.message.delete()
 
 
-async def create_new_subscription(
-    callback_query: CallbackQuery, days: list[str], profile: Profile, state: FSMContext
-) -> None:
-    data = await state.get_data()
-    subscription_id = await backend_service.create_subscription(profile.id, SUBSCRIPTION_PRICE, days)
-    subscription_data = {
-        "id": subscription_id,
-        "payment_date": "",
-        "enabled": False,
-        "price": SUBSCRIPTION_PRICE,
-        "user": profile.id,
-        "workout_days": days,
-        "workout_type": data.get("workout_type"),
-    }
-    cache_manager.save_subscription(profile.id, subscription_data)
+async def process_new_subscription(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     await callback_query.answer()
     timestamp = datetime.now().timestamp()
     order_number = f"id_{profile.id}_subscription_{timestamp}"

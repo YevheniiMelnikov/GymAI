@@ -1,5 +1,4 @@
 from accounts.views import *
-from django.contrib import admin
 from django.urls import include, path, re_path
 from drf_yasg import openapi
 from drf_yasg.views import get_schema_view

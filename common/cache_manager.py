@@ -36,6 +36,16 @@ class CacheManager:
             logger.error(f"JSON decode error: {e}")
             return []
 
+    def _set_data(self, key: str, profile_id: int, data: dict[str, Any], allowed_fields: list[str]) -> None:
+        try:
+            filtered_data = {k: data[k] for k in allowed_fields if k in data}
+            existing_data = json.loads(self.redis.hget(key, str(profile_id)) or "{}")
+            existing_data.update(filtered_data)
+            self.redis.hset(key, str(profile_id), json.dumps(existing_data))
+            logger.debug(f"Data for profile {profile_id} has been updated in {key}: {filtered_data}")
+        except Exception as e:
+            logger.error(f"Failed to set or update data for {profile_id} in {key}", e)
+
     def _update_profile_data(self, telegram_id: int, profiles_data: list[dict[str, Any]]) -> None:
         self.redis.hset("user_profiles", str(telegram_id), json.dumps(profiles_data))
 
@@ -141,16 +151,6 @@ class CacheManager:
             logger.error(f"Failed to set profile info for profile {profile_id}: {e}")
             return False
 
-    def _set_data(self, key: str, profile_id: int, data: dict[str, Any], allowed_fields: list[str]) -> None:
-        try:
-            filtered_data = {k: data[k] for k in allowed_fields if k in data}
-            existing_data = json.loads(self.redis.hget(key, str(profile_id)) or "{}")
-            existing_data.update(filtered_data)
-            self.redis.hset(key, str(profile_id), json.dumps(existing_data))
-            logger.debug(f"Data for profile {profile_id} has been updated in {key}: {filtered_data}")
-        except Exception as e:
-            logger.error(f"Failed to set or update data for {profile_id} in {key}", e)
-
     def set_client_data(self, profile_id: int, client_data: dict) -> None:
         allowed_fields = [
             "name",
@@ -160,6 +160,7 @@ class CacheManager:
             "workout_goals",
             "health_notes",
             "weight",
+            "status",
             "assigned_to",
         ]
         self._set_data("clients", profile_id, client_data, allowed_fields)
@@ -279,10 +280,10 @@ class CacheManager:
                 data = json.loads(subscription_data)
                 data["profile"] = profile_id
 
-                payment_date_str = data.get("payment_date")
-                if payment_date_str:
-                    payment_date = parse(payment_date_str)
-                    data["payment_date"] = payment_date.timestamp()
+                payment_date = data.get("payment_date")
+                if payment_date:
+                    payment_date = parse(payment_date)
+                    data["payment_date"] = payment_date.strftime("%Y-%m-%d")
 
                 return Subscription.from_dict(data)
             else:
@@ -291,6 +292,19 @@ class CacheManager:
         except Exception as e:
             logger.info(f"Failed to get subscription for profile_id {profile_id}: {e}")
             return None
+
+    def update_subscription_data(self, profile_id: int, subscription_data: dict) -> None:
+        allowed_fields = [
+            "payment_date",
+            "enabled",
+            "price",
+            "user",
+            "workout_type",
+            "workout_days",
+            "exercises",
+        ]
+
+        self._set_data("workout_plans:subscriptions", profile_id, subscription_data, allowed_fields)
 
     def get_clients_to_survey(self) -> list[int]:
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()

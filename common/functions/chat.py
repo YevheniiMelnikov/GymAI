@@ -9,11 +9,9 @@ from common.backend_service import backend_service
 from common.cache_manager import cache_manager
 from common.file_manager import avatar_manager
 from common.functions.exercises import edit_subscription_exercises
-from common.functions.menus import (show_exercises_menu,
-                                    show_manage_subscription_menu)
+from common.functions.menus import show_exercises_menu, show_main_menu, show_manage_subscription_menu
 from common.functions.profiles import get_or_load_profile
-from common.functions.text_utils import (format_new_client_message,
-                                         get_client_page, get_workout_types)
+from common.functions.text_utils import format_new_client_message, get_client_page, get_workout_types
 from common.functions.utils import *
 from common.models import Coach, Profile
 from texts.resources import MessageText
@@ -47,10 +45,7 @@ async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> 
     workout_types = await get_workout_types(coach_lang)
     preferable_workouts_type = workout_types.get(preferable_workout_type, "unknown")
     subscription = cache_manager.get_subscription(client.id)
-    waiting_program = cache_manager.check_payment_status(client.id, "program")
-    waiting_subscription = cache_manager.check_payment_status(client.id, "subscription")
-    status = True if waiting_program or waiting_subscription else False
-    client_page = await get_client_page(client, coach_lang, subscription, status, data)
+    client_page = await get_client_page(client, coach_lang, subscription, data)
     text = await format_new_client_message(data, coach_lang, client_lang, preferable_workouts_type)
     reply_markup = (
         new_incoming_request(coach_lang, client.id)
@@ -162,8 +157,10 @@ async def send_message(
 
     @sub_router.callback_query(F.data == "quit")
     @sub_router.callback_query(F.data == "later")
-    async def close_notification(callback_query: CallbackQuery):
+    async def close_notification(callback_query: CallbackQuery, state: FSMContext):
         await callback_query.message.delete()
+        profile = await get_or_load_profile(callback_query.from_user.id)
+        await show_main_menu(callback_query.message, profile, state)
 
     @sub_router.callback_query(F.data == "view")
     async def view_subscription(callback_query: CallbackQuery, state: FSMContext):
@@ -180,17 +177,20 @@ async def send_message(
     @sub_router.callback_query(F.data.startswith("answer"))
     async def answer_message(callback_query: CallbackQuery, state: FSMContext):
         profile = await get_or_load_profile(callback_query.from_user.id)
-        sender = (
-            cache_manager.get_client_by_id(profile.id)
-            if profile.status == "client"
-            else cache_manager.get_coach_by_id(profile.id)
-        )
+        recipient_id = int(callback_query.data.split("_")[1])
+        if profile.status == "client":
+            sender = cache_manager.get_client_by_id(profile.id)
+            state_to_set = States.contact_coach
+        else:
+            sender = cache_manager.get_coach_by_id(profile.id)
+            state_to_set = States.contact_client
+            if recipient.status == "waiting_for_text":
+                cache_manager.set_client_data(recipient.id, {"status": "default"})
+
         await callback_query.message.answer(translate(MessageText.enter_your_message, profile.language))
         await state.clear()
-        status_to_set = States.contact_coach if profile.status == "client" else States.contact_client
-        recipient_id = int(callback_query.data.split("_")[1])
         await state.update_data(recipient_id=recipient_id, sender_name=sender.name)
-        await state.set_state(status_to_set)
+        await state.set_state(state_to_set)
 
     @sub_router.callback_query(F.data == "previous")
     @sub_router.callback_query(F.data == "next")

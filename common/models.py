@@ -39,6 +39,7 @@ class Client(BaseEntity):
     workout_goals: str
     health_notes: str
     weight: int
+    status: str = "default"
     assigned_to: list[int] = field(default_factory=list)
 
 
@@ -91,10 +92,10 @@ class Payment(BaseEntity):
     profile: int
     payment_type: str
     shop_order_number: str
-    shop_bill_id: str
     amount: int
     status: str
     created_at: float
     updated_at: float
+    shop_bill_id: str | None = None
     handled: bool = False
     error: str | None = None

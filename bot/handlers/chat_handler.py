@@ -10,7 +10,6 @@ from common.cache_manager import cache_manager
 from common.exceptions import UserServiceError
 from common.functions.chat import send_message
 from common.functions.menus import show_main_menu
-from common.functions.profiles import get_or_load_profile
 from common.models import Profile
 from texts.resources import MessageText
 from texts.text_manager import translate
@@ -26,6 +25,8 @@ async def contact_client(message: Message, state: FSMContext):
 
     try:
         client = cache_manager.get_client_by_id(data.get("recipient_id"))
+        if client.status == "waiting_for_text":
+            cache_manager.set_client_data(client.id, {"status": "default"})
         client_profile = Profile.from_dict(await backend_service.get_profile(client.id))
         coach_name = cache_manager.get_coach_by_id(coach.id).name
     except Exception as e:

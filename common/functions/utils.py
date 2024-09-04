@@ -8,8 +8,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BotCommand, CallbackQuery
 
-from bot.keyboards import (program_edit_kb, program_view_kb,
-                           subscription_manage_menu)
+from bot.keyboards import program_edit_kb, program_view_kb, subscription_manage_menu
 from bot.states import States
 from common.functions import menus, profiles, text_utils
 from common.models import Client

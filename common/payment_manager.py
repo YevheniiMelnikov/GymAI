@@ -41,7 +41,7 @@ class PaymentHandler:
                             await self.handle_failed_payment(payment, profile)
                     except Exception as e:
                         logger.error(f"Error processing payment {payment.shop_order_number}: {e}")
-                        await self.backend_service.update_payment(payment.id, {"handled": False})
+                        await self.backend_service.update_payment(payment.id, dict(handled=False))
 
                 await asyncio.sleep(60)
 
@@ -61,6 +61,7 @@ class PaymentHandler:
         await self.backend_service.update_payment(payment.id, {"handled": False})
 
     async def handle_successful_payment(self, payment: Payment, profile: Profile):
+        await self.backend_service.update_payment(payment.id, dict(handled=True))
         client = self.cache_manager.get_client_by_id(profile.id)
         await send_message(
             recipient=client,
@@ -70,34 +71,31 @@ class PaymentHandler:
         )
 
         if payment.payment_type == "subscription":
+            cache_manager.set_client_data(client.id, dict(status="waiting_for_subscription"))
             await self.process_subscription_payment(profile)
         else:
+            cache_manager.set_client_data(client.id, {"status": "waiting_for_program"})
             await self.process_program_payment(profile)
-        await self.backend_service.update_payment(payment.id, {"handled": True})
         # TODO: NOTIFY PORTMONE
 
     async def process_subscription_payment(self, profile: Profile) -> None:
         try:
-            subscription = self.cache_manager.get_subscription(profile.id)
-            subscription_data = subscription.to_dict()
-            payload = dict(
-                enabled=True, payment_date=datetime.today().isoformat(), price=SUBSCRIPTION_PRICE, user=profile.id
+            cache_manager.update_subscription_data(
+                profile.id, dict(enabled=True, payment_date=datetime.today().strftime("%Y-%m-%d"))
             )
-            subscription_data.update(payload)
-            await self.backend_service.update_subscription(subscription.id, payload)
-            self.cache_manager.set_payment_status(profile.id, True, "subscription")
-            self.cache_manager.save_subscription(profile.id, subscription_data)
+            subscription = self.cache_manager.get_subscription(profile.id)
+            await self.backend_service.update_subscription(
+                subscription.id, dict(enabled=True, price=SUBSCRIPTION_PRICE, user=profile.id)
+            )
+            data = {
+                "request_type": "subscription",
+                "workout_type": subscription.workout_type,
+            }
+            client = self.cache_manager.get_client_by_id(profile.id)
+            coach = self.cache_manager.get_coach_by_id(client.assigned_to.pop())
+            await client_request(coach, client, data)
         except Exception as e:
-            logger.error(f"Subscription not created for profile_id {profile.id}: {e}")
-            return
-
-        data = {
-            "request_type": "subscription",
-            "workout_type": subscription.workout_type,
-        }
-        client = self.cache_manager.get_client_by_id(profile.id)
-        coach = self.cache_manager.get_coach_by_id(client.assigned_to.pop())
-        await client_request(coach, client, data)
+            logger.error(f"Subscription payment processing failed for profile_id {profile.id}: {e}")
 
     async def process_program_payment(self, profile: Profile) -> None:
         try:
