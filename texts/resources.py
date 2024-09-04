@@ -66,6 +66,7 @@ class ButtonText(Enum):
     friday = auto()
     saturday = auto()
     sunday = auto()
+    edit_days = auto()
 
     answer_yes = auto()
     answer_no = auto()
@@ -156,6 +157,9 @@ class MessageText(Enum):
     workouts_number = auto()
     workouts_per_week = auto()
     select_days = auto()
+    workout_plan_delete_warning = auto()
+    workout_plan_deleted = auto()
+    workout_days_changed = auto()
     program_not_ready = auto()
     complete_all_days = auto()
     no_program = auto()

@@ -8,7 +8,8 @@ from cryptography.fernet import InvalidToken
 
 from common.encrypter import Encrypter
 from common.encrypter import encrypter as enc
-from common.exceptions import EmailUnavailable, UsernameUnavailable, UserServiceError
+from common.exceptions import (EmailUnavailable, UsernameUnavailable,
+                               UserServiceError)
 from common.models import Exercise, Payment, Profile, Subscription
 
 logger = loguru.logger

@@ -9,9 +9,11 @@ from common.backend_service import backend_service
 from common.cache_manager import cache_manager
 from common.file_manager import avatar_manager
 from common.functions.exercises import edit_subscription_exercises
-from common.functions.menus import show_exercises_menu, show_main_menu, show_manage_subscription_menu
+from common.functions.menus import (show_exercises_menu, show_main_menu,
+                                    show_manage_subscription_menu)
 from common.functions.profiles import get_or_load_profile
-from common.functions.text_utils import format_new_client_message, get_client_page, get_workout_types
+from common.functions.text_utils import (format_new_client_message,
+                                         get_client_page, get_workout_types)
 from common.functions.utils import *
 from common.models import Coach, Profile
 from texts.resources import MessageText

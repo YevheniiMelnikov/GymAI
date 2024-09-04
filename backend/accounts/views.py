@@ -10,7 +10,9 @@ from rest_framework import generics, status
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied
-from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import (AllowAny, BasePermission,
+                                        IsAuthenticated,
+                                        IsAuthenticatedOrReadOnly)
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -18,7 +20,8 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework_api_key.permissions import HasAPIKey
 
 from .models import Payment, Profile, Program, Subscription
-from .serializers import PaymentSerializer, ProfileSerializer, ProgramSerializer, SubscriptionSerializer
+from .serializers import (PaymentSerializer, ProfileSerializer,
+                          ProgramSerializer, SubscriptionSerializer)
 
 
 class IsAuthenticatedButAllowInactive(BasePermission):

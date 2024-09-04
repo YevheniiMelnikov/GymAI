@@ -185,16 +185,17 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
 
 @main_router.callback_query(States.show_subscription)
 async def show_subscription_actions(callback_query: CallbackQuery, state: FSMContext):
-    await callback_query.answer()
     profile = await get_or_load_profile(callback_query.from_user.id)
     if callback_query.data == "back":
+        await callback_query.answer()
         await state.set_state(States.select_service)
         await callback_query.message.answer(
             text=translate(MessageText.select_service, lang=profile.language),
             reply_markup=select_service(profile.language),
         )
 
-    elif callback_query.data == "edit":
+    elif callback_query.data == "edit_days":
+        await callback_query.answer()
         await state.update_data(edit_mode=True)
         await state.set_state(States.workout_days)
         await callback_query.message.answer(
@@ -202,13 +203,19 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         )
 
     elif callback_query.data == "contact":
+        await callback_query.answer()
         client = cache_manager.get_client_by_id(profile.id)
         coach_id = client.assigned_to.pop()
         await state.update_data(recipient_id=coach_id, sender_name=client.name)
         await state.set_state(States.contact_coach)
         await callback_query.message.answer(translate(MessageText.enter_your_message, profile.language))
 
+    elif callback_query.data == "delete":  # TODO: IMPLEMENT THIS
+        await callback_query.answer("This option is not available yet", show_alert=True)
+        return
+
     else:
+        await callback_query.answer()
         subscription = cache_manager.get_subscription(profile.id)
         workout_days = subscription.workout_days
         await state.update_data(exercises=subscription.exercises, days=workout_days, split=len(workout_days))

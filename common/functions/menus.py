@@ -11,7 +11,8 @@ from aiogram.types import CallbackQuery, InputMediaPhoto, Message
 from dateutil.relativedelta import relativedelta
 
 from bot.keyboards import *
-from bot.keyboards import choose_coach, program_manage_menu, program_view_kb, select_service, subscription_manage_menu
+from bot.keyboards import (choose_coach, program_manage_menu, program_view_kb,
+                           select_service, subscription_manage_menu)
 from common.backend_service import backend_service
 from common.exceptions import UserServiceError
 from common.file_manager import avatar_manager

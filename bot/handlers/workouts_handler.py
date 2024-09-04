@@ -5,7 +5,9 @@ from common.functions.menus import *
 from common.functions.profiles import get_or_load_profile
 from common.functions.text_utils import format_program, get_translated_week_day
 from common.functions.utils import program_menu_pagination, short_url
-from common.functions.workout_plans import next_day_workout_plan, reset_workout_plan, save_workout_plan
+from common.functions.workout_plans import (next_day_workout_plan,
+                                            reset_workout_plan,
+                                            save_workout_plan)
 from common.models import Exercise
 from texts.resources import ButtonText, MessageText
 from texts.text_manager import translate
@@ -249,7 +251,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
         await callback_query.answer()
         if data.get("subscription"):
             subscription_data = cache_manager.get_subscription(client_id).to_dict()
-            subscription_data.update(user=client_id, exercises=None)
+            subscription_data.update(user=client_id, exercises={})
             await backend_service.update_subscription(subscription_data.get("id"), subscription_data)
             cache_manager.update_subscription_data(client_id, {"exercises": None, "user": client_id})
         else:
@@ -456,3 +458,26 @@ async def program_view(callback_query: CallbackQuery, state: FSMContext):
     split = data.get("split")
     await state.update_data(exercises=exercises, split=split)
     await program_menu_pagination(state, callback_query)
+
+
+@program_router.callback_query(States.confirm_subscription_reset)
+async def confirm_subscription_reset(callback_query: CallbackQuery, state: FSMContext):
+    profile = await get_or_load_profile(callback_query.from_user.id)
+    data = await state.get_data()
+    if callback_query.data == "yes":
+        await callback_query.answer(translate(MessageText.workout_plan_deleted, profile.language), show_alert=True)
+        cache_manager.update_subscription_data(profile.id, dict(exercises={}, workout_days=data.get("workout_days")))
+        subscription = cache_manager.get_subscription(profile.id)
+        await backend_service.update_subscription(subscription.id, subscription.to_dict())
+        client = cache_manager.get_client_by_id(profile.id)
+        coach = cache_manager.get_coach_by_id(client.assigned_to.pop())
+        await send_message(
+            recipient=coach,
+            text=translate(MessageText.workout_days_changed, profile.language).format(name=client.name),
+            state=state,
+            reply_markup=incoming_request(profile.language, "subscription", client.id),
+            include_incoming_message=False,
+        )
+    await show_main_menu(callback_query.message, profile, state)
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()

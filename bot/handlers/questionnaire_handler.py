@@ -7,15 +7,18 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import choose_gender, payment_keyboard, select_days, workout_experience_keyboard
+from bot.keyboards import (choose_gender, payment_keyboard, select_days,
+                           workout_experience_keyboard, yes_no)
 from bot.states import States
 from common.cache_manager import cache_manager
 from common.file_manager import avatar_manager
 from common.functions.chat import client_request
-from common.functions.exercises import edit_subscription_days, process_new_subscription
+from common.functions.exercises import (edit_subscription_days,
+                                        process_new_subscription)
 from common.functions.menus import show_main_menu
 from common.functions.profiles import get_or_load_profile, update_user_info
-from common.functions.text_utils import get_state_and_message, validate_birth_date
+from common.functions.text_utils import (get_state_and_message,
+                                         validate_birth_date)
 from common.functions.utils import delete_messages
 from common.payment_service import payment_service
 from common.settings import PROGRAM_PRICE
@@ -266,19 +269,25 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
 
 @questionnaire_router.callback_query(States.workout_days)
 async def workout_days(callback_query: CallbackQuery, state: FSMContext):
-    await callback_query.answer()
     profile = await get_or_load_profile(callback_query.from_user.id)
     data = await state.get_data()
     days = data.get("workout_days", [])
 
     if callback_query.data == "complete":
         if days:
-            await callback_query.answer(translate(MessageText.saved, lang=profile.language))
             await state.update_data(workout_days=days)
             if data.get("edit_mode"):
                 subscription = cache_manager.get_subscription(profile.id)
-                await edit_subscription_days(callback_query, days, profile, state, subscription)
+                if len(subscription.workout_days) == len(days):
+                    await edit_subscription_days(callback_query, days, profile, state, subscription)
+                else:
+                    await callback_query.message.answer(
+                        translate(MessageText.workout_plan_delete_warning, lang=profile.language),
+                        reply_markup=yes_no(profile.language),
+                    )
+                    await state.set_state(States.confirm_subscription_reset)
             else:
+                await callback_query.answer(translate(MessageText.saved, lang=profile.language))
                 await process_new_subscription(callback_query, profile, state)
         else:
             await callback_query.answer("❌")
