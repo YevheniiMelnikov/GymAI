@@ -86,7 +86,7 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
         return
 
     profile = await backend_service.get_profile_by_username(data["username"])
-    logger.info(f"Telegram user {message.from_user.id} logged in into profile {profile.id}")
+    logger.info(f"Telegram user {message.from_user.id} logged in with profile_id {profile.id}")
 
     if not profile:
         await message.answer(text=translate(MessageText.unexpected_error, lang=data.get("lang")))
@@ -159,6 +159,7 @@ async def register_user(callback_query: CallbackQuery, state: FSMContext, data: 
         return
 
     profile_data = await backend_service.get_profile_by_username(username)
+    assert profile_data
     logger.info(f"User {profile_data.id} logged in")
     await backend_service.reset_telegram_id(profile_data.id, callback_query.from_user.id)
     cache_manager.set_profile(
@@ -186,7 +187,7 @@ async def check_assigned_clients(profile_id: int) -> bool:
     return False
 
 
-async def get_or_load_profile(telegram_id: int) -> Profile:
+async def get_or_load_profile(telegram_id: int) -> Profile | None:
     try:
         return cache_manager.get_current_profile(telegram_id)
     except ProfileNotFoundError:
@@ -203,10 +204,9 @@ async def get_or_load_profile(telegram_id: int) -> Profile:
                 email=profile_data.get("email", ""),
                 is_current=True,
             )
+            return profile
         else:
-            raise ProfileNotFoundError(f"Profile not found for user {telegram_id}")
-
-    return profile
+            return None
 
 
 async def handle_logout(callback_query, profile, state):

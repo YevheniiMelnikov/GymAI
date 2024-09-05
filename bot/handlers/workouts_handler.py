@@ -294,7 +294,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
             current_program = cache_manager.get_program(client_id)
             split_number = current_program.split_number
             workout_type = current_program.workout_type
-            program = await format_program(exercises, 0)
+            program_text = await format_program(exercises, 0)
             if program_data := await backend_service.save_program(client_id, exercises, split_number):
                 program_data.update(workout_type=workout_type)
                 cache_manager.set_program(client_id, program_data)
@@ -306,7 +306,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
             )
             await send_message(
                 recipient=client,
-                text=translate(MessageText.program_page, lang=client_lang).format(program=program, day=1),
+                text=translate(MessageText.program_page, lang=client_lang).format(program=program_text, day=1),
                 state=state,
                 reply_markup=program_view_kb(client_lang),
                 include_incoming_message=False,

@@ -151,7 +151,7 @@ class CacheManager:
             logger.error(f"Failed to set profile info for profile {profile_id}: {e}")
             return False
 
-    def set_client_data(self, profile_id: int, client_data: dict) -> None:
+    def set_client_data(self, profile_id: int, client_data: dict[str, Any]) -> None:
         allowed_fields = [
             "name",
             "gender",

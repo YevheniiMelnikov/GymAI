@@ -1,13 +1,9 @@
 format:
-	ruff check --select I . --fix --config=pyproject.toml
-	ruff check --select E . --fix --config=pyproject.toml
-	ruff check --select F . --fix --config=pyproject.toml
-	ruff check --select B . --fix --config=pyproject.toml
-	ruff check --select A . --fix --config=pyproject.toml
-	black .
+	ruff check . --fix --config=pyproject.toml
+	black . --config=pyproject.toml
 
 check:
-	ruff check . --fix --config=pyproject.toml
+	mypy . --config=pyproject.toml
 
 migrations:
 	@docker compose exec -it backend bash -c "python manage.py makemigrations && python manage.py migrate"

@@ -121,6 +121,7 @@ async def send_message(
     reply_markup=None,
     include_incoming_message: bool = True,
     photo=None,
+    video=None,
 ) -> None:
     if state:
         data = await state.get_data()
@@ -131,6 +132,7 @@ async def send_message(
         sender_name = ""
 
     recipient_data = await backend_service.get_profile(recipient.id)
+    assert recipient_data
 
     if include_incoming_message:
         formatted_text = translate(MessageText.incoming_message, language).format(name=sender_name, message=text)
@@ -138,7 +140,15 @@ async def send_message(
         formatted_text = text
 
     async with aiohttp.ClientSession():
-        if photo:
+        if video:
+            await bot.send_video(
+                chat_id=recipient_data.get("current_tg_id"),
+                video=video.file_id,
+                caption=formatted_text,
+                reply_markup=reply_markup,
+                parse_mode=ParseMode.HTML,
+            )
+        elif photo:
             await bot.send_photo(
                 chat_id=recipient_data.get("current_tg_id"),
                 photo=photo.file_id,

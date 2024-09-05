@@ -221,7 +221,7 @@ class ProgramViewSet(ModelViewSet):
 
         existing_program = Program.objects.filter(profile_id=profile_id).first()
         if existing_program:
-            existing_program.exercises = exercises
+            existing_program.exercises_by_day = exercises
             existing_program.save()
             return existing_program
         else:

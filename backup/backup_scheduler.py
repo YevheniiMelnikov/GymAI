@@ -17,7 +17,7 @@ if not os.path.exists(BACKUP_DIR):
     os.makedirs(BACKUP_DIR)
 
 
-async def create_backup():
+async def create_backup() -> None:
     filename = f"{DB_NAME}_backup_{datetime.now().strftime('%Y%m%d%H%M%S')}.sql"
     filepath = os.path.join(BACKUP_DIR, filename)
     command = f"pg_dump -h {DB_HOST} -U {DB_USER} -F c {DB_NAME} > {filepath}"
@@ -28,7 +28,7 @@ async def create_backup():
         logger.error(f"Backup {filename} failed: {result.stderr}")
 
 
-async def delete_old_backups():
+async def delete_old_backups() -> None:
     now = datetime.now()
     for filename in os.listdir(BACKUP_DIR):
         if filename.startswith(DB_NAME) and filename.endswith(".sql"):
@@ -39,7 +39,7 @@ async def delete_old_backups():
                 logger.info(f"Deleted old backup: {filename}")
 
 
-async def backup_scheduler():
+async def backup_scheduler() -> None:
     logger.debug("Starting backup scheduler ...")
     scheduler = AsyncIOScheduler()
     scheduler.add_job(create_backup, "cron", hour=2, minute=0)
