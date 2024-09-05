@@ -168,7 +168,7 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
     format_attributes = get_profile_attributes(role=profile.status, user=user, lang_code=profile.language)
     if any(not value for value in format_attributes.values()):
         await state.set_state(States.name)
-        await callback_query.answer(translate(MessageText.edit_profile, lang=profile.language), show_alert=True)
+        await callback_query.message.answer(translate(MessageText.edit_profile, lang=profile.language))
         await callback_query.message.answer(translate(MessageText.name, lang=profile.language))
         with suppress(TelegramBadRequest):
             await callback_query.message.delete()
