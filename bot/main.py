@@ -3,6 +3,7 @@ import os
 
 import loguru
 from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage
 from dotenv import load_dotenv
 
@@ -30,7 +31,7 @@ async def main() -> None:
         logger.error("BOT_TOKEN environment variable not found.")
         return
 
-    bot = Bot(token=bot_token, parse_mode="HTML")
+    bot = Bot(token=bot_token, default=DefaultBotProperties(parse_mode="HTML"))
     redis_url = os.getenv("REDIS_URL")
     dp = Dispatcher(storage=RedisStorage.from_url(f"{redis_url}/0"))
     dp.include_routers(
