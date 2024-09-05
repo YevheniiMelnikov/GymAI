@@ -21,7 +21,7 @@ class BackendService:
         self.api_key = os.environ.get("API_KEY")
         self.client = httpx.AsyncClient()
 
-    async def _api_request(self, method: str, url: str, data: dict = None, headers: dict = None) -> tuple:
+    async def _api_request(self, method: str, url: str, data: dict | None = None, headers: dict = None) -> tuple:
         logger.debug(f"Executing {method.upper()} request to {url} with data: {data} and headers: {headers}")
         try:
             response = await self.client.request(method, url, json=data, headers=headers)

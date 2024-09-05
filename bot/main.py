@@ -7,7 +7,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage
 from dotenv import load_dotenv
 
-from backup.backup_scheduler import backup_scheduler
+from backup.backup_scheduler import backup_scheduler as backup
 from bot.handlers.chat_handler import chat_router
 from bot.handlers.command_handler import cmd_router
 from bot.handlers.invalid_content_handler import invalid_content_router
@@ -49,7 +49,7 @@ async def main() -> None:
 
     logger.info("Starting bot ...")
     await workout_scheduler()
-    await backup_scheduler()
+    await backup()
     payment_handler.start_payment_checker()
     try:
         await bot.delete_webhook(drop_pending_updates=True)
