@@ -9,8 +9,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import (payment_keyboard, program_edit_kb,
-                           program_manage_menu)
+from bot.keyboards import payment_keyboard, program_edit_kb, program_manage_menu
 from bot.states import States
 from common.backend_service import backend_service
 from common.cache_manager import cache_manager

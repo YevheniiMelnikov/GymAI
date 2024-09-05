@@ -11,8 +11,7 @@ from aiogram.types import CallbackQuery, InputMediaPhoto, Message
 from dateutil.relativedelta import relativedelta
 
 from bot.keyboards import *
-from bot.keyboards import (choose_coach, program_manage_menu, program_view_kb,
-                           select_service, subscription_manage_menu)
+from bot.keyboards import choose_coach, program_manage_menu, program_view_kb, select_service, subscription_manage_menu
 from common.backend_service import backend_service
 from common.exceptions import UserServiceError
 from common.file_manager import avatar_manager
@@ -147,7 +146,6 @@ async def show_coaches_menu(message: Message, coaches: list[Coach], current_inde
 
 
 async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    await callback_query.answer()
     try:
         user = (
             cache_manager.get_client_by_id(profile.id)
@@ -155,8 +153,8 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
             else cache_manager.get_coach_by_id(profile.id)
         )
     except UserServiceError:
-        user_data = await backend_service.get_profile(profile.id)
-        if user_data:
+        await callback_query.answer()
+        if user_data := await backend_service.get_profile(profile.id):
             if profile.status == "client":
                 user = Client.from_dict(user_data)
                 cache_manager.set_client_data(profile.id, user_data)
@@ -168,6 +166,14 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
             return
 
     format_attributes = get_profile_attributes(role=profile.status, user=user, lang_code=profile.language)
+    if any(not value for value in format_attributes.values()):
+        await state.set_state(States.name)
+        await callback_query.answer(translate(MessageText.edit_profile, lang=profile.language), show_alert=True)
+        await callback_query.message.answer(translate(MessageText.name, lang=profile.language))
+        with suppress(TelegramBadRequest):
+            await callback_query.message.delete()
+        return
+
     text = translate(
         MessageText.client_profile if profile.status == "client" else MessageText.coach_profile,
         lang=profile.language,

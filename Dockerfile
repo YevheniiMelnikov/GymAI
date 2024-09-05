@@ -20,10 +20,14 @@ RUN wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg -
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+RUN curl -sSL https://install.python-poetry.org | python3 -
+ENV PATH="/root/.local/bin:$PATH"
+
 WORKDIR $APP_HOME
 
-COPY requirements/requirements.txt $APP_HOME/requirements/requirements.txt
-RUN pip install --no-cache-dir -r requirements/requirements.txt
+COPY pyproject.toml poetry.lock $APP_HOME/
+
+RUN poetry install --no-root --no-interaction --no-ansi
 
 COPY . $APP_HOME
 

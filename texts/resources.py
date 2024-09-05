@@ -26,6 +26,7 @@ class ButtonText(Enum):
     my_clients = auto()
     my_profile = auto()
     my_program = auto()
+    logout = auto()
     edit = auto()
     program = auto()
     subscription = auto()
@@ -37,6 +38,8 @@ class ButtonText(Enum):
     photo = auto()
     edit_exercise = auto()
     delete_exercise = auto()
+    health_notes = auto()
+    weight = auto()
 
     choose_coach = auto()
     contact_client = auto()

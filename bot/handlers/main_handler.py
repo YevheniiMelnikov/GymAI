@@ -1,6 +1,6 @@
 from common.functions.chat import *
 from common.functions.menus import *
-from common.functions.profiles import assign_coach, get_or_load_profile
+from common.functions.profiles import assign_coach, get_or_load_profile, handle_logout
 from common.functions.utils import handle_clients_pagination
 from common.functions.workout_plans import manage_program
 from common.models import Coach, Profile
@@ -30,6 +30,9 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
 
             case "my_workouts":
                 await show_my_workouts_menu(callback_query, profile, state)
+
+            case "logout":
+                await handle_logout(callback_query, profile, state)
 
 
 @main_router.callback_query(States.profile)

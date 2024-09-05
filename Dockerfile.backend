@@ -6,11 +6,16 @@ ENV PYTHONPATH=$APP_HOME
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc python3-dev
 
+RUN curl -sSL https://install.python-poetry.org | python3 -
+ENV PATH="/root/.local/bin:$PATH"
+
 WORKDIR $APP_HOME
 
-ADD requirements/requirements.backend.txt $APP_HOME/requirements/requirements.backend.txt
-ADD backend $APP_HOME/backend
-RUN pip install -r requirements/requirements.backend.txt
+COPY pyproject.toml poetry.lock $APP_HOME/
+
+RUN poetry install --no-root --no-interaction --no-ansi
+
+COPY backend $APP_HOME/backend
 
 WORKDIR $APP_HOME/backend
 

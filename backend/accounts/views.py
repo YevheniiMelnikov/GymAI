@@ -10,9 +10,7 @@ from rest_framework import generics, status
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied
-from rest_framework.permissions import (AllowAny, BasePermission,
-                                        IsAuthenticated,
-                                        IsAuthenticatedOrReadOnly)
+from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -20,8 +18,7 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework_api_key.permissions import HasAPIKey
 
 from .models import Payment, Profile, Program, Subscription
-from .serializers import (PaymentSerializer, ProfileSerializer,
-                          ProgramSerializer, SubscriptionSerializer)
+from .serializers import PaymentSerializer, ProfileSerializer, ProgramSerializer, SubscriptionSerializer
 
 
 class IsAuthenticatedButAllowInactive(BasePermission):
@@ -147,12 +144,12 @@ class SendWelcomeEmailAPIView(APIView):
     def post(self, request, *args, **kwargs):
         email = request.data.get("email")
         username = request.data.get("username")
-
         html_content = render_to_string("email/welcome_email.html", {"username": username})
         text_content = strip_tags(html_content)
 
         try:
-            msg = EmailMultiAlternatives("", text_content, os.getenv("EMAIL_HOST_USER"), [email])
+            subject = "Вітаємо в AchieveTogether 👋"
+            msg = EmailMultiAlternatives(subject, text_content, os.getenv("EMAIL_HOST_USER"), [email])
             msg.attach_alternative(html_content, "text/html")
             msg.send()
         except Exception:
