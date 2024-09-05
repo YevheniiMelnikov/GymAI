@@ -154,32 +154,29 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
         )
     except UserServiceError:
         await callback_query.answer()
-        if user_data := await backend_service.get_profile(profile.id):
-            if profile.status == "client":
-                user = Client.from_dict(user_data)
-                cache_manager.set_client_data(profile.id, user_data)
-            else:
-                user = Coach.from_dict(user_data)
-                cache_manager.set_coach_data(profile.id, user_data)
-        else:
-            await show_profile_editing_menu(callback_query.message, profile, state)
+        user_data = await backend_service.get_profile(profile.id)
+        if None in user_data.values():
+            info_msg = await callback_query.message.answer(translate(MessageText.edit_profile, lang=profile.language))
+            name_msg = await callback_query.message.answer(translate(MessageText.name, lang=profile.language))
+            await state.update_data(
+                lang=profile.language,
+                role=profile.status,
+                chat_id=callback_query.message.chat.id,
+                message_ids=[info_msg.message_id, name_msg.message_id],
+            )
+            await state.set_state(States.name)
+            with suppress(TelegramBadRequest):
+                await callback_query.message.delete()
             return
 
-    format_attributes = get_profile_attributes(role=profile.status, user=user, lang_code=profile.language)
-    if any(not value for value in format_attributes.values()):
-        info_msg = await callback_query.message.answer(translate(MessageText.edit_profile, lang=profile.language))
-        name_msg = await callback_query.message.answer(translate(MessageText.name, lang=profile.language))
-        await state.update_data(
-            lang=profile.language,
-            role=profile.status,
-            chat_id=callback_query.message.chat.id,
-            message_ids=[info_msg.message_id, name_msg.message_id],
-        )
-        await state.set_state(States.name)
-        with suppress(TelegramBadRequest):
-            await callback_query.message.delete()
-        return
+        if profile.status == "client":
+            user = Client.from_dict(user_data)
+            cache_manager.set_client_data(profile.id, user_data)
+        else:
+            user = Coach.from_dict(user_data)
+            cache_manager.set_coach_data(profile.id, user_data)
 
+    format_attributes = get_profile_attributes(role=profile.status, user=user, lang_code=profile.language)
     text = translate(
         MessageText.client_profile if profile.status == "client" else MessageText.coach_profile,
         lang=profile.language,
