@@ -194,7 +194,8 @@ async def send_message(
         else:
             sender = cache_manager.get_coach_by_id(profile.id)
             state_to_set = States.contact_client
-            if recipient.status == "waiting_for_text":
+            client = cache_manager.get_client_by_id(recipient_id)
+            if client.status == "waiting_for_text":
                 cache_manager.set_client_data(recipient.id, {"status": "default"})
 
         await callback_query.message.answer(translate(MessageText.enter_your_message, profile.language))

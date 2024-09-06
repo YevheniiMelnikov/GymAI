@@ -270,7 +270,7 @@ def program_view_kb(lang_code: str) -> InlineKeyboardMarkup:
             InlineKeyboardButton(text=translate(ButtonText.back, lang_code), callback_data="previous"),
             InlineKeyboardButton(text=translate(ButtonText.forward, lang_code), callback_data="next"),
         ],
-        [InlineKeyboardButton(text=translate(ButtonText.prev_menu), callback_data="quit")],
+        [InlineKeyboardButton(text=translate(ButtonText.quit), callback_data="quit")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
 

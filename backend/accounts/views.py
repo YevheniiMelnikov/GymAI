@@ -205,7 +205,7 @@ class ProgramViewSet(ModelViewSet):
     def get_queryset(self):
         queryset = super().get_queryset().select_related("profile")
         profile = self.request.query_params.get("profile")
-        exercises = self.request.query_params.getlist("exercises")
+        exercises = self.request.query_params.getlist("exercises_by_day")
 
         if profile is not None:
             queryset = queryset.filter(profile_id=profile)
@@ -225,14 +225,14 @@ class ProgramViewSet(ModelViewSet):
             existing_program.save()
             return existing_program
         else:
-            return serializer.save(profile_id=profile_id)
+            return serializer.save(profile_id=profile_id, exercises_by_day=exercises)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         profile_id = request.data.get("profile")
-        exercises = request.data.get("exercises")
+        exercises = request.data.get("exercises_by_day")
 
         if not profile_id:
             raise PermissionDenied("Profile ID must be provided.")
@@ -248,7 +248,7 @@ class ProgramViewSet(ModelViewSet):
         serializer.is_valid(raise_exception=True)
 
         profile_id = request.data.get("profile")
-        exercises = request.data.get("exercises")
+        exercises = request.data.get("exercises_by_day")
 
         self.perform_create_or_update(serializer, profile_id, exercises)
         return Response(serializer.data)
