@@ -74,7 +74,7 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
             cache_program_data(data, profile.id)
         else:
             days = data.get("workout_days", [])
-            subscription_id = await backend_service.create_subscription(profile.id, SUBSCRIPTION_PRICE, days)
+            subscription_id = await backend_service.create_subscription(profile.id, days)
             subscription_data = {
                 "id": subscription_id,
                 "payment_date": datetime.today().strftime("%Y-%m-%d"),

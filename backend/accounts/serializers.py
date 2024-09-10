@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
+from rest_framework.exceptions import ValidationError
 
 from .models import Payment, Profile, Program, Subscription
 
@@ -34,6 +35,14 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subscription
         fields = "__all__"
+
+    def validate(self, data):
+        user = self.context["request"].user
+
+        if Subscription.objects.filter(user=user, enabled=True).exists():
+            raise ValidationError("User already has an active subscription")
+
+        return data
 
 
 class PaymentSerializer(serializers.ModelSerializer):

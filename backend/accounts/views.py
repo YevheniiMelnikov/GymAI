@@ -6,9 +6,10 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404, render
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
+from django_filters.rest_framework import DjangoFilterBackend
+
 from rest_framework import generics, status
 from rest_framework.authtoken.models import Token
-from rest_framework.decorators import action
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.request import Request
@@ -16,6 +17,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 from rest_framework_api_key.permissions import HasAPIKey
+from xml.etree import ElementTree as ET
 
 from .models import Payment, Profile, Program, Subscription
 from .serializers import PaymentSerializer, ProfileSerializer, ProgramSerializer, SubscriptionSerializer
@@ -253,19 +255,13 @@ class ProgramViewSet(ModelViewSet):
         self.perform_create_or_update(serializer, profile_id, exercises)
         return Response(serializer.data)
 
-    @action(detail=False, methods=["delete"], url_path="delete_by_profile/(?P<profile_id>[^/.]+)")
-    def delete_by_profile(self, request, profile_id=None):
-        program = Program.objects.filter(profile_id=profile_id).first()
-        if program:
-            program.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        return Response(status=status.HTTP_404_NOT_FOUND)
-
 
 class SubscriptionViewSet(ModelViewSet):
     queryset = Subscription.objects.all().select_related("user")
     serializer_class = SubscriptionSerializer
     permission_classes = [IsAuthenticated | HasAPIKey]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["enabled", "payment_date"]
 
     def get_queryset(self):
         queryset = super().get_queryset().select_related("user")
@@ -275,14 +271,6 @@ class SubscriptionViewSet(ModelViewSet):
             queryset = queryset.filter(user_id=user)
 
         return queryset
-
-    @action(detail=False, methods=["delete"], url_path="delete_by_user/(?P<user_id>[^/.]+)")
-    def delete_by_user(self, request, user_id=None):
-        subscriptions = Subscription.objects.filter(user_id=user_id)
-        if subscriptions.exists():
-            subscriptions.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
-        return Response(status=status.HTTP_404_NOT_FOUND)
 
 
 class GetUserTokenView(APIView):
@@ -306,33 +294,67 @@ class PaymentWebhookView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
+        if request.content_type == "application/json":
+            return self.handle_json(request)
+        elif request.content_type == "application/xml" or request.content_type == "text/xml":
+            return self.handle_xml(request)
+        else:
+            return Response({"detail": "Unsupported content type"}, status=status.HTTP_400_BAD_REQUEST)
+
+    def handle_json(self, request):
         try:
             data = request.data
 
-            if "shopBillId" not in data or "status" not in data:
+            if "shopBillId" not in data or "status" not in data or "shopOrderNumber" not in data:
                 return Response({"detail": "Missing required fields."}, status=status.HTTP_400_BAD_REQUEST)
 
-            shop_bill_id = data.get("shopBillId")
-            shop_order_number = data.get("shopOrderNumber")
+            bill_id = data.get("shopBillId")
+            order_number = data.get("shopOrderNumber")
             payment_status = data.get("status")
-            error = data.get("error")
-            self.process_payment(shop_order_number, shop_bill_id, error, payment_status)
+            error_message = data.get("errorMessage", "")
+
+            self.process_payment(order_number, bill_id, payment_status, error_message)
 
             if payment_status == "PAYED":
-                return Response({"status": "success"}, status=status.HTTP_200_OK)
+                return Response({"result": "OK"}, status=status.HTTP_200_OK)
             else:
-                return Response({"status": "failure"}, status=status.HTTP_200_OK)
+                return Response({"result": "FAILURE"}, status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response({"detail": f"Invalid webhook data: {e}"}, status=status.HTTP_400_BAD_REQUEST)
 
-    @staticmethod
-    def process_payment(shop_order_number, shop_bill_id, error, payment_status):
+    def handle_xml(self, request):
         try:
-            payment = get_object_or_404(Payment, shop_order_number=shop_order_number)
-            payment.shop_bill_id = shop_bill_id
+            xml_data = request.body.decode("utf-8")
+            root = ET.fromstring(xml_data)
+
+            bill_id = root.findtext("shopBillId")
+            order_number = root.findtext("shopOrderNumber")
+            payment_status = root.findtext("status")
+            error_message = root.findtext("errorMessage", "")
+
+            if not bill_id or not order_number or not payment_status:
+                return Response({"detail": "Missing required fields in XML."}, status=status.HTTP_400_BAD_REQUEST)
+
+            self.process_payment(order_number, bill_id, payment_status, error_message)
+
+            if payment_status == "PAYED":
+                return Response({"result": "OK"}, status=status.HTTP_200_OK)
+            else:
+                return Response({"result": "FAILURE"}, status=status.HTTP_200_OK)
+
+        except ET.ParseError as e:
+            return Response({"detail": f"Invalid XML data: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"detail": f"Error processing payment: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+
+    @staticmethod
+    def process_payment(order_number: str, bill_id: str, payment_status: str, error_message: str = "") -> None:
+        try:
+            payment = get_object_or_404(Payment, shop_order_number=order_number)
+            payment.shop_bill_id = bill_id
             payment.status = payment_status
-            payment.error = error
+            payment.error = error_message
             payment.handled = False
             payment.save()
 

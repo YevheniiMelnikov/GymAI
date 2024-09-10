@@ -6,7 +6,7 @@ from common.functions.profiles import get_or_load_profile
 from common.functions.text_utils import format_program, get_translated_week_day
 from common.functions.utils import program_menu_pagination, short_url
 from common.functions.workout_plans import next_day_workout_plan, reset_workout_plan, save_workout_plan
-from common.models import Exercise
+from common.models import Exercise, Program
 from texts.resources import ButtonText, MessageText
 from texts.text_manager import translate
 
@@ -298,6 +298,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
             if program_data := await backend_service.save_program(client_id, exercises, split_number):
                 program_data.update(workout_type=workout_type)
                 cache_manager.set_program(client_id, program_data)
+                cache_manager.set_payment_status(client_id, False, "program")
             await send_message(
                 recipient=client,
                 text=translate(MessageText.new_program, lang=client_lang),
@@ -477,5 +478,27 @@ async def confirm_subscription_reset(callback_query: CallbackQuery, state: FSMCo
             include_incoming_message=False,
         )
     await show_main_menu(callback_query.message, profile, state)
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()
+
+
+@program_router.callback_query(States.program_action_choice)
+async def program_action_choice(callback_query: CallbackQuery, state: FSMContext):
+    profile = await get_or_load_profile(callback_query.from_user.id)
+    data = await state.get_data()
+    if callback_query.data == "view":
+        await callback_query.answer()
+        program = Program.from_dict(data.get("program"))
+        program_text = await format_program(program.exercises_by_day, 0)
+        await callback_query.message.answer(
+            text=translate(MessageText.program_page, lang=profile.language).format(program=program_text, day=1),
+            reply_markup=program_view_kb(profile.language),
+            disable_web_page_preview=True,
+        )
+        await state.update_data(exercises=program.exercises_by_day, split=program.split_number, client=True)
+        await state.set_state(States.program_view)
+    else:
+        await callback_query.answer(translate(MessageText.program_delete_warning, profile.language), show_alert=True)
+        await show_program_promo_page(callback_query, profile, state)
     with suppress(TelegramBadRequest):
         await callback_query.message.delete()

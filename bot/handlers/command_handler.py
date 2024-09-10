@@ -89,7 +89,11 @@ async def cmd_logout(message: Message, state: FSMContext) -> None:
 async def cmd_help(message: Message) -> None:
     profile = await get_or_load_profile(message.from_user.id)
     language = profile.language if profile else "ua"
-    await message.answer(text=translate(MessageText.help, lang=language))
+    await message.answer(
+        text=translate(MessageText.help, lang=language).format(
+            email=os.getenv("DEFAULT_FROM_EMAIL"), tg=os.getenv("TG_SUPPORT_CONTACT")
+        )
+    )
 
 
 @cmd_router.message(Command("feedback"))

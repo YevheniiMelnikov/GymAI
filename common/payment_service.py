@@ -1,13 +1,14 @@
-import hashlib
-import hmac
+import base64
+import gzip
+import json
 import os
-from datetime import datetime
-from typing import Any
+import uuid
+import datetime
 
 import httpx
 import loguru
 
-from common.settings import PROGRAM_PRICE
+from common.settings import PROGRAM_PRICE, SUBSCRIPTION_PRICE
 
 logger = loguru.logger
 
@@ -21,13 +22,6 @@ class PaymentService:
         self.key = os.environ.get("PORTMONE_KEY")
         self.client = httpx.AsyncClient()
 
-    def generate_signature(self, shop_order_number: str, bill_amount: str) -> tuple[str, str]:
-        dt = datetime.now().strftime("%Y%m%d%H%M%S")
-        message = f"{self.payee_id}{dt}{shop_order_number}{bill_amount}"
-        message += self.login
-        signature = hmac.new(self.key.encode(), message.encode(), hashlib.sha256).hexdigest().upper()
-        return signature, dt
-
     async def get_program_link(self, order_number: str) -> str | None:
         payload = {
             "method": "getLinkInvoice",
@@ -40,7 +34,7 @@ class PaymentService:
                     "amount": PROGRAM_PRICE,
                 },
             },
-            "id": "1",
+            "id": str(uuid.uuid4()),
         }
 
         response = await self.client.post(self.gateway_url, json=payload)
@@ -51,27 +45,36 @@ class PaymentService:
             logger.error(f"Failed to get program link. HTTP status: {response.status_code}, response: {response.text}")
             return None
 
-    async def get_subscription_link(self, order_number: str) -> str | None:
-        return "www.example.com"  # TODO: REPLACE WITH ACTUAL URL
+    async def get_subscription_link(self, email: str, order_number: str) -> str:
+        today = datetime.date.today()
+        current_day = today.day
 
-    async def check_status(self, order_id: str) -> tuple[int, Any]:  # TODO: COMPARE WITH DOCS
-        return 200, {"RESULT": "APPROVED"}
-        # url = f"{self.gateway_url}status"
-        # signature, dt = self.generate_signature(order_id, amount)
-        # data = {
-        #     "payee_id": self.payee_id,
-        #     "shop_order_number": order_id,
-        #     "login": self.login,
-        #     "password": self.password,
-        #     "sign": signature,
-        #     "time": dt,
-        # }
-        #
-        # response = await self.client.post(url, json=data)
-        # if response.status_code == 200:
-        #     return response.status_code, response.json()
-        # else:
-        #     return response.status_code, response.text
+        if current_day > 28:
+            current_day = 1
+
+        payload = {
+            "v": "2",
+            "payeeId": self.payee_id,
+            "amount": SUBSCRIPTION_PRICE,
+            "emailAddress": email,
+            "billNumber": order_number,
+            "successUrl": os.getenv("BOT_LINK"),
+            "settings": {
+                "period": "1",
+                "payDate": str(current_day),
+            },
+        }
+
+        encoded_payload = self.encode_payload(payload)
+        subscription_link = f"{self.gateway_url}?i={encoded_payload}"
+        return subscription_link
+
+    @staticmethod
+    def encode_payload(payload: dict) -> str:
+        json_payload = json.dumps(payload)
+        compressed_payload = gzip.compress(json_payload.encode("utf-8"))
+        encoded_payload = base64.b64encode(compressed_payload).decode("utf-8")
+        return encoded_payload
 
 
 payment_service = PaymentService()

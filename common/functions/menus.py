@@ -285,32 +285,32 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
         if program_paid:
             await callback_query.answer(translate(MessageText.program_not_ready, profile.language), show_alert=True)
             return
+
         else:
-            program_text = await format_program(program.exercises_by_day, 0)
             await callback_query.message.answer(
-                text=translate(MessageText.program_page, lang=profile.language).format(program=program_text, day=1),
-                reply_markup=program_view_kb(profile.language),
-                disable_web_page_preview=True,
+                translate(MessageText.choose_action), reply_markup=program_action_kb(profile.language)
             )
-            with suppress(TelegramBadRequest):
-                await callback_query.message.delete()
-            await state.update_data(exercises=program.exercises_by_day, split=program.split_number, client=True)
-            await state.set_state(States.program_view)
+            await state.update_data(program=program.to_dict())
+            await state.set_state(States.program_action_choice)
     else:
-        program_img = BOT_PAYMENT_OPTIONS + f"program_{profile.language}.jpeg"
-        try:
-            await callback_query.message.answer_photo(
-                photo=program_img,
-                reply_markup=choose_payment_options(profile.language, "program"),
-            )
-        except TelegramBadRequest:
-            await callback_query.message.answer(
-                translate(MessageText.image_error, profile.language),
-                reply_markup=choose_payment_options(profile.language, "program"),
-            )
-        await state.set_state(States.payment_choice)
+        await show_program_promo_page(callback_query, profile, state)
     with suppress(TelegramBadRequest):
         await callback_query.message.delete()
+
+
+async def show_program_promo_page(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    program_img = BOT_PAYMENT_OPTIONS + f"program_{profile.language}.jpeg"
+    try:
+        await callback_query.message.answer_photo(
+            photo=program_img,
+            reply_markup=choose_payment_options(profile.language, "program"),
+        )
+    except TelegramBadRequest:
+        await callback_query.message.answer(
+            translate(MessageText.image_error, profile.language),
+            reply_markup=choose_payment_options(profile.language, "program"),
+        )
+    await state.set_state(States.payment_choice)
 
 
 async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, profile: Profile) -> None:

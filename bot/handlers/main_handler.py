@@ -2,7 +2,7 @@ from common.functions.chat import *
 from common.functions.menus import *
 from common.functions.profiles import assign_coach, get_or_load_profile, handle_logout
 from common.functions.utils import handle_clients_pagination
-from common.functions.workout_plans import manage_program
+from common.functions.workout_plans import manage_program, cancel_subscription
 from common.models import Coach, Profile
 from texts.resources import MessageText
 from texts.text_manager import translate
@@ -187,7 +187,7 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
 
 
 @main_router.callback_query(States.show_subscription)
-async def show_subscription_actions(callback_query: CallbackQuery, state: FSMContext):
+async def show_subscription_actions(callback_query: CallbackQuery, state: FSMContext, bot: Bot):
     profile = await get_or_load_profile(callback_query.from_user.id)
     if callback_query.data == "back":
         await callback_query.answer()
@@ -213,9 +213,29 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         await state.set_state(States.contact_coach)
         await callback_query.message.answer(translate(MessageText.enter_your_message, profile.language))
 
-    elif callback_query.data == "delete":  # TODO: IMPLEMENT THIS
-        await callback_query.answer("This option is not available yet", show_alert=True)
-        return
+    elif callback_query.data == "cancel":
+        logger.info(f"User {profile.id} requested to stop the subscription")
+        await callback_query.answer(translate(MessageText.subscription_canceled, profile.language), show_alert=True)
+        user = await bot.get_chat(callback_query.from_user.id)
+        contact = f"@{user.username}" if user.username else callback_query.from_user.id
+        subscription = cache_manager.get_subscription(profile.id)
+        shop_order_number, shop_bill_id = await backend_service.get_last_subscription_payment(profile.id)
+        payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
+        next_payment_date = payment_date + relativedelta(months=1)
+        async with aiohttp.ClientSession():
+            await bot.send_message(
+                OWNER_ID,
+                translate(MessageText.subscription_cancel_request).format(
+                    profile=profile.id,
+                    contact=contact,
+                    next_payment_date=next_payment_date.strftime("%Y-%m-%d"),
+                    shop_order_number=shop_order_number,
+                    shop_bill_id=shop_bill_id,
+                ),
+            )
+
+        await cancel_subscription(next_payment_date, profile.id, subscription.id)
+        await show_main_menu(callback_query.message, profile, state)
 
     else:
         await callback_query.answer()

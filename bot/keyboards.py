@@ -360,7 +360,7 @@ def show_subscriptions_kb(lang_code: str) -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=translate(ButtonText.exercises, lang_code), callback_data="exercises")],
         [InlineKeyboardButton(text=translate(ButtonText.contact_coach, lang_code), callback_data="contact")],
         [InlineKeyboardButton(text=translate(ButtonText.edit_days, lang_code), callback_data="edit_days")],
-        [InlineKeyboardButton(text=translate(ButtonText.delete, lang_code), callback_data="delete")],
+        [InlineKeyboardButton(text=translate(ButtonText.cancel_subscription, lang_code), callback_data="cancel")],
         [InlineKeyboardButton(text=translate(ButtonText.prev_menu), callback_data="back")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
@@ -424,3 +424,13 @@ def payment_keyboard(lang_code: str, link: str, request_type: str) -> InlineKeyb
             ],
         ]
     )
+
+
+def program_action_kb(lang_code: str) -> InlineKeyboardMarkup:
+    buttons = [
+        [
+            InlineKeyboardButton(text=translate(ButtonText.view, lang_code), callback_data="view"),
+            InlineKeyboardButton(text=translate(ButtonText.create, lang_code), callback_data="create"),
+        ],
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)

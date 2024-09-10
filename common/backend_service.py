@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from json import JSONDecodeError
 from typing import Any
 
@@ -10,6 +11,7 @@ from common.encrypter import Encrypter
 from common.encrypter import encrypter as enc
 from common.exceptions import EmailUnavailable, UsernameUnavailable, UserServiceError
 from common.models import Exercise, Payment, Profile, Subscription
+from common.settings import SUBSCRIPTION_PRICE
 
 logger = loguru.logger
 
@@ -208,13 +210,14 @@ class BackendService:
         status, _ = await self._api_request("delete", url, headers=headers)
         return status == 204
 
-    async def create_subscription(self, user_id: int, price: int, workout_days: list[str]) -> int | None:
+    async def create_subscription(self, user_id: int, workout_days: list[str]) -> int | None:
         url = f"{self.backend_url}api/v1/subscriptions/"
         data = {
             "user": user_id,
             "enabled": False,
-            "price": price,
+            "price": SUBSCRIPTION_PRICE,
             "workout_days": workout_days,
+            "payment_date": datetime.today().strftime("%Y-%m-%d"),
             "exercises": {},
         }
         status_code, response = await self._api_request(
@@ -244,6 +247,17 @@ class BackendService:
             return True
         logger.error(f"Failed to update subscription {subscription_id}. HTTP status: {status_code}")
         return False
+
+    async def get_expired_subscriptions(self, expired_before: str) -> list[dict]:
+        url = f"{self.backend_url}api/v1/subscriptions/?enabled=True&payment_date__lte={expired_before}"
+        status_code, subscriptions = await self._api_request(
+            "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
+        )
+
+        if status_code == 200:
+            return subscriptions
+        logger.error(f"Failed to retrieve expired subscriptions. HTTP status: {status_code}")
+        return []
 
     async def delete_profile(self, profile_id: int, token: str | None = None) -> bool:
         url = f"{self.backend_url}api/v1/persons/{profile_id}/delete/"
@@ -314,6 +328,22 @@ class BackendService:
             payments_list = payments_data.get("results", [])
             return [Payment.from_dict(payment) for payment in payments_list]
         return []
+
+    async def get_last_subscription_payment(self, profile_id: int) -> tuple[str, str] | None:
+        url = f"{self.backend_url}api/v1/payments/"
+        data = {"profile": profile_id, "payment_type": "subscription"}
+
+        status_code, payments_data = await self._api_request(
+            "get", url, data=data, headers={"Authorization": f"Api-Key {self.api_key}"}
+        )
+
+        if status_code == 200:
+            payments = payments_data.get("results", [])
+            if payments:
+                last_payment = sorted(payments, key=lambda x: x["created_at"], reverse=True)[0]
+                return last_payment["shop_order_number"], last_payment["shop_bill_id"]
+
+        return None
 
 
 backend_service = BackendService(enc)

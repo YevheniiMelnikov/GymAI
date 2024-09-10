@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import suppress
 from datetime import datetime
 
@@ -8,7 +9,7 @@ from aiogram.types import CallbackQuery
 from bot.keyboards import program_edit_kb, program_manage_menu, program_view_kb, subscription_view_kb
 from bot.states import States
 from common.backend_service import backend_service
-from common.cache_manager import cache_manager
+from common.cache_manager import cache_manager, logger
 from common.functions.chat import send_message
 from common.functions.menus import show_main_menu
 from common.functions.profiles import get_or_load_profile
@@ -179,3 +180,16 @@ def cache_program_data(data: dict, profile_id: int) -> None:
         "split_number": 1,
     }
     cache_manager.set_program(profile_id, program_data)
+
+
+async def cancel_subscription(next_payment_date: datetime, profile_id: int, subscription_id: int) -> None:
+    now = datetime.now()
+    delay = (next_payment_date - now).total_seconds()
+
+    if delay > 0:
+        await asyncio.sleep(delay)
+
+    await backend_service.update_subscription(subscription_id, dict(enabled=False))
+    cache_manager.update_subscription_data(profile_id, dict(enabled=False))
+    cache_manager.set_payment_status(profile_id, False, "subscription")
+    logger.info(f"Subscription for profile_id {profile_id} deactivated")

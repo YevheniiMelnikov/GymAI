@@ -153,12 +153,14 @@ async def edit_subscription_days(
         await callback_query.message.delete()
 
 
-async def process_new_subscription(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+async def process_new_subscription(
+    email: str, callback_query: CallbackQuery, profile: Profile, state: FSMContext
+) -> None:
     await callback_query.answer()
     timestamp = datetime.now().timestamp()
     order_number = f"id_{profile.id}_subscription_{timestamp}"
     await state.update_data(order_number=order_number, amount=SUBSCRIPTION_PRICE)
-    if payment_link := await payment_service.get_subscription_link(order_number):
+    if payment_link := await payment_service.get_subscription_link(email, order_number):
         await state.set_state(States.handle_payment)
         await callback_query.message.answer(
             translate(MessageText.follow_link, profile.language),

@@ -89,9 +89,9 @@ weight:
   ua: "Вага ⚖️"
 
 workout_experience:
-  eng: "Workout experience 🎓"
-  ru: "Опыт тренировок 🎓"
-  ua: "Тренувальний досвід 🎓"
+  eng: "Workout experience 💪"
+  ru: "Опыт тренировок 💪"
+  ua: "Тренувальний досвід 💪"
 
 health_notes:
   eng: "Health notes 🤕"
@@ -327,3 +327,8 @@ logout:
   eng: "Logout 🚪"
   ru: "Выход 🚪"
   ua: "Вийти 🚪"
+
+cancel_subscription:
+  eng: "Cancel subscription 🚫"
+  ru: "Отменить подписку 🚫"
+  ua: "Скасувати підписку 🚫"

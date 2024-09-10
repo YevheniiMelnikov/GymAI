@@ -21,6 +21,7 @@ class ButtonText(Enum):
     select = auto()
     prev_menu = auto()
     delete = auto()
+    cancel_subscription = auto()
     pay = auto()
 
     my_clients = auto()
@@ -171,6 +172,7 @@ class MessageText(Enum):
     no_coaches = auto()
     program_page = auto()
     program_view = auto()
+    program_delete_warning = auto()
     workout_results = auto()
     workout_feedback = auto()
     have_you_trained = auto()
@@ -183,6 +185,9 @@ class MessageText(Enum):
     payment_failure = auto()
     payment_in_progress = auto()
     subscription_page = auto()
+    subscription_canceled = auto()
+    subscription_cancel_request = auto()
+    subscription_cancel_warning = auto()
     payment_link = auto()
     contract_info_message = auto()
 

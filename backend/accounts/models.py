@@ -60,6 +60,7 @@ class Subscription(models.Model):  # type: ignore
     price = models.DecimalField(max_digits=10, decimal_places=2)  # type: ignore
     workout_days = ArrayField(models.CharField(max_length=100), default=list, blank=True)  # type: ignore
     exercises = JSONField(default=dict, blank=True, null=True)  # type: ignore
+    payment_date = models.CharField(max_length=100, null=True, blank=True)  # type: ignore
 
     class Meta:
         verbose_name = "subscription"

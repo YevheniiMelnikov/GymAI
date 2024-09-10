@@ -2,7 +2,6 @@ from aiogram.fsm.state import State, StatesGroup
 
 
 class States(StatesGroup):
-    default = State()
     action_choice = State()
     main_menu = State()
     feedback = State()
@@ -51,6 +50,7 @@ class States(StatesGroup):
     show_subscription = State()
     subscription_manage = State()
     program_manage = State()
+    program_action_choice = State()
 
     new_coach_request = State()
     choose_coach = State()
