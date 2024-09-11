@@ -1,13 +1,12 @@
 from typing import Any
 
 import loguru
-from cryptography.fernet import InvalidToken
 
 from services.backend_service import BackendService
 from common.models import Profile
 from common.encrypter import encrypter as enc, Encrypter
 
-logger = loguru.Logger
+logger = loguru.logger
 
 
 class ProfileService(BackendService):
@@ -32,13 +31,8 @@ class ProfileService(BackendService):
             "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
         if status_code == 200:
-            if "payment_details" in profile_data and profile_data["payment_details"]:
-                try:
-                    profile_data["payment_details"] = self.encrypter.decrypt(profile_data["payment_details"])
-                except InvalidToken:
-                    logger.error(f"Failed to decrypt payment details for user {username}")
-                    profile_data["payment_details"] = "Invalid encrypted data"
             return Profile.from_dict(profile_data)
+
         logger.info(f"Failed to retrieve profile for {username}. HTTP status: {status_code}")
         return None
 

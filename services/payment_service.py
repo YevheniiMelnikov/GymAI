@@ -1,15 +1,19 @@
 import base64
+import binascii
 import gzip
+import hashlib
+import hmac
 import json
 import os
 import uuid
 import datetime
 
 import loguru
+import requests
 
 from services.backend_service import BackendService
 from common.models import Payment
-from common.settings import PROGRAM_PRICE, SUBSCRIPTION_PRICE
+from common.settings import PROGRAM_PRICE, SUBSCRIPTION_PRICE, FIRST_NAME, LAST_NAME, ADDRESS
 
 logger = loguru.logger
 
@@ -76,6 +80,57 @@ class PaymentService(BackendService):
         compressed_payload = gzip.compress(json_payload.encode("utf-8"))
         encoded_payload = base64.b64encode(compressed_payload).decode("utf-8")
         return encoded_payload
+
+    def transfer_to_card(self, card_number: str, amount: str, order_number: str, recipient_info: dict) -> dict | None:
+        dt = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        signature = self.generate_signature(dt, self.login, self.payee_id, order_number, amount, self.key)
+
+        payload = {
+            "paymentType": "a2c_1",
+            "description": card_number,
+            "billAmount": amount,
+            "payeeId": self.payee_id,
+            "shopOrderNumber": order_number,
+            "dt": dt,
+            "signature": signature,
+            "mode": "1101",
+            "sender": "1101",
+            "identification": {
+                "sender": {
+                    "firstName": FIRST_NAME,
+                    "lastName": LAST_NAME,
+                    "account_number": os.getenv("ACCOUNT_NUMBER"),
+                },
+                "senderAddress": {
+                    "countryCode": "UKR",
+                    "city": "Kyiv",
+                    "address": ADDRESS,
+                },
+                "recipient": {
+                    "dstFirstName": recipient_info["dstFirstName"],
+                    "dstLastName": recipient_info["dstLastName"],
+                    "tax_id": recipient_info["tax_id"],
+                },
+            },
+        }
+
+        response = requests.post(self.gateway_url, json=payload)
+        if response.status_code == 200:
+            response_data = response.json()
+            if response_data.get("result") == "PAYED":
+                return response_data
+            else:
+                logger.error(f"Transfer failed. Response: {response_data}")
+                return None
+        else:
+            logger.error(f"Failed to transfer money. HTTP status: {response.status_code}, response: {response.text}")
+            return None
+
+    @staticmethod
+    def generate_signature(dt, login: str, payee_id: str, shop_order_number: str, bill_amount: str, key: str) -> str:
+        str_to_sign = payee_id + dt + binascii.hexlify(shop_order_number.encode()).decode().upper() + bill_amount
+        str_to_sign = str_to_sign.upper() + binascii.hexlify(login.encode()).decode().upper()
+        return hmac.new(key.encode(), str_to_sign.encode(), hashlib.sha256).hexdigest().upper()
 
     async def create_payment(self, profile_id: int, payment_option: str, order_number: str, amount: int) -> bool:
         url = f"{self.backend_url}api/v1/payments/create/"
