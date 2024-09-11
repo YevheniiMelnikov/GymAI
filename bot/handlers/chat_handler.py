@@ -5,12 +5,12 @@ from aiogram.types import Message
 
 from bot.keyboards import incoming_message
 from bot.states import States
-from common.backend_service import backend_service
 from common.cache_manager import cache_manager
 from common.exceptions import UserServiceError
 from common.functions.chat import send_message
 from common.functions.menus import show_main_menu
 from common.models import Profile
+from services.profile_service import profile_service
 from texts.resources import MessageText
 from texts.text_manager import translate
 
@@ -27,7 +27,7 @@ async def contact_client(message: Message, state: FSMContext):
         client = cache_manager.get_client_by_id(data.get("recipient_id"))
         if client.status == "waiting_for_text":
             cache_manager.set_client_data(client.id, {"status": "default"})
-        client_profile = Profile.from_dict(await backend_service.get_profile(client.id))
+        client_profile = Profile.from_dict(await profile_service.get_profile(client.id))
         coach_name = cache_manager.get_coach_by_id(coach.id).name
     except Exception as e:
         logger.error(f"Can't get data: {e}")
@@ -74,7 +74,7 @@ async def contact_coach(message: Message, state: FSMContext):
         return
 
     await state.update_data(sender_name=client_name)
-    coach_data = await backend_service.get_profile(coach.id)
+    coach_data = await profile_service.get_profile(coach.id)
     coach_lang = cache_manager.get_profile_info_by_key(coach_data.get("current_tg_id"), coach.id, "language") or "ua"
     await state.update_data(recipient_language=coach_lang)
 

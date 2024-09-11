@@ -4,9 +4,9 @@ from typing import Any, Optional
 from aiogram.fsm.state import State
 
 from bot.states import States
-from common.backend_service import backend_service
 from common.cache_manager import cache_manager
 from common.models import Client, Coach, Exercise
+from services.profile_service import profile_service
 from texts.resources import ButtonText, MessageText
 from texts.text_manager import translate
 
@@ -104,7 +104,7 @@ async def get_client_page(client: Client, lang_code: str, subscription: bool, da
         "waiting_for_text": translate(MessageText.waiting_for_text, lang=lang_code),
     }
 
-    client_data = await backend_service.get_profile(client.id)
+    client_data = await profile_service.get_profile(client.id)
     page = {
         "name": client.name,
         "gender": texts.get(client.gender, ""),

@@ -12,12 +12,12 @@ from dateutil.relativedelta import relativedelta
 
 from bot.keyboards import *
 from bot.keyboards import choose_coach, program_manage_menu, program_view_kb, select_service, subscription_manage_menu
-from common.backend_service import backend_service
 from common.exceptions import UserServiceError
 from common.file_manager import avatar_manager
 from common.functions.profiles import get_or_load_profile
 from common.functions.text_utils import *
 from common.models import Client, Coach, Profile, Subscription
+from services.profile_service import profile_service
 from common.settings import BOT_PAYMENT_OPTIONS
 from texts.resources import MessageText
 from texts.text_manager import translate
@@ -154,7 +154,7 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
         )
     except UserServiceError:
         await callback_query.answer()
-        user_data = await backend_service.get_profile(profile.id)
+        user_data = await profile_service.get_profile(profile.id)
         if None in user_data.values():
             info_msg = await callback_query.message.answer(translate(MessageText.edit_profile, lang=profile.language))
             name_msg = await callback_query.message.answer(translate(MessageText.name, lang=profile.language))
@@ -212,7 +212,7 @@ async def my_clients_menu(callback_query: CallbackQuery, profile: Profile, state
         except UserServiceError:
             clients = []
             for profile_id in assigned_ids:
-                if profile_data := await backend_service.get_profile(profile_id):
+                if profile_data := await profile_service.get_profile(profile_id):
                     clients.append(Client.from_dict(profile_data))
         await show_clients(callback_query.message, clients, state)
     else:

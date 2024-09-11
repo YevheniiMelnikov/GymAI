@@ -28,7 +28,13 @@ class ProfileSerializer(serializers.ModelSerializer):
 class ProgramSerializer(serializers.ModelSerializer):
     class Meta:
         model = Program
-        fields = "__all__"
+        fields = ["profile", "exercises_by_day", "split_number", "created_at"]
+
+    def update(self, instance, validated_data):
+        instance.exercises_by_day = validated_data.get("exercises_by_day", instance.exercises_by_day)
+        instance.split_number = validated_data.get("split_number", instance.split_number)
+        instance.save()
+        return instance
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):

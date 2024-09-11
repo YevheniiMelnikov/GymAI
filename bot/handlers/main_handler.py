@@ -4,6 +4,8 @@ from common.functions.profiles import assign_coach, get_or_load_profile, handle_
 from common.functions.utils import handle_clients_pagination
 from common.functions.workout_plans import manage_program, cancel_subscription
 from common.models import Coach, Profile
+from services.payment_service import payment_service
+from services.user_service import user_service
 from texts.resources import MessageText
 from texts.text_manager import translate
 
@@ -58,17 +60,17 @@ async def process_password_reset(message: Message, state: FSMContext) -> None:
     index = next((i for i, username in enumerate(data["usernames"]) if username == message.text), None)
     if index is not None:
         profile = Profile.from_dict(data["profiles"][index])
-        email = await backend_service.get_user_email(profile.id)
+        email = await user_service.get_user_email(profile.id)
         if email:
             token = cache_manager.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
             if not token:
-                token = await backend_service.get_user_token(profile.id)
-            if await backend_service.reset_password(email, token):
+                token = await user_service.get_user_token(profile.id)
+            if await user_service.reset_password(email, token):
                 await message.answer(
                     text=translate(MessageText.password_reset_sent, profile.language).format(email=email)
                 )
                 await state.clear()
-                await backend_service.log_out(profile, token)
+                await user_service.log_out(profile, token)
                 cache_manager.deactivate_profiles(profile.current_tg_id)
                 await message.answer(text=translate(MessageText.username, profile.language))
                 await state.set_state(States.username)
@@ -86,8 +88,8 @@ async def handle_feedback(message: Message, state: FSMContext) -> None:
     profile = await get_or_load_profile(message.from_user.id)
     token = cache_manager.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
     if not token:
-        token = await backend_service.get_user_token(profile.id)
-    if user_data := await backend_service.get_user_data(token):
+        token = await user_service.get_user_token(profile.id)
+    if user_data := await user_service.get_user_data(token):
         if await backend_service.send_feedback(user_data.get("email"), user_data.get("username"), message.text):
             logger.info(f"User {profile.id} sent feedback")
             await message.answer(text=translate(MessageText.feedback_sent, lang=profile.language))
@@ -219,7 +221,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         user = await bot.get_chat(callback_query.from_user.id)
         contact = f"@{user.username}" if user.username else callback_query.from_user.id
         subscription = cache_manager.get_subscription(profile.id)
-        shop_order_number, shop_bill_id = await backend_service.get_last_subscription_payment(profile.id)
+        shop_order_number, shop_bill_id = await payment_service.get_last_subscription_payment(profile.id)
         payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
         next_payment_date = payment_date + relativedelta(months=1)
         async with aiohttp.ClientSession():

@@ -19,7 +19,7 @@ from bot.handlers.workouts_handler import program_router
 from common.functions.chat import sub_router
 from common.functions.utils import set_bot_commands
 from common.payment_manager import payment_handler
-from common.subscription_manager import subscription_scheduler
+from common.subscription_manager import subscription_manager
 from common.workout_scheduler import survey_router, workout_scheduler
 
 load_dotenv()
@@ -51,7 +51,7 @@ async def main() -> None:
     logger.info("Starting bot ...")
     await workout_scheduler()
     await backup_scheduler()
-    await subscription_scheduler()
+    await subscription_manager()
     payment_handler.start_payment_checker()
     try:
         await bot.delete_webhook(drop_pending_updates=True)

@@ -5,13 +5,15 @@ from datetime import datetime
 import loguru
 from dateutil.relativedelta import relativedelta
 
-from common.backend_service import backend_service
+from services.backend_service import backend_service
 from common.cache_manager import cache_manager
 from common.functions.chat import client_request, send_message
 from common.functions.workout_plans import cancel_subscription
 from common.models import Payment, Profile
-from common.payment_service import payment_service
+from services.payment_service import payment_service
+from services.profile_service import profile_service
 from common.settings import SUBSCRIPTION_PRICE
+from services.workout_service import workout_service
 from texts.resources import MessageText
 from texts.text_manager import translate
 
@@ -23,6 +25,8 @@ class PaymentHandler:
         self.cache_manager = cache_manager
         self.backend_service = backend_service
         self.payment_service = payment_service
+        self.profile_service = profile_service
+        self.workout_service = workout_service
 
     def start_payment_checker(self):
         asyncio.create_task(self.check_payments())
@@ -30,14 +34,14 @@ class PaymentHandler:
     async def check_payments(self):
         while True:
             try:
-                payments = await self.backend_service.get_all_payments()
+                payments = await self.payment_service.get_all_payments()
 
                 for payment in payments:
                     if payment.handled:
                         continue
 
                     local_payment = await self.backend_service.check_local_payment(payment.shop_order_number)
-                    profile = Profile.from_dict(await self.backend_service.get_profile(payment.profile))
+                    profile = Profile.from_dict(await self.profile_service.get_profile(payment.profile))
                     if local_payment.status == "PAYED":
                         await self.handle_successful_payment(payment, profile)
                     elif local_payment.status == "REJECTED":
@@ -51,7 +55,7 @@ class PaymentHandler:
 
     async def handle_failed_payment(self, payment: Payment, profile: Profile) -> None:
         client = self.cache_manager.get_client_by_id(profile.id)
-        await self.backend_service.update_payment(payment.id, dict(handled=True))
+        await self.payment_service.update_payment(payment.id, dict(handled=True))
         if payment.payment_type == "subscription":
             subscription = cache_manager.get_subscription(profile.id)
             if subscription and subscription.enabled:
@@ -78,7 +82,7 @@ class PaymentHandler:
         )
 
     async def handle_successful_payment(self, payment: Payment, profile: Profile):
-        await self.backend_service.update_payment(payment.id, dict(handled=True))
+        await self.payment_service.update_payment(payment.id, dict(handled=True))
         client = self.cache_manager.get_client_by_id(profile.id)
         await send_message(
             recipient=client,
@@ -99,7 +103,7 @@ class PaymentHandler:
             cache_manager.update_subscription_data(
                 profile.id, dict(enabled=True, payment_date=datetime.today().strftime("%Y-%m-%d"))
             )
-            await self.backend_service.update_subscription(
+            await self.workout_service.update_subscription(
                 subscription.id,
                 dict(
                     enabled=True,

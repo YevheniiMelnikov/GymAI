@@ -184,6 +184,7 @@ class MessageText(Enum):
     payment_success = auto()
     payment_failure = auto()
     payment_in_progress = auto()
+    checkbox_reminding = auto()
     subscription_page = auto()
     subscription_canceled = auto()
     subscription_cancel_request = auto()

@@ -11,7 +11,6 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import payment_keyboard, program_edit_kb, program_manage_menu
 from bot.states import States
-from common.backend_service import backend_service
 from common.cache_manager import cache_manager
 from common.file_manager import gif_manager
 from common.functions.menus import show_subscription_page
@@ -19,8 +18,9 @@ from common.functions.profiles import get_or_load_profile
 from common.functions.text_utils import format_program, get_translated_week_day
 from common.functions.utils import delete_messages
 from common.models import Exercise, Profile, Subscription
-from common.payment_service import payment_service
+from services.payment_service import payment_service
 from common.settings import SUBSCRIPTION_PRICE
+from services.workout_service import workout_service
 from texts.exercises import exercise_dict
 from texts.resources import MessageText
 from texts.text_manager import translate
@@ -146,7 +146,7 @@ async def edit_subscription_days(
     updated_exercises = {days[i]: exercises for i, exercises in enumerate(exercises.values())}
     subscription_data.update(user=profile.id, exercises=updated_exercises)
     cache_manager.update_subscription_data(profile.id, {"exercises": updated_exercises, "user": profile.id})
-    await backend_service.update_subscription(subscription_data.get("id"), subscription_data)
+    await workout_service.update_subscription(subscription_data.get("id"), subscription_data)
     await state.set_state(States.show_subscription)
     await show_subscription_page(callback_query, state, subscription)
     with suppress(TelegramBadRequest):
@@ -156,7 +156,7 @@ async def edit_subscription_days(
 async def process_new_subscription(
     email: str, callback_query: CallbackQuery, profile: Profile, state: FSMContext
 ) -> None:
-    await callback_query.answer()
+    await callback_query.answer(translate(MessageText.checkbox_reminding, profile.language), show_alert=True)
     timestamp = datetime.now().timestamp()
     order_number = f"id_{profile.id}_subscription_{timestamp}"
     await state.update_data(order_number=order_number, amount=SUBSCRIPTION_PRICE)

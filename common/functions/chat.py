@@ -5,7 +5,6 @@ from aiogram.enums import ParseMode
 
 from bot.keyboards import *
 from bot.keyboards import new_coach_request
-from common.backend_service import backend_service
 from common.cache_manager import cache_manager
 from common.file_manager import avatar_manager
 from common.functions.exercises import edit_subscription_exercises
@@ -14,6 +13,8 @@ from common.functions.profiles import get_or_load_profile
 from common.functions.text_utils import format_new_client_message, get_client_page, get_workout_types
 from common.functions.utils import *
 from common.models import Coach, Profile
+from services.profile_service import profile_service
+from services.user_service import user_service
 from texts.resources import MessageText
 from texts.text_manager import translate
 
@@ -35,12 +36,12 @@ async def contact_client(callback_query: CallbackQuery, profile: Profile, client
 
 
 async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> None:
-    coach_data = await backend_service.get_profile(coach.id)
+    coach_data = await profile_service.get_profile(coach.id)
     coach_lang = cache_manager.get_profile_info_by_key(coach_data.get("current_tg_id"), coach.id, "language")
     data["recipient_language"] = coach_lang
     service = data.get("request_type")
     preferable_workout_type = data.get("workout_type")
-    client_data = await backend_service.get_profile(client.id)
+    client_data = await profile_service.get_profile(client.id)
     client_lang = cache_manager.get_profile_info_by_key(client_data.get("current_tg_id"), client.id, "language")
     workout_types = await get_workout_types(coach_lang)
     preferable_workouts_type = workout_types.get(preferable_workout_type, "unknown")
@@ -92,8 +93,8 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
     async def approve_coach(callback_query: CallbackQuery, state: FSMContext):
         token = cache_manager.get_profile_info_by_key(tg_id, profile.id, "auth_token")
         if not token:
-            token = await backend_service.get_user_token(profile.id)
-        await backend_service.edit_profile(profile.id, {"verified": True}, token)
+            token = await user_service.get_user_token(profile.id)
+        await profile_service.edit_profile(profile.id, {"verified": True}, token)
         cache_manager.set_coach_data(profile.id, {"verified": True})
         await callback_query.answer("👍")
         coach = cache_manager.get_coach_by_id(profile.id)
@@ -131,7 +132,7 @@ async def send_message(
         language = "ua"
         sender_name = ""
 
-    recipient_data = await backend_service.get_profile(recipient.id)
+    recipient_data = await profile_service.get_profile(recipient.id)
     assert recipient_data
 
     if include_incoming_message:

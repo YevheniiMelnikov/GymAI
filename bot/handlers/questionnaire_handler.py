@@ -9,7 +9,6 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import choose_gender, payment_keyboard, select_days, workout_experience_keyboard, yes_no
 from bot.states import States
-from common.backend_service import backend_service
 from common.cache_manager import cache_manager
 from common.file_manager import avatar_manager
 from common.functions.chat import client_request
@@ -18,7 +17,8 @@ from common.functions.menus import show_main_menu
 from common.functions.profiles import get_or_load_profile, update_user_info
 from common.functions.text_utils import get_state_and_message, validate_birth_date
 from common.functions.utils import delete_messages
-from common.payment_service import payment_service
+from services.payment_service import payment_service
+from services.profile_service import profile_service
 from common.settings import PROGRAM_PRICE
 from texts.resources import MessageText
 from texts.text_manager import translate
@@ -286,8 +286,7 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
                     await state.set_state(States.confirm_subscription_reset)
             else:
                 await callback_query.answer(translate(MessageText.saved, lang=profile.language))
-                profile_data = await backend_service.get_profile(profile.id)
-                # TODO: INFORM ABOUT REGULAR PAYMENT CHECKBOX!
+                profile_data = await profile_service.get_profile(profile.id)
                 await process_new_subscription(profile_data.get("email"), callback_query, profile, state)
         else:
             await callback_query.answer("❌")
