@@ -61,6 +61,14 @@ async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> 
         include_incoming_message=False,
     )
 
+    if data.get("wishes"):
+        await send_message(
+            recipient=coach,
+            text=data.get("wishes"),
+            state=None,
+            include_incoming_message=True,
+        )
+
     await send_message(
         recipient=coach,
         text=translate(MessageText.client_page, coach_lang).format(**client_page),
@@ -72,19 +80,33 @@ async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> 
 
 async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, Any]) -> None:
     name = data.get("name")
+    surname = data.get("surname")
     experience = data.get("work_experience")
     info = data.get("additional_info")
-    payment = data.get("payment_details")
-    file_name = data.get("profile_photo")
-    photo = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{file_name}"
+    card = data.get("payment_details")
+    tin = data.get("tax_identification")
+    subscription_price = data.get("subscription_price")
+    program_price = data.get("program_price")
     user = await bot.get_chat(tg_id)
     contact = f"@{user.username}" if user.username else tg_id
+
+    file_name = data.get("profile_photo")
+    photo = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{file_name}"
     async with aiohttp.ClientSession():
         await bot.send_photo(
             OWNER_ID,
             photo,
             caption=translate(MessageText.new_coach_request, "ru").format(
-                name=name, experience=experience, info=info, payment=payment, contact=contact, profile_id=profile.id
+                name=name,
+                surname=surname,
+                experience=experience,
+                info=info,
+                card=card,
+                tin=tin,
+                subscription_price=subscription_price,
+                program_price=program_price,
+                contact=contact,
+                profile_id=profile.id,
             ),
             reply_markup=new_coach_request(),
         )
@@ -94,7 +116,7 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
         token = cache_manager.get_profile_info_by_key(tg_id, profile.id, "auth_token")
         if not token:
             token = await user_service.get_user_token(profile.id)
-        await profile_service.edit_profile(profile.id, {"verified": True}, token)
+        await profile_service.edit_coach_profile(profile.id, dict(verified=True), token)
         cache_manager.set_coach_data(profile.id, {"verified": True})
         await callback_query.answer("👍")
         coach = cache_manager.get_coach_by_id(profile.id)

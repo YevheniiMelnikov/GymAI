@@ -5,8 +5,9 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import action_choice_keyboard, client_menu_keyboard, coach_menu_keyboard
+from bot.keyboards import action_choice_keyboard
 from bot.states import States
+from common.functions.menus import show_main_menu
 from services.backend_service import backend_service
 from common.cache_manager import cache_manager
 from common.exceptions import ProfileNotFoundError, UserServiceError
@@ -29,28 +30,22 @@ async def update_user_info(message: Message, state: FSMContext, role: str) -> No
         if not profile:
             raise ValueError("Profile not found")
 
+        token = cache_manager.get_profile_info_by_key(message.chat.id, profile.id, "auth_token")
+        if not token:
+            token = await user_service.get_user_token(profile.id)
+
         if role == "client":
             cache_manager.set_client_data(profile.id, data)
+            await profile_service.edit_client_profile(profile.id, data, token)
         else:
             if not data.get("edit_mode"):
                 await message.answer(translate(MessageText.wait_for_verification, data.get("lang")))
                 await chat.notify_about_new_coach(message.from_user.id, profile, data)
             cache_manager.set_coach_data(profile.id, data)
+            await profile_service.edit_coach_profile(profile.id, data, token)
 
-        token = cache_manager.get_profile_info_by_key(message.chat.id, profile.id, "auth_token")
-        if not token:
-            token = await user_service.get_user_token(profile.id)
-
-        await profile_service.edit_profile(profile.id, data, token)
         await message.answer(translate(MessageText.your_data_updated, lang=data.get("lang")))
-        await state.clear()
-        await state.update_data(profile=Profile.to_dict(profile))
-        await state.set_state(States.main_menu)
-
-        reply_markup = (
-            client_menu_keyboard(data.get("lang")) if role == "client" else coach_menu_keyboard(data.get("lang"))
-        )
-        await message.answer(translate(MessageText.main_menu, lang=data.get("lang")), reply_markup=reply_markup)
+        await show_main_menu(message, profile, state)
 
     except Exception as e:
         logger.error(f"Unexpected error updating profile: {e}")
@@ -69,8 +64,8 @@ async def assign_coach(coach: Coach, client: Client, telegram_id: int) -> None:
     token = cache_manager.get_profile_info_by_key(telegram_id, client.id, "auth_token")
     if not token:
         token = await user_service.get_user_token(client.id)
-    await profile_service.edit_profile(client.id, {"assigned_to": [coach.id]}, token)
-    await profile_service.edit_profile(coach.id, {"assigned_to": coach_clients}, token)
+    await profile_service.edit_client_profile(client.id, {"assigned_to": [coach.id]}, token)
+    await profile_service.edit_coach_profile(coach.id, {"assigned_to": coach_clients}, token)
 
 
 async def sign_in(message: Message, state: FSMContext, data: dict) -> None:

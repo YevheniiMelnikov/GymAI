@@ -182,15 +182,20 @@ class CacheManager:
     def set_coach_data(self, profile_id: int, profile_data: dict) -> None:
         allowed_fields = [
             "name",
-            "work_experience",
+            "surname" "work_experience",
             "additional_info",
             "payment_details",
+            "tax_identification",
             "profile_photo",
             "verified",
             "assigned_to",
+            "subscription_price",
+            "program_price",
         ]
         if profile_data.get("payment_details"):
             profile_data["payment_details"] = self.encrypter.encrypt(profile_data["payment_details"])
+        if profile_data.get("tax_identification"):
+            profile_data["tax_identification"] = self.encrypter.encrypt(profile_data["tax_identification"])
         self._set_data("coaches", profile_id, profile_data, allowed_fields)
 
     def get_coach_by_id(self, profile_id: int) -> Coach | None:
@@ -201,6 +206,8 @@ class CacheManager:
                 data["id"] = profile_id
                 if "payment_details" in data:
                     data["payment_details"] = self.encrypter.decrypt(data["payment_details"])
+                if "tax_identification" in data:
+                    data["tax_identification"] = self.encrypter.decrypt(data["tax_identification"])
                 return Coach.from_dict(data)
             else:
                 logger.debug(f"No data found for profile_id {profile_id} in cache")
@@ -293,6 +300,7 @@ class CacheManager:
             "workout_type",
             "workout_days",
             "exercises",
+            "wishes",
         ]
 
         self._set_data("workout_plans:subscriptions", profile_id, subscription_data, allowed_fields)
@@ -302,6 +310,7 @@ class CacheManager:
             "exercises_by_day",
             "split_number",
             "workout_type",
+            "wishes",
         ]
         self._set_data("workout_plans:programs", profile_id, program_data, allowed_fields)
 

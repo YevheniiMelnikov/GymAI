@@ -13,7 +13,7 @@ import requests
 
 from services.backend_service import BackendService
 from common.models import Payment
-from common.settings import PROGRAM_PRICE, SUBSCRIPTION_PRICE, FIRST_NAME, LAST_NAME, ADDRESS
+from common.settings import FIRST_NAME, LAST_NAME, ADDRESS
 
 logger = loguru.logger
 
@@ -27,7 +27,7 @@ class PaymentService(BackendService):
         self.gateway_url = os.environ.get("PAYMENT_GATEWAY_URL")
         self.key = os.environ.get("PORTMONE_KEY")
 
-    async def get_program_link(self, order_number: str) -> str | None:
+    async def get_program_link(self, order_number: str, amount: int) -> str | None:
         payload = {
             "method": "getLinkInvoice",
             "params": {
@@ -36,7 +36,7 @@ class PaymentService(BackendService):
                     "shopOrderNumber": order_number,
                     "password": self.password,
                     "payee_id": self.payee_id,
-                    "amount": PROGRAM_PRICE,
+                    "amount": amount,
                 },
             },
             "id": str(uuid.uuid4()),
@@ -50,7 +50,7 @@ class PaymentService(BackendService):
             logger.error(f"Failed to get program link. HTTP status: {response.status_code}, response: {response.text}")
             return None
 
-    async def get_subscription_link(self, email: str, order_number: str) -> str:
+    async def get_subscription_link(self, email: str, order_number: str, amount: str) -> str:
         today = datetime.date.today()
         current_day = today.day
 
@@ -60,7 +60,7 @@ class PaymentService(BackendService):
         payload = {
             "v": "2",
             "payeeId": self.payee_id,
-            "amount": SUBSCRIPTION_PRICE,
+            "amount": amount,
             "emailAddress": email,
             "billNumber": order_number,
             "successUrl": os.getenv("BOT_LINK"),

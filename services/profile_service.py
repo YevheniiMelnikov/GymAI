@@ -54,27 +54,38 @@ class ProfileService(BackendService):
         return status_code == 204
 
     async def edit_profile(self, profile_id: int, data: dict, token: str | None = None) -> bool:
+        fields = ["current_tg_id", "language", "name", "assigned_to"]
+        filtered_data = {key: data[key] for key in fields if key in data and data[key] is not None}
+        url = f"{self.backend_url}api/v1/persons/{profile_id}/"
+        status_code, _ = await self._api_request("put", url, filtered_data, headers={"Authorization": f"Token {token}"})
+        return status_code == 200
+
+    async def edit_client_profile(self, profile_id: int, data: dict, token: str | None = None) -> bool:
+        fields = ["gender", "born_in", "workout_experience", "workout_goals", "health_notes", "weight"]
+        filtered_data = {key: data[key] for key in fields if key in data and data[key] is not None}
+        url = f"{self.backend_url}api/v1/client-profiles/{profile_id}/"
+        status_code, _ = await self._api_request("put", url, filtered_data, headers={"Authorization": f"Token {token}"})
+        return status_code == 200
+
+    async def edit_coach_profile(self, profile_id: int, data: dict, token: str | None = None) -> bool:
         fields = [
-            "current_tg_id",
-            "language",
-            "name",
-            "gender",
-            "born_in",
-            "workout_experience",
+            "surname",
             "work_experience",
             "additional_info",
             "payment_details",
+            "tax_identification",
+            "program_price",
+            "subscription_price",
             "profile_photo",
-            "workout_goals",
-            "health_notes",
-            "weight",
             "verified",
-            "assigned_to",
         ]
         if "payment_details" in data:
             data["payment_details"] = self.encrypter.encrypt(data["payment_details"])
+        if "tax_identification" in data:
+            data["tax_identification"] = self.encrypter.encrypt(data["tax_identification"])
+
         filtered_data = {key: data[key] for key in fields if key in data and data[key] is not None}
-        url = f"{self.backend_url}api/v1/persons/{profile_id}/"
+        url = f"{self.backend_url}api/v1/coach-profiles/{profile_id}/"
         status_code, _ = await self._api_request("put", url, filtered_data, headers={"Authorization": f"Token {token}"})
         return status_code == 200
 

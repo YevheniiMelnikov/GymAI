@@ -19,7 +19,6 @@ from common.functions.text_utils import format_program, get_translated_week_day
 from common.functions.utils import delete_messages
 from common.models import Exercise, Profile, Subscription
 from services.payment_service import payment_service
-from common.settings import SUBSCRIPTION_PRICE
 from services.workout_service import workout_service
 from texts.exercises import exercise_dict
 from texts.resources import MessageText
@@ -159,8 +158,10 @@ async def process_new_subscription(
     await callback_query.answer(translate(MessageText.checkbox_reminding, profile.language), show_alert=True)
     timestamp = datetime.now().timestamp()
     order_number = f"id_{profile.id}_subscription_{timestamp}"
-    await state.update_data(order_number=order_number, amount=SUBSCRIPTION_PRICE)
-    if payment_link := await payment_service.get_subscription_link(email, order_number):
+    client = cache_manager.get_client_by_id(profile.id)
+    coach = cache_manager.get_coach_by_id(client.assigned_to.pop())
+    await state.update_data(order_number=order_number, amount=coach.subscription_price)
+    if payment_link := await payment_service.get_subscription_link(email, order_number, coach.subscription_price):
         await state.set_state(States.handle_payment)
         await callback_query.message.answer(
             translate(MessageText.follow_link, profile.language),

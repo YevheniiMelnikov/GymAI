@@ -5,7 +5,6 @@ import loguru
 from services.backend_service import BackendService
 from common.exceptions import UserServiceError
 from common.models import Exercise
-from common.settings import SUBSCRIPTION_PRICE
 
 logger = loguru.logger
 
@@ -44,14 +43,17 @@ class WorkoutService(BackendService):
         logger.error(f"Failed to update program {program_id}. HTTP status: {status_code}")
         return False
 
-    async def create_subscription(self, user_id: int, workout_days: list[str]) -> int | None:
+    async def create_subscription(
+        self, profile_id: int, workout_days: list[str], wishes: str, amount: int
+    ) -> int | None:
         url = f"{self.backend_url}api/v1/subscriptions/"
         data = {
-            "user": user_id,
+            "user": profile_id,
             "enabled": False,
-            "price": SUBSCRIPTION_PRICE,
+            "price": amount,
             "workout_days": workout_days,
             "payment_date": datetime.today().strftime("%Y-%m-%d"),
+            "wishes": wishes,
             "exercises": {},
         }
         status_code, response = await self._api_request(
@@ -59,7 +61,7 @@ class WorkoutService(BackendService):
         )
         if status_code == 201 and response:
             return response.get("id")
-        logger.error(f"Failed to create subscription for user {user_id}. HTTP status: {status_code}")
+        logger.error(f"Failed to create subscription for profile {profile_id}. HTTP status: {status_code}")
         return None
 
     async def update_subscription(self, subscription_id: int, data: dict) -> bool:

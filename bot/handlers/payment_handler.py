@@ -15,7 +15,6 @@ from common.functions.profiles import get_or_load_profile
 from common.functions.workout_plans import cache_program_data
 from common.models import Client, Coach
 from services.payment_service import payment_service
-from common.settings import SUBSCRIPTION_PRICE
 from services.workout_service import workout_service
 from texts.resources import ButtonText, MessageText
 from texts.text_manager import translate
@@ -75,15 +74,20 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
             cache_program_data(data, profile.id)
         else:
             days = data.get("workout_days", [])
-            subscription_id = await workout_service.create_subscription(profile.id, days)
+            client = cache_manager.get_client_by_id(profile.id)
+            coach = cache_manager.get_coach_by_id(client.assigned_to.pop())
+            subscription_id = await workout_service.create_subscription(
+                profile.id, days, data.get("wishes"), coach.subscription_price
+            )
             subscription_data = {
                 "id": subscription_id,
                 "payment_date": datetime.today().strftime("%Y-%m-%d"),
                 "enabled": False,
-                "price": SUBSCRIPTION_PRICE,
+                "price": coach.subscription_price,
                 "user": profile.id,
                 "workout_days": days,
                 "workout_type": data.get("workout_type"),
+                "wishes": data.get("wishes"),
             }
             cache_manager.save_subscription(profile.id, subscription_data)
         cache_manager.set_payment_status(profile.id, True, data.get("request_type"))

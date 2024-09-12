@@ -332,3 +332,13 @@ cancel_subscription:
   eng: "Cancel subscription 🚫"
   ru: "Отменить подписку 🚫"
   ua: "Скасувати підписку 🚫"
+
+program_price:
+  eng: "Program price 💰"
+  ru: "Стоимость программы 💰"
+  ua: "Вартість програми 💰"
+
+subscription_price:
+  eng: "Subscription price 💸"
+  ru: "Стоимость подписки 💸"
+  ua: "Вартість підписки 💸"

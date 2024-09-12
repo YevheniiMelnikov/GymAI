@@ -12,7 +12,6 @@ from common.functions.workout_plans import cancel_subscription
 from common.models import Payment, Profile
 from services.payment_service import payment_service
 from services.profile_service import profile_service
-from common.settings import SUBSCRIPTION_PRICE
 from services.workout_service import workout_service
 from texts.resources import MessageText
 from texts.text_manager import translate
@@ -107,7 +106,7 @@ class PaymentHandler:
                 subscription.id,
                 dict(
                     enabled=True,
-                    price=SUBSCRIPTION_PRICE,
+                    price=subscription.price,
                     user=profile.id,
                     payment_date=datetime.today().strftime("%Y-%m-%d"),
                 ),
@@ -115,6 +114,7 @@ class PaymentHandler:
             data = {
                 "request_type": "subscription",
                 "workout_type": subscription.workout_type,
+                "wishes": subscription.wishes,
             }
             if not subscription.enabled:
                 client = self.cache_manager.get_client_by_id(profile.id)
@@ -130,6 +130,7 @@ class PaymentHandler:
             data = {
                 "request_type": "program",
                 "workout_type": program.workout_type,
+                "wishes": program.wishes,
             }
             client = self.cache_manager.get_client_by_id(profile.id)
             coach = self.cache_manager.get_coach_by_id(client.assigned_to.pop())

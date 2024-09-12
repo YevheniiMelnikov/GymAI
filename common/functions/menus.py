@@ -253,11 +253,20 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
 
 
 async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    if cache_manager.check_payment_status(profile.id, "subscription"):
+        await callback_query.answer(translate(MessageText.program_not_ready, profile.language), show_alert=True)
+        return
+
     subscription = cache_manager.get_subscription(profile.id)
     if not subscription or not subscription.enabled:
         subscription_img = BOT_PAYMENT_OPTIONS + f"subscription_{profile.language}.jpeg"
+        client_profile = cache_manager.get_client_by_id(profile.id)
+        coach = cache_manager.get_coach_by_id(client_profile.assigned_to.pop())
         try:
             await callback_query.message.answer_photo(
+                caption=translate(MessageText.subscription_price, profile.language).format(
+                    price=coach.subscription_price
+                ),
                 photo=subscription_img,
                 reply_markup=choose_payment_options(profile.language, "subscription"),
             )
@@ -268,12 +277,9 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
             )
         await state.set_state(States.payment_choice)
     else:
-        if exercises := subscription.exercises:
-            await state.update_data(exercises=exercises, subscription=True)
+        if subscription.exercises:
+            await state.update_data(exercises=subscription.exercises, subscription=True)
             await show_subscription_page(callback_query, state, subscription)
-        else:
-            await callback_query.answer(translate(MessageText.program_not_ready, profile.language), show_alert=True)
-            return
 
     with suppress(TelegramBadRequest):
         await callback_query.message.delete()
@@ -300,8 +306,11 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
 
 async def show_program_promo_page(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     program_img = BOT_PAYMENT_OPTIONS + f"program_{profile.language}.jpeg"
+    client_profile = cache_manager.get_client_by_id(profile.id)
+    coach = cache_manager.get_coach_by_id(client_profile.assigned_to.pop())
     try:
         await callback_query.message.answer_photo(
+            caption=translate(MessageText.program_price, profile.language).format(price=coach.program_price),
             photo=program_img,
             reply_markup=choose_payment_options(profile.language, "program"),
         )

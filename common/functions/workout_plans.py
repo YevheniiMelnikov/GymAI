@@ -183,6 +183,7 @@ def cache_program_data(data: dict, profile_id: int) -> None:
         "created_at": datetime.now().timestamp(),
         "profile": profile_id,
         "split_number": 1,
+        "wishes": data.get("wishes"),
     }
     cache_manager.set_program(profile_id, program_data)
 

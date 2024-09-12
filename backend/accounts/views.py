@@ -11,6 +11,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import generics, status
 from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.generics import ListAPIView, RetrieveUpdateAPIView
 from rest_framework.permissions import AllowAny, BasePermission, IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -19,8 +20,15 @@ from rest_framework.viewsets import ModelViewSet
 from rest_framework_api_key.permissions import HasAPIKey
 from xml.etree import ElementTree as ET
 
-from .models import Payment, Profile, Program, Subscription
-from .serializers import PaymentSerializer, ProfileSerializer, ProgramSerializer, SubscriptionSerializer
+from .models import Payment, Profile, Program, Subscription, ClientProfile, CoachProfile
+from .serializers import (
+    PaymentSerializer,
+    ProfileSerializer,
+    ProgramSerializer,
+    SubscriptionSerializer,
+    CoachProfileSerializer,
+    ClientProfileSerializer,
+)
 
 
 class IsAuthenticatedButAllowInactive(BasePermission):
@@ -48,8 +56,12 @@ class CreateUserView(APIView):
         try:
             with transaction.atomic():
                 user = User.objects.create_user(username=username, password=password, email=email)
-                profile_data = {"status": user_status, "language": language, "current_tg_id": tg_id}
-                Profile.objects.create(user=user, **profile_data)
+                profile = Profile.objects.create(user=user, status=user_status, language=language, current_tg_id=tg_id)
+
+                if user_status == "client":
+                    ClientProfile.objects.create(profile=profile)
+                elif user_status == "coach":
+                    CoachProfile.objects.create(profile=profile)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -66,15 +78,19 @@ class UserProfileView(APIView):
             user = User.objects.get(username=username)
         except User.DoesNotExist:
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
 
         profile = getattr(user, "profile", None)
-        if profile:
-            serializer = self.serializer_class(profile)
-            return Response(serializer.data)
-        else:
+        if not profile:
             return Response({"error": "Profile not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if hasattr(profile, "client_profile"):
+            serializer = self.serializer_class(profile.client_profile)
+        elif hasattr(profile, "coach_profile"):
+            serializer = self.serializer_class(profile.coach_profile)
+        else:
+            return Response({"error": "Profile type not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(serializer.data)
 
 
 class CurrentUserView(APIView):
@@ -83,14 +99,18 @@ class CurrentUserView(APIView):
     def get(self, request):
         user = request.user
         profile = getattr(user, "profile", None)
-        if profile:
-            serializer = ProfileSerializer(profile)
-            data = serializer.data
-            return Response(
-                {"username": user.username, "email": user.email, "current_tg_id": data.get("current_tg_id")}
-            )
-        else:
+        if not profile:
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        if hasattr(profile, "client_profile"):
+            serializer = ProfileSerializer(profile.client_profile)
+        elif hasattr(profile, "coach_profile"):
+            serializer = ProfileSerializer(profile.coach_profile)
+        else:
+            return Response({"error": "Profile type not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        data = serializer.data
+        return Response({"username": user.username, "email": user.email, "current_tg_id": data.get("current_tg_id")})
 
 
 class ProfileByTelegramIDView(APIView):
@@ -119,45 +139,6 @@ class ResetTelegramIDView(APIView):
             return Response({"status": "success"}, status=status.HTTP_200_OK)
         except Profile.DoesNotExist:
             return Response({"error": "Profile not found"}, status=status.HTTP_404_NOT_FOUND)
-
-
-class SendFeedbackAPIView(APIView):
-    permission_classes = [HasAPIKey | IsAuthenticated]
-
-    def post(self, request: Request, *args, **kwargs) -> Response:
-        email = request.data.get("email")
-        username = request.data.get("username")
-        feedback = request.data.get("feedback")
-
-        subject = f"New Feedback from {username}"
-        message = f"User {username} with email {email} sent the following feedback:\n\n{feedback}"
-
-        try:
-            send_mail(subject, message, os.getenv("EMAIL_HOST_USER"), [os.getenv("EMAIL_HOST_USER")])
-        except Exception:
-            return Response({"message": "Failed to send feedback"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        return Response({"message": "Feedback sent successfully"}, status=status.HTTP_200_OK)
-
-
-class SendWelcomeEmailAPIView(APIView):
-    permission_classes = [HasAPIKey | IsAuthenticated]
-
-    def post(self, request, *args, **kwargs):
-        email = request.data.get("email")
-        username = request.data.get("username")
-        html_content = render_to_string("email/welcome_email.html", {"username": username})
-        text_content = strip_tags(html_content)
-
-        try:
-            subject = "Вітаємо в AchieveTogether 👋"
-            msg = EmailMultiAlternatives(subject, text_content, os.getenv("EMAIL_HOST_USER"), [email])
-            msg.attach_alternative(html_content, "text/html")
-            msg.send()
-        except Exception:
-            return Response({"message": "Failed to send welcome email"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        return Response({"message": "Welcome email sent successfully"}, status=status.HTTP_200_OK)
 
 
 class ProfileAPIUpdate(APIView):
@@ -199,47 +180,74 @@ class ProfileAPIList(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticatedOrReadOnly | HasAPIKey]
 
 
+class CoachProfileView(ListAPIView):
+    queryset = CoachProfile.objects.all()
+    serializer_class = CoachProfileSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly | HasAPIKey]
+
+
+class CoachProfileUpdate(RetrieveUpdateAPIView):
+    queryset = CoachProfile.objects.all()
+    serializer_class = CoachProfileSerializer
+    permission_classes = [IsAuthenticated | HasAPIKey]
+
+    def get_object(self):
+        return CoachProfile.objects.get(pk=self.kwargs.get("profile_id"))
+
+
+class ClientProfileView(ListAPIView):
+    queryset = ClientProfile.objects.all()
+    serializer_class = ClientProfileSerializer
+    permission_classes = [IsAuthenticatedOrReadOnly | HasAPIKey]
+
+
+class ClientProfileUpdate(RetrieveUpdateAPIView):
+    queryset = ClientProfile.objects.all()
+    serializer_class = ClientProfileSerializer
+    permission_classes = [IsAuthenticated | HasAPIKey]
+
+    def get_object(self):
+        return ClientProfile.objects.get(pk=self.kwargs.get("profile_id"))
+
+
 class ProgramViewSet(ModelViewSet):
-    queryset = Program.objects.all().select_related("profile")
+    queryset = Program.objects.all().select_related("client_profile")
     serializer_class = ProgramSerializer
     permission_classes = [HasAPIKey]
 
     def get_queryset(self):
-        queryset = super().get_queryset().select_related("profile")
-        profile = self.request.query_params.get("profile")
-        exercises = self.request.query_params.getlist("exercises_by_day")
+        queryset = super().get_queryset().select_related("client_profile")
+        client_profile_id = self.request.query_params.get("client_profile")
 
-        if profile is not None:
-            queryset = queryset.filter(profile_id=profile)
-        if exercises:
-            queryset = queryset.filter(exercises__overlap=exercises)
+        if client_profile_id is not None:
+            queryset = queryset.filter(client_profile_id=client_profile_id)
 
         return queryset
 
-    def perform_create_or_update(self, serializer, profile_id, exercises):
+    def perform_create_or_update(self, serializer, client_profile_id, exercises):
         api_key = self.request.headers.get("Authorization")
         if not api_key or not HasAPIKey().has_permission(self.request, self):
             raise PermissionDenied("API Key must be provided")
 
-        existing_program = Program.objects.filter(profile_id=profile_id).first()
+        existing_program = Program.objects.filter(client_profile_id=client_profile_id).first()
         if existing_program:
             existing_program.exercises_by_day = exercises
             existing_program.save()
             return existing_program
         else:
-            return serializer.save(profile_id=profile_id, exercises_by_day=exercises)
+            return serializer.save(client_profile_id=client_profile_id, exercises_by_day=exercises)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        profile_id = request.data.get("profile")
+        client_profile_id = request.data.get("client_profile")
         exercises = request.data.get("exercises_by_day")
 
-        if not profile_id:
-            raise PermissionDenied("Profile ID must be provided.")
+        if not client_profile_id:
+            raise PermissionDenied("Client profile ID must be provided.")
 
-        instance = self.perform_create_or_update(serializer, profile_id, exercises)
+        instance = self.perform_create_or_update(serializer, client_profile_id, exercises)
         headers = self.get_success_headers(serializer.data)
         return Response(ProgramSerializer(instance).data, status=status.HTTP_201_CREATED, headers=headers)
 
@@ -257,18 +265,18 @@ class ProgramViewSet(ModelViewSet):
 
 
 class SubscriptionViewSet(ModelViewSet):
-    queryset = Subscription.objects.all().select_related("user")
+    queryset = Subscription.objects.all().select_related("client_profile")
     serializer_class = SubscriptionSerializer
     permission_classes = [IsAuthenticated | HasAPIKey]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["enabled", "payment_date"]
 
     def get_queryset(self):
-        queryset = super().get_queryset().select_related("user")
-        user = self.request.query_params.get("user")
+        queryset = super().get_queryset().select_related("client_profile")
+        client_profile_id = self.request.query_params.get("client_profile")
 
-        if user is not None:
-            queryset = queryset.filter(user_id=user)
+        if client_profile_id is not None:
+            queryset = queryset.filter(client_profile_id=client_profile_id)
 
         return queryset
 
@@ -393,3 +401,42 @@ class PaymentCreateView(generics.CreateAPIView):
     queryset = Payment.objects.all()
     serializer_class = PaymentSerializer
     permission_classes = [IsAuthenticated | HasAPIKey]
+
+
+class SendFeedbackAPIView(APIView):
+    permission_classes = [HasAPIKey | IsAuthenticated]
+
+    def post(self, request: Request, *args, **kwargs) -> Response:
+        email = request.data.get("email")
+        username = request.data.get("username")
+        feedback = request.data.get("feedback")
+
+        subject = f"New Feedback from {username}"
+        message = f"User {username} with email {email} sent the following feedback:\n\n{feedback}"
+
+        try:
+            send_mail(subject, message, os.getenv("EMAIL_HOST_USER"), [os.getenv("EMAIL_HOST_USER")])
+        except Exception:
+            return Response({"message": "Failed to send feedback"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({"message": "Feedback sent successfully"}, status=status.HTTP_200_OK)
+
+
+class SendWelcomeEmailAPIView(APIView):
+    permission_classes = [HasAPIKey | IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        email = request.data.get("email")
+        username = request.data.get("username")
+        html_content = render_to_string("email/welcome_email.html", {"username": username})
+        text_content = strip_tags(html_content)
+
+        try:
+            subject = "Вітаємо в AchieveTogether 👋"
+            msg = EmailMultiAlternatives(subject, text_content, os.getenv("EMAIL_HOST_USER"), [email])
+            msg.attach_alternative(html_content, "text/html")
+            msg.send()
+        except Exception:
+            return Response({"message": "Failed to send welcome email"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({"message": "Welcome email sent successfully"}, status=status.HTTP_200_OK)

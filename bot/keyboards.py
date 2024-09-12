@@ -101,8 +101,14 @@ def edit_coach_profile(lang_code: str) -> InlineKeyboardMarkup:
                 text=translate(ButtonText.payment_details, lang=lang_code), callback_data="payment_details"
             )
         ],
+        [InlineKeyboardButton(text=translate(ButtonText.program_price, lang=lang_code), callback_data="program_price")],
+        [
+            InlineKeyboardButton(
+                text=translate(ButtonText.subscription_price, lang=lang_code), callback_data="subscription_price"
+            )
+        ],
         [InlineKeyboardButton(text=translate(ButtonText.photo, lang=lang_code), callback_data="photo")],
-        [InlineKeyboardButton(text=translate(ButtonText.prev_menu), callback_data="back")],
+        [InlineKeyboardButton(text=translate(ButtonText.prev_menu, lang=lang_code), callback_data="back")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
 

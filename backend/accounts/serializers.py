@@ -2,7 +2,7 @@ from django.contrib.auth.models import User
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
-from .models import Payment, Profile, Program, Subscription
+from .models import Payment, Profile, Program, Subscription, ClientProfile, CoachProfile
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -13,7 +13,6 @@ class UserSerializer(serializers.ModelSerializer):
 
 class ProfileSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
-    assigned_to = serializers.ListField(child=serializers.IntegerField(), required=False, allow_null=True, default=list)
 
     class Meta:
         model = Profile
@@ -25,10 +24,44 @@ class ProfileSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
 
+class ClientProfileSerializer(serializers.ModelSerializer):
+    profile = ProfileSerializer()
+
+    class Meta:
+        model = ClientProfile
+        fields = "__all__"
+
+    def update(self, instance, validated_data):
+        profile_data = validated_data.pop("profile", {})
+        profile_serializer = ProfileSerializer(instance.profile, data=profile_data, partial=True)
+        profile_serializer.is_valid(raise_exception=True)
+        profile_serializer.save()
+
+        return super().update(instance, validated_data)
+
+
+class CoachProfileSerializer(serializers.ModelSerializer):
+    profile = ProfileSerializer()
+
+    class Meta:
+        model = CoachProfile
+        fields = "__all__"
+
+    def update(self, instance, validated_data):
+        profile_data = validated_data.pop("profile", {})
+        profile_serializer = ProfileSerializer(instance.profile, data=profile_data, partial=True)
+        profile_serializer.is_valid(raise_exception=True)
+        profile_serializer.save()
+
+        return super().update(instance, validated_data)
+
+
 class ProgramSerializer(serializers.ModelSerializer):
+    client_profile = ClientProfileSerializer(read_only=True)
+
     class Meta:
         model = Program
-        fields = ["profile", "exercises_by_day", "split_number", "created_at"]
+        fields = "__all__"
 
     def update(self, instance, validated_data):
         instance.exercises_by_day = validated_data.get("exercises_by_day", instance.exercises_by_day)
@@ -38,14 +71,17 @@ class ProgramSerializer(serializers.ModelSerializer):
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):
+    client_profile = ClientProfileSerializer(read_only=True)
+
     class Meta:
         model = Subscription
         fields = "__all__"
 
     def validate(self, data):
         user = self.context["request"].user
+        client_profile = user.profile.client_profile
 
-        if Subscription.objects.filter(user=user, enabled=True).exists():
+        if Subscription.objects.filter(client_profile=client_profile, enabled=True).exists():
             raise ValidationError("User already has an active subscription")
 
         return data
