@@ -71,7 +71,6 @@ class CreateUserView(APIView):
 
 class UserProfileView(APIView):
     permission_classes = [HasAPIKey | IsAuthenticated]
-    serializer_class = ProfileSerializer
 
     def get(self, request: Request, username) -> Response:
         try:
@@ -84,9 +83,9 @@ class UserProfileView(APIView):
             return Response({"error": "Profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
         if hasattr(profile, "client_profile"):
-            serializer = self.serializer_class(profile.client_profile)
+            serializer = ClientProfileSerializer(profile.client_profile)
         elif hasattr(profile, "coach_profile"):
-            serializer = self.serializer_class(profile.coach_profile)
+            serializer = CoachProfileSerializer(profile.coach_profile)
         else:
             return Response({"error": "Profile type not found"}, status=status.HTTP_404_NOT_FOUND)
 

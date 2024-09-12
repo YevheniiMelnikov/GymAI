@@ -219,6 +219,7 @@ async def tax_identification(message: Message, state: FSMContext) -> None:
     program_price_msg = await message.answer(translate(MessageText.enter_program_price, lang=data.get("lang")))
     await state.update_data(chat_id=message.chat.id, message_ids=[program_price_msg.message_id])
     await state.set_state(States.enter_program_price)
+    await message.delete()
 
 
 @questionnaire_router.message(States.enter_program_price, F.text)
@@ -242,6 +243,7 @@ async def enter_program_price(message: Message, state: FSMContext) -> None:
         program_price=message.text, message_ids=[subscription_price_msg.message_id], chat_id=message.chat.id
     )
     await state.set_state(States.enter_subscription_price)
+    await message.delete()
 
 
 @questionnaire_router.message(States.enter_subscription_price, F.text)

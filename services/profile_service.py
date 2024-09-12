@@ -15,7 +15,7 @@ class ProfileService(BackendService):
         self.encrypter = encrypter
 
     async def get_profile(self, profile_id: int) -> dict[str, Any] | None:
-        url = f"{self.backend_url}api/v1/persons/{profile_id}/"
+        url = f"{self.backend_url}api/v1/profiles/{profile_id}/"
         status_code, user_data = await self._api_request(
             "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
@@ -26,18 +26,40 @@ class ProfileService(BackendService):
         return None
 
     async def get_profile_by_username(self, username: str) -> Profile | None:
-        url = f"{self.backend_url}api/v1/persons/{username}/"
+        url = f"{self.backend_url}api/v1/profiles/{username}/"
         status_code, profile_data = await self._api_request(
             "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
-        if status_code == 200:
-            return Profile.from_dict(profile_data)
 
-        logger.info(f"Failed to retrieve profile for {username}. HTTP status: {status_code}")
-        return None
+        if status_code != 200 or not profile_data:
+            logger.info(f"Failed to retrieve profile for {username}. HTTP status: {status_code}")
+            return None
+
+        profile_fields = profile_data.get("profile_data", {})
+
+        combined_data = {"id": profile_data.get("id"), "status": profile_data.get("status"), **profile_fields}
+
+        extra_fields = [
+            "surname",
+            "additional_info",
+            "profile_photo",
+            "payment_details",
+            "tax_identification",
+            "subscription_price",
+            "program_price",
+            "verified",
+            "workout_experience",
+            "workout_goals",
+            "health_notes",
+            "weight",
+            "born_in",
+        ]
+
+        combined_data.update({field: profile_data.get(field) for field in extra_fields if field in profile_data})
+        return Profile.from_dict(combined_data)
 
     async def get_profile_by_telegram_id(self, telegram_id: int) -> dict[str, Any] | None:
-        url = f"{self.backend_url}api/v1/persons/tg/{telegram_id}/"
+        url = f"{self.backend_url}api/v1/profiles/tg/{telegram_id}/"
         status_code, profile_data = await self._api_request(
             "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
@@ -48,7 +70,7 @@ class ProfileService(BackendService):
         return None
 
     async def delete_profile(self, profile_id: int, token: str | None = None) -> bool:
-        url = f"{self.backend_url}api/v1/persons/{profile_id}/delete/"
+        url = f"{self.backend_url}api/v1/profiles/{profile_id}/delete/"
         headers = {"Authorization": f"Token {token}"} if token else {}
         status_code, _ = await self._api_request("delete", url, headers=headers)
         return status_code == 204
@@ -56,13 +78,14 @@ class ProfileService(BackendService):
     async def edit_profile(self, profile_id: int, data: dict, token: str | None = None) -> bool:
         fields = ["current_tg_id", "language", "name", "assigned_to"]
         filtered_data = {key: data[key] for key in fields if key in data and data[key] is not None}
-        url = f"{self.backend_url}api/v1/persons/{profile_id}/"
+        url = f"{self.backend_url}api/v1/profiles/{profile_id}/"
         status_code, _ = await self._api_request("put", url, filtered_data, headers={"Authorization": f"Token {token}"})
         return status_code == 200
 
     async def edit_client_profile(self, profile_id: int, data: dict, token: str | None = None) -> bool:
         fields = ["gender", "born_in", "workout_experience", "workout_goals", "health_notes", "weight"]
         filtered_data = {key: data[key] for key in fields if key in data and data[key] is not None}
+        filtered_data["profile"] = profile_id
         url = f"{self.backend_url}api/v1/client-profiles/{profile_id}/"
         status_code, _ = await self._api_request("put", url, filtered_data, headers={"Authorization": f"Token {token}"})
         return status_code == 200
@@ -85,12 +108,13 @@ class ProfileService(BackendService):
             data["tax_identification"] = self.encrypter.encrypt(data["tax_identification"])
 
         filtered_data = {key: data[key] for key in fields if key in data and data[key] is not None}
+        filtered_data["profile"] = profile_id
         url = f"{self.backend_url}api/v1/coach-profiles/{profile_id}/"
         status_code, _ = await self._api_request("put", url, filtered_data, headers={"Authorization": f"Token {token}"})
         return status_code == 200
 
     async def reset_telegram_id(self, profile_id: int, telegram_id: int) -> bool:
-        url = f"{self.backend_url}api/v1/persons/reset-tg/{profile_id}/"
+        url = f"{self.backend_url}api/v1/profiles/reset-tg/{profile_id}/"
         data = {"telegram_id": telegram_id}
         status_code, _ = await self._api_request(
             "post", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}

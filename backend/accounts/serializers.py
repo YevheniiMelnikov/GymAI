@@ -16,7 +16,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = "__all__"
+        fields = ["id", "user", "status", "current_tg_id", "language", "name", "assigned_to"]
         extra_kwargs = {"user": {"read_only": True}}
 
     def update(self, instance, validated_data):
@@ -25,34 +25,26 @@ class ProfileSerializer(serializers.ModelSerializer):
 
 
 class ClientProfileSerializer(serializers.ModelSerializer):
-    profile = ProfileSerializer()
+    profile = serializers.PrimaryKeyRelatedField(queryset=Profile.objects.all())
+    profile_data = ProfileSerializer(source="profile", read_only=True)  # Оставляем для отображения данных профиля
 
     class Meta:
         model = ClientProfile
         fields = "__all__"
 
     def update(self, instance, validated_data):
-        profile_data = validated_data.pop("profile", {})
-        profile_serializer = ProfileSerializer(instance.profile, data=profile_data, partial=True)
-        profile_serializer.is_valid(raise_exception=True)
-        profile_serializer.save()
-
         return super().update(instance, validated_data)
 
 
 class CoachProfileSerializer(serializers.ModelSerializer):
-    profile = ProfileSerializer()
+    profile = serializers.PrimaryKeyRelatedField(queryset=Profile.objects.all())
+    profile_data = ProfileSerializer(source="profile", read_only=True)  # Оставляем для отображения данных профиля
 
     class Meta:
         model = CoachProfile
         fields = "__all__"
 
     def update(self, instance, validated_data):
-        profile_data = validated_data.pop("profile", {})
-        profile_serializer = ProfileSerializer(instance.profile, data=profile_data, partial=True)
-        profile_serializer.is_valid(raise_exception=True)
-        profile_serializer.save()
-
         return super().update(instance, validated_data)
 
 

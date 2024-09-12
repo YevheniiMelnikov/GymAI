@@ -15,6 +15,7 @@ class Profile(Model):
     class Meta:
         verbose_name = "profile"
         verbose_name_plural = "profiles"
+        constraints = [models.UniqueConstraint(fields=["user", "current_tg_id"], name="unique_tg_id_per_user")]
 
 
 class ClientProfile(Model):

@@ -182,7 +182,8 @@ class CacheManager:
     def set_coach_data(self, profile_id: int, profile_data: dict) -> None:
         allowed_fields = [
             "name",
-            "surname" "work_experience",
+            "surname",
+            "work_experience",
             "additional_info",
             "payment_details",
             "tax_identification",

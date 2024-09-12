@@ -10,7 +10,7 @@ logger = loguru.logger
 
 class UserService(BackendService):
     async def sign_up(self, **kwargs) -> bool:
-        url = f"{self.backend_url}api/v1/persons/create/"
+        url = f"{self.backend_url}api/v1/profiles/create/"
         status_code, response = await self._api_request(
             "post", url, data=kwargs, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
@@ -64,7 +64,7 @@ class UserService(BackendService):
         return None
 
     async def get_user_email(self, profile_id: int) -> str | None:
-        url = f"{self.backend_url}api/v1/persons/{profile_id}/"
+        url = f"{self.backend_url}api/v1/profiles/{profile_id}/"
         status_code, user_data = await self._api_request(
             "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
         )

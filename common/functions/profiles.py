@@ -7,7 +7,6 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import action_choice_keyboard
 from bot.states import States
-from common.functions.menus import show_main_menu
 from services.backend_service import backend_service
 from common.cache_manager import cache_manager
 from common.exceptions import ProfileNotFoundError, UserServiceError
@@ -45,13 +44,14 @@ async def update_user_info(message: Message, state: FSMContext, role: str) -> No
             await profile_service.edit_coach_profile(profile.id, data, token)
 
         await message.answer(translate(MessageText.your_data_updated, lang=data.get("lang")))
-        await show_main_menu(message, profile, state)
+        await menus.show_main_menu(message, profile, state)
 
     except Exception as e:
         logger.error(f"Unexpected error updating profile: {e}")
         await message.answer(translate(MessageText.unexpected_error, lang=data.get("lang")))
     finally:
-        await message.delete()
+        with suppress(TelegramBadRequest):
+            await message.delete()
 
 
 async def assign_coach(coach: Coach, client: Client, telegram_id: int) -> None:
