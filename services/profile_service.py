@@ -1,5 +1,5 @@
 from typing import Any
-
+from urllib.parse import urljoin
 import loguru
 
 from services.backend_service import BackendService
@@ -15,7 +15,7 @@ class ProfileService(BackendService):
         self.encrypter = encrypter
 
     async def get_profile(self, profile_id: int) -> dict[str, Any] | None:
-        url = f"{self.backend_url}api/v1/profiles/{profile_id}/"
+        url = urljoin(self.backend_url, f"api/v1/profiles/{profile_id}/")
         status_code, user_data = await self._api_request(
             "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
@@ -26,7 +26,7 @@ class ProfileService(BackendService):
         return None
 
     async def get_profile_by_username(self, username: str) -> Profile | None:
-        url = f"{self.backend_url}api/v1/profiles/{username}/"
+        url = urljoin(self.backend_url, f"api/v1/profiles/{username}/")
         status_code, profile_data = await self._api_request(
             "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
@@ -37,7 +37,7 @@ class ProfileService(BackendService):
 
         profile_fields = profile_data.get("profile_data", {})
 
-        combined_data = {"id": profile_data.get("id"), "status": profile_data.get("status"), **profile_fields}
+        combined_data = {"id": profile_data.get("id"), "status": profile_fields.get("status"), **profile_fields}
 
         extra_fields = [
             "surname",
@@ -59,7 +59,7 @@ class ProfileService(BackendService):
         return Profile.from_dict(combined_data)
 
     async def get_profile_by_telegram_id(self, telegram_id: int) -> dict[str, Any] | None:
-        url = f"{self.backend_url}api/v1/profiles/tg/{telegram_id}/"
+        url = urljoin(self.backend_url, f"api/v1/profiles/tg/{telegram_id}/")
         status_code, profile_data = await self._api_request(
             "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
@@ -70,23 +70,23 @@ class ProfileService(BackendService):
         return None
 
     async def delete_profile(self, profile_id: int, token: str | None = None) -> bool:
-        url = f"{self.backend_url}api/v1/profiles/{profile_id}/delete/"
+        url = urljoin(self.backend_url, f"api/v1/profiles/{profile_id}/delete/")
         headers = {"Authorization": f"Token {token}"} if token else {}
         status_code, _ = await self._api_request("delete", url, headers=headers)
         return status_code == 204
 
     async def edit_profile(self, profile_id: int, data: dict, token: str | None = None) -> bool:
+        url = urljoin(self.backend_url, f"api/v1/profiles/{profile_id}/")
         fields = ["current_tg_id", "language", "name", "assigned_to"]
         filtered_data = {key: data[key] for key in fields if key in data and data[key] is not None}
-        url = f"{self.backend_url}api/v1/profiles/{profile_id}/"
         status_code, _ = await self._api_request("put", url, filtered_data, headers={"Authorization": f"Token {token}"})
         return status_code == 200
 
     async def edit_client_profile(self, profile_id: int, data: dict, token: str | None = None) -> bool:
+        url = urljoin(self.backend_url, f"api/v1/client-profiles/{profile_id}/")
         fields = ["gender", "born_in", "workout_experience", "workout_goals", "health_notes", "weight"]
         filtered_data = {key: data[key] for key in fields if key in data and data[key] is not None}
         filtered_data["profile"] = profile_id
-        url = f"{self.backend_url}api/v1/client-profiles/{profile_id}/"
         status_code, _ = await self._api_request("put", url, filtered_data, headers={"Authorization": f"Token {token}"})
         return status_code == 200
 
@@ -109,12 +109,12 @@ class ProfileService(BackendService):
 
         filtered_data = {key: data[key] for key in fields if key in data and data[key] is not None}
         filtered_data["profile"] = profile_id
-        url = f"{self.backend_url}api/v1/coach-profiles/{profile_id}/"
+        url = urljoin(self.backend_url, f"api/v1/coach-profiles/{profile_id}/")
         status_code, _ = await self._api_request("put", url, filtered_data, headers={"Authorization": f"Token {token}"})
         return status_code == 200
 
     async def reset_telegram_id(self, profile_id: int, telegram_id: int) -> bool:
-        url = f"{self.backend_url}api/v1/profiles/reset-tg/{profile_id}/"
+        url = urljoin(self.backend_url, f"api/v1/profiles/reset-tg/{profile_id}/")
         data = {"telegram_id": telegram_id}
         status_code, _ = await self._api_request(
             "post", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}

@@ -147,8 +147,8 @@ class CacheManager:
                 return False
             self._update_profile_data(telegram_id, profiles_data)
             return True
-        except Exception as e:
-            logger.error(f"Failed to set profile info for profile {profile_id}: {e}")
+        except Exception:
+            logger.exception(f"Failed to set profile info for profile {profile_id}")
             return False
 
     def set_client_data(self, profile_id: int, client_data: dict[str, Any]) -> None:
@@ -165,7 +165,7 @@ class CacheManager:
         ]
         self._set_data("clients", profile_id, client_data, allowed_fields)
 
-    def get_client_by_id(self, profile_id: int) -> Client | None:
+    def get_client_by_id(self, profile_id: int) -> Client:
         try:
             client_data = self.redis.hget("clients", str(profile_id))
             if client_data:
@@ -199,7 +199,7 @@ class CacheManager:
             profile_data["tax_identification"] = self.encrypter.encrypt(profile_data["tax_identification"])
         self._set_data("coaches", profile_id, profile_data, allowed_fields)
 
-    def get_coach_by_id(self, profile_id: int) -> Coach | None:
+    def get_coach_by_id(self, profile_id: int) -> Coach:
         try:
             coach_data = self.redis.hget("coaches", str(profile_id))
             if coach_data:

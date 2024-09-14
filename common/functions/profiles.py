@@ -33,6 +33,10 @@ async def update_user_info(message: Message, state: FSMContext, role: str) -> No
         if not token:
             token = await user_service.get_user_token(profile.id)
 
+        profile_data = {key: data[key] for key in ["name", "assigned_to"] if key in data}
+        if profile_data:
+            await profile_service.edit_profile(profile.id, profile_data, token)
+
         if role == "client":
             cache_manager.set_client_data(profile.id, data)
             await profile_service.edit_client_profile(profile.id, data, token)
@@ -64,8 +68,8 @@ async def assign_coach(coach: Coach, client: Client, telegram_id: int) -> None:
     token = cache_manager.get_profile_info_by_key(telegram_id, client.id, "auth_token")
     if not token:
         token = await user_service.get_user_token(client.id)
-    await profile_service.edit_client_profile(client.id, {"assigned_to": [coach.id]}, token)
-    await profile_service.edit_coach_profile(coach.id, {"assigned_to": coach_clients}, token)
+    await profile_service.edit_profile(client.id, {"assigned_to": [coach.id]}, token)
+    await profile_service.edit_profile(coach.id, {"assigned_to": coach_clients}, token)
 
 
 async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
@@ -83,7 +87,6 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
         return
 
     profile = await profile_service.get_profile_by_username(data["username"])
-    logger.info(f"Telegram user {message.from_user.id} logged in with profile_id {profile.id}")
 
     if not profile:
         await message.answer(text=translate(MessageText.unexpected_error, lang=data.get("lang")))
@@ -92,6 +95,7 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
         await message.delete()
         return
 
+    logger.info(f"Telegram user {message.from_user.id} logged in with profile_id {profile.id}")
     await state.update_data(login_attempts=0)
     email = await user_service.get_user_email(profile.id)
     cache_manager.set_profile(

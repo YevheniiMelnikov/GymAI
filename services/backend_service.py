@@ -1,5 +1,6 @@
 import os
 from json import JSONDecodeError
+from urllib.parse import urljoin
 
 import httpx
 import loguru
@@ -20,26 +21,30 @@ class BackendService:
         logger.debug(f"Executing {method.upper()} request to {url} with data: {data} and headers: {headers}")
         try:
             response = await self.client.request(method, url, json=data, headers=headers)
-            if response.status_code in (204, 200, 201):
+            if response.is_success:
                 try:
                     json_data = response.json()
                     return response.status_code, json_data
                 except JSONDecodeError:
                     return response.status_code, None
             else:
+                try:
+                    error_data = response.json()
+                except JSONDecodeError:
+                    error_data = {"error": response.text}
                 logger.error(
-                    f"Request to {url} failed with status code {response.status_code} and response: {response.text}"
+                    f"Request to {url} failed with status code {response.status_code} and response: {error_data}"
                 )
-                return response.status_code, response.text
+                return response.status_code, error_data
         except httpx.HTTPError as e:
-            logger.error(f"HTTP error occurred: {e}")
-            raise UserServiceError(f"HTTP request failed: {e}")
+            logger.exception("HTTP error occurred")
+            raise UserServiceError(f"HTTP request failed: {e}") from e
         except Exception as e:
-            logger.error(f"Unexpected error: {e}")
-            raise UserServiceError(f"Unexpected error occurred: {e}")
+            logger.exception("Unexpected error occurred")
+            raise UserServiceError(f"Unexpected error occurred: {e}") from e
 
     async def send_feedback(self, email: str, username: str, feedback: str) -> bool:
-        url = f"{self.backend_url}api/v1/send-feedback/"
+        url = urljoin(self.backend_url, "api/v1/send-feedback/")
         headers = {"Authorization": f"Api-Key {self.api_key}"}
         status_code, _ = await self._api_request(
             "post",
@@ -54,7 +59,7 @@ class BackendService:
         return status_code == 200
 
     async def send_welcome_email(self, email: str, username: str) -> bool:
-        url = f"{self.backend_url}api/v1/send-welcome-email/"
+        url = urljoin(self.backend_url, "api/v1/send-welcome-email/")
         data = {"email": email, "username": username}
         status_code, response = await self._api_request(
             "post", url, data=data, headers={"Authorization": f"Api-Key {self.api_key}"}

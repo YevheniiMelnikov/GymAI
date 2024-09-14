@@ -1,5 +1,5 @@
 from datetime import datetime
-
+from urllib.parse import urljoin
 import loguru
 
 from services.backend_service import BackendService
@@ -11,7 +11,7 @@ logger = loguru.logger
 
 class WorkoutService(BackendService):
     async def save_program(self, client_id: int, exercises: dict[int, Exercise], split_number: int) -> dict:
-        url = f"{self.backend_url}api/v1/programs/"
+        url = urljoin(self.backend_url, "api/v1/programs/")
         data = {
             "profile": client_id,
             "exercises_by_day": exercises,
@@ -33,7 +33,7 @@ class WorkoutService(BackendService):
         )
 
     async def update_program(self, program_id: int, data: dict) -> bool:
-        url = f"{self.backend_url}api/v1/programs/{program_id}/"
+        url = urljoin(self.backend_url, f"api/v1/programs/{program_id}/")
         status_code, response = await self._api_request(
             "put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
@@ -46,7 +46,7 @@ class WorkoutService(BackendService):
     async def create_subscription(
         self, profile_id: int, workout_days: list[str], wishes: str, amount: int
     ) -> int | None:
-        url = f"{self.backend_url}api/v1/subscriptions/"
+        url = urljoin(self.backend_url, "api/v1/subscriptions/")
         data = {
             "user": profile_id,
             "enabled": False,
@@ -65,7 +65,7 @@ class WorkoutService(BackendService):
         return None
 
     async def update_subscription(self, subscription_id: int, data: dict) -> bool:
-        url = f"{self.backend_url}api/v1/subscriptions/{subscription_id}/"
+        url = urljoin(self.backend_url, f"api/v1/subscriptions/{subscription_id}/")
         status_code, response = await self._api_request(
             "put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
         )

@@ -7,6 +7,7 @@ import json
 import os
 import uuid
 import datetime
+from urllib.parse import urljoin, urlencode
 
 import loguru
 import requests
@@ -133,7 +134,7 @@ class PaymentService(BackendService):
         return hmac.new(key.encode(), str_to_sign.encode(), hashlib.sha256).hexdigest().upper()
 
     async def create_payment(self, profile_id: int, payment_option: str, order_number: str, amount: int) -> bool:
-        url = f"{self.backend_url}api/v1/payments/create/"
+        url = urljoin(self.backend_url, "api/v1/payments/create/")
         data = {
             "profile": profile_id,
             "handled": False,
@@ -148,33 +149,35 @@ class PaymentService(BackendService):
         return status_code == 201
 
     async def update_payment(self, payment_id: int, data: dict) -> bool:
-        url = f"{self.backend_url}api/v1/payments/{payment_id}/"
+        url = urljoin(self.backend_url, f"api/v1/payments/{payment_id}/")
         status_code, _ = await self._api_request("put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"})
         return status_code == 200
 
-    async def get_all_payments(self) -> list[Payment]:
-        url = f"{self.backend_url}api/v1/payments/"
+    async def get_unhandled_payments(self) -> list[Payment]:
+        url = urljoin(self.backend_url, "api/v1/payments/")
         status_code, payments_data = await self._api_request(
             "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
         if status_code == 200:
             payments_list = payments_data.get("results", [])
-            return [Payment.from_dict(payment) for payment in payments_list]
+            return [Payment.from_dict(payment) for payment in payments_list if not payment.handled]
         return []
 
     async def get_expired_subscriptions(self, expired_before: str) -> list[dict]:
-        url = f"{self.backend_url}api/v1/subscriptions/?enabled=True&payment_date__lte={expired_before}"
+        base_path = "api/v1/subscriptions/"
+        query_params = {"enabled": "True", "payment_date__lte": expired_before}
+        url = urljoin(self.backend_url, base_path) + "?" + urlencode(query_params)
         status_code, subscriptions = await self._api_request(
             "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
 
         if status_code == 200:
             return subscriptions
-        logger.error(f"Failed to retrieve expired subscriptions. HTTP status: {status_code}")
+        logger.error("Failed to retrieve expired subscriptions. HTTP status: {}".format(status_code))
         return []
 
     async def get_last_subscription_payment(self, profile_id: int) -> tuple[str, str] | None:
-        url = f"{self.backend_url}api/v1/payments/"
+        url = urljoin(self.backend_url, "api/v1/payments/")
         data = {"profile": profile_id, "payment_type": "subscription"}
 
         status_code, payments_data = await self._api_request(
