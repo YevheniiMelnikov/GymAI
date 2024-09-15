@@ -47,6 +47,7 @@ class Client(BaseEntity):
 class Coach(BaseEntity):
     id: int
     name: str
+    surname: str
     work_experience: int
     additional_info: str
     payment_details: str

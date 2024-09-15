@@ -13,8 +13,8 @@ import loguru
 import requests
 
 from services.backend_service import BackendService
-from common.models import Payment
-from common.settings import FIRST_NAME, LAST_NAME, ADDRESS
+from common.models import Payment, Coach
+from common.settings import FIRST_NAME, LAST_NAME, ADDRESS, PAYMENT_STATUS_PAYED
 
 logger = loguru.logger
 
@@ -82,13 +82,13 @@ class PaymentService(BackendService):
         encoded_payload = base64.b64encode(compressed_payload).decode("utf-8")
         return encoded_payload
 
-    def transfer_to_card(self, card_number: str, amount: str, order_number: str, recipient_info: dict) -> dict | None:
+    def transfer_to_card(self, coach: Coach, amount: str, order_number: str) -> bool:
         dt = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         signature = self.generate_signature(dt, self.login, self.payee_id, order_number, amount, self.key)
 
         payload = {
             "paymentType": "a2c_1",
-            "description": card_number,
+            "description": coach.payment_details,
             "billAmount": amount,
             "payeeId": self.payee_id,
             "shopOrderNumber": order_number,
@@ -108,9 +108,9 @@ class PaymentService(BackendService):
                     "address": ADDRESS,
                 },
                 "recipient": {
-                    "dstFirstName": recipient_info["dstFirstName"],
-                    "dstLastName": recipient_info["dstLastName"],
-                    "tax_id": recipient_info["tax_id"],
+                    "dstFirstName": coach.name,
+                    "dstLastName": coach.surname,
+                    "tax_id": coach.tax_identification,
                 },
             },
         }
@@ -119,16 +119,21 @@ class PaymentService(BackendService):
         if response.status_code == 200:
             response_data = response.json()
             if response_data.get("result") == "PAYED":
-                return response_data
+                logger.info(f"Successfully transferred {amount} UAH for order {order_number} to coach {coach.id}")
+                return True
             else:
                 logger.error(f"Transfer failed. Response: {response_data}")
-                return None
+                return False
         else:
-            logger.error(f"Failed to transfer money. HTTP status: {response.status_code}, response: {response.text}")
-            return None
+            logger.error(
+                f"Money transfer to coach {coach.id} failed. HTTP status: {response.status_code}, response: {response.text}"
+            )
+            return False
 
     @staticmethod
-    def generate_signature(dt, login: str, payee_id: str, shop_order_number: str, bill_amount: str, key: str) -> str:
+    def generate_signature(
+        dt: str, login: str, payee_id: str, shop_order_number: str, bill_amount: str, key: str
+    ) -> str:
         str_to_sign = payee_id + dt + binascii.hexlify(shop_order_number.encode()).decode().upper() + bill_amount
         str_to_sign = str_to_sign.upper() + binascii.hexlify(login.encode()).decode().upper()
         return hmac.new(key.encode(), str_to_sign.encode(), hashlib.sha256).hexdigest().upper()
@@ -148,6 +153,19 @@ class PaymentService(BackendService):
         )
         return status_code == 201
 
+    async def get_payment_status(self, shop_order_number: str) -> str | None:
+        url = urljoin(self.backend_url, f"api/v1/payments/?shop_order_number={shop_order_number}")
+        status_code, payment_data = await self._api_request(
+            "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
+        )
+
+        if status_code == 200 and payment_data.get("results"):
+            payment = payment_data["results"][0]
+            return payment.get("status", "PENDING")
+        else:
+            logger.error(f"Payment {shop_order_number} not found. HTTP status: {status_code}")
+            return
+
     async def update_payment(self, payment_id: int, data: dict) -> bool:
         url = urljoin(self.backend_url, f"api/v1/payments/{payment_id}/")
         status_code, _ = await self._api_request("put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"})
@@ -161,6 +179,16 @@ class PaymentService(BackendService):
         if status_code == 200:
             payments_list = payments_data.get("results", [])
             return [Payment.from_dict(payment) for payment in payments_list if not payment.handled]
+        return []
+
+    async def get_unclosed_payments(self) -> list[Payment]:
+        url = urljoin(self.backend_url, "api/v1/payments/")
+        status_code, payments_data = await self._api_request(
+            "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
+        )
+        if status_code == 200:
+            payments_list = payments_data.get("results", [])
+            return [Payment.from_dict(payment) for payment in payments_list if payment.status == PAYMENT_STATUS_PAYED]
         return []
 
     async def get_expired_subscriptions(self, expired_before: str) -> list[dict]:
