@@ -51,6 +51,9 @@ class Coach(BaseEntity):
     additional_info: str
     payment_details: str
     profile_photo: str
+    tax_identification: int
+    subscription_price: int
+    program_price: int
     assigned_to: list[int] = field(default_factory=list)
     verified: bool = False
 
@@ -63,6 +66,7 @@ class Program(BaseEntity):
     profile: int
     split_number: int
     workout_type: str
+    wishes: str
 
 
 @dataclass
@@ -73,6 +77,7 @@ class Subscription(BaseEntity):
     price: int
     user: int
     workout_type: str
+    wishes: str
     workout_days: list[str] = field(default_factory=list)
     exercises: dict[str, list[tuple[str, int]]] = field(default_factory=dict)
 

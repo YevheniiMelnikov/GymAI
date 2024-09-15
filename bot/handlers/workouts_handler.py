@@ -6,7 +6,8 @@ from common.functions.profiles import get_or_load_profile
 from common.functions.text_utils import format_program, get_translated_week_day
 from common.functions.utils import program_menu_pagination, short_url
 from common.functions.workout_plans import next_day_workout_plan, reset_workout_plan, save_workout_plan
-from common.models import Exercise
+from common.models import Exercise, Program
+from services.workout_service import workout_service
 from texts.resources import ButtonText, MessageText
 from texts.text_manager import translate
 
@@ -181,7 +182,7 @@ async def workout_results(callback_query: CallbackQuery, state: FSMContext):
         await callback_query.answer(translate(MessageText.keep_going, profile.language), show_alert=True)
         client = cache_manager.get_client_by_id(profile.id)
         coach = cache_manager.get_coach_by_id(client.assigned_to.pop())
-        coach_profile = await backend_service.get_profile(coach.id)
+        coach_profile = await profile_service.get_profile(coach.id)
         coach_lang = cache_manager.get_profile_info_by_key(coach_profile.get("current_tg_id"), coach.id, "language")
         await send_message(
             recipient=coach,
@@ -201,7 +202,7 @@ async def workout_description(message: Message, state: FSMContext):
     profile = await get_or_load_profile(message.from_user.id)
     client = cache_manager.get_client_by_id(profile.id)
     coach = cache_manager.get_coach_by_id(client.assigned_to.pop())
-    coach_data = await backend_service.get_profile(coach.id)
+    coach_data = await profile_service.get_profile(coach.id)
     coach_lang = cache_manager.get_profile_info_by_key(coach_data.get("current_tg_id"), coach.id, "language")
     data = await state.get_data()
     day = data.get("day")
@@ -246,18 +247,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
         return
 
     elif callback_query.data == "reset":
-        await callback_query.answer()
-        if data.get("subscription"):
-            subscription_data = cache_manager.get_subscription(client_id).to_dict()
-            subscription_data.update(user=client_id, exercises={})
-            await backend_service.update_subscription(subscription_data.get("id"), subscription_data)
-            cache_manager.update_subscription_data(client_id, {"exercises": None, "user": client_id})
-        else:
-            if await backend_service.delete_program(client_id):
-                cache_manager.delete_program(client_id)
-                cache_manager.set_payment_status(client_id, True, "program")
-        await state.clear()
-        await state.update_data(client_id=client_id, exercises=[], day_index=0)
+        await reset_workout_plan(callback_query, state)
 
     elif callback_query.data == "exercise_delete":
         await callback_query.answer()
@@ -276,12 +266,12 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
     elif callback_query.data == "finish_editing":
         await callback_query.answer(translate(ButtonText.done, profile.language))
         client = cache_manager.get_client_by_id(client_id)
-        client_data = await backend_service.get_profile(client_id)
+        client_data = await profile_service.get_profile(client_id)
         client_lang = cache_manager.get_profile_info_by_key(client_data.get("current_tg_id"), client.id, "language")
         if data.get("subscription"):
             subscription_data = cache_manager.get_subscription(client_id).to_dict()
             subscription_data.update(user=client_id, exercises=exercises)
-            await backend_service.update_subscription(subscription_data.get("id"), subscription_data)
+            await workout_service.update_subscription(subscription_data.get("id"), subscription_data)
             cache_manager.update_subscription_data(client_id, {"exercises": exercises, "user": client_id})
             await send_message(
                 recipient=client,
@@ -295,9 +285,10 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
             split_number = current_program.split_number
             workout_type = current_program.workout_type
             program_text = await format_program(exercises, 0)
-            if program_data := await backend_service.save_program(client_id, exercises, split_number):
+            if program_data := await workout_service.save_program(client_id, exercises, split_number):
                 program_data.update(workout_type=workout_type)
                 cache_manager.set_program(client_id, program_data)
+                cache_manager.set_payment_status(client_id, False, "program")
             await send_message(
                 recipient=client,
                 text=translate(MessageText.new_program, lang=client_lang),
@@ -466,7 +457,7 @@ async def confirm_subscription_reset(callback_query: CallbackQuery, state: FSMCo
         await callback_query.answer(translate(MessageText.workout_plan_deleted, profile.language), show_alert=True)
         cache_manager.update_subscription_data(profile.id, dict(exercises={}, workout_days=data.get("workout_days")))
         subscription = cache_manager.get_subscription(profile.id)
-        await backend_service.update_subscription(subscription.id, subscription.to_dict())
+        await workout_service.update_subscription(subscription.id, subscription.to_dict())
         client = cache_manager.get_client_by_id(profile.id)
         coach = cache_manager.get_coach_by_id(client.assigned_to.pop())
         await send_message(
@@ -477,5 +468,27 @@ async def confirm_subscription_reset(callback_query: CallbackQuery, state: FSMCo
             include_incoming_message=False,
         )
     await show_main_menu(callback_query.message, profile, state)
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()
+
+
+@program_router.callback_query(States.program_action_choice)
+async def program_action_choice(callback_query: CallbackQuery, state: FSMContext):
+    profile = await get_or_load_profile(callback_query.from_user.id)
+    data = await state.get_data()
+    if callback_query.data == "view":
+        await callback_query.answer()
+        program = Program.from_dict(data.get("program"))
+        program_text = await format_program(program.exercises_by_day, 0)
+        await callback_query.message.answer(
+            text=translate(MessageText.program_page, lang=profile.language).format(program=program_text, day=1),
+            reply_markup=program_view_kb(profile.language),
+            disable_web_page_preview=True,
+        )
+        await state.update_data(exercises=program.exercises_by_day, split=program.split_number, client=True)
+        await state.set_state(States.program_view)
+    else:
+        await callback_query.answer(translate(MessageText.program_delete_warning, profile.language), show_alert=True)
+        await show_program_promo_page(callback_query, profile, state)
     with suppress(TelegramBadRequest):
         await callback_query.message.delete()

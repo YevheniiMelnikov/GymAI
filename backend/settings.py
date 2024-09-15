@@ -7,7 +7,7 @@ SECRET_KEY = os.environ.get("SECRET_KEY")
 
 DEBUG = os.environ.get("DEBUG_STATUS")
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "achieve-together.org.ua", "www.achieve-together.org.ua"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "achieve-together.org.ua", "www.achieve-together.org.ua", "backend"]
 
 ASGI_APPLICATION = "backend.asgi.application"
 
@@ -18,6 +18,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "accounts.apps.AccountsConfig",
+    "payments.apps.PaymentsConfig",
     "rest_framework",
     "rest_framework.authtoken",
     "rest_framework_api_key",
@@ -52,8 +53,6 @@ TEMPLATES = [
         },
     },
 ]
-
-# WSGI_APPLICATION = "backend.wsgi.application"
 
 DATABASES = {
     "default": {

@@ -98,7 +98,6 @@ class CacheManager:
             else:
                 raise ProfileNotFoundError(f"No current profile found for user {telegram_id}")
         except Exception as e:
-            logger.info(f"Failed to get current profile for user {telegram_id}: {e}")
             raise ProfileNotFoundError(f"Failed to get current profile for user {telegram_id}: {e}")
 
     def get_profiles(self, telegram_id: int) -> list[Profile]:
@@ -147,8 +146,8 @@ class CacheManager:
                 return False
             self._update_profile_data(telegram_id, profiles_data)
             return True
-        except Exception as e:
-            logger.error(f"Failed to set profile info for profile {profile_id}: {e}")
+        except Exception:
+            logger.exception(f"Failed to set profile info for profile {profile_id}")
             return False
 
     def set_client_data(self, profile_id: int, client_data: dict[str, Any]) -> None:
@@ -165,7 +164,7 @@ class CacheManager:
         ]
         self._set_data("clients", profile_id, client_data, allowed_fields)
 
-    def get_client_by_id(self, profile_id: int) -> Client | None:
+    def get_client_by_id(self, profile_id: int) -> Client:
         try:
             client_data = self.redis.hget("clients", str(profile_id))
             if client_data:
@@ -182,18 +181,24 @@ class CacheManager:
     def set_coach_data(self, profile_id: int, profile_data: dict) -> None:
         allowed_fields = [
             "name",
+            "surname",
             "work_experience",
             "additional_info",
             "payment_details",
+            "tax_identification",
             "profile_photo",
             "verified",
             "assigned_to",
+            "subscription_price",
+            "program_price",
         ]
         if profile_data.get("payment_details"):
             profile_data["payment_details"] = self.encrypter.encrypt(profile_data["payment_details"])
+        if profile_data.get("tax_identification"):
+            profile_data["tax_identification"] = self.encrypter.encrypt(profile_data["tax_identification"])
         self._set_data("coaches", profile_id, profile_data, allowed_fields)
 
-    def get_coach_by_id(self, profile_id: int) -> Coach | None:
+    def get_coach_by_id(self, profile_id: int) -> Coach:
         try:
             coach_data = self.redis.hget("coaches", str(profile_id))
             if coach_data:
@@ -201,6 +206,8 @@ class CacheManager:
                 data["id"] = profile_id
                 if "payment_details" in data:
                     data["payment_details"] = self.encrypter.decrypt(data["payment_details"])
+                if "tax_identification" in data:
+                    data["tax_identification"] = self.encrypter.decrypt(data["tax_identification"])
                 return Coach.from_dict(data)
             else:
                 logger.debug(f"No data found for profile_id {profile_id} in cache")
@@ -256,15 +263,6 @@ class CacheManager:
             logger.info(f"Failed to check payment status for profile_id {profile_id}: {e}")
             return False
 
-    def delete_program(self, profile_id: int) -> bool:
-        try:
-            self.redis.hdel("workout_plans:programs", str(profile_id))
-            logger.debug(f"Program for profile_id {profile_id} deleted from cache")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to delete program for profile_id {profile_id}: {e}")
-            return False
-
     def save_subscription(self, profile_id: int, subscription_data: dict) -> None:
         try:
             self.redis.hset("workout_plans:subscriptions", str(profile_id), json.dumps(subscription_data))
@@ -302,9 +300,19 @@ class CacheManager:
             "workout_type",
             "workout_days",
             "exercises",
+            "wishes",
         ]
 
         self._set_data("workout_plans:subscriptions", profile_id, subscription_data, allowed_fields)
+
+    def update_program_data(self, profile_id: int, program_data: dict[str, Any]) -> None:
+        allowed_fields = [
+            "exercises_by_day",
+            "split_number",
+            "workout_type",
+            "wishes",
+        ]
+        self._set_data("workout_plans:programs", profile_id, program_data, allowed_fields)
 
     def get_clients_to_survey(self) -> list[int]:
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()

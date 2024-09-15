@@ -8,10 +8,10 @@ from aiogram.types import Message
 
 from bot.keyboards import action_choice_keyboard, language_choice
 from bot.states import States
-from common.backend_service import backend_service
 from common.cache_manager import cache_manager
 from common.functions.menus import show_main_menu
 from common.functions.profiles import get_or_load_profile
+from services.user_service import user_service
 from texts.resources import MessageText
 from texts.text_manager import translate
 
@@ -45,7 +45,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     if profile := await get_or_load_profile(message.from_user.id):
         logger.info(f"User with profile_id {profile.id} started bot")
         auth_token = cache_manager.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
-        await backend_service.log_out(profile, auth_token)
+        await user_service.log_out(profile, auth_token)
         cache_manager.deactivate_profiles(profile.current_tg_id)
         await state.update_data(lang=profile.language)
         start_message = await message.answer(text=translate(MessageText.start, profile.language))
@@ -72,7 +72,7 @@ async def cmd_logout(message: Message, state: FSMContext) -> None:
     if profile := await get_or_load_profile(message.from_user.id):
         language = profile.language if profile.language else "ua"
         auth_token = cache_manager.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
-        await backend_service.log_out(profile, auth_token)
+        await user_service.log_out(profile, auth_token)
         cache_manager.deactivate_profiles(profile.current_tg_id)
         await state.update_data(lang=language)
         await message.answer(
@@ -89,7 +89,11 @@ async def cmd_logout(message: Message, state: FSMContext) -> None:
 async def cmd_help(message: Message) -> None:
     profile = await get_or_load_profile(message.from_user.id)
     language = profile.language if profile else "ua"
-    await message.answer(text=translate(MessageText.help, lang=language))
+    await message.answer(
+        text=translate(MessageText.help, lang=language).format(
+            email=os.getenv("DEFAULT_FROM_EMAIL"), tg=os.getenv("TG_SUPPORT_CONTACT")
+        )
+    )
 
 
 @cmd_router.message(Command("feedback"))

@@ -4,9 +4,9 @@ from typing import Any, Optional
 from aiogram.fsm.state import State
 
 from bot.states import States
-from common.backend_service import backend_service
 from common.cache_manager import cache_manager
 from common.models import Client, Coach, Exercise
+from services.profile_service import profile_service
 from texts.resources import ButtonText, MessageText
 from texts.text_manager import translate
 
@@ -67,6 +67,8 @@ def get_profile_attributes(role: str, user: Optional[Client | Coach], lang_code:
             "experience": get_attr("work_experience"),
             "notes": get_attr("additional_info"),
             "payment_details": get_attr("payment_details"),
+            "subscription_price": get_attr("subscription_price"),
+            "program_price": get_attr("program_price"),
             "verif_status": verification_status.get(
                 get_attr("verified"), translate(MessageText.not_verified, lang=lang_code)
             ),
@@ -84,12 +86,23 @@ def get_state_and_message(callback: str, lang: str) -> tuple[State, str]:
         "work_experience": (States.work_experience, translate(MessageText.work_experience, lang=lang)),
         "additional_info": (States.additional_info, translate(MessageText.additional_info, lang=lang)),
         "payment_details": (States.payment_details, translate(MessageText.payment_details, lang=lang)),
+        "subscription_price": (
+            States.enter_subscription_price,
+            translate(MessageText.enter_subscription_price, lang=lang),
+        ),
+        "program_price": (States.enter_program_price, translate(MessageText.enter_program_price, lang=lang)),
         "photo": (States.profile_photo, translate(MessageText.upload_photo, lang=lang)),
     }.get(callback, (None, None))
 
 
 def get_coach_page(coach: Coach) -> dict[str, Any]:
-    return {"name": coach.name, "experience": coach.work_experience, "additional_info": coach.additional_info}
+    return {
+        "name": coach.name,
+        "experience": coach.work_experience,
+        "additional_info": coach.additional_info,
+        "subscription_price": coach.subscription_price,
+        "program_price": coach.program_price,
+    }
 
 
 async def get_client_page(client: Client, lang_code: str, subscription: bool, data: dict[str, Any]) -> dict[str, Any]:
@@ -104,7 +117,7 @@ async def get_client_page(client: Client, lang_code: str, subscription: bool, da
         "waiting_for_text": translate(MessageText.waiting_for_text, lang=lang_code),
     }
 
-    client_data = await backend_service.get_profile(client.id)
+    client_data = await profile_service.get_profile(client.id)
     page = {
         "name": client.name,
         "gender": texts.get(client.gender, ""),

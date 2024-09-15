@@ -89,9 +89,9 @@ weight:
   ua: "Вага ⚖️"
 
 workout_experience:
-  eng: "Workout experience 🎓"
-  ru: "Опыт тренировок 🎓"
-  ua: "Тренувальний досвід 🎓"
+  eng: "Workout experience 💪"
+  ru: "Опыт тренировок 💪"
+  ua: "Тренувальний досвід 💪"
 
 health_notes:
   eng: "Health notes 🤕"
@@ -136,7 +136,7 @@ forward:
 choose_coach:
   eng: "Choose a coach 🏋️‍♂️"
   ru: "Выбрать тренера 🏋️‍♂️"
-  ua: "Вибрати тренера 🏋️‍♂️"
+  ua: "Обрати тренера 🏋️‍♂️"
 
 quit:
   eng: "Close ❌"
@@ -327,3 +327,18 @@ logout:
   eng: "Logout 🚪"
   ru: "Выход 🚪"
   ua: "Вийти 🚪"
+
+cancel_subscription:
+  eng: "Cancel subscription 🚫"
+  ru: "Отменить подписку 🚫"
+  ua: "Скасувати підписку 🚫"
+
+program_price:
+  eng: "Program price 💰"
+  ru: "Стоимость программы 💰"
+  ua: "Вартість програми 💰"
+
+subscription_price:
+  eng: "Subscription price 💸"
+  ru: "Стоимость подписки 💸"
+  ua: "Вартість підписки 💸"

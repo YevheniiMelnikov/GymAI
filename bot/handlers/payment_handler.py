@@ -9,13 +9,13 @@ from aiogram.types import CallbackQuery
 
 from bot.keyboards import select_service, workout_type
 from bot.states import States
-from common.backend_service import backend_service
 from common.cache_manager import cache_manager
 from common.functions.menus import show_main_menu
 from common.functions.profiles import get_or_load_profile
 from common.functions.workout_plans import cache_program_data
 from common.models import Client, Coach
-from common.settings import SUBSCRIPTION_PRICE
+from services.payment_service import payment_service
+from services.workout_service import workout_service
 from texts.resources import ButtonText, MessageText
 from texts.text_manager import translate
 
@@ -74,19 +74,24 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
             cache_program_data(data, profile.id)
         else:
             days = data.get("workout_days", [])
-            subscription_id = await backend_service.create_subscription(profile.id, SUBSCRIPTION_PRICE, days)
+            client = cache_manager.get_client_by_id(profile.id)
+            coach = cache_manager.get_coach_by_id(client.assigned_to.pop())
+            subscription_id = await workout_service.create_subscription(
+                profile.id, days, data.get("wishes"), coach.subscription_price
+            )
             subscription_data = {
                 "id": subscription_id,
                 "payment_date": datetime.today().strftime("%Y-%m-%d"),
                 "enabled": False,
-                "price": SUBSCRIPTION_PRICE,
+                "price": coach.subscription_price,
                 "user": profile.id,
                 "workout_days": days,
                 "workout_type": data.get("workout_type"),
+                "wishes": data.get("wishes"),
             }
             cache_manager.save_subscription(profile.id, subscription_data)
         cache_manager.set_payment_status(profile.id, True, data.get("request_type"))
-        await backend_service.create_payment(profile.id, data.get("request_type"), order_number, amount)
+        await payment_service.create_payment(profile.id, data.get("request_type"), order_number, amount)
         await callback_query.message.answer(translate(MessageText.payment_in_progress, profile.language))
 
     await show_main_menu(callback_query.message, profile, state)

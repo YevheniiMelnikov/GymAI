@@ -10,9 +10,9 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from bot.keyboards import workout_results, workout_survey_keyboard
 from bot.states import States
-from common.backend_service import backend_service
 from common.cache_manager import cache_manager
 from common.functions.profiles import get_or_load_profile
+from services.profile_service import profile_service
 from texts.resources import MessageText
 from texts.text_manager import translate
 
@@ -24,7 +24,7 @@ bot = Bot(os.environ.get("BOT_TOKEN"))
 async def send_daily_survey():
     clients = cache_manager.get_clients_to_survey()
     for client_id in clients:
-        client_data = await backend_service.get_profile(client_id.id)
+        client_data = await profile_service.get_profile(client_id.id)
         client_lang = (
             cache_manager.get_profile_info_by_key(client_data.get("current_tg_id"), client_id, "language") or "ua"
         )

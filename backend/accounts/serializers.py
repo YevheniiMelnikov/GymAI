@@ -1,7 +1,7 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
-from .models import Payment, Profile, Program, Subscription
+from .models import Profile, ClientProfile, CoachProfile
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -11,38 +11,56 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class ProfileSerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True)
-    assigned_to = serializers.ListField(child=serializers.IntegerField(), required=False, allow_null=True, default=list)
+    user = serializers.SerializerMethodField()
+    current_tg_id = serializers.IntegerField(required=False)
 
     class Meta:
         model = Profile
         fields = "__all__"
-        extra_kwargs = {"user": {"read_only": True}}
+
+    def get_user(self, obj):
+        return {"username": obj.user.username, "email": obj.user.email}
 
     def update(self, instance, validated_data):
-        validated_data.pop("user", None)
+        current_tg_id = validated_data.get("current_tg_id", None)
+        if current_tg_id is None:
+            validated_data.pop("current_tg_id", None)
+
         return super().update(instance, validated_data)
 
 
-class ProgramSerializer(serializers.ModelSerializer):
+class ClientProfileSerializer(serializers.ModelSerializer):
+    profile_data = ProfileSerializer(source="profile", read_only=True)
+
     class Meta:
-        model = Program
-        fields = "__all__"
+        model = ClientProfile
+        fields = [
+            "id",
+            "profile_data",
+            "gender",
+            "born_in",
+            "weight",
+            "health_notes",
+            "workout_experience",
+            "workout_goals",
+            "coach",
+        ]
 
 
-class SubscriptionSerializer(serializers.ModelSerializer):
+class CoachProfileSerializer(serializers.ModelSerializer):
+    profile_data = ProfileSerializer(source="profile", read_only=True)
+
     class Meta:
-        model = Subscription
-        fields = "__all__"
-
-
-class PaymentSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Payment
-        fields = "__all__"
-
-    def update(self, instance, validated_data):
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        return instance
+        model = CoachProfile
+        fields = [
+            "id",
+            "profile_data",
+            "surname",
+            "additional_info",
+            "profile_photo",
+            "payment_details",
+            "tax_identification",
+            "subscription_price",
+            "program_price",
+            "verified",
+        ]
