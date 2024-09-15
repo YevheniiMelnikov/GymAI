@@ -10,7 +10,7 @@ from common.cache_manager import cache_manager
 from common.functions.chat import client_request, send_message
 from common.functions.workout_plans import cancel_subscription
 from common.models import Payment, Profile
-from common.settings import PAYMENT_STATUS_PAYED, PAYMENT_STATUS_REJECTED
+from common.settings import PAYMENT_STATUS_PAYED, PAYMENT_STATUS_REJECTED, PAYMENT_STATUS_CLOSED, PAYMENT_CHECK_INTERVAL
 from services.payment_service import payment_service
 from services.profile_service import profile_service
 from services.workout_service import workout_service
@@ -30,34 +30,69 @@ class PaymentHandler:
 
     def start_payment_checker(self) -> None:
         asyncio.create_task(self.check_payments())
+        asyncio.create_task(self.schedule_unclosed_payment_check())
+
+    async def schedule_unclosed_payment_check(self) -> None:
+        while True:
+            now = datetime.now(timezone.utc)
+            target_time = now.replace(day=1, hour=12, minute=0, second=0, microsecond=0)
+
+            if now >= target_time:
+                target_time += relativedelta(months=1)
+
+            delay = (target_time - now).total_seconds()
+            logger.info(f"Scheduled unclosed payment processing at {target_time.isoformat()} UTC (in {delay} seconds)")
+            await asyncio.sleep(delay)
+
+            await self.process_unclosed_payments()
 
     async def check_payments(self) -> None:
         while True:
             try:
                 payments = await self.payment_service.get_unhandled_payments()
-
-                for payment in payments:
-                    local_payment = await self.backend_service.check_local_payment(payment.shop_order_number)
-                    profile_data = await self.profile_service.get_profile(payment.profile)
-                    if not profile_data:
-                        logger.error(f"Profile not found for payment {payment.id}")
-                        continue
-                    profile = Profile.from_dict(profile_data)
-
-                    if local_payment.status == PAYMENT_STATUS_PAYED:
-                        await self.handle_successful_payment(payment, profile)
-                    elif local_payment.status == PAYMENT_STATUS_REJECTED:
-                        await self.handle_failed_payment(payment, profile)
-
-                await asyncio.sleep(60)
-
+                tasks = [self.process_payment(payment) for payment in payments]
+                await asyncio.gather(*tasks)
+                await asyncio.sleep(PAYMENT_CHECK_INTERVAL)
             except Exception as e:
                 logger.exception(f"Error in periodic payment check: {e}")
-                await asyncio.sleep(60)
+                await asyncio.sleep(PAYMENT_CHECK_INTERVAL)
+
+    async def process_payment(self, payment: Payment) -> None:
+        try:
+            payment_status = await self.payment_service.get_payment_status(payment.shop_order_number)
+            profile = Profile.from_dict(await self.profile_service.get_profile(payment.profile))
+            if not profile:
+                logger.error(f"Profile not found for payment {payment.id}")
+                return
+
+            if payment_status.status == PAYMENT_STATUS_PAYED:
+                await self.handle_successful_payment(payment, profile)
+            elif payment_status.status == PAYMENT_STATUS_REJECTED:
+                await self.handle_failed_payment(payment, profile)
+            else:
+                logger.info(f"Payment {payment.id} has unhandled status: {payment_status.status}")
+        except Exception as e:
+            logger.exception(f"Error processing payment {payment.id}: {e}")
+
+    async def process_unclosed_payments(self) -> None:
+        for payment in await self.payment_service.get_unclosed_payments():
+            try:
+                client = self.cache_manager.get_client_by_id(payment.profile)
+                coach = self.cache_manager.get_coach_by_id(client.assigned_to.pop())
+                loop = asyncio.get_running_loop()
+                transfer_result = await loop.run_in_executor(
+                    None, self.payment_service.transfer_to_card, coach, str(payment.amount), payment.shop_order_number
+                )
+                if transfer_result and await self.payment_service.update_payment(
+                    payment.id, dict(status=PAYMENT_STATUS_CLOSED)
+                ):
+                    logger.info(f"Payment {payment.shop_order_number} marked as {PAYMENT_STATUS_CLOSED}")
+            except Exception as e:
+                logger.error(f"Error processing payment {payment.shop_order_number}: {e}")
 
     async def handle_failed_payment(self, payment: Payment, profile: Profile) -> None:
         client = self.cache_manager.get_client_by_id(profile.id)
-        await self.payment_service.update_payment(payment.id, dict(handled=True))
+        await self.payment_service.update_payment(payment.id, dict(handled=True, status=PAYMENT_STATUS_REJECTED))
         if payment.payment_type == "subscription":
             subscription = self.cache_manager.get_subscription(profile.id)
             if subscription and subscription.enabled:
@@ -86,23 +121,35 @@ class PaymentHandler:
         )
 
     async def handle_successful_payment(self, payment: Payment, profile: Profile) -> None:
-        await self.payment_service.update_payment(payment.id, {"handled": True})
-        client = self.cache_manager.get_client_by_id(profile.id)
-        if client is None:
-            logger.error(f"Client not found for profile_id {profile.id}")
-            return
+        try:
+            updated = await self.payment_service.update_payment(
+                payment.id, dict(handled=True, status=PAYMENT_STATUS_PAYED)
+            )
+            if not updated:
+                logger.error(f"Failed to update payment status for {payment.id}")
+                return
 
-        await send_message(
-            recipient=client,
-            text=translate(MessageText.payment_success, profile.language),
-            state=None,
-            include_incoming_message=False,
-        )
+            client = self.cache_manager.get_client_by_id(profile.id)
+            if client is None:
+                logger.error(f"Client not found for profile_id {profile.id}")
+                return
 
-        if payment.payment_type == "subscription":
-            await self.process_subscription_payment(profile)
-        else:
-            await self.process_program_payment(profile)
+            await send_message(
+                recipient=client,
+                text=translate(MessageText.payment_success, profile.language),
+                state=None,
+                include_incoming_message=False,
+            )
+
+            logger.info(
+                f"Profile {profile.id} successfully payed {payment.amount} UAH for {payment.payment_type} service"
+            )
+            if payment.payment_type == "subscription":
+                await self.process_subscription_payment(profile)
+            else:
+                await self.process_program_payment(profile)
+        except Exception as e:
+            logger.exception(f"Failed to handle successful payment {payment.id}: {e}")
 
     async def process_subscription_payment(self, profile: Profile) -> None:
         try:
@@ -152,8 +199,9 @@ class PaymentHandler:
             if client is None:
                 logger.error(f"Client not found for profile_id {profile.id}")
                 return
-            coach = self.cache_manager.get_coach_by_id(client.assigned_to.pop())
-            await client_request(coach, client, data)
+
+            if coach := self.cache_manager.get_coach_by_id(client.assigned_to.pop()):
+                await client_request(coach, client, data)
         except Exception as e:
             logger.exception(f"Program payment processing failed for profile_id {profile.id}: {e}")
 
