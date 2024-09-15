@@ -16,7 +16,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Profile
-        fields = ["id", "user", "status", "language", "assigned_to", "current_tg_id", "name"]
+        fields = "__all__"
 
     def get_user(self, obj):
         return {"username": obj.user.username, "email": obj.user.email}

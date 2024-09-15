@@ -32,9 +32,14 @@ class BackendService:
                     error_data = response.json()
                 except JSONDecodeError:
                     error_data = {"error": response.text}
-                logger.error(
-                    f"Request to {url} failed with status code {response.status_code} and response: {error_data}"
-                )
+
+                if response.status_code == 404:
+                    logger.info(f"Request to {url} returned 404: {error_data}")
+                else:
+                    logger.error(
+                        f"Request to {url} failed with status code {response.status_code} and response: {error_data}"
+                    )
+
                 return response.status_code, error_data
         except httpx.HTTPError as e:
             logger.exception("HTTP error occurred")

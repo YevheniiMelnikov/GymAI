@@ -319,10 +319,10 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
 @questionnaire_router.message(States.enter_wishes)
 async def enter_wishes(message: Message, state: FSMContext):
     profile = await get_or_load_profile(message.from_user.id)
-    await state.update_data(wishes=message.text)
-    data = await state.get_data()
     client = cache_manager.get_client_by_id(profile.id)
     coach = cache_manager.get_coach_by_id(client.assigned_to.pop())
+    await state.update_data(wishes=message.text, sender_name=client.name)
+    data = await state.get_data()
 
     if data.get("new_client"):
         await message.answer(translate(MessageText.coach_selected).format(name=coach.name))

@@ -136,7 +136,7 @@ forward:
 choose_coach:
   eng: "Choose a coach 🏋️‍♂️"
   ru: "Выбрать тренера 🏋️‍♂️"
-  ua: "Вибрати тренера 🏋️‍♂️"
+  ua: "Обрати тренера 🏋️‍♂️"
 
 quit:
   eng: "Close ❌"

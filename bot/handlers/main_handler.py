@@ -147,7 +147,7 @@ async def coach_paginator(callback_query: CallbackQuery, state: FSMContext):
         coach_id = callback_query.data.split("_")[1]
         coach = cache_manager.get_coach_by_id(coach_id)
         client = cache_manager.get_client_by_id(profile.id)
-        await assign_coach(coach, client, callback_query.from_user.id)
+        await assign_coach(coach, client)
         await state.set_state(States.gift)
         await callback_query.message.answer(
             translate(MessageText.gift, profile.language), reply_markup=gift(profile.language)

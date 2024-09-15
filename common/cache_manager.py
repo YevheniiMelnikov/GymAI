@@ -98,7 +98,6 @@ class CacheManager:
             else:
                 raise ProfileNotFoundError(f"No current profile found for user {telegram_id}")
         except Exception as e:
-            logger.info(f"Failed to get current profile for user {telegram_id}: {e}")
             raise ProfileNotFoundError(f"Failed to get current profile for user {telegram_id}: {e}")
 
     def get_profiles(self, telegram_id: int) -> list[Profile]:

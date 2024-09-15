@@ -14,7 +14,7 @@ from bot.keyboards import *
 from bot.keyboards import choose_coach, program_manage_menu, program_view_kb, select_service, subscription_manage_menu
 from common.exceptions import UserServiceError
 from common.file_manager import avatar_manager
-from common.functions.profiles import get_or_load_profile
+from common.functions.profiles import get_or_load_profile, start_profile_creation
 from common.functions.text_utils import *
 from common.models import Client, Coach, Profile, Subscription
 from services.profile_service import profile_service
@@ -156,25 +156,19 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
         await callback_query.answer()
         user_data = await profile_service.get_profile(profile.id)
         if None in user_data.values():
-            info_msg = await callback_query.message.answer(translate(MessageText.edit_profile, lang=profile.language))
-            name_msg = await callback_query.message.answer(translate(MessageText.name, lang=profile.language))
-            await state.update_data(
-                lang=profile.language,
-                role=profile.status,
-                chat_id=callback_query.message.chat.id,
-                message_ids=[info_msg.message_id, name_msg.message_id],
-            )
-            await state.set_state(States.name)
-            with suppress(TelegramBadRequest):
-                await callback_query.message.delete()
+            await start_profile_creation(callback_query.message, profile, state)
             return
 
-        if profile.status == "client":
-            user = Client.from_dict(user_data)
-            cache_manager.set_client_data(profile.id, user_data)
-        else:
-            user = Coach.from_dict(user_data)
-            cache_manager.set_coach_data(profile.id, user_data)
+        try:
+            if profile.status == "client":
+                cache_manager.set_client_data(profile.id, user_data)
+                user = Client.from_dict(user_data)
+            else:
+                cache_manager.set_coach_data(profile.id, user_data)
+                user = Coach.from_dict(user_data)
+        except TypeError:
+            await start_profile_creation(callback_query.message, profile, state)
+            return
 
     format_attributes = get_profile_attributes(role=profile.status, user=user, lang_code=profile.language)
     text = translate(

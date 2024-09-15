@@ -184,7 +184,7 @@ class CoachProfileUpdate(RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated | HasAPIKey]
 
     def get_object(self):
-        return CoachProfile.objects.get(pk=self.kwargs.get("profile_id"))
+        return CoachProfile.objects.get(profile_id=self.kwargs.get("profile_id"))
 
 
 class ClientProfileView(ListAPIView):
@@ -199,7 +199,7 @@ class ClientProfileUpdate(RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated | HasAPIKey]
 
     def get_object(self):
-        return ClientProfile.objects.get(pk=self.kwargs.get("profile_id"))
+        return ClientProfile.objects.get(profile_id=self.kwargs.get("profile_id"))
 
 
 class GetUserTokenView(APIView):
@@ -227,7 +227,7 @@ class SendFeedbackAPIView(APIView):
         username = request.data.get("username")
         feedback = request.data.get("feedback")
 
-        subject = f"New Feedback from {username}"
+        subject = f"New feedback from {username}"
         message = f"User {username} with email {email} sent the following feedback:\n\n{feedback}"
 
         try:

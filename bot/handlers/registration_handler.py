@@ -29,10 +29,7 @@ async def language_choice(callback_query: CallbackQuery, state: FSMContext) -> N
     lang_code = callback_query.data
     await set_bot_commands(lang_code)
     if profile := await get_or_load_profile(callback_query.from_user.id):
-        token = cache_manager.get_profile_info_by_key(callback_query.from_user.id, profile.id, "auth_token")
-        if not token:
-            token = await user_service.get_user_token(profile.id)
-        await profile_service.edit_profile(profile.id, {"language": lang_code}, token)
+        await profile_service.edit_profile(profile.id, {"language": lang_code})
         cache_manager.set_profile_info_by_key(callback_query.from_user.id, profile.id, "language", lang_code)
         profile.language = lang_code
         await show_main_menu(callback_query.message, profile, state)
