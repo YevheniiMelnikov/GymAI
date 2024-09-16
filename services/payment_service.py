@@ -14,7 +14,7 @@ import requests
 
 from services.backend_service import BackendService
 from common.models import Payment, Coach
-from common.settings import FIRST_NAME, LAST_NAME, ADDRESS, PAYMENT_STATUS_PAYED
+from common.settings import PAYMENT_STATUS_PAYED
 
 logger = loguru.logger
 
@@ -83,38 +83,7 @@ class PaymentService(BackendService):
         return encoded_payload
 
     def transfer_to_card(self, coach: Coach, amount: str, order_number: str) -> bool:
-        dt = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-        signature = self.generate_signature(dt, self.login, self.payee_id, order_number, amount, self.key)
-
-        payload = {
-            "paymentType": "a2c_1",
-            "description": coach.payment_details,
-            "billAmount": amount,
-            "payeeId": self.payee_id,
-            "shopOrderNumber": order_number,
-            "dt": dt,
-            "signature": signature,
-            "mode": "1101",
-            "sender": "1101",
-            "identification": {
-                "sender": {
-                    "firstName": FIRST_NAME,
-                    "lastName": LAST_NAME,
-                    "account_number": os.getenv("ACCOUNT_NUMBER"),
-                },
-                "senderAddress": {
-                    "countryCode": "UKR",
-                    "city": "Kyiv",
-                    "address": ADDRESS,
-                },
-                "recipient": {
-                    "dstFirstName": coach.name,
-                    "dstLastName": coach.surname,
-                    "tax_id": coach.tax_identification,
-                },
-            },
-        }
-
+        payload = {}
         response = requests.post(self.gateway_url, json=payload)
         if response.status_code == 200:
             response_data = response.json()

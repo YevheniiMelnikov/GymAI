@@ -59,7 +59,6 @@ class CoachProfileSerializer(serializers.ModelSerializer):
             "additional_info",
             "profile_photo",
             "payment_details",
-            "tax_identification",
             "subscription_price",
             "program_price",
             "verified",

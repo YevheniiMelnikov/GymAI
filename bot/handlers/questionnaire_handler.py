@@ -199,23 +199,6 @@ async def payment_details(message: Message, state: FSMContext) -> None:
         await update_user_info(message, state, "coach")
         return
 
-    tax_identification_msg = await message.answer(translate(MessageText.tax_identification, lang=data.get("lang")))
-    await state.update_data(chat_id=message.chat.id, message_ids=[tax_identification_msg.message_id])
-    await state.set_state(States.tax_identification)
-    await message.delete()
-
-
-@questionnaire_router.message(States.tax_identification, F.text)
-async def tax_identification(message: Message, state: FSMContext) -> None:
-    data = await state.get_data()
-    await delete_messages(state)
-    tin = message.text.replace(" ", "")
-    if not all(map(lambda x: x.isdigit(), tin)) or len(tin) != 10:
-        await message.answer(translate(MessageText.invalid_content, lang=data.get("lang")))
-        await message.delete()
-        return
-
-    await state.update_data(tax_identification=tin)
     program_price_msg = await message.answer(translate(MessageText.enter_program_price, lang=data.get("lang")))
     await state.update_data(chat_id=message.chat.id, message_ids=[program_price_msg.message_id])
     await state.set_state(States.enter_program_price)
@@ -314,6 +297,7 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
     await state.update_data(workout_type=callback_query.data)
     await state.set_state(States.enter_wishes)
     await callback_query.message.answer(translate(MessageText.enter_wishes, profile.language))
+    await callback_query.message.delete()
 
 
 @questionnaire_router.message(States.enter_wishes)

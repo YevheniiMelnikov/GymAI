@@ -82,7 +82,6 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
     experience = data.get("work_experience")
     info = data.get("additional_info")
     card = data.get("payment_details")
-    tin = data.get("tax_identification")
     subscription_price = data.get("subscription_price")
     program_price = data.get("program_price")
     user = await bot.get_chat(tg_id)
@@ -100,7 +99,6 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
                 experience=experience,
                 info=info,
                 card=card,
-                tin=tin,
                 subscription_price=subscription_price,
                 program_price=program_price,
                 contact=contact,

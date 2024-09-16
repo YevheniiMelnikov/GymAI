@@ -31,7 +31,6 @@ class States(StatesGroup):
     payment_details = State()
     enter_program_price = State()
     enter_subscription_price = State()
-    tax_identification = State()
     profile_photo = State()
     accept_policy = State()
 

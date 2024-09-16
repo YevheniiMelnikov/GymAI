@@ -41,7 +41,6 @@ class CoachProfile(Model):
     additional_info = models.CharField(max_length=250, null=True, blank=True)
     profile_photo = models.CharField(max_length=250, null=True, blank=True)
     payment_details = models.CharField(max_length=250, null=True, blank=True)
-    tax_identification = models.CharField(max_length=250, null=True, blank=True)
     subscription_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     program_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     verified = models.BooleanField(default=False)
