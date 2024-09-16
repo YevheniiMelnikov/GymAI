@@ -185,7 +185,6 @@ class CacheManager:
             "work_experience",
             "additional_info",
             "payment_details",
-            "tax_identification",
             "profile_photo",
             "verified",
             "assigned_to",
@@ -194,8 +193,6 @@ class CacheManager:
         ]
         if profile_data.get("payment_details"):
             profile_data["payment_details"] = self.encrypter.encrypt(profile_data["payment_details"])
-        if profile_data.get("tax_identification"):
-            profile_data["tax_identification"] = self.encrypter.encrypt(profile_data["tax_identification"])
         self._set_data("coaches", profile_id, profile_data, allowed_fields)
 
     def get_coach_by_id(self, profile_id: int) -> Coach:
@@ -206,9 +203,8 @@ class CacheManager:
                 data["id"] = profile_id
                 if "payment_details" in data:
                     data["payment_details"] = self.encrypter.decrypt(data["payment_details"])
-                if "tax_identification" in data:
-                    data["tax_identification"] = self.encrypter.decrypt(data["tax_identification"])
                 return Coach.from_dict(data)
+
             else:
                 logger.debug(f"No data found for profile_id {profile_id} in cache")
                 raise UserServiceError

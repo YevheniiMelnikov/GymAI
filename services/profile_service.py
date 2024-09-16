@@ -47,7 +47,6 @@ class ProfileService(BackendService):
             "additional_info",
             "profile_photo",
             "payment_details",
-            "tax_identification",
             "subscription_price",
             "program_price",
             "verified",
@@ -102,7 +101,6 @@ class ProfileService(BackendService):
             "work_experience",
             "additional_info",
             "payment_details",
-            "tax_identification",
             "program_price",
             "subscription_price",
             "profile_photo",
@@ -110,8 +108,6 @@ class ProfileService(BackendService):
         ]
         if "payment_details" in data:
             data["payment_details"] = self.encrypter.encrypt(data["payment_details"])
-        if "tax_identification" in data:
-            data["tax_identification"] = self.encrypter.encrypt(data["tax_identification"])
 
         filtered_data = {key: data[key] for key in fields if key in data and data[key] is not None}
         filtered_data["profile_id"] = profile_id

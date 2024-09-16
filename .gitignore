@@ -160,4 +160,3 @@ google_creds.json
 .nohup.out
 .pgdata/
 .redisdata/
-services/signature.py

@@ -1146,6 +1146,16 @@ files = [
 ]
 
 [[package]]
+name = "liqpay"
+version = "1.0.1"
+description = "Python interface for Liqpay e-comerce platform"
+optional = false
+python-versions = "*"
+files = [
+    {file = "liqpay-1.0.1.tar.gz", hash = "sha256:7dfdeeab7c50eb099f0f019d77047b970300fab5765d9b7d9c51131b834cce7e"},
+]
+
+[[package]]
 name = "loguru"
 version = "0.7.2"
 description = "Python logging made (stupidly) simple"
@@ -2217,4 +2227,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "d3250ede4a25b12bdc253a8c818ba578950d8194c099285f8ce6bf330dd49ca9"
+content-hash = "a7e37b483238c9e391ae8a11ddbc604a72a6ccefbde6054310c6671657bfa0d3"

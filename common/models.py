@@ -52,7 +52,6 @@ class Coach(BaseEntity):
     additional_info: str
     payment_details: str
     profile_photo: str
-    tax_identification: int
     subscription_price: int
     program_price: int
     assigned_to: list[int] = field(default_factory=list)
