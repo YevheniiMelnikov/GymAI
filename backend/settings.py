@@ -19,6 +19,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "accounts.apps.AccountsConfig",
     "payments.apps.PaymentsConfig",
+    "home.apps.HomeConfig",
     "rest_framework",
     "rest_framework.authtoken",
     "rest_framework_api_key",

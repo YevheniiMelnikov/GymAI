@@ -3,9 +3,9 @@ import sys
 
 from loguru import logger
 
-debug_level = os.getenv("DEBUG_LEVEL", "INFO")
+log_level = os.getenv("DEBUG_LEVEL", "INFO")
 logger.configure(
     handlers=[
-        {"sink": sys.stdout, "level": f"{debug_level}", "format": "{time:YYYY-MM-DD HH:mm:ss} - {level} - {message}"}
+        {"sink": sys.stdout, "level": f"{log_level}", "format": "{time:YYYY-MM-DD HH:mm:ss} - {level} - {message}"}
     ]
 )
