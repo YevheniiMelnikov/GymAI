@@ -235,6 +235,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
                 ),
             )
 
+        await payment_service.unsubscribe(order_id)
         await cancel_subscription(next_payment_date, profile.id, subscription.id)
         await show_main_menu(callback_query.message, profile, state)
 

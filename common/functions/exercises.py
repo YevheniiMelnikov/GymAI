@@ -18,6 +18,7 @@ from common.functions.profiles import get_or_load_profile
 from common.functions.text_utils import format_program, get_translated_week_day
 from common.functions.utils import delete_messages
 from common.models import Exercise, Profile, Subscription
+from common.settings import SUBSCRIPTION_DESCRIPTION
 from services.payment_service import payment_service
 from services.workout_service import workout_service
 from texts.exercises import exercise_dict
@@ -160,7 +161,7 @@ async def process_new_subscription(callback_query: CallbackQuery, profile: Profi
     coach = cache_manager.get_coach_by_id(client.assigned_to.pop())
     await state.update_data(order_id=order_id, amount=coach.subscription_price)
     if payment_link := await payment_service.get_payment_link(
-        "subscribe", coach.subscription_price, order_id, "subscription payment"
+        "subscribe", coach.subscription_price, order_id, SUBSCRIPTION_DESCRIPTION
     ):
         await state.set_state(States.handle_payment)
         await callback_query.message.answer(
