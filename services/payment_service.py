@@ -1,16 +1,9 @@
-import base64
-import binascii
-import gzip
-import hashlib
-import hmac
-import json
 import os
-import uuid
 import datetime
 from urllib.parse import urljoin, urlencode
 
 import loguru
-import requests
+from liqpay import LiqPay
 
 from services.backend_service import BackendService
 from common.models import Payment, Coach
@@ -22,97 +15,60 @@ logger = loguru.logger
 class PaymentService(BackendService):
     def __init__(self):
         super().__init__()
-        self.payee_id = os.environ.get("PORTMONE_PAYEE_ID")
-        self.login = os.environ.get("PORTMONE_LOGIN")
-        self.password = os.environ.get("PORTMONE_PASSWORD")
-        self.gateway_url = os.environ.get("PAYMENT_GATEWAY_URL")
-        self.key = os.environ.get("PORTMONE_KEY")
+        self.checkout_url = os.getenv("CHECKOUT_URL")
+        self.payment_client = LiqPay(os.getenv("PAYMENT_PUB_KEY"), os.getenv("PAYMENT_PRIVATE_KEY"))
 
-    async def get_program_link(self, order_number: str, amount: int) -> str | None:
-        payload = {
-            "method": "getLinkInvoice",
-            "params": {
-                "data": {
-                    "login": self.login,
-                    "shopOrderNumber": order_number,
-                    "password": self.password,
-                    "payee_id": self.payee_id,
-                    "amount": amount,
-                },
-            },
-            "id": str(uuid.uuid4()),
-        }
-
-        response = await self.client.post(self.gateway_url, json=payload)
-        if response.status_code == 200:
-            response_data = response.json()
-            return response_data.get("result").get("linkInvoice")
-        else:
-            logger.error(f"Failed to get program link. HTTP status: {response.status_code}, response: {response.text}")
-            return None
-
-    async def get_subscription_link(self, email: str, order_number: str, amount: str) -> str:
-        today = datetime.date.today()
-        current_day = today.day
-
-        if current_day > 28:
-            current_day = 1
-
-        payload = {
-            "v": "2",
-            "payeeId": self.payee_id,
+    async def get_payment_link(self, action: str, amount: str, order_id: str, description: str) -> str:
+        params = {
+            "action": action,
             "amount": amount,
-            "emailAddress": email,
-            "billNumber": order_number,
-            "successUrl": os.getenv("BOT_LINK"),
-            "settings": {
-                "period": "1",
-                "payDate": str(current_day),
-            },
+            "currency": "UAH",
+            "description": description,
+            "order_id": order_id,
+            "version": "3",
+            "server_url": os.getenv("PAYMENT_CALLBACK_URL"),
+            "result_url": os.getenv("BOT_LINK"),
         }
 
-        encoded_payload = self.encode_payload(payload)
-        subscription_link = f"{self.gateway_url}?i={encoded_payload}"
-        return subscription_link
+        if action == "subscribe":
+            params["subscribe_date_start"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            params["subscribe_periodicity"] = "month"
 
-    @staticmethod
-    def encode_payload(payload: dict) -> str:
-        json_payload = json.dumps(payload)
-        compressed_payload = gzip.compress(json_payload.encode("utf-8"))
-        encoded_payload = base64.b64encode(compressed_payload).decode("utf-8")
-        return encoded_payload
+        data = self.payment_client.cnb_data(params)
+        signature = self.payment_client.cnb_signature(params)
+        query_string = urlencode({"data": data, "signature": signature})
+        return urljoin(self.checkout_url, f"?{query_string}")
 
-    def transfer_to_card(self, coach: Coach, amount: str, order_number: str) -> bool:
-        payload = {}
-        response = requests.post(self.gateway_url, json=payload)
-        if response.status_code == 200:
-            response_data = response.json()
-            if response_data.get("result") == "PAYED":
-                logger.info(f"Successfully transferred {amount} UAH for order {order_number} to coach {coach.id}")
-                return True
-            else:
-                logger.error(f"Transfer failed. Response: {response_data}")
-                return False
+    async def transfer_to_card(self, coach: Coach, amount: str, order_id: str) -> bool:
+        params = {
+            "action": "p2pcredit",
+            "version": "3",
+            "amount": amount,
+            "currency": "UAH",
+            "description": f"Transfer for order {order_id}",
+            "order_id": order_id,
+            "receiver_card": coach.payment_details,
+            "receiver_last_name": coach.surname,
+            "receiver_first_name": coach.name,
+        }
+
+        response = self.payment_client.api("request", params)
+
+        if response.get("status") == "success":
+            logger.info(f"Successfully transferred {amount} UAH for order {order_id} to coach {coach.id}")
+            return True
         else:
             logger.error(
                 f"Money transfer to coach {coach.id} failed. HTTP status: {response.status_code}, response: {response.text}"
             )
             return False
 
-    @staticmethod
-    def generate_signature(
-        dt: str, login: str, payee_id: str, shop_order_number: str, bill_amount: str, key: str
-    ) -> str:
-        str_to_sign = payee_id + dt + binascii.hexlify(shop_order_number.encode()).decode().upper() + bill_amount
-        str_to_sign = str_to_sign.upper() + binascii.hexlify(login.encode()).decode().upper()
-        return hmac.new(key.encode(), str_to_sign.encode(), hashlib.sha256).hexdigest().upper()
-
-    async def create_payment(self, profile_id: int, payment_option: str, order_number: str, amount: int) -> bool:
+    async def create_payment(self, profile_id: int, payment_option: str, order_id: str, amount: int) -> bool:
         url = urljoin(self.backend_url, "api/v1/payments/create/")
         data = {
             "profile": profile_id,
             "handled": False,
-            "shop_order_number": order_number,
+            "order_id": order_id,
             "payment_type": payment_option,
             "amount": amount,
             "status": "PENDING",
@@ -122,8 +78,8 @@ class PaymentService(BackendService):
         )
         return status_code == 201
 
-    async def get_payment_status(self, shop_order_number: str) -> str | None:
-        url = urljoin(self.backend_url, f"api/v1/payments/?shop_order_number={shop_order_number}")
+    async def get_payment_status(self, order_id: str) -> str | None:
+        url = urljoin(self.backend_url, f"api/v1/payments/?order_id={order_id}")
         status_code, payment_data = await self._api_request(
             "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
@@ -132,7 +88,7 @@ class PaymentService(BackendService):
             payment = payment_data["results"][0]
             return payment.get("status", "PENDING")
         else:
-            logger.error(f"Payment {shop_order_number} not found. HTTP status: {status_code}")
+            logger.error(f"Payment {order_id} not found. HTTP status: {status_code}")
             return
 
     async def update_payment(self, payment_id: int, data: dict) -> bool:
@@ -185,7 +141,7 @@ class PaymentService(BackendService):
             payments = payments_data.get("results", [])
             if payments:
                 last_payment = sorted(payments, key=lambda x: x["created_at"], reverse=True)[0]
-                return last_payment["shop_order_number"], last_payment["shop_bill_id"]
+                return last_payment["order_id"]
 
         return None
 

@@ -18,7 +18,6 @@ from common.functions.profiles import get_or_load_profile, update_user_info
 from common.functions.text_utils import get_state_and_message, validate_birth_date
 from common.functions.utils import delete_messages
 from services.payment_service import payment_service
-from services.profile_service import profile_service
 from texts.resources import MessageText
 from texts.text_manager import translate
 
@@ -320,9 +319,11 @@ async def enter_wishes(message: Message, state: FSMContext):
             )
         elif data.get("request_type") == "program":
             timestamp = datetime.now().timestamp()
-            order_number = f"id_{profile.id}_program_{timestamp}"
-            await state.update_data(order_number=order_number, amount=coach.program_price)
-            if payment_link := await payment_service.get_program_link(order_number, coach.program_price):
+            order_id = f"id_{profile.id}_program_{timestamp}"
+            await state.update_data(order_id=order_id, amount=coach.program_price)
+            if payment_link := await payment_service.get_payment_link(
+                "pay", coach.program_price, order_id, "program payment"
+            ):
                 await state.set_state(States.handle_payment)
                 await message.answer(
                     translate(MessageText.follow_link, profile.language),
@@ -355,8 +356,7 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
                     await state.set_state(States.confirm_subscription_reset)
             else:
                 await callback_query.answer(translate(MessageText.saved, lang=profile.language))
-                profile_data = await profile_service.get_profile(profile.id)
-                await process_new_subscription(profile_data.get("email"), callback_query, profile, state)
+                await process_new_subscription(callback_query, profile, state)
         else:
             await callback_query.answer("❌")
     else:

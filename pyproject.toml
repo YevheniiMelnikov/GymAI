@@ -88,7 +88,7 @@ drf-yasg = "^1.21.7"
 djoser = "^2.2.3"
 cryptography = "^43.0.1"
 django-filter = "^24.3"
-liqpay = "^1.0.1"
+liqpay-python = "^1.1"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.8.0"

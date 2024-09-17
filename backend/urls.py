@@ -13,5 +13,5 @@ urlpatterns = [
     re_path(r"^auth/", include("djoser.urls.authtoken")),
     path("api/v1/", include("accounts.urls")),
     path("api/v1/", include("payments.urls")),
-    path('', include('home.urls')),
+    path("", include("home.urls")),
 ]
