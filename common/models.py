@@ -96,11 +96,10 @@ class Payment(BaseEntity):
     id: int
     profile: int
     payment_type: str
-    shop_order_number: str
+    order_id: str
     amount: int
     status: str
     created_at: float
     updated_at: float
-    shop_bill_id: str | None = None
     handled: bool = False
     error: str | None = None

@@ -59,7 +59,7 @@ class PaymentHandler:
 
     async def process_payment(self, payment: Payment) -> None:
         try:
-            payment_status = await self.payment_service.get_payment_status(payment.shop_order_number)
+            payment_status = await self.payment_service.get_payment_status(payment.order_id)
             profile = Profile.from_dict(await self.profile_service.get_profile(payment.profile))
             if not profile:
                 logger.error(f"Profile not found for payment {payment.id}")
@@ -81,14 +81,14 @@ class PaymentHandler:
                 coach = self.cache_manager.get_coach_by_id(client.assigned_to.pop())
                 loop = asyncio.get_running_loop()
                 transfer_result = await loop.run_in_executor(
-                    None, self.payment_service.transfer_to_card, coach, str(payment.amount), payment.shop_order_number
+                    None, self.payment_service.transfer_to_card, coach, str(payment.amount), payment.order_id
                 )
                 if transfer_result and await self.payment_service.update_payment(
                     payment.id, dict(status=PAYMENT_STATUS_CLOSED)
                 ):
-                    logger.info(f"Payment {payment.shop_order_number} marked as {PAYMENT_STATUS_CLOSED}")
+                    logger.info(f"Payment {payment.order_id} marked as {PAYMENT_STATUS_CLOSED}")
             except Exception as e:
-                logger.error(f"Error processing payment {payment.shop_order_number}: {e}")
+                logger.error(f"Error processing payment {payment.order_id}: {e}")
 
     async def handle_failed_payment(self, payment: Payment, profile: Profile) -> None:
         client = self.cache_manager.get_client_by_id(profile.id)

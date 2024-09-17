@@ -152,16 +152,16 @@ async def edit_subscription_days(
         await callback_query.message.delete()
 
 
-async def process_new_subscription(
-    email: str, callback_query: CallbackQuery, profile: Profile, state: FSMContext
-) -> None:
+async def process_new_subscription(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     await callback_query.answer(translate(MessageText.checkbox_reminding, profile.language), show_alert=True)
     timestamp = datetime.now().timestamp()
-    order_number = f"id_{profile.id}_subscription_{timestamp}"
+    order_id = f"id_{profile.id}_subscription_{timestamp}"
     client = cache_manager.get_client_by_id(profile.id)
     coach = cache_manager.get_coach_by_id(client.assigned_to.pop())
-    await state.update_data(order_number=order_number, amount=coach.subscription_price)
-    if payment_link := await payment_service.get_subscription_link(email, order_number, coach.subscription_price):
+    await state.update_data(order_id=order_id, amount=coach.subscription_price)
+    if payment_link := await payment_service.get_payment_link(
+        "subscribe", coach.subscription_price, order_id, "subscription payment"
+    ):
         await state.set_state(States.handle_payment)
         await callback_query.message.answer(
             translate(MessageText.follow_link, profile.language),

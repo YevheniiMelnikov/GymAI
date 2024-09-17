@@ -1,7 +1,11 @@
-from xml.etree import ElementTree as ET
+import base64
+import json
+import os
 
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
+from liqpay import LiqPay
 from rest_framework import status, generics
 from rest_framework.exceptions import PermissionDenied, NotFound
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -89,72 +93,44 @@ class PaymentWebhookView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
-        if request.content_type == "application/json":
-            return self.handle_json(request)
-        elif request.content_type == "application/xml" or request.content_type == "text/xml":
-            return self.handle_xml(request)
-        else:
-            return Response({"detail": "Unsupported content type"}, status=status.HTTP_400_BAD_REQUEST)
-
-    def handle_json(self, request):
         try:
-            data = request.data
+            data = request.POST.get("data")
+            signature = request.POST.get("signature")
 
-            if "shopBillId" not in data or "status" not in data or "shopOrderNumber" not in data:
-                return Response({"detail": "Missing required fields."}, status=status.HTTP_400_BAD_REQUEST)
+            if not data or not signature:
+                return JsonResponse({"detail": "Missing data or signature."}, status=status.HTTP_400_BAD_REQUEST)
 
-            bill_id = data.get("shopBillId")
-            order_number = data.get("shopOrderNumber")
-            payment_status = data.get("status")
-            error_message = data.get("errorMessage", "")
+            liqpay_client = LiqPay(os.getenv("PAYMENT_PUB_KEY"), os.getenv("PAYMENT_PRIVATE_KEY"))
+            sign = liqpay_client.str_to_sign(os.getenv("PAYMENT_PRIVATE_KEY") + data + os.getenv("PAYMENT_PRIVATE_KEY"))
+            if sign != signature:
+                return JsonResponse({"detail": "Invalid signature."}, status=status.HTTP_400_BAD_REQUEST)
 
-            self.process_payment(order_number, bill_id, payment_status, error_message)
+            decoded_data = base64.b64decode(data).decode("utf-8")
+            payment_info = json.loads(decoded_data)
+            order_id = payment_info.get("order_id")
+            payment_status = payment_info.get("status")
+            error_message = payment_info.get("err_description", "")
+            self.process_payment(order_id, payment_status, error_message)
 
-            if payment_status == "PAYED":
-                return Response({"result": "OK"}, status=status.HTTP_200_OK)
+            if status == "success":
+                return JsonResponse({"result": "OK"}, status=status.HTTP_200_OK)
             else:
-                return Response({"result": "FAILURE"}, status=status.HTTP_200_OK)
+                return JsonResponse({"result": "FAILURE"}, status=status.HTTP_200_OK)
 
         except Exception as e:
-            return Response({"detail": f"Invalid webhook data: {e}"}, status=status.HTTP_400_BAD_REQUEST)
-
-    def handle_xml(self, request):
-        try:
-            xml_data = request.body.decode("utf-8")
-            root = ET.fromstring(xml_data)
-
-            bill_id = root.findtext("shopBillId")
-            order_number = root.findtext("shopOrderNumber")
-            payment_status = root.findtext("status")
-            error_message = root.findtext("errorMessage", "")
-
-            if not bill_id or not order_number or not payment_status:
-                return Response({"detail": "Missing required fields in XML."}, status=status.HTTP_400_BAD_REQUEST)
-
-            self.process_payment(order_number, bill_id, payment_status, error_message)
-
-            if payment_status == "PAYED":
-                return Response({"result": "OK"}, status=status.HTTP_200_OK)
-            else:
-                return Response({"result": "FAILURE"}, status=status.HTTP_200_OK)
-
-        except ET.ParseError as e:
-            return Response({"detail": f"Invalid XML data: {e}"}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            return Response({"detail": f"Error processing payment: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+            return JsonResponse({"detail": f"Error processing payment: {e}"}, status=status.HTTP_400_BAD_REQUEST)
 
     @staticmethod
-    def process_payment(order_number: str, bill_id: str, payment_status: str, error_message: str = "") -> None:
+    def process_payment(order_id: str, payment_status: str, error_message: str = "") -> None:
         try:
-            payment = get_object_or_404(Payment, shop_order_number=order_number)
-            payment.shop_bill_id = bill_id
+            payment = get_object_or_404(Payment, order_id=order_id)
             payment.status = payment_status
             payment.error = error_message
             payment.handled = False
             payment.save()
 
         except Payment.DoesNotExist:
-            raise NotFound(detail="Payment not found", code=status.HTTP_404_NOT_FOUND)
+            raise NotFound(detail=f"Payment {order_id} not found", code=status.HTTP_404_NOT_FOUND)
 
 
 class PaymentListView(generics.ListAPIView):

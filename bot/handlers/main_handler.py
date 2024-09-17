@@ -221,7 +221,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         user = await bot.get_chat(callback_query.from_user.id)
         contact = f"@{user.username}" if user.username else callback_query.from_user.id
         subscription = cache_manager.get_subscription(profile.id)
-        shop_order_number, shop_bill_id = await payment_service.get_last_subscription_payment(profile.id)
+        order_id = await payment_service.get_last_subscription_payment(profile.id)
         payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
         next_payment_date = payment_date + relativedelta(months=1)
         async with aiohttp.ClientSession():
@@ -231,8 +231,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
                     profile=profile.id,
                     contact=contact,
                     next_payment_date=next_payment_date.strftime("%Y-%m-%d"),
-                    shop_order_number=shop_order_number,
-                    shop_bill_id=shop_bill_id,
+                    order_id=order_id,
                 ),
             )
 

@@ -68,7 +68,7 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
     profile = await get_or_load_profile(callback_query.from_user.id)
     if callback_query.data == "done":
         data = await state.get_data()
-        order_number = data.get("order_number")
+        order_id = data.get("order_id")
         amount = data.get("amount")
         if data.get("request_type") == "program":
             cache_program_data(data, profile.id)
@@ -91,7 +91,7 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
             }
             cache_manager.save_subscription(profile.id, subscription_data)
         cache_manager.set_payment_status(profile.id, True, data.get("request_type"))
-        await payment_service.create_payment(profile.id, data.get("request_type"), order_number, amount)
+        await payment_service.create_payment(profile.id, data.get("request_type"), order_id, amount)
         await callback_query.message.answer(translate(MessageText.payment_in_progress, profile.language))
 
     await show_main_menu(callback_query.message, profile, state)
