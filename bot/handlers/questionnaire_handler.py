@@ -17,6 +17,7 @@ from common.functions.menus import show_main_menu
 from common.functions.profiles import get_or_load_profile, update_user_info
 from common.functions.text_utils import get_state_and_message, validate_birth_date
 from common.functions.utils import delete_messages
+from common.settings import PROGRAM_DESCRIPTION
 from services.payment_service import payment_service
 from texts.resources import MessageText
 from texts.text_manager import translate
@@ -322,7 +323,7 @@ async def enter_wishes(message: Message, state: FSMContext):
             order_id = f"id_{profile.id}_program_{timestamp}"
             await state.update_data(order_id=order_id, amount=coach.program_price)
             if payment_link := await payment_service.get_payment_link(
-                "pay", coach.program_price, order_id, "program payment"
+                "pay", coach.program_price, order_id, PROGRAM_DESCRIPTION
             ):
                 await state.set_state(States.handle_payment)
                 await message.answer(

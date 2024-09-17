@@ -63,6 +63,27 @@ class PaymentService(BackendService):
             )
             return False
 
+    async def unsubscribe(self, order_id: str) -> bool:
+        try:
+            params = {
+                "action": "unsubscribe",
+                "version": "3",
+                "order_id": order_id,
+            }
+
+            response = self.payment_client.api("request", params)
+
+            if response.get("status") == "success":
+                logger.info(f"Successfully unsubscribed for order {order_id}")
+                return True
+            else:
+                logger.error(f"Unsubscribe failed for order {order_id}. Response: {response}")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error during unsubscribe: {e}")
+            return False
+
     async def create_payment(self, profile_id: int, payment_option: str, order_id: str, amount: int) -> bool:
         url = urljoin(self.backend_url, "api/v1/payments/create/")
         data = {
@@ -103,7 +124,7 @@ class PaymentService(BackendService):
         )
         if status_code == 200:
             payments_list = payments_data.get("results", [])
-            return [Payment.from_dict(payment) for payment in payments_list if not payment.handled]
+            return [Payment.from_dict(payment) for payment in payments_list if not payment.get("handled")]
         return []
 
     async def get_unclosed_payments(self) -> list[Payment]:
@@ -113,7 +134,9 @@ class PaymentService(BackendService):
         )
         if status_code == 200:
             payments_list = payments_data.get("results", [])
-            return [Payment.from_dict(payment) for payment in payments_list if payment.status == PAYMENT_STATUS_PAYED]
+            return [
+                Payment.from_dict(payment) for payment in payments_list if payment.get("status") == PAYMENT_STATUS_PAYED
+            ]
         return []
 
     async def get_expired_subscriptions(self, expired_before: str) -> list[dict]:
@@ -129,7 +152,7 @@ class PaymentService(BackendService):
         logger.error("Failed to retrieve expired subscriptions. HTTP status: {}".format(status_code))
         return []
 
-    async def get_last_subscription_payment(self, profile_id: int) -> tuple[str, str] | None:
+    async def get_last_subscription_payment(self, profile_id: int) -> str | None:
         url = urljoin(self.backend_url, "api/v1/payments/")
         data = {"profile": profile_id, "payment_type": "subscription"}
 
