@@ -18,7 +18,10 @@ class PaymentService(BackendService):
         self.checkout_url = os.getenv("CHECKOUT_URL")
         self.payment_client = LiqPay(os.getenv("PAYMENT_PUB_KEY"), os.getenv("PAYMENT_PRIVATE_KEY"))
 
-    async def get_payment_link(self, action: str, amount: str, order_id: str, description: str) -> str:
+    async def get_payment_link(
+        self, action: str, amount: str, order_id: str, description: str, client_email: str
+    ) -> str:
+        emails = [email for email in [client_email, os.getenv("EMAIL_HOST_USER")] if email]
         params = {
             "action": action,
             "amount": amount,
@@ -28,6 +31,9 @@ class PaymentService(BackendService):
             "version": "3",
             "server_url": os.getenv("PAYMENT_CALLBACK_URL"),
             "result_url": os.getenv("BOT_LINK"),
+            "rro_info": {
+                "delivery_emails": emails,
+            },
         }
 
         if action == "subscribe":

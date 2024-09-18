@@ -160,8 +160,9 @@ async def process_new_subscription(callback_query: CallbackQuery, profile: Profi
     client = cache_manager.get_client_by_id(profile.id)
     coach = cache_manager.get_coach_by_id(client.assigned_to.pop())
     await state.update_data(order_id=order_id, amount=coach.subscription_price)
+    email = cache_manager.get_profile_info_by_key(callback_query.from_user.id, profile.id, "email")
     if payment_link := await payment_service.get_payment_link(
-        "subscribe", coach.subscription_price, order_id, SUBSCRIPTION_DESCRIPTION
+        "subscribe", coach.subscription_price, order_id, SUBSCRIPTION_DESCRIPTION, email
     ):
         await state.set_state(States.handle_payment)
         await callback_query.message.answer(

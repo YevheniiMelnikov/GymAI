@@ -79,9 +79,10 @@ class PaymentHandler:
             try:
                 client = self.cache_manager.get_client_by_id(payment.profile)
                 coach = self.cache_manager.get_coach_by_id(client.assigned_to.pop())
+                amount = payment.amount // 2
                 loop = asyncio.get_running_loop()
                 transfer_result = await loop.run_in_executor(
-                    None, self.payment_service.transfer_to_card, coach, str(payment.amount), payment.order_id
+                    None, self.payment_service.transfer_to_card, coach, str(amount), payment.order_id
                 )
                 if transfer_result and await self.payment_service.update_payment(
                     payment.id, dict(status=PAYMENT_STATUS_CLOSED)
