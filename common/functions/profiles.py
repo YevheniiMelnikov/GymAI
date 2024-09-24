@@ -186,12 +186,13 @@ async def get_or_load_profile(telegram_id: int) -> Profile | None:
             profile = Profile.from_dict(profile_data)
             await profile_service.reset_telegram_id(profile.id, telegram_id)
             token = await user_service.get_user_token(profile.id)
+            user_data = profile_data.get("user", {})
             cache_manager.set_profile(
                 profile=profile,
-                username=profile_data.get("username", ""),
+                username=user_data.get("username", ""),
                 auth_token=token,
                 telegram_id=telegram_id,
-                email=profile_data.get("email", ""),
+                email=user_data.get("email", ""),
                 is_current=True,
             )
             return profile
