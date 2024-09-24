@@ -1,9 +1,10 @@
-BOT_PAYMENT_OPTIONS = "https://storage.googleapis.com/payments_options/"
+BOT_PAYMENT_OPTIONS = "https://storage.googleapis.com/services_promo/"
 FIRST_NAME = "Євгеній"
 LAST_NAME = "МЕЛЬНИКОВ"
 ADDRESS = "вул. Пимоненка, 13"
-PAYMENT_STATUS_PAYED = "PAYED"
-PAYMENT_STATUS_REJECTED = "REJECTED"
+SUCCESS_PAYMENT_STATUS = "success"
+FAILURE_PAYMENT_STATUS = "failure"
+SUBSCRIBED_PAYMENT_STATUS = "subscribed"
 PAYMENT_STATUS_CLOSED = "CLOSED"
 PAYMENT_CHECK_INTERVAL = 60
 SUBSCRIPTION_DESCRIPTION = "Оплата підписки"

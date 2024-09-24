@@ -7,7 +7,7 @@ from liqpay import LiqPay
 
 from services.backend_service import BackendService
 from common.models import Payment, Coach
-from common.settings import PAYMENT_STATUS_PAYED
+from common.settings import SUCCESS_PAYMENT_STATUS
 
 logger = loguru.logger
 
@@ -79,7 +79,7 @@ class PaymentService(BackendService):
 
             response = self.payment_client.api("request", params)
 
-            if response.get("status") == "success":
+            if response.get("status") == "unsubscribed":
                 logger.info(f"Successfully unsubscribed for order {order_id}")
                 return True
             else:
@@ -141,7 +141,9 @@ class PaymentService(BackendService):
         if status_code == 200:
             payments_list = payments_data.get("results", [])
             return [
-                Payment.from_dict(payment) for payment in payments_list if payment.get("status") == PAYMENT_STATUS_PAYED
+                Payment.from_dict(payment)
+                for payment in payments_list
+                if payment.get("status") == SUCCESS_PAYMENT_STATUS
             ]
         return []
 

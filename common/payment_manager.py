@@ -10,7 +10,13 @@ from common.cache_manager import cache_manager
 from common.functions.chat import client_request, send_message
 from common.functions.workout_plans import cancel_subscription
 from common.models import Payment, Profile
-from common.settings import PAYMENT_STATUS_PAYED, PAYMENT_STATUS_REJECTED, PAYMENT_STATUS_CLOSED, PAYMENT_CHECK_INTERVAL
+from common.settings import (
+    SUCCESS_PAYMENT_STATUS,
+    FAILURE_PAYMENT_STATUS,
+    PAYMENT_STATUS_CLOSED,
+    PAYMENT_CHECK_INTERVAL,
+    SUBSCRIBED_PAYMENT_STATUS,
+)
 from services.payment_service import payment_service
 from services.profile_service import profile_service
 from services.workout_service import workout_service
@@ -65,12 +71,11 @@ class PaymentHandler:
                 logger.error(f"Profile not found for payment {payment.id}")
                 return
 
-            if payment_status.status == PAYMENT_STATUS_PAYED:
+            if payment_status == SUCCESS_PAYMENT_STATUS or payment_status == SUBSCRIBED_PAYMENT_STATUS:
                 await self.handle_successful_payment(payment, profile)
-            elif payment_status.status == PAYMENT_STATUS_REJECTED:
+            elif payment_status == FAILURE_PAYMENT_STATUS:
                 await self.handle_failed_payment(payment, profile)
-            else:
-                logger.info(f"Payment {payment.id} has unhandled status: {payment_status.status}")
+
         except Exception as e:
             logger.exception(f"Error processing payment {payment.id}: {e}")
 
@@ -93,7 +98,7 @@ class PaymentHandler:
 
     async def handle_failed_payment(self, payment: Payment, profile: Profile) -> None:
         client = self.cache_manager.get_client_by_id(profile.id)
-        await self.payment_service.update_payment(payment.id, dict(handled=True, status=PAYMENT_STATUS_REJECTED))
+        await self.payment_service.update_payment(payment.id, dict(handled=True, status=FAILURE_PAYMENT_STATUS))
         if payment.payment_type == "subscription":
             subscription = self.cache_manager.get_subscription(profile.id)
             if subscription and subscription.enabled:
@@ -124,7 +129,7 @@ class PaymentHandler:
     async def handle_successful_payment(self, payment: Payment, profile: Profile) -> None:
         try:
             updated = await self.payment_service.update_payment(
-                payment.id, dict(handled=True, status=PAYMENT_STATUS_PAYED)
+                payment.id, dict(handled=True, status=SUCCESS_PAYMENT_STATUS)
             )
             if not updated:
                 logger.error(f"Failed to update payment status for {payment.id}")
