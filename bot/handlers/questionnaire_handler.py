@@ -322,8 +322,9 @@ async def enter_wishes(message: Message, state: FSMContext):
             timestamp = datetime.now().timestamp()
             order_id = f"id_{profile.id}_program_{timestamp}"
             await state.update_data(order_id=order_id, amount=coach.program_price)
+            email = cache_manager.get_profile_info_by_key(message.from_user.id, profile.id, "email")
             if payment_link := await payment_service.get_payment_link(
-                "pay", coach.program_price, order_id, PROGRAM_DESCRIPTION
+                "pay", coach.program_price, order_id, PROGRAM_DESCRIPTION, email
             ):
                 await state.set_state(States.handle_payment)
                 await message.answer(

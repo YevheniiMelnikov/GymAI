@@ -54,4 +54,4 @@ class FileManager:
 
 
 avatar_manager = FileManager("coach_avatars")
-gif_manager = FileManager("gif_exercises")
+gif_manager = FileManager("exercises_guide")
