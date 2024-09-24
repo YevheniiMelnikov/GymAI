@@ -123,10 +123,10 @@ def workout_experience_keyboard(lang_code: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
 
 
-def new_coach_request() -> InlineKeyboardMarkup:
+def new_coach_request(profile_id: int) -> InlineKeyboardMarkup:
     kb = InlineKeyboardBuilder()
-    kb.button(text="Принять", callback_data="coach_approve")
-    kb.button(text="Отклонить", callback_data="coach_decline")
+    kb.button(text="Принять", callback_data=f"approve_{profile_id}")
+    kb.button(text="Отклонить", callback_data=f"decline_{profile_id}")
     return kb.as_markup(one_time_keyboard=True)
 
 
