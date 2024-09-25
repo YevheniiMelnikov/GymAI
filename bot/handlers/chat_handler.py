@@ -37,23 +37,24 @@ async def contact_client(message: Message, state: FSMContext):
         return
 
     await state.update_data(sender_name=coach_name)
-    client_language = cache_manager.get_profile_info_by_key(client_profile.current_tg_id, client.id, "language")
-    await state.update_data(recipient_language=client_language)
+    await state.update_data(recipient_language=client_profile.language)
 
     if message.photo:
         photo = message.photo[-1]
         caption = message.caption if message.caption else ""
         await send_message(
-            client, caption, state, reply_markup=incoming_message(client_language, profile.id), photo=photo
+            client, caption, state, reply_markup=incoming_message(client_profile.language, profile.id), photo=photo
         )
     elif message.video:
         video = message.video
         caption = message.caption if message.caption else ""
         await send_message(
-            client, caption, state, reply_markup=incoming_message(client_language, profile.id), video=video
+            client, caption, state, reply_markup=incoming_message(client_profile.language, profile.id), video=video
         )
     else:
-        await send_message(client, message.text, state, reply_markup=incoming_message(client_language, profile.id))
+        await send_message(
+            client, message.text, state, reply_markup=incoming_message(client_profile.language, profile.id)
+        )
 
     await message.answer(translate(MessageText.message_sent, profile.language))
     logger.debug(f"Coach {profile.id} sent message to client {client.id}")
@@ -67,6 +68,7 @@ async def contact_coach(message: Message, state: FSMContext):
 
     try:
         coach = cache_manager.get_coach_by_id(data.get("recipient_id"))
+        coach_profile = Profile.from_dict(await profile_service.get_profile(coach.id))
         client_name = cache_manager.get_client_by_id(profile.id).name
     except UserServiceError as error:
         logger.error(f"Can't get data from cache: {error}")
@@ -75,20 +77,24 @@ async def contact_coach(message: Message, state: FSMContext):
         return
 
     await state.update_data(sender_name=client_name)
-    coach_data = await profile_service.get_profile(coach.id)
-    coach_lang = cache_manager.get_profile_info_by_key(coach_data.get("current_tg_id"), coach.id, "language") or "ua"
-    await state.update_data(recipient_language=coach_lang)
+    await state.update_data(recipient_language=coach_profile.language)
 
     if message.photo:
         photo = message.photo[-1]
         caption = message.caption if message.caption else ""
-        await send_message(coach, caption, state, reply_markup=incoming_message(coach_lang, profile.id), photo=photo)
+        await send_message(
+            coach, caption, state, reply_markup=incoming_message(coach_profile.language, profile.id), photo=photo
+        )
     elif message.video:
         video = message.video
         caption = message.caption if message.caption else ""
-        await send_message(coach, caption, state, reply_markup=incoming_message(coach_lang, profile.id), video=video)
+        await send_message(
+            coach, caption, state, reply_markup=incoming_message(coach_profile.language, profile.id), video=video
+        )
     else:
-        await send_message(coach, message.text, state, reply_markup=incoming_message(coach_lang, profile.id))
+        await send_message(
+            coach, message.text, state, reply_markup=incoming_message(coach_profile.language, profile.id)
+        )
 
     await message.answer(translate(MessageText.message_sent, profile.language))
     logger.debug(f"Client {profile.id} sent message to coach {coach.id}")

@@ -37,10 +37,10 @@ async def main() -> None:
     dp = Dispatcher(storage=RedisStorage.from_url(f"{redis_url}/0"))
     dp.include_routers(
         cmd_router,
+        message_router,
         chat_router,
         survey_router,
         main_router,
-        message_router,
         register_router,
         questionnaire_router,
         invalid_content_router,

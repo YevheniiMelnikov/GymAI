@@ -155,6 +155,11 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
     except UserServiceError:
         await callback_query.answer()
         user_data = await profile_service.get_profile(profile.id)
+
+        if user_data is None:
+            await start_profile_creation(callback_query.message, profile, state)
+            return
+
         if None in user_data.values():
             await start_profile_creation(callback_query.message, profile, state)
             return
