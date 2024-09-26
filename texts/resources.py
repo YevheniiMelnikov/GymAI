@@ -160,6 +160,7 @@ class MessageText(Enum):
     program_price = auto()
     enter_subscription_price = auto()
     subscription_price = auto()
+    price_warning = auto()
     exercise_weight = auto()
     program_guide = auto()
     select_exercise = auto()

@@ -75,7 +75,7 @@ class Subscription(BaseEntity):
     payment_date: str
     enabled: bool
     price: int
-    user: int
+    client_profile: int
     workout_type: str
     wishes: str
     workout_days: list[str] = field(default_factory=list)

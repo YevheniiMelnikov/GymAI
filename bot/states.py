@@ -29,8 +29,8 @@ class States(StatesGroup):
     work_experience = State()
     additional_info = State()
     payment_details = State()
-    enter_program_price = State()
-    enter_subscription_price = State()
+    program_price = State()
+    subscription_price = State()
     profile_photo = State()
     accept_policy = State()
 

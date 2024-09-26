@@ -4,6 +4,7 @@ from common.functions.profiles import assign_coach, get_or_load_profile, handle_
 from common.functions.utils import handle_clients_pagination
 from common.functions.workout_plans import manage_program, cancel_subscription
 from common.models import Coach, Profile
+from services.backend_service import backend_service
 from services.payment_service import payment_service
 from services.user_service import user_service
 from texts.resources import MessageText
@@ -62,15 +63,13 @@ async def process_password_reset(message: Message, state: FSMContext) -> None:
         profile = Profile.from_dict(data["profiles"][index])
         email = await user_service.get_user_email(profile.id)
         if email:
-            token = cache_manager.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
-            if not token:
-                token = await user_service.get_user_token(profile.id)
-            if await user_service.reset_password(email, token):
+            auth_token = await user_service.get_user_token(profile.id)
+            if await user_service.reset_password(email, auth_token):
                 await message.answer(
                     text=translate(MessageText.password_reset_sent, profile.language).format(email=email)
                 )
                 await state.clear()
-                await user_service.log_out(profile, token)
+                await user_service.log_out(profile, auth_token)
                 cache_manager.deactivate_profiles(profile.current_tg_id)
                 await message.answer(text=translate(MessageText.username, profile.language))
                 await state.set_state(States.username)
@@ -86,10 +85,8 @@ async def process_password_reset(message: Message, state: FSMContext) -> None:
 @main_router.message(States.feedback)
 async def handle_feedback(message: Message, state: FSMContext) -> None:
     profile = await get_or_load_profile(message.from_user.id)
-    token = cache_manager.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
-    if not token:
-        token = await user_service.get_user_token(profile.id)
-    if user_data := await user_service.get_user_data(token):
+    auth_token = await user_service.get_user_token(profile.id)
+    if user_data := await user_service.get_user_data(auth_token):
         if await backend_service.send_feedback(user_data.get("email"), user_data.get("username"), message.text):
             logger.info(f"User {profile.id} sent feedback")
             await message.answer(text=translate(MessageText.feedback_sent, lang=profile.language))
@@ -199,7 +196,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
             reply_markup=select_service(profile.language),
         )
 
-    elif callback_query.data == "edit_days":
+    elif callback_query.data == "change_days":
         await callback_query.answer()
         await state.update_data(edit_mode=True)
         await state.set_state(States.workout_days)

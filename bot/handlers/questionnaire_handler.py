@@ -201,11 +201,11 @@ async def payment_details(message: Message, state: FSMContext) -> None:
 
     program_price_msg = await message.answer(translate(MessageText.enter_program_price, lang=data.get("lang")))
     await state.update_data(chat_id=message.chat.id, message_ids=[program_price_msg.message_id])
-    await state.set_state(States.enter_program_price)
+    await state.set_state(States.program_price)
     await message.delete()
 
 
-@questionnaire_router.message(States.enter_program_price, F.text)
+@questionnaire_router.message(States.program_price, F.text)
 async def enter_program_price(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
@@ -225,11 +225,11 @@ async def enter_program_price(message: Message, state: FSMContext) -> None:
     await state.update_data(
         program_price=message.text, message_ids=[subscription_price_msg.message_id], chat_id=message.chat.id
     )
-    await state.set_state(States.enter_subscription_price)
+    await state.set_state(States.subscription_price)
     await message.delete()
 
 
-@questionnaire_router.message(States.enter_subscription_price, F.text)
+@questionnaire_router.message(States.subscription_price, F.text)
 async def enter_subscription_price(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
@@ -283,6 +283,13 @@ async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> No
         return
 
     state_to_set, message = get_state_and_message(callback_query.data, profile.language)
+    if state_to_set == States.subscription_price:
+        price_warning_msg = await callback_query.message.answer(
+            translate(MessageText.price_warning, lang=profile.language)
+        )
+        await state.update_data(
+            price_warning_msg_ids=[price_warning_msg.message_id], chat_id=callback_query.message.chat.id
+        )
     await state.update_data(edit_mode=True)
     reply_markup = workout_experience_keyboard(profile.language) if state_to_set == States.workout_experience else None
     await callback_query.message.answer(message, lang=profile.language, reply_markup=reply_markup)

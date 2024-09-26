@@ -53,7 +53,6 @@ class CacheManager:
         self,
         profile: Profile,
         username: str,
-        auth_token: str,
         telegram_id: int,
         email: str,
         is_current: bool = True,
@@ -65,7 +64,6 @@ class CacheManager:
                 "status": profile.status,
                 "language": profile.language,
                 "username": username,
-                "auth_token": auth_token,
                 "email": email,
                 "is_current": is_current,
                 "last_used": time.time(),
@@ -272,10 +270,7 @@ class CacheManager:
             subscription_data = self.redis.hget("workout_plans:subscriptions", str(profile_id))
             if subscription_data:
                 data = json.loads(subscription_data)
-                data["profile"] = profile_id
-
-                payment_date = data.get("payment_date")
-                if payment_date:
+                if payment_date := data.get("payment_date"):
                     payment_date = parse(payment_date)
                     data["payment_date"] = payment_date.strftime("%Y-%m-%d")
 
@@ -292,7 +287,7 @@ class CacheManager:
             "payment_date",
             "enabled",
             "price",
-            "user",
+            "client_profile",
             "workout_type",
             "workout_days",
             "exercises",
@@ -328,6 +323,8 @@ class CacheManager:
         return clients_with_workout
 
     def cache_gif_filename(self, exercise_name: str, filename: str) -> None:
+        if not exercise_name or not filename:
+            return
         try:
             self.redis.hset("exercise_gif_map", exercise_name, filename)
         except Exception as e:

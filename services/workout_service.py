@@ -44,11 +44,11 @@ class WorkoutService(BackendService):
         return False
 
     async def create_subscription(
-        self, profile_id: int, workout_days: list[str], wishes: str, amount: int
+        self, profile_id: int, workout_days: list[str], wishes: str, amount: int, auth_token: str
     ) -> int | None:
         url = urljoin(self.backend_url, "api/v1/subscriptions/")
         data = {
-            "user": profile_id,
+            "client_profile": profile_id,
             "enabled": False,
             "price": amount,
             "workout_days": workout_days,
@@ -57,17 +57,17 @@ class WorkoutService(BackendService):
             "exercises": {},
         }
         status_code, response = await self._api_request(
-            "post", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
+            "post", url, data, headers={"Authorization": f"Token {auth_token}"}
         )
         if status_code == 201 and response:
             return response.get("id")
         logger.error(f"Failed to create subscription for profile {profile_id}. HTTP status: {status_code}")
         return None
 
-    async def update_subscription(self, subscription_id: int, data: dict) -> bool:
+    async def update_subscription(self, subscription_id: int, data: dict, auth_token: str) -> bool:
         url = urljoin(self.backend_url, f"api/v1/subscriptions/{subscription_id}/")
         status_code, response = await self._api_request(
-            "put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
+            "put", url, data, headers={"Authorization": f"Token {auth_token}"}
         )
         if status_code == 200:
             return True

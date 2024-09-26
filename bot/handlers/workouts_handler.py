@@ -7,6 +7,7 @@ from common.functions.text_utils import format_program, get_translated_week_day
 from common.functions.utils import program_menu_pagination, short_url
 from common.functions.workout_plans import next_day_workout_plan, reset_workout_plan, save_workout_plan
 from common.models import Exercise, Program
+from services.user_service import user_service
 from services.workout_service import workout_service
 from texts.resources import ButtonText, MessageText
 from texts.text_manager import translate
@@ -270,9 +271,11 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
         client_lang = cache_manager.get_profile_info_by_key(client_data.get("current_tg_id"), client.id, "language")
         if data.get("subscription"):
             subscription_data = cache_manager.get_subscription(client_id).to_dict()
-            subscription_data.update(user=client_id, exercises=exercises)
-            await workout_service.update_subscription(subscription_data.get("id"), subscription_data)
-            cache_manager.update_subscription_data(client_id, {"exercises": exercises, "user": client_id})
+            subscription_data.update(client_profile=client_id, exercises=exercises)
+            auth_token = user_service.get_user_token(client_id)
+            await workout_service.update_subscription(subscription_data.get("id"), subscription_data, auth_token)
+            cache_manager.update_subscription_data(client_id, {"exercises": exercises, "client_profile": client_id})
+            cache_manager.reset_program_payment_status(client_id, "subscription")
             await send_message(
                 recipient=client,
                 text=translate(MessageText.new_program, lang=client_lang),
@@ -288,7 +291,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
             if program_data := await workout_service.save_program(client_id, exercises, split_number):
                 program_data.update(workout_type=workout_type)
                 cache_manager.set_program(client_id, program_data)
-                cache_manager.set_payment_status(client_id, False, "program")
+                cache_manager.reset_program_payment_status(client_id, "program")
             await send_message(
                 recipient=client,
                 text=translate(MessageText.new_program, lang=client_lang),
@@ -456,8 +459,10 @@ async def confirm_subscription_reset(callback_query: CallbackQuery, state: FSMCo
     if callback_query.data == "yes":
         await callback_query.answer(translate(MessageText.workout_plan_deleted, profile.language), show_alert=True)
         cache_manager.update_subscription_data(profile.id, dict(exercises={}, workout_days=data.get("workout_days")))
-        subscription = cache_manager.get_subscription(profile.id)
-        await workout_service.update_subscription(subscription.id, subscription.to_dict())
+        subscription_data = cache_manager.get_subscription(profile.id).to_dict()
+        subscription_data.update(client_profile=profile.id)
+        auth_token = await user_service.get_user_token(profile.id)
+        await workout_service.update_subscription(subscription_data.get("id"), subscription_data, auth_token)
         client = cache_manager.get_client_by_id(profile.id)
         coach = cache_manager.get_coach_by_id(client.assigned_to.pop())
         await send_message(

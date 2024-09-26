@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import loguru
 from dateutil.relativedelta import relativedelta
 
+from common.sheets_manager import sheets_manager
 from services.backend_service import backend_service
 from common.cache_manager import cache_manager
 from common.functions.chat import client_request, send_message
@@ -13,12 +14,13 @@ from common.models import Payment, Profile
 from common.settings import (
     SUCCESS_PAYMENT_STATUS,
     FAILURE_PAYMENT_STATUS,
-    PAYMENT_STATUS_CLOSED,
     PAYMENT_CHECK_INTERVAL,
     SUBSCRIBED_PAYMENT_STATUS,
+    PAYMENT_STATUS_CLOSED,
 )
 from services.payment_service import payment_service
 from services.profile_service import profile_service
+from services.user_service import user_service
 from services.workout_service import workout_service
 from texts.resources import MessageText
 from texts.text_manager import translate
@@ -41,16 +43,37 @@ class PaymentHandler:
     async def schedule_unclosed_payment_check(self) -> None:
         while True:
             now = datetime.now(timezone.utc)
-            target_time = now.replace(day=1, hour=12, minute=0, second=0, microsecond=0)
+            target_time = now.replace(day=1, hour=8, minute=0, second=0, microsecond=0)
 
             if now >= target_time:
                 target_time += relativedelta(months=1)
 
             delay = (target_time - now).total_seconds()
-            logger.info(f"Scheduled unclosed payment processing at {target_time.isoformat()} UTC (in {delay} seconds)")
+            logger.debug(f"Scheduled unclosed payment processing at {target_time.isoformat()} UTC (in {delay} seconds)")
             await asyncio.sleep(delay)
 
             await self.process_unclosed_payments()
+
+    async def process_unclosed_payments(self) -> None:
+        payments_data = []
+
+        for payment in await self.payment_service.get_unclosed_payments():
+            try:
+                client = self.cache_manager.get_client_by_id(payment.profile)
+                coach = self.cache_manager.get_coach_by_id(client.assigned_to.pop())
+
+                payments_data.append(
+                    [coach.name, coach.surname, coach.payment_details, payment.order_id, payment.amount // 2]
+                )
+
+                if await self.payment_service.update_payment(payment.id, dict(status=PAYMENT_STATUS_CLOSED)):
+                    logger.info(f"Payment {payment.order_id} marked as {PAYMENT_STATUS_CLOSED}")
+            except Exception as e:
+                logger.error(f"Error processing payment {payment.order_id}: {e}", exc_info=True)
+
+        if payments_data:
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, sheets_manager.create_new_payment_sheet, payments_data)
 
     async def check_payments(self) -> None:
         while True:
@@ -78,23 +101,6 @@ class PaymentHandler:
 
         except Exception as e:
             logger.exception(f"Error processing payment {payment.id}: {e}")
-
-    async def process_unclosed_payments(self) -> None:
-        for payment in await self.payment_service.get_unclosed_payments():
-            try:
-                client = self.cache_manager.get_client_by_id(payment.profile)
-                coach = self.cache_manager.get_coach_by_id(client.assigned_to.pop())
-                amount = payment.amount // 2
-                loop = asyncio.get_running_loop()
-                transfer_result = await loop.run_in_executor(
-                    None, self.payment_service.transfer_to_card, coach, str(amount), payment.order_id
-                )
-                if transfer_result and await self.payment_service.update_payment(
-                    payment.id, dict(status=PAYMENT_STATUS_CLOSED)
-                ):
-                    logger.info(f"Payment {payment.order_id} marked as {PAYMENT_STATUS_CLOSED}")
-            except Exception as e:
-                logger.error(f"Error processing payment {payment.order_id}: {e}")
 
     async def handle_failed_payment(self, payment: Payment, profile: Profile) -> None:
         client = self.cache_manager.get_client_by_id(profile.id)
@@ -166,7 +172,10 @@ class PaymentHandler:
                 return
 
             current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-            self.cache_manager.update_subscription_data(profile.id, {"enabled": True, "payment_date": current_date})
+            self.cache_manager.update_subscription_data(
+                profile.id, {"client_profile": profile.id, "enabled": True, "payment_date": current_date}
+            )
+            auth_token = await user_service.get_user_token(profile.id)
             await self.workout_service.update_subscription(
                 subscription.id,
                 {
@@ -175,6 +184,7 @@ class PaymentHandler:
                     "user": profile.id,
                     "payment_date": current_date,
                 },
+                auth_token,
             )
             data = {
                 "request_type": "subscription",
