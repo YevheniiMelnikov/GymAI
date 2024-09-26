@@ -8,7 +8,7 @@ from bot.keyboards import new_coach_request
 from common.cache_manager import cache_manager
 from common.file_manager import avatar_manager
 from common.functions.exercises import edit_subscription_exercises
-from common.functions.menus import show_exercises_menu, show_main_menu, show_manage_subscription_menu
+from common.functions.menus import show_exercises_menu, show_main_menu, manage_subscription
 from common.functions.profiles import get_or_load_profile
 from common.functions.text_utils import format_new_client_message, get_client_page, get_workout_types
 from common.functions.utils import *
@@ -182,7 +182,7 @@ async def create_workouts(callback_query: CallbackQuery, state: FSMContext):
     client_id = parts[2]
     await state.update_data(client_id=client_id)
     if service == "subscription":
-        await show_manage_subscription_menu(callback_query, profile.language, client_id, state)
+        await manage_subscription(callback_query, profile.language, client_id, state)
     else:
         await callback_query.message.answer(translate(MessageText.workouts_number, profile.language))
         await state.set_state(States.workouts_number)

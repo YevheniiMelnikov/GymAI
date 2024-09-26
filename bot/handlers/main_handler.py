@@ -173,7 +173,7 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
         return
 
     if action == "subscription":
-        await show_manage_subscription_menu(callback_query, profile.language, client_id, state)
+        await manage_subscription(callback_query, profile.language, client_id, state)
         return
 
     try:
@@ -225,7 +225,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
             await bot.send_message(
                 OWNER_ID,
                 translate(MessageText.subscription_cancel_request, lang="ru").format(
-                    profile=profile.id,
+                    profile_id=profile.id,
                     contact=contact,
                     next_payment_date=next_payment_date.strftime("%Y-%m-%d"),
                     order_id=order_id,

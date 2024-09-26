@@ -144,6 +144,7 @@ async def manage_program(callback_query: CallbackQuery, profile: Profile, client
         await callback_query.answer(
             text=translate(MessageText.payment_required, lang=profile.language), show_alert=True
         )
+        await state.set_state(States.show_clients)
         return
 
     if workout_data and workout_data.exercises_by_day:

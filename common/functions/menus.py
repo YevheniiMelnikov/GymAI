@@ -338,14 +338,13 @@ async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, 
     await callback_query.message.delete()
 
 
-async def show_manage_subscription_menu(
-    callback_query: CallbackQuery, lang: str, client_id: str, state: FSMContext
-) -> None:
+async def manage_subscription(callback_query: CallbackQuery, lang: str, client_id: str, state: FSMContext) -> None:
     await state.clear()
     subscription = cache_manager.get_subscription(client_id)
 
     if not subscription or not subscription.enabled:
-        await callback_query.answer(translate(MessageText.payment_required, lang))
+        await callback_query.answer(translate(MessageText.payment_required, lang), show_alert=True)
+        await state.set_state(States.show_clients)
         return
 
     await callback_query.answer()

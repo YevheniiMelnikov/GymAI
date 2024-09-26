@@ -565,7 +565,7 @@ subscription_canceled:
   ua: "Ваш запит на зупинку підписки передано платіжному сервісу. За бажання ви можете оформити її повторно 🙂"
 
 subscription_cancel_request:  # admin message
-  ru: "Запрос на отмену подписки!\nprofile_id: {profile_id}\ncontact: {contact}\nnext_payment_date_str: {next_payment_date_str}\norder_id: {order_id}"
+  ru: "Запрос на отмену подписки!\nprofile_id: {profile_id}\ncontact: {contact}\nnext_payment_date: {next_payment_date}\norder_id: {order_id}"
 
 subscription_cancel_warning:
   eng: "There was an error during the renewal of your subscription, it will be suspended {date}\nIf you want, you can subscribe again\nYou can contact support by mail: {mail} or in telegram: {tg} ✍️"
