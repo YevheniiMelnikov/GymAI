@@ -87,10 +87,10 @@ def get_state_and_message(callback: str, lang: str) -> tuple[State, str]:
         "additional_info": (States.additional_info, translate(MessageText.additional_info, lang=lang)),
         "payment_details": (States.payment_details, translate(MessageText.payment_details, lang=lang)),
         "subscription_price": (
-            States.enter_subscription_price,
+            States.subscription_price,
             translate(MessageText.enter_subscription_price, lang=lang),
         ),
-        "program_price": (States.enter_program_price, translate(MessageText.enter_program_price, lang=lang)),
+        "program_price": (States.program_price, translate(MessageText.enter_program_price, lang=lang)),
         "photo": (States.profile_photo, translate(MessageText.upload_photo, lang=lang)),
     }.get(callback, (None, None))
 

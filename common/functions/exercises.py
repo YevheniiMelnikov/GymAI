@@ -20,6 +20,7 @@ from common.functions.utils import delete_messages
 from common.models import Exercise, Profile, Subscription
 from common.settings import SUBSCRIPTION_DESCRIPTION
 from services.payment_service import payment_service
+from services.user_service import user_service
 from services.workout_service import workout_service
 from texts.exercises import exercise_dict
 from texts.resources import MessageText
@@ -94,7 +95,8 @@ async def find_exercise_gif(exercise: str) -> str | None:
                     matching_blob = blobs[0]
                     if matching_blob.exists():
                         file_url = f"https://storage.googleapis.com/{gif_manager.bucket_name}/{matching_blob.name}"
-                        cache_manager.cache_gif_filename(exercise, matching_blob.name)
+                        for synonym in synonyms:
+                            cache_manager.cache_gif_filename(synonym.lower(), matching_blob.name)
                         return file_url
 
     except Exception as e:
@@ -144,9 +146,11 @@ async def edit_subscription_days(
     subscription_data = subscription.to_dict()
     exercises = subscription_data.get("exercises", {})
     updated_exercises = {days[i]: exercises for i, exercises in enumerate(exercises.values())}
-    subscription_data.update(user=profile.id, exercises=updated_exercises)
-    cache_manager.update_subscription_data(profile.id, {"exercises": updated_exercises, "user": profile.id})
-    await workout_service.update_subscription(subscription_data.get("id"), subscription_data)
+    payload = {"workout_days": days, "exercises": updated_exercises, "client_profile": profile.id}
+    subscription_data.update(payload)
+    cache_manager.update_subscription_data(profile.id, payload)
+    auth_token = await user_service.get_user_token(profile.id)
+    await workout_service.update_subscription(subscription_data.get("id"), subscription_data, auth_token)
     await state.set_state(States.show_subscription)
     await show_subscription_page(callback_query, state, subscription)
     with suppress(TelegramBadRequest):

@@ -69,8 +69,7 @@ async def assign_coach(coach: Coach, client: Client) -> None:
 
 
 async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
-    token = await user_service.log_in(username=data["username"], password=message.text)
-    if not token:
+    if not await user_service.log_in(username=data["username"], password=message.text):
         attempts = data.get("login_attempts", 0) + 1
         await state.update_data(login_attempts=attempts)
         if attempts >= 3:
@@ -94,9 +93,7 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
     logger.info(f"Telegram user {message.from_user.id} logged in with profile_id {profile.id}")
     await state.update_data(login_attempts=0)
     email = await user_service.get_user_email(profile.id)
-    cache_manager.set_profile(
-        profile=profile, username=data["username"], auth_token=token, telegram_id=message.from_user.id, email=email
-    )
+    cache_manager.set_profile(profile=profile, username=data["username"], telegram_id=message.from_user.id, email=email)
     await profile_service.reset_telegram_id(profile.id, message.from_user.id)
     logger.debug(f"profile_id {profile.id} set for user {message.from_user.id}")
     await profile_service.edit_profile(profile_id=profile.id, data={"current_tg_id": message.from_user.id})
@@ -139,9 +136,7 @@ async def register_user(callback_query: CallbackQuery, state: FSMContext, data: 
     )
 
     logger.info(f"User {email} registered successfully.")
-    token = await user_service.log_in(username=username, password=password)
-
-    if not token:
+    if not await user_service.log_in(username=username, password=password):
         logger.error(f"Login failed for user {username} after registration")
         await callback_query.message.answer(text=translate(MessageText.unexpected_error, data.get("lang")))
         await state.clear()
@@ -156,7 +151,6 @@ async def register_user(callback_query: CallbackQuery, state: FSMContext, data: 
     cache_manager.set_profile(
         profile=profile_data,
         username=username,
-        auth_token=token,
         telegram_id=callback_query.from_user.id,
         email=email,
     )
@@ -185,12 +179,10 @@ async def get_or_load_profile(telegram_id: int) -> Profile | None:
         if profile_data := await profile_service.get_profile_by_telegram_id(telegram_id):
             profile = Profile.from_dict(profile_data)
             await profile_service.reset_telegram_id(profile.id, telegram_id)
-            token = await user_service.get_user_token(profile.id)
             user_data = profile_data.get("user", {})
             cache_manager.set_profile(
                 profile=profile,
                 username=user_data.get("username", ""),
-                auth_token=token,
                 telegram_id=telegram_id,
                 email=user_data.get("email", ""),
                 is_current=True,
@@ -200,9 +192,9 @@ async def get_or_load_profile(telegram_id: int) -> Profile | None:
             return None
 
 
-async def handle_logout(callback_query, profile, state):
+async def handle_logout(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     await callback_query.answer("🏃")
-    auth_token = cache_manager.get_profile_info_by_key(callback_query.message.from_user.id, profile.id, "auth_token")
+    auth_token = await user_service.get_user_token(profile.id)
     await user_service.log_out(profile, auth_token)
     cache_manager.deactivate_profiles(profile.current_tg_id)
     await state.update_data(lang=profile.language)

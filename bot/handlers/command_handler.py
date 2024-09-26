@@ -44,7 +44,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.update_data(chat_id=message.chat.id)
     if profile := await get_or_load_profile(message.from_user.id):
         logger.info(f"User with profile_id {profile.id} started bot")
-        auth_token = cache_manager.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
+        auth_token = await user_service.get_user_token(profile.id)
         await user_service.log_out(profile, auth_token)
         cache_manager.deactivate_profiles(profile.current_tg_id)
         await state.update_data(lang=profile.language)
@@ -71,7 +71,7 @@ async def cmd_logout(message: Message, state: FSMContext) -> None:
     await state.clear()
     if profile := await get_or_load_profile(message.from_user.id):
         language = profile.language if profile.language else "ua"
-        auth_token = cache_manager.get_profile_info_by_key(message.from_user.id, profile.id, "auth_token")
+        auth_token = await user_service.get_user_token(profile.id)
         await user_service.log_out(profile, auth_token)
         cache_manager.deactivate_profiles(profile.current_tg_id)
         await state.update_data(lang=language)

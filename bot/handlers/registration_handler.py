@@ -211,10 +211,8 @@ async def delete_profile_confirmation(callback_query: CallbackQuery, state: FSMC
             if await check_assigned_clients(profile.id):
                 await callback_query.answer(translate(MessageText.unable_to_delete_profile, lang=lang))
                 return
-        token = cache_manager.get_profile_info_by_key(callback_query.from_user.id, profile.id, "auth_token")
-        if not token:
-            token = await user_service.get_user_token(profile.id)
-        if await profile_service.delete_profile(profile.id, token):
+        auth_token = await user_service.get_user_token(profile.id)
+        if await profile_service.delete_profile(profile.id, auth_token):
             cache_manager.delete_profile(callback_query.from_user.id, profile.id)
             await callback_query.message.answer(translate(MessageText.profile_deleted, profile.language))
             await callback_query.message.answer(

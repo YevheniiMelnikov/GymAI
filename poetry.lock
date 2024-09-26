@@ -919,13 +919,13 @@ grpcio-gcp = ["grpcio-gcp (>=0.2.2,<1.0.dev0)"]
 
 [[package]]
 name = "google-auth"
-version = "2.34.0"
+version = "2.35.0"
 description = "Google Authentication Library"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "google_auth-2.34.0-py2.py3-none-any.whl", hash = "sha256:72fd4733b80b6d777dcde515628a9eb4a577339437012874ea286bca7261ee65"},
-    {file = "google_auth-2.34.0.tar.gz", hash = "sha256:8eb87396435c19b20d32abd2f984e31c191a15284af72eb922f10e5bde9c04cc"},
+    {file = "google_auth-2.35.0-py2.py3-none-any.whl", hash = "sha256:25df55f327ef021de8be50bad0dfd4a916ad0de96da86cd05661c9297723ad3f"},
+    {file = "google_auth-2.35.0.tar.gz", hash = "sha256:f4c64ed4e01e8e8b646ef34c018f8bf3338df0c8e37d8b3bba40e7f574a3278a"},
 ]
 
 [package.dependencies]
@@ -939,6 +939,24 @@ enterprise-cert = ["cryptography", "pyopenssl"]
 pyopenssl = ["cryptography (>=38.0.3)", "pyopenssl (>=20.0.0)"]
 reauth = ["pyu2f (>=0.1.5)"]
 requests = ["requests (>=2.20.0,<3.0.0.dev0)"]
+
+[[package]]
+name = "google-auth-oauthlib"
+version = "1.2.1"
+description = "Google Authentication Library"
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "google_auth_oauthlib-1.2.1-py2.py3-none-any.whl", hash = "sha256:2d58a27262d55aa1b87678c3ba7142a080098cbc2024f903c62355deb235d91f"},
+    {file = "google_auth_oauthlib-1.2.1.tar.gz", hash = "sha256:afd0cad092a2eaa53cd8e8298557d6de1034c6cb4a740500b5357b648af97263"},
+]
+
+[package.dependencies]
+google-auth = ">=2.15.0"
+requests-oauthlib = ">=0.7.0"
+
+[package.extras]
+tool = ["click (>=6.0.0)"]
 
 [[package]]
 name = "google-cloud-core"
@@ -1054,6 +1072,21 @@ protobuf = ">=3.20.2,<4.21.1 || >4.21.1,<4.21.2 || >4.21.2,<4.21.3 || >4.21.3,<4
 
 [package.extras]
 grpc = ["grpcio (>=1.44.0,<2.0.0.dev0)"]
+
+[[package]]
+name = "gspread"
+version = "6.1.2"
+description = "Google Spreadsheets Python API"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "gspread-6.1.2-py3-none-any.whl", hash = "sha256:345996fbb74051ee574e3d330a375ac625774f289459f73cb1f8b6fb3cf4cac5"},
+    {file = "gspread-6.1.2.tar.gz", hash = "sha256:b147688b8c7a18c9835d5f998997ec17c97c0470babcab17f65ac2b3a32402b7"},
+]
+
+[package.dependencies]
+google-auth = ">=1.12.0"
+google-auth-oauthlib = ">=0.4.1"
 
 [[package]]
 name = "h11"
@@ -2237,4 +2270,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "214bf8a578c049ad6b5c573cb356c8381e387c90640e3a5112ca3c8a1543432f"
+content-hash = "05f133a4feaf78b52c9aae52c1fddafd1b633addbf5d1f0dbe5f8c4fea923ea7"

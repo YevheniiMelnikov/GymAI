@@ -365,7 +365,7 @@ def show_subscriptions_kb(lang_code: str) -> InlineKeyboardMarkup:
     buttons = [
         [InlineKeyboardButton(text=translate(ButtonText.exercises, lang_code), callback_data="exercises")],
         [InlineKeyboardButton(text=translate(ButtonText.contact_coach, lang_code), callback_data="contact")],
-        [InlineKeyboardButton(text=translate(ButtonText.edit_days, lang_code), callback_data="edit_days")],
+        [InlineKeyboardButton(text=translate(ButtonText.edit_days, lang_code), callback_data="change_days")],
         [InlineKeyboardButton(text=translate(ButtonText.cancel_subscription, lang_code), callback_data="cancel")],
         [InlineKeyboardButton(text=translate(ButtonText.prev_menu), callback_data="back")],
     ]

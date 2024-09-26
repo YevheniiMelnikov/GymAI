@@ -611,3 +611,8 @@ program_price:
   eng: "The program fee is {price} UAH"
   ru: "Стоимость программы составляет {price} грн"
   ua: "Вартість програми становить {price} грн"
+
+price_warning:
+  eng: "If your current customers have a subscription - the change in subscription price will not affect their regular bank payment. If you do not want to work with your old clients at the previously specified price and wish to cancel them - contact support @achieve_together_help ✍️"
+  ru: "Если у ваших текущих клиентов оформлена подписка - смена стоимости подписки не затронет их регулярный платеж в банке. Если вы не желаете работать со старыми клиентами по ранее указанной цене и желаете от них отказаться - свяжитесь с поддержкой @achieve_together_help ✍️"
+  ua: "Якщо у ваших поточних клієнтів оформлена підписка - зміна вартості підписки не торкнеться їхнього регулярного платежу в банку. Якщо ви не бажаєте працювати зі старими клієнтами за раніше зазначеною ціною і бажаєте від них відмовитися - зв'яжіться з підтримкою @achieve_together_help ✍️"

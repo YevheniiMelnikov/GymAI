@@ -286,8 +286,7 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
 
 async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     if program := cache_manager.get_program(profile.id):
-        program_paid = cache_manager.check_payment_status(profile.id, "program")
-        if program_paid:
+        if cache_manager.check_payment_status(profile.id, "program"):
             await callback_query.answer(translate(MessageText.program_not_ready, profile.language), show_alert=True)
             return
 
