@@ -89,11 +89,7 @@ async def cmd_logout(message: Message, state: FSMContext) -> None:
 async def cmd_help(message: Message) -> None:
     profile = await get_or_load_profile(message.from_user.id)
     language = profile.language if profile else "ua"
-    await message.answer(
-        text=translate(MessageText.help, lang=language).format(
-            email=os.getenv("DEFAULT_FROM_EMAIL"), tg=os.getenv("TG_SUPPORT_CONTACT")
-        )
-    )
+    await message.answer(text=translate(MessageText.help, lang=language))
 
 
 @cmd_router.message(Command("feedback"))
@@ -122,16 +118,32 @@ async def cmd_reset_password(message: Message, state: FSMContext) -> None:
         await state.clear()
 
 
-@cmd_router.message(Command("policy"))
+@cmd_router.message(Command("offer"))
 async def cmd_policy(message: Message) -> None:
-    profile = await get_or_load_profile(message.from_user.id)
-    language = profile.language if profile else "ua"
+    if profile := await get_or_load_profile(message.from_user.id):
+        language = profile.language
+    else:
+        language = "ua"
     public_offer = os.getenv("PUBLIC_OFFER")
     privacy_policy = os.getenv("PRIVACY_POLICY")
     await message.answer(
         translate(MessageText.contract_info_message, language).format(
             public_offer=public_offer,
             privacy_policy=privacy_policy,
+        ),
+        disable_web_page_preview=True,
+    )
+
+
+@cmd_router.message(Command("info"))
+async def cmd_info(message: Message, state: FSMContext) -> None:
+    if profile := await get_or_load_profile(message.from_user.id):
+        language = profile.language
+    else:
+        language = "ua"
+    await message.answer(
+        translate(MessageText.info, language).format(
+            offer=os.getenv("PUBLIC_OFFER"), email=os.getenv("DEFAULT_FROM_EMAIL"), tg=os.getenv("TG_SUPPORT_CONTACT")
         ),
         disable_web_page_preview=True,
     )

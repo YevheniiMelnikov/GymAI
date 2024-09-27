@@ -205,6 +205,7 @@ class MessageText(Enum):
     follow_link = auto()
     main_menu = auto()
     help = auto()
+    info = auto()
     start = auto()
     saved = auto()
     feedback = auto()
