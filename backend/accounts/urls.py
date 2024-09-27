@@ -14,7 +14,6 @@ urlpatterns = [
     path("client-profiles/<int:profile_id>/", ClientProfileUpdate.as_view(), name="client-profile-update"),
     path("coach-profiles/", CoachProfileView.as_view(), name="coach-profile-list"),
     path("coach-profiles/<int:profile_id>/", CoachProfileUpdate.as_view(), name="coach-profile-update"),
-    path("password-reset/<uidb64>/<token>/", reset_password_request_view, name="password-reset-confirm"),
     path("get-user-token/", GetUserTokenView.as_view(), name="get-user-token"),
     path("send-feedback/", SendFeedbackAPIView.as_view(), name="send-feedback"),
     path("send-welcome-email/", SendWelcomeEmailAPIView.as_view(), name="send_welcome_email"),
