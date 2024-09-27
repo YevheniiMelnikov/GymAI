@@ -1,27 +1,46 @@
 <!DOCTYPE html>
+{% load static %}
 <html lang="uk">
 <head>
     <meta charset="UTF-8">
     <title>AchieveTogether</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="{% static 'images/favicon.png' %}" type="image/x-icon">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         /* Додаткові стилі */
         body {
             background-color: #f8f9fa;
-            padding-top: 60px;
+            padding-top: 80px;
         }
         .hero {
-            padding: 60px 0;
+            padding: 120px 0;
             text-align: center;
+            position: relative;
+            z-index: 1;
         }
+
         .hero h1 {
             font-size: 3rem;
             margin-bottom: 20px;
+            white-space: normal;
+            z-index: 2;
         }
         .hero p {
             font-size: 1.25rem;
             margin-bottom: 30px;
+        }
+        .features p, section p {
+            font-size: 1.1rem; /* Увеличиваем размер шрифта */
+            line-height: 1.6; /* Межстрочный интервал для удобства чтения */
+        }
+        .logo {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        .logo img {
+            max-width: 120px;
         }
         .footer {
             padding: 20px 0;
@@ -35,7 +54,12 @@
 
     <nav class="navbar navbar-expand-lg navbar-light bg-light fixed-top">
         <div class="container">
-            <a class="navbar-brand" href="#">AchieveTogether</a>
+            <a class="navbar-brand d-flex align-items-center" href="#">
+                <div class="logo">
+                    <img src="{% static 'images/logo.PNG' %}" alt="AchieveTogether Logo">
+                </div>
+                AchieveTogether
+            </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Перемкнути навігацію">
                 <span class="navbar-toggler-icon"></span>
             </button>
@@ -61,8 +85,8 @@
     <div class="hero">
         <div class="container">
             <h1>Ласкаво просимо до AchieveTogether</h1>
-            <p>Надаємо доступ до персональних онлайн тренувань під керівництвом професійних тренерів.</p>
-            <a href="https://t.me/achieve_together_bot" class="btn btn-primary btn-lg">Почати з ботом</a>
+            <p>Надаємо доступ до персональних онлайн тренувань під керівництвом професійних тренерів</p>
+            <a href="https://t.me/achieve_together_bot" class="btn btn-primary btn-lg">Запустити бота</a>
         </div>
     </div>
 
@@ -71,17 +95,42 @@
             <div class="row">
                 <div class="col-md-4">
                     <h3>Персональні тренування</h3>
-                    <p>Індивідуальний підхід до кожного клієнта.</p>
+                    <p>Наш телеграм-бот допоможе підібрати тренера, який створить для вас унікальну програму тренувань, враховуючи ваші цілі, рівень підготовки та вподобання. Перед початком роботи бот збирає необхідну інформацію про ваш фізичний стан і побажання, щоб тренер міг скласти індивідуальний план.</p>
                 </div>
                 <div class="col-md-4">
                     <h3>Професійні тренери</h3>
-                    <p>Кваліфіковані спеціалісти, які допоможуть досягти цілей.</p>
+                    <p>Усі наші тренери — кваліфіковані фахівці з багаторічним досвідом, які допоможуть вам досягти бажаних результатів.</p>
                 </div>
                 <div class="col-md-4">
                     <h3>Зручний доступ</h3>
-                    <p>Тренуйтеся у будь-який час та в будь-якому місці.</p>
+                    <p>Тренуйтеся у будь-який час та в будь-якому місці, використовуючи інструкції та техніки, представлені у вигляді GIF-анімацій для зручного виконання вправ.</p>
                 </div>
             </div>
+        </section>
+
+        <section class="about mt-5">
+            <h2 class="text-center">Про проєкт AchieveTogether</h2>
+            <p>AchieveTogether — це ваша персональна платформа для досягнення фітнес-цілей! Ми пропонуємо зручну онлайн-платформу для підбору професійних тренерів та проведення індивідуальних тренувань, які можна виконувати будь-де.</p>
+        </section>
+
+        <section class="how-it-works mt-5">
+            <h2 class="text-center">Як це працює?</h2>
+            <ul>
+                <li>Персональні тренування: Наш телеграм-бот підбирає тренера, який створює для вас унікальну програму тренувань.</li>
+                <li>Професійні тренери: Кваліфіковані фахівці допоможуть досягти ваших цілей.</li>
+                <li>Зручний доступ: Ви можете тренуватися у будь-який час та місці, отримуючи інструкції у вигляді GIF-анімацій для правильного виконання вправ.</li>
+            </ul>
+        </section>
+
+
+        <section class="faq mt-5">
+            <h2 class="text-center">FAQ (Часті запитання)</h2>
+            <h4>Як працює телеграм-бот?</h4>
+            <p>Телеграм-бот збирає необхідну інформацію про вас і автоматично підбирає спеціаліста відповідно до ваших запитів.</p>
+            <h4>Чи можу я змінити тренера?</h4>
+            <p>Так, ви можете змінити тренера, якщо відчуваєте, що хочете спробувати інший стиль тренувань або отримати інший підхід.</p>
+            <h4>Як я буду виконувати вправи?</h4>
+            <p>Кожна вправа супроводжується GIF-анімацією, щоб ви могли правильно виконувати техніку.</p>
         </section>
     </div>
 
