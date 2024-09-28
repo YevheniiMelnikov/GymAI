@@ -39,7 +39,7 @@ def validate_birth_date(year: str) -> bool:
 
 
 def get_profile_attributes(role: str, user: Optional[Client | Coach], lang_code: str) -> dict[str, str]:
-    def get_attr(attr_name):
+    def get_attr(attr_name: str) -> str:
         return getattr(user, attr_name, "") if user else ""
 
     genders = {

@@ -63,7 +63,7 @@ async def send_daily_survey():
                 await callback_query.message.delete()
 
 
-async def workout_scheduler():
+async def workout_scheduler() -> None:
     logger.debug("Starting workout scheduler ...")
     scheduler = AsyncIOScheduler()
     scheduler.add_job(send_daily_survey, "cron", hour=9, minute=0)

@@ -17,10 +17,14 @@ class UserService(BackendService):
             "post", url, data=kwargs, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
         if status_code == 400 and "error" in response:
-            if "already exists" in response:
+            error_message = response["error"]
+            if "Username already exists" in error_message:
                 raise UsernameUnavailable(response)
-            elif "email" in response:
+            elif "Email already in use" in error_message:
                 raise EmailUnavailable(response)
+            else:
+                logger.error(f"Sign up failed with error: {error_message}")
+                return False
         return status_code == 201
 
     async def get_user_token(self, profile_id: int) -> str | None:

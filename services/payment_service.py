@@ -6,7 +6,7 @@ import loguru
 from liqpay import LiqPay
 
 from services.backend_service import BackendService
-from common.models import Payment, Coach
+from common.models import Payment
 from common.settings import SUCCESS_PAYMENT_STATUS
 
 logger = loguru.logger
@@ -44,30 +44,6 @@ class PaymentService(BackendService):
         signature = self.payment_client.cnb_signature(params)
         query_string = urlencode({"data": data, "signature": signature})
         return urljoin(self.checkout_url, f"?{query_string}")
-
-    async def transfer_to_card(self, coach: Coach, amount: str, order_id: str) -> bool:
-        params = {
-            "action": "p2pcredit",
-            "version": "3",
-            "amount": amount,
-            "currency": "UAH",
-            "description": f"Transfer for order {order_id}",
-            "order_id": order_id,
-            "receiver_card": coach.payment_details,
-            "receiver_last_name": coach.surname,
-            "receiver_first_name": coach.name,
-        }
-
-        response = self.payment_client.api("request", params)
-
-        if response.get("status") == "success":
-            logger.info(f"Successfully transferred {amount} UAH for order {order_id} to coach {coach.id}")
-            return True
-        else:
-            logger.error(
-                f"Money transfer to coach {coach.id} failed. HTTP status: {response.status_code}, response: {response.text}"
-            )
-            return False
 
     async def unsubscribe(self, order_id: str) -> bool:
         try:
@@ -116,7 +92,7 @@ class PaymentService(BackendService):
             return payment.get("status", "PENDING")
         else:
             logger.error(f"Payment {order_id} not found. HTTP status: {status_code}")
-            return
+            return None
 
     async def update_payment(self, payment_id: int, data: dict) -> bool:
         url = urljoin(self.backend_url, f"api/v1/payments/{payment_id}/")
