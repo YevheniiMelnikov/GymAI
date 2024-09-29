@@ -163,9 +163,9 @@ async def register_user(callback_query: CallbackQuery, state: FSMContext, data: 
 async def check_assigned_clients(profile_id: int) -> bool:
     coach = cache_manager.get_coach_by_id(profile_id)
     assigned_clients = coach.assigned_to
-    for client in assigned_clients:
-        subscription = cache_manager.get_subscription(client.id)
-        waiting_program = cache_manager.check_payment_status(client.id, "program")
+    for client_id in assigned_clients:
+        subscription = cache_manager.get_subscription(client_id)
+        waiting_program = cache_manager.check_payment_status(client_id, "program")
         if subscription.enabled or waiting_program:
             return True
 

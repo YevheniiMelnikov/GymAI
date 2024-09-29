@@ -3,6 +3,7 @@ import os
 from django.contrib.auth.models import User
 from django.core.mail import EmailMultiAlternatives, send_mail
 from django.db import transaction
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
@@ -139,7 +140,9 @@ class ProfileAPIUpdate(APIView):
 
     def get_object(self) -> Profile:
         profile_id = self.kwargs.get("profile_id")
-        return get_object_or_404(Profile, pk=profile_id)
+        obj = get_object_or_404(Profile, pk=profile_id)
+        self.check_object_permissions(self.request, obj)
+        return obj
 
     def get(self, request: Request, profile_id: int, format=None) -> Response:
         profile = self.get_object()
@@ -155,7 +158,7 @@ class ProfileAPIUpdate(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-def reset_password_request_view(request, uidb64: str, token: str) -> render:
+def reset_password_request_view(request, uidb64: str, token: str) -> HttpResponse:
     return render(request, "reset-password.html", {"uid": uidb64, "token": token})
 
 
@@ -184,7 +187,9 @@ class CoachProfileUpdate(RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated | HasAPIKey]
 
     def get_object(self):
-        return CoachProfile.objects.get(profile_id=self.kwargs.get("profile_id"))
+        obj = CoachProfile.objects.get(profile_id=self.kwargs.get("profile_id"))
+        self.check_object_permissions(self.request, obj)
+        return obj
 
 
 class ClientProfileView(ListAPIView):
@@ -199,7 +204,9 @@ class ClientProfileUpdate(RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated | HasAPIKey]
 
     def get_object(self):
-        return ClientProfile.objects.get(profile_id=self.kwargs.get("profile_id"))
+        obj = ClientProfile.objects.get(profile_id=self.kwargs.get("profile_id"))
+        self.check_object_permissions(self.request, obj)
+        return obj
 
 
 class GetUserTokenView(APIView):

@@ -23,7 +23,7 @@ register_router = Router()
 
 
 @register_router.callback_query(States.language_choice)
-async def language_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
+async def choose_language(callback_query: CallbackQuery, state: FSMContext) -> None:
     await callback_query.answer()
     await delete_messages(state)
     lang_code = callback_query.data

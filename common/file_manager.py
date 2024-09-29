@@ -44,8 +44,12 @@ class FileManager:
 
     @staticmethod
     def clean_up_local_file(file: str) -> None:
-        os.remove(f"temp/{file}")
-        logger.debug(f"File {file} successfully deleted")
+        file_path = f"temp/{file}"
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            logger.debug(f"File {file} successfully deleted")
+        else:
+            logger.warning(f"File {file} does not exist, skipping deletion")
 
     @staticmethod
     def check_file_size(file_path: str, max_size_mb: float) -> bool:

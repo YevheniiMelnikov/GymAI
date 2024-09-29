@@ -27,17 +27,6 @@ def validate_email(email: str) -> bool:
     return bool(re.match(pattern, email))
 
 
-def validate_birth_date(year: str) -> bool:
-    try:
-        year = int(year)
-    except ValueError:
-        return False
-
-    if not (1900 <= year <= 2025):
-        raise ValueError("Invalid year")
-    return True
-
-
 def get_profile_attributes(role: str, user: Optional[Client | Coach], lang_code: str) -> dict[str, str]:
     def get_attr(attr_name: str) -> str:
         return getattr(user, attr_name, "") if user else ""
@@ -177,7 +166,7 @@ def get_translated_week_day(lang_code: str, day: str) -> str:
     return days.get(day)
 
 
-async def format_program(exercises: dict[str, any], day: int) -> str:
+async def format_program(exercises: dict[str, Any], day: int) -> str:
     program_lines = []
     exercises_data = exercises.get(str(day), [])
     exercises = [Exercise(**e) if isinstance(e, dict) else e for e in exercises_data]
