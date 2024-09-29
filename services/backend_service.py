@@ -5,12 +5,14 @@ from urllib.parse import urljoin
 import httpx
 import loguru
 
+from common.decorators import singleton
 from common.exceptions import UserServiceError
 
 
 logger = loguru.logger
 
 
+@singleton
 class BackendService:
     def __init__(self):
         self.backend_url = os.environ.get("BACKEND_URL")

@@ -2,6 +2,7 @@ from datetime import datetime
 from urllib.parse import urljoin
 import loguru
 
+from common.decorators import singleton
 from services.backend_service import BackendService
 from common.exceptions import UserServiceError
 from common.models import Exercise
@@ -9,6 +10,7 @@ from common.models import Exercise
 logger = loguru.logger
 
 
+@singleton
 class WorkoutService(BackendService):
     async def save_program(self, client_id: int, exercises: dict[int, Exercise], split_number: int) -> dict:
         url = urljoin(self.backend_url, "api/v1/programs/")

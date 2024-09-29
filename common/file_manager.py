@@ -5,9 +5,12 @@ import loguru
 from aiogram.types import Message
 from google.cloud import storage
 
+from common.decorators import singleton
+
 logger = loguru.logger
 
 
+@singleton
 class FileManager:
     def __init__(self, bucket_name: str):
         self.bucket_name = bucket_name

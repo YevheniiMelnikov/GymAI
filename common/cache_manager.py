@@ -10,6 +10,7 @@ import loguru
 import redis
 from dateutil.parser import parse
 
+from common.decorators import singleton
 from common.encrypter import Encrypter
 from common.encrypter import encrypter as enc
 from common.exceptions import ProfileNotFoundError, UserServiceError
@@ -18,6 +19,7 @@ from common.models import Client, Coach, Profile, Program, Subscription
 logger = loguru.logger
 
 
+@singleton
 class CacheManager:
     def __init__(self, redis_url: str, encrypter: Encrypter):
         self.redis_url = redis_url
