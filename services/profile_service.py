@@ -2,6 +2,7 @@ from typing import Any
 from urllib.parse import urljoin
 import loguru
 
+from common.decorators import singleton
 from services.backend_service import BackendService
 from common.models import Profile
 from common.encrypter import encrypter as enc, Encrypter
@@ -9,6 +10,7 @@ from common.encrypter import encrypter as enc, Encrypter
 logger = loguru.logger
 
 
+@singleton
 class ProfileService(BackendService):
     def __init__(self, encrypter: Encrypter):
         super().__init__()

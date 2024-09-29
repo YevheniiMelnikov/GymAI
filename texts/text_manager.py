@@ -2,6 +2,7 @@ import os
 
 import yaml
 
+from common.decorators import singleton
 from texts.resources import ButtonText, MessageText
 
 ResourceType = str | MessageText | ButtonText
@@ -21,6 +22,7 @@ else:
     }
 
 
+@singleton
 class TextManager:
     def __init__(self) -> None:
         self.messages = self.load_messages()
