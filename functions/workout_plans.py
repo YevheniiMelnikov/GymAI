@@ -9,11 +9,11 @@ from aiogram.types import CallbackQuery
 from bot.keyboards import program_edit_kb, program_manage_menu, program_view_kb, subscription_view_kb
 from bot.states import States
 from common.cache_manager import cache_manager, logger
-from common.functions.chat import send_message
-from common.functions.menus import show_main_menu
-from common.functions.profiles import get_or_load_profile
-from common.functions.text_utils import format_program, get_translated_week_day
-from common.functions.utils import delete_messages
+from functions.chat import send_message
+from functions.menus import show_main_menu
+from functions.profiles import get_or_load_profile
+from functions.text_utils import format_program, get_translated_week_day
+from functions.utils import delete_messages
 from common.models import Profile
 from services.profile_service import profile_service
 from services.user_service import user_service

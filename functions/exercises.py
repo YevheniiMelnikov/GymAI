@@ -13,10 +13,10 @@ from bot.keyboards import payment_keyboard, program_edit_kb, program_manage_menu
 from bot.states import States
 from common.cache_manager import cache_manager
 from common.file_manager import gif_manager
-from common.functions.menus import show_subscription_page
-from common.functions.profiles import get_or_load_profile
-from common.functions.text_utils import format_program, get_translated_week_day
-from common.functions.utils import delete_messages
+from functions.menus import show_subscription_page
+from functions.profiles import get_or_load_profile
+from functions.text_utils import format_program, get_translated_week_day
+from functions.utils import delete_messages
 from common.models import Exercise, Profile, Subscription
 from common.settings import SUBSCRIPTION_DESCRIPTION
 from services.payment_service import payment_service

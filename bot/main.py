@@ -16,8 +16,8 @@ from bot.handlers.payment_handler import payment_router
 from bot.handlers.questionnaire_handler import questionnaire_router
 from bot.handlers.registration_handler import register_router
 from bot.handlers.workouts_handler import program_router
-from common.functions.chat import message_router
-from common.functions.utils import set_bot_commands
+from functions import message_router
+from functions.utils import set_bot_commands
 from common.payment_manager import payment_handler
 from common.subscription_manager import subscription_manager
 from common.workout_scheduler import survey_router, workout_scheduler

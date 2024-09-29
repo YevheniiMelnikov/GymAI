@@ -1,12 +1,41 @@
-from common.functions.chat import *
-from common.functions.chat import send_message
-from common.functions.exercises import *
-from common.functions.menus import *
-from common.functions.profiles import get_or_load_profile
-from common.functions.text_utils import format_program, get_translated_week_day
-from common.functions.utils import program_menu_pagination, short_url
-from common.functions.workout_plans import next_day_workout_plan, reset_workout_plan, save_workout_plan
+from contextlib import suppress
+
+from aiogram import Router, F
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+from bot.keyboards import (
+    workout_feedback,
+    select_exercise,
+    subscription_view_kb,
+    program_view_kb,
+    edit_exercise_data,
+    reps_number,
+    sets_number,
+    program_edit_kb,
+    select_service,
+    incoming_request,
+    program_manage_menu,
+)
+from bot.states import States
+from common.cache_manager import cache_manager
+from functions.chat import send_message
+from functions.exercises import update_exercise_data, save_exercise, find_exercise_gif
+from functions.menus import (
+    show_main_menu,
+    my_clients_menu,
+    show_program_promo_page,
+    show_my_subscription_menu,
+    show_my_program_menu,
+)
+from functions.profiles import get_or_load_profile
+from functions.text_utils import format_program, get_translated_week_day
+from functions.utils import program_menu_pagination, short_url, delete_messages
+from functions.workout_plans import next_day_workout_plan, reset_workout_plan, save_workout_plan
 from common.models import Exercise, Program
+from services.profile_service import profile_service
 from services.user_service import user_service
 from services.workout_service import workout_service
 from texts.resources import ButtonText, MessageText

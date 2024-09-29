@@ -9,8 +9,8 @@ from common.decorators import singleton
 from common.sheets_manager import sheets_manager
 from services.backend_service import backend_service
 from common.cache_manager import cache_manager
-from common.functions.chat import client_request, send_message
-from common.functions.workout_plans import cancel_subscription
+from functions import client_request, send_message
+from functions.workout_plans import cancel_subscription
 from common.models import Payment, Profile
 from common.settings import (
     SUCCESS_PAYMENT_STATUS,

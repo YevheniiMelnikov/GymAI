@@ -1,8 +1,31 @@
-from common.functions.chat import *
-from common.functions.menus import *
-from common.functions.profiles import assign_coach, get_or_load_profile, handle_logout
-from common.functions.utils import handle_clients_pagination
-from common.functions.workout_plans import manage_program, cancel_subscription
+from contextlib import suppress
+from datetime import datetime
+
+import loguru
+from aiogram import Bot, Router
+from aiogram.client.session import aiohttp
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message
+from dateutil.relativedelta import relativedelta
+
+from bot.keyboards import select_service, choose_coach, gift, select_days, yes_no
+from bot.states import States
+from common.cache_manager import cache_manager
+from functions.chat import OWNER_ID, contact_client
+from functions.menus import (
+    show_main_menu,
+    show_exercises_menu,
+    manage_subscription,
+    show_coaches_menu,
+    show_profile_editing_menu,
+    show_my_workouts_menu,
+    my_clients_menu,
+    show_my_profile_menu,
+)
+from functions.profiles import assign_coach, get_or_load_profile, handle_logout
+from functions.utils import handle_clients_pagination
+from functions.workout_plans import manage_program, cancel_subscription
 from common.models import Coach, Profile
 from services.backend_service import backend_service
 from services.payment_service import payment_service

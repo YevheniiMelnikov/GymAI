@@ -14,8 +14,7 @@ from bot.keyboards import *
 from bot.keyboards import choose_coach, program_manage_menu, program_view_kb, select_service, subscription_manage_menu
 from common.exceptions import UserServiceError
 from common.file_manager import avatar_manager
-from common.functions.profiles import get_or_load_profile, start_profile_creation
-from common.functions.text_utils import *
+from functions.profiles import get_or_load_profile, start_profile_creation
 from common.models import Client, Coach, Profile, Subscription
 from services.profile_service import profile_service
 from common.settings import BOT_PAYMENT_OPTIONS

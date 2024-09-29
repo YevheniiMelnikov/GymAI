@@ -11,7 +11,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from bot.keyboards import workout_results, workout_survey_keyboard
 from bot.states import States
 from common.cache_manager import cache_manager
-from common.functions.profiles import get_or_load_profile
+from functions.profiles import get_or_load_profile
 from services.profile_service import profile_service
 from texts.resources import MessageText
 from texts.text_manager import translate

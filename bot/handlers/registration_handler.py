@@ -10,10 +10,10 @@ from bot.keyboards import *
 from bot.states import States
 from common.cache_manager import cache_manager
 from common.exceptions import EmailUnavailable, UsernameUnavailable
-from common.functions.menus import show_main_menu, show_my_profile_menu
-from common.functions.profiles import check_assigned_clients, get_or_load_profile, register_user, sign_in
-from common.functions.text_utils import validate_email, validate_password
-from common.functions.utils import delete_messages, set_bot_commands
+from functions.menus import show_main_menu, show_my_profile_menu
+from functions.profiles import check_assigned_clients, get_or_load_profile, register_user, sign_in
+from functions.text_utils import validate_email, validate_password
+from functions.utils import delete_messages, set_bot_commands
 from services.profile_service import profile_service
 from services.user_service import user_service
 from texts.resources import MessageText
