@@ -165,12 +165,12 @@ async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMCon
         )
     await state.update_data(exercises=exercises)
 
-    exercise = Exercise(name=exercise_name, sets=sets, reps=reps, gif_link=gif_link, weight=weight)
+    exercise = Exercise(name=exercise_name, sets=sets, reps=reps, gif_link=gif_link, weight=str(weight))
     await save_exercise(state, exercise, input_data)
 
 
 @program_router.callback_query(States.workout_survey)
-async def workout_results(callback_query: CallbackQuery, state: FSMContext):
+async def send_workout_results(callback_query: CallbackQuery, state: FSMContext):
     profile = await get_or_load_profile(callback_query.from_user.id)
     data = await state.get_data()
     day = data.get("day")
@@ -273,7 +273,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
             subscription_data = cache_manager.get_subscription(client_id).to_dict()
             subscription_data.update(client_profile=client_id, exercises=exercises)
             auth_token = user_service.get_user_token(client_id)
-            await workout_service.update_subscription(subscription_data.get("id"), subscription_data, auth_token)
+            await workout_service.update_subscription(subscription_data.get("id"), subscription_data, auth_token)  # type: ignore
             cache_manager.update_subscription_data(client_id, {"exercises": exercises, "client_profile": client_id})
             cache_manager.reset_program_payment_status(client_id, "subscription")
             await send_message(

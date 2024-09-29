@@ -7,7 +7,7 @@ from accounts.models import ClientProfile, Profile
 
 class Program(models.Model):
     client_profile = models.ForeignKey(ClientProfile, on_delete=models.CASCADE, related_name="programs")  # type: ignore
-    exercises_by_day = JSONField(default=dict, blank=True)  # type: ignore
+    exercises_by_day = JSONField(default=dict, blank=True)
     split_number = models.IntegerField(null=True, blank=True)  # type: ignore
     wishes = models.CharField(max_length=500, null=True, blank=True)  # type: ignore
     created_at = models.DateTimeField(auto_now_add=True)  # type: ignore
@@ -24,7 +24,7 @@ class Subscription(models.Model):
     enabled = models.BooleanField(default=False)  # type: ignore
     price = models.DecimalField(max_digits=10, decimal_places=2)  # type: ignore
     workout_days = ArrayField(models.CharField(max_length=100), default=list, blank=True)  # type: ignore
-    exercises = JSONField(default=dict, blank=True, null=True)  # type: ignore
+    exercises = JSONField(default=dict, blank=True, null=True)
     wishes = models.CharField(max_length=500, null=True, blank=True)  # type: ignore
     payment_date = models.CharField(max_length=100, null=True, blank=True)  # type: ignore
 

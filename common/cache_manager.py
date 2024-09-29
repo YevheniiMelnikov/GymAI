@@ -114,7 +114,7 @@ class CacheManager:
             return coaches_data
         except Exception as e:
             logger.info(f"Failed to retrieve coach data: {e}")
-            return
+            return None
 
     def deactivate_profiles(self, telegram_id: int) -> None:
         try:

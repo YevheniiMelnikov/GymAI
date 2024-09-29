@@ -15,7 +15,7 @@ from common.functions.chat import client_request
 from common.functions.exercises import edit_subscription_days, process_new_subscription
 from common.functions.menus import show_main_menu
 from common.functions.profiles import get_or_load_profile, update_user_info
-from common.functions.text_utils import get_state_and_message, validate_birth_date
+from common.functions.text_utils import get_state_and_message
 from common.functions.utils import delete_messages
 from common.settings import PROGRAM_DESCRIPTION
 from services.payment_service import payment_service
@@ -43,14 +43,9 @@ async def gender(callback_query: CallbackQuery, state: FSMContext) -> None:
 async def born_in(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
-    if validate_birth_date(message.text):
-        goals_msg = await message.answer(translate(MessageText.workout_goals, lang=data.get("lang")))
-        await state.update_data(born_in=message.text, chat_id=message.chat.id, message_ids=[goals_msg.message_id])
-        await state.set_state(States.workout_goals)
-    else:
-        data = await state.get_data()
-        await message.answer(message.text)
-        await message.answer(translate(MessageText.invalid_content, lang=data.get("lang")))
+    goals_msg = await message.answer(translate(MessageText.workout_goals, lang=data.get("lang")))
+    await state.update_data(born_in=message.text, chat_id=message.chat.id, message_ids=[goals_msg.message_id])
+    await state.set_state(States.workout_goals)
     await message.delete()
 
 
