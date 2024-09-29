@@ -11,12 +11,12 @@ from bot.keyboards import choose_gender, payment_keyboard, select_days, workout_
 from bot.states import States
 from common.cache_manager import cache_manager
 from common.file_manager import avatar_manager
-from common.functions.chat import client_request
-from common.functions.exercises import edit_subscription_days, process_new_subscription
-from common.functions.menus import show_main_menu
-from common.functions.profiles import get_or_load_profile, update_user_info
-from common.functions.text_utils import get_state_and_message
-from common.functions.utils import delete_messages
+from functions import client_request
+from functions.exercises import edit_subscription_days, process_new_subscription
+from functions.menus import show_main_menu
+from functions.profiles import get_or_load_profile, update_user_info
+from functions.text_utils import get_state_and_message
+from functions.utils import delete_messages
 from common.settings import PROGRAM_DESCRIPTION
 from services.payment_service import payment_service
 from texts.resources import MessageText

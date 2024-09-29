@@ -10,8 +10,9 @@ from bot.states import States
 from services.backend_service import backend_service
 from common.cache_manager import cache_manager
 from common.exceptions import ProfileNotFoundError, UserServiceError
-from common.functions import chat, menus
-from common.functions.utils import delete_messages
+from functions import menus
+from functions import chat
+from functions.utils import delete_messages
 from common.models import Client, Coach, Profile
 from services.profile_service import profile_service
 from services.user_service import user_service

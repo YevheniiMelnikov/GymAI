@@ -10,9 +10,9 @@ from aiogram.types import CallbackQuery
 from bot.keyboards import select_service, workout_type
 from bot.states import States
 from common.cache_manager import cache_manager
-from common.functions.menus import show_main_menu
-from common.functions.profiles import get_or_load_profile
-from common.functions.workout_plans import cache_program_data
+from functions.menus import show_main_menu
+from functions.profiles import get_or_load_profile
+from functions.workout_plans import cache_program_data
 from common.models import Client, Coach
 from services.payment_service import payment_service
 from services.user_service import user_service

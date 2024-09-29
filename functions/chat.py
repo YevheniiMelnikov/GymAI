@@ -1,18 +1,26 @@
+import os
+from contextlib import suppress
 from typing import Any
 
-from aiogram import F, Router
+import aiohttp
+import loguru
+from aiogram import F, Router, Bot
 from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery
 
 from bot.keyboards import *
 from bot.keyboards import new_coach_request
+from bot.states import States
 from common.cache_manager import cache_manager
 from common.file_manager import avatar_manager
-from common.functions.exercises import edit_subscription_exercises
-from common.functions.menus import show_exercises_menu, show_main_menu, manage_subscription
-from common.functions.profiles import get_or_load_profile
-from common.functions.text_utils import format_new_client_message, get_client_page, get_workout_types
-from common.functions.utils import *
-from common.models import Coach, Profile
+from functions.exercises import edit_subscription_exercises
+from functions.menus import show_exercises_menu, show_main_menu, manage_subscription
+from functions.profiles import get_or_load_profile
+from functions.text_utils import format_new_client_message, get_client_page, get_workout_types
+from common.models import Coach, Profile, Client
+from functions.utils import program_menu_pagination
 from services.profile_service import profile_service
 from texts.resources import MessageText
 from texts.text_manager import translate

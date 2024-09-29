@@ -45,7 +45,7 @@ services:
     logging:
       driver: loki
       options:
-        loki-url: "http://172.20.0.7:3100/loki/api/v1/push"
+        loki-url: "http://172.20.0.8:3100/loki/api/v1/push"
         loki-external-labels: "job=backend,app=gym_bot"
     networks:
       - monitoring
@@ -65,7 +65,7 @@ services:
     logging:
       driver: loki
       options:
-        loki-url: "http://172.20.0.7:3100/loki/api/v1/push"
+        loki-url: "http://172.20.0.8:3100/loki/api/v1/push"
         loki-external-labels: "job=bot,app=gym_bot"
     env_file:
       - ./.env
@@ -78,6 +78,16 @@ services:
     restart: always
     volumes:
       - ./backup/dumps:/opt/backup/dumps
+
+  alertmanager:
+    image: prom/alertmanager
+    container_name: alertmanager
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    networks:
+      - monitoring
 
 volumes:
   pgdata:

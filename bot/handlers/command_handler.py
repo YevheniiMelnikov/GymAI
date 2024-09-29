@@ -9,8 +9,8 @@ from aiogram.types import Message
 from bot.keyboards import action_choice_keyboard, language_choice
 from bot.states import States
 from common.cache_manager import cache_manager
-from common.functions.menus import show_main_menu
-from common.functions.profiles import get_or_load_profile
+from functions.menus import show_main_menu
+from functions.profiles import get_or_load_profile
 from services.user_service import user_service
 from texts.resources import MessageText
 from texts.text_manager import translate

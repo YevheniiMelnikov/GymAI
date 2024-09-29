@@ -10,7 +10,7 @@ from aiogram.types import BotCommand, CallbackQuery
 
 from bot.keyboards import program_edit_kb, program_view_kb, subscription_manage_menu
 from bot.states import States
-from common.functions import menus, profiles, text_utils
+from functions import menus, profiles, text_utils
 from common.models import Client
 from texts.resources import MessageText
 from texts.text_manager import resource_manager, translate
