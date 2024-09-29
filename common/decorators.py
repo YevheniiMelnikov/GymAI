@@ -1,9 +1,10 @@
 def singleton(cls):
     instances = {}
 
-    def get_instance(*args, **kwargs):
-        if cls not in instances:
-            instances[cls] = cls(*args, **kwargs)
-        return instances[cls]
+    class Wrapper(cls):
+        def __new__(cls, *args, **kwargs):
+            if cls not in instances:
+                instances[cls] = super(Wrapper, cls).__new__(cls)
+            return instances[cls]
 
-    return get_instance
+    return Wrapper
