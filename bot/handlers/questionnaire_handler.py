@@ -11,7 +11,7 @@ from bot.keyboards import choose_gender, payment_keyboard, select_days, workout_
 from bot.states import States
 from common.cache_manager import cache_manager
 from common.file_manager import avatar_manager
-from functions import client_request
+from functions.chat import client_request
 from functions.exercises import edit_subscription_days, process_new_subscription
 from functions.menus import show_main_menu
 from functions.profiles import get_or_load_profile, update_user_info

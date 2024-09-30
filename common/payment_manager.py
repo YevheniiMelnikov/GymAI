@@ -7,9 +7,9 @@ from dateutil.relativedelta import relativedelta
 
 from common.decorators import singleton
 from common.sheets_manager import sheets_manager
+from functions.chat import send_message, client_request
 from services.backend_service import backend_service
 from common.cache_manager import cache_manager
-from functions import client_request, send_message
 from functions.workout_plans import cancel_subscription
 from common.models import Payment, Profile
 from common.settings import (
