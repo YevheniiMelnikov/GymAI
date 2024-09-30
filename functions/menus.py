@@ -12,10 +12,19 @@ from dateutil.relativedelta import relativedelta
 
 from bot.keyboards import *
 from bot.keyboards import choose_coach, program_manage_menu, program_view_kb, select_service, subscription_manage_menu
+from bot.states import States
+from common.cache_manager import cache_manager
 from common.exceptions import UserServiceError
 from common.file_manager import avatar_manager
 from functions.profiles import get_or_load_profile, start_profile_creation
 from common.models import Client, Coach, Profile, Subscription
+from functions.text_utils import (
+    get_client_page,
+    get_coach_page,
+    get_profile_attributes,
+    format_program,
+    get_translated_week_day,
+)
 from services.profile_service import profile_service
 from common.settings import BOT_PAYMENT_OPTIONS
 from texts.resources import MessageText
