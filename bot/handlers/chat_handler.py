@@ -7,7 +7,7 @@ from bot.keyboards import incoming_message
 from bot.states import States
 from common.cache_manager import cache_manager
 from common.exceptions import UserServiceError
-from functions import send_message
+from functions.chat import send_message
 from functions.menus import show_main_menu
 from functions.profiles import get_or_load_profile
 from common.models import Profile
