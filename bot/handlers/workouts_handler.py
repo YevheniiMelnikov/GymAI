@@ -314,11 +314,11 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
             )
         else:
             current_program = cache_manager.get_program(client_id)
-            split_number = current_program.split_number
-            workout_type = current_program.workout_type
             program_text = await format_program(exercises, 0)
-            if program_data := await workout_service.save_program(client_id, exercises, split_number):
-                program_data.update(workout_type=workout_type)
+            if program_data := await workout_service.save_program(
+                client_id, exercises, current_program.split_number, current_program.wishes
+            ):
+                program_data.update(workout_type=current_program.workout_type)
                 cache_manager.set_program(client_id, program_data)
                 cache_manager.reset_program_payment_status(client_id, "program")
             await send_message(
@@ -425,6 +425,11 @@ async def delete_exercise(callback_query: CallbackQuery, state: FSMContext):
     daily_exercises.pop(int(exercise_index))
     await state.update_data(exercises=exercises)
     await state.set_state(States.program_edit)
+    program = await format_program({str(day_index): exercises[str(day_index)]}, int(day_index))
+    await callback_query.message.answer(
+        translate(MessageText.program_page, profile.language).format(program=program, day=int(day_index) + 1),
+        disable_web_page_preview=True,
+    )
     await callback_query.message.answer(
         translate(MessageText.continue_editing, profile.language), reply_markup=program_edit_kb(profile.language)
     )

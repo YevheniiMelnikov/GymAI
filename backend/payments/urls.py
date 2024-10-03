@@ -6,7 +6,6 @@ from .views import (
     PaymentCreateView,
     PaymentListView,
     PaymentDetailView,
-    PaymentWebhookView,
 )
 
 program_router = DefaultRouter()
@@ -21,5 +20,4 @@ urlpatterns = [
     path("payments/create/", PaymentCreateView.as_view(), name="payments-create"),
     path("payments/", PaymentListView.as_view(), name="payments-list"),
     path("payments/<int:pk>/", PaymentDetailView.as_view(), name="payment-update"),
-    path("payment-webhook/", PaymentWebhookView.as_view(), name="payment-webhook"),
 ]

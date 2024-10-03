@@ -118,8 +118,14 @@ async def update_exercise_data(message: Message, state: FSMContext, lang: str, u
     exercises[day_index][exercise_index] = selected_exercise
     await state.update_data(exercises=exercises)
     await state.set_state(States.program_edit)
+    program = await format_program({str(day_index): exercises[str(day_index)]}, int(day_index))
+    await message.answer(
+        translate(MessageText.program_page, lang).format(program=program, day=int(day_index) + 1),
+        disable_web_page_preview=True,
+    )
     await message.answer(translate(MessageText.continue_editing, lang), reply_markup=program_edit_kb(lang))
-    await message.delete()
+    with suppress(TelegramBadRequest):
+        await message.delete()
 
 
 async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMContext, day_index: int) -> None:
