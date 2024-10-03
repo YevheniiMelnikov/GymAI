@@ -12,12 +12,15 @@ logger = loguru.logger
 
 @singleton
 class WorkoutService(BackendService):
-    async def save_program(self, client_id: int, exercises: dict[int, Exercise], split_number: int) -> dict:
+    async def save_program(
+        self, client_id: int, exercises: dict[int, Exercise], split_number: int, wishes: str
+    ) -> dict:
         url = urljoin(self.backend_url, "api/v1/programs/")
         data = {
-            "profile": client_id,
+            "client_profile": client_id,
             "exercises_by_day": exercises,
             "split_number": split_number,
+            "wishes": wishes,
         }
         status_code, response = await self._api_request(
             "post", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
@@ -31,7 +34,8 @@ class WorkoutService(BackendService):
             split_number=split_number,
             exercises_by_day=exercises,
             created_at=response.get("created_at"),
-            profile=client_id,
+            client_profile=client_id,
+            wishes=wishes,
         )
 
     async def update_program(self, program_id: int, data: dict) -> bool:

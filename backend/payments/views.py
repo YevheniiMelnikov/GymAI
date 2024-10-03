@@ -17,6 +17,8 @@ from rest_framework_api_key.permissions import HasAPIKey
 from payments.models import Program, Subscription, Payment
 from payments.serializers import ProgramSerializer, SubscriptionSerializer, PaymentSerializer
 
+from accounts.models import ClientProfile
+
 
 class ProgramViewSet(ModelViewSet):
     queryset = Program.objects.all().select_related("client_profile")
@@ -36,14 +38,18 @@ class ProgramViewSet(ModelViewSet):
         api_key = self.request.headers.get("Authorization")
         if not api_key or not HasAPIKey().has_permission(self.request, self):
             raise PermissionDenied("API Key must be provided")
+        try:
+            client_profile = ClientProfile.objects.get(profile__id=client_profile_id)
+        except ClientProfile.DoesNotExist:
+            raise NotFound(f"ClientProfile with profile_id {client_profile_id} does not exist.")
 
-        existing_program = Program.objects.filter(client_profile_id=client_profile_id).first()
+        existing_program = Program.objects.filter(client_profile=client_profile).first()
         if existing_program:
             existing_program.exercises_by_day = exercises
             existing_program.save()
             return existing_program
         else:
-            return serializer.save(client_profile_id=client_profile_id, exercises_by_day=exercises)
+            return serializer.save(client_profile=client_profile, exercises_by_day=exercises)
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -103,7 +109,7 @@ class PaymentWebhookView(APIView):
             liqpay_client = LiqPay(os.getenv("PAYMENT_PUB_KEY"), os.getenv("PAYMENT_PRIVATE_KEY"))
             sign = liqpay_client.str_to_sign(os.getenv("PAYMENT_PRIVATE_KEY") + data + os.getenv("PAYMENT_PRIVATE_KEY"))
             if sign != signature:
-                return JsonResponse({"detail": "Invalid signature."}, status=status.HTTP_400_BAD_REQUEST)
+                return JsonResponse({"detail": "Invalid signature"}, status=status.HTTP_400_BAD_REQUEST)
 
             decoded_data = base64.b64decode(data).decode("utf-8")
             payment_info = json.loads(decoded_data)
@@ -112,7 +118,7 @@ class PaymentWebhookView(APIView):
             error_message = payment_info.get("err_description", "")
             self.process_payment(order_id, payment_status, error_message)
 
-            if status == "success":
+            if payment_status == "success":
                 return JsonResponse({"result": "OK"}, status=status.HTTP_200_OK)
             else:
                 return JsonResponse({"result": "FAILURE"}, status=status.HTTP_200_OK)

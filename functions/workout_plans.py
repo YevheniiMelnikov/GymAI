@@ -50,8 +50,10 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
                 )
             else:
                 program_text = await format_program(exercises, 0)
-                if program_data := await workout_service.save_program(client_id, exercises, split_number):
-                    current_program = cache_manager.get_program(client_id)
+                current_program = cache_manager.get_program(client_id)
+                if program_data := await workout_service.save_program(
+                    client_id, exercises, split_number, current_program.wishes
+                ):
                     program_data.update(workout_type=current_program.workout_type)
                     cache_manager.set_program(client_id, program_data)
                     cache_manager.reset_program_payment_status(client_id, "program")
@@ -115,8 +117,11 @@ async def next_day_workout_plan(callback_query: CallbackQuery, state: FSMContext
             await callback_query.answer(translate(ButtonText.forward, profile.language))
             await delete_messages(state)
             completed_days += 1
-            days = data.get("days", [])
-            week_day = get_translated_week_day(profile.language, days[completed_days]).lower()
+            if data.get("subscription"):
+                days = data.get("days", [])
+                week_day = get_translated_week_day(profile.language, days[completed_days]).lower()
+            else:
+                week_day = completed_days + 1
             exercise_msg = await callback_query.message.answer(translate(MessageText.enter_exercise, profile.language))
             await callback_query.message.answer(
                 translate(MessageText.enter_daily_program, profile.language).format(day=week_day),
