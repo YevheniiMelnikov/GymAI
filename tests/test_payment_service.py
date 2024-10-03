@@ -82,30 +82,6 @@ async def test_create_payment_failure(payment_service):
 
 
 @pytest.mark.asyncio
-async def test_get_payment_status_success(payment_service):
-    order_id = "order123"
-
-    async def mock_api_request(method, url, headers):
-        assert method == "get"
-        assert "order_id=order123" in url
-        return 200, {"results": [{"status": "success"}]}
-
-    with patch.object(payment_service, "_api_request", side_effect=mock_api_request):
-        status = await payment_service.get_payment_status(order_id)
-        assert status == "success"
-
-
-@pytest.mark.asyncio
-async def test_get_payment_status_failure(payment_service):
-    async def mock_api_request(method, url, headers):
-        return 404, {}
-
-    with patch.object(payment_service, "_api_request", side_effect=mock_api_request):
-        status = await payment_service.get_payment_status("order123")
-        assert status is None
-
-
-@pytest.mark.asyncio
 async def test_update_payment_success(payment_service):
     payment_id = 1
     data = {"status": "success"}

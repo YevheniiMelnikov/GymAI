@@ -124,8 +124,8 @@ async def close_notification(callback_query: CallbackQuery, state: FSMContext):
     await show_main_menu(callback_query.message, profile, state)
 
 
-@message_router.callback_query(F.data == "view")
-async def view_subscription(callback_query: CallbackQuery, state: FSMContext):
+@message_router.callback_query(F.data == "subscription_view")
+async def subscription_view(callback_query: CallbackQuery, state: FSMContext):
     profile = await get_or_load_profile(callback_query.from_user.id)
     subscription_data = cache_manager.get_subscription(profile.id)
     await state.update_data(

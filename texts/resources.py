@@ -23,6 +23,7 @@ class ButtonText(Enum):
     delete = auto()
     cancel_subscription = auto()
     pay = auto()
+    new_program = auto()
 
     my_clients = auto()
     my_profile = auto()

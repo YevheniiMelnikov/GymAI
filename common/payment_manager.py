@@ -90,15 +90,14 @@ class PaymentHandler:
 
     async def process_payment(self, payment: Payment) -> None:
         try:
-            payment_status = await self.payment_service.get_payment_status(payment.order_id)
             profile = Profile.from_dict(await self.profile_service.get_profile(payment.profile))
             if not profile:
                 logger.error(f"Profile not found for payment {payment.id}")
                 return
 
-            if payment_status == SUCCESS_PAYMENT_STATUS or payment_status == SUBSCRIBED_PAYMENT_STATUS:
+            if payment.status == SUCCESS_PAYMENT_STATUS or payment.status == SUBSCRIBED_PAYMENT_STATUS:
                 await self.handle_successful_payment(payment, profile)
-            elif payment_status == FAILURE_PAYMENT_STATUS:
+            elif payment.status == FAILURE_PAYMENT_STATUS:
                 await self.handle_failed_payment(payment, profile)
 
         except Exception as e:
@@ -155,9 +154,7 @@ class PaymentHandler:
                 include_incoming_message=False,
             )
 
-            logger.info(
-                f"Profile {profile.id} successfully payed {payment.amount} UAH for {payment.payment_type} service"
-            )
+            logger.info(f"Profile {profile.id} successfully payed {payment.amount} UAH for {payment.payment_type}")
             if payment.payment_type == "subscription":
                 await self.process_subscription_payment(profile)
             else:
