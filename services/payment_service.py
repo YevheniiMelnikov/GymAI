@@ -83,19 +83,6 @@ class PaymentService(BackendService):
         )
         return status_code == 201
 
-    async def get_payment_status(self, order_id: str) -> str | None:
-        url = urljoin(self.backend_url, f"api/v1/payments/?order_id={order_id}")
-        status_code, payment_data = await self._api_request(
-            "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
-        )
-
-        if status_code == 200 and payment_data.get("results"):
-            payment = payment_data["results"][0]
-            return payment.get("status", "PENDING")
-        else:
-            logger.error(f"Payment {order_id} not found. HTTP status: {status_code}")
-            return None
-
     async def update_payment(self, payment_id: int, data: dict) -> bool:
         url = urljoin(self.backend_url, f"api/v1/payments/{payment_id}/")
         status_code, _ = await self._api_request("put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"})

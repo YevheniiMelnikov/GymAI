@@ -342,3 +342,8 @@ subscription_price:
   eng: "Subscription price 💸"
   ru: "Стоимость подписки 💸"
   ua: "Вартість підписки 💸"
+
+new_program:
+  eng: "Create new 🆕"
+  ru: "Создать новую 🆕"
+  ua: "Створити нову 🆕"

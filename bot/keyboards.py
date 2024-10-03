@@ -402,7 +402,7 @@ def subscription_manage_menu(lang_code: str) -> InlineKeyboardMarkup:
 
 def subscription_view_kb(lang_code: str) -> InlineKeyboardMarkup:
     buttons = [
-        [InlineKeyboardButton(text=translate(ButtonText.view, lang_code), callback_data="view")],
+        [InlineKeyboardButton(text=translate(ButtonText.view, lang_code), callback_data="subscription_view")],
         [InlineKeyboardButton(text=translate(ButtonText.later, lang_code), callback_data="later")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
@@ -435,8 +435,8 @@ def payment_keyboard(lang_code: str, link: str, request_type: str) -> InlineKeyb
 def program_action_kb(lang_code: str) -> InlineKeyboardMarkup:
     buttons = [
         [
-            InlineKeyboardButton(text=translate(ButtonText.view, lang_code), callback_data="view"),
-            InlineKeyboardButton(text=translate(ButtonText.create, lang_code), callback_data="create"),
+            InlineKeyboardButton(text=translate(ButtonText.view, lang_code), callback_data="show_old"),
+            InlineKeyboardButton(text=translate(ButtonText.new_program, lang_code), callback_data="new_program"),
         ],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)

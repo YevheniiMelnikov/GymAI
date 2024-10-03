@@ -59,7 +59,7 @@ async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Messa
             if not any(ex["name"] == exercise.name for ex in exercises[str(day_index)]):
                 exercises[str(day_index)].append(asdict(exercise))
         program_data = cache_manager.get_program(client_id)
-        split_number = program_data.split_number
+        split_number = data.get("split", program_data.split_number)
         program = await format_program({str(day_index): exercises[str(day_index)]}, day_index)
 
     exercise_msg = await (input_data.answer if isinstance(input_data, Message) else input_data.message.answer)(
@@ -102,7 +102,7 @@ async def find_exercise_gif(exercise: str) -> str | None:
     except Exception as e:
         logger.error(f"Failed to find gif for exercise {exercise}: {e}")
 
-    logger.info(f"No matching file found for exercise: {exercise}")
+    logger.debug(f"No matching file found for exercise: {exercise}")
     return None
 
 

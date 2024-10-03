@@ -515,7 +515,7 @@ async def confirm_subscription_reset(callback_query: CallbackQuery, state: FSMCo
 async def program_action_choice(callback_query: CallbackQuery, state: FSMContext):
     profile = await get_or_load_profile(callback_query.from_user.id)
     data = await state.get_data()
-    if callback_query.data == "view":
+    if callback_query.data == "show_old":
         await callback_query.answer()
         program = Program.from_dict(data.get("program"))
         program_text = await format_program(program.exercises_by_day, 0)
