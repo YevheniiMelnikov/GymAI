@@ -194,15 +194,20 @@ def select_service(lang_code: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
 
 
-def program_manage_menu(lang_code: str) -> InlineKeyboardMarkup:
+def program_manage_menu(lang_code: str, workouts_per_week: int) -> InlineKeyboardMarkup:
     buttons = [
         [
             InlineKeyboardButton(text=translate(ButtonText.save, lang_code), callback_data="save"),
             InlineKeyboardButton(text=translate(ButtonText.reset_program, lang_code), callback_data="reset"),
-        ],
-        [InlineKeyboardButton(text=translate(ButtonText.next_day, lang_code), callback_data="add_next_day")],
-        [InlineKeyboardButton(text=translate(ButtonText.quit, lang_code), callback_data="quit")],
+        ]
     ]
+
+    if workouts_per_week > 1:
+        buttons.append(
+            [InlineKeyboardButton(text=translate(ButtonText.next_day, lang_code), callback_data="add_next_day")]
+        )
+
+    buttons.append([InlineKeyboardButton(text=translate(ButtonText.quit, lang_code), callback_data="quit")])
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
 
 

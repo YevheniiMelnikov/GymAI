@@ -65,7 +65,7 @@ async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Messa
     )
     program_msg = await exercise_msg.answer(
         text=translate(MessageText.program_page, profile.language).format(program=program, day=day),
-        reply_markup=program_manage_menu(profile.language),
+        reply_markup=program_manage_menu(profile.language, split_number),
         disable_web_page_preview=True,
     )
 

@@ -77,7 +77,7 @@ class PaymentService(BackendService):
             "order_id": order_id,
             "payment_type": payment_option,
             "amount": amount,
-            "status": "PENDING",
+            "status": "pending",
         }
         status_code, response = await self._api_request(
             "post", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}

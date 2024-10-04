@@ -36,6 +36,7 @@ async def test_save_program_success(workout_service):
             "exercises_by_day": exercises,
             "created_at": "2023-09-28T12:00:00Z",
             "client_profile": client_id,
+            "wishes": wishes,
         }
 
 

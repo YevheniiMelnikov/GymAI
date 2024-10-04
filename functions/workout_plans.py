@@ -125,7 +125,7 @@ async def next_day_workout_plan(callback_query: CallbackQuery, state: FSMContext
             exercise_msg = await callback_query.message.answer(translate(MessageText.enter_exercise, profile.language))
             await callback_query.message.answer(
                 translate(MessageText.enter_daily_program, profile.language).format(day=week_day),
-                reply_markup=program_manage_menu(profile.language),
+                reply_markup=program_manage_menu(profile.language, split_number),
             )
             await state.update_data(
                 day_index=completed_days,
