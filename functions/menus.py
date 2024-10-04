@@ -41,10 +41,16 @@ async def show_subscription_page(callback_query: CallbackQuery, state: FSMContex
     next_payment_date = payment_date + relativedelta(months=1)
     next_payment_date_str = next_payment_date.strftime("%Y-%m-%d")
     enabled_status = "✅" if subscription.enabled else "❌"
+    translated_week_days = ", ".join(
+        map(lambda x: get_translated_week_day(profile.language, x), subscription.workout_days)
+    )
     await state.set_state(States.show_subscription)
     await callback_query.message.answer(
         translate(MessageText.subscription_page, profile.language).format(
-            next_payment_date=next_payment_date_str, enabled=enabled_status, price=subscription.price
+            next_payment_date=next_payment_date_str,
+            enabled=enabled_status,
+            price=subscription.price,
+            days=translated_week_days,
         ),
         reply_markup=show_subscriptions_kb(profile.language),
     )

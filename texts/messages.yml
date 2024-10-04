@@ -380,9 +380,9 @@ payment_in_progress:
   ua: "Ваш платіж обробляється, очікуйте ⏳"
 
 subscription_page:
-  eng: "<b>Subscription Information:</b>\n\n<b>Status:</b> {enabled}\n<b>Price:</b> {price} UAH\n<b>Date of charge-off:</b> {next_payment_date}"
-  ru: "<b>Информация о подписке:</b>\n\n<b>Статус:</b> {enabled}\n<b>Цена:</b> {price} грн\n<b>Дата наступного списания:</b> {next_payment_date}"
-  ua: "<b>Інформація про підписку:</b>\n\n<b>Статус:</b> {enabled}\n<b>Ціна:</b> {price} грн\n<b>Дата следующего списання:</b> {next_payment_date}"
+  eng: "<b>Subscription Information:</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Status:</b> {enabled}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Price:</b> {price} UAH\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Date of charge-off:</b> {next_payment_date}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Workout days:</b> {days}"
+  ru: "<b>Информация о подписке:</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Статус:</b> {enabled}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Цена:</b> {price} грн\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Дата следующего списання:</b> {next_payment_date}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Дни тренировок:</b> {days}"
+  ua: "<b>Інформація про підписку:</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Статус:</b> {enabled}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Ціна:</b> {price} грн\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Дата наступного списання:</b> {next_payment_date}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Дні тренувань:</b> {days}"
 
 program_not_ready:
   eng: "Your program has not yet been written. Please wait for a notification when it is ready 🙂"
