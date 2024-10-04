@@ -62,7 +62,7 @@ async def test_create_payment_success(payment_service):
             "order_id": order_id,
             "payment_type": payment_option,
             "amount": amount,
-            "status": "PENDING",
+            "status": "pending",
         }
         return 201, {}
 
@@ -117,7 +117,7 @@ async def test_get_unhandled_payments(payment_service):
                     "payment_type": "subscription",
                     "order_id": "order1",
                     "amount": 100,
-                    "status": "PENDING",
+                    "status": "pending",
                     "created_at": 1633036800.0,
                     "updated_at": 1633036800.0,
                     "handled": False,

@@ -368,7 +368,7 @@ async def manage_subscription(callback_query: CallbackQuery, lang: str, client_i
         await callback_query.message.answer(text=translate(MessageText.program_guide, lang))
         day_1_msg = await callback_query.message.answer(
             translate(MessageText.enter_daily_program, lang).format(day=week_day),
-            reply_markup=program_manage_menu(lang),
+            reply_markup=program_manage_menu(lang, workouts_per_week),
         )
         await state.update_data(
             chat_id=callback_query.message.chat.id,

@@ -74,7 +74,7 @@ async def workouts_number_choice(message: Message, state: FSMContext):
     await message.answer(text=translate(MessageText.program_guide, lang=profile.language))
     day_1_msg = await message.answer(
         translate(MessageText.enter_daily_program, profile.language).format(day=1),
-        reply_markup=program_manage_menu(profile.language),
+        reply_markup=program_manage_menu(profile.language, workouts_per_week),
     )
     with suppress(TelegramBadRequest):
         await message.delete()
