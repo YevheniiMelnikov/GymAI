@@ -21,9 +21,10 @@ class PaymentService(BackendService):
         self.payment_client = LiqPay(os.getenv("PAYMENT_PUB_KEY"), os.getenv("PAYMENT_PRIVATE_KEY"))
 
     async def get_payment_link(
-        self, action: str, amount: str, order_id: str, description: str, client_email: str
+        self, action: str, amount: str, order_id: str, payment_type: str, client_email: str, profile_id: int
     ) -> str:
         emails = [email for email in [client_email, os.getenv("EMAIL_HOST_USER")] if email]
+        description = f"{payment_type} payment from profile {profile_id}"
         params = {
             "action": action,
             "amount": amount,

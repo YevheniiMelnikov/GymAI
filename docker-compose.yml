@@ -80,7 +80,7 @@ services:
       - ./backup/dumps:/opt/backup/dumps
 
   alertmanager:
-    image: prom/alertmanager
+    image: prom/alertmanager:latest
     container_name: alertmanager
     ports:
       - "9093:9093"
@@ -88,6 +88,7 @@ services:
       - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml
     networks:
       - monitoring
+    restart: always
 
 volumes:
   pgdata:

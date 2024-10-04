@@ -1,4 +1,6 @@
 import os
+import secrets
+import string
 from contextlib import suppress
 
 import aiohttp
@@ -117,3 +119,8 @@ async def delete_messages(state: FSMContext) -> None:
         with suppress(TelegramBadRequest):
             await bot.delete_message(chat_id=data["chat_id"], message_id=message_id)
     await state.update_data(message_ids=[])
+
+
+def generate_order_id() -> str:
+    characters = string.ascii_letters + string.digits
+    return "".join(secrets.choice(characters) for _ in range(12))

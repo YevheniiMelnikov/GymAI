@@ -1,7 +1,6 @@
 import os
 from contextlib import suppress
 from dataclasses import asdict
-from datetime import datetime
 
 import loguru
 from aiogram import Bot
@@ -16,9 +15,8 @@ from common.file_manager import gif_manager
 from functions.menus import show_subscription_page
 from functions.profiles import get_or_load_profile
 from functions.text_utils import format_program, get_translated_week_day
-from functions.utils import delete_messages
+from functions.utils import delete_messages, generate_order_id
 from common.models import Exercise, Profile, Subscription
-from common.settings import SUBSCRIPTION_DESCRIPTION
 from services.payment_service import payment_service
 from services.user_service import user_service
 from services.workout_service import workout_service
@@ -165,14 +163,13 @@ async def edit_subscription_days(
 
 async def process_new_subscription(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     await callback_query.answer(translate(MessageText.checkbox_reminding, profile.language), show_alert=True)
-    timestamp = datetime.now().timestamp()
-    order_id = f"id_{profile.id}_subscription_{timestamp}"
+    order_id = generate_order_id()
     client = cache_manager.get_client_by_id(profile.id)
     coach = cache_manager.get_coach_by_id(client.assigned_to.pop())
     await state.update_data(order_id=order_id, amount=coach.subscription_price)
     email = cache_manager.get_profile_info_by_key(callback_query.from_user.id, profile.id, "email")
     if payment_link := await payment_service.get_payment_link(
-        "subscribe", coach.subscription_price, order_id, SUBSCRIPTION_DESCRIPTION, email
+        "subscribe", coach.subscription_price, order_id, "subscription", email, profile.id
     ):
         await state.set_state(States.handle_payment)
         await callback_query.message.answer(

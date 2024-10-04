@@ -1,5 +1,4 @@
 from contextlib import suppress
-from datetime import datetime
 
 import loguru
 from aiogram import F, Router
@@ -16,8 +15,7 @@ from functions.exercises import edit_subscription_days, process_new_subscription
 from functions.menus import show_main_menu
 from functions.profiles import get_or_load_profile, update_user_info
 from functions.text_utils import get_state_and_message
-from functions.utils import delete_messages
-from common.settings import PROGRAM_DESCRIPTION
+from functions.utils import delete_messages, generate_order_id
 from services.payment_service import payment_service
 from texts.resources import MessageText
 from texts.text_manager import translate
@@ -321,12 +319,11 @@ async def enter_wishes(message: Message, state: FSMContext):
                 translate(MessageText.select_days, profile.language), reply_markup=select_days(profile.language, [])
             )
         elif data.get("request_type") == "program":
-            timestamp = datetime.now().timestamp()
-            order_id = f"id_{profile.id}_program_{timestamp}"
+            order_id = generate_order_id()
             await state.update_data(order_id=order_id, amount=coach.program_price)
             email = cache_manager.get_profile_info_by_key(message.from_user.id, profile.id, "email")
             if payment_link := await payment_service.get_payment_link(
-                "pay", coach.program_price, order_id, PROGRAM_DESCRIPTION, email
+                "pay", coach.program_price, order_id, "program", email, profile.id
             ):
                 await state.set_state(States.handle_payment)
                 await message.answer(

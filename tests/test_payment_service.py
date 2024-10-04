@@ -11,11 +11,11 @@ async def test_get_payment_link(payment_service):
     action = "pay"
     amount = "100"
     order_id = "order123"
-    description = "Test Payment"
+    payment_type = "program"
     client_email = "client@example.com"
+    profile_id = 1
 
-    link = await payment_service.get_payment_link(action, amount, order_id, description, client_email)
-
+    link = await payment_service.get_payment_link(action, amount, order_id, payment_type, client_email, profile_id)
     expected_params = {"data": "mocked_data", "signature": "mocked_signature"}
     expected_query = urlencode(expected_params)
     expected_url = f"http://checkout.test/?{expected_query}"
