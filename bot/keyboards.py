@@ -299,8 +299,8 @@ def workout_survey_keyboard(lang_code: str, day: str) -> InlineKeyboardMarkup:
 def workout_results(lang_code: str) -> InlineKeyboardMarkup:
     buttons = [
         [
-            InlineKeyboardButton(text=translate(ButtonText.answer_yes, lang_code), callback_data="answer_yes"),
-            InlineKeyboardButton(text=translate(ButtonText.answer_no, lang_code), callback_data="answer_no"),
+            InlineKeyboardButton(text=translate(ButtonText.answer_yes, lang_code), callback_data="completed"),
+            InlineKeyboardButton(text=translate(ButtonText.answer_no, lang_code), callback_data="not_completed"),
         ],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)

@@ -24,7 +24,7 @@ bot = Bot(os.environ.get("BOT_TOKEN"))
 async def send_daily_survey():
     clients = cache_manager.get_clients_to_survey()
     for client_id in clients:
-        client_data = await profile_service.get_profile(client_id.id)
+        client_data = await profile_service.get_profile(client_id)
         client_lang = (
             cache_manager.get_profile_info_by_key(client_data.get("current_tg_id"), client_id, "language") or "ua"
         )
