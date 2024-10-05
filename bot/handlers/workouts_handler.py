@@ -207,7 +207,7 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext)
     day_index = data.get("day_index", 0)
 
     program = await format_program({str(day_index): exercises}, day_index)
-    if callback_query.data == "answer_yes":
+    if callback_query.data == "completed":
         await callback_query.answer()
         await callback_query.answer(translate(MessageText.keep_going, profile.language), show_alert=True)
         client = cache_manager.get_client_by_id(profile.id)
@@ -238,7 +238,7 @@ async def workout_description(message: Message, state: FSMContext):
     day = data.get("day")
     exercises = data.get("exercises")
     day_index = data.get("day_index")
-    program = await format_program(exercises, day_index)
+    program = await format_program(dict({str(day_index): exercises}), day_index)
     await send_message(
         recipient=coach,
         text=translate(MessageText.workout_feedback, coach_lang).format(
