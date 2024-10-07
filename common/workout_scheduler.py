@@ -50,7 +50,7 @@ async def send_daily_survey():
                 except ValueError:
                     day_index = -1
 
-                exercises = subscription.exercises.get(str(day_index))
+                exercises = subscription.exercises.get(str(day_index)) or subscription.exercises.get(yesterday)
                 await state.update_data(exercises=exercises, day=yesterday, day_index=day_index)
                 await callback_query.answer("🔥")
                 await callback_query.message.answer(
