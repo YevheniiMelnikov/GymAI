@@ -111,7 +111,8 @@ class CacheManager:
                 coach_dict = json.loads(v)
                 coach_dict["id"] = int(k)
                 coach = Coach.from_dict(coach_dict)
-                coaches_data.append(coach)
+                if coach.verified:
+                    coaches_data.append(coach)
             random.shuffle(coaches_data)
             return coaches_data
         except Exception as e:
