@@ -54,21 +54,6 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
     exercises = data.get("exercises", {})
     split_number = data.get("split")
 
-    if callback_query.data == "prev_day" or callback_query.data == "previous":
-        current_day -= 1
-    else:
-        current_day += 1
-
-    if current_day < 0:
-        current_day = 0
-        await callback_query.answer(translate(MessageText.out_of_range, profile.language))
-    elif current_day >= split_number:
-        current_day = split_number - 1
-        await callback_query.answer(translate(MessageText.out_of_range, profile.language))
-
-    await state.update_data(day_index=current_day)
-    program_text = await text_utils.format_program(exercises, current_day)
-
     if data.get("client"):
         reply_markup = program_view_kb(profile.language)
         state_to_set = States.program_view
@@ -80,6 +65,18 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
         )
         state_to_set = States.subscription_manage if data.get("subscription") else States.program_edit
 
+    await state.set_state(state_to_set)
+    current_day += -1 if callback_query.data in ["prev_day", "previous"] else 1
+
+    if current_day < 0 or current_day >= split_number:
+        current_day = max(0, min(current_day, split_number - 1))
+        await callback_query.answer(translate(MessageText.out_of_range, profile.language))
+        await state.update_data(day_index=current_day)
+        return
+
+    await state.update_data(day_index=current_day)
+
+    program_text = await text_utils.format_program(exercises, current_day)
     days = data.get("days", [])
     next_day = (
         text_utils.get_translated_week_day(profile.language, days[current_day]).lower()
@@ -93,7 +90,6 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
             disable_web_page_preview=True,
         )
 
-    await state.set_state(state_to_set)
     await callback_query.answer()
 
 
