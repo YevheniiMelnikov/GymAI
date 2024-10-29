@@ -39,13 +39,13 @@ services:
       db:
         condition: service_healthy
     ports:
-      - "127.0.0.1:8000:8000"
+      - "8000:8000"
     env_file:
       - ./.env
     logging:
       driver: loki
       options:
-        loki-url: "http://172.20.0.4:3100/loki/api/v1/push"
+        loki-url: "http://172.20.0.10:3100/loki/api/v1/push"
         loki-external-labels: "job=backend,app=gym_bot"
     networks:
       - monitoring
@@ -61,11 +61,11 @@ services:
       - db
       - redis
     ports:
-      - "127.0.0.1:8080:8000"
+      - "8080:8000"
     logging:
       driver: loki
       options:
-        loki-url: "http://172.20.0.4:3100/loki/api/v1/push"
+        loki-url: "http://172.20.0.10:3100/loki/api/v1/push"
         loki-external-labels: "job=bot,app=gym_bot"
     env_file:
       - ./.env
