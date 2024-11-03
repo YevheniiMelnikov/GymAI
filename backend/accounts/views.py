@@ -24,6 +24,11 @@ from .serializers import (
     ClientProfileSerializer,
 )
 
+# @csrf_exempt
+# @require_POST
+# def create_api_key_view(request):
+#     api_key, key = APIKey.objects.create_key(name="my-key")
+#     return JsonResponse({"api_key": key})
 
 class IsAuthenticatedButAllowInactive(BasePermission):
     def has_permission(self, request, view):

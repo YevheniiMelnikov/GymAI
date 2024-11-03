@@ -158,5 +158,6 @@ google_creds.json
 /docker-compose_dev.yml
 .backup/dumps/
 .nohup.out
-.pgdata/
-.redisdata/
+/pgdata/
+/redisdata/
+*~
