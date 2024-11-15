@@ -127,18 +127,23 @@ async def register_user(callback_query: CallbackQuery, state: FSMContext, data: 
     username = data.get("username")
     password = data.get("password")
 
-    await user_service.sign_up(
+    if not await user_service.sign_up(
         current_tg_id=callback_query.from_user.id,
         username=username,
         password=password,
         email=email,
         status=data.get("account_type"),
         language=data.get("lang"),
-    )
+    ):
+        await callback_query.message.answer(text=translate(MessageText.unexpected_error, data.get("lang")))
+        await state.clear()
+        await state.set_state(States.username)
+        await callback_query.message.answer(text=translate(MessageText.username, data.get("lang")))
+        return
 
     logger.info(f"User {email} registered successfully.")
+
     if not await user_service.log_in(username=username, password=password):
-        logger.error(f"Login failed for user {username} after registration")
         await callback_query.message.answer(text=translate(MessageText.unexpected_error, data.get("lang")))
         await state.clear()
         await state.set_state(States.username)

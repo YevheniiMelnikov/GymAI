@@ -20,9 +20,9 @@ class UserService(BackendService):
         )
         if status_code == 400 and "error" in response:
             error_message = response["error"]
-            if "Username already exists" in error_message:
+            if error_message == "Username already exists":
                 raise UsernameUnavailable(response)
-            elif "Email already in use" in error_message:
+            elif error_message == "This email already taken":
                 raise EmailUnavailable(response)
             else:
                 logger.error(f"Sign up failed with error: {error_message}")

@@ -30,6 +30,7 @@ from .serializers import (
 #     api_key, key = APIKey.objects.create_key(name="my-key")
 #     return JsonResponse({"api_key": key})
 
+
 class IsAuthenticatedButAllowInactive(BasePermission):
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated

@@ -338,7 +338,7 @@ async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, 
     data = await state.get_data()
     exercises = data.get("exercises", {})
     days = data.get("days", [])
-    program = await format_program(exercises, day=days[0])
+    program = await format_program(exercises, day=0)
     week_day = get_translated_week_day(profile.language, days[0]).lower()
 
     await callback_query.message.answer(
