@@ -58,7 +58,9 @@ class CacheManager:
         key = self._add_prefix("user_profiles")
         self.redis.hset(key, str(telegram_id), json.dumps(profiles_data))
 
-    def set_profile(self, profile: Profile, username: str, telegram_id: int, email: str, is_current: bool = True) -> None:
+    def set_profile(
+        self, profile: Profile, username: str, telegram_id: int, email: str, is_current: bool = True
+    ) -> None:
         try:
             current_profiles = self._get_profile_data(telegram_id)
             profile_data = {
