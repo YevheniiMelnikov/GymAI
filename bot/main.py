@@ -34,7 +34,7 @@ async def main() -> None:
 
     bot = Bot(token=bot_token, default=DefaultBotProperties(parse_mode="HTML"))
     redis_url = os.getenv("REDIS_URL")
-    dp = Dispatcher(storage=RedisStorage.from_url(f"{redis_url}/0"))
+    dp = Dispatcher(storage=RedisStorage.from_url(f"{redis_url}"))
     dp.include_routers(
         cmd_router,
         message_router,
