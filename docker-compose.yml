@@ -15,7 +15,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: always
+    restart: unless-stopped
 
   redis:
     image: "redis:latest"
@@ -28,13 +28,13 @@ services:
     networks:
       - monitoring
     command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
-    restart: always
+    restart: unless-stopped
 
   backend:
     container_name: backend
     build:
       context: .
-      dockerfile: Dockerfile.backend
+      dockerfile: api.Dockerfile
     depends_on:
       db:
         condition: service_healthy
@@ -49,7 +49,7 @@ services:
         loki-external-labels: "job=backend,app=gym_bot"
     networks:
       - monitoring
-    restart: always
+    restart: unless-stopped
 
   bot:
     container_name: bot
@@ -75,7 +75,7 @@ services:
       - main.py
     networks:
       - monitoring
-    restart: always
+    restart: unless-stopped
     volumes:
       - ./backup/dumps:/opt/backup/dumps
 
@@ -88,7 +88,7 @@ services:
       - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml
     networks:
       - monitoring
-    restart: always
+    restart: unless-stopped
 
 volumes:
   pgdata:
