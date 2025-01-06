@@ -215,7 +215,7 @@ class CacheManager:
                 logger.debug(f"No data found for profile_id {profile_id} in cache")
                 raise UserServiceError
         except Exception as e:
-            logger.info(f"Failed to get data for profile_id from cache {profile_id}: {e}")
+            logger.info(f"Failed to get data for profile_id {profile_id} from cache: {e}")
             raise UserServiceError
 
     def set_program(self, client_id: int, program_data: dict) -> None:
