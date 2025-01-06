@@ -27,8 +27,8 @@ from functions.text_utils import (
 )
 from services.profile_service import profile_service
 from common.settings import BOT_PAYMENT_OPTIONS
-from texts.resources import MessageText
-from texts.text_manager import translate
+from bot.texts.resources import MessageText
+from bot.texts.text_manager import translate
 
 logger = loguru.logger
 bot = Bot(os.environ.get("BOT_TOKEN"))

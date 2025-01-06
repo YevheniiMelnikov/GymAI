@@ -20,9 +20,9 @@ from common.models import Exercise, Profile, Subscription
 from services.payment_service import payment_service
 from services.user_service import user_service
 from services.workout_service import workout_service
-from texts.exercises import exercise_dict
-from texts.resources import MessageText
-from texts.text_manager import translate
+from bot.texts.exercises import exercise_dict
+from bot.texts.resources import MessageText
+from bot.texts.text_manager import translate
 
 bot = Bot(os.environ.get("BOT_TOKEN"))
 logger = loguru.logger

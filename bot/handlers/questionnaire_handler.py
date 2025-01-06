@@ -17,8 +17,8 @@ from functions.profiles import get_or_load_profile, update_user_info
 from functions.text_utils import get_state_and_message
 from functions.utils import delete_messages, generate_order_id
 from services.payment_service import payment_service
-from texts.resources import MessageText
-from texts.text_manager import translate
+from bot.texts.resources import MessageText
+from bot.texts.text_manager import translate
 
 logger = loguru.logger
 

@@ -49,9 +49,9 @@ sign_up:
   ua: "Реєстрація 📝"
 
 back:
-  eng: "Back ⬅️"
-  ru: "Назад ⬅️"
-  ua: "Назад ⬅️"
+  eng: "←"
+  ru: "←"
+  ua: "←"
 
 edit:
   eng: "Edit ✏️"
@@ -129,9 +129,9 @@ select:
   ua: "Обрати ✅"
 
 forward:
-  eng: "Forward ➡️"
-  ru: "Далее ➡️"
-  ua: "Далі ➡️"
+  eng: "→"
+  ru: "→"
+  ua: "→"
 
 choose_coach:
   eng: "Choose a coach 🏋️‍♂️"
@@ -304,9 +304,9 @@ create:
   ua: "Створити 📝"
 
 prev_menu:
-  eng: "⏮"
-  ru: "⏮"
-  ua: "⏮"
+  eng: "Back ⬅️"
+  ru: "Назад ⬅️"
+  ua: "Назад ⬅️"
 
 delete:
   eng: "Delete 🗑"
@@ -339,9 +339,9 @@ program_price:
   ua: "Вартість програми 💰"
 
 subscription_price:
-  eng: "Subscription price 💸"
-  ru: "Стоимость подписки 💸"
-  ua: "Вартість підписки 💸"
+  eng: "Subscription price 💰"
+  ru: "Стоимость подписки 💰"
+  ua: "Вартість підписки 💰"
 
 new_program:
   eng: "Create new 🆕"

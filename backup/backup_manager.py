@@ -105,7 +105,7 @@ async def delete_old_backups() -> None:
 async def backup_scheduler() -> None:
     logger.debug("Starting backup scheduler ...")
     scheduler = AsyncIOScheduler()
-    scheduler.add_job(create_postgres_backup, "cron", hour=15, minute=25)
-    scheduler.add_job(create_redis_backup, "cron", hour=15, minute=25)
-    scheduler.add_job(delete_old_backups, "cron", hour=13, minute=42)
+    scheduler.add_job(create_postgres_backup, "cron", hour=2, minute=5)
+    scheduler.add_job(create_redis_backup, "cron", hour=2, minute=10)
+    scheduler.add_job(delete_old_backups, "cron", hour=2, minute=15)
     scheduler.start()

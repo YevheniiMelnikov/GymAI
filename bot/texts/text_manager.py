@@ -2,22 +2,22 @@ import os
 
 import yaml
 
-from texts.resources import ButtonText, MessageText
+from bot.texts.resources import ButtonText, MessageText
 
 ResourceType = str | MessageText | ButtonText
 
 if os.getenv("ENVIRONMENT", "local") == "local":
     PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     RESOURCES = {
-        "messages": f"{PROJECT_ROOT}/texts/messages.yml",
-        "buttons": f"{PROJECT_ROOT}/texts/buttons.yml",
-        "commands": f"{PROJECT_ROOT}/texts/commands.yml",
+        "messages": f"{PROJECT_ROOT}/bot/texts/messages.yml",
+        "buttons": f"{PROJECT_ROOT}/bot/texts/buttons.yml",
+        "commands": f"{PROJECT_ROOT}/bot/texts/commands.yml",
     }
 else:
     RESOURCES = {
-        "messages": "/opt/texts/messages.yml",
-        "buttons": "/opt/texts/buttons.yml",
-        "commands": "/opt/texts/commands.yml",
+        "messages": "/opt/bot/texts/messages.yml",
+        "buttons": "/opt/bot/texts/buttons.yml",
+        "commands": "/opt/bot/texts/commands.yml",
     }
 
 

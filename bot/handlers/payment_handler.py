@@ -17,8 +17,8 @@ from common.models import Client, Coach
 from services.payment_service import payment_service
 from services.user_service import user_service
 from services.workout_service import workout_service
-from texts.resources import ButtonText, MessageText
-from texts.text_manager import translate
+from bot.texts.resources import ButtonText, MessageText
+from bot.texts.text_manager import translate
 
 payment_router = Router()
 logger = loguru.logger
