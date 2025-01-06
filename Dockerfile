@@ -1,4 +1,4 @@
-FROM python:3.12
+FROM python:3.13-slim
 
 ENV APP_HOME=/opt
 ENV PYTHONPATH=$APP_HOME

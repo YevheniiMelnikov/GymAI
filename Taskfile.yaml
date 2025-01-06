@@ -26,5 +26,5 @@ tasks:
     cmds:
       - ruff format --config=pyproject.toml
 
-  tests:
-    @pytest tests -v --ff
+#  tests:
+#    @pytest tests -v --ff

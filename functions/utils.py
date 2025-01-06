@@ -95,7 +95,7 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
 
 async def handle_clients_pagination(callback_query: CallbackQuery, profile, index: int, state: FSMContext) -> None:
     data = await state.get_data()
-    clients = [Client.from_dict(data) for data in data["clients"]]
+    clients = [Client.from_dict(data) for data in data.get("clients")]
 
     if not clients:
         await callback_query.answer(translate(MessageText.no_clients, profile.language))
@@ -113,7 +113,7 @@ async def delete_messages(state: FSMContext) -> None:
     message_ids = data.get("message_ids", [])
     for message_id in message_ids:
         with suppress(TelegramBadRequest):
-            await bot.delete_message(chat_id=data["chat_id"], message_id=message_id)
+            await bot.delete_message(chat_id=data.get("chat_id"), message_id=message_id)
     await state.update_data(message_ids=[])
 
 
