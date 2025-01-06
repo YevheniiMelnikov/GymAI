@@ -23,7 +23,7 @@ services:
     ports:
       - "6379:6379"
     volumes:
-      - redisdata:/data
+      - redis_data:/data
       - ./redis.conf:/usr/local/etc/redis/redis.conf
     networks:
       - monitoring
@@ -78,6 +78,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./backup/dumps:/opt/backup/dumps
+      - redis_data:/opt/redis/data:ro
 
   alertmanager:
     image: prom/alertmanager:latest
@@ -97,7 +98,7 @@ volumes:
       o: bind
       type: none
       device: /opt/postgres/data/
-  redisdata:
+  redis_data:
     driver: local
     driver_opts:
       o: bind
