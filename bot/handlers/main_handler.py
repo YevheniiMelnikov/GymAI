@@ -30,8 +30,8 @@ from common.models import Coach, Profile
 from services.backend_service import backend_service
 from services.payment_service import payment_service
 from services.user_service import user_service
-from texts.resources import MessageText
-from texts.text_manager import translate
+from bot.texts.resources import MessageText
+from bot.texts.text_manager import translate
 
 main_router = Router()
 logger = loguru.logger

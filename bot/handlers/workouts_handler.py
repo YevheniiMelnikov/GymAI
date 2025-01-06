@@ -38,8 +38,8 @@ from common.models import Exercise, Program
 from services.profile_service import profile_service
 from services.user_service import user_service
 from services.workout_service import workout_service
-from texts.resources import ButtonText, MessageText
-from texts.text_manager import translate
+from bot.texts.resources import ButtonText, MessageText
+from bot.texts.text_manager import translate
 
 program_router = Router()
 

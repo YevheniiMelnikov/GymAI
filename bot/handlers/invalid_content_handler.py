@@ -3,8 +3,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from bot.states import States
-from texts.resources import MessageText
-from texts.text_manager import translate
+from bot.texts.resources import MessageText
+from bot.texts.text_manager import translate
 
 invalid_content_router = Router()
 

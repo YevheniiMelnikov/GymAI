@@ -14,8 +14,8 @@ from bot.keyboards import program_edit_kb, program_view_kb, subscription_manage_
 from bot.states import States
 from functions import menus, profiles, text_utils
 from common.models import Client
-from texts.resources import MessageText
-from texts.text_manager import resource_manager, translate
+from bot.texts.resources import MessageText
+from bot.texts.text_manager import resource_manager, translate
 
 logger = loguru.logger
 bot = Bot(os.environ.get("BOT_TOKEN"))

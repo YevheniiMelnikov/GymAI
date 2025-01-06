@@ -22,8 +22,8 @@ from functions.text_utils import format_new_client_message, get_client_page, get
 from common.models import Coach, Profile, Client
 from functions.utils import program_menu_pagination
 from services.profile_service import profile_service
-from texts.resources import MessageText
-from texts.text_manager import translate
+from bot.texts.resources import MessageText
+from bot.texts.text_manager import translate
 
 logger = loguru.logger
 bot = Bot(os.environ.get("BOT_TOKEN"))

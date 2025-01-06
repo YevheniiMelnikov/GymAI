@@ -16,8 +16,8 @@ from functions.text_utils import validate_email, validate_password
 from functions.utils import delete_messages, set_bot_commands
 from services.profile_service import profile_service
 from services.user_service import user_service
-from texts.resources import MessageText
-from texts.text_manager import translate
+from bot.texts.resources import MessageText
+from bot.texts.text_manager import translate
 
 register_router = Router()
 

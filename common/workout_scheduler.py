@@ -13,8 +13,8 @@ from bot.states import States
 from common.cache_manager import cache_manager
 from functions.profiles import get_or_load_profile
 from services.profile_service import profile_service
-from texts.resources import MessageText
-from texts.text_manager import translate
+from bot.texts.resources import MessageText
+from bot.texts.text_manager import translate
 
 logger = loguru.logger
 survey_router = Router()
