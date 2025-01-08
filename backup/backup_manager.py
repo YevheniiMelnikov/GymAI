@@ -42,9 +42,9 @@ async def create_postgres_backup() -> None:
             result = await run_subprocess(command, stdout=f, stderr=subprocess.PIPE)
 
         if result.returncode == 0:
-            logger.info(f"PostgreSQL backup {filename} сохранён по пути {filepath}")
+            logger.info(f"PostgreSQL backup {filename} saved successfully at {filepath}")
         else:
-            logger.error(f"PostgreSQL backup {filename} не удался: {result.stderr.decode().strip()}")
+            logger.error(f"PostgreSQL backup {filename} failed: {result.stderr.decode().strip()}")
             if os.path.exists(filepath):
                 os.remove(filepath)
     except Exception as e:
@@ -74,7 +74,7 @@ async def create_redis_backup() -> None:
         with open(source_dump, "rb") as src, open(backup_filepath, "wb") as dest:
             dest.write(src.read())
 
-        logger.info(f"Redis backup сохранён по пути {backup_filepath}")
+        logger.info(f"Redis backup saved successfully at {backup_filepath}")
 
     except Exception as e:
         logger.error(f"Exception during Redis backup: {e}")
@@ -105,7 +105,7 @@ async def delete_old_backups() -> None:
 async def backup_scheduler() -> None:
     logger.debug("Starting backup scheduler ...")
     scheduler = AsyncIOScheduler()
-    scheduler.add_job(create_postgres_backup, "cron", hour=2, minute=5)
-    scheduler.add_job(create_redis_backup, "cron", hour=2, minute=10)
-    scheduler.add_job(delete_old_backups, "cron", hour=2, minute=15)
+    scheduler.add_job(create_postgres_backup, "cron", hour=2, minute=0)
+    scheduler.add_job(create_redis_backup, "cron", hour=2, minute=1)
+    scheduler.add_job(delete_old_backups, "cron", hour=2, minute=2)
     scheduler.start()
