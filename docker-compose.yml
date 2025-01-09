@@ -1,6 +1,6 @@
 services:
   db:
-    image: "postgres:16"
+    image: "postgres:17.2"
     container_name: db
     ports:
       - "5432:5432"
@@ -18,7 +18,7 @@ services:
     restart: unless-stopped
 
   redis:
-    image: "redis:7.0"
+    image: "redis:7.4.2"
     container_name: redis
     ports:
       - "6379:6379"
@@ -78,7 +78,6 @@ services:
     restart: unless-stopped
     volumes:
       - ./backup/dumps:/opt/backup/dumps
-      - redisdata:/data
 
   alertmanager:
     image: prom/alertmanager:latest
