@@ -65,8 +65,6 @@ async def send_daily_survey():
 
 async def workout_scheduler() -> None:
     logger.debug("Starting workout scheduler ...")
-    # scheduler = AsyncIOScheduler()
-    # scheduler.add_job(send_daily_survey, "cron", hour=9, minute=0)
-    # scheduler.start()
-
-    await send_daily_survey()
+    scheduler = AsyncIOScheduler()
+    scheduler.add_job(send_daily_survey, "cron", hour=9, minute=0)
+    scheduler.start()
