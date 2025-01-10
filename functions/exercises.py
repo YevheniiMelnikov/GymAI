@@ -33,8 +33,8 @@ async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Messa
     await delete_messages(state)
     profile = await get_or_load_profile(input_data.from_user.id)
     day_index = data.get("day_index", 0)
-    exercises = data.get("exercises", {})
     client_id = data.get("client_id")
+    exercises = data.get("exercises", {})
 
     if data.get("subscription"):
         days = data.get("days")
@@ -106,19 +106,19 @@ async def find_exercise_gif(exercise: str) -> str | None:
 
 async def update_exercise_data(message: Message, state: FSMContext, lang: str, updated_option: dict) -> None:
     data = await state.get_data()
-    exercises = data.get("exercises", {})
-    day_index = str(data.get("day_index"))
+    exercises = data.get("exercises", [])
+    day_index = data.get("day_index", 0)
     exercise_index = data.get("exercise_index", 0)
-    selected_exercise = exercises[day_index][exercise_index]
+    selected_exercise = exercises[exercise_index]
     updated_key = list(updated_option.keys())[0]
     updated_value = list(updated_option.values())[0]
     selected_exercise[updated_key] = updated_value
-    exercises[day_index][exercise_index] = selected_exercise
+    exercises[exercise_index] = selected_exercise
     await state.update_data(exercises=exercises)
     await state.set_state(States.program_edit)
-    program = await format_program({str(day_index): exercises[str(day_index)]}, int(day_index))
+    program = await format_program({str(day_index): exercises}, day_index)
     await message.answer(
-        translate(MessageText.program_page, lang).format(program=program, day=int(day_index) + 1),
+        translate(MessageText.program_page, lang).format(program=program, day=day_index + 1),
         disable_web_page_preview=True,
     )
     await message.answer(translate(MessageText.continue_editing, lang), reply_markup=program_edit_kb(lang))
@@ -126,18 +126,26 @@ async def update_exercise_data(message: Message, state: FSMContext, lang: str, u
         await message.delete()
 
 
-async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMContext, day_index: int) -> None:
+async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMContext) -> None:
     profile = await get_or_load_profile(callback_query.from_user.id)
     client_id = callback_query.data.split("_")[1]
     day = callback_query.data.split("_")[2]
+    week_day = get_translated_week_day(profile.language, day).lower()
     subscription = cache_manager.get_subscription(client_id)
+    day_index = subscription.workout_days.index(day)
     program_text = await format_program(subscription.exercises, 0)
     await state.update_data(
-        exercises=subscription.exercises, client_id=client_id, day=day, subscription=True, day_index=day_index
+        exercises=subscription.exercises,
+        client_id=client_id,
+        day=day,
+        subscription=True,
+        day_index=day_index,
+        days=subscription.workout_days,
+        completed_days=len(subscription.workout_days),
     )
     await state.set_state(States.program_edit)
     await callback_query.message.answer(
-        text=translate(MessageText.program_page, profile.language).format(program=program_text, day=day),
+        text=translate(MessageText.program_page, profile.language).format(program=program_text, day=week_day),
         disable_web_page_preview=True,
         reply_markup=program_edit_kb(profile.language),
     )
