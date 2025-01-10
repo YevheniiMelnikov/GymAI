@@ -129,7 +129,8 @@ async def set_exercise_sets(callback_query: CallbackQuery, state: FSMContext) ->
         return
 
     await callback_query.message.answer(translate(MessageText.enter_reps, profile.language), reply_markup=reps_number())
-    await callback_query.message.delete()
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()
     await state.set_state(States.enter_reps)
 
 
@@ -184,7 +185,11 @@ async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMCon
         await update_exercise_data(message, state, profile.language, {"weight": weight})
         return
 
-    exercises = data.get("exercises", {})
+    if data.get("subscription"):
+        subscription = cache_manager.get_subscription(data.get("client_id"))
+        exercises = subscription.exercises
+    else:
+        exercises = data.get("exercises", {})
     day_index = data.get("day_index", 0)
     if str(day_index) not in exercises:
         exercises[str(day_index)] = [dict(gif_link=gif_link, name=exercise_name, reps=reps, sets=sets, weight=weight)]
@@ -225,6 +230,8 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext)
     else:
         await callback_query.answer(translate(MessageText.workout_description, profile.language), show_alert=True)
         await state.set_state(States.workout_description)
+    with suppress(TelegramBadRequest):
+        await callback_query.message.delete()
 
 
 @program_router.message(States.workout_description)
@@ -263,11 +270,15 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
     if callback_query.data == "exercise_add":
         await callback_query.answer()
         exercise_msg = await callback_query.message.answer(translate(MessageText.enter_exercise, profile.language))
+        if data.get("subscription"):
+            exercises = exercises.get(day_index, [])
+        else:
+            await state.update_data(exercise_index=len(exercises) + 1)
         await state.update_data(
-            exercise_index=len(exercises) + 1,
             exercises=exercises,
             message_ids=[exercise_msg.message_id],
             chat_id=callback_query.message.chat.id,
+            edit_mode=False,
         )
         await state.set_state(States.add_exercise_name)
 

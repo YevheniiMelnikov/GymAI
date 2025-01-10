@@ -176,9 +176,7 @@ async def navigate_days(callback_query: CallbackQuery, state: FSMContext):
 
 @message_router.callback_query(F.data.startswith("edit_"))
 async def edit_subscription(callback_query: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    day_index = data.get("day_index", 0)
-    await edit_subscription_exercises(callback_query, state, day_index)
+    await edit_subscription_exercises(callback_query, state)
 
 
 @message_router.callback_query(F.data.startswith("create"))

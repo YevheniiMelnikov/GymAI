@@ -9,9 +9,9 @@ ResourceType = str | MessageText | ButtonText
 if os.getenv("ENVIRONMENT", "local") == "local":
     PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     RESOURCES = {
-        "messages": f"{PROJECT_ROOT}/bot/texts/messages.yml",
-        "buttons": f"{PROJECT_ROOT}/bot/texts/buttons.yml",
-        "commands": f"{PROJECT_ROOT}/bot/texts/commands.yml",
+        "messages": f"{PROJECT_ROOT}/texts/messages.yml",
+        "buttons": f"{PROJECT_ROOT}/texts/buttons.yml",
+        "commands": f"{PROJECT_ROOT}/texts/commands.yml",
     }
 else:
     RESOURCES = {
