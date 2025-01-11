@@ -312,6 +312,8 @@ async def enter_wishes(message: Message, state: FSMContext):
         await message.answer(translate(MessageText.coach_selected).format(name=coach.name))
         await client_request(coach, client, data)
         await show_main_menu(message, profile, state)
+        with suppress(TelegramBadRequest):
+            await message.delete()
     else:
         if data.get("request_type") == "subscription":
             await state.set_state(States.workout_days)
@@ -332,8 +334,8 @@ async def enter_wishes(message: Message, state: FSMContext):
                 )
             else:
                 await message.answer(translate(MessageText.unexpected_error, profile.language))
-    with suppress(TelegramBadRequest):
-        await message.delete()
+        with suppress(TelegramBadRequest):
+            await message.delete()
 
 
 @questionnaire_router.callback_query(States.workout_days)
@@ -364,12 +366,11 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
         if callback_query.data not in days:
             days.append(callback_query.data)
         else:
-            await callback_query.answer("❌")
+            days.remove(callback_query.data)
 
         await state.update_data(workout_days=days)
-        reply_markup = select_days(profile.language, days)
 
-        if callback_query.message.reply_markup != reply_markup:
-            await callback_query.message.edit_reply_markup(reply_markup=reply_markup)
+        with suppress(TelegramBadRequest):
+            await callback_query.message.edit_reply_markup(reply_markup=select_days(profile.language, days))
 
         await state.set_state(States.workout_days)
