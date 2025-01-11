@@ -48,7 +48,7 @@ class CacheManager:
             existing_data = json.loads(self.redis.hget(key, str(profile_id)) or "{}")
             existing_data.update(filtered_data)
             self.redis.hset(key, str(profile_id), json.dumps(existing_data))
-            logger.debug(f"Data for profile {profile_id} has been updated in {key}: {filtered_data}")
+            logger.debug(f"Data for profile_id {profile_id} has been updated in {key}: {filtered_data}")
         except Exception as e:
             logger.error(f"Failed to set or update data for {profile_id} in {key}", e)
 
@@ -149,7 +149,7 @@ class CacheManager:
             self._update_profile_data(telegram_id, profiles_data)
             return True
         except Exception as e:
-            logger.exception(f"Failed to set profile info for profile {profile_id}: {e}")
+            logger.exception(f"Failed to set profile info for profile_id {profile_id}: {e}")
             return False
 
     def delete_profile(self, telegram_id: int, profile_id: int) -> bool:
@@ -166,7 +166,7 @@ class CacheManager:
             logger.info(f"Profile {profile_id} deleted for tg user {telegram_id}")
             return True
         except Exception as e:
-            logger.error(f"Failed to delete profile {profile_id} for tg user {telegram_id}: {e}")
+            logger.error(f"Failed to delete profile_id {profile_id} for tg user {telegram_id}: {e}")
             return False
 
     def set_client_data(self, profile_id: int, client_data: dict[str, Any]) -> None:
@@ -334,7 +334,7 @@ class CacheManager:
             key = self._add_prefix("workout_plans:subscriptions")
             self.redis.hset(key, str(profile_id), json.dumps(subscription_data))
             self.reset_program_payment_status(profile_id, "subscription")
-            logger.debug(f"Subscription for profile {profile_id} saved in cache")
+            logger.debug(f"Subscription for profile_id {profile_id} saved in cache")
         except Exception as e:
             logger.error(f"Failed to save subscription in cache for profile {profile_id}: {e}")
 

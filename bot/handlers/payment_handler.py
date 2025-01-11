@@ -6,6 +6,7 @@ from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
+from rest_framework.exceptions import ValidationError
 
 from bot.keyboards import select_service, workout_type
 from bot.states import States
@@ -65,7 +66,6 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
 
 @payment_router.callback_query(States.handle_payment)
 async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
-    await callback_query.answer()
     profile = await get_or_load_profile(callback_query.from_user.id)
     if callback_query.data == "done":
         data = await state.get_data()
@@ -78,9 +78,15 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
             client = cache_manager.get_client_by_id(profile.id)
             coach = cache_manager.get_coach_by_id(client.assigned_to.pop())
             auth_token = await user_service.get_user_token(profile.id)
-            subscription_id = await workout_service.create_subscription(
-                profile.id, days, data.get("wishes"), coach.subscription_price, auth_token
-            )
+            try:
+                subscription_id = await workout_service.create_subscription(
+                    profile.id, days, data.get("wishes"), coach.subscription_price, auth_token
+                )
+            except ValidationError as e:
+                logger.error(f"Failed to create subscription: {e}")
+                await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
+                return
+
             subscription_data = {
                 "id": subscription_id,
                 "payment_date": datetime.today().strftime("%Y-%m-%d"),
@@ -94,7 +100,7 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
             cache_manager.save_subscription(profile.id, subscription_data)
         cache_manager.set_payment_status(profile.id, True, data.get("request_type"))
         await payment_service.create_payment(profile.id, data.get("request_type"), order_id, amount)
-        await callback_query.message.answer(translate(MessageText.payment_in_progress, profile.language))
+        await callback_query.answer(translate(MessageText.payment_in_progress, profile.language), show_alert=True)
 
     await show_main_menu(callback_query.message, profile, state)
     with suppress(TelegramBadRequest):
