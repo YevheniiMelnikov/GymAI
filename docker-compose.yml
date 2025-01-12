@@ -25,6 +25,7 @@ services:
     volumes:
       - redisdata:/data
       - ./redis.conf:/usr/local/etc/redis/redis.conf
+      - /opt/redis/logs:/var/log/redis
     networks:
       - monitoring
     command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
