@@ -5,10 +5,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 from gspread import Worksheet
 
-from common.decorators import singleton
 
-
-@singleton
 class SheetsManager:
     def __init__(self) -> None:
         self.creds = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")

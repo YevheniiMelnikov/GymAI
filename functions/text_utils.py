@@ -7,8 +7,8 @@ from bot.states import States
 from common.cache_manager import cache_manager
 from common.models import Client, Coach, Exercise
 from services.profile_service import profile_service
-from texts.resources import ButtonText, MessageText
-from texts.text_manager import translate
+from bot.texts.resources import ButtonText, MessageText
+from bot.texts.text_manager import translate
 
 
 def validate_password(password: str) -> bool:

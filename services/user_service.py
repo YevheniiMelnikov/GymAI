@@ -2,7 +2,6 @@ from urllib.parse import urljoin
 
 import loguru
 
-from common.decorators import singleton
 from services.backend_service import BackendService
 from common.exceptions import UsernameUnavailable, EmailUnavailable
 from common.models import Profile
@@ -11,7 +10,6 @@ from common.models import Profile
 logger = loguru.logger
 
 
-@singleton
 class UserService(BackendService):
     async def sign_up(self, **kwargs) -> bool:
         url = urljoin(self.backend_url, "api/v1/profiles/create/")

@@ -1,21 +1,29 @@
-FROM python:3.12
+FROM python:3.13-slim
 
 ENV APP_HOME=/opt
 ENV PYTHONPATH=$APP_HOME
+ENV TZ=Europe/Kyiv
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends gcc python3-dev
+    && apt-get install -y --no-install-recommends \
+       gcc \
+       python3-dev \
+       curl \
+    && rm -rf /var/lib/apt/lists/*
 
 RUN curl -sSL https://install.python-poetry.org | python3 -
+
 ENV PATH="/root/.local/bin:$PATH"
+
+RUN poetry --version
 
 WORKDIR $APP_HOME
 
+COPY pyproject.toml poetry.lock README.md $APP_HOME/
+
 RUN poetry config virtualenvs.create false
 
-COPY pyproject.toml poetry.lock $APP_HOME/
-
-RUN poetry install --no-interaction --no-ansi
+RUN poetry install --no-interaction --no-ansi --no-root
 
 COPY backend $APP_HOME/backend
 

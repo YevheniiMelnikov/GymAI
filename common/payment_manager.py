@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 import loguru
 from dateutil.relativedelta import relativedelta
 
-from common.decorators import singleton
 from common.sheets_manager import sheets_manager
 from functions.chat import send_message, client_request
 from services.backend_service import backend_service
@@ -23,13 +22,12 @@ from services.payment_service import payment_service
 from services.profile_service import profile_service
 from services.user_service import user_service
 from services.workout_service import workout_service
-from texts.resources import MessageText
-from texts.text_manager import translate
+from bot.texts.resources import MessageText
+from bot.texts.text_manager import translate
 
 logger = loguru.logger
 
 
-@singleton
 class PaymentHandler:
     def __init__(self):
         self.cache_manager = cache_manager

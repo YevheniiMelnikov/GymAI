@@ -5,12 +5,9 @@ import loguru
 from aiogram.types import Message
 from google.cloud import storage
 
-from common.decorators import singleton
-
 logger = loguru.logger
 
 
-@singleton
 class FileManager:
     def __init__(self, bucket_name: str):
         self.bucket_name = bucket_name
@@ -29,21 +26,20 @@ class FileManager:
 
     @staticmethod
     async def save_profile_photo(message: Message) -> str | None:
-        file_id = message.photo[-1].file_id
-        file = await message.bot.get_file(file_id)
-        file_url = f"https://api.telegram.org/file/bot{message.bot.token}/{file.file_path}"
-        local_file_path = os.path.join("temp", f"{file_id}.jpg")
-        os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
-        async with aiohttp.ClientSession() as session:
-            async with session.get(file_url) as resp:
-                if resp.status == 200:
-                    with open(local_file_path, "wb") as f:
-                        f.write(await resp.read())
-                        logger.debug(f"File {file_id} successfully saved locally")
-                        return f"{file_id}.jpg"
-                else:
-                    logger.error(f"Error saving file {file_id}")
-                    return None
+        try:
+            photo = message.photo[-1]
+            file_id = photo.file_id
+            file = await message.bot.get_file(file_id)
+            local_file_path = os.path.join("temp", f"{file_id}.jpg")
+            os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
+            await message.bot.download_file(file.file_path, destination=local_file_path)
+            logger.debug(f"File {file_id} successfully saved locally at {local_file_path}")
+            await message.delete()
+            return f"{file_id}.jpg"
+
+        except Exception as e:
+            logger.error(f"Error saving file: {e}")
+            return None
 
     @staticmethod
     def clean_up_local_file(file: str) -> None:

@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "pythonproject1"
+name = "gymbot"
 version = "0.1.0"
 description = ""
 authors = ["Yevhenii Melnykov <yevhenii.melnykov@codeit.local>"]

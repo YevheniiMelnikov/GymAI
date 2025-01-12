@@ -159,5 +159,5 @@ google_creds.json
 .backup/dumps/
 .nohup.out
 /pgdata/
-/redisdata/
+/redis_data/
 *~

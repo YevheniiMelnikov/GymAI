@@ -12,8 +12,8 @@ from functions.menus import show_main_menu
 from functions.profiles import get_or_load_profile
 from common.models import Profile
 from services.profile_service import profile_service
-from texts.resources import MessageText
-from texts.text_manager import translate
+from bot.texts.resources import MessageText
+from bot.texts.text_manager import translate
 
 logger = loguru.logger
 chat_router = Router()

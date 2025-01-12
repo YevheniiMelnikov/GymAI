@@ -27,8 +27,8 @@ from functions.text_utils import (
 )
 from services.profile_service import profile_service
 from common.settings import BOT_PAYMENT_OPTIONS
-from texts.resources import MessageText
-from texts.text_manager import translate
+from bot.texts.resources import MessageText
+from bot.texts.text_manager import translate
 
 logger = loguru.logger
 bot = Bot(os.environ.get("BOT_TOKEN"))
@@ -389,7 +389,7 @@ async def manage_subscription(callback_query: CallbackQuery, lang: str, client_i
         await state.set_state(States.program_manage)
 
     else:
-        program_text = await format_program({days[0]: subscription.exercises[days[0]]}, days[0])
+        program_text = await format_program({days[0]: subscription.exercises["0"]}, days[0])
         await callback_query.message.answer(
             text=translate(MessageText.program_page, lang).format(program=program_text, day=week_day),
             reply_markup=subscription_manage_menu(lang),

@@ -5,7 +5,6 @@ from urllib.parse import urljoin, urlencode
 import loguru
 from liqpay import LiqPay
 
-from common.decorators import singleton
 from services.backend_service import BackendService
 from common.models import Payment
 from common.settings import SUCCESS_PAYMENT_STATUS
@@ -13,7 +12,6 @@ from common.settings import SUCCESS_PAYMENT_STATUS
 logger = loguru.logger
 
 
-@singleton
 class PaymentService(BackendService):
     def __init__(self):
         super().__init__()

@@ -1,0 +1,16 @@
+__pycache__/
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.env
+venv/
+.venv/
+*.log
+*.pot
+.mypy_cache/
+.pytest_cache/
+.idea/
+*~
+.git

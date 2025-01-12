@@ -12,8 +12,8 @@ from common.cache_manager import cache_manager
 from functions.menus import show_main_menu
 from functions.profiles import get_or_load_profile
 from services.user_service import user_service
-from texts.resources import MessageText
-from texts.text_manager import translate
+from bot.texts.resources import MessageText
+from bot.texts.text_manager import translate
 
 logger = loguru.logger
 cmd_router = Router()

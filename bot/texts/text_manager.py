@@ -2,8 +2,7 @@ import os
 
 import yaml
 
-from common.decorators import singleton
-from texts.resources import ButtonText, MessageText
+from bot.texts.resources import ButtonText, MessageText
 
 ResourceType = str | MessageText | ButtonText
 
@@ -16,13 +15,12 @@ if os.getenv("ENVIRONMENT", "local") == "local":
     }
 else:
     RESOURCES = {
-        "messages": "/opt/texts/messages.yml",
-        "buttons": "/opt/texts/buttons.yml",
-        "commands": "/opt/texts/commands.yml",
+        "messages": "/opt/bot/texts/messages.yml",
+        "buttons": "/opt/bot/texts/buttons.yml",
+        "commands": "/opt/bot/texts/commands.yml",
     }
 
 
-@singleton
 class TextManager:
     def __init__(self) -> None:
         self.messages = self.load_messages()

@@ -18,14 +18,14 @@ from common.models import Profile
 from services.profile_service import profile_service
 from services.user_service import user_service
 from services.workout_service import workout_service
-from texts.resources import ButtonText, MessageText
-from texts.text_manager import translate
+from bot.texts.resources import ButtonText, MessageText
+from bot.texts.text_manager import translate
 
 
 async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) -> None:
     profile = await get_or_load_profile(callback_query.from_user.id)
     data = await state.get_data()
-    completed_days = data.get("day_index", 0) + 1
+    completed_days = data.get("completed_days", data.get("day_index", 0) + 1)
     split_number = data.get("split")
     client_id = data.get("client_id")
     if exercises := data.get("exercises", {}):
@@ -119,9 +119,15 @@ async def next_day_workout_plan(callback_query: CallbackQuery, state: FSMContext
             completed_days += 1
             if data.get("subscription"):
                 days = data.get("days", [])
-                week_day = get_translated_week_day(profile.language, days[completed_days]).lower()
+                if completed_days < len(days):
+                    week_day = get_translated_week_day(profile.language, days[completed_days]).lower()
+                else:
+                    await callback_query.answer(translate(MessageText.out_of_range, profile.language))
+                    return
+
             else:
                 week_day = completed_days + 1
+
             exercise_msg = await callback_query.message.answer(translate(MessageText.enter_exercise, profile.language))
             await callback_query.message.answer(
                 translate(MessageText.enter_daily_program, profile.language).format(day=week_day),
@@ -132,11 +138,9 @@ async def next_day_workout_plan(callback_query: CallbackQuery, state: FSMContext
                 chat_id=callback_query.message.chat.id,
                 message_ids=[exercise_msg.message_id],
             )
-
         else:
             await callback_query.answer(translate(MessageText.out_of_range, profile.language))
             return
-
     else:
         await callback_query.answer(text=translate(MessageText.no_exercises_to_save, lang=profile.language))
 
