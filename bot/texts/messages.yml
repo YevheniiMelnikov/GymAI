@@ -473,7 +473,7 @@ exercise_weight:
   eng: "Enter the weight of the weights, or close this window"
   ru: "Введите вес отягощения, либо закройте это окно"
   ua: "Введіть вагу обтяження, або закрийте це вікно"
-  
+
 workouts_per_week:
   eng: "The desired number of training days is {days}❕️"
   ru: "Желаемое количество тренировочных дней - {days} ❕ "
