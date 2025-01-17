@@ -3,10 +3,12 @@ import json
 import os
 
 from django.http import JsonResponse
+from django_filters.rest_framework import DjangoFilterBackend
 from liqpay import LiqPay
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied, NotFound
-from rest_framework.permissions import AllowAny
+from rest_framework.generics import CreateAPIView, RetrieveUpdateAPIView, ListAPIView
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
@@ -16,6 +18,9 @@ from payments.models import Program, Payment
 from payments.serializers import ProgramSerializer
 
 from accounts.models import ClientProfile
+
+from backend.payments.models import Subscription
+from backend.payments.serializers import PaymentSerializer, SubscriptionSerializer
 
 
 class ProgramViewSet(ModelViewSet):
@@ -119,3 +124,59 @@ class PaymentWebhookView(APIView):
 
         except Payment.DoesNotExist:
             raise NotFound(detail=f"Payment {order_id} not found", code=status.HTTP_404_NOT_FOUND)
+
+
+class SubscriptionViewSet(ModelViewSet):
+    queryset = Subscription.objects.all().select_related("client_profile")
+    serializer_class = SubscriptionSerializer
+    permission_classes = [IsAuthenticated]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ["enabled", "payment_date"]
+
+    async def get_queryset(self):
+        queryset = await super().get_queryset().select_related("client_profile")
+        client_profile_id = self.request.query_params.get("client_profile")
+
+        if client_profile_id is not None:
+            queryset = queryset.filter(client_profile_id=client_profile_id)
+
+        return queryset
+
+
+class PaymentCreateView(CreateAPIView):
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    permission_classes = [IsAuthenticated]
+
+    async def post(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        await serializer.asave()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class PaymentListView(ListAPIView):
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    permission_classes = [IsAuthenticated]
+
+    async def get_queryset(self):
+        queryset = await super().get_queryset()
+        status_filter = self.request.query_params.get("status", None)
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+        return queryset
+
+
+class PaymentDetailView(RetrieveUpdateAPIView):
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    permission_classes = [IsAuthenticated]
+
+    async def patch(self, request, *args, **kwargs):
+        kwargs["partial"] = True
+        return await self.update(request, *args, **kwargs)
+
+    async def put(self, request, *args, **kwargs):
+        kwargs["partial"] = False
+        return await self.update(request, *args, **kwargs)
