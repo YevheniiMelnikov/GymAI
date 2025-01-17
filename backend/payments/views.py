@@ -14,8 +14,8 @@ from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 from rest_framework_api_key.permissions import HasAPIKey
 
-from payments.models import Program, Payment
-from payments.serializers import ProgramSerializer
+from models import Program, Payment
+from serializers import ProgramSerializer
 
 from accounts.models import ClientProfile
 
