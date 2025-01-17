@@ -1,20 +1,15 @@
 import os
-
-from django.contrib.auth.models import User
-from django.core.mail import EmailMultiAlternatives, send_mail
-from django.db import transaction
-from django.http import HttpResponse
-from django.shortcuts import get_object_or_404, render
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
+from django.db import transaction
+from django.contrib.auth.models import User
+from django.core.mail import EmailMultiAlternatives, send_mail
 
-from rest_framework import generics, status
-from rest_framework.authtoken.models import Token
-from rest_framework.generics import ListAPIView, RetrieveUpdateAPIView
-from rest_framework.permissions import BasePermission, IsAuthenticated, IsAuthenticatedOrReadOnly
-from rest_framework.request import Request
-from rest_framework.response import Response
+from rest_framework import status
 from rest_framework.views import APIView
+from rest_framework.permissions import BasePermission, IsAuthenticated
+from rest_framework.response import Response
+from rest_framework.request import Request
 from rest_framework_api_key.permissions import HasAPIKey
 
 from .models import Profile, ClientProfile, CoachProfile
@@ -23,12 +18,6 @@ from .serializers import (
     CoachProfileSerializer,
     ClientProfileSerializer,
 )
-
-# @csrf_exempt
-# @require_POST
-# def create_api_key_view(request):
-#     api_key, key = APIKey.objects.create_key(name="my-key")
-#     return JsonResponse({"api_key": key})
 
 
 class IsAuthenticatedButAllowInactive(BasePermission):
@@ -39,7 +28,7 @@ class IsAuthenticatedButAllowInactive(BasePermission):
 class CreateUserView(APIView):
     permission_classes = [HasAPIKey | IsAuthenticated]
 
-    def post(self, request: Request) -> Response:
+    async def post(self, request: Request) -> Response:
         username = request.data.get("username")
         password = request.data.get("password")
         email = request.data.get("email")
@@ -50,18 +39,20 @@ class CreateUserView(APIView):
         if not password or not username or not email:
             return Response({"error": "Required fields are missing"}, status=status.HTTP_400_BAD_REQUEST)
 
-        if User.objects.filter(email=email).exists():
+        if await User.objects.filter(email=email).aexists():
             return Response({"error": "This email already taken"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            with transaction.atomic():
-                user = User.objects.create_user(username=username, password=password, email=email)
-                profile = Profile.objects.create(user=user, status=user_status, language=language, current_tg_id=tg_id)
+            async with transaction.atomic():
+                user = await User.objects.acreate_user(username=username, password=password, email=email)
+                profile = await Profile.objects.acreate(
+                    user=user, status=user_status, language=language, current_tg_id=tg_id
+                )
 
                 if user_status == "client":
-                    ClientProfile.objects.create(profile=profile)
+                    await ClientProfile.objects.acreate(profile=profile)
                 elif user_status == "coach":
-                    CoachProfile.objects.create(profile=profile)
+                    await CoachProfile.objects.acreate(profile=profile)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -72,9 +63,9 @@ class CreateUserView(APIView):
 class UserProfileView(APIView):
     permission_classes = [HasAPIKey | IsAuthenticated]
 
-    def get(self, request: Request, username) -> Response:
+    async def get(self, request: Request, username) -> Response:
         try:
-            user = User.objects.get(username=username)
+            user = await User.objects.aget(username=username)
         except User.DoesNotExist:
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -95,7 +86,7 @@ class UserProfileView(APIView):
 class CurrentUserView(APIView):
     permission_classes = [HasAPIKey | IsAuthenticated]
 
-    def get(self, request):
+    async def get(self, request):
         user = request.user
         profile = getattr(user, "profile", None)
         if not profile:
@@ -116,9 +107,9 @@ class ProfileByTelegramIDView(APIView):
     permission_classes = [HasAPIKey | IsAuthenticated]
     serializer_class = ProfileSerializer
 
-    def get(self, request: Request, telegram_id: int) -> Response:
+    async def get(self, request: Request, telegram_id: int) -> Response:
         try:
-            profile = Profile.objects.get(current_tg_id=telegram_id)
+            profile = await Profile.objects.aget(current_tg_id=telegram_id)
         except Profile.DoesNotExist:
             return Response({"error": "Profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -129,113 +120,21 @@ class ProfileByTelegramIDView(APIView):
 class ResetTelegramIDView(APIView):
     permission_classes = [HasAPIKey | IsAuthenticated]
 
-    def post(self, request: Request, profile_id: int) -> Response:
+    async def post(self, request: Request, profile_id: int) -> Response:
         try:
-            profile = get_object_or_404(Profile, id=profile_id)
-            Profile.objects.filter(user=profile.user).exclude(id=profile_id).update(current_tg_id=None)
+            profile = await Profile.objects.aget(id=profile_id)
+            await Profile.objects.filter(user=profile.user).exclude(id=profile_id).aupdate(current_tg_id=None)
             profile.current_tg_id = request.data.get("telegram_id")
-            profile.save()
+            await profile.asave()
             return Response({"status": "success"}, status=status.HTTP_200_OK)
         except Profile.DoesNotExist:
             return Response({"error": "Profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
-class ProfileAPIUpdate(APIView):
-    serializer_class = ProfileSerializer
-    permission_classes = [HasAPIKey | IsAuthenticatedButAllowInactive]
-
-    def get_object(self) -> Profile:
-        profile_id = self.kwargs.get("profile_id")
-        obj = get_object_or_404(Profile, pk=profile_id)
-        self.check_object_permissions(self.request, obj)
-        return obj
-
-    def get(self, request: Request, profile_id: int, format=None) -> Response:
-        profile = self.get_object()
-        serializer = ProfileSerializer(profile)
-        return Response(serializer.data)
-
-    def put(self, request: Request, profile_id: int, format=None) -> Response:
-        profile = self.get_object()
-        serializer = ProfileSerializer(profile, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-def reset_password_request_view(request, uidb64: str, token: str) -> HttpResponse:
-    return render(request, "reset-password.html", {"uid": uidb64, "token": token})
-
-
-class ProfileAPIDestroy(generics.RetrieveDestroyAPIView):
-    serializer_class = ProfileSerializer
-    queryset = Profile.objects.all()
-    permission_classes = [IsAuthenticated | HasAPIKey]
-    lookup_field = "id"
-
-
-class ProfileAPIList(generics.ListCreateAPIView):
-    serializer_class = ProfileSerializer
-    queryset = Profile.objects.all()
-    permission_classes = [IsAuthenticatedOrReadOnly | HasAPIKey]
-
-
-class CoachProfileView(ListAPIView):
-    queryset = CoachProfile.objects.all()
-    serializer_class = CoachProfileSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly | HasAPIKey]
-
-
-class CoachProfileUpdate(RetrieveUpdateAPIView):
-    queryset = CoachProfile.objects.all()
-    serializer_class = CoachProfileSerializer
-    permission_classes = [IsAuthenticated | HasAPIKey]
-
-    def get_object(self):
-        obj = CoachProfile.objects.get(profile_id=self.kwargs.get("profile_id"))
-        self.check_object_permissions(self.request, obj)
-        return obj
-
-
-class ClientProfileView(ListAPIView):
-    queryset = ClientProfile.objects.all()
-    serializer_class = ClientProfileSerializer
-    permission_classes = [IsAuthenticatedOrReadOnly | HasAPIKey]
-
-
-class ClientProfileUpdate(RetrieveUpdateAPIView):
-    queryset = ClientProfile.objects.all()
-    serializer_class = ClientProfileSerializer
-    permission_classes = [IsAuthenticated | HasAPIKey]
-
-    def get_object(self):
-        obj = ClientProfile.objects.get(profile_id=self.kwargs.get("profile_id"))
-        self.check_object_permissions(self.request, obj)
-        return obj
-
-
-class GetUserTokenView(APIView):
-    permission_classes = [HasAPIKey]
-
-    def post(self, request, *args, **kwargs):
-        profile_id = request.data.get("profile_id")
-        if not profile_id:
-            return Response({"error": "Profile ID is required"}, status=400)
-
-        try:
-            profile = Profile.objects.get(id=profile_id)
-            user = profile.user
-            token, created = Token.objects.get_or_create(user=user)
-            return Response({"profile_id": profile_id, "username": user.username, "auth_token": token.key})
-        except Profile.DoesNotExist:
-            return Response({"error": "Profile not found"}, status=404)
-
-
 class SendFeedbackAPIView(APIView):
     permission_classes = [HasAPIKey | IsAuthenticated]
 
-    def post(self, request: Request, *args, **kwargs) -> Response:
+    async def post(self, request: Request, *args, **kwargs) -> Response:
         email = request.data.get("email")
         username = request.data.get("username")
         feedback = request.data.get("feedback")
@@ -254,7 +153,7 @@ class SendFeedbackAPIView(APIView):
 class SendWelcomeEmailAPIView(APIView):
     permission_classes = [HasAPIKey | IsAuthenticated]
 
-    def post(self, request, *args, **kwargs):
+    async def post(self, request, *args, **kwargs):
         email = request.data.get("email")
         username = request.data.get("username")
         html_content = render_to_string("email/welcome_email.html", {"username": username})
