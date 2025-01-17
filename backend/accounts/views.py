@@ -1,4 +1,6 @@
 import os
+
+from django.http import HttpResponse
 from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
@@ -25,6 +27,10 @@ from .serializers import (
 class IsAuthenticatedButAllowInactive(BasePermission):
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated
+
+
+async def reset_password_request_view(request, uidb64: str, token: str) -> HttpResponse:
+    return render(request, "reset-password.html", {"uid": uidb64, "token": token})
 
 
 async def home(request):
