@@ -78,9 +78,9 @@ class PaymentHandler:
     async def check_payments(self) -> None:
         while True:
             try:
-                payments = await self.payment_service.get_unhandled_payments()
-                tasks = [self.process_payment(payment) for payment in payments]
-                await asyncio.gather(*tasks)
+                if payments := await self.payment_service.get_unhandled_payments():
+                    tasks = [self.process_payment(payment) for payment in payments]
+                    await asyncio.gather(*tasks)
                 await asyncio.sleep(PAYMENT_CHECK_INTERVAL)
             except Exception as e:
                 logger.exception(f"Error in periodic payment check: {e}")
@@ -88,11 +88,12 @@ class PaymentHandler:
 
     async def process_payment(self, payment: Payment) -> None:
         try:
-            profile = Profile.from_dict(await self.profile_service.get_profile(payment.profile))
-            if not profile:
-                logger.error(f"Profile not found for payment {payment.id}")
+            profile_data = await self.profile_service.get_profile(payment.profile)
+            if profile_data is None:
+                logger.error(f"Profile not found for payment_id {payment.id}")
                 return
 
+            profile = Profile.from_dict(profile_data)
             if payment.status == SUCCESS_PAYMENT_STATUS or payment.status == SUBSCRIBED_PAYMENT_STATUS:
                 await self.handle_successful_payment(payment, profile)
             elif payment.status == FAILURE_PAYMENT_STATUS:

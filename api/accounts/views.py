@@ -1,19 +1,20 @@
 import os
 
-from django.http import HttpResponse
-from django.shortcuts import render
-from django.template.loader import render_to_string
-from django.utils.html import strip_tags
-from django.db import transaction
 from django.contrib.auth.models import User
 from django.core.mail import EmailMultiAlternatives, send_mail
+from django.db import transaction
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, render
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
 
 from rest_framework import generics, status
-from rest_framework.views import APIView
-from rest_framework.permissions import BasePermission, IsAuthenticated, IsAuthenticatedOrReadOnly
-from rest_framework.response import Response
-from rest_framework.request import Request
 from rest_framework.authtoken.models import Token
+from rest_framework.generics import ListAPIView, RetrieveUpdateAPIView
+from rest_framework.permissions import BasePermission, IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.request import Request
+from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework_api_key.permissions import HasAPIKey
 
 from .models import Profile, ClientProfile, CoachProfile
@@ -23,24 +24,22 @@ from .serializers import (
     ClientProfileSerializer,
 )
 
+# @csrf_exempt
+# @require_POST
+# def create_api_key_view(request):
+#     api_key, key = APIKey.objects.create_key(name="my-key")
+#     return JsonResponse({"api_key": key})
+
 
 class IsAuthenticatedButAllowInactive(BasePermission):
     def has_permission(self, request, view):
         return request.user and request.user.is_authenticated
 
 
-async def reset_password_request_view(request, uidb64: str, token: str) -> HttpResponse:
-    return render(request, "reset-password.html", {"uid": uidb64, "token": token})
-
-
-async def home(request):
-    return render(request, "home/home.html")
-
-
 class CreateUserView(APIView):
     permission_classes = [HasAPIKey | IsAuthenticated]
 
-    async def post(self, request: Request) -> Response:
+    def post(self, request: Request) -> Response:
         username = request.data.get("username")
         password = request.data.get("password")
         email = request.data.get("email")
@@ -51,20 +50,18 @@ class CreateUserView(APIView):
         if not password or not username or not email:
             return Response({"error": "Required fields are missing"}, status=status.HTTP_400_BAD_REQUEST)
 
-        if await User.objects.filter(email=email).aexists():
+        if User.objects.filter(email=email).exists():
             return Response({"error": "This email already taken"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            async with transaction.atomic():
-                user = await User.objects.acreate_user(username=username, password=password, email=email)
-                profile = await Profile.objects.acreate(
-                    user=user, status=user_status, language=language, current_tg_id=tg_id
-                )
+            with transaction.atomic():
+                user = User.objects.create_user(username=username, password=password, email=email)
+                profile = Profile.objects.create(user=user, status=user_status, language=language, current_tg_id=tg_id)
 
                 if user_status == "client":
-                    await ClientProfile.objects.acreate(profile=profile)
+                    ClientProfile.objects.create(profile=profile)
                 elif user_status == "coach":
-                    await CoachProfile.objects.acreate(profile=profile)
+                    CoachProfile.objects.create(profile=profile)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
@@ -75,9 +72,9 @@ class CreateUserView(APIView):
 class UserProfileView(APIView):
     permission_classes = [HasAPIKey | IsAuthenticated]
 
-    async def get(self, request: Request, username) -> Response:
+    def get(self, request: Request, username) -> Response:
         try:
-            user = await User.objects.aget(username=username)
+            user = User.objects.get(username=username)
         except User.DoesNotExist:
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -98,7 +95,7 @@ class UserProfileView(APIView):
 class CurrentUserView(APIView):
     permission_classes = [HasAPIKey | IsAuthenticated]
 
-    async def get(self, request):
+    def get(self, request):
         user = request.user
         profile = getattr(user, "profile", None)
         if not profile:
@@ -119,9 +116,9 @@ class ProfileByTelegramIDView(APIView):
     permission_classes = [HasAPIKey | IsAuthenticated]
     serializer_class = ProfileSerializer
 
-    async def get(self, request: Request, telegram_id: int) -> Response:
+    def get(self, request: Request, telegram_id: int) -> Response:
         try:
-            profile = await Profile.objects.aget(current_tg_id=telegram_id)
+            profile = Profile.objects.get(current_tg_id=telegram_id)
         except Profile.DoesNotExist:
             return Response({"error": "Profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
@@ -132,12 +129,12 @@ class ProfileByTelegramIDView(APIView):
 class ResetTelegramIDView(APIView):
     permission_classes = [HasAPIKey | IsAuthenticated]
 
-    async def post(self, request: Request, profile_id: int) -> Response:
+    def post(self, request: Request, profile_id: int) -> Response:
         try:
-            profile = await Profile.objects.aget(id=profile_id)
-            await Profile.objects.filter(user=profile.user).exclude(id=profile_id).aupdate(current_tg_id=None)
+            profile = get_object_or_404(Profile, id=profile_id)
+            Profile.objects.filter(user=profile.user).exclude(id=profile_id).update(current_tg_id=None)
             profile.current_tg_id = request.data.get("telegram_id")
-            await profile.asave()
+            profile.save()
             return Response({"status": "success"}, status=status.HTTP_200_OK)
         except Profile.DoesNotExist:
             return Response({"error": "Profile not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -147,24 +144,28 @@ class ProfileAPIUpdate(APIView):
     serializer_class = ProfileSerializer
     permission_classes = [HasAPIKey | IsAuthenticatedButAllowInactive]
 
-    async def get_object(self) -> Profile:
+    def get_object(self) -> Profile:
         profile_id = self.kwargs.get("profile_id")
-        obj = await Profile.objects.aget(pk=profile_id)
+        obj = get_object_or_404(Profile, pk=profile_id)
         self.check_object_permissions(self.request, obj)
         return obj
 
-    async def get(self, request: Request, profile_id: int, format=None) -> Response:
-        profile = await self.get_object()
+    def get(self, request: Request, profile_id: int, format=None) -> Response:
+        profile = self.get_object()
         serializer = ProfileSerializer(profile)
         return Response(serializer.data)
 
-    async def put(self, request: Request, profile_id: int, format=None) -> Response:
-        profile = await self.get_object()
+    def put(self, request: Request, profile_id: int, format=None) -> Response:
+        profile = self.get_object()
         serializer = ProfileSerializer(profile, data=request.data, partial=True)
         if serializer.is_valid():
-            await serializer.asave()
+            serializer.save()
             return Response(serializer.data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+def reset_password_request_view(request, uidb64: str, token: str) -> HttpResponse:
+    return render(request, "reset-password.html", {"uid": uidb64, "token": token})
 
 
 class ProfileAPIDestroy(generics.RetrieveDestroyAPIView):
@@ -180,36 +181,36 @@ class ProfileAPIList(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticatedOrReadOnly | HasAPIKey]
 
 
-class CoachProfileView(generics.ListAPIView):
+class CoachProfileView(ListAPIView):
     queryset = CoachProfile.objects.all()
     serializer_class = CoachProfileSerializer
     permission_classes = [IsAuthenticatedOrReadOnly | HasAPIKey]
 
 
-class CoachProfileUpdate(generics.RetrieveUpdateAPIView):
+class CoachProfileUpdate(RetrieveUpdateAPIView):
     queryset = CoachProfile.objects.all()
     serializer_class = CoachProfileSerializer
     permission_classes = [IsAuthenticated | HasAPIKey]
 
-    async def get_object(self):
-        obj = await CoachProfile.objects.aget(profile_id=self.kwargs.get("profile_id"))
+    def get_object(self):
+        obj = CoachProfile.objects.get(profile_id=self.kwargs.get("profile_id"))
         self.check_object_permissions(self.request, obj)
         return obj
 
 
-class ClientProfileView(generics.ListAPIView):
+class ClientProfileView(ListAPIView):
     queryset = ClientProfile.objects.all()
     serializer_class = ClientProfileSerializer
     permission_classes = [IsAuthenticatedOrReadOnly | HasAPIKey]
 
 
-class ClientProfileUpdate(generics.RetrieveUpdateAPIView):
+class ClientProfileUpdate(RetrieveUpdateAPIView):
     queryset = ClientProfile.objects.all()
     serializer_class = ClientProfileSerializer
     permission_classes = [IsAuthenticated | HasAPIKey]
 
-    async def get_object(self):
-        obj = await ClientProfile.objects.aget(profile_id=self.kwargs.get("profile_id"))
+    def get_object(self):
+        obj = ClientProfile.objects.get(profile_id=self.kwargs.get("profile_id"))
         self.check_object_permissions(self.request, obj)
         return obj
 
@@ -217,15 +218,15 @@ class ClientProfileUpdate(generics.RetrieveUpdateAPIView):
 class GetUserTokenView(APIView):
     permission_classes = [HasAPIKey]
 
-    async def post(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
         profile_id = request.data.get("profile_id")
         if not profile_id:
             return Response({"error": "Profile ID is required"}, status=400)
 
         try:
-            profile = await Profile.objects.aget(id=profile_id)
+            profile = Profile.objects.get(id=profile_id)
             user = profile.user
-            token, created = await Token.objects.aget_or_create(user=user)
+            token, created = Token.objects.get_or_create(user=user)
             return Response({"profile_id": profile_id, "username": user.username, "auth_token": token.key})
         except Profile.DoesNotExist:
             return Response({"error": "Profile not found"}, status=404)
@@ -234,7 +235,7 @@ class GetUserTokenView(APIView):
 class SendFeedbackAPIView(APIView):
     permission_classes = [HasAPIKey | IsAuthenticated]
 
-    async def post(self, request: Request, *args, **kwargs) -> Response:
+    def post(self, request: Request, *args, **kwargs) -> Response:
         email = request.data.get("email")
         username = request.data.get("username")
         feedback = request.data.get("feedback")
@@ -253,7 +254,7 @@ class SendFeedbackAPIView(APIView):
 class SendWelcomeEmailAPIView(APIView):
     permission_classes = [HasAPIKey | IsAuthenticated]
 
-    async def post(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
         email = request.data.get("email")
         username = request.data.get("username")
         html_content = render_to_string("email/welcome_email.html", {"username": username})

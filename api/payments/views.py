@@ -3,24 +3,21 @@ import json
 import os
 
 from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from liqpay import LiqPay
-from rest_framework import status
+from rest_framework import status, generics
 from rest_framework.exceptions import PermissionDenied, NotFound
-from rest_framework.generics import CreateAPIView, RetrieveUpdateAPIView, ListAPIView
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 from rest_framework_api_key.permissions import HasAPIKey
 
-from .models import Program, Payment
-from .serializers import ProgramSerializer
+from payments.models import Program, Subscription, Payment
+from payments.serializers import ProgramSerializer, SubscriptionSerializer, PaymentSerializer
 
 from accounts.models import ClientProfile
-
-from payments.models import Subscription
-from payments.serializers import PaymentSerializer, SubscriptionSerializer
 
 
 class ProgramViewSet(ModelViewSet):
@@ -37,25 +34,24 @@ class ProgramViewSet(ModelViewSet):
 
         return queryset
 
-    async def perform_create_or_update(self, serializer, client_profile_id, exercises):
+    def perform_create_or_update(self, serializer, client_profile_id, exercises):
         api_key = self.request.headers.get("Authorization")
         if not api_key or not HasAPIKey().has_permission(self.request, self):
             raise PermissionDenied("API Key must be provided")
-
         try:
-            client_profile = await ClientProfile.objects.aget(profile__id=client_profile_id)
+            client_profile = ClientProfile.objects.get(profile__id=client_profile_id)
         except ClientProfile.DoesNotExist:
             raise NotFound(f"ClientProfile with profile_id {client_profile_id} does not exist.")
 
-        existing_program = await Program.objects.filter(client_profile=client_profile).afirst()
+        existing_program = Program.objects.filter(client_profile=client_profile).first()
         if existing_program:
             existing_program.exercises_by_day = exercises
-            await existing_program.asave()
+            existing_program.save()
             return existing_program
         else:
-            return await serializer.save(client_profile=client_profile, exercises_by_day=exercises)
+            return serializer.save(client_profile=client_profile, exercises_by_day=exercises)
 
-    async def create(self, request, *args, **kwargs):
+    def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
@@ -65,11 +61,11 @@ class ProgramViewSet(ModelViewSet):
         if not client_profile_id:
             raise PermissionDenied("Client profile ID must be provided.")
 
-        instance = await self.perform_create_or_update(serializer, client_profile_id, exercises)
+        instance = self.perform_create_or_update(serializer, client_profile_id, exercises)
         headers = self.get_success_headers(serializer.data)
         return Response(ProgramSerializer(instance).data, status=status.HTTP_201_CREATED, headers=headers)
 
-    async def update(self, request, *args, **kwargs):
+    def update(self, request, *args, **kwargs):
         partial = kwargs.pop("partial", False)
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
@@ -78,52 +74,8 @@ class ProgramViewSet(ModelViewSet):
         profile_id = request.data.get("profile")
         exercises = request.data.get("exercises_by_day")
 
-        await self.perform_create_or_update(serializer, profile_id, exercises)
+        self.perform_create_or_update(serializer, profile_id, exercises)
         return Response(serializer.data)
-
-
-class PaymentWebhookView(APIView):
-    permission_classes = [AllowAny]
-
-    async def post(self, request, *args, **kwargs):
-        try:
-            data = request.POST.get("data")
-            signature = request.POST.get("signature")
-
-            if not data or not signature:
-                return JsonResponse({"detail": "Missing data or signature."}, status=status.HTTP_400_BAD_REQUEST)
-
-            liqpay_client = LiqPay(os.getenv("PAYMENT_PUB_KEY"), os.getenv("PAYMENT_PRIVATE_KEY"))
-            sign = liqpay_client.str_to_sign(os.getenv("PAYMENT_PRIVATE_KEY") + data + os.getenv("PAYMENT_PRIVATE_KEY"))
-            if sign != signature:
-                return JsonResponse({"detail": "Invalid signature"}, status=status.HTTP_400_BAD_REQUEST)
-
-            decoded_data = base64.b64decode(data).decode("utf-8")
-            payment_info = json.loads(decoded_data)
-            order_id = payment_info.get("order_id")
-            payment_status = payment_info.get("status")
-            error_message = payment_info.get("err_description", "")
-            await self.process_payment(order_id, payment_status, error_message)
-
-            if payment_status == "success":
-                return JsonResponse({"result": "OK"}, status=status.HTTP_200_OK)
-            else:
-                return JsonResponse({"result": "FAILURE"}, status=status.HTTP_200_OK)
-
-        except Exception as e:
-            return JsonResponse({"detail": f"Error processing payment: {e}"}, status=status.HTTP_400_BAD_REQUEST)
-
-    @staticmethod
-    async def process_payment(order_id: str, payment_status: str, error_message: str = "") -> None:
-        try:
-            payment = await Payment.objects.aget(order_id=order_id)
-            payment.status = payment_status
-            payment.error = error_message
-            payment.handled = False
-            await payment.asave()
-
-        except Payment.DoesNotExist:
-            raise NotFound(detail=f"Payment {order_id} not found", code=status.HTTP_404_NOT_FOUND)
 
 
 class SubscriptionViewSet(ModelViewSet):
@@ -143,45 +95,78 @@ class SubscriptionViewSet(ModelViewSet):
         return queryset
 
 
-class PaymentCreateView(CreateAPIView):
-    queryset = Payment.objects.all()
-    serializer_class = PaymentSerializer
-    permission_classes = [IsAuthenticated | HasAPIKey]
+class PaymentWebhookView(APIView):
+    permission_classes = [AllowAny]
 
-    async def post(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        await serializer.asave()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    def post(self, request, *args, **kwargs):
+        try:
+            data = request.POST.get("data")
+            signature = request.POST.get("signature")
+
+            if not data or not signature:
+                return JsonResponse({"detail": "Missing data or signature."}, status=status.HTTP_400_BAD_REQUEST)
+
+            liqpay_client = LiqPay(os.getenv("PAYMENT_PUB_KEY"), os.getenv("PAYMENT_PRIVATE_KEY"))
+            sign = liqpay_client.str_to_sign(os.getenv("PAYMENT_PRIVATE_KEY") + data + os.getenv("PAYMENT_PRIVATE_KEY"))
+            if sign != signature:
+                return JsonResponse({"detail": "Invalid signature"}, status=status.HTTP_400_BAD_REQUEST)
+
+            decoded_data = base64.b64decode(data).decode("utf-8")
+            payment_info = json.loads(decoded_data)
+            order_id = payment_info.get("order_id")
+            payment_status = payment_info.get("status")
+            error_message = payment_info.get("err_description", "")
+            self.process_payment(order_id, payment_status, error_message)
+
+            if payment_status == "success":
+                return JsonResponse({"result": "OK"}, status=status.HTTP_200_OK)
+            else:
+                return JsonResponse({"result": "FAILURE"}, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return JsonResponse({"detail": f"Error processing payment: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+
+    @staticmethod
+    def process_payment(order_id: str, payment_status: str, error_message: str = "") -> None:
+        try:
+            payment = get_object_or_404(Payment, order_id=order_id)
+            payment.status = payment_status
+            payment.error = error_message
+            payment.handled = False
+            payment.save()
+
+        except Payment.DoesNotExist:
+            raise NotFound(detail=f"Payment {order_id} not found", code=status.HTTP_404_NOT_FOUND)
 
 
-class PaymentListView(ListAPIView):
+class PaymentListView(generics.ListAPIView):
     queryset = Payment.objects.all()
     serializer_class = PaymentSerializer
     permission_classes = [IsAuthenticated | HasAPIKey]
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        status_filter = self.request.query_params.get("status", None)
-        if status_filter:
-            queryset = queryset.filter(status=status_filter)
+        status = self.request.query_params.get("status", None)
+        if status:
+            queryset = queryset.filter(status=status)
         return queryset
 
 
-class PaymentDetailView(RetrieveUpdateAPIView):
+class PaymentDetailView(generics.RetrieveUpdateAPIView):
     queryset = Payment.objects.all()
     serializer_class = PaymentSerializer
     permission_classes = [IsAuthenticated | HasAPIKey]
 
-    async def get(self, request, pk, *args, **kwargs):
-        payment = await Payment.objects.aget(pk=pk)
-        serializer = self.serializer_class(payment)
-        return Response(serializer.data)
-
-    async def patch(self, request, *args, **kwargs):
+    def patch(self, request, *args, **kwargs):
         kwargs["partial"] = True
-        return await self.update(request, *args, **kwargs)
+        return self.update(request, *args, **kwargs)
 
-    async def put(self, request, *args, **kwargs):
-        kwargs["partial"] = False
-        return await self.update(request, *args, **kwargs)
+    def put(self, request, *args, **kwargs):
+        kwargs["partial"] = True
+        return self.update(request, *args, **kwargs)
+
+
+class PaymentCreateView(generics.CreateAPIView):
+    queryset = Payment.objects.all()
+    serializer_class = PaymentSerializer
+    permission_classes = [IsAuthenticated | HasAPIKey]
