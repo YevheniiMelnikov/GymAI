@@ -7,9 +7,9 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 
 DEBUG = os.environ.get("DEBUG_STATUS", "False").lower() == "true"
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "achieve-together.org.ua", "www.achieve-together.org.ua", "backend"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "achieve-together.org.ua", "www.achieve-together.org.ua", "api"]
 
-ASGI_APPLICATION = "backend.asgi.application"
+ASGI_APPLICATION = "api.asgi.application"
 
 INSTALLED_APPS = [
     "django.contrib.auth",
@@ -37,12 +37,12 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-ROOT_URLCONF = "backend.urls"
+ROOT_URLCONF = "api.urls"
 
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "backend/templates"],
+        "DIRS": [BASE_DIR / "api/templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -94,7 +94,7 @@ USE_TZ = False
 
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [
-    BASE_DIR / "backend/static",
+    BASE_DIR / "api/static",
 ]
 STATIC_ROOT = BASE_DIR / "staticfiles"
 

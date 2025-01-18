@@ -19,8 +19,8 @@ from .serializers import ProgramSerializer
 
 from accounts.models import ClientProfile
 
-from backend.payments.models import Subscription
-from backend.payments.serializers import PaymentSerializer, SubscriptionSerializer
+from payments.models import Subscription
+from payments.serializers import PaymentSerializer, SubscriptionSerializer
 
 
 class ProgramViewSet(ModelViewSet):
@@ -28,8 +28,8 @@ class ProgramViewSet(ModelViewSet):
     serializer_class = ProgramSerializer
     permission_classes = [HasAPIKey]
 
-    async def get_queryset(self):
-        queryset = await super().get_queryset().select_related("client_profile")
+    def get_queryset(self):
+        queryset = super().get_queryset().select_related("client_profile")
         client_profile_id = self.request.query_params.get("client_profile")
 
         if client_profile_id is not None:
@@ -129,12 +129,12 @@ class PaymentWebhookView(APIView):
 class SubscriptionViewSet(ModelViewSet):
     queryset = Subscription.objects.all().select_related("client_profile")
     serializer_class = SubscriptionSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated | HasAPIKey]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["enabled", "payment_date"]
 
-    async def get_queryset(self):
-        queryset = await super().get_queryset().select_related("client_profile")
+    def get_queryset(self):
+        queryset = super().get_queryset().select_related("client_profile")
         client_profile_id = self.request.query_params.get("client_profile")
 
         if client_profile_id is not None:
@@ -146,7 +146,7 @@ class SubscriptionViewSet(ModelViewSet):
 class PaymentCreateView(CreateAPIView):
     queryset = Payment.objects.all()
     serializer_class = PaymentSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated | HasAPIKey]
 
     async def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -158,10 +158,10 @@ class PaymentCreateView(CreateAPIView):
 class PaymentListView(ListAPIView):
     queryset = Payment.objects.all()
     serializer_class = PaymentSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated | HasAPIKey]
 
-    async def get_queryset(self):
-        queryset = await super().get_queryset()
+    def get_queryset(self):
+        queryset = super().get_queryset()
         status_filter = self.request.query_params.get("status", None)
         if status_filter:
             queryset = queryset.filter(status=status_filter)
@@ -171,7 +171,12 @@ class PaymentListView(ListAPIView):
 class PaymentDetailView(RetrieveUpdateAPIView):
     queryset = Payment.objects.all()
     serializer_class = PaymentSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated | HasAPIKey]
+
+    async def get(self, request, pk, *args, **kwargs):
+        payment = await Payment.objects.aget(pk=pk)
+        serializer = self.serializer_class(payment)
+        return Response(serializer.data)
 
     async def patch(self, request, *args, **kwargs):
         kwargs["partial"] = True
