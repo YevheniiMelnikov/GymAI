@@ -4,7 +4,7 @@ from drf_yasg import openapi
 from rest_framework import permissions
 
 from accounts.views import reset_password_request_view
-from backend.payments.views import PaymentWebhookView
+from api.payments.views import PaymentWebhookView
 
 api_info = openapi.Info(title="Admin Rest", default_version="0.1")
 schema_view = get_schema_view(api_info, public=True, url="", permission_classes=[permissions.IsAuthenticated])

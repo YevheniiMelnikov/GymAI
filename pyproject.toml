@@ -55,5 +55,7 @@ exclude = [
   "venv",
   ".venv",
 ]
+
+[tool.ruff.lint]
 select = ["E", "F"]
 ignore = ["F405", "F403"]
