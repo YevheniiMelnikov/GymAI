@@ -155,9 +155,9 @@ cython_debug/
 #.idea/
 database.db
 google_creds.json
+/docker-compose-local.yml
 .backup/dumps/
 .nohup.out
 /pgdata/
 /redis_data/
 *~
-/docker-compose-local.yml
