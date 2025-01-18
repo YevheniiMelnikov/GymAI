@@ -25,9 +25,9 @@ RUN poetry config virtualenvs.create false
 
 RUN poetry install --no-interaction --no-ansi --no-root
 
-COPY backend $APP_HOME/backend
+COPY api $APP_HOME/api
 
-WORKDIR $APP_HOME/backend
+WORKDIR $APP_HOME/api
 
 RUN python manage.py collectstatic --noinput
 

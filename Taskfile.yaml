@@ -1,20 +1,25 @@
 version: '3'
 
 tasks:
+  localrun:
+    desc: Run bot locally
+    cmds:
+      - docker compose -f docker-compose-local.yml up --build
+
   build:
     desc: Build Docker-container
     cmds:
-      - docker-compose build
+      - docker compose build
 
   up:
     desc: Start Docker-containers
     cmds:
-      - docker-compose up
+      - docker compose up
 
   down:
     desc: Stop Docker-containers
     cmds:
-      - docker-compose down
+      - docker compose down
 
   lint:
     desc: Run linters
