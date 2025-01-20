@@ -1,3 +1,5 @@
+import os
+
 BOT_PAYMENT_OPTIONS = "https://storage.googleapis.com/services_promo/"
 FIRST_NAME = "Євгеній"
 LAST_NAME = "МЕЛЬНИКОВ"
@@ -7,3 +9,4 @@ FAILURE_PAYMENT_STATUS = "failure"
 SUBSCRIBED_PAYMENT_STATUS = "subscribed"
 PAYMENT_STATUS_CLOSED = "CLOSED"
 PAYMENT_CHECK_INTERVAL = 60
+OWNER_ID = os.getenv("OWNER_ID")

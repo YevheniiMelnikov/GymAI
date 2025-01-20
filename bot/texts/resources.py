@@ -211,6 +211,7 @@ class MessageText(Enum):
     saved = auto()
     feedback = auto()
     feedback_sent = auto()
+    new_feedback = auto()
     message_sent = auto()
     incoming_message = auto()
     incoming_request = auto()

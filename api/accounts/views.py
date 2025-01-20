@@ -1,7 +1,7 @@
 import os
 
 from django.contrib.auth.models import User
-from django.core.mail import EmailMultiAlternatives, send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
@@ -230,25 +230,6 @@ class GetUserTokenView(APIView):
             return Response({"profile_id": profile_id, "username": user.username, "auth_token": token.key})
         except Profile.DoesNotExist:
             return Response({"error": "Profile not found"}, status=404)
-
-
-class SendFeedbackAPIView(APIView):
-    permission_classes = [HasAPIKey | IsAuthenticated]
-
-    def post(self, request: Request, *args, **kwargs) -> Response:
-        email = request.data.get("email")
-        username = request.data.get("username")
-        feedback = request.data.get("feedback")
-
-        subject = f"New feedback from {username}"
-        message = f"User {username} with email {email} sent the following feedback:\n\n{feedback}"
-
-        try:
-            send_mail(subject, message, os.getenv("EMAIL_HOST_USER"), [os.getenv("EMAIL_HOST_USER")])
-        except Exception:
-            return Response({"message": "Failed to send feedback"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        return Response({"message": "Feedback sent successfully"}, status=status.HTTP_200_OK)
 
 
 class SendWelcomeEmailAPIView(APIView):

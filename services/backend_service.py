@@ -48,21 +48,6 @@ class BackendService:
             logger.exception("Unexpected error occurred")
             raise UserServiceError(f"Unexpected error occurred: {e}") from e
 
-    async def send_feedback(self, email: str, username: str, feedback: str) -> bool:
-        url = urljoin(self.backend_url, "api/v1/send-feedback/")
-        headers = {"Authorization": f"Api-Key {self.api_key}"}
-        status_code, _ = await self._api_request(
-            "post",
-            url,
-            {
-                "email": email,
-                "username": username,
-                "feedback": feedback,
-            },
-            headers,
-        )
-        return status_code == 200
-
     async def send_welcome_email(self, email: str, username: str) -> bool:
         url = urljoin(self.backend_url, "api/v1/send-welcome-email/")
         data = {"email": email, "username": username}

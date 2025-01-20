@@ -12,7 +12,8 @@ from dateutil.relativedelta import relativedelta
 from bot.keyboards import select_service, choose_coach, gift, select_days, yes_no
 from bot.states import States
 from common.cache_manager import cache_manager
-from functions.chat import OWNER_ID, contact_client
+from common.settings import OWNER_ID
+from functions.chat import contact_client, process_feedback_content
 from functions.menus import (
     show_main_menu,
     show_exercises_menu,
@@ -27,7 +28,6 @@ from functions.profiles import assign_coach, get_or_load_profile, handle_logout
 from functions.utils import handle_clients_pagination
 from functions.workout_plans import manage_program, cancel_subscription
 from common.models import Coach, Profile
-from services.backend_service import backend_service
 from services.payment_service import payment_service
 from services.user_service import user_service
 from bot.texts.resources import MessageText
@@ -108,16 +108,9 @@ async def process_password_reset(message: Message, state: FSMContext) -> None:
 @main_router.message(States.feedback)
 async def handle_feedback(message: Message, state: FSMContext) -> None:
     profile = await get_or_load_profile(message.from_user.id)
-    auth_token = await user_service.get_user_token(profile.id)
-    if user_data := await user_service.get_user_data(auth_token):
-        if await backend_service.send_feedback(user_data.get("email"), user_data.get("username"), message.text):
-            logger.info(f"User {profile.id} sent feedback")
-            await message.answer(text=translate(MessageText.feedback_sent, lang=profile.language))
-        else:
-            await message.answer(text=translate(MessageText.unexpected_error, lang=profile.language))
-        await show_main_menu(message, profile, state)
-    else:
-        await message.answer(text=translate(MessageText.unexpected_error, lang=profile.language))
+    if await process_feedback_content(message, profile):
+        logger.info(f"Profile_id {profile.id} sent feedback")
+        await message.answer(text=translate(MessageText.feedback_sent, lang=profile.language))
         await show_main_menu(message, profile, state)
 
 
