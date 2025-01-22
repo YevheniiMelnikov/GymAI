@@ -9,13 +9,12 @@ class Profile(Model):
     status = models.CharField(max_length=50, default="client")  # type: ignore
     language = models.CharField(max_length=50, null=True, blank=True)  # type: ignore
     assigned_to = ArrayField(models.IntegerField(), default=list, blank=True)  # type: ignore
-    current_tg_id = models.BigIntegerField(blank=True)  # type: ignore
+    current_tg_id = models.BigIntegerField(blank=True, null=True, unique=True)  # type: ignore
     name = models.CharField(max_length=50, null=True, blank=True)  # type: ignore
 
     class Meta:
         verbose_name = "profile"
         verbose_name_plural = "profiles"
-        constraints = [models.UniqueConstraint(fields=["user", "current_tg_id"], name="unique_tg_id_per_user")]
         app_label = "accounts"
 
 

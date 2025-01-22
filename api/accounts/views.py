@@ -1,12 +1,13 @@
 import os
 
 from django.contrib.auth.models import User
-from django.core.mail import EmailMultiAlternatives, send_mail
+from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.template.loader import render_to_string
 from django.utils.html import strip_tags
+from djoser.views import TokenDestroyView
 
 from rest_framework import generics, status
 from rest_framework.authtoken.models import Token
@@ -43,51 +44,50 @@ class CreateUserView(APIView):
         username = request.data.get("username")
         password = request.data.get("password")
         email = request.data.get("email")
-        user_status = request.data.get("status")
-        language = request.data.get("language")
+        user_status = request.data.get("status", "client")
+        language = request.data.get("language", "ru")
         tg_id = request.data.get("current_tg_id")
 
-        if not password or not username or not email:
+        if not all([password, username, email]):
             return Response({"error": "Required fields are missing"}, status=status.HTTP_400_BAD_REQUEST)
-
-        if User.objects.filter(email=email).exists():
-            return Response({"error": "This email already taken"}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             with transaction.atomic():
-                user = User.objects.create_user(username=username, password=password, email=email)
+                user = User.objects.create_user(username=username, email=email, password=password, is_active=True)
+
                 profile = Profile.objects.create(user=user, status=user_status, language=language, current_tg_id=tg_id)
 
                 if user_status == "client":
                     ClientProfile.objects.create(profile=profile)
                 elif user_status == "coach":
                     CoachProfile.objects.create(profile=profile)
+
+                Token.objects.create(user=user)
+
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-        user_data = {"id": user.id, "username": user.username, "email": user.email, "current_tg_id": tg_id}
-        return Response(user_data, status=status.HTTP_201_CREATED)
+        return Response(
+            {"id": user.id, "username": user.username, "email": user.email, "auth_token": user.auth_token.key},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class UserProfileView(APIView):
     permission_classes = [HasAPIKey | IsAuthenticated]
 
     def get(self, request: Request, username) -> Response:
-        try:
-            user = User.objects.get(username=username)
-        except User.DoesNotExist:
-            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+        user = get_object_or_404(User, username=username)
+        profile, _ = Profile.objects.get_or_create(user=user)
 
-        profile = getattr(user, "profile", None)
-        if not profile:
-            return Response({"error": "Profile not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        if hasattr(profile, "client_profile"):
-            serializer = ClientProfileSerializer(profile.client_profile)
-        elif hasattr(profile, "coach_profile"):
-            serializer = CoachProfileSerializer(profile.coach_profile)
+        if profile.status == "client":
+            client_profile, _ = ClientProfile.objects.get_or_create(profile=profile)
+            serializer = ClientProfileSerializer(client_profile)
+        elif profile.status == "coach":
+            coach_profile, _ = CoachProfile.objects.get_or_create(profile=profile)
+            serializer = CoachProfileSerializer(coach_profile)
         else:
-            return Response({"error": "Profile type not found"}, status=status.HTTP_404_NOT_FOUND)
+            return Response({"error": "Unknown profile type"}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(serializer.data)
 
@@ -97,19 +97,28 @@ class CurrentUserView(APIView):
 
     def get(self, request):
         user = request.user
-        profile = getattr(user, "profile", None)
-        if not profile:
-            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+        profile, created = Profile.objects.get_or_create(user=user)
 
-        if hasattr(profile, "client_profile"):
-            serializer = ProfileSerializer(profile.client_profile)
-        elif hasattr(profile, "coach_profile"):
-            serializer = ProfileSerializer(profile.coach_profile)
+        if profile.status not in ["client", "coach"]:
+            return Response({"error": "Unknown profile type"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if profile.status == "client":
+            client_profile, _ = ClientProfile.objects.get_or_create(profile=profile)
+            profile_data = ClientProfileSerializer(client_profile).data
         else:
-            return Response({"error": "Profile type not found"}, status=status.HTTP_404_NOT_FOUND)
+            coach_profile, _ = CoachProfile.objects.get_or_create(profile=profile)
+            profile_data = CoachProfileSerializer(coach_profile).data
 
-        data = serializer.data
-        return Response({"username": user.username, "email": user.email, "current_tg_id": data.get("current_tg_id")})
+        return Response(
+            {
+                "username": user.username,
+                "email": user.email,
+                "status": profile.status,
+                "current_tg_id": profile.current_tg_id,
+                "profile_data": profile_data,
+            },
+            status=status.HTTP_200_OK,
+        )
 
 
 class ProfileByTelegramIDView(APIView):
@@ -119,11 +128,10 @@ class ProfileByTelegramIDView(APIView):
     def get(self, request: Request, telegram_id: int) -> Response:
         try:
             profile = Profile.objects.get(current_tg_id=telegram_id)
+            serializer = self.serializer_class(profile)
+            return Response(serializer.data, status=status.HTTP_200_OK)
         except Profile.DoesNotExist:
             return Response({"error": "Profile not found"}, status=status.HTTP_404_NOT_FOUND)
-
-        serializer = self.serializer_class(profile)
-        return Response(serializer.data)
 
 
 class ResetTelegramIDView(APIView):
@@ -193,9 +201,15 @@ class CoachProfileUpdate(RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated | HasAPIKey]
 
     def get_object(self):
-        obj = CoachProfile.objects.get(profile_id=self.kwargs.get("profile_id"))
-        self.check_object_permissions(self.request, obj)
-        return obj
+        profile_id = self.kwargs.get("profile_id")
+        profile = get_object_or_404(Profile, id=profile_id)
+
+        if profile.status != "coach":
+            return Response({"error": "Profile status is not a coach"}, status=status.HTTP_400_BAD_REQUEST)
+
+        coach_profile, _ = CoachProfile.objects.get_or_create(profile=profile)
+        self.check_object_permissions(self.request, coach_profile)
+        return coach_profile
 
 
 class ClientProfileView(ListAPIView):
@@ -210,9 +224,15 @@ class ClientProfileUpdate(RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated | HasAPIKey]
 
     def get_object(self):
-        obj = ClientProfile.objects.get(profile_id=self.kwargs.get("profile_id"))
-        self.check_object_permissions(self.request, obj)
-        return obj
+        profile_id = self.kwargs.get("profile_id")
+        profile = get_object_or_404(Profile, id=profile_id)
+
+        if profile.status != "client":
+            return Response({"error": "Profile status is not a client"}, status=status.HTTP_400_BAD_REQUEST)
+
+        client_profile, _ = ClientProfile.objects.get_or_create(profile=profile)
+        self.check_object_permissions(self.request, client_profile)
+        return client_profile
 
 
 class GetUserTokenView(APIView):
@@ -220,35 +240,11 @@ class GetUserTokenView(APIView):
 
     def post(self, request, *args, **kwargs):
         profile_id = request.data.get("profile_id")
-        if not profile_id:
-            return Response({"error": "Profile ID is required"}, status=400)
+        profile = get_object_or_404(Profile, id=profile_id)
 
-        try:
-            profile = Profile.objects.get(id=profile_id)
-            user = profile.user
-            token, created = Token.objects.get_or_create(user=user)
-            return Response({"profile_id": profile_id, "username": user.username, "auth_token": token.key})
-        except Profile.DoesNotExist:
-            return Response({"error": "Profile not found"}, status=404)
+        token, _ = Token.objects.get_or_create(user=profile.user)
 
-
-class SendFeedbackAPIView(APIView):
-    permission_classes = [HasAPIKey | IsAuthenticated]
-
-    def post(self, request: Request, *args, **kwargs) -> Response:
-        email = request.data.get("email")
-        username = request.data.get("username")
-        feedback = request.data.get("feedback")
-
-        subject = f"New feedback from {username}"
-        message = f"User {username} with email {email} sent the following feedback:\n\n{feedback}"
-
-        try:
-            send_mail(subject, message, os.getenv("EMAIL_HOST_USER"), [os.getenv("EMAIL_HOST_USER")])
-        except Exception:
-            return Response({"message": "Failed to send feedback"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        return Response({"message": "Feedback sent successfully"}, status=status.HTTP_200_OK)
+        return Response({"profile_id": profile_id, "username": profile.user.username, "auth_token": token.key})
 
 
 class SendWelcomeEmailAPIView(APIView):
@@ -269,3 +265,14 @@ class SendWelcomeEmailAPIView(APIView):
             return Response({"message": "Failed to send welcome email"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response({"message": "Welcome email sent successfully"}, status=status.HTTP_200_OK)
+
+
+class CustomTokenDestroyView(TokenDestroyView):
+    def post(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            profiles = Profile.objects.filter(user=request.user, current_tg_id__isnull=False)
+            for profile in profiles:
+                profile.current_tg_id = None
+                profile.save()
+
+        return super().post(request, *args, **kwargs)

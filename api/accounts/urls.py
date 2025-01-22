@@ -15,6 +15,5 @@ urlpatterns = [
     path("coach-profiles/", CoachProfileView.as_view(), name="coach-profile-list"),
     path("coach-profiles/<int:profile_id>/", CoachProfileUpdate.as_view(), name="coach-profile-update"),
     path("get-user-token/", GetUserTokenView.as_view(), name="get-user-token"),
-    path("send-feedback/", SendFeedbackAPIView.as_view(), name="send-feedback"),
     path("send-welcome-email/", SendWelcomeEmailAPIView.as_view(), name="send_welcome_email"),
 ]

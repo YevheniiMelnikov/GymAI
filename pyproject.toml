@@ -31,6 +31,7 @@ django-filter = "^24.3"
 liqpay-python = "^1.1"
 gspread = "^6.1.4"
 google-auth = "^2.37.0"
+django-jazzmin = "^3.0.1"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.6.3"

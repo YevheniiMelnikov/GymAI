@@ -12,6 +12,8 @@ ALLOWED_HOSTS = ["localhost", "127.0.0.1", "achieve-together.org.ua", "www.achie
 ASGI_APPLICATION = "api.asgi.application"
 
 INSTALLED_APPS = [
+    "jazzmin",
+    "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
@@ -112,9 +114,7 @@ REST_FRAMEWORK = {
         "rest_framework.authentication.BasicAuthentication",
         "rest_framework.authentication.SessionAuthentication",
     ],
-    "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework_api_key.permissions.HasAPIKey",
-    ],
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticatedOrReadOnly"],
 }
 
 DOMAIN = os.getenv("DOMAIN")
@@ -130,7 +130,8 @@ DJOSER = {
     "USER_AUTHENTICATION_FIELD": "username",
     "USER_CREATE_PASSWORD_RETYPE": True,
     "SERIALIZERS": {
-        "user_create": "accounts.serializers.ProfileSerializer",
+        "user_create": "djoser.serializers.UserCreateSerializer",
+        "user": "accounts.serializers.UserSerializer",
     },
 }
 
