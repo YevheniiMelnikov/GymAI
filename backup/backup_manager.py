@@ -14,12 +14,12 @@ DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_HOST = os.getenv("DB_HOST")
 DB_PORT = os.getenv("DB_PORT")
+os.environ["PGPASSWORD"] = DB_PASSWORD
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 BACKUP_DIR = os.path.join(CURRENT_DIR, "dumps")
 POSTGRES_BACKUP_DIR = os.path.join(BACKUP_DIR, "postgres")
 REDIS_BACKUP_DIR = os.path.join(BACKUP_DIR, "redis")
-os.environ["PGPASSWORD"] = DB_PASSWORD
 
 for directory in [POSTGRES_BACKUP_DIR, REDIS_BACKUP_DIR]:
     os.makedirs(directory, exist_ok=True)

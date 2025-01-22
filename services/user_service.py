@@ -25,6 +25,7 @@ class UserService(BackendService):
             else:
                 logger.error(f"Sign up failed with error: {error_message}")
                 return False
+
         return status_code == 201
 
     async def get_user_token(self, profile_id: int) -> str | None:
@@ -36,11 +37,9 @@ class UserService(BackendService):
 
         if status == 200 and "auth_token" in response:
             return response["auth_token"]
-        else:
-            logger.error(
-                f"Failed to retrieve token for profile {profile_id}. Status code: {status}, response: {response}"
-            )
-            return None
+
+        logger.error(f"Failed to retrieve token for profile {profile_id}. Status code: {status}, response: {response}")
+        return None
 
     async def log_in(self, username: str, password: str) -> str | None:
         url = urljoin(self.backend_url, "auth/token/login/")
@@ -49,6 +48,7 @@ class UserService(BackendService):
         )
         if status_code == 200 and "auth_token" in response:
             return response["auth_token"]
+
         logger.error(f"Failed to log in with username: {username}, status code: {status_code}, response: {response}")
         return None
 
@@ -59,6 +59,7 @@ class UserService(BackendService):
             if status_code == 204:
                 logger.info(f"User with profile_id {profile.id} logged out")
                 return True
+
         return False
 
     async def get_user_data(self, token: str) -> dict[str, str] | None:
@@ -66,6 +67,7 @@ class UserService(BackendService):
         status_code, response = await self._api_request("get", url, headers={"Authorization": f"Token {token}"})
         if status_code == 200:
             return response
+
         logger.debug(f"Failed to retrieve user data. HTTP status: {status_code}")
         return None
 
@@ -78,6 +80,7 @@ class UserService(BackendService):
             user = user_data.get("user")
             if user:
                 return user.get("email")
+
         logger.info(f"Failed to retrieve email for profile_id {profile_id}. HTTP status: {status_code}")
         return None
 

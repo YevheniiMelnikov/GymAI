@@ -141,7 +141,7 @@ async def register_user(callback_query: CallbackQuery, state: FSMContext, data: 
         await callback_query.message.answer(text=translate(MessageText.username, data.get("lang")))
         return
 
-    logger.info(f"User {email} registered successfully.")
+    logger.info(f"User {email} registered successfully")
 
     if not await user_service.log_in(username=username, password=password):
         await callback_query.message.answer(text=translate(MessageText.unexpected_error, data.get("lang")))

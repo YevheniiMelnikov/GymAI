@@ -1,4 +1,5 @@
 from django.contrib.auth.models import User
+from djoser.serializers import UserCreateSerializer
 from rest_framework import serializers
 
 from .models import Profile, ClientProfile, CoachProfile
@@ -63,3 +64,8 @@ class CoachProfileSerializer(serializers.ModelSerializer):
             "program_price",
             "verified",
         ]
+
+
+class UserCreateSerializer(UserCreateSerializer):
+    class Meta(UserCreateSerializer.Meta):
+        fields = ("id", "username", "email", "password")
