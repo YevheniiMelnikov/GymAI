@@ -10,7 +10,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from bot.keyboards import workout_results, workout_survey_keyboard
 from bot.states import States
-from common.cache_manager import cache_manager
+from core.cache_manager import cache_manager
 from functions.profiles import get_or_load_profile
 from services.profile_service import profile_service
 from bot.texts.resources import MessageText
@@ -63,8 +63,8 @@ async def send_daily_survey():
                 await callback_query.message.delete()
 
 
-async def workout_scheduler() -> None:
-    logger.debug("Starting workout scheduler ...")
+async def run_workout_scheduler() -> None:
+    logger.debug("Starting workout scheduler...")
     scheduler = AsyncIOScheduler()
     scheduler.add_job(send_daily_survey, "cron", hour=9, minute=0)
     scheduler.start()

@@ -2,7 +2,7 @@ from unittest.mock import patch, MagicMock
 
 import pytest
 
-from common.exceptions import UsernameUnavailable, EmailUnavailable
+from core.exceptions import UsernameUnavailable, EmailUnavailable
 
 
 @pytest.mark.asyncio

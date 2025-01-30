@@ -7,9 +7,9 @@ from bot.texts.text_manager import translate
 
 def language_choice() -> InlineKeyboardMarkup:
     buttons = [
-        [InlineKeyboardButton(text="Українська", callback_data="ua")],
-        [InlineKeyboardButton(text="Русский", callback_data="ru")],
-        [InlineKeyboardButton(text="English", callback_data="eng")],
+        [InlineKeyboardButton(text="Українська [UA]", callback_data="ua")],
+        [InlineKeyboardButton(text="English [ENG]", callback_data="eng")],
+        [InlineKeyboardButton(text="Русский [RU]", callback_data="ru")],
     ]
     return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
 

@@ -1,4 +1,3 @@
-import os
 from contextlib import suppress
 
 from aiogram import F, Router
@@ -8,8 +7,9 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import *
 from bot.states import States
-from common.cache_manager import cache_manager
-from common.exceptions import EmailUnavailable, UsernameUnavailable
+from core.cache_manager import cache_manager
+from core.exceptions import EmailUnavailable, UsernameUnavailable
+from core.settings import settings
 from functions.menus import show_main_menu, show_my_profile_menu
 from functions.profiles import check_assigned_clients, get_or_load_profile, register_user, sign_in
 from functions.text_utils import validate_email, validate_password
@@ -152,11 +152,9 @@ async def email(message: Message, state: FSMContext) -> None:
         return
 
     await state.update_data(email=message.text)
-    public_offer = os.getenv("PUBLIC_OFFER")
-    privacy_policy = os.getenv("PRIVACY_POLICY")
     contract_info_message = await message.answer(
         translate(MessageText.contract_info_message, data.get("lang")).format(
-            public_offer=public_offer, privacy_policy=privacy_policy
+            public_offer=settings.PUBLIC_OFFER, privacy_policy=settings.PRIVACY_POLICY
         ),
         disable_web_page_preview=True,
     )

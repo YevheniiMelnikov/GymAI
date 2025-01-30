@@ -1,4 +1,3 @@
-import os
 from contextlib import suppress
 from typing import Any
 
@@ -13,22 +12,21 @@ from aiogram.types import CallbackQuery, Message
 from bot.keyboards import *
 from bot.keyboards import new_coach_request
 from bot.states import States
-from common.cache_manager import cache_manager
-from common.file_manager import avatar_manager
-from common.settings import OWNER_ID
+from core.cache_manager import cache_manager
+from core.file_manager import avatar_manager
+from core.settings import settings
 from functions.exercises import edit_subscription_exercises
 from functions.menus import show_exercises_menu, show_main_menu, manage_subscription
 from functions.profiles import get_or_load_profile
 from functions.text_utils import format_new_client_message, get_client_page, get_workout_types
-from common.models import Coach, Profile, Client
+from core.models import Coach, Profile, Client
 from functions.utils import program_menu_pagination
 from services.profile_service import profile_service
 from bot.texts.resources import MessageText
 from bot.texts.text_manager import translate
 
 logger = loguru.logger
-bot = Bot(os.environ.get("BOT_TOKEN"))
-BACKEND_URL = os.environ.get("BACKEND_URL")
+bot = Bot(settings.BOT_TOKEN)
 message_router = Router()
 
 
@@ -99,7 +97,7 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
     photo = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{file_name}"
     async with aiohttp.ClientSession():
         await bot.send_photo(
-            chat_id=OWNER_ID,
+            chat_id=settings.OWNER_ID,
             photo=photo,
             caption=translate(MessageText.new_coach_request, "ru").format(
                 name=name,
@@ -282,7 +280,7 @@ async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> 
 async def process_feedback_content(message: Message, profile: Profile) -> bool:
     if message.text:
         await bot.send_message(
-            chat_id=OWNER_ID,
+            chat_id=settings.OWNER_ID,
             text=translate(MessageText.new_feedback, lang="ru").format(profile_id=profile.id, feedback=message.text),
             parse_mode=ParseMode.HTML,
         )
@@ -290,7 +288,7 @@ async def process_feedback_content(message: Message, profile: Profile) -> bool:
 
     elif message.photo:
         await bot.send_message(
-            chat_id=OWNER_ID,
+            chat_id=settings.OWNER_ID,
             text=translate(MessageText.new_feedback, lang="ru").format(
                 profile_id=profile.id, feedback=message.caption or ""
             ),
@@ -298,21 +296,21 @@ async def process_feedback_content(message: Message, profile: Profile) -> bool:
         )
         photo_id = message.photo[-1].file_id
         await bot.send_photo(
-            chat_id=OWNER_ID,
+            chat_id=settings.OWNER_ID,
             photo=photo_id,
         )
         return True
 
     elif message.video:
         await bot.send_message(
-            chat_id=OWNER_ID,
+            chat_id=settings.OWNER_ID,
             text=translate(MessageText.new_feedback, lang="ru").format(
                 profile_id=profile.id, feedback=message.caption or ""
             ),
             parse_mode=ParseMode.HTML,
         )
         await bot.send_video(
-            chat_id=OWNER_ID,
+            chat_id=settings.OWNER_ID,
             video=message.video.file_id,
         )
         return True

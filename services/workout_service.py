@@ -2,18 +2,18 @@ from datetime import datetime
 from urllib.parse import urljoin
 import loguru
 
-from services.backend_service import BackendService
-from common.exceptions import UserServiceError
-from common.models import Exercise
+from services.api_service import APIService
+from core.exceptions import UserServiceError
+from core.models import Exercise
 
 logger = loguru.logger
 
 
-class WorkoutService(BackendService):
+class WorkoutService(APIService):
     async def save_program(
         self, client_id: int, exercises: dict[int, Exercise], split_number: int, wishes: str
     ) -> dict:
-        url = urljoin(self.backend_url, "api/v1/programs/")
+        url = urljoin(self.api_url, "api/v1/programs/")
         data = {
             "client_profile": client_id,
             "exercises_by_day": exercises,
@@ -37,7 +37,7 @@ class WorkoutService(BackendService):
         )
 
     async def update_program(self, program_id: int, data: dict) -> bool:
-        url = urljoin(self.backend_url, f"api/v1/programs/{program_id}/")
+        url = urljoin(self.api_url, f"api/v1/programs/{program_id}/")
         status_code, response = await self._api_request(
             "put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
@@ -50,7 +50,7 @@ class WorkoutService(BackendService):
     async def create_subscription(
         self, profile_id: int, workout_days: list[str], wishes: str, amount: int, auth_token: str
     ) -> int | None:
-        url = urljoin(self.backend_url, "api/v1/subscriptions/")
+        url = urljoin(self.api_url, "api/v1/subscriptions/")
         data = {
             "client_profile": profile_id,
             "enabled": False,
@@ -69,7 +69,7 @@ class WorkoutService(BackendService):
         return None
 
     async def update_subscription(self, subscription_id: int, data: dict, auth_token: str) -> bool:
-        url = urljoin(self.backend_url, f"api/v1/subscriptions/{subscription_id}/")
+        url = urljoin(self.api_url, f"api/v1/subscriptions/{subscription_id}/")
         status_code, response = await self._api_request(
             "put", url, data, headers={"Authorization": f"Token {auth_token}"}
         )
