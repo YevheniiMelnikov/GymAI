@@ -10,13 +10,13 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import payment_keyboard, program_edit_kb, program_manage_menu
 from bot.states import States
-from common.cache_manager import cache_manager
-from common.file_manager import gif_manager
+from core.cache_manager import cache_manager
+from core.file_manager import gif_manager
 from functions.menus import show_subscription_page
 from functions.profiles import get_or_load_profile
 from functions.text_utils import format_program, get_translated_week_day
 from functions.utils import delete_messages, generate_order_id
-from common.models import Exercise, Profile, Subscription
+from core.models import Exercise, Profile, Subscription
 from services.payment_service import payment_service
 from services.user_service import user_service
 from services.workout_service import workout_service

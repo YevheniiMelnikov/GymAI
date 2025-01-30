@@ -1,14 +1,16 @@
-import os
+from contextlib import suppress
 
 import loguru
 from aiogram import Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from bot.keyboards import action_choice_keyboard, language_choice
 from bot.states import States
-from common.cache_manager import cache_manager
+from core.cache_manager import cache_manager
+from core.settings import settings
 from functions.menus import show_main_menu
 from functions.profiles import get_or_load_profile
 from services.user_service import user_service
@@ -27,6 +29,8 @@ async def cmd_language(message: Message, state: FSMContext) -> None:
         lang = "ua"
     await message.answer(text=translate(MessageText.choose_language, lang=lang), reply_markup=language_choice())
     await state.set_state(States.language_choice)
+    with suppress(TelegramBadRequest):
+        await message.delete()
 
 
 @cmd_router.message(Command("menu"))
@@ -36,6 +40,9 @@ async def cmd_menu(message: Message, state: FSMContext) -> None:
     else:
         await state.set_state(States.language_choice)
         await message.answer(text=translate(MessageText.choose_language), reply_markup=language_choice())
+
+    with suppress(TelegramBadRequest):
+        await message.delete()
 
 
 @cmd_router.message(Command("start"))
@@ -55,7 +62,8 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         )
         await state.update_data(message_ids=[start_message.message_id])
         await state.set_state(States.action_choice)
-        await message.delete()
+        with suppress(TelegramBadRequest):
+            await message.delete()
         return
 
     logger.info(f"Telegram user {message.from_user.id} started bot")
@@ -64,6 +72,8 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.set_state(States.language_choice)
     language_message = await message.answer(text=translate(MessageText.choose_language), reply_markup=language_choice())
     await state.update_data(message_ids=[start_message.message_id, language_message.message_id])
+    with suppress(TelegramBadRequest):
+        await message.delete()
 
 
 @cmd_router.message(Command("logout"))
@@ -83,6 +93,8 @@ async def cmd_logout(message: Message, state: FSMContext) -> None:
 
     else:
         await message.answer(text=translate(MessageText.logout, lang="ua"))
+    with suppress(TelegramBadRequest):
+        await message.delete()
 
 
 @cmd_router.message(Command("help"))
@@ -98,6 +110,8 @@ async def cmd_feedback(message: Message, state: FSMContext) -> None:
     language = profile.language if profile else "ua"
     await message.answer(text=translate(MessageText.feedback, lang=language))
     await state.set_state(States.feedback)
+    with suppress(TelegramBadRequest):
+        await message.delete()
 
 
 @cmd_router.message(Command("reset_password"))
@@ -117,6 +131,9 @@ async def cmd_reset_password(message: Message, state: FSMContext) -> None:
         await message.answer(text=translate(MessageText.no_profiles_found))
         await state.clear()
 
+    with suppress(TelegramBadRequest):
+        await message.delete()
+
 
 @cmd_router.message(Command("offer"))
 async def cmd_policy(message: Message) -> None:
@@ -124,15 +141,15 @@ async def cmd_policy(message: Message) -> None:
         language = profile.language
     else:
         language = "ua"
-    public_offer = os.getenv("PUBLIC_OFFER")
-    privacy_policy = os.getenv("PRIVACY_POLICY")
     await message.answer(
         translate(MessageText.contract_info_message, language).format(
-            public_offer=public_offer,
-            privacy_policy=privacy_policy,
+            public_offer=settings.PUBLIC_OFFER,
+            privacy_policy=settings.PRIVACY_POLICY,
         ),
         disable_web_page_preview=True,
     )
+    with suppress(TelegramBadRequest):
+        await message.delete()
 
 
 @cmd_router.message(Command("info"))
@@ -143,7 +160,9 @@ async def cmd_info(message: Message, state: FSMContext) -> None:
         language = "ua"
     await message.answer(
         translate(MessageText.info, language).format(
-            offer=os.getenv("PUBLIC_OFFER"), email=os.getenv("DEFAULT_FROM_EMAIL"), tg=os.getenv("TG_SUPPORT_CONTACT")
+            offer=settings.PUBLIC_OFFER, email=settings.DEFAULT_FROM_EMAIL, tg=settings.TG_SUPPORT_CONTACT
         ),
         disable_web_page_preview=True,
     )
+    with suppress(TelegramBadRequest):
+        await message.delete()

@@ -1,4 +1,3 @@
-import os
 import secrets
 import string
 from contextlib import suppress
@@ -12,13 +11,14 @@ from aiogram.types import BotCommand, CallbackQuery
 
 from bot.keyboards import program_edit_kb, program_view_kb, subscription_manage_menu
 from bot.states import States
+from core.settings import settings
 from functions import menus, profiles, text_utils
-from common.models import Client
+from core.models import Client
 from bot.texts.resources import MessageText
 from bot.texts.text_manager import resource_manager, translate
 
 logger = loguru.logger
-bot = Bot(os.environ.get("BOT_TOKEN"))
+bot = Bot(settings.BOT_TOKEN)
 
 
 async def short_url(url: str) -> str:

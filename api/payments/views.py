@@ -1,6 +1,5 @@
 import base64
 import json
-import os
 
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
@@ -18,6 +17,8 @@ from payments.models import Program, Subscription, Payment
 from payments.serializers import ProgramSerializer, SubscriptionSerializer, PaymentSerializer
 
 from accounts.models import ClientProfile
+
+from core.settings import settings
 
 
 class ProgramViewSet(ModelViewSet):
@@ -106,8 +107,8 @@ class PaymentWebhookView(APIView):
             if not data or not signature:
                 return JsonResponse({"detail": "Missing data or signature."}, status=status.HTTP_400_BAD_REQUEST)
 
-            liqpay_client = LiqPay(os.getenv("PAYMENT_PUB_KEY"), os.getenv("PAYMENT_PRIVATE_KEY"))
-            sign = liqpay_client.str_to_sign(os.getenv("PAYMENT_PRIVATE_KEY") + data + os.getenv("PAYMENT_PRIVATE_KEY"))
+            liqpay_client = LiqPay(settings.PAYMENT_PUB_KEY, settings.PAYMENT_PRIVATE_KEY)
+            sign = liqpay_client.str_to_sign(settings.PAYMENT_PRIVATE_KEY + data + settings.PAYMENT_PRIVATE_KEY)
             if sign != signature:
                 return JsonResponse({"detail": "Invalid signature"}, status=status.HTTP_400_BAD_REQUEST)
 

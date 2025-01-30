@@ -1,5 +1,3 @@
-import os
-
 from django.contrib.auth.models import User
 from django.core.mail import EmailMultiAlternatives
 from django.db import transaction
@@ -18,6 +16,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_api_key.permissions import HasAPIKey
 
+from core.settings import settings
 from .models import Profile, ClientProfile, CoachProfile
 from .serializers import (
     ProfileSerializer,
@@ -258,7 +257,7 @@ class SendWelcomeEmailAPIView(APIView):
 
         try:
             subject = "Вітаємо в AchieveTogether 👋"
-            msg = EmailMultiAlternatives(subject, text_content, os.getenv("EMAIL_HOST_USER"), [email])
+            msg = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, [email])
             msg.attach_alternative(html_content, "text/html")
             msg.send()
         except Exception:

@@ -7,17 +7,19 @@ from datetime import datetime, timedelta
 import loguru
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+from core.settings import settings
+
 logger = loguru.logger
 
-DB_NAME = os.getenv("DB_NAME")
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-DB_HOST = os.getenv("DB_HOST")
-DB_PORT = os.getenv("DB_PORT")
+DB_NAME = settings.DB_NAME
+DB_USER = settings.DB_USER
+DB_PASSWORD = settings.DB_PASSWORD
+DB_HOST = settings.DB_HOST
+DB_PORT = settings.DB_PORT
 os.environ["PGPASSWORD"] = DB_PASSWORD
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-BACKUP_DIR = os.path.join(CURRENT_DIR, "dumps")
+BACKUP_DIR = os.path.join(os.path.dirname(CURRENT_DIR), "dumps")
 POSTGRES_BACKUP_DIR = os.path.join(BACKUP_DIR, "postgres")
 REDIS_BACKUP_DIR = os.path.join(BACKUP_DIR, "redis")
 
@@ -102,8 +104,8 @@ async def delete_old_backups() -> None:
                     logger.error(f"Failed to delete {db_type} backup {filename}: {e}")
 
 
-async def backup_scheduler() -> None:
-    logger.debug("Starting backup scheduler ...")
+async def run_backup_scheduler() -> None:
+    logger.debug("Starting backup scheduler...")
     scheduler = AsyncIOScheduler()
     scheduler.add_job(create_postgres_backup, "cron", hour=2, minute=0)
     scheduler.add_job(create_redis_backup, "cron", hour=2, minute=1)

@@ -1,9 +1,11 @@
 import os
 from pathlib import Path
 
+from core.settings import settings
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = os.getenv("SECRET_KEY")
+SECRET_KEY = settings.SECRET_KEY
 
 DEBUG = os.environ.get("DEBUG_STATUS", "False").lower() == "true"
 
@@ -60,11 +62,11 @@ TEMPLATES = [
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql_psycopg2",
-        "NAME": os.getenv("DB_NAME"),
-        "USER": os.getenv("DB_USER"),
-        "PASSWORD": os.getenv("DB_PASSWORD"),
-        "HOST": os.getenv("DB_HOST"),
-        "PORT": os.getenv("DB_PORT"),
+        "NAME": settings.DB_NAME,
+        "USER": settings.DB_USER,
+        "PASSWORD": settings.DB_PASSWORD,
+        "HOST": settings.DB_HOST,
+        "PORT": settings.DB_PORT,
         "TEST": {
             "NAME": "test_db",
         },
@@ -117,8 +119,8 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticatedOrReadOnly"],
 }
 
-DOMAIN = os.getenv("DOMAIN")
-SITE_NAME = "AchieveTogether"
+DOMAIN = settings.DOMAIN
+SITE_NAME = settings.SITE_NAME
 CORS_ALLOWED_ORIGINS = ["*"]
 
 DJOSER = {
@@ -139,8 +141,8 @@ EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = "smtp.gmail.com"
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
-DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL")
+EMAIL_HOST_USER = settings.EMAIL_HOST_USER
+EMAIL_HOST_PASSWORD = settings.EMAIL_HOST_PASSWORD
+DEFAULT_FROM_EMAIL = settings.DEFAULT_FROM_EMAIL
 SERVER_EMAIL = EMAIL_HOST_USER
 EMAIL_ADMIN = EMAIL_HOST_USER

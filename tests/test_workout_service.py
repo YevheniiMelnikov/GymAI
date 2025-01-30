@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 
-from common.exceptions import UserServiceError
+from core.exceptions import UserServiceError
 
 
 @pytest.mark.asyncio

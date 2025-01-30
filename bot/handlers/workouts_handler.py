@@ -20,7 +20,7 @@ from bot.keyboards import (
     program_manage_menu,
 )
 from bot.states import States
-from common.cache_manager import cache_manager
+from core.cache_manager import cache_manager
 from functions.chat import send_message
 from functions.exercises import update_exercise_data, save_exercise, find_exercise_gif
 from functions.menus import (
@@ -34,7 +34,7 @@ from functions.profiles import get_or_load_profile
 from functions.text_utils import format_program, get_translated_week_day
 from functions.utils import program_menu_pagination, short_url, delete_messages
 from functions.workout_plans import next_day_workout_plan, reset_workout_plan, save_workout_plan
-from common.models import Exercise, Program
+from core.models import Exercise, Program
 from services.profile_service import profile_service
 from services.user_service import user_service
 from services.workout_service import workout_service

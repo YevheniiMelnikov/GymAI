@@ -2,17 +2,17 @@ from urllib.parse import urljoin
 
 import loguru
 
-from services.backend_service import BackendService
-from common.exceptions import UsernameUnavailable, EmailUnavailable
-from common.models import Profile
+from services.api_service import APIService
+from core.exceptions import UsernameUnavailable, EmailUnavailable
+from core.models import Profile
 
 
 logger = loguru.logger
 
 
-class UserService(BackendService):
+class UserService(APIService):
     async def sign_up(self, **kwargs) -> bool:
-        url = urljoin(self.backend_url, "api/v1/profiles/create/")
+        url = urljoin(self.api_url, "api/v1/profiles/create/")
         status_code, response = await self._api_request(
             "post", url, data=kwargs, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
@@ -29,7 +29,7 @@ class UserService(BackendService):
         return status_code == 201
 
     async def get_user_token(self, profile_id: int) -> str | None:
-        url = urljoin(self.backend_url, "api/v1/get-user-token/")
+        url = urljoin(self.api_url, "api/v1/get-user-token/")
         data = {"profile_id": profile_id}
         status, response = await self._api_request(
             "post", url, data=data, headers={"Authorization": f"Api-Key {self.api_key}"}
@@ -42,7 +42,7 @@ class UserService(BackendService):
         return None
 
     async def log_in(self, username: str, password: str) -> str | None:
-        url = urljoin(self.backend_url, "auth/token/login/")
+        url = urljoin(self.api_url, "auth/token/login/")
         status_code, response = await self._api_request(
             "post", url, {"username": username, "password": password}, {"Authorization": f"Api-Key {self.api_key}"}
         )
@@ -54,7 +54,7 @@ class UserService(BackendService):
 
     async def log_out(self, profile: Profile, auth_token: str) -> bool:
         if auth_token:
-            url = urljoin(self.backend_url, "auth/token/logout/")
+            url = urljoin(self.api_url, "auth/token/logout/")
             status_code, _ = await self._api_request("post", url, headers={"Authorization": f"Token {auth_token}"})
             if status_code == 204:
                 logger.info(f"User with profile_id {profile.id} logged out")
@@ -63,7 +63,7 @@ class UserService(BackendService):
         return False
 
     async def get_user_data(self, token: str) -> dict[str, str] | None:
-        url = urljoin(self.backend_url, "api/v1/current-user/")
+        url = urljoin(self.api_url, "api/v1/current-user/")
         status_code, response = await self._api_request("get", url, headers={"Authorization": f"Token {token}"})
         if status_code == 200:
             return response
@@ -72,7 +72,7 @@ class UserService(BackendService):
         return None
 
     async def get_user_email(self, profile_id: int) -> str | None:
-        url = urljoin(self.backend_url, f"api/v1/profiles/{profile_id}/")
+        url = urljoin(self.api_url, f"api/v1/profiles/{profile_id}/")
         status_code, user_data = await self._api_request(
             "get", url, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
@@ -85,7 +85,7 @@ class UserService(BackendService):
         return None
 
     async def reset_password(self, email: str, token: str) -> bool:
-        url = urljoin(self.backend_url, "api/v1/auth/users/reset_password/")
+        url = urljoin(self.api_url, "api/v1/auth/users/reset_password/")
         headers = {"Authorization": f"Token {token}"}
         status_code, _ = await self._api_request("post", url, {"email": email}, headers)
         logger.debug(f"Password reset requested for {email}")

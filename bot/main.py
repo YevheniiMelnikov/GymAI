@@ -1,5 +1,4 @@
 import asyncio
-import os
 
 import loguru
 from aiogram import Bot, Dispatcher
@@ -7,58 +6,32 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage
 from dotenv import load_dotenv
 
-from backup.backup_manager import backup_scheduler
-from bot.handlers.chat_handler import chat_router
-from bot.handlers.command_handler import cmd_router
-from bot.handlers.invalid_content_handler import invalid_content_router
-from bot.handlers.main_handler import main_router
-from bot.handlers.payment_handler import payment_router
-from bot.handlers.questionnaire_handler import questionnaire_router
-from bot.handlers.registration_handler import register_router
-from bot.handlers.workouts_handler import program_router
-from functions.chat import message_router
+from core.settings import settings
+from schedulers.backup_scheduler import run_backup_scheduler
+from bot.handlers.routers_configurator import configure_routers
 from functions.utils import set_bot_commands
-from common.payment_manager import payment_handler
-from common.subscription_manager import subscription_manager
-from common.workout_scheduler import survey_router, workout_scheduler
+from schedulers.payment_scheduler import payment_processor
+from schedulers.subscription_scheduler import run_subscription_scheduler
+from schedulers.workout_scheduler import run_workout_scheduler
 
 load_dotenv()
 logger = loguru.logger
 
 
 async def main() -> None:
-    bot_token = os.getenv("BOT_TOKEN")
-    if not bot_token:
-        logger.error("BOT_TOKEN environment variable not found.")
-        return
+    bot = Bot(token=settings.BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
+    dp = Dispatcher(storage=RedisStorage.from_url(f"{settings.REDIS_URL}"))
+    configure_routers(dp)
 
-    bot = Bot(token=bot_token, default=DefaultBotProperties(parse_mode="HTML"))
-    redis_url = os.getenv("REDIS_URL")
-    dp = Dispatcher(storage=RedisStorage.from_url(f"{redis_url}"))
-    dp.include_routers(
-        cmd_router,
-        message_router,
-        chat_router,
-        survey_router,
-        main_router,
-        register_router,
-        questionnaire_router,
-        invalid_content_router,
-        program_router,
-        payment_router,
-    )
+    await run_workout_scheduler()
+    await run_backup_scheduler()
+    await run_subscription_scheduler()
+    payment_processor.run_payment_checker()
 
     logger.info("Starting bot ...")
-    await workout_scheduler()
-    await backup_scheduler()
-    await subscription_manager()
-    payment_handler.start_payment_checker()
-    try:
-        await bot.delete_webhook(drop_pending_updates=True)
-        await set_bot_commands()
-        await dp.start_polling(bot)
-    except Exception as e:
-        logger.error(f"Failed to start the bot due to an exception: {e}")
+    await bot.delete_webhook(drop_pending_updates=True)
+    await set_bot_commands()
+    await dp.start_polling(bot)
 
 
 if __name__ == "__main__":

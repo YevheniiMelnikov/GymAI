@@ -8,8 +8,8 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import choose_gender, payment_keyboard, select_days, workout_experience_keyboard, yes_no
 from bot.states import States
-from common.cache_manager import cache_manager
-from common.file_manager import avatar_manager
+from core.cache_manager import cache_manager
+from core.file_manager import avatar_manager
 from functions.chat import client_request
 from functions.exercises import edit_subscription_days, process_new_subscription
 from functions.menus import show_main_menu

@@ -4,8 +4,8 @@ from typing import Any, Optional
 from aiogram.fsm.state import State
 
 from bot.states import States
-from common.cache_manager import cache_manager
-from common.models import Client, Coach, Exercise
+from core.cache_manager import cache_manager
+from core.models import Client, Coach, Exercise
 from services.profile_service import profile_service
 from bot.texts.resources import ButtonText, MessageText
 from bot.texts.text_manager import translate

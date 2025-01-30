@@ -11,8 +11,8 @@ from dateutil.relativedelta import relativedelta
 
 from bot.keyboards import select_service, choose_coach, gift, select_days, yes_no
 from bot.states import States
-from common.cache_manager import cache_manager
-from common.settings import OWNER_ID
+from core.cache_manager import cache_manager
+from core.settings import settings
 from functions.chat import contact_client, process_feedback_content
 from functions.menus import (
     show_main_menu,
@@ -27,7 +27,7 @@ from functions.menus import (
 from functions.profiles import assign_coach, get_or_load_profile, handle_logout
 from functions.utils import handle_clients_pagination
 from functions.workout_plans import manage_program, cancel_subscription
-from common.models import Coach, Profile
+from core.models import Coach, Profile
 from services.payment_service import payment_service
 from services.user_service import user_service
 from bot.texts.resources import MessageText
@@ -239,7 +239,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         next_payment_date = payment_date + relativedelta(months=1)
         async with aiohttp.ClientSession():
             await bot.send_message(
-                OWNER_ID,
+                settings.OWNER_ID,
                 translate(MessageText.subscription_cancel_request, lang="ru").format(
                     profile_id=profile.id,
                     contact=contact,

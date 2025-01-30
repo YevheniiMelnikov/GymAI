@@ -7,13 +7,13 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import action_choice_keyboard
 from bot.states import States
-from services.backend_service import backend_service
-from common.cache_manager import cache_manager
-from common.exceptions import ProfileNotFoundError, UserServiceError
+from services.api_service import api_service
+from core.cache_manager import cache_manager
+from core.exceptions import ProfileNotFoundError, UserServiceError
 from functions import menus
 from functions import chat
 from functions.utils import delete_messages
-from common.models import Client, Coach, Profile
+from core.models import Client, Coach, Profile
 from services.profile_service import profile_service
 from services.user_service import user_service
 from bot.texts.resources import MessageText
@@ -160,7 +160,7 @@ async def register_user(callback_query: CallbackQuery, state: FSMContext, data: 
         telegram_id=callback_query.from_user.id,
         email=email,
     )
-    if not await backend_service.send_welcome_email(email=email, username=username):
+    if not await api_service.send_welcome_email(email=email, username=username):
         logger.error(f"Failed to send welcome email to {email}")
     await callback_query.message.answer(text=translate(MessageText.registration_successful, lang=data.get("lang")))
     await menus.show_main_menu(callback_query.message, profile_data, state)

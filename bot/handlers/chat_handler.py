@@ -5,12 +5,12 @@ from aiogram.types import Message
 
 from bot.keyboards import incoming_message
 from bot.states import States
-from common.cache_manager import cache_manager
-from common.exceptions import UserServiceError
+from core.cache_manager import cache_manager
+from core.exceptions import UserServiceError
 from functions.chat import send_message
 from functions.menus import show_main_menu
 from functions.profiles import get_or_load_profile
-from common.models import Profile
+from core.models import Profile
 from services.profile_service import profile_service
 from bot.texts.resources import MessageText
 from bot.texts.text_manager import translate

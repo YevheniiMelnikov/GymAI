@@ -13,11 +13,11 @@ from dateutil.relativedelta import relativedelta
 from bot.keyboards import *
 from bot.keyboards import choose_coach, program_manage_menu, program_view_kb, select_service, subscription_manage_menu
 from bot.states import States
-from common.cache_manager import cache_manager
-from common.exceptions import UserServiceError
-from common.file_manager import avatar_manager
+from core.cache_manager import cache_manager
+from core.exceptions import UserServiceError
+from core.file_manager import avatar_manager
 from functions.profiles import get_or_load_profile, start_profile_creation
-from common.models import Client, Coach, Profile, Subscription
+from core.models import Client, Coach, Profile, Subscription
 from functions.text_utils import (
     get_client_page,
     get_coach_page,
@@ -26,7 +26,7 @@ from functions.text_utils import (
     get_translated_week_day,
 )
 from services.profile_service import profile_service
-from common.settings import BOT_PAYMENT_OPTIONS
+from core.settings import settings
 from bot.texts.resources import MessageText
 from bot.texts.text_manager import translate
 
@@ -272,7 +272,7 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
 
     subscription = cache_manager.get_subscription(profile.id)
     if not subscription or not subscription.enabled:
-        subscription_img = BOT_PAYMENT_OPTIONS + f"subscription_{profile.language}.jpeg"
+        subscription_img = settings.BOT_PAYMENT_OPTIONS + f"subscription_{profile.language}.jpeg"
         client_profile = cache_manager.get_client_by_id(profile.id)
         coach = cache_manager.get_coach_by_id(client_profile.assigned_to.pop())
         try:
@@ -317,7 +317,7 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
 
 
 async def show_program_promo_page(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    program_img = BOT_PAYMENT_OPTIONS + f"program_{profile.language}.jpeg"
+    program_img = settings.BOT_PAYMENT_OPTIONS + f"program_{profile.language}.jpeg"
     client_profile = cache_manager.get_client_by_id(profile.id)
     coach = cache_manager.get_coach_by_id(client_profile.assigned_to.pop())
     try:

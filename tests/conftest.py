@@ -9,7 +9,7 @@ from services.workout_service import WorkoutService
 
 import pytest
 
-from services.backend_service import BackendService
+from services.api_service import APIService
 from services.user_service import UserService
 
 
@@ -38,27 +38,27 @@ class MockEncrypter:
         return f"encrypted_{data}"
 
 
-with patch("common.encrypter.Encrypter", new=MockEncrypter):
+with patch("schedulers.encrypter.Encrypter", new=MockEncrypter):
     from services.profile_service import ProfileService
 
 
 @pytest.fixture
-def backend_service(monkeypatch) -> BackendService:
-    monkeypatch.setenv("BACKEND_URL", "http://testserver/")
+def api_service(monkeypatch) -> APIService:
+    monkeypatch.setenv("api_url", "http://testserver/")
     monkeypatch.setenv("API_KEY", "test_api_key")
-    return BackendService()
+    return APIService()
 
 
 @pytest.fixture
 def user_service(monkeypatch) -> UserService:
-    monkeypatch.setenv("BACKEND_URL", "http://testserver/")
+    monkeypatch.setenv("api_url", "http://testserver/")
     monkeypatch.setenv("API_KEY", "test_api_key")
     return UserService()
 
 
 @pytest.fixture
 def profile_service(monkeypatch) -> ProfileService:
-    monkeypatch.setenv("BACKEND_URL", "http://testserver/")
+    monkeypatch.setenv("api_url", "http://testserver/")
     monkeypatch.setenv("API_KEY", "test_api_key")
     encrypter = MockEncrypter()
     return ProfileService(encrypter=encrypter)  # type: ignore
@@ -66,14 +66,14 @@ def profile_service(monkeypatch) -> ProfileService:
 
 @pytest.fixture
 def workout_service(monkeypatch) -> WorkoutService:
-    monkeypatch.setenv("BACKEND_URL", "http://testserver/")
+    monkeypatch.setenv("api_url", "http://testserver/")
     monkeypatch.setenv("API_KEY", "test_api_key")
     return WorkoutService()
 
 
 @pytest.fixture
 def payment_service(monkeypatch) -> PaymentService:
-    monkeypatch.setenv("BACKEND_URL", "http://testserver/")
+    monkeypatch.setenv("api_url", "http://testserver/")
     monkeypatch.setenv("API_KEY", "test_api_key")
     monkeypatch.setenv("CHECKOUT_URL", "http://checkout.test/")
     monkeypatch.setenv("PAYMENT_PUB_KEY", "test_pub_key")
