@@ -11,7 +11,6 @@ from aiogram.types import CallbackQuery, InputMediaPhoto, Message
 from dateutil.relativedelta import relativedelta
 
 from bot.keyboards import *
-from bot.keyboards import choose_coach, program_manage_menu, program_view_kb, select_service, subscription_manage_menu
 from bot.states import States
 from core.cache_manager import cache_manager
 from core.exceptions import UserServiceError
@@ -20,13 +19,12 @@ from functions.profiles import get_or_load_profile, start_profile_creation
 from core.models import Client, Coach, Profile, Subscription
 from functions.text_utils import (
     get_client_page,
-    get_coach_page,
     get_profile_attributes,
     format_program,
     get_translated_week_day,
 )
 from services.profile_service import profile_service
-from core.settings import settings
+from common.settings import settings
 from bot.texts.resources import MessageText
 from bot.texts.text_manager import translate
 
@@ -127,10 +125,9 @@ async def show_coaches_menu(message: Message, coaches: list[Coach], current_inde
     profile = await get_or_load_profile(message.chat.id)
     current_index %= len(coaches)
     current_coach = coaches[current_index]
-    coach_info = get_coach_page(current_coach)
     text = translate(MessageText.coach_page, profile.language)
     coach_photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{current_coach.profile_photo}"
-    formatted_text = text.format(**coach_info)
+    formatted_text = text.format(**Coach.to_dict(current_coach))
 
     try:
         media = InputMediaPhoto(media=coach_photo_url)

@@ -12,7 +12,7 @@ from dateutil.relativedelta import relativedelta
 from bot.keyboards import select_service, choose_coach, gift, select_days, yes_no
 from bot.states import States
 from core.cache_manager import cache_manager
-from core.settings import settings
+from common.settings import settings
 from functions.chat import contact_client, process_feedback_content
 from functions.menus import (
     show_main_menu,

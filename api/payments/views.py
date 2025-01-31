@@ -18,7 +18,7 @@ from payments.serializers import ProgramSerializer, SubscriptionSerializer, Paym
 
 from accounts.models import ClientProfile
 
-from core.settings import settings
+from common.settings import settings
 
 
 class ProgramViewSet(ModelViewSet):

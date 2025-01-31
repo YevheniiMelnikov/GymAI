@@ -11,7 +11,7 @@ from aiogram.types import BotCommand, CallbackQuery
 
 from bot.keyboards import program_edit_kb, program_view_kb, subscription_manage_menu
 from bot.states import States
-from core.settings import settings
+from common.settings import settings
 from functions import menus, profiles, text_utils
 from core.models import Client
 from bot.texts.resources import MessageText

@@ -6,7 +6,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage
 from dotenv import load_dotenv
 
-from core.settings import settings
+from common.settings import settings
 from schedulers.backup_scheduler import run_backup_scheduler
 from bot.handlers.routers_configurator import configure_routers
 from functions.utils import set_bot_commands

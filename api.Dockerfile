@@ -2,6 +2,7 @@ FROM python:3.13-slim
 
 ENV APP_HOME=/opt
 ENV PYTHONPATH=$APP_HOME
+ENV PYTHONPATH="/opt/common:$PYTHONPATH"
 ENV TZ=Europe/Kyiv
 
 RUN apt-get update \
@@ -26,6 +27,7 @@ RUN poetry config virtualenvs.create false
 RUN poetry install --no-interaction --no-ansi --no-root
 
 COPY api $APP_HOME/api
+COPY common /opt/common
 
 WORKDIR $APP_HOME/api
 

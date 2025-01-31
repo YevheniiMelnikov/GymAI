@@ -16,7 +16,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_api_key.permissions import HasAPIKey
 
-from core.settings import settings
+from common.settings import settings
 from .models import Profile, ClientProfile, CoachProfile
 from .serializers import (
     ProfileSerializer,

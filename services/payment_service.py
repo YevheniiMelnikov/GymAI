@@ -8,7 +8,7 @@ from liqpay import LiqPay
 
 from services.api_service import APIService
 from core.models import Payment
-from core.settings import settings
+from common.settings import settings
 
 logger = loguru.logger
 

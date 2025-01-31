@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-from core.settings import settings
+from common.settings import settings
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 

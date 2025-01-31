@@ -9,7 +9,7 @@ from bot.keyboards import *
 from bot.states import States
 from core.cache_manager import cache_manager
 from core.exceptions import EmailUnavailable, UsernameUnavailable
-from core.settings import settings
+from common.settings import settings
 from functions.menus import show_main_menu, show_my_profile_menu
 from functions.profiles import check_assigned_clients, get_or_load_profile, register_user, sign_in
 from functions.text_utils import validate_email, validate_password

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import loguru
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from core.settings import settings
+from common.settings import settings
 
 logger = loguru.logger
 

@@ -6,7 +6,7 @@ from functions.chat import send_message, client_request
 from core.cache_manager import cache_manager, CacheManager
 from functions.workout_plans import cancel_subscription
 from core.models import Payment, Profile
-from core.settings import settings
+from common.settings import settings
 from schedulers.sheets_scheduler import sheets_manager
 from services.payment_service import payment_service, PaymentService
 from services.profile_service import profile_service, ProfileService

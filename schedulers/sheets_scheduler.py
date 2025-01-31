@@ -4,7 +4,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 from gspread import Worksheet
 
-from core.settings import settings
+from common.settings import settings
 
 
 class SheetsManager:

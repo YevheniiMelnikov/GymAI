@@ -38,6 +38,7 @@ class Settings:
     TG_SUPPORT_CONTACT: str = os.getenv("TG_SUPPORT_CONTACT")
     GOOGLE_APPLICATION_CREDENTIALS: str = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
     SPREADSHEET_ID: str = os.getenv("SPREADSHEET_ID")
+    DOMAIN: str = os.getenv("DOMAIN")
 
 
 settings = Settings()
