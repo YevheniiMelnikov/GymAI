@@ -4,17 +4,13 @@ import loguru
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage
-from dotenv import load_dotenv
 
 from common.settings import settings
-from schedulers.backup_scheduler import run_backup_scheduler
+from schedulers import backup_scheduler, subscription_scheduler, workout_scheduler
+from core import payment_processor
 from bot.handlers.routers_configurator import configure_routers
 from functions.utils import set_bot_commands
-from schedulers.payment_scheduler import payment_processor
-from schedulers.subscription_scheduler import run_subscription_scheduler
-from schedulers.workout_scheduler import run_workout_scheduler
 
-load_dotenv()
 logger = loguru.logger
 
 
@@ -23,10 +19,10 @@ async def main() -> None:
     dp = Dispatcher(storage=RedisStorage.from_url(f"{settings.REDIS_URL}"))
     configure_routers(dp)
 
-    await run_workout_scheduler()
-    await run_backup_scheduler()
-    await run_subscription_scheduler()
-    payment_processor.run_payment_checker()
+    await workout_scheduler.run()
+    await backup_scheduler.run()
+    await subscription_scheduler.run()
+    payment_processor.run()
 
     logger.info("Starting bot ...")
     await bot.delete_webhook(drop_pending_updates=True)

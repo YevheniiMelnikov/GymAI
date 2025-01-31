@@ -15,7 +15,7 @@ from bot.states import States
 from core.cache_manager import cache_manager
 from core.exceptions import UserServiceError
 from core.file_manager import avatar_manager
-from functions.profiles import get_or_load_profile, start_profile_creation
+from functions import profiles
 from core.models import Client, Coach, Profile, Subscription
 from functions.text_utils import (
     get_client_page,
@@ -34,7 +34,7 @@ bot = Bot(os.environ.get("BOT_TOKEN"))
 
 async def show_subscription_page(callback_query: CallbackQuery, state: FSMContext, subscription: Subscription) -> None:
     await callback_query.answer()
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await profiles.get_or_load_profile(callback_query.from_user.id)
     payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
     next_payment_date = payment_date + relativedelta(months=1)
     next_payment_date_str = next_payment_date.strftime("%Y-%m-%d")
@@ -104,7 +104,7 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext) 
 
 
 async def show_clients(message: Message, clients: list[Client], state: FSMContext, current_index=0) -> None:
-    profile = await get_or_load_profile(message.chat.id)
+    profile = await profiles.get_or_load_profile(message.chat.id)
     current_index %= len(clients)
     current_client = clients[current_index]
     subscription = True if cache_manager.get_subscription(current_client.id) else False
@@ -122,7 +122,7 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
 
 
 async def show_coaches_menu(message: Message, coaches: list[Coach], current_index=0) -> None:
-    profile = await get_or_load_profile(message.chat.id)
+    profile = await profiles.get_or_load_profile(message.chat.id)
     current_index %= len(coaches)
     current_coach = coaches[current_index]
     text = translate(MessageText.coach_page, profile.language)
@@ -168,11 +168,11 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
         user_data = await profile_service.get_profile(profile.id)
 
         if user_data is None:
-            await start_profile_creation(callback_query.message, profile, state)
+            await profiles.start_profile_creation(callback_query.message, profile, state)
             return
 
         if None in user_data.values():
-            await start_profile_creation(callback_query.message, profile, state)
+            await profiles.start_profile_creation(callback_query.message, profile, state)
             return
 
         try:
@@ -183,7 +183,7 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
                 cache_manager.set_coach_data(profile.id, user_data)
                 user = Coach.from_dict(user_data)
         except TypeError:
-            await start_profile_creation(callback_query.message, profile, state)
+            await profiles.start_profile_creation(callback_query.message, profile, state)
             return
 
     format_attributes = get_profile_attributes(role=profile.status, user=user, lang_code=profile.language)

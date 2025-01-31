@@ -17,7 +17,7 @@ from core.file_manager import avatar_manager
 from common.settings import settings
 from functions.exercises import edit_subscription_exercises
 from functions.menus import show_exercises_menu, show_main_menu, manage_subscription
-from functions.profiles import get_or_load_profile
+from functions import profiles
 from functions.text_utils import format_new_client_message, get_client_page, get_workout_types
 from core.models import Coach, Profile, Client
 from functions.utils import program_menu_pagination
@@ -118,13 +118,13 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
 @message_router.callback_query(F.data == "later")
 async def close_notification(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.message.delete()
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await profiles.get_or_load_profile(callback_query.from_user.id)
     await show_main_menu(callback_query.message, profile, state)
 
 
 @message_router.callback_query(F.data == "subscription_view")
 async def subscription_view(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await profiles.get_or_load_profile(callback_query.from_user.id)
     subscription_data = cache_manager.get_subscription(profile.id)
     await state.update_data(
         exercises=subscription_data.exercises,
@@ -137,7 +137,7 @@ async def subscription_view(callback_query: CallbackQuery, state: FSMContext):
 
 @message_router.callback_query(F.data.startswith("answer"))
 async def answer_message(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await profiles.get_or_load_profile(callback_query.from_user.id)
     recipient_id = int(callback_query.data.split("_")[1])
     if profile.status == "client":
         sender = cache_manager.get_client_by_id(profile.id)
@@ -158,7 +158,7 @@ async def answer_message(callback_query: CallbackQuery, state: FSMContext):
 @message_router.callback_query(F.data == "previous")
 @message_router.callback_query(F.data == "next")
 async def navigate_days(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await profiles.get_or_load_profile(callback_query.from_user.id)
     program = cache_manager.get_program(profile.id)
     data = await state.get_data()
     if data.get("subscription"):
@@ -179,7 +179,7 @@ async def edit_subscription(callback_query: CallbackQuery, state: FSMContext):
 
 @message_router.callback_query(F.data.startswith("create"))
 async def create_workouts(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await profiles.get_or_load_profile(callback_query.from_user.id)
     await state.clear()
     parts = callback_query.data.split("_")
     service = parts[1]

@@ -7,7 +7,7 @@ from core.cache_manager import cache_manager, CacheManager
 from functions.workout_plans import cancel_subscription
 from core.models import Payment, Profile
 from common.settings import settings
-from schedulers.sheets_scheduler import sheets_manager
+from core.google_sheets_manager import sheets_manager
 from services.payment_service import payment_service, PaymentService
 from services.profile_service import profile_service, ProfileService
 from services.user_service import user_service
@@ -29,7 +29,7 @@ class PaymentProcessor:
         self.profile_service = profile_srv
         self.workout_service = workout_srv
 
-    def run_payment_checker(self) -> None:
+    def run(self) -> None:
         asyncio.create_task(self._check_payments_loop())
         asyncio.create_task(self._schedule_unclosed_payment_check())
 
@@ -209,9 +209,11 @@ class PaymentProcessor:
         )
 
 
-payment_processor = PaymentProcessor(
-    cache_mngr=cache_manager,
-    payment_srv=payment_service,
-    profile_srv=profile_service,
-    workout_srv=workout_service,
-)
+def run():
+    payment_processor = PaymentProcessor(
+        cache_mngr=cache_manager,
+        payment_srv=payment_service,
+        profile_srv=profile_service,
+        workout_srv=workout_service,
+    )
+    payment_processor.run()

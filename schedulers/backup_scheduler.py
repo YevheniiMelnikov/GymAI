@@ -104,7 +104,7 @@ async def delete_old_backups() -> None:
                     logger.error(f"Failed to delete {db_type} backup {filename}: {e}")
 
 
-async def run_backup_scheduler() -> None:
+async def run() -> None:
     logger.debug("Starting backup scheduler...")
     scheduler = AsyncIOScheduler()
     scheduler.add_job(create_postgres_backup, "cron", hour=2, minute=0)

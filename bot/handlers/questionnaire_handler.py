@@ -250,7 +250,7 @@ async def profile_photo(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     local_file = await avatar_manager.save_profile_photo(message)
 
-    if local_file and avatar_manager.check_file_size(f"temp/{local_file}", 20):
+    if local_file and avatar_manager.check_file_size(local_file, 20):
         if avatar_manager.upload_image_to_gcs(local_file):
             uploaded_msg = await message.answer(translate(MessageText.photo_uploaded, lang=data.get("lang")))
             await state.update_data(

@@ -8,14 +8,15 @@ from common.settings import settings
 
 
 class SheetsManager:
+    SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
+    DRIVE_SCOPE = "https://www.googleapis.com/auth/drive"
+
     def __init__(self) -> None:
         self.creds = settings.GOOGLE_APPLICATION_CREDENTIALS
         self.sheet_id = settings.SPREADSHEET_ID
 
     def connect(self) -> gspread.Client:
-        creds = Credentials.from_service_account_file(
-            self.creds, scopes=["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-        )
+        creds = Credentials.from_service_account_file(self.creds, scopes=[self.SHEETS_SCOPE, self.DRIVE_SCOPE])
         return gspread.authorize(creds)
 
     def create_new_payment_sheet(self, data: list[list]) -> Worksheet:

@@ -15,12 +15,12 @@ class FileManager:
 
     def upload_image_to_gcs(self, source_file_name: str) -> bool:
         try:
-            blob = self.bucket.blob(source_file_name)
-            blob.upload_from_filename(f"temp/{source_file_name}")
-            logger.debug(f"File {source_file_name} successfully uploaded to GCS.")
+            blob = self.bucket.blob(os.path.basename(source_file_name))
+            blob.upload_from_filename(source_file_name)
+            logger.debug(f"File {source_file_name[:10]}...jpg successfully uploaded to storage")
             return True
         except Exception as e:
-            logger.error(f"Failed to upload {source_file_name} to GCS: {e}")
+            logger.error(f"Failed to upload {source_file_name[:10]}...jpg to storage: {e}")
             return False
 
     @staticmethod
@@ -29,12 +29,11 @@ class FileManager:
             photo = message.photo[-1]
             file_id = photo.file_id
             file = await message.bot.get_file(file_id)
-            local_file_path = os.path.join("temp", f"{file_id}.jpg")
-            os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
+            local_file_path = f"{file_id}.jpg"
             await message.bot.download_file(file.file_path, destination=local_file_path)
-            logger.debug(f"File {file_id} successfully saved locally at {local_file_path}")
+            logger.debug(f"File {file_id[:10]}...jpg successfully saved locally")
             await message.delete()
-            return f"{file_id}.jpg"
+            return local_file_path
 
         except Exception as e:
             logger.error(f"Error saving file: {e}")
@@ -42,12 +41,11 @@ class FileManager:
 
     @staticmethod
     def clean_up_local_file(file: str) -> None:
-        file_path = f"temp/{file}"
-        if os.path.exists(file_path):
-            os.remove(file_path)
-            logger.debug(f"File {file} successfully deleted")
+        if os.path.exists(file):
+            os.remove(file)
+            logger.debug(f"File {file[:10]}...jpg successfully deleted")
         else:
-            logger.warning(f"File {file} does not exist, skipping deletion")
+            logger.warning(f"File {file[:10]}...jpg does not exist, skipping deletion")
 
     @staticmethod
     def check_file_size(file_path: str, max_size_mb: float) -> bool:
