@@ -13,7 +13,7 @@ from bot.states import States
 from core.cache_manager import cache_manager
 from core.file_manager import gif_manager
 from functions.menus import show_subscription_page
-from functions.profiles import get_or_load_profile
+from functions import profiles
 from functions.text_utils import format_program, get_translated_week_day
 from functions.utils import delete_messages, generate_order_id
 from core.models import Exercise, Profile, Subscription
@@ -31,7 +31,7 @@ logger = loguru.logger
 async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Message | CallbackQuery) -> None:
     data = await state.get_data()
     await delete_messages(state)
-    profile = await get_or_load_profile(input_data.from_user.id)
+    profile = await profiles.get_or_load_profile(input_data.from_user.id)
     day_index = data.get("day_index", 0)
     client_id = data.get("client_id")
     exercises = data.get("exercises", {})
@@ -127,7 +127,7 @@ async def update_exercise_data(message: Message, state: FSMContext, lang: str, u
 
 
 async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await profiles.get_or_load_profile(callback_query.from_user.id)
     client_id = callback_query.data.split("_")[1]
     day = callback_query.data.split("_")[2]
     week_day = get_translated_week_day(profile.language, day).lower()

@@ -161,3 +161,4 @@ google_creds.json
 /pgdata/
 /redis_data/
 *~
+!/backup/
