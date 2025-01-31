@@ -14,7 +14,7 @@ from bot.keyboards import new_coach_request
 from bot.states import States
 from core.cache_manager import cache_manager
 from core.file_manager import avatar_manager
-from core.settings import settings
+from common.settings import settings
 from functions.exercises import edit_subscription_exercises
 from functions.menus import show_exercises_menu, show_main_menu, manage_subscription
 from functions.profiles import get_or_load_profile

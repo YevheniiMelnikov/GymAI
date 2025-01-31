@@ -13,7 +13,7 @@ from core.encrypter import Encrypter
 from core.encrypter import encrypter as enc
 from core.exceptions import ProfileNotFoundError, UserServiceError
 from core.models import Client, Coach, Profile, Program, Subscription
-from core.settings import settings
+from common.settings import settings
 
 logger = loguru.logger
 

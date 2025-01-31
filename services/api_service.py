@@ -5,7 +5,7 @@ import httpx
 import loguru
 
 from core.exceptions import UserServiceError
-from core.settings import settings
+from common.settings import settings
 
 logger = loguru.logger
 

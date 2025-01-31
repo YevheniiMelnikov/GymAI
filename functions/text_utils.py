@@ -84,16 +84,6 @@ def get_state_and_message(callback: str, lang: str) -> tuple[State, str]:
     }.get(callback, (None, None))
 
 
-def get_coach_page(coach: Coach) -> dict[str, Any]:
-    return {
-        "name": coach.name,
-        "experience": coach.work_experience,
-        "additional_info": coach.additional_info,
-        "subscription_price": coach.subscription_price,
-        "program_price": coach.program_price,
-    }
-
-
 async def get_client_page(client: Client, lang_code: str, subscription: bool, data: dict[str, Any]) -> dict[str, Any]:
     texts = {
         "male": translate(ButtonText.male, lang=lang_code),

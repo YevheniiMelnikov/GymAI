@@ -1,6 +1,6 @@
 from cryptography.fernet import Fernet
 
-from core.settings import settings
+from common.settings import settings
 
 
 class Encrypter:
