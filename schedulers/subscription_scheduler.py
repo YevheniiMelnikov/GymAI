@@ -32,7 +32,7 @@ async def deactivate_expired_subscriptions() -> None:
         logger.exception(f"Error during subscription deactivation: {e}")
 
 
-async def run_subscription_scheduler() -> None:
+async def run() -> None:
     logger.debug("Starting subscription scheduler...")
     scheduler = AsyncIOScheduler()
     scheduler.add_job(deactivate_expired_subscriptions, "cron", hour=1, minute=0)

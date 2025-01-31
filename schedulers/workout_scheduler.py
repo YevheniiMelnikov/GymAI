@@ -1,4 +1,3 @@
-import os
 from datetime import datetime, timedelta
 
 import loguru
@@ -10,6 +9,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from bot.keyboards import workout_results, workout_survey_keyboard
 from bot.states import States
+from common.settings import settings
 from core.cache_manager import cache_manager
 from functions.profiles import get_or_load_profile
 from services.profile_service import profile_service
@@ -18,7 +18,7 @@ from bot.texts.text_manager import translate
 
 logger = loguru.logger
 survey_router = Router()
-bot = Bot(os.environ.get("BOT_TOKEN"))
+bot = Bot(settings.BOT_TOKEN)
 
 
 async def send_daily_survey():
@@ -63,7 +63,7 @@ async def send_daily_survey():
                 await callback_query.message.delete()
 
 
-async def run_workout_scheduler() -> None:
+async def run() -> None:
     logger.debug("Starting workout scheduler...")
     scheduler = AsyncIOScheduler()
     scheduler.add_job(send_daily_survey, "cron", hour=9, minute=0)
