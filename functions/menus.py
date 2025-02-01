@@ -63,7 +63,8 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
     if profile.status == "client":
         try:
             questionnaire = cache_manager.get_client_by_id(profile.id)
-        except UserServiceError:
+        except UserServiceError as error:
+            logger.error(f"Error retrieving client profile for {profile.id}: {error}")
             questionnaire = None
         reply_markup = edit_client_profile(profile.language) if questionnaire else None
         await state.update_data(role="client")
@@ -71,7 +72,8 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
     else:
         try:
             questionnaire = cache_manager.get_coach_by_id(profile.id)
-        except UserServiceError:
+        except UserServiceError as error:
+            logger.error(f"Error retrieving coach profile for {profile.id}: {error}")
             questionnaire = None
         reply_markup = edit_coach_profile(profile.language) if questionnaire else None
         await state.update_data(role="coach")
@@ -163,15 +165,18 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
             if profile.status == "client"
             else cache_manager.get_coach_by_id(profile.id)
         )
-    except UserServiceError:
+    except UserServiceError as error:
+        logger.error(f"Error retrieving user data for profile {profile.id} (status: {profile.status}): {error}")
         await callback_query.answer()
         user_data = await profile_service.get_profile(profile.id)
 
         if user_data is None:
+            logger.warning(f"No user data found for profile {profile.id}, initiating profile creation.")
             await profiles.start_profile_creation(callback_query.message, profile, state)
             return
 
         if None in user_data.values():
+            logger.warning(f"Incomplete profile data for {profile.id}, initiating profile creation.")
             await profiles.start_profile_creation(callback_query.message, profile, state)
             return
 
@@ -211,7 +216,8 @@ async def my_clients_menu(callback_query: CallbackQuery, profile: Profile, state
     try:
         coach = cache_manager.get_coach_by_id(profile.id)
         assigned_ids = coach.assigned_to if coach.assigned_to else None
-    except UserServiceError:
+    except UserServiceError as error:
+        logger.error(f"Error retrieving coach data for profile {profile.id}: {error}")
         await callback_query.answer(translate(MessageText.coach_info_message, lang=profile.language), show_alert=True)
         return
 
@@ -219,11 +225,17 @@ async def my_clients_menu(callback_query: CallbackQuery, profile: Profile, state
         await callback_query.answer()
         try:
             clients = [cache_manager.get_client_by_id(client) for client in assigned_ids]
-        except UserServiceError:
+        except UserServiceError as error:
+            logger.error(f"Error retrieving client data for assigned IDs {assigned_ids}: {error}")
             clients = []
             for profile_id in assigned_ids:
-                if profile_data := await profile_service.get_profile(profile_id):
-                    clients.append(Client.from_dict(profile_data))
+                try:
+                    profile_data = await profile_service.get_profile(profile_id)
+                    if profile_data:
+                        clients.append(Client.from_dict(profile_data))
+                except Exception as e:
+                    logger.error(f"Error retrieving profile data for client {profile_id}: {e}")
+                    continue
         await show_clients(callback_query.message, clients, state)
     else:
         if not coach.verified:
@@ -238,7 +250,8 @@ async def my_clients_menu(callback_query: CallbackQuery, profile: Profile, state
 async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     try:
         client = cache_manager.get_client_by_id(profile.id)
-    except UserServiceError:
+    except UserServiceError as error:
+        logger.error(f"Error retrieving client data for profile {profile.id}: {error}")
         await callback_query.answer(
             translate(MessageText.questionnaire_not_completed, profile.language), show_alert=True
         )
@@ -259,7 +272,10 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
         )
 
     with suppress(TelegramBadRequest):
-        await callback_query.message.delete()
+        try:
+            await callback_query.message.delete()
+        except TelegramBadRequest as e:
+            logger.warning(f"Failed to delete message for callback {callback_query.id}: {e}")
 
 
 async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:

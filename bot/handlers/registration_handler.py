@@ -1,5 +1,6 @@
 from contextlib import suppress
 
+import loguru
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -20,6 +21,7 @@ from bot.texts.resources import MessageText
 from bot.texts.text_manager import translate
 
 register_router = Router()
+logger = loguru.logger
 
 
 @register_router.callback_query(States.language_choice)
@@ -175,13 +177,15 @@ async def accept_policy(callback_query: CallbackQuery, state: FSMContext) -> Non
     if callback_query.data == "yes":
         try:
             await register_user(callback_query, state, data)
-        except UsernameUnavailable:
+        except UsernameUnavailable as e:
+            logger.error(f"Username unavailable: {e.username}")
             await state.set_state(States.username)
             username_unavailable_message = await callback_query.message.answer(
                 text=translate(MessageText.username_unavailable, lang=lang)
             )
             await state.update_data(message_ids=[username_unavailable_message.message_id])
-        except EmailUnavailable:
+        except EmailUnavailable as e:
+            logger.error(f"Email unavailable: {e.email}")
             email_unavailable_message = await callback_query.message.answer(
                 text=translate(MessageText.email_unavailable, lang=lang)
             )

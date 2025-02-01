@@ -96,9 +96,10 @@ class CacheManager:
             if current_profiles:
                 return max(current_profiles, key=lambda p: p.last_used)
             else:
-                raise ProfileNotFoundError(f"No current profile found for user {telegram_id}")
+                raise ProfileNotFoundError(telegram_id)
         except Exception as e:
-            raise ProfileNotFoundError(f"Failed to get current profile for user {telegram_id}: {e}")
+            logger.error(f"Error while fetching profile for user {telegram_id}: {e}")
+            raise ProfileNotFoundError(telegram_id)
 
     def get_profiles(self, telegram_id: int) -> list[Profile]:
         return [Profile.from_dict(data) for data in self._get_profile_data(telegram_id)]
@@ -193,10 +194,16 @@ class CacheManager:
                 return Client.from_dict(data)
             else:
                 logger.debug(f"No client data found for client ID {profile_id}")
-                raise UserServiceError
+                raise UserServiceError(
+                    message="No client data found",
+                    code=404,
+                    details=f"Client ID: {profile_id} not found in Redis cache",
+                )
         except Exception as e:
-            logger.info(f"Failed to get client data for client ID {profile_id}: {e}")
-            raise UserServiceError
+            logger.error(f"Failed to get client data for client ID {profile_id}: {e}")
+            raise UserServiceError(
+                message="Failed to get client data", code=500, details=f"Error: {e}, Client ID: {profile_id}"
+            )
 
     def get_clients_to_survey(self) -> list[int]:
         try:
@@ -247,13 +254,16 @@ class CacheManager:
                 if "payment_details" in data:
                     data["payment_details"] = self.encrypter.decrypt(data["payment_details"])
                 return Coach.from_dict(data)
-
             else:
                 logger.debug(f"No data found for profile_id {profile_id} in cache")
-                raise UserServiceError
+                raise UserServiceError(
+                    message="No coach data found", code=404, details=f"Coach ID: {profile_id} not found in Redis cache"
+                )
         except Exception as e:
-            logger.info(f"Failed to get data for profile_id {profile_id} from cache: {e}")
-            raise UserServiceError
+            logger.error(f"Failed to get data for profile_id {profile_id} from cache: {e}")
+            raise UserServiceError(
+                message="Failed to get coach data", code=500, details=f"Error: {e}, Coach ID: {profile_id}"
+            )
 
     def set_program(self, client_id: int, program_data: dict) -> None:
         try:

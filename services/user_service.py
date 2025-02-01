@@ -19,11 +19,15 @@ class UserService(APIService):
         if status_code == 400 and "error" in response:
             error_message = response["error"]
             if error_message == "Username already exists":
-                raise UsernameUnavailable(response)
+                username = kwargs.get("username", "Unknown")
+                logger.error(f"Username {username} already exists.")
+                raise UsernameUnavailable(username)
             elif error_message == "This email already taken":
-                raise EmailUnavailable(response)
+                email = kwargs.get("email", "Unknown")
+                logger.error(f"Email {email} already taken.")
+                raise EmailUnavailable(email)
             else:
-                logger.error(f"Sign up failed with error: {error_message}")
+                logger.error(f"Sign up failed with error: {error_message}, response: {response}")
                 return False
 
         return status_code == 201
