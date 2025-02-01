@@ -20,21 +20,32 @@ class WorkoutService(APIService):
             "split_number": split_number,
             "wishes": wishes,
         }
-        status_code, response = await self._api_request(
-            "post", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
-        )
-        if status_code != 201:
-            logger.error(f"Failed to save program for client {client_id}: {response}")
-            raise UserServiceError(f"Failed to save program: {response}")
 
-        return dict(
-            id=response.get("id"),
-            split_number=split_number,
-            exercises_by_day=exercises,
-            created_at=response.get("created_at"),
-            client_profile=client_id,
-            wishes=wishes,
-        )
+        try:
+            status_code, response = await self._api_request(
+                "post", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
+            )
+
+            if status_code != 201:
+                logger.error(f"Failed to save program for client {client_id}: {response}")
+                raise UserServiceError(f"Failed to save program, received status {status_code}: {response}")
+
+            return dict(
+                id=response.get("id"),
+                split_number=split_number,
+                exercises_by_day=exercises,
+                created_at=response.get("created_at"),
+                client_profile=client_id,
+                wishes=wishes,
+            )
+
+        except UserServiceError as e:
+            logger.error(f"Error while saving program for client {client_id}: {str(e)}")
+            raise
+
+        except Exception as e:
+            logger.exception(f"Unexpected error while saving program for client {client_id}: {str(e)}")
+            raise UserServiceError(f"Unexpected error occurred while saving program: {str(e)}") from e
 
     async def update_program(self, program_id: int, data: dict) -> bool:
         url = urljoin(self.api_url, f"api/v1/programs/{program_id}/")

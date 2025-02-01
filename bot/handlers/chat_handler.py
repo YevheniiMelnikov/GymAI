@@ -68,10 +68,24 @@ async def contact_coach(message: Message, state: FSMContext):
 
     try:
         coach = cache_manager.get_coach_by_id(data.get("recipient_id"))
+        if not coach:
+            raise UserServiceError("Coach not found in cache", 404, f"recipient_id: {data.get('recipient_id')}")
+
         coach_profile = Profile.from_dict(await profile_service.get_profile(coach.id))
+        if not coach_profile:
+            raise UserServiceError("Coach profile not found", 404, f"coach_id: {coach.id}")
+
         client_name = cache_manager.get_client_by_id(profile.id).name
+        if not client_name:
+            raise UserServiceError("Client name not found", 404, f"profile_id: {profile.id}")
+
     except UserServiceError as error:
-        logger.error(f"Can't get data from cache: {error}")
+        logger.error(f"UserServiceError - {error}")
+        await message.answer(translate(MessageText.unexpected_error, profile.language))
+        await show_main_menu(message, profile, state)
+        return
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
         await message.answer(translate(MessageText.unexpected_error, profile.language))
         await show_main_menu(message, profile, state)
         return

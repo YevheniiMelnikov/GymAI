@@ -25,6 +25,7 @@ class APIService:
                     json_data = response.json()
                     return response.status_code, json_data
                 except JSONDecodeError:
+                    logger.warning(f"Failed to decode JSON from response for {url}")
                     return response.status_code, None
             else:
                 try:
@@ -40,6 +41,9 @@ class APIService:
                     )
 
                 return response.status_code, error_data
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error occurred: {e}")
+            raise UserServiceError(f"HTTP request failed with status {e.response.status_code}: {e}") from e
         except httpx.HTTPError as e:
             logger.exception("HTTP error occurred")
             raise UserServiceError(f"HTTP request failed: {e}") from e

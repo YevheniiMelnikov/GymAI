@@ -93,7 +93,11 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
 
     logger.info(f"Telegram user {message.from_user.id} logged in with profile_id {profile.id}")
     await state.update_data(login_attempts=0)
-    email = await user_service.get_user_email(profile.id)
+    try:
+        email = await user_service.get_user_email(profile.id)
+    except Exception as e:
+        logger.error(f"Error retrieving email for profile {profile.id}: {e}")
+        email = None
     cache_manager.set_profile(profile=profile, username=data["username"], telegram_id=message.from_user.id, email=email)
     await profile_service.reset_telegram_id(profile.id, message.from_user.id)
     logger.debug(f"profile_id {profile.id} set for user {message.from_user.id}")
@@ -119,7 +123,10 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
         profile.language = data.get("lang")
     await menus.show_main_menu(message, profile, state)
     with suppress(TelegramBadRequest):
-        await message.delete()
+        try:
+            await message.delete()
+        except TelegramBadRequest as e:
+            logger.warning(f"Failed to delete message for user {message.from_user.id}: {e}")
 
 
 async def register_user(callback_query: CallbackQuery, state: FSMContext, data: dict) -> None:
@@ -181,20 +188,29 @@ async def check_assigned_clients(profile_id: int) -> bool:
 async def get_or_load_profile(telegram_id: int) -> Profile | None:
     try:
         return cache_manager.get_current_profile(telegram_id)
-    except ProfileNotFoundError:
-        if profile_data := await profile_service.get_profile_by_telegram_id(telegram_id):
-            profile = Profile.from_dict(profile_data)
-            await profile_service.reset_telegram_id(profile.id, telegram_id)
-            user_data = profile_data.get("user", {})
-            cache_manager.set_profile(
-                profile=profile,
-                username=user_data.get("username", ""),
-                telegram_id=telegram_id,
-                email=user_data.get("email", ""),
-                is_current=True,
-            )
-            return profile
-        else:
+    except ProfileNotFoundError as e:
+        logger.error(f"Profile not found in cache for user {telegram_id}: {e}")
+
+        try:
+            if profile_data := await profile_service.get_profile_by_telegram_id(telegram_id):
+                profile = Profile.from_dict(profile_data)
+                await profile_service.reset_telegram_id(profile.id, telegram_id)
+                user_data = profile_data.get("user", {})
+
+                cache_manager.set_profile(
+                    profile=profile,
+                    username=user_data.get("username", ""),
+                    telegram_id=telegram_id,
+                    email=user_data.get("email", ""),
+                    is_current=True,
+                )
+                return profile
+            else:
+                logger.warning(f"No profile data found for user {telegram_id}")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error occurred while fetching profile for user {telegram_id} from database: {e}")
             return None
 
 
