@@ -10,7 +10,8 @@ class Settings:
     SUBSCRIBED_PAYMENT_STATUS: str = "subscribed"
     PAYMENT_STATUS_CLOSED: str = "CLOSED"
     PAYMENT_CHECK_INTERVAL: int = 60
-    SITE_NAME = "AchieveTogether"
+    SITE_NAME: str = "AchieveTogether"
+    DEFAULT_BOT_LANGUAGE: str = "ua"
 
     PAYMENT_PRIVATE_KEY: str = os.getenv("PAYMENT_PRIVATE_KEY")
     PAYMENT_PUB_KEY: str = os.getenv("PAYMENT_PUB_KEY")

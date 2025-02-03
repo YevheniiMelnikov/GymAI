@@ -5,6 +5,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage
 
+from bot.middlewares import ProfileMiddleware
 from common.settings import settings
 from schedulers import backup_scheduler, subscription_scheduler, workout_scheduler
 from core import payment_processor
@@ -17,6 +18,7 @@ logger = loguru.logger
 async def main() -> None:
     bot = Bot(token=settings.BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
     dp = Dispatcher(storage=RedisStorage.from_url(f"{settings.REDIS_URL}"))
+    dp.message.middleware.register(ProfileMiddleware())
     configure_routers(dp)
 
     await workout_scheduler.run()

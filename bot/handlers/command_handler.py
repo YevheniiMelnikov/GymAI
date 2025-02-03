@@ -11,8 +11,8 @@ from bot.keyboards import action_choice_keyboard, language_choice
 from bot.states import States
 from core.cache_manager import cache_manager
 from common.settings import settings
+from core.models import Profile
 from functions.menus import show_main_menu
-from functions.profiles import get_or_load_profile
 from services.user_service import user_service
 from bot.texts.resources import MessageText
 from bot.texts.text_manager import translate
@@ -23,10 +23,12 @@ cmd_router = Router()
 
 @cmd_router.message(Command("language"))
 async def cmd_language(message: Message, state: FSMContext) -> None:
-    if profile := await get_or_load_profile(message.from_user.id):
+    data = await state.get_data()
+    if profile := Profile.from_dict(data.get("profile", {})):
         lang = profile.language
     else:
-        lang = "ua"
+        lang = settings.DEFAULT_BOT_LANGUAGE
+
     await message.answer(text=translate(MessageText.choose_language, lang=lang), reply_markup=language_choice())
     await state.set_state(States.language_choice)
     with suppress(TelegramBadRequest):
@@ -35,7 +37,8 @@ async def cmd_language(message: Message, state: FSMContext) -> None:
 
 @cmd_router.message(Command("menu"))
 async def cmd_menu(message: Message, state: FSMContext) -> None:
-    if profile := await get_or_load_profile(message.from_user.id):
+    data = await state.get_data()
+    if profile := Profile.from_dict(data.get("profile", {})):
         await show_main_menu(message, profile, state)
     else:
         await state.set_state(States.language_choice)
@@ -49,7 +52,8 @@ async def cmd_menu(message: Message, state: FSMContext) -> None:
 async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
     await state.update_data(chat_id=message.chat.id)
-    if profile := await get_or_load_profile(message.from_user.id):
+    data = await state.get_data()
+    if profile := Profile.from_dict(data.get("profile", {})):
         logger.info(f"User with profile_id {profile.id} started bot")
         auth_token = await user_service.get_user_token(profile.id)
         await user_service.log_out(profile, auth_token)
@@ -79,7 +83,8 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
 @cmd_router.message(Command("logout"))
 async def cmd_logout(message: Message, state: FSMContext) -> None:
     await state.clear()
-    if profile := await get_or_load_profile(message.from_user.id):
+    data = await state.get_data()
+    if profile := Profile.from_dict(data.get("profile", {})):
         language = profile.language if profile.language else "ua"
         auth_token = await user_service.get_user_token(profile.id)
         await user_service.log_out(profile, auth_token)
@@ -98,16 +103,18 @@ async def cmd_logout(message: Message, state: FSMContext) -> None:
 
 
 @cmd_router.message(Command("help"))
-async def cmd_help(message: Message) -> None:
-    profile = await get_or_load_profile(message.from_user.id)
-    language = profile.language if profile else "ua"
+async def cmd_help(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    profile = Profile.from_dict(data.get("profile", {}))
+    language = profile.language if profile else settings.DEFAULT_BOT_LANGUAGE
     await message.answer(text=translate(MessageText.help, lang=language))
 
 
 @cmd_router.message(Command("feedback"))
 async def cmd_feedback(message: Message, state: FSMContext) -> None:
-    profile = await get_or_load_profile(message.from_user.id)
-    language = profile.language if profile else "ua"
+    data = await state.get_data()
+    profile = Profile.from_dict(data.get("profile", {}))
+    language = profile.language if profile else settings.DEFAULT_BOT_LANGUAGE
     await message.answer(text=translate(MessageText.feedback, lang=language))
     await state.set_state(States.feedback)
     with suppress(TelegramBadRequest):
@@ -121,7 +128,7 @@ async def cmd_reset_password(message: Message, state: FSMContext) -> None:
         usernames = [
             cache_manager.get_profile_info_by_key(message.from_user.id, profile.id, "username") for profile in profiles
         ]
-        language = profiles[0].language if profiles[0].language else "ua"
+        language = profiles[0].language if profiles[0].language else settings.DEFAULT_BOT_LANGUAGE
         await state.update_data(
             lang=language, profiles=[profile.to_dict() for profile in profiles], usernames=usernames
         )
@@ -136,13 +143,12 @@ async def cmd_reset_password(message: Message, state: FSMContext) -> None:
 
 
 @cmd_router.message(Command("offer"))
-async def cmd_policy(message: Message) -> None:
-    if profile := await get_or_load_profile(message.from_user.id):
-        language = profile.language
-    else:
-        language = "ua"
+async def cmd_policy(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    profile = Profile.from_dict(data.get("profile", {}))
+    lang = profile.language if profile else settings.DEFAULT_BOT_LANGUAGE
     await message.answer(
-        translate(MessageText.contract_info_message, language).format(
+        translate(MessageText.contract_info_message, lang).format(
             public_offer=settings.PUBLIC_OFFER,
             privacy_policy=settings.PRIVACY_POLICY,
         ),
@@ -154,12 +160,11 @@ async def cmd_policy(message: Message) -> None:
 
 @cmd_router.message(Command("info"))
 async def cmd_info(message: Message, state: FSMContext) -> None:
-    if profile := await get_or_load_profile(message.from_user.id):
-        language = profile.language
-    else:
-        language = "ua"
+    data = await state.get_data()
+    profile = Profile.from_dict(data.get("profile", {}))
+    lang = profile.language if profile else settings.DEFAULT_BOT_LANGUAGE
     await message.answer(
-        translate(MessageText.info, language).format(
+        translate(MessageText.info, lang).format(
             offer=settings.PUBLIC_OFFER, email=settings.DEFAULT_FROM_EMAIL, tg=settings.TG_SUPPORT_CONTACT
         ),
         disable_web_page_preview=True,

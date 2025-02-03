@@ -3,6 +3,7 @@ import os
 import yaml
 
 from bot.texts.resources import ButtonText, MessageText
+from common.settings import settings
 
 ResourceType = str | MessageText | ButtonText
 
@@ -55,7 +56,5 @@ class TextManager:
 resource_manager = TextManager()
 
 
-def translate(key: ResourceType, lang: str | None = "ua") -> str | None:
-    if lang is None:
-        lang = "ua"
+def translate(key: ResourceType, lang: str | None = settings.DEFAULT_BOT_LANGUAGE) -> str | None:
     return resource_manager.get_text(key, lang)
