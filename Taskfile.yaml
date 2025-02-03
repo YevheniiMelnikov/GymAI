@@ -21,7 +21,7 @@ tasks:
     cmds:
       - docker compose down
 
-  lint:
+  check:
     desc: Run linters
     cmds:
       - ruff check --fix --config=pyproject.toml

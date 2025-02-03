@@ -1,15 +1,23 @@
 import sys
-
 from loguru import logger
-
-from common.settings import settings
 
 logger.configure(
     handlers=[
         {
             "sink": sys.stdout,
-            "level": f"{settings.DEBUG_LEVEL}",
-            "format": "{time:YYYY-MM-DD HH:mm:ss} - {level} - {message}",
-        }
+            "level": "DEBUG",
+            "format": "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",  # noqa
+            "colorize": True,
+        },
+        {
+            "sink": "gym_bot.log",
+            "level": "DEBUG",
+            "serialize": True,
+            "format": "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} - {message}",
+            "rotation": "100 MB",
+            "retention": "30 days",
+            "compression": "zip",
+            "enqueue": True,
+        },
     ]
 )
