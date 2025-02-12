@@ -100,7 +100,7 @@ exercise_dict = {
     "dumbbell_pullover.gif": [
         "dumbbell pullover",
         "пуловер с гантелью",
-        "пуловер с гантелей" "пуловер з гантелею",
+        "пуловер с гантелейпуловер з гантелею",
     ],
     "dumbbell_shrugs.gif": [
         "dumbbell shrugs",
@@ -175,7 +175,7 @@ exercise_dict = {
         "incline push ups",
         "отжимания в наклоне",
         "віджимання на нахилі",
-        "отжимания под углом" "віджимання під кутом",
+        "отжимания под угломвіджимання під кутом",
     ],
     "leg_abduction.gif": [
         "leg abduction",

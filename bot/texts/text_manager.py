@@ -3,6 +3,7 @@ import os
 import yaml
 
 from bot.texts.resources import ButtonText, MessageText
+from common.settings import settings
 
 ResourceType = str | MessageText | ButtonText
 
@@ -23,39 +24,53 @@ else:
 
 class TextManager:
     def __init__(self) -> None:
-        self.messages = self.load_messages()
-        self.commands = self.load_commands()
+        self.messages = {}
+        self.buttons = {}
+        self.commands = {}
+        self.load_resources()
 
-    def get_text(self, key: ResourceType, lang: str | None = "eng") -> str | None:
+    def load_resources(self) -> None:
+        for resource_type, path in RESOURCES.items():
+            with open(path, "r", encoding="utf-8") as file:
+                data = yaml.safe_load(file)
+                if resource_type == "messages":
+                    self.messages = data
+                elif resource_type == "buttons":
+                    self.buttons = data
+                elif resource_type == "commands":
+                    self.commands = data
+
+    def get_message(self, key: str, lang: str | None) -> str:
+        lang = lang or settings.DEFAULT_BOT_LANGUAGE
+        try:
+            return self.messages[key][lang]
+        except KeyError as e:
+            raise ValueError(f"Message key '{key}' ({lang}) not found") from e
+
+    def get_button(self, key: str, lang: str | None) -> str:
+        lang = lang or settings.DEFAULT_BOT_LANGUAGE
+        try:
+            return self.buttons[key][lang]
+        except KeyError as e:
+            raise ValueError(f"Button key '{key}' ({lang}) not found") from e
+
+    def get_text(self, key: ResourceType, lang: str | None = "eng") -> str | None:  # TODO: REMOVE
         if str(key) in self.messages:
             return self.messages[str(key)][lang]
         else:
             raise ValueError(f"Key {key.name} not found")
 
-    @staticmethod
-    def load_messages() -> dict[str, dict[str, str]]:
-        result = {}
-        for type, path in RESOURCES.items():
-            with open(path, "r", encoding="utf-8") as file:
-                data = yaml.safe_load(file)
-            for key, value in data.items():
-                result[f"{type}.{key}"] = value
-        return result
-
-    @staticmethod
-    def load_commands() -> dict[str, dict[str, str]]:
-        result = {}
-        with open(RESOURCES["commands"], "r", encoding="utf-8") as file:
-            data = yaml.safe_load(file)
-            for key, value in data.items():
-                result[key] = value
-        return result
-
 
 resource_manager = TextManager()
 
 
-def translate(key: ResourceType, lang: str | None = "ua") -> str | None:
-    if lang is None:
-        lang = "ua"
+def msg_text(key: str, lang: str | None) -> str:
+    return resource_manager.get_message(key, lang)
+
+
+def btn_text(key: str, lang: str | None) -> str:
+    return resource_manager.get_button(key, lang)
+
+
+def translate(key: ResourceType, lang: str | None) -> str | None:  # TODO: REMOVE
     return resource_manager.get_text(key, lang)

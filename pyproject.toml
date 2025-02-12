@@ -1,8 +1,8 @@
 [tool.poetry]
-name = "gymbot"
+name = "GymBot"
 version = "0.1.0"
 description = ""
-authors = ["Yevhenii Melnykov <yevhenii.melnykov@codeit.local>"]
+authors = ["Yevhenii Melnykov <evgeniy@workmail.com>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
@@ -35,7 +35,7 @@ django-jazzmin = "^3.0.1"
 pre-commit = "^4.1.0"
 
 [tool.poetry.group.dev.dependencies]
-ruff = "^0.6.3"
+ruff = "^0.9.4"
 pytest = "^8.3.2"
 pre-commit = "^4.0.1"
 
