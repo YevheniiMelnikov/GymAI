@@ -16,20 +16,23 @@ logger = loguru.logger
 
 
 async def main() -> None:
-    bot = Bot(token=settings.BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
-    dp = Dispatcher(storage=RedisStorage.from_url(f"{settings.REDIS_URL}"))
-    dp.message.middleware.register(ProfileMiddleware())
-    configure_routers(dp)
+    try:
+        bot = Bot(token=settings.BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
+        dp = Dispatcher(storage=RedisStorage.from_url(f"{settings.REDIS_URL}"))
+        dp.message.middleware.register(ProfileMiddleware())
+        configure_routers(dp)
 
-    await workout_scheduler.run()
-    await backup_scheduler.run()
-    await subscription_scheduler.run()
-    payment_processor.run()
+        await workout_scheduler.run()
+        await backup_scheduler.run()
+        await subscription_scheduler.run()
+        payment_processor.run()
 
-    logger.info("Starting bot ...")
-    await bot.delete_webhook(drop_pending_updates=True)
-    await set_bot_commands()
-    await dp.start_polling(bot)
+        logger.info("Starting bot ...")
+        await bot.delete_webhook(drop_pending_updates=True)
+        await set_bot_commands()
+        await dp.start_polling(bot)
+    except Exception as e:
+        logger.critical(f"Error while starting bot: {e}")
 
 
 if __name__ == "__main__":
