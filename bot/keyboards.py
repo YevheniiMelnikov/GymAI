@@ -1,404 +1,414 @@
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton as Btn
+from aiogram.types import InlineKeyboardButton as KbBtn
+from aiogram.types import InlineKeyboardMarkup as KbMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from bot.buttons_builder import ButtonsBuilder
 from bot.texts.text_manager import btn_text
 
 
-def select_language_kb() -> InlineKeyboardMarkup:
+def select_language_kb() -> KbMarkup:
     buttons = [
-        [Btn(text="UA", callback_data="ua")],
-        [Btn(text="ENG", callback_data="eng")],
-        [Btn(text="RU", callback_data="ru")],
+        [KbBtn(text="UA", callback_data="ua")],
+        [KbBtn(text="ENG", callback_data="eng")],
+        [KbBtn(text="RU", callback_data="ru")],
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def select_gender_kb(lang: str) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardBuilder()
-    kb.button(text=btn_text("male", lang), callback_data="male")
-    kb.button(text=btn_text("female", lang), callback_data="female")
-    return kb.as_markup(one_time_keyboard=True)
-
-
-def select_role_kb(lang: str) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardBuilder()
-    kb.button(text=btn_text("client", lang), callback_data="client")
-    kb.button(text=btn_text("coach", lang), callback_data="coach")
-    return kb.as_markup(one_time_keyboard=True)
-
-
-def client_menu_kb(lang: str) -> InlineKeyboardMarkup:
+def client_menu_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
-        [Btn(text=btn_text("my_profile", lang), callback_data="my_profile")],
-        [Btn(text=btn_text("my_program", lang), callback_data="my_workouts")],
-        [Btn(text=btn_text("feedback", lang), callback_data="feedback")],
-        [Btn(text=btn_text("logout", lang), callback_data="logout")],
+        [builder.add("my_profile", "my_profile")],
+        [builder.add("my_program", "my_workouts")],
+        [builder.add("feedback", "feedback")],
+        [builder.add("logout", "logout")],
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def coach_menu_kb(lang: str) -> InlineKeyboardMarkup:
+def coach_menu_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
-        [Btn(text=btn_text("my_profile", lang), callback_data="my_profile")],
-        [Btn(text=btn_text("my_clients", lang), callback_data="my_clients")],
-        [Btn(text=btn_text("feedback", lang), callback_data="feedback")],
-        [Btn(text=btn_text("logout", lang), callback_data="logout")],
+        [builder.add("my_profile", "my_profile")],
+        [builder.add("my_clients", "my_clients")],
+        [builder.add("feedback", "feedback")],
+        [builder.add("logout", "logout")],
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def action_choice_kb(lang: str) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardBuilder()
-    kb.button(text=btn_text("sign_in", lang), callback_data="sign_in")
-    kb.button(text=btn_text("sign_up", lang), callback_data="sign_up")
-    return kb.as_markup(one_time_keyboard=True)
+def action_choice_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [
+        [builder.add("sign_in", "sign_in")],
+        [builder.add("sign_up", "sign_up")],
+    ]
+    return KbMarkup(inline_keyboard=buttons)
 
 
-def profile_menu_kb(lang: str) -> InlineKeyboardMarkup:
+def select_gender_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [
+        [builder.add("male", "male")],
+        [builder.add("female", "female")],
+    ]
+    return KbMarkup(inline_keyboard=buttons)
+
+
+def select_role_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [
+        [builder.add("client", "client")],
+        [builder.add("coach", "coach")],
+    ]
+    return KbMarkup(inline_keyboard=buttons)
+
+
+def profile_menu_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
         [
-            Btn(text=btn_text("edit", lang), callback_data="profile_edit"),
-            Btn(text=btn_text("delete", lang), callback_data="profile_delete"),
+            builder.add("edit", "profile_edit"),
+            builder.add("delete", "profile_delete"),
         ],
-        [
-            Btn(text=btn_text("prev_menu", lang), callback_data="back"),
-        ],
+        [builder.add("prev_menu", "back")],
     ]
+    return KbMarkup(inline_keyboard=buttons)
 
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
 
-
-def edit_client_profile_kb(lang: str) -> InlineKeyboardMarkup:
+def edit_client_profile_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
-        [Btn(text=btn_text("workout_experience", lang), callback_data="workout_experience")],
-        [Btn(text=btn_text("workout_goals", lang), callback_data="workout_goals")],
-        [Btn(text=btn_text("health_notes", lang), callback_data="health_notes")],
-        [Btn(text=btn_text("weight", lang), callback_data="weight")],
-        [Btn(text=btn_text("prev_menu", lang), callback_data="back")],
+        [builder.add("workout_experience", "workout_experience")],
+        [builder.add("workout_goals", "workout_goals")],
+        [builder.add("health_notes", "health_notes")],
+        [builder.add("weight", "weight")],
+        [builder.add("prev_menu", "back")],
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def edit_coach_profile_kb(lang: str) -> InlineKeyboardMarkup:
+def edit_coach_profile_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
-        [Btn(text=btn_text("work_experience", lang), callback_data="work_experience")],
-        [Btn(text=btn_text("additional_info", lang), callback_data="additional_info")],
-        [Btn(text=btn_text("payment_details", lang), callback_data="payment_details")],
-        [Btn(text=btn_text("program_price", lang), callback_data="program_price")],
-        [Btn(text=btn_text("subscription_price", lang), callback_data="subscription_price")],
-        [Btn(text=btn_text("photo", lang), callback_data="photo")],
-        [Btn(text=btn_text("prev_menu", lang), callback_data="back")],
+        [builder.add("work_experience", "work_experience")],
+        [builder.add("additional_info", "additional_info")],
+        [builder.add("payment_details", "payment_details")],
+        [builder.add("program_price", "program_price")],
+        [builder.add("subscription_price", "subscription_price")],
+        [builder.add("photo", "photo")],
+        [builder.add("prev_menu", "back")],
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def workout_experience_kb(lang: str) -> InlineKeyboardMarkup:
+def workout_experience_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
-        [Btn(text=btn_text("beginner", lang), callback_data="0-1")],
-        [Btn(text=btn_text("intermediate", lang), callback_data="1-3")],
-        [Btn(text=btn_text("advanced", lang), callback_data="3-5")],
-        [Btn(text=btn_text("experienced", lang), callback_data="5+")],
+        [builder.add("beginner", "0-1")],
+        [builder.add("intermediate", "1-3")],
+        [builder.add("advanced", "3-5")],
+        [builder.add("experienced", "5+")],
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def new_coach_kb(profile_id: int) -> InlineKeyboardMarkup:
+def new_coach_kb(profile_id: int) -> KbMarkup:
+    # Using InlineKeyboardBuilder directly since texts are emojis
     kb = InlineKeyboardBuilder()
     kb.button(text="👍", callback_data=f"approve_{profile_id}")
     kb.button(text="👎", callback_data=f"decline_{profile_id}")
     return kb.as_markup(one_time_keyboard=True)
 
 
-def choose_coach_kb(lang: str) -> InlineKeyboardMarkup:
+def choose_coach_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
-        [Btn(text=btn_text("choose_coach", lang), callback_data="choose_coach")],
-        [
-            Btn(text=btn_text("prev_menu", lang), callback_data="back"),
-        ],
+        [builder.add("choose_coach", "choose_coach")],
+        [builder.add("prev_menu", "back")],
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
+    return KbMarkup(inline_keyboard=buttons)
 
 
-def coach_select_kb(lang: str, coach_id: int, current_index: int) -> InlineKeyboardMarkup:
+def coach_select_kb(lang: str, coach_id: int, current_index: int) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
-        [Btn(text=btn_text("select", lang), callback_data=f"selected_{coach_id}")],
+        [builder.add("select", f"selected_{coach_id}")],
         [
-            Btn(text=btn_text("back", lang), callback_data=f"prev_{current_index - 1}"),
-            Btn(text=btn_text("forward", lang), callback_data=f"next_{current_index + 1}"),
+            builder.add("back", f"prev_{current_index - 1}"),
+            builder.add("forward", f"next_{current_index + 1}"),
         ],
-        [Btn(text=btn_text("prev_menu", lang), callback_data="quit")],
+        [builder.add("prev_menu", "quit")],
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
+    return KbMarkup(inline_keyboard=buttons)
 
 
-def client_select_kb(lang: str, client_id: int, current_index: int) -> InlineKeyboardMarkup:
+def client_select_kb(lang: str, client_id: int, current_index: int) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
         [
-            Btn(text=btn_text("back", lang), callback_data=f"prev_{current_index - 1}"),
-            Btn(text=btn_text("forward", lang), callback_data=f"next_{current_index + 1}"),
+            builder.add("back", f"prev_{current_index - 1}"),
+            builder.add("forward", f"next_{current_index + 1}"),
         ],
-        [Btn(text=btn_text("program", lang), callback_data=f"program_{client_id}")],
-        [Btn(text=btn_text("subscription", lang), callback_data=f"subscription_{client_id}")],
-        [
-            Btn(text=btn_text("contact_client", lang), callback_data=f"contact_{client_id}"),
-        ],
-        [Btn(text=btn_text("prev_menu", lang), callback_data="back")],
+        [builder.add("program", f"program_{client_id}")],
+        [builder.add("subscription", f"subscription_{client_id}")],
+        [builder.add("contact_client", f"contact_{client_id}")],
+        [builder.add("prev_menu", "back")],
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
+    return KbMarkup(inline_keyboard=buttons)
 
 
-def new_message_kb(lang: str, profile_id: int) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardBuilder()
-    kb.button(text=btn_text("answer", lang), callback_data=f"answer_{profile_id}")
-    kb.button(text=btn_text("quit", lang), callback_data="quit")
-    return kb.as_markup(one_time_keyboard=True)
-
-
-def select_service_kb(lang: str) -> InlineKeyboardMarkup:
+def new_message_kb(lang: str, profile_id: int) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
-        [Btn(text=btn_text("subscription", lang), callback_data="subscription")],
-        [Btn(text=btn_text("program", lang), callback_data="program")],
-        [Btn(text=btn_text("prev_menu", lang), callback_data="back")],
+        [builder.add("answer", f"answer_{profile_id}")],
+        [builder.add("quit", "quit")],
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+    return KbMarkup(inline_keyboard=buttons)
 
 
-def program_manage_kb(lang: str, workouts_per_week: int) -> InlineKeyboardMarkup:
+def select_service_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [
+        [builder.add("subscription", "subscription")],
+        [builder.add("program", "program")],
+        [builder.add("prev_menu", "back")],
+    ]
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
+def program_manage_kb(lang: str, workouts_per_week: int) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
         [
-            Btn(text=btn_text("save", lang), callback_data="save"),
-            Btn(text=btn_text("reset_program", lang), callback_data="reset"),
+            builder.add("save", "save"),
+            builder.add("reset_program", "reset"),
         ]
     ]
-
     if workouts_per_week > 1:
-        buttons.append([Btn(text=btn_text("next_day", lang), callback_data="add_next_day")])
+        buttons.append([builder.add("next_day", "add_next_day")])
+    buttons.append([builder.add("quit", "quit")])
+    return KbMarkup(inline_keyboard=buttons)
 
-    buttons.append([Btn(text=btn_text("quit", lang), callback_data="quit")])
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
 
-
-def choose_payment_options_kb(lang: str, option: str) -> InlineKeyboardMarkup:
+def choose_payment_options_kb(lang: str, option: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
-        [
-            Btn(text=btn_text("select", lang), callback_data=f"select_{option}"),
-        ],
-        [
-            Btn(text=btn_text("prev_menu", lang), callback_data="back"),
-        ],
+        [builder.add("select", f"select_{option}")],
+        [builder.add("prev_menu", "back")],
     ]
-
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
-
-
-def client_msg_bk(lang: str, client_id: int) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardBuilder()
-    kb.button(text=btn_text("answer", lang), callback_data=f"answer_{client_id}")
-    kb.button(text=btn_text("later", lang), callback_data="later")
-    return kb.as_markup(one_time_keyboard=True)
+    return KbMarkup(inline_keyboard=buttons)
 
 
-def incoming_request_kb(lang: str, service: str, client_id: int) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardBuilder()
-    kb.button(text=btn_text("create", lang), callback_data=f"create_{service}_{client_id}")
-    kb.button(text=btn_text("later", lang), callback_data="later")
-    return kb.as_markup(one_time_keyboard=True)
-
-
-def gift_kb(lang: str) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardBuilder()
-    kb.button(text=btn_text("get", lang), callback_data="get")
-    return kb.as_markup(one_time_keyboard=True)
-
-
-def workout_type_kb(lang: str) -> InlineKeyboardMarkup:
+def client_msg_bk(lang: str, client_id: int) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
-        [Btn(text=btn_text("gym_workout", lang), callback_data="gym")],
-        [Btn(text=btn_text("home_workout", lang), callback_data="home")],
-        [Btn(text=btn_text("street_workout", lang), callback_data="street")],
+        [builder.add("answer", f"answer_{client_id}")],
+        [builder.add("later", "later")],
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+    return KbMarkup(inline_keyboard=buttons)
 
 
-def select_days_kb(lang: str, selected_days: list) -> InlineKeyboardMarkup:
-    days_of_week = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+def incoming_request_kb(lang: str, service: str, client_id: int) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [
+        [builder.add("create", f"create_{service}_{client_id}")],
+        [builder.add("later", "later")],
+    ]
+    return KbMarkup(inline_keyboard=buttons)
+
+
+def gift_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [[builder.add("get", "get")]]
+    return KbMarkup(inline_keyboard=buttons)
+
+
+def workout_type_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [
+        [builder.add("gym_workout", "gym")],
+        [builder.add("home_workout", "home")],
+        [builder.add("street_workout", "street")],
+    ]
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
+def select_days_kb(lang: str, selected_days: list) -> KbMarkup:
+    from bot.texts.text_manager import btn_text
+
     buttons = []
-
+    days_of_week = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
     for day in days_of_week:
-        text = f"✔️ {btn_text(day, lang)}" if day in selected_days else btn_text(day, lang)
-        buttons.append([Btn(text=text, callback_data=day)])
-
-    complete_button = [Btn(text=btn_text("save", lang), callback_data="complete")]
+        raw_text = btn_text(day, lang)
+        text = f"✔️ {raw_text}" if day in selected_days else raw_text
+        buttons.append([KbBtn(text=text, callback_data=day)])
+    builder = ButtonsBuilder(lang)
+    complete_button = [builder.add("save", "complete")]
     buttons.append(complete_button)
+    return KbMarkup(inline_keyboard=buttons)
 
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-
-def program_view_kb(lang: str) -> InlineKeyboardMarkup:
+def program_view_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
         [
-            Btn(text=btn_text("back", lang), callback_data="previous"),
-            Btn(text=btn_text("forward", lang), callback_data="next"),
+            builder.add("back", "previous"),
+            builder.add("forward", "next"),
         ],
-        [Btn(text=btn_text("quit", lang), callback_data="quit")],
+        [
+            builder.add("quit", "quit"),
+        ],
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def workout_survey_kb(lang: str, day: str) -> InlineKeyboardMarkup:
+def workout_survey_kb(lang: str, day: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
         [
-            Btn(text=btn_text("answer_yes", lang), callback_data=f"yes_{day}"),
-            Btn(text=btn_text("answer_no", lang), callback_data=f"no_{day}"),
+            builder.add("answer_yes", f"yes_{day}"),
+            builder.add("answer_no", f"no_{day}"),
         ]
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=2)
+    return KbMarkup(inline_keyboard=buttons, row_width=2)
 
 
-def workout_results_kb(lang: str) -> InlineKeyboardMarkup:
+def workout_results_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
         [
-            Btn(text=btn_text("answer_yes", lang), callback_data="completed"),
-            Btn(text=btn_text("answer_no", lang), callback_data="not_completed"),
-        ],
+            builder.add("answer_yes", "completed"),
+            builder.add("answer_no", "not_completed"),
+        ]
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
+    return KbMarkup(inline_keyboard=buttons)
 
 
-def sets_number_kb() -> InlineKeyboardMarkup:
+def sets_number_kb() -> KbMarkup:
     buttons = [
-        [Btn(text="1", callback_data="1"), Btn(text="2", callback_data="2")],
-        [Btn(text="3", callback_data="3"), Btn(text="4", callback_data="4")],
-        [Btn(text="5", callback_data="5")],
+        [KbBtn(text="1", callback_data="1"), KbBtn(text="2", callback_data="2")],
+        [KbBtn(text="3", callback_data="3"), KbBtn(text="4", callback_data="4")],
+        [KbBtn(text="5", callback_data="5")],
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=2)
+    return KbMarkup(inline_keyboard=buttons, row_width=2)
 
 
-def reps_number_kb() -> InlineKeyboardMarkup:
-    buttons = [
-        [
-            Btn(text="1-3", callback_data="1-3"),
-            Btn(text="3-5", callback_data="3-5"),
-            Btn(text="5-8", callback_data="5-8"),
-            Btn(text="8-10", callback_data="8-10"),
-        ],
-        [
-            Btn(text="12-15", callback_data="12-15"),
-            Btn(text="15-20", callback_data="15-20"),
-            Btn(text="20-30", callback_data="20-30"),
-            Btn(text="30+", callback_data="30+"),
-        ],
-    ]
-
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=2)
-
-
-def workout_feedback_kb(lang: str, client_id: int, day: str) -> InlineKeyboardMarkup:
+def reps_number_kb() -> KbMarkup:
     buttons = [
         [
-            Btn(text=btn_text("contact_client", lang), callback_data=f"answer_{client_id}"),
-            Btn(text=btn_text("edit", lang), callback_data=f"edit_{client_id}_{day}"),
+            KbBtn(text="1-3", callback_data="1-3"),
+            KbBtn(text="3-5", callback_data="3-5"),
+            KbBtn(text="5-8", callback_data="5-8"),
+            KbBtn(text="8-10", callback_data="8-10"),
         ],
-        [Btn(text=btn_text("quit", lang), callback_data="quit")],
+        [
+            KbBtn(text="12-15", callback_data="12-15"),
+            KbBtn(text="15-20", callback_data="15-20"),
+            KbBtn(text="20-30", callback_data="20-30"),
+            KbBtn(text="30+", callback_data="30+"),
+        ],
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True)
+    return KbMarkup(inline_keyboard=buttons, row_width=2)
 
 
-def program_edit_kb(lang: str) -> InlineKeyboardMarkup:
+def workout_feedback_kb(lang: str, client_id: int, day: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
         [
-            Btn(text=btn_text("back", lang), callback_data="prev_day"),
-            Btn(text=btn_text("forward", lang), callback_data="next_day"),
+            builder.add("contact_client", f"answer_{client_id}"),
+            builder.add("edit", f"edit_{client_id}_{day}"),
         ],
-        [Btn(text=btn_text("add_exercise", lang), callback_data="exercise_add")],
-        [Btn(text=btn_text("edit_exercise", lang), callback_data="exercise_edit")],
-        [Btn(text=btn_text("delete_exercise", lang), callback_data="exercise_delete")],
         [
-            Btn(text=btn_text("save", lang), callback_data="finish_editing"),
-            Btn(text=btn_text("reset_program", lang), callback_data="reset"),
+            builder.add("quit", "quit"),
         ],
-        [Btn(text=btn_text("prev_menu", lang), callback_data="quit")],
     ]
+    return KbMarkup(inline_keyboard=buttons)
 
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
-
-def show_subscriptions_kb(lang: str) -> InlineKeyboardMarkup:
+def program_edit_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
-        [Btn(text=btn_text("exercises", lang), callback_data="exercises")],
-        [Btn(text=btn_text("contact_coach", lang), callback_data="contact")],
-        [Btn(text=btn_text("edit_days", lang), callback_data="change_days")],
-        [Btn(text=btn_text("cancel_subscription", lang), callback_data="cancel")],
-        [Btn(text=btn_text("prev_menu", lang), callback_data="back")],
+        [builder.add("back", "prev_day"), builder.add("forward", "next_day")],
+        [builder.add("add_exercise", "exercise_add")],
+        [builder.add("edit_exercise", "exercise_edit")],
+        [builder.add("delete_exercise", "exercise_delete")],
+        [builder.add("save", "finish_editing"), builder.add("reset_program", "reset")],
+        [builder.add("prev_menu", "quit")],
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+    return KbMarkup(inline_keyboard=buttons)
 
 
-def select_exercise_kb(exercises: list[dict]) -> InlineKeyboardMarkup:
+def show_subscriptions_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [
+        [builder.add("exercises", "exercises")],
+        [builder.add("contact_coach", "contact")],
+        [builder.add("edit_days", "change_days")],
+        [builder.add("cancel_subscription", "cancel")],
+        [builder.add("prev_menu", "back")],
+    ]
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
+def select_exercise_kb(exercises: list[dict]) -> KbMarkup:
     buttons = []
     for index, exercise in enumerate(exercises):
-        buttons.append([Btn(text=exercise.get("name"), callback_data=str(index))])
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+        buttons.append([KbBtn(text=exercise.get("name"), callback_data=str(index))])
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def edit_exercise_data_kb(lang: str) -> InlineKeyboardMarkup:
+def edit_exercise_data_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
-        [Btn(text=btn_text("sets", lang), callback_data="sets")],
-        [Btn(text=btn_text("reps", lang), callback_data="reps")],
-        [Btn(text=btn_text("weight", lang), callback_data="weight")],
+        [builder.add("sets", "sets")],
+        [builder.add("reps", "reps")],
+        [builder.add("weight", "weight")],
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def subscription_manage_kb(lang: str) -> InlineKeyboardMarkup:
+def subscription_manage_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
-        [
-            Btn(text=btn_text("back", lang), callback_data="prev_day"),
-            Btn(text=btn_text("forward", lang), callback_data="next_day"),
-        ],
-        [Btn(text=btn_text("edit", lang), callback_data="edit")],
-        [Btn(text=btn_text("prev_menu", lang), callback_data="back")],
+        [builder.add("back", "prev_day"), builder.add("forward", "next_day")],
+        [builder.add("edit", "edit")],
+        [builder.add("prev_menu", "back")],
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def subscription_view_kb(lang: str) -> InlineKeyboardMarkup:
+def subscription_view_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
-        [Btn(text=btn_text("view", lang), callback_data="subscription_view")],
-        [Btn(text=btn_text("later", lang), callback_data="later")],
+        [builder.add("view", "subscription_view")],
+        [builder.add("later", "later")],
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def yes_no_kb(lang: str) -> InlineKeyboardMarkup:
+def yes_no_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
     buttons = [
-        [
-            Btn(text=btn_text("answer_yes", lang), callback_data="yes"),
-            Btn(text=btn_text("answer_no", lang), callback_data="no"),
-        ],
+        [builder.add("answer_yes", "yes"), builder.add("answer_no", "no")],
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def payment_kb(lang: str, link: str, request_type: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                Btn(text=btn_text("pay", lang), callback_data=request_type, url=link),
-                Btn(text=btn_text("done", lang), callback_data="done"),
-            ],
-            [
-                Btn(text=btn_text("prev_menu", lang), callback_data="back"),
-            ],
-        ]
-    )
-
-
-def program_action_kb(lang: str) -> InlineKeyboardMarkup:
+def payment_kb(lang: str, link: str, request_type: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    pay_button = KbBtn(text=btn_text("pay", lang), callback_data=request_type, url=link)
+    done_button = builder.add("done", "done")
     buttons = [
-        [
-            Btn(text=btn_text("view", lang), callback_data="show_old"),
-            Btn(text=btn_text("new_program", lang), callback_data="new_program"),
-        ],
+        [pay_button, done_button],
+        [builder.add("prev_menu", "back")],
     ]
-    return InlineKeyboardMarkup(inline_keyboard=buttons, one_time_keyboard=True, row_width=1)
+    return KbMarkup(inline_keyboard=buttons)
+
+
+def program_action_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [
+        [builder.add("view", "show_old"), builder.add("new_program", "new_program")],
+    ]
+    return KbMarkup(inline_keyboard=buttons, row_width=1)

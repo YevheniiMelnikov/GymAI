@@ -53,16 +53,16 @@ class CreateUserView(APIView):
         try:
             with transaction.atomic():
                 user = User.objects.create_user(username=username, email=email, password=password, is_active=True)
-                profile = Profile.objects.create(user=user, status=user_status, language=language, current_tg_id=tg_id)
+                profile = Profile.objects.add(user=user, status=user_status, language=language, current_tg_id=tg_id)
 
                 if user_status == "client":
-                    ClientProfile.objects.create(profile=profile)
+                    ClientProfile.objects.add(profile=profile)
                     logger.info(f"ClientProfile created for user: {username}")
                 elif user_status == "coach":
-                    CoachProfile.objects.create(profile=profile)
+                    CoachProfile.objects.add(profile=profile)
                     logger.info(f"CoachProfile created for user: {username}")
 
-                Token.objects.create(user=user)
+                Token.objects.add(user=user)
 
         except Exception as e:
             logger.exception("Error occured during user creation.")
