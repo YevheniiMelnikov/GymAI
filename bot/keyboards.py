@@ -114,7 +114,6 @@ def workout_experience_kb(lang: str) -> KbMarkup:
 
 
 def new_coach_kb(profile_id: int) -> KbMarkup:
-    # Using InlineKeyboardBuilder directly since texts are emojis
     kb = InlineKeyboardBuilder()
     kb.button(text="👍", callback_data=f"approve_{profile_id}")
     kb.button(text="👎", callback_data=f"decline_{profile_id}")
@@ -235,8 +234,6 @@ def workout_type_kb(lang: str) -> KbMarkup:
 
 
 def select_days_kb(lang: str, selected_days: list) -> KbMarkup:
-    from bot.texts.text_manager import btn_text
-
     buttons = []
     days_of_week = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
     for day in days_of_week:
