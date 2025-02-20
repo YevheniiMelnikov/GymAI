@@ -2,7 +2,7 @@ from urllib.parse import urljoin
 
 import loguru
 
-from services.api_service import APIService
+from services.api_service import APIClient
 from core.exceptions import UsernameUnavailable, EmailUnavailable
 from core.models import Profile
 
@@ -10,7 +10,7 @@ from core.models import Profile
 logger = loguru.logger
 
 
-class UserService(APIService):
+class UserClient(APIClient):
     async def sign_up(self, **kwargs) -> bool:
         url = urljoin(self.api_url, "api/v1/profiles/create/")
         status_code, response = await self._api_request(
@@ -96,4 +96,4 @@ class UserService(APIService):
         return status_code == 204
 
 
-user_service = UserService()
+user_service = UserClient()

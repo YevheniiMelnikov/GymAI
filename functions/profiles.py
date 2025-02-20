@@ -5,7 +5,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import action_choice_keyboard
+from bot.keyboards import action_choice_kb
 from bot.states import States
 from services.api_service import api_service
 from core.cache_manager import cache_manager
@@ -16,8 +16,7 @@ from functions.utils import delete_messages
 from core.models import Client, Coach, Profile
 from services.profile_service import profile_service
 from services.user_service import user_service
-from bot.texts.resources import MessageText
-from bot.texts.text_manager import translate
+from bot.texts.text_manager import msg_text
 
 logger = loguru.logger
 
@@ -36,20 +35,21 @@ async def update_user_info(message: Message, state: FSMContext, role: str) -> No
 
         if role == "client":
             cache_manager.set_client_data(profile.id, data)
-            await profile_service.edit_client_profile(profile.id, data)
+            await profile_service.edit_client_profile_kb(profile.id, data)
         else:
             if not data.get("edit_mode"):
-                await message.answer(translate(MessageText.wait_for_verification, data.get("lang")))
+                await message.answer(msg_text("wait_for_verification", data.get("lang")))
                 await chat.notify_about_new_coach(message.from_user.id, profile, data)
             cache_manager.set_coach_data(profile.id, data)
-            await profile_service.edit_coach_profile(profile.id, data)
+            await profile_service.edit_coach_profile_kb(profile.id, data)
 
-        await message.answer(translate(MessageText.your_data_updated, lang=data.get("lang")))
+        await message.answer(msg_text("your_data_updated", data.get("lang")))
+        await message.answer(msg_text("your_data_updated", data.get("lang")))
         await menus.show_main_menu(message, profile, state)
 
     except Exception as e:
         logger.error(f"Unexpected error updating profile: {e}")
-        await message.answer(translate(MessageText.unexpected_error, lang=data.get("lang")))
+        await message.answer(msg_text("unexpected_error", data.get("lang")))
     finally:
         with suppress(TelegramBadRequest):
             await message.delete()
@@ -64,7 +64,7 @@ async def assign_coach(coach: Coach, client: Client) -> None:
 
     coach_profile = await profile_service.get_coach_profile(coach.id)
     coach_profile_id = int(coach_profile["id"])
-    await profile_service.edit_client_profile(client.id, dict(coach=coach_profile_id))
+    await profile_service.edit_client_profile_kb(client.id, dict(coach=coach_profile_id))
     cache_manager.set_client_data(client.id, {"assigned_to": [coach.id]})
     await profile_service.edit_profile(client.id, {"assigned_to": [coach.id]})
 
@@ -74,20 +74,20 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
         attempts = data.get("login_attempts", 0) + 1
         await state.update_data(login_attempts=attempts)
         if attempts >= 3:
-            await message.answer(text=translate(MessageText.reset_password_offer, lang=data.get("lang")))
+            await message.answer(msg_text("reset_password_offer", data.get("lang")))
         else:
-            await message.answer(text=translate(MessageText.invalid_credentials, lang=data.get("lang")))
+            await message.answer(msg_text("invalid_credentials", data.get("lang")))
             await state.set_state(States.username)
-            await message.answer(text=translate(MessageText.username, lang=data.get("lang")))
+            await message.answer(msg_text("username", data.get("lang")))
         await message.delete()
         return
 
     profile = await profile_service.get_profile_by_username(data["username"])
 
     if not profile:
-        await message.answer(text=translate(MessageText.unexpected_error, lang=data.get("lang")))
+        await message.answer(msg_text("unexpected_error", data.get("lang")))
         await state.set_state(States.username)
-        await message.answer(text=translate(MessageText.username, lang=data.get("lang")))
+        await message.answer(msg_text("username", data.get("lang")))
         await message.delete()
         return
 
@@ -116,7 +116,7 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
             client_data = await profile_service.get_profile(profile.id)
             cache_manager.set_client_data(profile.id, client_data)
 
-    await message.answer(text=translate(MessageText.signed_in, lang=data.get("lang")))
+    await message.answer(msg_text("signed_in", data.get("lang")))
     await delete_messages(state)
     if data.get("lang") != profile.language:
         cache_manager.set_profile_info_by_key(message.from_user.id, profile.id, "language", data.get("lang"))
@@ -142,19 +142,19 @@ async def register_user(callback_query: CallbackQuery, state: FSMContext, data: 
         status=data.get("account_type"),
         language=data.get("lang"),
     ):
-        await callback_query.message.answer(text=translate(MessageText.unexpected_error, data.get("lang")))
+        await callback_query.message.answer(msg_text("unexpected_error", data.get("lang")))
         await state.clear()
         await state.set_state(States.username)
-        await callback_query.message.answer(text=translate(MessageText.username, data.get("lang")))
+        await callback_query.message.answer(msg_text("username", data.get("lang")))
         return
 
     logger.info(f"User {email} registered successfully")
 
     if not await user_service.log_in(username=username, password=password):
-        await callback_query.message.answer(text=translate(MessageText.unexpected_error, data.get("lang")))
+        await callback_query.message.answer(msg_text("unexpected_error", data.get("lang")))
         await state.clear()
         await state.set_state(States.username)
-        await callback_query.message.answer(text=translate(MessageText.username, data.get("lang")))
+        await callback_query.message.answer(msg_text("username", data.get("lang")))
         return
 
     profile_data = await profile_service.get_profile_by_username(username)
@@ -169,7 +169,7 @@ async def register_user(callback_query: CallbackQuery, state: FSMContext, data: 
     )
     if not await api_service.send_welcome_email(email=email, username=username):
         logger.error(f"Failed to send welcome email to {email}")
-    await callback_query.message.answer(text=translate(MessageText.registration_successful, lang=data.get("lang")))
+    await callback_query.message.answer(msg_text("registration_successful", data.get("lang")))
     await menus.show_main_menu(callback_query.message, profile_data, state)
 
 
@@ -219,20 +219,20 @@ async def handle_logout(callback_query: CallbackQuery, profile: Profile, state: 
     auth_token = await user_service.get_user_token(profile.id)
     await user_service.log_out(profile, auth_token)
     cache_manager.deactivate_profiles(profile.current_tg_id)
-    await state.update_data(lang=profile.language)
+    await state.update_data(profile.language)
     await callback_query.message.answer(
-        text=translate(MessageText.choose_action, lang=profile.language),
-        reply_markup=action_choice_keyboard(profile.language),
+        msg_text("select_action", profile.language),
+        reply_markup=action_choice_kb(profile.language),
     )
     await state.set_state(States.action_choice)
     await callback_query.message.delete()
 
 
 async def start_profile_creation(message: Message, profile: Profile, state: FSMContext) -> None:
-    info_msg = await message.answer(translate(MessageText.edit_profile, lang=profile.language))
-    name_msg = await message.answer(translate(MessageText.name, lang=profile.language))
+    info_msg = await message.answer(msg_text("edit_profile", profile.language))
+    name_msg = await message.answer(msg_text("name", profile.language))
     await state.update_data(
-        lang=profile.language,
+        profile.language,
         role=profile.status,
         chat_id=message.chat.id,
         message_ids=[info_msg.message_id, name_msg.message_id],

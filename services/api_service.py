@@ -10,7 +10,7 @@ from common.settings import settings
 logger = loguru.logger
 
 
-class APIService:
+class APIClient:
     def __init__(self):
         self.api_url = settings.API_URL
         self.api_key = settings.API_KEY
@@ -41,6 +41,7 @@ class APIService:
                     )
 
                 return response.status_code, error_data
+
         except httpx.HTTPStatusError as e:
             logger.error(f"HTTP error occurred: {e}")
             raise UserServiceError(f"HTTP request failed with status {e.response.status_code}: {e}") from e
@@ -63,4 +64,4 @@ class APIService:
         return False
 
 
-api_service = APIService()
+api_service = APIClient()

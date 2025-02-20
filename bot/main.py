@@ -25,7 +25,7 @@ async def main() -> None:
         await workout_scheduler.run()
         await backup_scheduler.run()
         await subscription_scheduler.run()
-        payment_processor.run()
+        await payment_processor.run()
 
         logger.info("Starting bot ...")
         await bot.delete_webhook(drop_pending_updates=True)

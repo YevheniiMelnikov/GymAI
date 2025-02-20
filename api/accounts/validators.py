@@ -28,6 +28,6 @@ class CustomPasswordValidator:
 
     def get_help_text(self) -> str:
         return _(
-            "Ваш пароль повинен містити принаймні %(min_length)d символів,"
-            "включаючи принаймні одну літеру та одну цифру." % {"min_length": self.min_length}
+            f"Ваш пароль повинен містити принаймні {self.min_length} символів,"
+            "включаючи принаймні одну літеру та одну цифру."
         )

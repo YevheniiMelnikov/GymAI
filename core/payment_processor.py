@@ -8,21 +8,20 @@ from functions.workout_plans import cancel_subscription
 from core.models import Payment, Profile
 from common.settings import settings
 from core.google_sheets_manager import sheets_manager
-from services.payment_service import payment_service, PaymentService
-from services.profile_service import profile_service, ProfileService
+from services.payment_service import payment_service, PaymentClient
+from services.profile_service import profile_service, ProfileClient
 from services.user_service import user_service
-from services.workout_service import workout_service, WorkoutService
-from bot.texts.resources import MessageText
-from bot.texts.text_manager import translate
+from services.workout_service import workout_service, WorkoutClient
+from bot.texts.text_manager import msg_text
 
 
 class PaymentProcessor:
     def __init__(
         self,
         cache_mngr: CacheManager,
-        payment_srv: PaymentService,
-        profile_srv: ProfileService,
-        workout_srv: WorkoutService,
+        payment_srv: PaymentClient,
+        profile_srv: ProfileClient,
+        workout_srv: WorkoutClient,
     ):
         self.cache_manager = cache_mngr
         self.payment_service = payment_srv
@@ -121,7 +120,7 @@ class PaymentProcessor:
                 next_payment_date = payment_date + relativedelta(months=1)
                 await send_message(
                     recipient=client,
-                    text=translate(MessageText.subscription_cancel_warning, profile.language).format(
+                    text=msg_text("subscription_cancel_warning", profile.language).format(
                         date=next_payment_date.strftime("%Y-%m-%d"),
                         mail=settings.DEFAULT_FROM_EMAIL,
                         tg=settings.TG_SUPPORT_CONTACT,
@@ -134,7 +133,7 @@ class PaymentProcessor:
 
         await send_message(
             recipient=client,
-            text=translate(MessageText.payment_failure, profile.language).format(
+            text=msg_text("payment_failure", profile.language).format(
                 mail=settings.DEFAULT_FROM_EMAIL, tg=settings.TG_SUPPORT_CONTACT
             ),
             state=None,
@@ -149,7 +148,7 @@ class PaymentProcessor:
 
         await send_message(
             recipient=client,
-            text=translate(MessageText.payment_success, profile.language),
+            text=msg_text("payment_success", profile.language),
             state=None,
             include_incoming_message=False,
         )
@@ -209,7 +208,7 @@ class PaymentProcessor:
         )
 
 
-def run():
+async def run():
     payment_processor = PaymentProcessor(
         cache_mngr=cache_manager,
         payment_srv=payment_service,

@@ -2,14 +2,14 @@ from typing import Any
 from urllib.parse import urljoin
 import loguru
 
-from services.api_service import APIService
+from services.api_service import APIClient
 from core.models import Profile
 from core.encrypter import encrypter as enc, Encrypter
 
 logger = loguru.logger
 
 
-class ProfileService(APIService):
+class ProfileClient(APIClient):
     def __init__(self, encrypter: Encrypter):
         super().__init__()
         self.encrypter = encrypter
@@ -137,4 +137,4 @@ class ProfileService(APIService):
         return status_code == 200
 
 
-profile_service = ProfileService(enc)
+profile_service = ProfileClient(enc)

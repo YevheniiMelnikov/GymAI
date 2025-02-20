@@ -6,7 +6,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import choose_gender, payment_keyboard, select_days, workout_experience_keyboard, yes_no
+from bot.keyboards import select_gender_kb, payment_kb, select_days_kb, workout_experience_kb, yes_no_kb
 from bot.states import States
 from core.cache_manager import cache_manager
 from core.file_manager import avatar_manager
@@ -17,8 +17,7 @@ from functions.profiles import get_or_load_profile, update_user_info
 from functions.text_utils import get_state_and_message
 from functions.utils import delete_messages, generate_order_id
 from services.payment_service import payment_service
-from bot.texts.resources import MessageText
-from bot.texts.text_manager import translate
+from bot.texts.text_manager import msg_text
 
 logger = loguru.logger
 
@@ -28,8 +27,8 @@ questionnaire_router = Router()
 @questionnaire_router.callback_query(States.gender)
 async def gender(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
-    await callback_query.answer(translate(MessageText.saved, lang=data.get("lang")))
-    age_msg = await callback_query.message.answer(text=translate(MessageText.born_in, lang=data.get("lang")))
+    await callback_query.answer(msg_text("saved", data.get("lang")))
+    age_msg = await callback_query.message.answer(msg_text("born_in", data.get("lang")))
     await state.update_data(
         gender=callback_query.data, chat_id=callback_query.message.chat.id, message_ids=[age_msg.message_id]
     )
@@ -41,7 +40,7 @@ async def gender(callback_query: CallbackQuery, state: FSMContext) -> None:
 async def born_in(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
-    goals_msg = await message.answer(translate(MessageText.workout_goals, lang=data.get("lang")))
+    goals_msg = await message.answer(msg_text("workout_goals", data.get("lang")))
     await state.update_data(born_in=message.text, chat_id=message.chat.id, message_ids=[goals_msg.message_id])
     await state.set_state(States.workout_goals)
     await message.delete()
@@ -57,8 +56,8 @@ async def workout_goals(message: Message, state: FSMContext) -> None:
         return
 
     experience_msg = await message.answer(
-        translate(MessageText.workout_experience, lang=data.get("lang")),
-        reply_markup=workout_experience_keyboard(data.get("lang")),
+        msg_text("workout_experience", data.get("lang")),
+        reply_markup=workout_experience_kb(data.get("lang")),
     )
     await state.update_data(chat_id=message.chat.id, message_ids=[experience_msg.message_id])
     await state.set_state(States.workout_experience)
@@ -69,13 +68,13 @@ async def workout_goals(message: Message, state: FSMContext) -> None:
 async def workout_experience(callback_query: CallbackQuery, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
-    await callback_query.answer(translate(MessageText.saved, lang=data.get("lang")))
+    await callback_query.answer(msg_text("saved", data.get("lang")))
     await state.update_data(workout_experience=callback_query.data)
     if data.get("edit_mode"):
         await update_user_info(callback_query.message, state, "client")
         return
 
-    weight_msg = await callback_query.message.answer(translate(MessageText.weight, lang=data.get("lang")))
+    weight_msg = await callback_query.message.answer(msg_text("weight", data.get("lang")))
     await state.update_data(chat_id=callback_query.message.chat.id, message_ids=[weight_msg.message_id])
     await state.set_state(States.weight)
     with suppress(TelegramBadRequest):
@@ -87,7 +86,7 @@ async def weight(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     await delete_messages(state)
     if not all(map(lambda x: x.isdigit(), message.text.split())):
-        await message.answer(translate(MessageText.invalid_content, lang=data.get("lang")))
+        await message.answer(msg_text("invalid_content", data.get("lang")))
         await state.set_state(States.weight)
         return
 
@@ -96,7 +95,7 @@ async def weight(message: Message, state: FSMContext) -> None:
         await update_user_info(message, state, "client")
         return
 
-    health_msg = await message.answer(translate(MessageText.health_notes, lang=data.get("lang")))
+    health_msg = await message.answer(msg_text("health_notes", data.get("lang")))
     await state.update_data(chat_id=message.chat.id, message_ids=[health_msg.message_id])
     await state.set_state(States.health_notes)
     await message.delete()
@@ -116,11 +115,11 @@ async def name(message: Message, state: FSMContext) -> None:
     state_to_set = States.surname if data.get("role") == "coach" else States.gender
     await state.set_state(state_to_set)
     text = (
-        translate(MessageText.surname, data.get("lang"))
+        msg_text("surname", data.get("lang"))
         if data["role"] == "coach"
-        else translate(MessageText.choose_gender, data.get("lang"))
+        else msg_text("choose_gender", data.get("lang"))
     )
-    reply_markup = choose_gender(data.get("lang")) if data["role"] == "client" else None
+    reply_markup = select_gender_kb(data.get("lang")) if data["role"] == "client" else None
     msg = await message.answer(text=text, reply_markup=reply_markup)
     await state.update_data(chat_id=message.chat.id, message_ids=[msg.message_id], name=message.text, verified=False)
     await message.delete()
@@ -135,7 +134,7 @@ async def surname(message: Message, state: FSMContext) -> None:
         await update_user_info(message, state, "coach")
         return
 
-    work_experience_msg = await message.answer(translate(MessageText.work_experience, lang=data.get("lang")))
+    work_experience_msg = await message.answer(msg_text("work_experience", data.get("lang")))
     await state.update_data(chat_id=message.chat.id, message_ids=[work_experience_msg.message_id])
     await state.set_state(States.work_experience)
     await message.delete()
@@ -146,8 +145,8 @@ async def work_experience(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
     if not all(map(lambda x: x.isdigit(), message.text.split())):
-        await message.answer(translate(MessageText.invalid_content, lang=data.get("lang")))
-        await message.answer(translate(MessageText.work_experience, lang=data.get("lang")))
+        await message.answer(msg_text("invalid_content", data.get("lang")))
+        await message.answer(msg_text("work_experience", data.get("lang")))
         await state.set_state(States.work_experience)
         return
 
@@ -156,7 +155,7 @@ async def work_experience(message: Message, state: FSMContext) -> None:
         await update_user_info(message, state, "coach")
         return
 
-    additional_info_msg = await message.answer(translate(MessageText.additional_info, lang=data.get("lang")))
+    additional_info_msg = await message.answer(msg_text("additional_info", data.get("lang")))
     await state.update_data(chat_id=message.chat.id, message_ids=[additional_info_msg.message_id])
     await state.set_state(States.additional_info)
     await message.delete()
@@ -171,7 +170,7 @@ async def additional_info(message: Message, state: FSMContext) -> None:
         await update_user_info(message, state, "coach")
         return
 
-    payment_details_msg = await message.answer(translate(MessageText.payment_details, lang=data.get("lang")))
+    payment_details_msg = await message.answer(msg_text("payment_details", data.get("lang")))
     await state.update_data(chat_id=message.chat.id, message_ids=[payment_details_msg.message_id])
     await state.set_state(States.payment_details)
     await message.delete()
@@ -184,7 +183,7 @@ async def payment_details(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     card_number = message.text.replace(" ", "")
     if not all(map(lambda x: x.isdigit(), card_number)) or len(card_number) != 16:
-        await message.answer(translate(MessageText.invalid_content, lang=data.get("lang")))
+        await message.answer(msg_text("invalid_content", data.get("lang")))
         await message.delete()
         return
 
@@ -192,7 +191,7 @@ async def payment_details(message: Message, state: FSMContext) -> None:
         await update_user_info(message, state, "coach")
         return
 
-    program_price_msg = await message.answer(translate(MessageText.enter_program_price, lang=data.get("lang")))
+    program_price_msg = await message.answer(msg_text("enter_program_price", data.get("lang")))
     await state.update_data(chat_id=message.chat.id, message_ids=[program_price_msg.message_id])
     await state.set_state(States.program_price)
     await message.delete()
@@ -203,7 +202,7 @@ async def enter_program_price(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
     if not all(map(lambda x: x.isdigit(), message.text)):
-        await message.answer(translate(MessageText.invalid_content, lang=data.get("lang")))
+        await message.answer(msg_text("invalid_content", data.get("lang")))
         await message.delete()
         return
 
@@ -212,9 +211,7 @@ async def enter_program_price(message: Message, state: FSMContext) -> None:
         await update_user_info(message, state, "coach")
         return
 
-    subscription_price_msg = await message.answer(
-        translate(MessageText.enter_subscription_price, lang=data.get("lang"))
-    )
+    subscription_price_msg = await message.answer(msg_text("enter_subscription_price", data.get("lang")))
     await state.update_data(
         program_price=message.text, message_ids=[subscription_price_msg.message_id], chat_id=message.chat.id
     )
@@ -227,7 +224,7 @@ async def enter_subscription_price(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
     if not all(map(lambda x: x.isdigit(), message.text)):
-        await message.answer(translate(MessageText.invalid_content, lang=data.get("lang")))
+        await message.answer(msg_text("invalid_content", data.get("lang")))
         await message.delete()
         return
 
@@ -236,7 +233,7 @@ async def enter_subscription_price(message: Message, state: FSMContext) -> None:
         await update_user_info(message, state, "coach")
         return
 
-    photo_msg = await message.answer(translate(MessageText.upload_photo, lang=data.get("lang")))
+    photo_msg = await message.answer(msg_text("upload_photo", data.get("lang")))
     await state.update_data(
         subscription_price=message.text, chat_id=message.chat.id, message_ids=[photo_msg.message_id]
     )
@@ -252,17 +249,17 @@ async def profile_photo(message: Message, state: FSMContext) -> None:
 
     if local_file and avatar_manager.check_file_size(local_file, 20):
         if avatar_manager.upload_image_to_gcs(local_file):
-            uploaded_msg = await message.answer(translate(MessageText.photo_uploaded, lang=data.get("lang")))
+            uploaded_msg = await message.answer(msg_text("photo_uploaded", data.get("lang")))
             await state.update_data(
                 profile_photo=local_file, chat_id=message.chat.id, message_ids=[uploaded_msg.message_id]
             )
             avatar_manager.clean_up_local_file(local_file)
             await update_user_info(message, state, "coach")
         else:
-            await message.answer(translate(MessageText.photo_upload_fail, lang=data.get("lang")))
+            await message.answer(msg_text("photo_upload_fail", data.get("lang")))
             await state.set_state(States.profile_photo)
     else:
-        await message.answer(translate(MessageText.photo_upload_fail, lang=data.get("lang")))
+        await message.answer(msg_text("photo_upload_fail", data.get("lang")))
         await state.set_state(States.profile_photo)
 
 
@@ -275,17 +272,15 @@ async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> No
         await show_main_menu(callback_query.message, profile, state)
         return
 
-    state_to_set, message = get_state_and_message(callback_query.data, profile.language)
+    state_to_set, message_text = get_state_and_message(callback_query.data, profile.language)
     if state_to_set == States.subscription_price:
-        price_warning_msg = await callback_query.message.answer(
-            translate(MessageText.price_warning, lang=profile.language)
-        )
+        price_warning_msg = await callback_query.message.answer(msg_text("price_warning", profile.language))
         await state.update_data(
             price_warning_msg_ids=[price_warning_msg.message_id], chat_id=callback_query.message.chat.id
         )
     await state.update_data(edit_mode=True)
-    reply_markup = workout_experience_keyboard(profile.language) if state_to_set == States.workout_experience else None
-    await callback_query.message.answer(message, lang=profile.language, reply_markup=reply_markup)
+    reply_markup = workout_experience_kb(profile.language) if state_to_set == States.workout_experience else None
+    await callback_query.message.answer(message_text, lang=profile.language, reply_markup=reply_markup)
     await state.set_state(state_to_set)
     with suppress(TelegramBadRequest):
         await callback_query.message.delete()
@@ -296,7 +291,7 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
     profile = await get_or_load_profile(callback_query.from_user.id)
     await state.update_data(workout_type=callback_query.data)
     await state.set_state(States.enter_wishes)
-    await callback_query.message.answer(translate(MessageText.enter_wishes, profile.language))
+    await callback_query.message.answer(msg_text("enter_wishes", profile.language))
     await callback_query.message.delete()
 
 
@@ -309,7 +304,7 @@ async def enter_wishes(message: Message, state: FSMContext):
     data = await state.get_data()
 
     if data.get("new_client"):
-        await message.answer(translate(MessageText.coach_selected).format(name=coach.name))
+        await message.answer(msg_text("coach_selected").format(name=coach.name))
         await client_request(coach, client, data)
         await show_main_menu(message, profile, state)
         with suppress(TelegramBadRequest):
@@ -318,7 +313,7 @@ async def enter_wishes(message: Message, state: FSMContext):
         if data.get("request_type") == "subscription":
             await state.set_state(States.workout_days)
             await message.answer(
-                translate(MessageText.select_days, profile.language), reply_markup=select_days(profile.language, [])
+                msg_text("select_days", profile.language), reply_markup=select_days_kb(profile.language, [])
             )
         elif data.get("request_type") == "program":
             order_id = generate_order_id()
@@ -329,11 +324,11 @@ async def enter_wishes(message: Message, state: FSMContext):
             ):
                 await state.set_state(States.handle_payment)
                 await message.answer(
-                    translate(MessageText.follow_link, profile.language),
-                    reply_markup=payment_keyboard(profile.language, payment_link, "program"),
+                    msg_text("follow_link", profile.language),
+                    reply_markup=payment_kb(profile.language, payment_link, "program"),
                 )
             else:
-                await message.answer(translate(MessageText.unexpected_error, profile.language))
+                await message.answer(msg_text("unexpected_error", profile.language))
         with suppress(TelegramBadRequest):
             await message.delete()
 
@@ -353,12 +348,12 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
                     await edit_subscription_days(callback_query, days, profile, state, subscription)
                 else:
                     await callback_query.message.answer(
-                        translate(MessageText.workout_plan_delete_warning, lang=profile.language),
-                        reply_markup=yes_no(profile.language),
+                        msg_text("workout_plan_delete_warning", profile.language),
+                        reply_markup=yes_no_kb(profile.language),
                     )
                     await state.set_state(States.confirm_subscription_reset)
             else:
-                await callback_query.answer(translate(MessageText.saved, lang=profile.language))
+                await callback_query.answer(msg_text("saved", profile.language))
                 await process_new_subscription(callback_query, profile, state)
         else:
             await callback_query.answer("❌")
@@ -371,6 +366,6 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
         await state.update_data(workout_days=days)
 
         with suppress(TelegramBadRequest):
-            await callback_query.message.edit_reply_markup(reply_markup=select_days(profile.language, days))
+            await callback_query.message.edit_reply_markup(reply_markup=select_days_kb(profile.language, days))
 
         await state.set_state(States.workout_days)

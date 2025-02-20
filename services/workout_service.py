@@ -2,14 +2,14 @@ from datetime import datetime
 from urllib.parse import urljoin
 import loguru
 
-from services.api_service import APIService
+from services.api_service import APIClient
 from core.exceptions import UserServiceError
 from core.models import Exercise
 
 logger = loguru.logger
 
 
-class WorkoutService(APIService):
+class WorkoutClient(APIClient):
     async def save_program(
         self, client_id: int, exercises: dict[int, Exercise], split_number: int, wishes: str
     ) -> dict:
@@ -90,4 +90,4 @@ class WorkoutService(APIService):
         return False
 
 
-workout_service = WorkoutService()
+workout_service = WorkoutClient()

@@ -6,7 +6,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 
-from bot.keyboards import program_edit_kb, program_manage_menu, program_view_kb, subscription_view_kb
+from bot.keyboards import program_edit_kb, program_manage_kb, program_view_kb, subscription_view_kb
 from bot.states import States
 from core.cache_manager import cache_manager, logger
 from functions.chat import send_message
@@ -18,8 +18,7 @@ from core.models import Profile
 from services.profile_service import profile_service
 from services.user_service import user_service
 from services.workout_service import workout_service
-from bot.texts.resources import ButtonText, MessageText
-from bot.texts.text_manager import translate
+from bot.texts.text_manager import msg_text, btn_text
 
 
 async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) -> None:
@@ -30,7 +29,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
     client_id = data.get("client_id")
     if exercises := data.get("exercises", {}):
         if completed_days >= split_number:
-            await callback_query.answer(text=translate(MessageText.saved, lang=profile.language))
+            await callback_query.answer(msg_text("saved", profile.language))
             client = cache_manager.get_client_by_id(client_id)
             client_data = await profile_service.get_profile(client_id)
             client_lang = cache_manager.get_profile_info_by_key(client_data.get("current_tg_id"), client_id, "language")
@@ -43,7 +42,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
                 cache_manager.reset_program_payment_status(client_id, "subscription")
                 await send_message(
                     recipient=client,
-                    text=translate(MessageText.new_program, lang=client_lang),
+                    text=msg_text("new_program", client_lang),
                     state=state,
                     reply_markup=subscription_view_kb(client_lang),
                     include_incoming_message=False,
@@ -54,19 +53,19 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
                 if program_data := await workout_service.save_program(
                     client_id, exercises, split_number, current_program.wishes
                 ):
-                    program_data.update(workout_type=current_program.workout_type, split_number=split_number)
+                    program_data.update(workout_type=current_program.workout_type_kb, split_number=split_number)
                     cache_manager.set_program(client_id, program_data)
                     cache_manager.reset_program_payment_status(client_id, "program")
 
                 await send_message(
                     recipient=client,
-                    text=translate(MessageText.new_program, lang=client_lang),
+                    text=msg_text("new_program", client_lang),
                     state=state,
                     include_incoming_message=False,
                 )
                 await send_message(
                     recipient=client,
-                    text=translate(MessageText.program_page, lang=client_lang).format(program=program_text, day=1),
+                    text=msg_text("program_page", client_lang).format(program=program_text, day=1),
                     state=state,
                     reply_markup=program_view_kb(client_lang),
                     include_incoming_message=False,
@@ -75,16 +74,16 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
             cache_manager.set_client_data(client_id, {"status": "default"})
             await show_main_menu(callback_query.message, profile, state)
         else:
-            await callback_query.answer(translate(MessageText.complete_all_days, profile.language), show_alert=True)
+            await callback_query.answer(msg_text("complete_all_days", profile.language), show_alert=True)
     else:
-        await callback_query.answer(text=translate(MessageText.no_exercises_to_save, lang=profile.language))
+        await callback_query.answer(msg_text("no_exercises_to_save", profile.language))
 
 
 async def reset_workout_plan(callback_query: CallbackQuery, state: FSMContext) -> None:
     profile = await get_or_load_profile(callback_query.from_user.id)
     data = await state.get_data()
     client_id = data.get("client_id")
-    await callback_query.answer(translate(ButtonText.done, profile.language))
+    await callback_query.answer(btn_text("done", profile.language))
     if data.get("subscription"):
         subscription_data = cache_manager.get_subscription(client_id).to_dict()
         subscription_data.update(client_profile=client_id, exercises={})
@@ -100,7 +99,7 @@ async def reset_workout_plan(callback_query: CallbackQuery, state: FSMContext) -
         cache_manager.set_client_data(client_id, {"status": "waiting_for_program"})
         cache_manager.set_payment_status(client_id, True, "program")
     await state.clear()
-    await callback_query.message.answer(translate(MessageText.enter_daily_program, profile.language).format(day=1))
+    await callback_query.message.answer(msg_text("enter_daily_program", profile.language).format(day=1))
     await state.update_data(client_id=client_id, exercises=[], day_index=0)
     await state.set_state(States.program_manage)
     with suppress(TelegramBadRequest):
@@ -114,7 +113,7 @@ async def next_day_workout_plan(callback_query: CallbackQuery, state: FSMContext
     split_number = data.get("split")
     if data.get("exercises"):
         if completed_days < split_number:
-            await callback_query.answer(translate(ButtonText.forward, profile.language))
+            await callback_query.answer(btn_text("forward", profile.language))
             await delete_messages(state)
             completed_days += 1
             if data.get("subscription"):
@@ -122,16 +121,16 @@ async def next_day_workout_plan(callback_query: CallbackQuery, state: FSMContext
                 if completed_days < len(days):
                     week_day = get_translated_week_day(profile.language, days[completed_days]).lower()
                 else:
-                    await callback_query.answer(translate(MessageText.out_of_range, profile.language))
+                    await callback_query.answer(msg_text("out_of_range", profile.language))
                     return
 
             else:
                 week_day = completed_days + 1
 
-            exercise_msg = await callback_query.message.answer(translate(MessageText.enter_exercise, profile.language))
+            exercise_msg = await callback_query.message.answer(msg_text("enter_exercise", profile.language))
             await callback_query.message.answer(
-                translate(MessageText.enter_daily_program, profile.language).format(day=week_day),
-                reply_markup=program_manage_menu(profile.language, split_number),
+                msg_text("enter_daily_program", profile.language).format(day=week_day),
+                reply_markup=program_manage_kb(profile.language, split_number),
             )
             await state.update_data(
                 day_index=completed_days,
@@ -139,10 +138,10 @@ async def next_day_workout_plan(callback_query: CallbackQuery, state: FSMContext
                 message_ids=[exercise_msg.message_id],
             )
         else:
-            await callback_query.answer(translate(MessageText.out_of_range, profile.language))
+            await callback_query.answer(msg_text("out_of_range", profile.language))
             return
     else:
-        await callback_query.answer(text=translate(MessageText.no_exercises_to_save, lang=profile.language))
+        await callback_query.answer(msg_text("no_exercises_to_save", profile.language))
 
 
 async def manage_program(callback_query: CallbackQuery, profile: Profile, client_id: str, state: FSMContext) -> None:
@@ -150,16 +149,14 @@ async def manage_program(callback_query: CallbackQuery, profile: Profile, client
     workout_data = cache_manager.get_program(client_id)
 
     if not program_paid and not workout_data:
-        await callback_query.answer(
-            text=translate(MessageText.payment_required, lang=profile.language), show_alert=True
-        )
+        await callback_query.answer(msg_text("payment_required", profile.language), show_alert=True)
         await state.set_state(States.show_clients)
         return
 
     if workout_data and workout_data.exercises_by_day:
         program = await format_program(workout_data.exercises_by_day, 0)
         program_msg = await callback_query.message.answer(
-            text=translate(MessageText.program_page, lang=profile.language).format(program=program, day=1),
+            msg_text("program_page", profile.language).format(program=program, day=1),
             reply_markup=program_edit_kb(profile.language),
             disable_web_page_preview=True,
         )
@@ -175,11 +172,9 @@ async def manage_program(callback_query: CallbackQuery, profile: Profile, client
         return
 
     else:
-        no_program_msg = await callback_query.message.answer(
-            text=translate(MessageText.no_program, lang=profile.language)
-        )
+        no_program_msg = await callback_query.message.answer(msg_text("no_program", profile.language))
 
-    workouts_number_msg = await callback_query.message.answer(translate(MessageText.workouts_number, profile.language))
+    workouts_number_msg = await callback_query.message.answer(msg_text("workouts_number", profile.language))
     await state.update_data(
         chat_id=callback_query.message.chat.id,
         message_ids=[no_program_msg.message_id, workouts_number_msg.message_id],

@@ -6,7 +6,7 @@ from typing import Any
 import loguru
 from liqpay import LiqPay
 
-from services.api_service import APIService
+from services.api_service import APIClient
 from core.models import Payment
 from common.settings import settings
 
@@ -23,7 +23,7 @@ class PaymentConfig:
     email_host: str
 
 
-class PaymentService(APIService):
+class PaymentClient(APIClient):
     API_BASE_PATH = "api/v1/payments/"
     SUBSCRIPTIONS_PATH = "api/v1/subscriptions/"
 
@@ -33,8 +33,8 @@ class PaymentService(APIService):
         self.payment_client = LiqPay(self.config.public_key, self.config.private_key)
 
     @staticmethod
-    def from_env() -> "PaymentService":
-        return PaymentService(payment_config)
+    def from_env() -> "PaymentClient":
+        return PaymentClient(payment_config)
 
     def _build_payment_params(
         self, action: str, amount: str, order_id: str, payment_type: str, profile_id: int, emails: list[str]
@@ -186,4 +186,4 @@ payment_config = PaymentConfig(
     bot_link=settings.BOT_LINK,
     email_host=settings.EMAIL_HOST_USER,
 )
-payment_service = PaymentService.from_env()
+payment_service = PaymentClient.from_env()
