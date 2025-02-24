@@ -1,4 +1,6 @@
 import asyncio
+from contextlib import suppress
+
 import loguru
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
@@ -38,10 +40,6 @@ async def start_web_app(app: web.Application) -> web.AppRunner:
     return runner
 
 
-async def shutdown_web_app(runner: web.AppRunner):
-    await runner.cleanup()
-
-
 async def main() -> None:
     bot = Bot(token=settings.BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
     dp = Dispatcher(storage=RedisStorage.from_url(settings.REDIS_URL))
@@ -65,14 +63,12 @@ async def main() -> None:
     except (KeyboardInterrupt, SystemExit):
         logger.info("Shutting down bot...")
     finally:
-        await shutdown_web_app(runner)
+        await runner.cleanup()
         dp.shutdown()
         await bot.session.close()
-        logger.info("Bot stopped.")
+        logger.info("Bot stopped")
 
 
 if __name__ == "__main__":
-    try:
+    with suppress(KeyboardInterrupt, SystemExit):
         asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        logger.info("Bot stopped")
