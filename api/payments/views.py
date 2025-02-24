@@ -24,7 +24,7 @@ from common.settings import settings
 logger = loguru.logger
 
 
-class ProgramViewSet(ModelViewSet):
+class ProgramViewSet(ModelViewSet):  # TODO: SEPARATE THIS
     queryset = Program.objects.all().select_related("client_profile")
     serializer_class = ProgramSerializer
     permission_classes = [HasAPIKey]
@@ -91,7 +91,7 @@ class ProgramViewSet(ModelViewSet):
         return Response(serializer.data)
 
 
-class SubscriptionViewSet(ModelViewSet):
+class SubscriptionViewSet(ModelViewSet):  # TODO: SEPARATE THIS
     queryset = Subscription.objects.all().select_related("client_profile")
     serializer_class = SubscriptionSerializer
     permission_classes = [IsAuthenticated | HasAPIKey]

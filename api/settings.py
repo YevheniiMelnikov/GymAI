@@ -31,6 +31,33 @@ INSTALLED_APPS = [
     "drf_yasg",
 ]
 
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "loguru": {
+            "level": "DEBUG",
+            "class": "common.logger.InterceptHandler",
+        },
+    },
+    "root": {
+        "handlers": ["loguru"],
+        "level": "DEBUG",
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["loguru"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "django.request": {
+            "handlers": ["loguru"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+    },
+}
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
