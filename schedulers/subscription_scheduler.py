@@ -9,17 +9,13 @@ from services.workout_service import workout_service
 logger = loguru.logger
 
 
-async def deactivate_expired_subscriptions() -> None:
-    now = datetime.now()
-    yesterday = now - timedelta(days=1)
+class SubscriptionManager:
+    def __init__(self):
+        self.scheduler = None
 
-    try:
-        expired_subscriptions = await payment_service.get_expired_subscriptions(yesterday.strftime("%Y-%m-%d"))
-        for subscription in expired_subscriptions:
-            if not (subscription_id := subscription.get("id")) or not (profile_id := subscription.get("user")):
-                logger.warning(f"Invalid subscription format: {subscription}")
-                continue
-
+    @staticmethod
+    async def _run_deactivation(subscription_id, profile_id):
+        try:
             auth_token = await user_service.get_user_token(profile_id)
             await workout_service.update_subscription(
                 subscription_id, {"client_profile": profile_id, "enabled": False}, auth_token
@@ -27,13 +23,45 @@ async def deactivate_expired_subscriptions() -> None:
             cache_manager.update_subscription_data(profile_id, {"enabled": False})
             cache_manager.reset_program_payment_status(profile_id, "subscription")
             logger.info(f"Subscription {subscription_id} for user {profile_id} deactivated")
+        except Exception as e:
+            logger.error(f"Failed to deactivate subscription {subscription_id} for user {profile_id}: {e}")
 
-    except Exception as e:
-        logger.exception(f"Error during subscription deactivation: {e}")
+    async def deactivate_expired_subscriptions(self) -> None:
+        now = datetime.now()
+        yesterday = now - timedelta(days=1)
+
+        try:
+            expired_subscriptions = await payment_service.get_expired_subscriptions(yesterday.strftime("%Y-%m-%d"))
+            for subscription in expired_subscriptions:
+                subscription_id = subscription.get("id")
+                profile_id = subscription.get("user")
+                if not subscription_id or not profile_id:
+                    logger.warning(f"Invalid subscription format: {subscription}")
+                    continue
+                await self._run_deactivation(subscription_id, profile_id)
+
+        except Exception as e:
+            logger.exception(f"Error during subscription deactivation: {e}")
+
+    async def run(self) -> None:
+        logger.debug("Starting subscription scheduler...")
+        self.scheduler = AsyncIOScheduler()
+        self.scheduler.add_job(self.deactivate_expired_subscriptions, "cron", hour=1, minute=0)
+        self.scheduler.start()
+
+    async def shutdown(self) -> None:
+        if self.scheduler:
+            self.scheduler.shutdown(wait=False)
+            logger.debug("Subscription scheduler stopped")
+
+
+subscription_manager = SubscriptionManager()
 
 
 async def run() -> None:
-    logger.debug("Starting subscription scheduler...")
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(deactivate_expired_subscriptions, "cron", hour=1, minute=0)
-    scheduler.start()
+    await subscription_manager.run()
+
+
+async def shutdown() -> None:
+    if subscription_manager.scheduler:
+        await subscription_manager.shutdown()

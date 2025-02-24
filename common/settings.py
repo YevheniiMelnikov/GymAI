@@ -1,6 +1,10 @@
 import os
 from dataclasses import dataclass
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 
 @dataclass
 class Settings:
@@ -39,6 +43,12 @@ class Settings:
     EMAIL_HOST_USER: str = os.getenv("EMAIL_HOST_USER")
     DEFAULT_FROM_EMAIL: str = os.getenv("DEFAULT_FROM_EMAIL")
     EMAIL_HOST_PASSWORD: str = os.getenv("EMAIL_HOST_PASSWORD")
+
+    WEB_SERVER_HOST: str = "0.0.0.0"
+    WEBHOOK_HOST: str = os.getenv("WEBHOOK_HOST")
+    WEBHOOK_PORT: int = 8080
+    WEBHOOK_PATH: str = f"/gym_bot/{BOT_TOKEN}"
+    WEBHOOK_URL: str = f"{WEBHOOK_HOST}{WEBHOOK_PATH}/{BOT_TOKEN}"
 
     REDIS_URL: str = os.getenv("REDIS_URL")
     DB_PORT: str = os.getenv("DB_PORT")

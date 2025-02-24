@@ -15,13 +15,8 @@ logger = loguru.logger
 
 class BackupManager:
     def __init__(self):
-        self.db_name = settings.DB_NAME
-        self.db_user = settings.DB_USER
-        self.db_password = settings.DB_PASSWORD
-        self.db_host = settings.DB_HOST
-        self.db_port = settings.DB_PORT
-        os.environ["PGPASSWORD"] = self.db_password
-
+        self.scheduler = None
+        os.environ["PGPASSWORD"] = settings.DB_PASSWORD
         self.current_dir = os.path.dirname(os.path.abspath(__file__))
         self.backup_dir = os.path.join(os.path.dirname(self.current_dir), "dumps")
         self.postgres_backup_dir = os.path.join(self.backup_dir, "postgres")
@@ -38,19 +33,19 @@ class BackupManager:
 
     async def create_postgres_backup(self) -> None:
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        filename = f"{self.db_name}_backup_{timestamp}.dump"
+        filename = f"{settings.DB_NAME}_backup_{timestamp}.dump"
         filepath = os.path.join(self.postgres_backup_dir, filename)
         command = [
             "pg_dump",
             "-h",
-            self.db_host,
+            settings.DB_HOST,
             "-p",
-            self.db_port,
+            settings.DB_PORT,
             "-U",
-            self.db_user,
+            settings.DB_USER,
             "-F",
             "c",
-            self.db_name,
+            settings.DB_NAME,
         ]
 
         try:
@@ -95,7 +90,7 @@ class BackupManager:
         retention_period = timedelta(days=30)
 
         for filename in os.listdir(self.postgres_backup_dir):
-            if filename.startswith(self.db_name) and filename.endswith(".dump"):
+            if filename.startswith(settings.DB_NAME) and filename.endswith(".dump"):
                 filepath = os.path.join(self.postgres_backup_dir, filename)
                 file_creation_time = datetime.fromtimestamp(os.path.getctime(filepath))
                 if now - file_creation_time > retention_period:
@@ -118,13 +113,24 @@ class BackupManager:
 
     async def run(self) -> None:
         logger.debug("Starting backup scheduler...")
-        scheduler = AsyncIOScheduler()
-        scheduler.add_job(self.create_postgres_backup, "cron", hour=2, minute=0)
-        scheduler.add_job(self.create_redis_backup, "cron", hour=2, minute=1)
-        scheduler.add_job(self.cleanup_backups, "cron", hour=2, minute=2)
-        scheduler.start()
+        self.scheduler = AsyncIOScheduler()
+        self.scheduler.add_job(self.create_postgres_backup, "cron", hour=2, minute=0)
+        self.scheduler.add_job(self.create_redis_backup, "cron", hour=2, minute=1)
+        self.scheduler.add_job(self.cleanup_backups, "cron", hour=2, minute=2)
+        self.scheduler.start()
+
+    async def shutdown(self) -> None:
+        self.scheduler.shutdown(wait=False)
+        logger.debug("Backup scheduler stopped")
+
+
+backup_manager = BackupManager()
 
 
 async def run() -> None:
-    backup_manager = BackupManager()
     await backup_manager.run()
+
+
+async def shutdown() -> None:
+    if backup_manager.scheduler:
+        await backup_manager.shutdown()
