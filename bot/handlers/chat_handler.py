@@ -3,17 +3,16 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
-from bot.keyboards import incoming_message
+from bot.keyboards import new_message_kb
 from bot.states import States
 from core.cache_manager import cache_manager
 from core.exceptions import UserServiceError
 from functions.chat import send_message
+from core.models import Profile
 from functions.menus import show_main_menu
 from functions.profiles import get_or_load_profile
-from core.models import Profile
 from services.profile_service import profile_service
-from bot.texts.resources import MessageText
-from bot.texts.text_manager import translate
+from bot.texts.text_manager import msg_text
 
 logger = loguru.logger
 chat_router = Router()
@@ -32,7 +31,7 @@ async def contact_client(message: Message, state: FSMContext):
         coach_name = cache_manager.get_coach_by_id(profile.id).name
     except Exception as e:
         logger.error(f"Can't get data: {e}")
-        await message.answer(translate(MessageText.unexpected_error, profile.language))
+        await message.answer(msg_text("unexpected_error", profile.language))
         await show_main_menu(message, profile, state)
         return
 
@@ -43,20 +42,20 @@ async def contact_client(message: Message, state: FSMContext):
         photo = message.photo[-1]
         caption = message.caption if message.caption else ""
         await send_message(
-            client, caption, state, reply_markup=incoming_message(client_profile.language, profile.id), photo=photo
+            client, caption, state, reply_markup=new_message_kb(client_profile.language, profile.id), photo=photo
         )
     elif message.video:
         video = message.video
         caption = message.caption if message.caption else ""
         await send_message(
-            client, caption, state, reply_markup=incoming_message(client_profile.language, profile.id), video=video
+            client, caption, state, reply_markup=new_message_kb(client_profile.language, profile.id), video=video
         )
     else:
         await send_message(
-            client, message.text, state, reply_markup=incoming_message(client_profile.language, profile.id)
+            client, message.text, state, reply_markup=new_message_kb(client_profile.language, profile.id)
         )
 
-    await message.answer(translate(MessageText.message_sent, profile.language))
+    await message.answer(msg_text("message_sent", profile.language))
     logger.debug(f"Coach {profile.id} sent message to client {client.id}")
     await show_main_menu(message, profile, state)
 
@@ -81,12 +80,12 @@ async def contact_coach(message: Message, state: FSMContext):
 
     except UserServiceError as error:
         logger.error(f"UserServiceError - {error}")
-        await message.answer(translate(MessageText.unexpected_error, profile.language))
+        await message.answer(msg_text("unexpected_error", profile.language))
         await show_main_menu(message, profile, state)
         return
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
-        await message.answer(translate(MessageText.unexpected_error, profile.language))
+        await message.answer(msg_text("unexpected_error", profile.language))
         await show_main_menu(message, profile, state)
         return
 
@@ -97,19 +96,17 @@ async def contact_coach(message: Message, state: FSMContext):
         photo = message.photo[-1]
         caption = message.caption if message.caption else ""
         await send_message(
-            coach, caption, state, reply_markup=incoming_message(coach_profile.language, profile.id), photo=photo
+            coach, caption, state, reply_markup=new_message_kb(coach_profile.language, profile.id), photo=photo
         )
     elif message.video:
         video = message.video
         caption = message.caption if message.caption else ""
         await send_message(
-            coach, caption, state, reply_markup=incoming_message(coach_profile.language, profile.id), video=video
+            coach, caption, state, reply_markup=new_message_kb(coach_profile.language, profile.id), video=video
         )
     else:
-        await send_message(
-            coach, message.text, state, reply_markup=incoming_message(coach_profile.language, profile.id)
-        )
+        await send_message(coach, message.text, state, reply_markup=new_message_kb(coach_profile.language, profile.id))
 
-    await message.answer(translate(MessageText.message_sent, profile.language))
+    await message.answer(msg_text("message_sent", profile.language))
     logger.debug(f"Client {profile.id} sent message to coach {coach.id}")
     await show_main_menu(message, profile, state)

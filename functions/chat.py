@@ -10,8 +10,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import *
-from bot.keyboards import new_coach_request
+from bot.keyboards import new_coach_kb
 from bot.states import States
+from bot.texts.text_manager import msg_text
 from core.cache_manager import cache_manager
 from core.file_manager import avatar_manager
 from common.settings import settings
@@ -22,8 +23,6 @@ from functions.text_utils import format_new_client_message, get_client_page, get
 from core.models import Coach, Profile, Client
 from functions.utils import program_menu_pagination
 from services.profile_service import profile_service
-from bot.texts.resources import MessageText
-from bot.texts.text_manager import translate
 
 logger = loguru.logger
 bot = Bot(settings.BOT_TOKEN)
@@ -44,14 +43,14 @@ async def send_message(
         language = data.get("recipient_language", "ua")
         sender_name = data.get("sender_name", "")
     else:
-        language = "ua"
+        language = settings.DEFAULT_BOT_LANGUAGE
         sender_name = ""
 
     recipient_data = await profile_service.get_profile(recipient.id)
     assert recipient_data
 
     if include_incoming_message:
-        formatted_text = translate(MessageText.incoming_message, language).format(name=sender_name, message=text)
+        formatted_text = msg_text("incoming_message", language).format(name=sender_name, message=text)
     else:
         formatted_text = text
 
@@ -99,7 +98,7 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
         await bot.send_photo(
             chat_id=settings.OWNER_ID,
             photo=photo,
-            caption=translate(MessageText.new_coach_request, "ru").format(
+            caption=msg_text("new_coach_request", settings.OWNER_LANGUAGE).format(
                 name=name,
                 surname=surname,
                 experience=experience,
@@ -110,7 +109,7 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
                 contact=contact,
                 profile_id=profile.id,
             ),
-            reply_markup=new_coach_request(profile.id),
+            reply_markup=new_coach_kb(profile.id),
         )
 
 
@@ -149,7 +148,7 @@ async def answer_message(callback_query: CallbackQuery, state: FSMContext):
         if client.status == "waiting_for_text":
             cache_manager.set_client_data(recipient_id, {"status": "default"})
 
-    await callback_query.message.answer(translate(MessageText.enter_your_message, profile.language))
+    await callback_query.message.answer(msg_text("enter_your_message", profile.language))
     await state.clear()
     await state.update_data(recipient_id=recipient_id, sender_name=sender.name)
     await state.set_state(state_to_set)
@@ -188,7 +187,7 @@ async def create_workouts(callback_query: CallbackQuery, state: FSMContext):
     if service == "subscription":
         await manage_subscription(callback_query, profile.language, client_id, state)
     else:
-        await callback_query.message.answer(translate(MessageText.workouts_number, profile.language))
+        await callback_query.message.answer(msg_text("workouts_number", profile.language))
         await state.set_state(States.workouts_number)
         with suppress(TelegramBadRequest):
             await callback_query.message.delete()
@@ -197,7 +196,7 @@ async def create_workouts(callback_query: CallbackQuery, state: FSMContext):
 @message_router.callback_query(F.data.startswith("approve"))
 async def approve_coach(callback_query: CallbackQuery, state: FSMContext):
     profile_id = callback_query.data.split("_")[1]
-    await profile_service.edit_coach_profile(int(profile_id), dict(verified=True))
+    await profile_service.edit_coach_profile_kb(int(profile_id), dict(verified=True))
     cache_manager.set_coach_data(int(profile_id), {"verified": True})
     await callback_query.answer("👍")
     coach = cache_manager.get_coach_by_id(int(profile_id))
@@ -205,7 +204,7 @@ async def approve_coach(callback_query: CallbackQuery, state: FSMContext):
         lang = profile_data.get("language")
     else:
         lang = "ua"
-    await send_message(coach, translate(MessageText.coach_verified, lang=lang), state, include_incoming_message=False)
+    await send_message(coach, msg_text("coach_verified", lang), state, include_incoming_message=False)
     await callback_query.message.delete()
     logger.info(f"Coach verification for profile_id {profile_id} approved")
 
@@ -219,14 +218,14 @@ async def decline_coach(callback_query: CallbackQuery, state: FSMContext):
         lang = profile_data.get("language")
     else:
         lang = "ua"
-    await send_message(coach, translate(MessageText.coach_declined, lang=lang), state, include_incoming_message=False)
+    await send_message(coach, msg_text("coach_declined", lang), state, include_incoming_message=False)
     await callback_query.message.delete()
     logger.info(f"Coach verification for profile_id {profile_id} declined")
 
 
 async def contact_client(callback_query: CallbackQuery, profile: Profile, client_id: str, state: FSMContext) -> None:
     await callback_query.answer()
-    await callback_query.message.answer(translate(MessageText.enter_your_message, profile.language))
+    await callback_query.message.answer(msg_text("enter_your_message", profile.language))
     await callback_query.message.delete()
     coach = cache_manager.get_coach_by_id(profile.id)
     await state.clear()
@@ -248,9 +247,9 @@ async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> 
     client_page = await get_client_page(client, coach_lang, subscription, data)
     text = await format_new_client_message(data, coach_lang, client_lang, preferable_workouts_type)
     reply_markup = (
-        new_incoming_request(coach_lang, client.id)
+        client_msg_bk(coach_lang, client.id)
         if data.get("new_client")
-        else incoming_request(coach_lang, service, client.id)
+        else incoming_request_kb(coach_lang, service, client.id)
     )
 
     await send_message(
@@ -270,7 +269,7 @@ async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> 
 
     await send_message(
         recipient=coach,
-        text=translate(MessageText.client_page, coach_lang).format(**client_page),
+        text=msg_text("client_page, coach_lang").format(**client_page),
         state=None,
         reply_markup=reply_markup,
         include_incoming_message=False,
@@ -281,7 +280,7 @@ async def process_feedback_content(message: Message, profile: Profile) -> bool:
     if message.text:
         await bot.send_message(
             chat_id=settings.OWNER_ID,
-            text=translate(MessageText.new_feedback, lang="ru").format(profile_id=profile.id, feedback=message.text),
+            text=msg_text("new_feedback", settings.OWNER_LANGUAGE).format(profile_id=profile.id, feedback=message.text),
             parse_mode=ParseMode.HTML,
         )
         return True
@@ -289,7 +288,7 @@ async def process_feedback_content(message: Message, profile: Profile) -> bool:
     elif message.photo:
         await bot.send_message(
             chat_id=settings.OWNER_ID,
-            text=translate(MessageText.new_feedback, lang="ru").format(
+            text=msg_text("new_feedback", settings.OWNER_LANGUAGE).format(
                 profile_id=profile.id, feedback=message.caption or ""
             ),
             parse_mode=ParseMode.HTML,
@@ -304,7 +303,7 @@ async def process_feedback_content(message: Message, profile: Profile) -> bool:
     elif message.video:
         await bot.send_message(
             chat_id=settings.OWNER_ID,
-            text=translate(MessageText.new_feedback, lang="ru").format(
+            text=msg_text("new_feedback", settings.OWNER_LANGUAGE).format(
                 profile_id=profile.id, feedback=message.caption or ""
             ),
             parse_mode=ParseMode.HTML,
@@ -316,5 +315,5 @@ async def process_feedback_content(message: Message, profile: Profile) -> bool:
         return True
 
     else:
-        await message.answer(text=translate(MessageText.invalid_content, lang="ru"))
+        await message.answer(msg_text("invalid_content", profile.language))
         return False

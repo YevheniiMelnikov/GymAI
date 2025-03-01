@@ -9,8 +9,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from dateutil.relativedelta import relativedelta
 
-from bot.keyboards import select_service, choose_coach, gift, select_days, yes_no
+from bot.keyboards import select_service_kb, choose_coach_kb, select_days_kb, gift_kb, yes_no_kb
 from bot.states import States
+from bot.texts.text_manager import msg_text
 from core.cache_manager import cache_manager
 from common.settings import settings
 from functions.chat import contact_client, process_feedback_content
@@ -30,8 +31,6 @@ from functions.workout_plans import manage_program, cancel_subscription
 from core.models import Coach, Profile
 from services.payment_service import payment_service
 from services.user_service import user_service
-from bot.texts.resources import MessageText
-from bot.texts.text_manager import translate
 
 main_router = Router()
 logger = loguru.logger
@@ -44,7 +43,7 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
         match callback_query.data:
             case "feedback":
                 await callback_query.answer()
-                await callback_query.message.answer(text=translate(MessageText.feedback, lang=profile.language))
+                await callback_query.message.answer(msg_text("feedback", profile.language))
                 await state.set_state(States.feedback)
                 await callback_query.message.delete()
 
@@ -72,7 +71,7 @@ async def profile_menu(callback_query: CallbackQuery, state: FSMContext) -> None
         await show_main_menu(callback_query.message, profile, state)
     else:
         await callback_query.message.answer(
-            text=translate(MessageText.delete_confirmation, profile.language), reply_markup=yes_no(profile.language)
+            msg_text("delete_confirmation", profile.language), reply_markup=yes_no_kb(profile.language)
         )
         await callback_query.message.delete()
         await state.set_state(States.profile_delete)
@@ -88,20 +87,18 @@ async def process_password_reset(message: Message, state: FSMContext) -> None:
         if email:
             auth_token = await user_service.get_user_token(profile.id)
             if await user_service.reset_password(email, auth_token):
-                await message.answer(
-                    text=translate(MessageText.password_reset_sent, profile.language).format(email=email)
-                )
+                await message.answer(msg_text("password_reset_sent", profile.language).format(email=email))
                 await state.clear()
                 await user_service.log_out(profile, auth_token)
                 cache_manager.deactivate_profiles(profile.current_tg_id)
-                await message.answer(text=translate(MessageText.username, profile.language))
+                await message.answer(msg_text("username", profile.language))
                 await state.set_state(States.username)
             else:
-                await message.answer(text=translate(MessageText.unexpected_error, profile.language))
+                await message.answer(msg_text("unexpected_error", profile.language))
         else:
-            await message.answer(text=translate(MessageText.no_profiles_found, data.get("lang")))
+            await message.answer(msg_text("no_profiles_found", data.get("lang")))
     else:
-        await message.answer(text=translate(MessageText.no_profiles_found, data.get("lang")))
+        await message.answer(msg_text("no_profiles_found", data.get("lang")))
     await message.delete()
 
 
@@ -110,7 +107,7 @@ async def handle_feedback(message: Message, state: FSMContext) -> None:
     profile = await get_or_load_profile(message.from_user.id)
     if await process_feedback_content(message, profile):
         logger.info(f"Profile_id {profile.id} sent feedback")
-        await message.answer(text=translate(MessageText.feedback_sent, lang=profile.language))
+        await message.answer(msg_text("feedback_sent", profile.language))
         await show_main_menu(message, profile, state)
 
 
@@ -123,7 +120,7 @@ async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext):
     else:
         coaches = cache_manager.get_coaches()
         if not coaches:
-            await callback_query.answer(translate(MessageText.no_coaches, lang=profile.language), show_alert=True)
+            await callback_query.answer(msg_text("no_coaches", profile.language), show_alert=True)
             return
 
         await state.set_state(States.coach_selection)
@@ -140,8 +137,8 @@ async def coach_paginator(callback_query: CallbackQuery, state: FSMContext):
 
     if callback_query.data == "quit":
         await callback_query.message.answer(
-            text=translate(MessageText.no_program, lang=profile.language),
-            reply_markup=choose_coach(profile.language),
+            msg_text("no_program", profile.language),
+            reply_markup=choose_coach_kb(profile.language),
         )
         await state.set_state(States.choose_coach)
         await callback_query.message.delete()
@@ -152,19 +149,17 @@ async def coach_paginator(callback_query: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     coaches = [Coach.from_dict(data) for data in data["coaches"]]
     if index < 0 or index >= len(coaches) and action != "selected":
-        await callback_query.answer(translate(MessageText.out_of_range, profile.language))
+        await callback_query.answer(msg_text("out_of_range", profile.language))
         return
 
     if action == "selected":
-        await callback_query.answer(translate(MessageText.saved, profile.language))
+        await callback_query.answer(msg_text("saved", profile.language))
         coach_id = callback_query.data.split("_")[1]
         coach = cache_manager.get_coach_by_id(coach_id)
         client = cache_manager.get_client_by_id(profile.id)
         await assign_coach(coach, client)
         await state.set_state(States.gift)
-        await callback_query.message.answer(
-            translate(MessageText.gift, profile.language), reply_markup=gift(profile.language)
-        )
+        await callback_query.message.answer(msg_text("gift", profile.language), reply_markup=gift_kb(profile.language))
         await callback_query.message.delete()
     else:
         await show_coaches_menu(callback_query.message, coaches, current_index=index)
@@ -195,7 +190,7 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
     try:
         index = int(client_id)
     except ValueError:
-        await callback_query.answer(translate(MessageText.out_of_range, profile.language))
+        await callback_query.answer(msg_text("out_of_range", profile.language))
         return
 
     await handle_clients_pagination(callback_query, profile, index, state)
@@ -208,8 +203,8 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         await callback_query.answer()
         await state.set_state(States.select_service)
         await callback_query.message.answer(
-            text=translate(MessageText.select_service, lang=profile.language),
-            reply_markup=select_service(profile.language),
+            msg_text("select_service", profile.language),
+            reply_markup=select_service_kb(profile.language),
         )
 
     elif callback_query.data == "change_days":
@@ -217,7 +212,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         await state.update_data(edit_mode=True)
         await state.set_state(States.workout_days)
         await callback_query.message.answer(
-            translate(MessageText.select_days, profile.language), reply_markup=select_days(profile.language, [])
+            msg_text("select_days", profile.language), reply_markup=select_days_kb(profile.language, [])
         )
 
     elif callback_query.data == "contact":
@@ -226,11 +221,11 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         coach_id = client.assigned_to.pop()
         await state.update_data(recipient_id=coach_id, sender_name=client.name)
         await state.set_state(States.contact_coach)
-        await callback_query.message.answer(translate(MessageText.enter_your_message, profile.language))
+        await callback_query.message.answer(msg_text("enter_your_message", profile.language))
 
     elif callback_query.data == "cancel":
         logger.info(f"User {profile.id} requested to stop the subscription")
-        await callback_query.answer(translate(MessageText.subscription_canceled, profile.language), show_alert=True)
+        await callback_query.answer(msg_text("subscription_canceled", profile.language), show_alert=True)
         user = await bot.get_chat(callback_query.from_user.id)
         contact = f"@{user.username}" if user.username else callback_query.from_user.id
         subscription = cache_manager.get_subscription(profile.id)
@@ -240,7 +235,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         async with aiohttp.ClientSession():
             await bot.send_message(
                 settings.OWNER_ID,
-                translate(MessageText.subscription_cancel_request, lang="ru").format(
+                msg_text("subscription_cancel_request", settings.OWNER_LANGUAGE).format(
                     profile_id=profile.id,
                     contact=contact,
                     next_payment_date=next_payment_date.strftime("%Y-%m-%d"),

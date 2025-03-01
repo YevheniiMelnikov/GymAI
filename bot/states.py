@@ -6,7 +6,7 @@ class States(StatesGroup):
     main_menu = State()
     feedback = State()
 
-    language_choice = State()
+    select_language = State()
     username = State()
     password = State()
     email = State()

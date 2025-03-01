@@ -136,7 +136,7 @@ class MessageText(Enum):
     profile_deleted = auto()
     accept_policy = auto()
     your_data_updated = auto()
-    choose_language = auto()
+    select_language = auto()
     choose_account_type = auto()
 
     choose_coach = auto()
@@ -202,7 +202,7 @@ class MessageText(Enum):
     payment_link = auto()
     contract_info_message = auto()
 
-    choose_action = auto()
+    select_action = auto()
     follow_link = auto()
     main_menu = auto()
     help = auto()

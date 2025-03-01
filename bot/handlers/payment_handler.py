@@ -8,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from rest_framework.exceptions import ValidationError
 
-from bot.keyboards import select_service, workout_type
+from bot.keyboards import select_service_kb, workout_type_kb
 from bot.states import States
 from core.cache_manager import cache_manager
 from functions.menus import show_main_menu
@@ -18,8 +18,7 @@ from core.models import Client, Coach
 from services.payment_service import payment_service
 from services.user_service import user_service
 from services.workout_service import workout_service
-from bot.texts.resources import ButtonText, MessageText
-from bot.texts.text_manager import translate
+from bot.texts.text_manager import msg_text, btn_text
 
 payment_router = Router()
 logger = loguru.logger
@@ -28,10 +27,10 @@ logger = loguru.logger
 @payment_router.callback_query(States.gift, F.data == "get")
 async def get_the_gift(callback_query: CallbackQuery, state: FSMContext):
     profile = await get_or_load_profile(callback_query.from_user.id)
-    await callback_query.answer(translate(ButtonText.done, profile.language))
+    await callback_query.answer(btn_text("done", profile.language))
     cache_manager.set_client_data(profile.id, {"status": "waiting_for_text"})
     await callback_query.message.answer(
-        translate(MessageText.workout_type), reply_markup=workout_type(profile.language)
+        msg_text("workout_type", profile.language), reply_markup=workout_type_kb(profile.language)
     )
     await state.update_data(new_client=True)
     await state.set_state(States.workout_type)
@@ -45,8 +44,8 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
     if callback_query.data == "back":
         await state.set_state(States.select_service)
         await callback_query.message.answer(
-            text=translate(MessageText.select_service, lang=profile.language),
-            reply_markup=select_service(profile.language),
+            msg_text("select_service", profile.language),
+            reply_markup=select_service_kb(profile.language),
         )
         await callback_query.message.delete()
         return
@@ -57,7 +56,7 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
     coach = cache_manager.get_coach_by_id(coach_id)
     await state.update_data(request_type=option, client=Client.to_dict(client), coach=Coach.to_dict(coach))
     await callback_query.message.answer(
-        translate(MessageText.workout_type), reply_markup=workout_type(profile.language)
+        msg_text("workout_type", profile.language), reply_markup=workout_type_kb(profile.language)
     )
     await state.set_state(States.workout_type)
     with suppress(TelegramBadRequest):
@@ -84,7 +83,7 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
                 )
             except ValidationError as e:
                 logger.error(f"Failed to create subscription: {e}")
-                await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
+                await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
                 return
 
             subscription_data = {
@@ -100,7 +99,7 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
             cache_manager.save_subscription(profile.id, subscription_data)
         cache_manager.set_payment_status(profile.id, True, data.get("request_type"))
         await payment_service.create_payment(profile.id, data.get("request_type"), order_id, amount)
-        await callback_query.answer(translate(MessageText.payment_in_progress, profile.language), show_alert=True)
+        await callback_query.answer(msg_text("payment_in_progress", profile.language), show_alert=True)
 
     await show_main_menu(callback_query.message, profile, state)
     with suppress(TelegramBadRequest):

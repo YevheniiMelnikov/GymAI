@@ -6,7 +6,7 @@ from typing import Any
 import loguru
 from liqpay import LiqPay
 
-from services.api_service import APIService
+from services.api_service import APIClient
 from core.models import Payment
 from common.settings import settings
 
@@ -23,7 +23,7 @@ class PaymentConfig:
     email_host: str
 
 
-class PaymentService(APIService):
+class PaymentService(APIClient):
     API_BASE_PATH = "api/v1/payments/"
     SUBSCRIPTIONS_PATH = "api/v1/subscriptions/"
 

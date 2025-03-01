@@ -7,8 +7,7 @@ from bot.states import States
 from core.cache_manager import cache_manager
 from core.models import Client, Coach, Exercise
 from services.profile_service import profile_service
-from bot.texts.resources import ButtonText, MessageText
-from bot.texts.text_manager import translate
+from bot.texts.text_manager import msg_text, btn_text
 
 
 def validate_password(password: str) -> bool:
@@ -27,17 +26,17 @@ def validate_email(email: str) -> bool:
     return bool(re.match(pattern, email))
 
 
-def get_profile_attributes(role: str, user: Optional[Client | Coach], lang_code: str) -> dict[str, str]:
+def get_profile_attributes(role: str, user: Optional[Client | Coach], lang: str) -> dict[str, str]:
     def get_attr(attr_name: str) -> str:
         return getattr(user, attr_name, "") if user else ""
 
     genders = {
-        "male": translate(ButtonText.male, lang=lang_code),
-        "female": translate(ButtonText.female, lang=lang_code),
+        "male": btn_text("male", lang),
+        "female": btn_text("female", lang),
     }
     verification_status = {
-        True: translate(MessageText.verified, lang=lang_code),
-        False: translate(MessageText.not_verified, lang=lang_code),
+        True: msg_text("verified", lang),
+        False: msg_text("not_verified", lang),
     }
 
     if role == "client":
@@ -58,9 +57,7 @@ def get_profile_attributes(role: str, user: Optional[Client | Coach], lang_code:
             "payment_details": get_attr("payment_details"),
             "subscription_price": get_attr("subscription_price"),
             "program_price": get_attr("program_price"),
-            "verif_status": verification_status.get(
-                get_attr("verified"), translate(MessageText.not_verified, lang=lang_code)
-            ),
+            "verif_status": verification_status.get(get_attr("verified"), msg_text("not_verified", lang)),
         }
 
     return attributes
@@ -68,32 +65,32 @@ def get_profile_attributes(role: str, user: Optional[Client | Coach], lang_code:
 
 def get_state_and_message(callback: str, lang: str) -> tuple[State, str]:
     return {
-        "workout_experience": (States.workout_experience, translate(MessageText.workout_experience, lang=lang)),
-        "workout_goals": (States.workout_goals, translate(MessageText.workout_goals, lang=lang)),
-        "weight": (States.weight, translate(MessageText.weight, lang=lang)),
-        "health_notes": (States.health_notes, translate(MessageText.health_notes, lang=lang)),
-        "work_experience": (States.work_experience, translate(MessageText.work_experience, lang=lang)),
-        "additional_info": (States.additional_info, translate(MessageText.additional_info, lang=lang)),
-        "payment_details": (States.payment_details, translate(MessageText.payment_details, lang=lang)),
+        "workout_experience": (States.workout_experience, msg_text("workout_experience", lang)),
+        "workout_goals": (States.workout_goals, msg_text("workout_goals", lang)),
+        "weight": (States.weight, msg_text("weight", lang)),
+        "health_notes": (States.health_notes, msg_text("health_notes", lang)),
+        "work_experience": (States.work_experience, msg_text("work_experience", lang)),
+        "additional_info": (States.additional_info, msg_text("additional_info", lang)),
+        "payment_details": (States.payment_details, msg_text("payment_details", lang)),
         "subscription_price": (
             States.subscription_price,
-            translate(MessageText.enter_subscription_price, lang=lang),
+            msg_text("enter_subscription_price", lang),
         ),
-        "program_price": (States.program_price, translate(MessageText.enter_program_price, lang=lang)),
-        "photo": (States.profile_photo, translate(MessageText.upload_photo, lang=lang)),
+        "program_price": (States.program_price, msg_text("enter_program_price", lang)),
+        "photo": (States.profile_photo, msg_text("upload_photo", lang)),
     }.get(callback, (None, None))
 
 
 async def get_client_page(client: Client, lang_code: str, subscription: bool, data: dict[str, Any]) -> dict[str, Any]:
     texts = {
-        "male": translate(ButtonText.male, lang=lang_code),
-        "female": translate(ButtonText.female, lang=lang_code),
-        "enabled": translate(ButtonText.enabled, lang=lang_code),
-        "disabled": translate(ButtonText.disabled, lang=lang_code),
-        "waiting_for_subscription": translate(MessageText.waiting_for_subscription, lang=lang_code),
-        "waiting_for_program": translate(MessageText.waiting_for_program, lang=lang_code),
-        "default": translate(MessageText.client_default_status, lang=lang_code),
-        "waiting_for_text": translate(MessageText.waiting_for_text, lang=lang_code),
+        "male": btn_text("male", lang_code),
+        "female": btn_text("female", lang_code),
+        "enabled": btn_text("enabled", lang_code),
+        "disabled": btn_text("disabled", lang_code),
+        "waiting_for_subscription": msg_text("waiting_for_subscription", lang_code),
+        "waiting_for_program": msg_text("waiting_for_program", lang_code),
+        "default": msg_text("client_default_status", lang_code),
+        "waiting_for_text": msg_text("waiting_for_text", lang_code),
     }
 
     client_data = await profile_service.get_profile(client.id)
@@ -118,40 +115,40 @@ async def format_new_client_message(
     data: dict[str, Any], coach_lang: str, client_lang: str, preferable_type: str
 ) -> str:
     if data.get("new_client"):
-        return translate(MessageText.new_client, coach_lang).format(lang=client_lang, workout_type=preferable_type)
+        return msg_text("new_client", coach_lang).format(lang=client_lang, workout_type=preferable_type)
     else:
         service_types = await get_service_types(coach_lang)
         service_type = data.get("request_type")
         service = service_types.get(service_type)
-        return translate(MessageText.incoming_request, coach_lang).format(
+        return msg_text("incoming_request", coach_lang).format(
             service=service, lang=client_lang, workout_type=preferable_type
         )
 
 
 async def get_service_types(language: str) -> dict:
     return {
-        "subscription": translate(ButtonText.subscription, language),
-        "program": translate(ButtonText.program, language),
+        "subscription": btn_text("subscription", language),
+        "program": btn_text("program", language),
     }
 
 
 async def get_workout_types(language: str) -> dict:
     return {
-        "home": translate(ButtonText.home_workout, language),
-        "street": translate(ButtonText.street_workout, language),
-        "gym": translate(ButtonText.gym_workout, language),
+        "home": btn_text("home_workout", language),
+        "street": btn_text("street_workout", language),
+        "gym": btn_text("gym_workout", language),
     }
 
 
 def get_translated_week_day(lang_code: str, day: str) -> str:
     days = {
-        "monday": translate(ButtonText.monday, lang_code),
-        "tuesday": translate(ButtonText.tuesday, lang_code),
-        "wednesday": translate(ButtonText.wednesday, lang_code),
-        "thursday": translate(ButtonText.thursday, lang_code),
-        "friday": translate(ButtonText.friday, lang_code),
-        "saturday": translate(ButtonText.saturday, lang_code),
-        "sunday": translate(ButtonText.sunday, lang_code),
+        "monday": btn_text("monday", lang_code),
+        "tuesday": btn_text("tuesday", lang_code),
+        "wednesday": btn_text("wednesday", lang_code),
+        "thursday": btn_text("thursday", lang_code),
+        "friday": btn_text("friday", lang_code),
+        "saturday": btn_text("saturday", lang_code),
+        "sunday": btn_text("sunday", lang_code),
     }
     return days.get(day)
 

@@ -8,7 +8,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import payment_keyboard, program_edit_kb, program_manage_menu
+from bot.keyboards import payment_kb, program_edit_kb, program_manage_kb
 from bot.states import States
 from core.cache_manager import cache_manager
 from core.file_manager import gif_manager
@@ -21,8 +21,7 @@ from services.payment_service import payment_service
 from services.user_service import user_service
 from services.workout_service import workout_service
 from bot.texts.exercises import exercise_dict
-from bot.texts.resources import MessageText
-from bot.texts.text_manager import translate
+from bot.texts.text_manager import msg_text
 
 bot = Bot(os.environ.get("BOT_TOKEN"))
 logger = loguru.logger
@@ -61,11 +60,11 @@ async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Messa
         program = await format_program({str(day_index): exercises[str(day_index)]}, day_index)
 
     exercise_msg = await (input_data.answer if isinstance(input_data, Message) else input_data.message.answer)(
-        translate(MessageText.enter_exercise, profile.language)
+        msg_text("enter_exercise", profile.language)
     )
     program_msg = await exercise_msg.answer(
-        text=translate(MessageText.program_page, profile.language).format(program=program, day=day),
-        reply_markup=program_manage_menu(profile.language, split_number),
+        msg_text("program_page", profile.language).format(program=program, day=day),
+        reply_markup=program_manage_kb(profile.language, split_number),
         disable_web_page_preview=True,
     )
 
@@ -118,10 +117,10 @@ async def update_exercise_data(message: Message, state: FSMContext, lang: str, u
     await state.set_state(States.program_edit)
     program = await format_program({str(day_index): exercises}, day_index)
     await message.answer(
-        translate(MessageText.program_page, lang).format(program=program, day=day_index + 1),
+        msg_text("program_page", lang).format(program=program, day=day_index + 1),
         disable_web_page_preview=True,
     )
-    await message.answer(translate(MessageText.continue_editing, lang), reply_markup=program_edit_kb(lang))
+    await message.answer(msg_text("continue_editing", lang), reply_markup=program_edit_kb(lang))
     with suppress(TelegramBadRequest):
         await message.delete()
 
@@ -145,7 +144,7 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
     )
     await state.set_state(States.program_edit)
     await callback_query.message.answer(
-        text=translate(MessageText.program_page, profile.language).format(program=program_text, day=week_day),
+        msg_text("program_page", profile.language).format(program=program_text, day=week_day),
         disable_web_page_preview=True,
         reply_markup=program_edit_kb(profile.language),
     )
@@ -170,7 +169,7 @@ async def edit_subscription_days(
 
 
 async def process_new_subscription(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    await callback_query.answer(translate(MessageText.checkbox_reminding, profile.language), show_alert=True)
+    await callback_query.answer(msg_text("checkbox_reminding", profile.language), show_alert=True)
     order_id = generate_order_id()
     client = cache_manager.get_client_by_id(profile.id)
     coach = cache_manager.get_coach_by_id(client.assigned_to.pop())
@@ -181,9 +180,9 @@ async def process_new_subscription(callback_query: CallbackQuery, profile: Profi
     ):
         await state.set_state(States.handle_payment)
         await callback_query.message.answer(
-            translate(MessageText.follow_link, profile.language),
-            reply_markup=payment_keyboard(profile.language, payment_link, "subscription"),
+            msg_text("follow_link", profile.language),
+            reply_markup=payment_kb(profile.language, payment_link, "subscription"),
         )
     else:
-        await callback_query.message.answer(translate(MessageText.unexpected_error, profile.language))
+        await callback_query.message.answer(msg_text("unexpected_error", profile.language))
     await callback_query.message.delete()

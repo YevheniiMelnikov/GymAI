@@ -9,13 +9,12 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BotCommand, CallbackQuery
 
-from bot.keyboards import program_edit_kb, program_view_kb, subscription_manage_menu
+from bot.keyboards import program_edit_kb, program_view_kb, subscription_manage_kb
 from bot.states import States
 from common.settings import settings
 from functions import menus, profiles, text_utils
 from core.models import Client
-from bot.texts.resources import MessageText
-from bot.texts.text_manager import resource_manager, translate
+from bot.texts.text_manager import resource_manager, msg_text
 
 logger = loguru.logger
 bot = Bot(settings.BOT_TOKEN)
@@ -59,9 +58,7 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
         state_to_set = States.program_view
     else:
         reply_markup = (
-            subscription_manage_menu(profile.language)
-            if data.get("subscription")
-            else program_edit_kb(profile.language)
+            subscription_manage_kb(profile.language) if data.get("subscription") else program_edit_kb(profile.language)
         )
         state_to_set = States.subscription_manage if data.get("subscription") else States.program_edit
 
@@ -70,7 +67,7 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
 
     if current_day < 0 or current_day >= split_number:
         current_day = max(0, min(current_day, split_number - 1))
-        await callback_query.answer(translate(MessageText.out_of_range, profile.language))
+        await callback_query.answer(msg_text("out_of_range", profile.language))
         await state.update_data(day_index=current_day)
         return
 
@@ -85,7 +82,7 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
     )
     with suppress(TelegramBadRequest):
         await callback_query.message.edit_text(
-            text=translate(MessageText.program_page, profile.language).format(program=program_text, day=next_day),
+            msg_text("program_page", profile.language).format(program=program_text, day=next_day),
             reply_markup=reply_markup,
             disable_web_page_preview=True,
         )
@@ -98,11 +95,11 @@ async def handle_clients_pagination(callback_query: CallbackQuery, profile, inde
     clients = [Client.from_dict(data) for data in data.get("clients")]
 
     if not clients:
-        await callback_query.answer(translate(MessageText.no_clients, profile.language))
+        await callback_query.answer(msg_text("no_clients", profile.language))
         return
 
     if index < 0 or index >= len(clients):
-        await callback_query.answer(translate(MessageText.out_of_range, profile.language))
+        await callback_query.answer(msg_text("out_of_range", profile.language))
         return
 
     await menus.show_clients(callback_query.message, clients, state, index)

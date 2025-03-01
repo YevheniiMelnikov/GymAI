@@ -7,14 +7,13 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from bot.keyboards import workout_results, workout_survey_keyboard
+from bot.keyboards import workout_results_kb, workout_survey_kb
 from bot.states import States
 from common.settings import settings
 from core.cache_manager import cache_manager
 from functions.profiles import get_or_load_profile
 from services.profile_service import profile_service
-from bot.texts.resources import MessageText
-from bot.texts.text_manager import translate
+from bot.texts.text_manager import msg_text
 
 logger = loguru.logger
 survey_router = Router()
@@ -26,14 +25,15 @@ async def send_daily_survey():
     for client_id in clients:
         client_data = await profile_service.get_profile(client_id)
         client_lang = (
-            cache_manager.get_profile_info_by_key(client_data.get("current_tg_id"), client_id, "language") or "ua"
+            cache_manager.get_profile_info_by_key(client_data.get("current_tg_id"), client_id, "language")
+            or settings.DEFAULT_BOT_LANGUAGE
         )
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
         async with aiohttp.ClientSession():
             await bot.send_message(
                 chat_id=client_data.get("current_tg_id"),
-                text=translate(MessageText.have_you_trained, client_lang),
-                reply_markup=workout_survey_keyboard(client_lang, yesterday),
+                text=msg_text("have_you_trained", client_lang),
+                reply_markup=workout_survey_kb(client_lang, yesterday),
                 disable_notification=True,
             )
 
@@ -54,7 +54,7 @@ async def send_daily_survey():
                 await state.update_data(exercises=exercises, day=yesterday, day_index=day_index)
                 await callback_query.answer("🔥")
                 await callback_query.message.answer(
-                    translate(MessageText.workout_results), reply_markup=workout_results(profile.language)
+                    msg_text("workout_results", profile.language), reply_markup=workout_results_kb(profile.language)
                 )
                 await callback_query.message.delete()
                 await state.set_state(States.workout_survey)
