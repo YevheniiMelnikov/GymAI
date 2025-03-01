@@ -1,10 +1,8 @@
 import os
 
-import loguru
+from common.logger import logger
 from aiogram.types import Message
 from google.cloud import storage
-
-logger = loguru.logger
 
 
 class FileManager:

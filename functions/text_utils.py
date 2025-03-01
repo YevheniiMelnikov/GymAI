@@ -4,9 +4,9 @@ from typing import Any, Optional
 from aiogram.fsm.state import State
 
 from bot.states import States
-from core.cache_manager import cache_manager
+from core.cache_manager import CacheManager
 from core.models import Client, Coach, Exercise
-from services.profile_service import profile_service
+from services.profile_service import ProfileService
 from bot.texts.text_manager import msg_text, btn_text
 
 
@@ -93,7 +93,7 @@ async def get_client_page(client: Client, lang_code: str, subscription: bool, da
         "waiting_for_text": msg_text("waiting_for_text", lang_code),
     }
 
-    client_data = await profile_service.get_profile(client.id)
+    client_data = await ProfileService.get_profile(client.id)
     page = {
         "name": client.name,
         "gender": texts.get(client.gender, ""),
@@ -102,7 +102,7 @@ async def get_client_page(client: Client, lang_code: str, subscription: bool, da
         "workout_goals": client.workout_goals,
         "health_notes": client.health_notes,
         "weight": client.weight,
-        "language": cache_manager.get_profile_info_by_key(client_data.get("current_tg_id"), client.id, "language"),
+        "language": CacheManager.get_profile_info_by_key(client_data.get("current_tg_id"), client.id, "language"),
         "subscription": texts.get("enabled") if subscription else texts.get("disabled"),
         "status": texts.get(client.status),
     }

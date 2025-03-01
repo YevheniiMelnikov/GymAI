@@ -1,6 +1,5 @@
 from contextlib import suppress
 
-import loguru
 from aiogram import Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
@@ -9,14 +8,14 @@ from aiogram.types import Message
 
 from bot.keyboards import action_choice_kb, select_language_kb
 from bot.states import States
-from core.cache_manager import cache_manager
+from common.logger import logger
+from core.cache_manager import CacheManager
 from common.settings import settings
 from core.models import Profile
 from functions.menus import show_main_menu
 from services.user_service import user_service
 from bot.texts.text_manager import msg_text
 
-logger = loguru.logger
 cmd_router = Router()
 
 
@@ -49,11 +48,13 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
     await state.update_data(chat_id=message.chat.id)
     data = await state.get_data()
-    if profile := Profile.from_dict(data.get("profile", {})):
+
+    if data.get("profile"):
+        profile = Profile.from_dict(data.get("profile"))
         logger.info(f"User with profile_id {profile.id} started bot")
         auth_token = await user_service.get_user_token(profile.id)
         await user_service.log_out(profile, auth_token)
-        cache_manager.deactivate_profiles(profile.current_tg_id)
+        CacheManager.deactivate_profiles(profile.current_tg_id)
         await state.update_data(lang=profile.language)
         start_message = await message.answer(msg_text("start", profile.language))
         await message.answer(
@@ -64,18 +65,18 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         await state.set_state(States.action_choice)
         with suppress(TelegramBadRequest):
             await message.delete()
-        return
 
-    logger.info(f"Telegram user {message.from_user.id} started bot")
-    start_message = await message.answer(msg_text("start", settings.DEFAULT_BOT_LANGUAGE))
-    await state.update_data(message_ids=[start_message.message_id])
-    await state.set_state(States.select_language)
-    language_message = await message.answer(
-        msg_text("select_language", settings.DEFAULT_BOT_LANGUAGE), reply_markup=select_language_kb()
-    )
-    await state.update_data(message_ids=[start_message.message_id, language_message.message_id])
-    with suppress(TelegramBadRequest):
-        await message.delete()
+    else:
+        logger.info(f"Telegram user {message.from_user.id} started bot")
+        start_message = await message.answer(msg_text("start", settings.DEFAULT_BOT_LANGUAGE))
+        await state.update_data(message_ids=[start_message.message_id])
+        await state.set_state(States.select_language)
+        language_message = await message.answer(
+            msg_text("select_language", settings.DEFAULT_BOT_LANGUAGE), reply_markup=select_language_kb()
+        )
+        await state.update_data(message_ids=[start_message.message_id, language_message.message_id])
+        with suppress(TelegramBadRequest):
+            await message.delete()
 
 
 @cmd_router.message(Command("logout"))
@@ -86,7 +87,7 @@ async def cmd_logout(message: Message, state: FSMContext) -> None:
         lang = profile.language if profile.language else settings.DEFAULT_BOT_LANGUAGE
         auth_token = await user_service.get_user_token(profile.id)
         await user_service.log_out(profile, auth_token)
-        cache_manager.deactivate_profiles(profile.current_tg_id)
+        CacheManager.deactivate_profiles(profile.current_tg_id)
         await state.update_data(lang=lang)
         await message.answer(
             msg_text("select_action", lang),
@@ -121,10 +122,10 @@ async def cmd_feedback(message: Message, state: FSMContext) -> None:
 
 @cmd_router.message(Command("reset_password"))
 async def cmd_reset_password(message: Message, state: FSMContext) -> None:
-    profiles = cache_manager.get_profiles(message.from_user.id)
+    profiles = CacheManager.get_profiles(message.from_user.id)
     if profiles:
         usernames = [
-            cache_manager.get_profile_info_by_key(message.from_user.id, profile.id, "username") for profile in profiles
+            CacheManager.get_profile_info_by_key(message.from_user.id, profile.id, "username") for profile in profiles
         ]
         language = profiles[0].language if profiles[0].language else settings.DEFAULT_BOT_LANGUAGE
         await state.update_data(

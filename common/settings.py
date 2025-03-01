@@ -48,7 +48,7 @@ class Settings:
     WEBHOOK_HOST: str = os.getenv("WEBHOOK_HOST")
     WEBHOOK_PORT: int = 8080
     WEBHOOK_PATH: str = f"/gym_bot/{BOT_TOKEN}"
-    WEBHOOK_URL: str = f"{WEBHOOK_HOST}{WEBHOOK_PATH}/{BOT_TOKEN}"
+    WEBHOOK_URL: str = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 
     REDIS_URL: str = os.getenv("REDIS_URL")
     DB_PORT: str = os.getenv("DB_PORT")

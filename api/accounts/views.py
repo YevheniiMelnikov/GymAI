@@ -18,16 +18,13 @@ from rest_framework_api_key.permissions import HasAPIKey
 
 from common.constants import WELCOME_MAIL_SUBJECT
 from common.settings import settings
+from common.logger import logger
 from .models import Profile, ClientProfile, CoachProfile
 from .serializers import (
     ProfileSerializer,
     CoachProfileSerializer,
     ClientProfileSerializer,
 )
-
-import loguru
-
-logger = loguru.logger
 
 
 class IsAuthenticatedButAllowInactive(BasePermission):

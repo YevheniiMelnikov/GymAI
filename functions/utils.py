@@ -1,9 +1,10 @@
 import secrets
 import string
 from contextlib import suppress
+from typing import Optional
 
 import aiohttp
-import loguru
+from common.logger import logger
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -14,9 +15,8 @@ from bot.states import States
 from common.settings import settings
 from functions import menus, profiles, text_utils
 from core.models import Client
-from bot.texts.text_manager import resource_manager, msg_text
+from bot.texts.text_manager import msg_text, TextManager
 
-logger = loguru.logger
 bot = Bot(settings.BOT_TOKEN)
 
 
@@ -35,8 +35,9 @@ async def short_url(url: str) -> str:
                 return url
 
 
-async def set_bot_commands(lang: str = "ua") -> None:
-    command_texts = resource_manager.commands
+async def set_bot_commands(lang: Optional[str] = None) -> None:
+    lang = lang or settings.DEFAULT_BOT_LANGUAGE
+    command_texts = TextManager.commands
     commands = [BotCommand(command=cmd, description=desc[lang]) for cmd, desc in command_texts.items()]
     await bot.set_my_commands(commands)
 

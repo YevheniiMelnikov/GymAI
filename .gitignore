@@ -161,3 +161,4 @@ google_creds.json
 *~
 /dumps/
 docker-compose-local.yml
+gym_bot.log
