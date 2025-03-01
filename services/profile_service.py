@@ -9,7 +9,7 @@ from core.encrypter import encrypter as enc, Encrypter
 logger = loguru.logger
 
 
-class ProfileClient(APIClient):
+class ProfileService(APIClient):
     def __init__(self, encrypter: Encrypter):
         super().__init__()
         self.encrypter = encrypter
@@ -137,4 +137,4 @@ class ProfileClient(APIClient):
         return status_code == 200
 
 
-profile_service = ProfileClient(enc)
+profile_service = ProfileService(enc)

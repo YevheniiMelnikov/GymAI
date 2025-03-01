@@ -25,9 +25,9 @@ services:
     volumes:
       - redisdata:/data
       - ./redis.conf:/usr/local/etc/redis/redis.conf
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
     networks:
       - monitoring
-    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 10s
@@ -48,12 +48,7 @@ services:
     env_file:
       - ./.env
     volumes:
-    - ./common:/opt/common
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://172.20.0.2:3100/loki/api/v1/push"
-        loki-external-labels: "job=api,app=gym_bot"
+      - ./common:/opt/common
     networks:
       - monitoring
     restart: unless-stopped
@@ -68,7 +63,7 @@ services:
       - db
       - redis
     ports:
-      - "8080:8000"
+      - "8080:8080"
     logging:
       driver: loki
       options:
@@ -93,7 +88,21 @@ services:
     ports:
       - "9093:9093"
     volumes:
-      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ./static:/opt/backend/staticfiles:ro
     networks:
       - monitoring
     restart: unless-stopped

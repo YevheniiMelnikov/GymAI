@@ -64,4 +64,4 @@ class APIClient:
         return False
 
 
-api_service = APIClient()
+api_client = APIClient()

@@ -10,7 +10,7 @@ from core.models import Profile
 logger = loguru.logger
 
 
-class UserClient(APIClient):
+class UserService(APIClient):
     async def sign_up(self, **kwargs) -> bool:
         url = urljoin(self.api_url, "api/v1/profiles/create/")
         status_code, response = await self._api_request(
@@ -96,4 +96,4 @@ class UserClient(APIClient):
         return status_code == 204
 
 
-user_service = UserClient()
+user_service = UserService()

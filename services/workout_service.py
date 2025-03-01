@@ -9,7 +9,7 @@ from core.models import Exercise
 logger = loguru.logger
 
 
-class WorkoutClient(APIClient):
+class WorkoutService(APIClient):
     async def save_program(
         self, client_id: int, exercises: dict[int, Exercise], split_number: int, wishes: str
     ) -> dict:
@@ -90,4 +90,4 @@ class WorkoutClient(APIClient):
         return False
 
 
-workout_service = WorkoutClient()
+workout_service = WorkoutService()

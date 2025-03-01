@@ -8,10 +8,10 @@ from functions.workout_plans import cancel_subscription
 from core.models import Payment, Profile
 from common.settings import settings
 from core.google_sheets_manager import sheets_manager
-from services.payment_service import payment_service, PaymentClient
-from services.profile_service import profile_service, ProfileClient
+from services.payment_service import payment_service, PaymentService
+from services.profile_service import profile_service, ProfileService
 from services.user_service import user_service
-from services.workout_service import workout_service, WorkoutClient
+from services.workout_service import workout_service, WorkoutService
 from bot.texts.text_manager import msg_text
 
 
@@ -19,9 +19,9 @@ class PaymentProcessor:
     def __init__(
         self,
         cache_mngr: CacheManager,
-        payment_srv: PaymentClient,
-        profile_srv: ProfileClient,
-        workout_srv: WorkoutClient,
+        payment_srv: PaymentService,
+        profile_srv: ProfileService,
+        workout_srv: WorkoutService,
     ):
         self.cache_manager = cache_mngr
         self.payment_service = payment_srv
