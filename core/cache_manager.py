@@ -5,62 +5,62 @@ from datetime import datetime, timedelta
 from json import JSONDecodeError
 from typing import Any
 
-import loguru
 import redis
 from dateutil.parser import parse
+from common.logger import logger
 
-from core.encrypter import Encrypter
-from core.encrypter import encrypter as enc
+from core.encryptor import Encryptor
 from core.exceptions import ProfileNotFoundError, UserServiceError
 from core.models import Client, Coach, Profile, Program, Subscription
 from common.settings import settings
 
-logger = loguru.logger
-
 
 class CacheManager:
-    def __init__(self, redis_url: str, encrypter: Encrypter, prefix: str = "app/"):
-        self.redis_url = redis_url
-        self.redis = redis.from_url(f"{self.redis_url}", encoding="utf-8", decode_responses=True)
-        self.encrypter = encrypter
-        self.prefix = prefix
+    redis = redis.from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
+    encryptor = Encryptor
 
-    def _add_prefix(self, key: str) -> str:
-        return f"{self.prefix}{key}"
+    @classmethod
+    def _add_prefix(cls, key: str) -> str:
+        return f"app/{key}"
 
-    def close_pool(self) -> None:
-        if self.redis:
-            self.redis.close()
+    @classmethod
+    def close_pool(cls) -> None:
+        if cls.redis:
+            cls.redis.close()
 
-    def _get_profile_data(self, telegram_id: int) -> list[dict[str, Any]]:
-        key = self._add_prefix("user_profiles")
-        profiles_data = self.redis.hget(key, str(telegram_id)) or "[]"
+    @classmethod
+    def _get_profile_data(cls, telegram_id: int) -> list[dict[str, Any]]:
+        key = cls._add_prefix("user_profiles")
+        profiles_data = cls.redis.hget(key, str(telegram_id)) or "[]"
         try:
             return json.loads(profiles_data)
         except JSONDecodeError as e:
             logger.error(f"JSON decode error: {e}")
             return []
 
-    def _set_data(self, key: str, profile_id: int, data: dict[str, Any], allowed_fields: list[str]) -> None:
+    @classmethod
+    def _set_data(cls, key: str, profile_id: int, data: dict[str, Any], allowed_fields: list[str]) -> None:
         try:
-            key = self._add_prefix(key)
+            key = cls._add_prefix(key)
             filtered_data = {k: data[k] for k in allowed_fields if k in data}
-            existing_data = json.loads(self.redis.hget(key, str(profile_id)) or "{}")
+            existing_data = json.loads(cls.redis.hget(key, str(profile_id)) or "{}")
             existing_data.update(filtered_data)
-            self.redis.hset(key, str(profile_id), json.dumps(existing_data))
+            cls.redis.hset(key, str(profile_id), json.dumps(existing_data))
             logger.debug(f"Data for profile_id {profile_id} has been updated in {key}: {filtered_data}")
         except Exception as e:
             logger.error(f"Failed to set or update data for {profile_id} in {key}", e)
 
-    def _update_profile_data(self, telegram_id: int, profiles_data: list[dict[str, Any]]) -> None:
-        key = self._add_prefix("user_profiles")
-        self.redis.hset(key, str(telegram_id), json.dumps(profiles_data))
+    @classmethod
+    def _update_profile_data(cls, telegram_id: int, profiles_data: list[dict[str, Any]]) -> None:
+        key = cls._add_prefix("user_profiles")
+        cls.redis.hset(key, str(telegram_id), json.dumps(profiles_data))
 
+    @classmethod
     def set_profile(
-        self, profile: Profile, username: str, telegram_id: int, email: str, is_current: bool = True
+        cls, profile: Profile, username: str, telegram_id: int, email: str, is_current: bool = True
     ) -> None:
         try:
-            current_profiles = self._get_profile_data(telegram_id)
+            current_profiles = cls._get_profile_data(telegram_id)
             profile_data = {
                 "id": profile.id,
                 "status": profile.status,
@@ -82,32 +82,31 @@ class CacheManager:
                     p["is_current"] = False
                     p["current_tg_id"] = None
 
-            self._update_profile_data(telegram_id, current_profiles)
+            cls._update_profile_data(telegram_id, current_profiles)
             logger.debug(f"Profile {profile.id} set for user {telegram_id}")
 
         except Exception as e:
             logger.error(f"Failed to set profile for user {telegram_id}: {e}")
 
-    def get_current_profile(self, telegram_id: int) -> Profile:
-        try:
-            current_profiles = [
-                Profile.from_dict(data) for data in self._get_profile_data(telegram_id) if data.get("is_current", True)
-            ]
-            if current_profiles:
-                return max(current_profiles, key=lambda p: p.last_used)
-            else:
-                raise ProfileNotFoundError(telegram_id)
-        except Exception as e:
-            logger.error(f"Error while fetching profile for user {telegram_id}: {e}")
+    @classmethod
+    def get_current_profile(cls, telegram_id: int) -> Profile:
+        current_profiles = [
+            Profile.from_dict(data) for data in cls._get_profile_data(telegram_id) if data.get("is_current", True)
+        ]
+        if current_profiles:
+            return max(current_profiles, key=lambda p: p.last_used)
+        else:
             raise ProfileNotFoundError(telegram_id)
 
-    def get_profiles(self, telegram_id: int) -> list[Profile]:
-        return [Profile.from_dict(data) for data in self._get_profile_data(telegram_id)]
+    @classmethod
+    def get_profiles(cls, telegram_id: int) -> list[Profile]:
+        return [Profile.from_dict(data) for data in cls._get_profile_data(telegram_id)]
 
-    def get_coaches(self) -> list[Coach] | None:
+    @classmethod
+    def get_coaches(cls) -> list[Coach] | None:
         try:
-            key = self._add_prefix("coaches")
-            all_coaches = self.redis.hgetall(key)
+            key = cls._add_prefix("coaches")
+            all_coaches = cls.redis.hgetall(key)
             coaches_data = []
             for k, v in all_coaches.items():
                 coach_dict = json.loads(v)
@@ -121,48 +120,52 @@ class CacheManager:
             logger.info(f"Failed to retrieve coach data: {e}")
             return None
 
-    def deactivate_profiles(self, telegram_id: int) -> None:
+    @classmethod
+    def deactivate_profiles(cls, telegram_id: int) -> None:
         try:
-            profiles_data = self._get_profile_data(telegram_id)
+            profiles_data = cls._get_profile_data(telegram_id)
             for profile_data in profiles_data:
                 profile_data["is_current"] = False
-            self._update_profile_data(telegram_id, profiles_data)
+            cls._update_profile_data(telegram_id, profiles_data)
             logger.debug(f"Profiles of user {telegram_id} deactivated")
         except Exception as e:
             logger.error(f"Failed to deactivate profiles of user {telegram_id}: {e}")
 
-    def get_profile_info_by_key(self, telegram_id: int, profile_id: int, key: str) -> str | None:
-        profiles = self._get_profile_data(telegram_id)
+    @classmethod
+    def get_profile_info_by_key(cls, telegram_id: int, profile_id: int, key: str) -> str | None:
+        profiles = cls._get_profile_data(telegram_id)
         for profile_data in profiles:
             if profile_data.get("id") == profile_id:
                 return profile_data.get(key)
         return None
 
-    def set_profile_info_by_key(self, telegram_id: int, profile_id: int, key: str, value: Any) -> bool:
+    @classmethod
+    def set_profile_info_by_key(cls, telegram_id: int, profile_id: int, key: str, value: Any) -> bool:
         try:
-            profiles_data = self._get_profile_data(telegram_id)
+            profiles_data = cls._get_profile_data(telegram_id)
             for profile_data in profiles_data:
                 if profile_data.get("id") == profile_id:
                     profile_data[key] = value
                     break
             else:
                 return False
-            self._update_profile_data(telegram_id, profiles_data)
+            cls._update_profile_data(telegram_id, profiles_data)
             return True
         except Exception as e:
             logger.exception(f"Failed to set profile info for profile_id {profile_id}: {e}")
             return False
 
-    def delete_profile(self, telegram_id: int, profile_id: int) -> bool:
+    @classmethod
+    def delete_profile(cls, telegram_id: int, profile_id: int) -> bool:
         try:
-            profiles_data = self._get_profile_data(telegram_id)
+            profiles_data = cls._get_profile_data(telegram_id)
             updated_profiles_data = [p for p in profiles_data if p["id"] != profile_id]
-            key = self._add_prefix("user_profiles")
+            key = cls._add_prefix("user_profiles")
 
             if not updated_profiles_data:
-                self.redis.hdel(key, str(telegram_id))
+                cls.redis.hdel(key, str(telegram_id))
             else:
-                self._update_profile_data(telegram_id, updated_profiles_data)
+                cls._update_profile_data(telegram_id, updated_profiles_data)
 
             logger.info(f"Profile {profile_id} deleted for tg user {telegram_id}")
             return True
@@ -170,7 +173,8 @@ class CacheManager:
             logger.error(f"Failed to delete profile_id {profile_id} for tg user {telegram_id}: {e}")
             return False
 
-    def set_client_data(self, profile_id: int, client_data: dict[str, Any]) -> None:
+    @classmethod
+    def set_client_data(cls, profile_id: int, client_data: dict[str, Any]) -> None:
         allowed_fields = [
             "name",
             "gender",
@@ -182,12 +186,13 @@ class CacheManager:
             "status",
             "assigned_to",
         ]
-        self._set_data("clients", profile_id, client_data, allowed_fields)
+        cls._set_data("clients", profile_id, client_data, allowed_fields)
 
-    def get_client_by_id(self, profile_id: int) -> Client:
+    @classmethod
+    def get_client_by_id(cls, profile_id: int) -> Client:
         try:
-            key = self._add_prefix("clients")
-            client_data = self.redis.hget(key, str(profile_id))
+            key = cls._add_prefix("clients")
+            client_data = cls.redis.hget(key, str(profile_id))
             if client_data:
                 data = json.loads(client_data)
                 data["id"] = profile_id
@@ -205,15 +210,16 @@ class CacheManager:
                 message="Failed to get client data", code=500, details=f"Error: {e}, Client ID: {profile_id}"
             )
 
-    def get_clients_to_survey(self) -> list[int]:
+    @classmethod
+    def get_clients_to_survey(cls) -> list[int]:
         try:
             yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
             clients_with_workout = []
-            key = self._add_prefix("clients")
-            all_clients = self.redis.hgetall(key)
+            key = cls._add_prefix("clients")
+            all_clients = cls.redis.hgetall(key)
 
             for client_id, _ in all_clients.items():
-                subscription = self.get_subscription(int(client_id))
+                subscription = cls.get_subscription(int(client_id))
                 if (
                     subscription
                     and subscription.enabled
@@ -227,7 +233,8 @@ class CacheManager:
             logger.error(f"Failed to get clients to survey: {e}")
             return []
 
-    def set_coach_data(self, profile_id: int, profile_data: dict) -> None:
+    @classmethod
+    def set_coach_data(cls, profile_id: int, profile_data: dict) -> None:
         allowed_fields = [
             "name",
             "surname",
@@ -241,18 +248,19 @@ class CacheManager:
             "program_price",
         ]
         if profile_data.get("payment_details"):
-            profile_data["payment_details"] = self.encrypter.encrypt(profile_data["payment_details"])
-        self._set_data("coaches", profile_id, profile_data, allowed_fields)
+            profile_data["payment_details"] = cls.encryptor.encrypt(profile_data["payment_details"])
+        cls._set_data("coaches", profile_id, profile_data, allowed_fields)
 
-    def get_coach_by_id(self, profile_id: int) -> Coach:
+    @classmethod
+    def get_coach_by_id(cls, profile_id: int) -> Coach:
         try:
-            key = self._add_prefix("coaches")
-            coach_data = self.redis.hget(key, str(profile_id))
+            key = cls._add_prefix("coaches")
+            coach_data = cls.redis.hget(key, str(profile_id))
             if coach_data:
                 data = json.loads(coach_data)
                 data["id"] = profile_id
                 if "payment_details" in data:
-                    data["payment_details"] = self.encrypter.decrypt(data["payment_details"])
+                    data["payment_details"] = cls.encryptor.decrypt(data["payment_details"])
                 return Coach.from_dict(data)
             else:
                 logger.debug(f"No data found for profile_id {profile_id} in cache")
@@ -265,18 +273,20 @@ class CacheManager:
                 message="Failed to get coach data", code=500, details=f"Error: {e}, Coach ID: {profile_id}"
             )
 
-    def set_program(self, client_id: int, program_data: dict) -> None:
+    @classmethod
+    def set_program(cls, client_id: int, program_data: dict) -> None:
         try:
-            key = self._add_prefix("workout_plans:programs")
-            self.redis.hset(key, str(client_id), json.dumps(program_data))
+            key = cls._add_prefix("workout_plans:programs")
+            cls.redis.hset(key, str(client_id), json.dumps(program_data))
             logger.debug(f"Program for client {client_id} saved in cache")
         except Exception as e:
             logger.error(f"Failed to save program in cache for client {client_id}: {e}")
 
-    def get_program(self, profile_id: int) -> Program | None:
+    @classmethod
+    def get_program(cls, profile_id: int) -> Program | None:
         try:
-            key = self._add_prefix("workout_plans:programs")
-            program_data = self.redis.hget(key, str(profile_id))
+            key = cls._add_prefix("workout_plans:programs")
+            program_data = cls.redis.hget(key, str(profile_id))
             if program_data:
                 data = json.loads(program_data)
                 data["profile"] = profile_id
@@ -288,7 +298,8 @@ class CacheManager:
             logger.info(f"Failed to get program for profile_id {profile_id}: {e}")
             return None
 
-    def update_subscription_data(self, profile_id: int, subscription_data: dict) -> None:
+    @classmethod
+    def update_subscription_data(cls, profile_id: int, subscription_data: dict) -> None:
         allowed_fields = [
             "payment_date",
             "enabled",
@@ -299,37 +310,41 @@ class CacheManager:
             "exercises",
             "wishes",
         ]
-        self._set_data("workout_plans:subscriptions", profile_id, subscription_data, allowed_fields)
+        cls._set_data("workout_plans:subscriptions", profile_id, subscription_data, allowed_fields)
 
-    def update_program_data(self, profile_id: int, program_data: dict[str, Any]) -> None:
+    @classmethod
+    def update_program_data(cls, profile_id: int, program_data: dict[str, Any]) -> None:
         allowed_fields = [
             "exercises_by_day",
             "split_number",
             "workout_type",
             "wishes",
         ]
-        self._set_data("workout_plans:programs", profile_id, program_data, allowed_fields)
+        cls._set_data("workout_plans:programs", profile_id, program_data, allowed_fields)
 
-    def set_payment_status(self, profile_id: int, paid: bool, service_type: str) -> None:
+    @classmethod
+    def set_payment_status(cls, profile_id: int, paid: bool, service_type: str) -> None:
         try:
-            key = self._add_prefix(f"workout_plans:payments:{service_type}")
-            self.redis.hset(key, str(profile_id), json.dumps({"paid": paid}))
+            key = cls._add_prefix(f"workout_plans:payments:{service_type}")
+            cls.redis.hset(key, str(profile_id), json.dumps({"paid": paid}))
             logger.debug(f"Program status for profile_id {profile_id} set to {paid}")
         except Exception as e:
             logger.error(f"Failed to set payment status for profile_id {profile_id}: {e}")
 
-    def reset_program_payment_status(self, profile_id: int, service_type: str) -> None:
+    @classmethod
+    def reset_program_payment_status(cls, profile_id: int, service_type: str) -> None:
         try:
-            key = self._add_prefix(f"workout_plans:payments:{service_type}")
-            self.redis.hdel(key, str(profile_id))
+            key = cls._add_prefix(f"workout_plans:payments:{service_type}")
+            cls.redis.hdel(key, str(profile_id))
             logger.debug(f"Payment status for profile_id {profile_id} has been reset")
         except Exception as e:
             logger.error(f"Failed to reset payment status for profile_id {profile_id}: {e}")
 
-    def check_payment_status(self, profile_id: int, service_type: str) -> bool:
+    @classmethod
+    def check_payment_status(cls, profile_id: int, service_type: str) -> bool:
         try:
-            key = self._add_prefix(f"workout_plans:payments:{service_type}")
-            payment_status = self.redis.hget(key, str(profile_id))
+            key = cls._add_prefix(f"workout_plans:payments:{service_type}")
+            payment_status = cls.redis.hget(key, str(profile_id))
             if payment_status:
                 return json.loads(payment_status).get("paid", False)
             else:
@@ -339,19 +354,21 @@ class CacheManager:
             logger.info(f"Failed to check payment status for profile_id {profile_id}: {e}")
             return False
 
-    def save_subscription(self, profile_id: int, subscription_data: dict) -> None:
+    @classmethod
+    def save_subscription(cls, profile_id: int, subscription_data: dict) -> None:
         try:
-            key = self._add_prefix("workout_plans:subscriptions")
-            self.redis.hset(key, str(profile_id), json.dumps(subscription_data))
-            self.reset_program_payment_status(profile_id, "subscription")
+            key = cls._add_prefix("workout_plans:subscriptions")
+            cls.redis.hset(key, str(profile_id), json.dumps(subscription_data))
+            cls.reset_program_payment_status(profile_id, "subscription")
             logger.debug(f"Subscription for profile_id {profile_id} saved in cache")
         except Exception as e:
             logger.error(f"Failed to save subscription in cache for profile {profile_id}: {e}")
 
-    def get_subscription(self, profile_id: int) -> Subscription | None:
+    @classmethod
+    def get_subscription(cls, profile_id: int) -> Subscription | None:
         try:
-            key = self._add_prefix("workout_plans:subscriptions")
-            subscription_data = self.redis.hget(key, str(profile_id))
+            key = cls._add_prefix("workout_plans:subscriptions")
+            subscription_data = cls.redis.hget(key, str(profile_id))
             if subscription_data:
                 data = json.loads(subscription_data)
                 if payment_date := data.get("payment_date"):
@@ -366,22 +383,21 @@ class CacheManager:
             logger.info(f"Failed to get subscription for profile_id {profile_id}: {e}")
             return None
 
-    def cache_gif_filename(self, exercise_name: str, filename: str) -> None:
+    @classmethod
+    def cache_gif_filename(cls, exercise_name: str, filename: str) -> None:
         if not exercise_name or not filename:
             return
         try:
-            key = self._add_prefix("gifs")
-            self.redis.hset(key, exercise_name, filename)
+            key = cls._add_prefix("gifs")
+            cls.redis.hset(key, exercise_name, filename)
         except Exception as e:
             logger.info(f"Failed to cache gif filename for exercise {exercise_name}: {e}")
 
-    def get_exercise_gif(self, exercise_name: str) -> str | None:
+    @classmethod
+    def get_exercise_gif(cls, exercise_name: str) -> str | None:
         try:
-            key = self._add_prefix("gifs")
-            return self.redis.hget(key, exercise_name)
+            key = cls._add_prefix("gifs")
+            return cls.redis.hget(key, exercise_name)
         except Exception as e:
             logger.info(f"Failed to get gif filename for exercise {exercise_name}: {e}")
             return None
-
-
-cache_manager = CacheManager(settings.REDIS_URL, enc)

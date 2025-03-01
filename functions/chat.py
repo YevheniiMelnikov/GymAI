@@ -2,7 +2,7 @@ from contextlib import suppress
 from typing import Any
 
 import aiohttp
-import loguru
+from common.logger import logger
 from aiogram import F, Router, Bot
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
@@ -13,7 +13,7 @@ from bot.keyboards import *
 from bot.keyboards import new_coach_kb
 from bot.states import States
 from bot.texts.text_manager import msg_text
-from core.cache_manager import cache_manager
+from core.cache_manager import CacheManager
 from core.file_manager import avatar_manager
 from common.settings import settings
 from functions.exercises import edit_subscription_exercises
@@ -22,9 +22,8 @@ from functions import profiles
 from functions.text_utils import format_new_client_message, get_client_page, get_workout_types
 from core.models import Coach, Profile, Client
 from functions.utils import program_menu_pagination
-from services.profile_service import profile_service
+from services.profile_service import ProfileService
 
-logger = loguru.logger
 bot = Bot(settings.BOT_TOKEN)
 message_router = Router()
 
@@ -46,7 +45,7 @@ async def send_message(
         language = settings.DEFAULT_BOT_LANGUAGE
         sender_name = ""
 
-    recipient_data = await profile_service.get_profile(recipient.id)
+    recipient_data = await ProfileService.get_profile(recipient.id)
     assert recipient_data
 
     if include_incoming_message:
@@ -124,7 +123,7 @@ async def close_notification(callback_query: CallbackQuery, state: FSMContext):
 @message_router.callback_query(F.data == "subscription_view")
 async def subscription_view(callback_query: CallbackQuery, state: FSMContext):
     profile = await profiles.get_or_load_profile(callback_query.from_user.id)
-    subscription_data = cache_manager.get_subscription(profile.id)
+    subscription_data = CacheManager.get_subscription(profile.id)
     await state.update_data(
         exercises=subscription_data.exercises,
         split=len(subscription_data.workout_days),
@@ -139,14 +138,14 @@ async def answer_message(callback_query: CallbackQuery, state: FSMContext):
     profile = await profiles.get_or_load_profile(callback_query.from_user.id)
     recipient_id = int(callback_query.data.split("_")[1])
     if profile.status == "client":
-        sender = cache_manager.get_client_by_id(profile.id)
+        sender = CacheManager.get_client_by_id(profile.id)
         state_to_set = States.contact_coach
     else:
-        sender = cache_manager.get_coach_by_id(profile.id)
+        sender = CacheManager.get_coach_by_id(profile.id)
         state_to_set = States.contact_client
-        client = cache_manager.get_client_by_id(recipient_id)
+        client = CacheManager.get_client_by_id(recipient_id)
         if client.status == "waiting_for_text":
-            cache_manager.set_client_data(recipient_id, {"status": "default"})
+            CacheManager.set_client_data(recipient_id, {"status": "default"})
 
     await callback_query.message.answer(msg_text("enter_your_message", profile.language))
     await state.clear()
@@ -158,10 +157,10 @@ async def answer_message(callback_query: CallbackQuery, state: FSMContext):
 @message_router.callback_query(F.data == "next")
 async def navigate_days(callback_query: CallbackQuery, state: FSMContext):
     profile = await profiles.get_or_load_profile(callback_query.from_user.id)
-    program = cache_manager.get_program(profile.id)
+    program = CacheManager.get_program(profile.id)
     data = await state.get_data()
     if data.get("subscription"):
-        subscription = cache_manager.get_subscription(profile.id)
+        subscription = CacheManager.get_subscription(profile.id)
         split_number = len(subscription.workout_days)
         exercises = subscription.exercises
     else:
@@ -196,11 +195,11 @@ async def create_workouts(callback_query: CallbackQuery, state: FSMContext):
 @message_router.callback_query(F.data.startswith("approve"))
 async def approve_coach(callback_query: CallbackQuery, state: FSMContext):
     profile_id = callback_query.data.split("_")[1]
-    await profile_service.edit_coach_profile_kb(int(profile_id), dict(verified=True))
-    cache_manager.set_coach_data(int(profile_id), {"verified": True})
+    await ProfileService.edit_coach_profile_kb(int(profile_id), dict(verified=True))
+    CacheManager.set_coach_data(int(profile_id), {"verified": True})
     await callback_query.answer("👍")
-    coach = cache_manager.get_coach_by_id(int(profile_id))
-    if profile_data := await profile_service.get_profile(int(profile_id)):
+    coach = CacheManager.get_coach_by_id(int(profile_id))
+    if profile_data := await ProfileService.get_profile(int(profile_id)):
         lang = profile_data.get("language")
     else:
         lang = "ua"
@@ -213,8 +212,8 @@ async def approve_coach(callback_query: CallbackQuery, state: FSMContext):
 async def decline_coach(callback_query: CallbackQuery, state: FSMContext):
     profile_id = callback_query.data.split("_")[1]
     await callback_query.answer("👎")
-    coach = cache_manager.get_coach_by_id(profile_id)
-    if profile_data := await profile_service.get_profile(int(profile_id)):
+    coach = CacheManager.get_coach_by_id(profile_id)
+    if profile_data := await ProfileService.get_profile(int(profile_id)):
         lang = profile_data.get("language")
     else:
         lang = "ua"
@@ -227,23 +226,23 @@ async def contact_client(callback_query: CallbackQuery, profile: Profile, client
     await callback_query.answer()
     await callback_query.message.answer(msg_text("enter_your_message", profile.language))
     await callback_query.message.delete()
-    coach = cache_manager.get_coach_by_id(profile.id)
+    coach = CacheManager.get_coach_by_id(profile.id)
     await state.clear()
     await state.update_data(recipient_id=client_id, sender_name=coach.name)
     await state.set_state(States.contact_client)
 
 
 async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> None:
-    coach_data = await profile_service.get_profile(coach.id)
-    coach_lang = cache_manager.get_profile_info_by_key(coach_data.get("current_tg_id"), coach.id, "language")
+    coach_data = await ProfileService.get_profile(coach.id)
+    coach_lang = CacheManager.get_profile_info_by_key(coach_data.get("current_tg_id"), coach.id, "language")
     data["recipient_language"] = coach_lang
     service = data.get("request_type")
     preferable_workout_type = data.get("workout_type")
-    client_data = await profile_service.get_profile(client.id)
-    client_lang = cache_manager.get_profile_info_by_key(client_data.get("current_tg_id"), client.id, "language")
+    client_data = await ProfileService.get_profile(client.id)
+    client_lang = CacheManager.get_profile_info_by_key(client_data.get("current_tg_id"), client.id, "language")
     workout_types = await get_workout_types(coach_lang)
     preferable_workouts_type = workout_types.get(preferable_workout_type, "unknown")
-    subscription = cache_manager.get_subscription(client.id)
+    subscription = CacheManager.get_subscription(client.id)
     client_page = await get_client_page(client, coach_lang, subscription, data)
     text = await format_new_client_message(data, coach_lang, client_lang, preferable_workouts_type)
     reply_markup = (

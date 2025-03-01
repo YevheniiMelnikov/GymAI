@@ -5,12 +5,10 @@ import subprocess
 import shutil
 from datetime import datetime, timedelta
 
-import loguru
+from common.logger import logger
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from common.settings import settings
-
-logger = loguru.logger
 
 
 class BackupManager:

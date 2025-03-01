@@ -1,7 +1,7 @@
 import asyncio
 from contextlib import suppress
 
-import loguru
+from common.logger import logger
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage
@@ -14,8 +14,6 @@ from schedulers import backup_scheduler, subscription_scheduler, workout_schedul
 from core import payment_processor
 from bot.handlers.routers_configurator import configure_routers
 from functions.utils import set_bot_commands
-
-logger = loguru.logger
 
 
 async def on_startup() -> None:
@@ -51,13 +49,12 @@ async def main() -> None:
     await bot.set_webhook(url=settings.WEBHOOK_URL)
     app = web.Application()
     app["bot"] = bot
-
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=settings.WEBHOOK_PATH)
     setup_application(app, dp, bot=bot)
     runner = await start_web_app(app)
     logger.info("Bot started")
-    stop_event = asyncio.Event()
 
+    stop_event = asyncio.Event()
     try:
         await stop_event.wait()
     except (KeyboardInterrupt, SystemExit):

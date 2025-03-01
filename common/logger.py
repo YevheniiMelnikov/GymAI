@@ -2,6 +2,7 @@ import logging
 import sys
 from loguru import logger
 
+logger.remove()
 logger.configure(
     handlers=[
         {
@@ -12,8 +13,8 @@ logger.configure(
         },
         {
             "sink": "gym_bot.log",
-            "level": "DEBUG",
-            "serialize": True,
+            "level": "INFO",
+            "serialize": False,
             "format": "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} - {message}",
             "rotation": "100 MB",
             "retention": "30 days",

@@ -1,20 +1,20 @@
-import loguru
+from common.logger import logger
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from bot.keyboards import new_message_kb
 from bot.states import States
-from core.cache_manager import cache_manager
+from core.cache_manager import CacheManager
 from core.exceptions import UserServiceError
 from functions.chat import send_message
 from core.models import Profile
 from functions.menus import show_main_menu
 from functions.profiles import get_or_load_profile
-from services.profile_service import profile_service
 from bot.texts.text_manager import msg_text
+from services.profile_service import ProfileService
 
-logger = loguru.logger
+
 chat_router = Router()
 
 
@@ -24,11 +24,11 @@ async def contact_client(message: Message, state: FSMContext):
     profile = await get_or_load_profile(message.from_user.id)
 
     try:
-        client = cache_manager.get_client_by_id(data.get("recipient_id"))
+        client = CacheManager.get_client_by_id(data.get("recipient_id"))
         if client.status == "waiting_for_text":
-            cache_manager.set_client_data(client.id, {"status": "default"})
-        client_profile = Profile.from_dict(await profile_service.get_profile(client.id))
-        coach_name = cache_manager.get_coach_by_id(profile.id).name
+            CacheManager.set_client_data(client.id, {"status": "default"})
+        client_profile = Profile.from_dict(await ProfileService.get_profile(client.id))
+        coach_name = CacheManager.get_coach_by_id(profile.id).name
     except Exception as e:
         logger.error(f"Can't get data: {e}")
         await message.answer(msg_text("unexpected_error", profile.language))
@@ -66,15 +66,15 @@ async def contact_coach(message: Message, state: FSMContext):
     profile = await get_or_load_profile(message.from_user.id)
 
     try:
-        coach = cache_manager.get_coach_by_id(data.get("recipient_id"))
+        coach = CacheManager.get_coach_by_id(data.get("recipient_id"))
         if not coach:
             raise UserServiceError("Coach not found in cache", 404, f"recipient_id: {data.get('recipient_id')}")
 
-        coach_profile = Profile.from_dict(await profile_service.get_profile(coach.id))
+        coach_profile = Profile.from_dict(await ProfileService.get_profile(coach.id))
         if not coach_profile:
             raise UserServiceError("Coach profile not found", 404, f"coach_id: {coach.id}")
 
-        client_name = cache_manager.get_client_by_id(profile.id).name
+        client_name = CacheManager.get_client_by_id(profile.id).name
         if not client_name:
             raise UserServiceError("Client name not found", 404, f"profile_id: {profile.id}")
 

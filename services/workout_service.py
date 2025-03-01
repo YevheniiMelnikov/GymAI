@@ -1,12 +1,10 @@
 from datetime import datetime
 from urllib.parse import urljoin
-import loguru
+from common.logger import logger
 
 from services.api_service import APIClient
 from core.exceptions import UserServiceError
 from core.models import Exercise
-
-logger = loguru.logger
 
 
 class WorkoutService(APIClient):

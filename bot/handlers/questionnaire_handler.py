@@ -1,6 +1,5 @@
 from contextlib import suppress
 
-import loguru
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -8,7 +7,7 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import select_gender_kb, payment_kb, select_days_kb, workout_experience_kb, yes_no_kb
 from bot.states import States
-from core.cache_manager import cache_manager
+from core.cache_manager import CacheManager
 from core.file_manager import avatar_manager
 from functions.chat import client_request
 from functions.exercises import edit_subscription_days, process_new_subscription
@@ -16,10 +15,9 @@ from functions.menus import show_main_menu
 from functions.profiles import get_or_load_profile, update_user_info
 from functions.text_utils import get_state_and_message
 from functions.utils import delete_messages, generate_order_id
-from services.payment_service import payment_service
+from services.payment_service import PaymentService
 from bot.texts.text_manager import msg_text
 
-logger = loguru.logger
 
 questionnaire_router = Router()
 
@@ -298,13 +296,13 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
 @questionnaire_router.message(States.enter_wishes)
 async def enter_wishes(message: Message, state: FSMContext):
     profile = await get_or_load_profile(message.from_user.id)
-    client = cache_manager.get_client_by_id(profile.id)
-    coach = cache_manager.get_coach_by_id(client.assigned_to.pop())
+    client = CacheManager.get_client_by_id(profile.id)
+    coach = CacheManager.get_coach_by_id(client.assigned_to.pop())
     await state.update_data(wishes=message.text, sender_name=client.name)
     data = await state.get_data()
 
     if data.get("new_client"):
-        await message.answer(msg_text("coach_selected").format(name=coach.name))
+        await message.answer(msg_text("coach_selected", profile.language).format(name=coach.name))
         await client_request(coach, client, data)
         await show_main_menu(message, profile, state)
         with suppress(TelegramBadRequest):
@@ -313,14 +311,19 @@ async def enter_wishes(message: Message, state: FSMContext):
         if data.get("request_type") == "subscription":
             await state.set_state(States.workout_days)
             await message.answer(
-                msg_text("select_days", profile.language), reply_markup=select_days_kb(profile.language, [])
+                text=msg_text("select_days", profile.language), reply_markup=select_days_kb(profile.language, [])
             )
         elif data.get("request_type") == "program":
             order_id = generate_order_id()
             await state.update_data(order_id=order_id, amount=coach.program_price)
-            email = cache_manager.get_profile_info_by_key(message.from_user.id, profile.id, "email")
-            if payment_link := await payment_service.get_payment_link(
-                "pay", coach.program_price, order_id, "program", email, profile.id
+            email = CacheManager.get_profile_info_by_key(message.from_user.id, profile.id, "email")
+            if payment_link := await PaymentService.get_payment_link(
+                action="pay",
+                amount=str(coach.program_price),
+                order_id=order_id,
+                payment_type="program",
+                client_email=email,
+                profile_id=profile.id,
             ):
                 await state.set_state(States.handle_payment)
                 await message.answer(
@@ -343,7 +346,7 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
         if days:
             await state.update_data(workout_days=days)
             if data.get("edit_mode"):
-                subscription = cache_manager.get_subscription(profile.id)
+                subscription = CacheManager.get_subscription(profile.id)
                 if len(subscription.workout_days) == len(days):
                     await edit_subscription_days(callback_query, days, profile, state, subscription)
                 else:

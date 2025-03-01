@@ -1,13 +1,10 @@
 from urllib.parse import urljoin
 
-import loguru
+from common.logger import logger
 
 from services.api_service import APIClient
 from core.exceptions import UsernameUnavailable, EmailUnavailable
 from core.models import Profile
-
-
-logger = loguru.logger
 
 
 class UserService(APIClient):

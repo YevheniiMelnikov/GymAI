@@ -8,14 +8,14 @@ from aiogram.types import CallbackQuery
 
 from bot.keyboards import program_edit_kb, program_manage_kb, program_view_kb, subscription_view_kb
 from bot.states import States
-from core.cache_manager import cache_manager, logger
+from core.cache_manager import CacheManager
 from functions.chat import send_message
 from functions.menus import show_main_menu
 from functions.profiles import get_or_load_profile
 from functions.text_utils import format_program, get_translated_week_day
 from functions.utils import delete_messages
 from core.models import Profile
-from services.profile_service import profile_service
+from services.profile_service import ProfileService
 from services.user_service import user_service
 from services.workout_service import workout_service
 from bot.texts.text_manager import msg_text, btn_text
@@ -30,16 +30,16 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
     if exercises := data.get("exercises", {}):
         if completed_days >= split_number:
             await callback_query.answer(msg_text("saved", profile.language))
-            client = cache_manager.get_client_by_id(client_id)
-            client_data = await profile_service.get_profile(client_id)
-            client_lang = cache_manager.get_profile_info_by_key(client_data.get("current_tg_id"), client_id, "language")
+            client = CacheManager.get_client_by_id(client_id)
+            client_data = await ProfileService.get_profile(client_id)
+            client_lang = CacheManager.get_profile_info_by_key(client_data.get("current_tg_id"), client_id, "language")
             if data.get("subscription"):
-                subscription_data = cache_manager.get_subscription(client_id).to_dict()
+                subscription_data = CacheManager.get_subscription(client_id).to_dict()
                 subscription_data.update(client_profile=client_id, exercises=exercises)
-                cache_manager.update_subscription_data(client_id, {"exercises": exercises, "client_profile": client_id})
+                CacheManager.update_subscription_data(client_id, {"exercises": exercises, "client_profile": client_id})
                 auth_token = await user_service.get_user_token(client_id)
                 await workout_service.update_subscription(subscription_data.get("id"), subscription_data, auth_token)
-                cache_manager.reset_program_payment_status(client_id, "subscription")
+                CacheManager.reset_program_payment_status(client_id, "subscription")
                 await send_message(
                     recipient=client,
                     text=msg_text("new_program", client_lang),
@@ -49,13 +49,13 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
                 )
             else:
                 program_text = await format_program(exercises, 0)
-                current_program = cache_manager.get_program(client_id)
+                current_program = CacheManager.get_program(client_id)
                 if program_data := await workout_service.save_program(
                     client_id, exercises, split_number, current_program.wishes
                 ):
                     program_data.update(workout_type=current_program.workout_type_kb, split_number=split_number)
-                    cache_manager.set_program(client_id, program_data)
-                    cache_manager.reset_program_payment_status(client_id, "program")
+                    CacheManager.set_program(client_id, program_data)
+                    CacheManager.reset_program_payment_status(client_id, "program")
 
                 await send_message(
                     recipient=client,
@@ -71,7 +71,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
                     include_incoming_message=False,
                 )
 
-            cache_manager.set_client_data(client_id, {"status": "default"})
+            CacheManager.set_client_data(client_id, {"status": "default"})
             await show_main_menu(callback_query.message, profile, state)
         else:
             await callback_query.answer(msg_text("complete_all_days", profile.language), show_alert=True)
@@ -85,19 +85,19 @@ async def reset_workout_plan(callback_query: CallbackQuery, state: FSMContext) -
     client_id = data.get("client_id")
     await callback_query.answer(btn_text("done", profile.language))
     if data.get("subscription"):
-        subscription_data = cache_manager.get_subscription(client_id).to_dict()
+        subscription_data = CacheManager.get_subscription(client_id).to_dict()
         subscription_data.update(client_profile=client_id, exercises={})
         auth_token = await user_service.get_user_token(client_id)
         await workout_service.update_subscription(subscription_data.get("id"), subscription_data, auth_token)
-        cache_manager.update_subscription_data(client_id, {"exercises": None, "client_profile": client_id})
-        cache_manager.set_client_data(client_id, {"status": "waiting_for_subscription"})
-        cache_manager.set_payment_status(client_id, True, "subscription")
+        CacheManager.update_subscription_data(client_id, {"exercises": None, "client_profile": client_id})
+        CacheManager.set_client_data(client_id, {"status": "waiting_for_subscription"})
+        CacheManager.set_payment_status(client_id, True, "subscription")
     else:
-        program = cache_manager.get_program(client_id)
+        program = CacheManager.get_program(client_id)
         await workout_service.update_program(program.id, dict(exercises_by_day={}))
-        cache_manager.update_program_data(client_id, dict(exercises_by_day={}))
-        cache_manager.set_client_data(client_id, {"status": "waiting_for_program"})
-        cache_manager.set_payment_status(client_id, True, "program")
+        CacheManager.update_program_data(client_id, dict(exercises_by_day={}))
+        CacheManager.set_client_data(client_id, {"status": "waiting_for_program"})
+        CacheManager.set_payment_status(client_id, True, "program")
     await state.clear()
     await callback_query.message.answer(msg_text("enter_daily_program", profile.language).format(day=1))
     await state.update_data(client_id=client_id, exercises=[], day_index=0)
@@ -145,8 +145,8 @@ async def next_day_workout_plan(callback_query: CallbackQuery, state: FSMContext
 
 
 async def manage_program(callback_query: CallbackQuery, profile: Profile, client_id: str, state: FSMContext) -> None:
-    program_paid = cache_manager.check_payment_status(client_id, "program")
-    workout_data = cache_manager.get_program(client_id)
+    program_paid = CacheManager.check_payment_status(client_id, "program")
+    workout_data = CacheManager.get_program(client_id)
 
     if not program_paid and not workout_data:
         await callback_query.answer(msg_text("payment_required", profile.language), show_alert=True)
@@ -194,7 +194,7 @@ def cache_program_data(data: dict, profile_id: int) -> None:
         "split_number": 1,
         "wishes": data.get("wishes"),
     }
-    cache_manager.set_program(profile_id, program_data)
+    CacheManager.set_program(profile_id, program_data)
 
 
 async def cancel_subscription(next_payment_date: datetime, profile_id: int, subscription_id: int) -> None:
@@ -208,6 +208,5 @@ async def cancel_subscription(next_payment_date: datetime, profile_id: int, subs
     await workout_service.update_subscription(
         subscription_id, dict(client_profile=profile_id, enabled=False), auth_token
     )
-    cache_manager.update_subscription_data(profile_id, dict(enabled=False))
-    cache_manager.reset_program_payment_status(profile_id, "subscription")
-    logger.info(f"Subscription for profile_id {profile_id} deactivated")
+    CacheManager.update_subscription_data(profile_id, dict(enabled=False))
+    CacheManager.reset_program_payment_status(profile_id, "subscription")

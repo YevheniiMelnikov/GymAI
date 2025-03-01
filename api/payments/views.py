@@ -1,7 +1,7 @@
 import base64
 import json
 
-import loguru
+from common.logger import logger
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
@@ -20,8 +20,6 @@ from payments.serializers import ProgramSerializer, SubscriptionSerializer, Paym
 from accounts.models import ClientProfile
 
 from common.settings import settings
-
-logger = loguru.logger
 
 
 class ProgramViewSet(ModelViewSet):  # TODO: SEPARATE THIS

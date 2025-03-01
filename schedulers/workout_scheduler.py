@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-import loguru
+from common.logger import logger
 from aiogram import Bot, F, Router
 from aiogram.client.session import aiohttp
 from aiogram.fsm.context import FSMContext
@@ -10,22 +10,22 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from bot.keyboards import workout_results_kb, workout_survey_kb
 from bot.states import States
 from common.settings import settings
-from core.cache_manager import cache_manager
+from core.cache_manager import CacheManager
 from functions.profiles import get_or_load_profile
-from services.profile_service import profile_service
+from services.profile_service import ProfileService
 from bot.texts.text_manager import msg_text
 
-logger = loguru.logger
+
 survey_router = Router()
 bot = Bot(settings.BOT_TOKEN)
 
 
 async def send_daily_survey():
-    clients = cache_manager.get_clients_to_survey()
+    clients = CacheManager.get_clients_to_survey()
     for client_id in clients:
-        client_data = await profile_service.get_profile(client_id)
+        client_data = await ProfileService.get_profile(client_id)
         client_lang = (
-            cache_manager.get_profile_info_by_key(client_data.get("current_tg_id"), client_id, "language")
+            CacheManager.get_profile_info_by_key(client_data.get("current_tg_id"), client_id, "language")
             or settings.DEFAULT_BOT_LANGUAGE
         )
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
@@ -41,7 +41,7 @@ async def send_daily_survey():
         @survey_router.callback_query(F.data.startswith("no_"))
         async def have_you_trained(callback_query: CallbackQuery, state: FSMContext):
             profile = await get_or_load_profile(callback_query.from_user.id)
-            subscription = cache_manager.get_subscription(profile.id)
+            subscription = CacheManager.get_subscription(profile.id)
             workout_days = subscription.workout_days
             if callback_query.data.startswith("yes"):
                 try:
