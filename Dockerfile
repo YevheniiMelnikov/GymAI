@@ -35,7 +35,7 @@ COPY pyproject.toml poetry.lock README.md $APP_HOME/
 
 RUN poetry config virtualenvs.create false
 
-RUN poetry install --no-interaction --no-ansi --no-root
+RUN poetry install --no-interaction --no-ansi
 
 COPY . $APP_HOME
 
