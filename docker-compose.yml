@@ -1,6 +1,6 @@
 services:
   db:
-    image: "postgres:16"
+    image: "postgres:17"
     container_name: db
     ports:
       - "5432:5432"
@@ -63,12 +63,7 @@ services:
       - db
       - redis
     ports:
-      - "8080:8080"
-    logging:
-      driver: loki
-      options:
-        loki-url: "http://172.20.0.2:3100/loki/api/v1/push"
-        loki-external-labels: "job=bot,app=gym_bot"
+      - "8080:8000"
     env_file:
       - ./.env
     command:
@@ -82,17 +77,6 @@ services:
       - ./backup/dumps:/opt/backup/dumps
       - ./common:/opt/common
 
-  alertmanager:
-    image: prom/alertmanager:latest
-    container_name: alertmanager
-    ports:
-      - "9093:9093"
-    volumes:
-      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-    networks:
-      - monitoring
-    restart: unless-stopped
-
   nginx:
     image: nginx:latest
     container_name: nginx
@@ -102,7 +86,9 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
-      - ./static:/opt/backend/staticfiles:ro
+      - ./static:/opt/api/staticfiles:ro
+    depends_on:
+      - bot
     networks:
       - monitoring
     restart: unless-stopped
