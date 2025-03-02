@@ -8,10 +8,9 @@ from core.models import Exercise
 
 
 class WorkoutService(APIClient):
-    async def save_program(
-        self, client_id: int, exercises: dict[int, Exercise], split_number: int, wishes: str
-    ) -> dict:
-        url = urljoin(self.api_url, "api/v1/programs/")
+    @classmethod
+    async def save_program(cls, client_id: int, exercises: dict[int, Exercise], split_number: int, wishes: str) -> dict:
+        url = urljoin(cls.api_url, "api/v1/programs/")
         data = {
             "client_profile": client_id,
             "exercises_by_day": exercises,
@@ -20,8 +19,8 @@ class WorkoutService(APIClient):
         }
 
         try:
-            status_code, response = await self._api_request(
-                "post", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
+            status_code, response = await cls._api_request(
+                "post", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"}
             )
 
             if status_code != 201:
@@ -45,10 +44,11 @@ class WorkoutService(APIClient):
             logger.exception(f"Unexpected error while saving program for client {client_id}: {str(e)}")
             raise UserServiceError(f"Unexpected error occurred while saving program: {str(e)}") from e
 
-    async def update_program(self, program_id: int, data: dict) -> bool:
-        url = urljoin(self.api_url, f"api/v1/programs/{program_id}/")
-        status_code, response = await self._api_request(
-            "put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
+    @classmethod
+    async def update_program(cls, program_id: int, data: dict) -> bool:
+        url = urljoin(cls.api_url, f"api/v1/programs/{program_id}/")
+        status_code, response = await cls._api_request(
+            "put", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"}
         )
         if status_code == 200:
             logger.debug(f"Program {program_id} updated successfully")
@@ -56,10 +56,11 @@ class WorkoutService(APIClient):
         logger.error(f"Failed to update program {program_id}. HTTP status: {status_code}")
         return False
 
+    @classmethod
     async def create_subscription(
-        self, profile_id: int, workout_days: list[str], wishes: str, amount: int, auth_token: str
+        cls, profile_id: int, workout_days: list[str], wishes: str, amount: int, auth_token: str
     ) -> int | None:
-        url = urljoin(self.api_url, "api/v1/subscriptions/")
+        url = urljoin(cls.api_url, "api/v1/subscriptions/")
         data = {
             "client_profile": profile_id,
             "enabled": False,
@@ -69,7 +70,7 @@ class WorkoutService(APIClient):
             "wishes": wishes,
             "exercises": {},
         }
-        status_code, response = await self._api_request(
+        status_code, response = await cls._api_request(
             "post", url, data, headers={"Authorization": f"Token {auth_token}"}
         )
         if status_code == 201 and response:
@@ -77,15 +78,13 @@ class WorkoutService(APIClient):
         logger.error(f"Failed to create subscription for profile {profile_id}. HTTP status: {status_code}")
         return None
 
-    async def update_subscription(self, subscription_id: int, data: dict, auth_token: str) -> bool:
-        url = urljoin(self.api_url, f"api/v1/subscriptions/{subscription_id}/")
-        status_code, response = await self._api_request(
+    @classmethod
+    async def update_subscription(cls, subscription_id: int, data: dict, auth_token: str) -> bool:
+        url = urljoin(cls.api_url, f"api/v1/subscriptions/{subscription_id}/")
+        status_code, response = await cls._api_request(
             "put", url, data, headers={"Authorization": f"Token {auth_token}"}
         )
         if status_code == 200:
             return True
         logger.error(f"Failed to update subscription {subscription_id}. HTTP status: {status_code}")
         return False
-
-
-workout_service = WorkoutService()

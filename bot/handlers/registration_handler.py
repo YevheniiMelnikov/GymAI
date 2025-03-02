@@ -17,7 +17,7 @@ from functions.profiles import check_assigned_clients, get_or_load_profile, regi
 from functions.text_utils import validate_email, validate_password
 from functions.utils import delete_messages, set_bot_commands
 from services.profile_service import ProfileService
-from services.user_service import user_service
+from services.user_service import UserService
 
 register_router = Router()
 
@@ -199,7 +199,7 @@ async def delete_profile_confirmation(callback_query: CallbackQuery, state: FSMC
             if await check_assigned_clients(profile.id):
                 await callback_query.answer(msg_text("unable_to_delete_profile", lang))
                 return
-        auth_token = await user_service.get_user_token(profile.id)
+        auth_token = await UserService.get_user_token(profile.id)
         if await ProfileService.delete_profile(profile.id, auth_token):
             CacheManager.delete_profile(callback_query.from_user.id, profile.id)
             await callback_query.message.answer(msg_text("profile_deleted", profile.language))

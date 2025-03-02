@@ -13,7 +13,7 @@ from core.cache_manager import CacheManager
 from common.settings import settings
 from core.models import Profile
 from functions.menus import show_main_menu
-from services.user_service import user_service
+from services.user_service import UserService
 from bot.texts.text_manager import msg_text
 
 cmd_router = Router()
@@ -52,8 +52,8 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     if data.get("profile"):
         profile = Profile.from_dict(data.get("profile"))
         logger.info(f"User with profile_id {profile.id} started bot")
-        auth_token = await user_service.get_user_token(profile.id)
-        await user_service.log_out(profile, auth_token)
+        auth_token = await UserService.get_user_token(profile.id)
+        await UserService.log_out(profile, auth_token)
         CacheManager.deactivate_profiles(profile.current_tg_id)
         await state.update_data(lang=profile.language)
         start_message = await message.answer(msg_text("start", profile.language))
@@ -85,8 +85,8 @@ async def cmd_logout(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     if profile := Profile.from_dict(data.get("profile", {})):
         lang = profile.language if profile.language else settings.DEFAULT_BOT_LANGUAGE
-        auth_token = await user_service.get_user_token(profile.id)
-        await user_service.log_out(profile, auth_token)
+        auth_token = await UserService.get_user_token(profile.id)
+        await UserService.log_out(profile, auth_token)
         CacheManager.deactivate_profiles(profile.current_tg_id)
         await state.update_data(lang=lang)
         await message.answer(

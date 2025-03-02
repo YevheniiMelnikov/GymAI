@@ -10,24 +10,26 @@ from aiohttp import web
 
 from bot.middlewares import ProfileMiddleware
 from common.settings import settings
-from schedulers import backup_scheduler, subscription_scheduler, workout_scheduler
-from core import payment_processor
+from core.payment_processor import PaymentProcessor
+from schedulers import workout_scheduler
 from bot.handlers.routers_configurator import configure_routers
 from functions.utils import set_bot_commands
+from schedulers.backup_scheduler import BackupManager
+from schedulers.subscription_scheduler import SubscriptionManager
 
 
 async def on_startup() -> None:
     await set_bot_commands()
     await workout_scheduler.run()
-    await backup_scheduler.run()
-    await subscription_scheduler.run()
-    await payment_processor.run()
+    await BackupManager.run()
+    await SubscriptionManager.run()
+    PaymentProcessor.run()
 
 
 async def on_shutdown(bot: Bot) -> None:
     await bot.session.close()
-    await backup_scheduler.shutdown()
-    await subscription_scheduler.shutdown()
+    await BackupManager.shutdown()
+    await SubscriptionManager.shutdown()
 
 
 async def start_web_app(app: web.Application) -> web.AppRunner:

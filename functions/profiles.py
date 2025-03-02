@@ -15,7 +15,7 @@ from functions import chat
 from functions.utils import delete_messages
 from core.models import Client, Coach, Profile
 from services.profile_service import ProfileService
-from services.user_service import user_service
+from services.user_service import UserService
 from bot.texts.text_manager import msg_text
 
 
@@ -68,7 +68,7 @@ async def assign_coach(coach: Coach, client: Client) -> None:
 
 
 async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
-    if not await user_service.log_in(username=data["username"], password=message.text):
+    if not await UserService.log_in(username=data["username"], password=message.text):
         attempts = data.get("login_attempts", 0) + 1
         await state.update_data(login_attempts=attempts)
         if attempts >= 3:
@@ -92,7 +92,7 @@ async def sign_in(message: Message, state: FSMContext, data: dict) -> None:
     logger.info(f"Telegram user {message.from_user.id} logged in with profile_id {profile.id}")
     await state.update_data(login_attempts=0)
     try:
-        email = await user_service.get_user_email(profile.id)
+        email = await UserService.get_user_email(profile.id)
     except Exception as e:
         logger.error(f"Error retrieving email for profile {profile.id}: {e}")
         email = None
@@ -132,7 +132,7 @@ async def register_user(callback_query: CallbackQuery, state: FSMContext, data: 
     username = data.get("username")
     password = data.get("password")
 
-    if not await user_service.sign_up(
+    if not await UserService.sign_up(
         current_tg_id=callback_query.from_user.id,
         username=username,
         password=password,
@@ -148,7 +148,7 @@ async def register_user(callback_query: CallbackQuery, state: FSMContext, data: 
 
     logger.info(f"User {email} registered successfully")
 
-    if not await user_service.log_in(username=username, password=password):
+    if not await UserService.log_in(username=username, password=password):
         await callback_query.message.answer(msg_text("unexpected_error", data.get("lang")))
         await state.clear()
         await state.set_state(States.username)
@@ -208,8 +208,8 @@ async def get_or_load_profile(telegram_id: int) -> Profile | None:
 
 async def handle_logout(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     await callback_query.answer("🏃")
-    auth_token = await user_service.get_user_token(profile.id)
-    await user_service.log_out(profile, auth_token)
+    auth_token = await UserService.get_user_token(profile.id)
+    await UserService.log_out(profile, auth_token)
     CacheManager.deactivate_profiles(profile.current_tg_id)
     await state.update_data(profile.language)
     await callback_query.message.answer(

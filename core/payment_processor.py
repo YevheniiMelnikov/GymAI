@@ -7,10 +7,10 @@ from core.cache_manager import CacheManager
 from functions.workout_plans import cancel_subscription
 from core.models import Payment, Profile
 from common.settings import settings
-from core.google_sheets_manager import sheets_manager
+from core.google_sheets_manager import SheetsManager
 from services.payment_service import PaymentService
 from services.profile_service import ProfileService
-from services.user_service import user_service
+from services.user_service import UserService
 from services.workout_service import WorkoutService
 from bot.texts.text_manager import msg_text
 
@@ -71,7 +71,7 @@ class PaymentProcessor:
 
             if payments_data:
                 loop = asyncio.get_running_loop()
-                await loop.run_in_executor(None, sheets_manager.create_new_payment_sheet, payments_data)
+                await loop.run_in_executor(None, SheetsManager.create_new_payment_sheet, payments_data)
 
         except Exception as e:
             logger.error(f"Failed to process unclosed payments: {e}")
@@ -167,7 +167,7 @@ class PaymentProcessor:
 
         current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         cls.cache_manager.update_subscription_data(profile.id, {"enabled": True, "payment_date": current_date})
-        auth_token = await user_service.get_user_token(profile.id)
+        auth_token = await UserService.get_user_token(profile.id)
         await cls.workout_service.update_subscription(
             subscription.id, {"enabled": True, "price": subscription.price, "payment_date": current_date}, auth_token
         )
@@ -209,7 +209,3 @@ class PaymentProcessor:
             client=client,
             data={"request_type": "program", "workout_type": program.workout_type, "wishes": program.wishes},
         )
-
-
-async def run():
-    PaymentProcessor.run()
