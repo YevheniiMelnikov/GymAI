@@ -30,7 +30,7 @@ from functions.utils import handle_clients_pagination
 from functions.workout_plans import manage_program, cancel_subscription
 from core.models import Coach, Profile
 from services.payment_service import PaymentService
-from services.user_service import user_service
+from services.user_service import UserService
 
 main_router = Router()
 
@@ -82,13 +82,13 @@ async def process_password_reset(message: Message, state: FSMContext) -> None:
     index = next((i for i, username in enumerate(data["usernames"]) if username == message.text), None)
     if index is not None:
         profile = Profile.from_dict(data["profiles"][index])
-        email = await user_service.get_user_email(profile.id)
+        email = await UserService.get_user_email(profile.id)
         if email:
-            auth_token = await user_service.get_user_token(profile.id)
-            if await user_service.reset_password(email, auth_token):
+            auth_token = await UserService.get_user_token(profile.id)
+            if await UserService.reset_password(email, auth_token):
                 await message.answer(msg_text("password_reset_sent", profile.language).format(email=email))
                 await state.clear()
-                await user_service.log_out(profile, auth_token)
+                await UserService.log_out(profile, auth_token)
                 CacheManager.deactivate_profiles(profile.current_tg_id)
                 await message.answer(msg_text("username", profile.language))
                 await state.set_state(States.username)
