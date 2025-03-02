@@ -1211,11 +1211,14 @@ python-versions = "*"
 files = []
 develop = false
 
+[package.dependencies]
+requests = "*"
+
 [package.source]
 type = "git"
 url = "https://github.com/liqpay/sdk-python"
-reference = "master"
-resolved_reference = "d6f86a0284a36d689a931110b9ce629ef8b84432"
+reference = "HEAD"
+resolved_reference = "ae287304c5183f525b94e5aa57d8b8a40a3233a0"
 
 [[package]]
 name = "loguru"
@@ -2395,4 +2398,4 @@ propcache = ">=0.2.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.12"
-content-hash = "dfdc31582fbe514103b0ff68492dd755201038c96e23c79a81dfc7431d1b6cce"
+content-hash = "63703725ce2e300ef9c135f2b89b33d55c8a135285aaa3bac7bae5a38e38af4c"

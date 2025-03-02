@@ -47,8 +47,6 @@ services:
       - "8000:8000"
     env_file:
       - ./.env
-    volumes:
-      - ./common:/opt/common
     networks:
       - monitoring
     restart: unless-stopped
@@ -69,14 +67,12 @@ services:
     command:
       - python
       - -u
-      - main.py
+      - /app/bot/main.py
     networks:
       - monitoring
     restart: unless-stopped
     volumes:
-      - ./backup/dumps:/opt/backup/dumps
-      - ./common:/opt/common
-
+      - ./backup/dumps:/app/bot/backup/dumps
   nginx:
     image: nginx:latest
     container_name: nginx
