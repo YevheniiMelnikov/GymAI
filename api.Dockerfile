@@ -1,9 +1,10 @@
 FROM python:3.13-slim
 
 ENV APP_HOME=/opt
-ENV PYTHONPATH=$APP_HOME
-ENV PYTHONPATH="/opt/common:$PYTHONPATH"
+ENV PYTHONPATH=$APP_HOME:/opt/common
 ENV TZ=Europe/Kyiv
+
+WORKDIR $APP_HOME
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -13,26 +14,18 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN curl -sSL https://install.python-poetry.org | python3 -
-
 ENV PATH="/root/.local/bin:$PATH"
-
 RUN poetry --version
 
-WORKDIR $APP_HOME
+COPY pyproject.toml poetry.lock README.md ./
+RUN poetry config virtualenvs.create false \
+    && poetry install --no-interaction --no-ansi
 
-COPY pyproject.toml poetry.lock README.md $APP_HOME/
+COPY api ./api
+COPY common ./common
 
-RUN poetry config virtualenvs.create false
-
-RUN poetry install --no-interaction --no-ansi
-
-COPY api $APP_HOME/api
-COPY common /opt/common
-
-WORKDIR $APP_HOME/api
-
-RUN python manage.py collectstatic --noinput
+RUN python api/manage.py collectstatic --noinput
 
 EXPOSE 8000
 
-CMD ["bash", "-c", "echo 'Starting migrations...' && python manage.py migrate && echo 'Starting server...' && python manage.py runserver 0.0.0.0:8000"]
+CMD ["bash", "-c", "python api/manage.py migrate && python api/manage.py runserver 0.0.0.0:8000"]
