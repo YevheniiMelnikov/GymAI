@@ -1,5 +1,4 @@
 import asyncio
-from contextlib import suppress
 
 from common.logger import logger
 from aiogram import Bot, Dispatcher
@@ -69,5 +68,7 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    with suppress(KeyboardInterrupt, SystemExit):
+    try:
         asyncio.run(main())
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        pass

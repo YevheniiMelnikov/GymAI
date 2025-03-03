@@ -33,13 +33,13 @@ async def update_user_info(message: Message, state: FSMContext, role: str) -> No
 
         if role == "client":
             CacheManager.set_client_data(profile.id, data)
-            await ProfileService.edit_client_profile_kb(profile.id, data)
+            await ProfileService.edit_client_profile(profile.id, data)
         else:
             if not data.get("edit_mode"):
                 await message.answer(msg_text("wait_for_verification", data.get("lang")))
                 await chat.notify_about_new_coach(message.from_user.id, profile, data)
             CacheManager.set_coach_data(profile.id, data)
-            await ProfileService.edit_coach_profile_kb(profile.id, data)
+            await ProfileService.edit_coach_profile(profile.id, data)
 
         await message.answer(msg_text("your_data_updated", data.get("lang")))
         await message.answer(msg_text("your_data_updated", data.get("lang")))

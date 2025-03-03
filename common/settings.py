@@ -47,7 +47,7 @@ class Settings:
     WEB_SERVER_HOST: str = "0.0.0.0"
     WEBHOOK_HOST: str = os.getenv("WEBHOOK_HOST")
     WEBHOOK_PORT: int = os.getenv("WEBHOOK_PORT")
-    WEBHOOK_PATH: str = f"/gym_bot/{BOT_TOKEN}"
+    WEBHOOK_PATH: str = f"/gym_bot/{BOT_TOKEN}"  # REMOVE BOT_TOKEN
     WEBHOOK_URL: str = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 
     REDIS_URL: str = os.getenv("REDIS_URL")
