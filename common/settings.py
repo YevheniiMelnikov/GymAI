@@ -31,7 +31,6 @@ class Settings:
     API_KEY: str = os.getenv("API_KEY")
     API_URL: str = os.getenv("API_URL")
     SECRET_KEY: str = os.getenv("SECRET_KEY")
-    CRYPTO_KEY: str = os.getenv("CRYPTO_KEY")
 
     BOT_TOKEN: str = os.getenv("BOT_TOKEN")
     BOT_LINK = os.getenv("BOT_LINK")
