@@ -26,7 +26,6 @@ django-extensions = "^3.2.3"
 djangorestframework = "^3.15.2"
 djangorestframework-api-key = "^3.0.0"
 drf-yasg = "^1.21.9"
-djoser = "^2.3.1"
 cryptography = "^44.0.0"
 django-filter = "==25.1"
 liqpay-python = {git = "https://github.com/liqpay/sdk-python"}

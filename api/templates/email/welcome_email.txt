@@ -1,9 +1,0 @@
-{% blocktrans %}Ласкаво просимо, {{ username }}!{% endblocktrans %}
-
-{% blocktrans %}Дякуємо за реєстрацію в AchieveTogether! Ми раді вітати вас серед наших користувачів.{% endblocktrans %}
-
-{% blocktrans %}Якщо у вас виникнуть питання або потребуєте допомоги, не соромтеся звертатися до нас.{% endblocktrans %}
-
-{% blocktrans %}Бажаємо вам приємного користування!{% endblocktrans %}
-
-{% blocktrans %}З повагою, Команда AchieveTogether{% endblocktrans %}

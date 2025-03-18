@@ -16,7 +16,6 @@ from functions.profiles import get_or_load_profile
 from functions.workout_plans import cache_program_data
 from core.models import Client, Coach
 from services.payment_service import PaymentService
-from services.user_service import UserService
 from services.workout_service import WorkoutService
 from bot.texts.text_manager import msg_text, btn_text
 
@@ -75,10 +74,9 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
             days = data.get("workout_days", [])
             client = CacheManager.get_client_by_id(profile.id)
             coach = CacheManager.get_coach_by_id(client.assigned_to.pop())
-            auth_token = await UserService.get_user_token(profile.id)
             try:
                 subscription_id = await WorkoutService.create_subscription(
-                    profile.id, days, data.get("wishes"), coach.subscription_price, auth_token
+                    profile.id, days, data.get("wishes"), coach.subscription_price
                 )
             except ValidationError as e:
                 logger.error(f"Failed to create subscription: {e}")

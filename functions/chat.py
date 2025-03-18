@@ -56,7 +56,7 @@ async def send_message(
     async with aiohttp.ClientSession():
         if video:
             await bot.send_video(
-                chat_id=recipient_data.get("current_tg_id"),
+                chat_id=recipient_data.get("tg_id"),
                 video=video.file_id,
                 caption=formatted_text,
                 reply_markup=reply_markup,
@@ -64,7 +64,7 @@ async def send_message(
             )
         elif photo:
             await bot.send_photo(
-                chat_id=recipient_data.get("current_tg_id"),
+                chat_id=recipient_data.get("tg_id"),
                 photo=photo.file_id,
                 caption=formatted_text,
                 reply_markup=reply_markup,
@@ -72,7 +72,7 @@ async def send_message(
             )
         else:
             await bot.send_message(
-                chat_id=recipient_data.get("current_tg_id"),
+                chat_id=recipient_data.get("tg_id"),
                 text=formatted_text,
                 reply_markup=reply_markup,
                 disable_web_page_preview=True,
@@ -195,7 +195,7 @@ async def create_workouts(callback_query: CallbackQuery, state: FSMContext):
 @message_router.callback_query(F.data.startswith("approve"))
 async def approve_coach(callback_query: CallbackQuery, state: FSMContext):
     profile_id = callback_query.data.split("_")[1]
-    await ProfileService.edit_coach_profile_kb(int(profile_id), dict(verified=True))
+    await ProfileService.edit_coach_profile(int(profile_id), dict(verified=True))
     CacheManager.set_coach_data(int(profile_id), {"verified": True})
     await callback_query.answer("👍")
     coach = CacheManager.get_coach_by_id(int(profile_id))
@@ -212,7 +212,7 @@ async def approve_coach(callback_query: CallbackQuery, state: FSMContext):
 async def decline_coach(callback_query: CallbackQuery, state: FSMContext):
     profile_id = callback_query.data.split("_")[1]
     await callback_query.answer("👎")
-    coach = CacheManager.get_coach_by_id(profile_id)
+    coach = CacheManager.get_coach_by_id(int(profile_id))
     if profile_data := await ProfileService.get_profile(int(profile_id)):
         lang = profile_data.get("language")
     else:
@@ -234,12 +234,12 @@ async def contact_client(callback_query: CallbackQuery, profile: Profile, client
 
 async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> None:
     coach_data = await ProfileService.get_profile(coach.id)
-    coach_lang = CacheManager.get_profile_info_by_key(coach_data.get("current_tg_id"), coach.id, "language")
+    coach_lang = CacheManager.get_profile_info_by_key(coach_data.get("tg_id"), coach.id, "language")
     data["recipient_language"] = coach_lang
     service = data.get("request_type")
     preferable_workout_type = data.get("workout_type")
     client_data = await ProfileService.get_profile(client.id)
-    client_lang = CacheManager.get_profile_info_by_key(client_data.get("current_tg_id"), client.id, "language")
+    client_lang = CacheManager.get_profile_info_by_key(client_data.get("tg_id"), client.id, "language")
     workout_types = await get_workout_types(coach_lang)
     preferable_workouts_type = workout_types.get(preferable_workout_type, "unknown")
     subscription = CacheManager.get_subscription(client.id)

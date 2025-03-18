@@ -1,5 +1,4 @@
 from json import JSONDecodeError
-from urllib.parse import urljoin
 
 import httpx
 from common.logger import logger
@@ -49,15 +48,3 @@ class APIClient:
         except Exception as e:
             logger.exception("Unexpected error occurred")
             raise UserServiceError(f"Unexpected error occurred: {e}") from e
-
-    @classmethod
-    async def send_welcome_email(cls, email: str, username: str) -> bool:
-        url = urljoin(cls.api_url, "api/v1/send-welcome-email/")
-        data = {"email": email, "username": username}
-        status_code, response = await cls._api_request(
-            "post", url, data=data, headers={"Authorization": f"Api-Key {cls.api_key}"}
-        )
-        if status_code == 200:
-            return True
-        logger.error(f"Failed to send welcome email. Status code: {status_code}, response: {response}")
-        return False

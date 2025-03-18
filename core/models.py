@@ -24,7 +24,7 @@ class BaseEntity:
 class Profile(BaseEntity):
     id: int
     status: str
-    current_tg_id: int | None = None
+    tg_id: int | None = None
     language: str | None = None
     last_used: float | None = None
 

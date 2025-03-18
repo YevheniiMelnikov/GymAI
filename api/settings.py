@@ -6,7 +6,6 @@ from common.settings import settings
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = settings.SECRET_KEY
-
 DEBUG = os.environ.get("DEBUG_STATUS", "False").lower() == "true"
 
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "achieve-together.org.ua", "www.achieve-together.org.ua", "api"]
@@ -27,7 +26,6 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework.authtoken",
     "rest_framework_api_key",
-    "djoser",
     "drf_yasg",
 ]
 
@@ -100,27 +98,9 @@ DATABASES = {
     }
 }
 
-AUTH_PASSWORD_VALIDATORS = [
-    {
-        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
-    },
-    {
-        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
-        "OPTIONS": {
-            "min_length": 8,
-        },
-    },
-    {
-        "NAME": "accounts.validators.CustomPasswordValidator",
-    },
-]
-
 LANGUAGE_CODE = "ru"
-
 TIME_ZONE = "Europe/Kyiv"
-
 USE_I18N = True
-
 USE_TZ = False
 
 STATIC_URL = "/static/"
@@ -149,27 +129,3 @@ REST_FRAMEWORK = {
 DOMAIN = settings.DOMAIN
 SITE_NAME = settings.SITE_NAME
 CORS_ALLOWED_ORIGINS = ["*"]
-
-DJOSER = {
-    "PASSWORD_RESET_CONFIRM_URL": "/password-reset/{uid}/{token}",
-    "PASSWORD_RESET_CONFIRM_RETYPE": True,
-    "PASSWORD_RESET_SHOW_EMAIL_NOT_FOUND": True,
-    "SEND_ACTIVATION_EMAIL": True,
-    "EMAIL": {"password_reset": "accounts.emails.CustomPasswordResetEmail"},
-    "USER_AUTHENTICATION_FIELD": "username",
-    "USER_CREATE_PASSWORD_RETYPE": True,
-    "SERIALIZERS": {
-        "user_create": "djoser.serializers.UserCreateSerializer",
-        "user": "accounts.serializers.UserSerializer",
-    },
-}
-
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
-EMAIL_HOST = "smtp.gmail.com"
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = settings.EMAIL_HOST_USER
-EMAIL_HOST_PASSWORD = settings.EMAIL_HOST_PASSWORD
-DEFAULT_FROM_EMAIL = settings.DEFAULT_FROM_EMAIL
-SERVER_EMAIL = EMAIL_HOST_USER
-EMAIL_ADMIN = EMAIL_HOST_USER

@@ -23,16 +23,6 @@
   ru: "Информация"
   ua: "Інформація"
 
-/logout:
-  eng: "Logout from bot"
-  ru: "Выйти из бота"
-  ua: "Вийти з бота"
-
-/reset_password:
-  eng: "Reset password"
-  ru: "Сбросить пароль"
-  ua: "Скинути пароль"
-
 /feedback:
   eng: "Give a feedback"
   ru: "Оставить отзыв"

@@ -69,7 +69,7 @@ class CacheManager:
                 "email": email,
                 "is_current": is_current,
                 "last_used": time.time(),
-                "current_tg_id": telegram_id,
+                "tg_id": telegram_id,
             }
             existing_profile_index = next((i for i, p in enumerate(current_profiles) if p["id"] == profile.id), None)
             if existing_profile_index is not None:
@@ -80,7 +80,7 @@ class CacheManager:
             for p in current_profiles:
                 if p["id"] != profile.id:
                     p["is_current"] = False
-                    p["current_tg_id"] = None
+                    p["tg_id"] = None
 
             cls._update_profile_data(telegram_id, current_profiles)
             logger.debug(f"Profile {profile.id} set for user {telegram_id}")
@@ -255,7 +255,7 @@ class CacheManager:
     def get_coach_by_id(cls, profile_id: int) -> Coach:
         try:
             key = cls._add_prefix("coaches")
-            coach_data = cls.redis.hget(key, str(profile_id))
+            coach_data = cls.redis.hget(key, profile_id)
             if coach_data:
                 data = json.loads(coach_data)
                 data["id"] = profile_id

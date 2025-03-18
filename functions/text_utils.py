@@ -102,7 +102,7 @@ async def get_client_page(client: Client, lang_code: str, subscription: bool, da
         "workout_goals": client.workout_goals,
         "health_notes": client.health_notes,
         "weight": client.weight,
-        "language": CacheManager.get_profile_info_by_key(client_data.get("current_tg_id"), client.id, "language"),
+        "language": CacheManager.get_profile_info_by_key(client_data.get("tg_id"), client.id, "language"),
         "subscription": texts.get("enabled") if subscription else texts.get("disabled"),
         "status": texts.get(client.status),
     }

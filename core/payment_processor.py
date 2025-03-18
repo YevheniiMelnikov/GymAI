@@ -10,7 +10,6 @@ from common.settings import settings
 from core.google_sheets_manager import SheetsManager
 from services.payment_service import PaymentService
 from services.profile_service import ProfileService
-from services.user_service import UserService
 from services.workout_service import WorkoutService
 from bot.texts.text_manager import msg_text
 
@@ -167,9 +166,8 @@ class PaymentProcessor:
 
         current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         cls.cache_manager.update_subscription_data(profile.id, {"enabled": True, "payment_date": current_date})
-        auth_token = await UserService.get_user_token(profile.id)
         await cls.workout_service.update_subscription(
-            subscription.id, {"enabled": True, "price": subscription.price, "payment_date": current_date}, auth_token
+            subscription.id, {"enabled": True, "price": subscription.price, "payment_date": current_date}
         )
         if not subscription.enabled:
             client = cls.cache_manager.get_client_by_id(profile.id)

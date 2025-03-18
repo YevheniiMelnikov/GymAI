@@ -26,7 +26,7 @@ class Migration(migrations.Migration):
                         base_field=models.IntegerField(), blank=True, default=list, size=None
                     ),
                 ),
-                ("current_tg_id", models.BigIntegerField(blank=True)),
+                ("tg_id", models.BigIntegerField(blank=True)),
                 ("name", models.CharField(blank=True, max_length=50, null=True)),
                 (
                     "user",

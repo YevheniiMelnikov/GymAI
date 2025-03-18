@@ -25,13 +25,13 @@ async def send_daily_survey():
     for client_id in clients:
         client_data = await ProfileService.get_profile(client_id)
         client_lang = (
-            CacheManager.get_profile_info_by_key(client_data.get("current_tg_id"), client_id, "language")
+            CacheManager.get_profile_info_by_key(client_data.get("tg_id"), client_id, "language")
             or settings.DEFAULT_BOT_LANGUAGE
         )
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
         async with aiohttp.ClientSession():
             await bot.send_message(
-                chat_id=client_data.get("current_tg_id"),
+                chat_id=client_data.get("tg_id"),
                 text=msg_text("have_you_trained", client_lang),
                 reply_markup=workout_survey_kb(client_lang, yesterday),
                 disable_notification=True,

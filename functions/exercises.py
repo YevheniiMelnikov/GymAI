@@ -17,7 +17,6 @@ from functions.text_utils import format_program, get_translated_week_day
 from functions.utils import delete_messages, generate_order_id
 from core.models import Exercise, Profile, Subscription
 from services.payment_service import PaymentService
-from services.user_service import UserService
 from services.workout_service import WorkoutService
 from bot.texts.exercises import exercise_dict
 from bot.texts.text_manager import msg_text
@@ -158,8 +157,7 @@ async def edit_subscription_days(
     payload = {"workout_days": days, "exercises": updated_exercises, "client_profile": profile.id}
     subscription_data.update(payload)
     CacheManager.update_subscription_data(profile.id, payload)
-    auth_token = await UserService.get_user_token(profile.id)
-    await WorkoutService.update_subscription(subscription_data.get("id"), subscription_data, auth_token)
+    await WorkoutService.update_subscription(subscription_data.get("id"), subscription_data)
     await state.set_state(States.show_subscription)
     await show_subscription_page(callback_query, state, subscription)
     with suppress(TelegramBadRequest):

@@ -1,4 +1,3 @@
-import os
 from contextlib import suppress
 from datetime import datetime
 
@@ -26,9 +25,6 @@ from functions.text_utils import (
 from services.profile_service import ProfileService
 from common.settings import settings
 from bot.texts.text_manager import msg_text
-
-
-bot = Bot(os.environ.get("BOT_TOKEN"))
 
 
 async def show_subscription_page(callback_query: CallbackQuery, state: FSMContext, subscription: Subscription) -> None:
@@ -118,7 +114,7 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
     await state.set_state(States.show_clients)
 
 
-async def show_coaches_menu(message: Message, coaches: list[Coach], current_index=0) -> None:
+async def show_coaches_menu(message: Message, coaches: list[Coach], bot: Bot, current_index=0) -> None:
     profile = await profiles.get_or_load_profile(message.chat.id)
     current_index %= len(coaches)
     current_coach = coaches[current_index]
@@ -165,26 +161,12 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
         await callback_query.answer()
         user_data = await ProfileService.get_profile(profile.id)
 
-        if user_data is None:
-            logger.warning(f"No user data found for profile {profile.id}, initiating profile creation.")
-            await profiles.start_profile_creation(callback_query.message, profile, state)
-            return
-
-        if None in user_data.values():
-            logger.warning(f"Incomplete profile data for {profile.id}, initiating profile creation.")
-            await profiles.start_profile_creation(callback_query.message, profile, state)
-            return
-
-        try:
-            if profile.status == "client":
-                CacheManager.set_client_data(profile.id, user_data)
-                user = Client.from_dict(user_data)
-            else:
-                CacheManager.set_coach_data(profile.id, user_data)
-                user = Coach.from_dict(user_data)
-        except TypeError:
-            await profiles.start_profile_creation(callback_query.message, profile, state)
-            return
+        if profile.status == "client":
+            CacheManager.set_client_data(profile.id, user_data)
+            user = Client.from_dict(user_data)
+        else:
+            CacheManager.set_coach_data(profile.id, user_data)
+            user = Coach.from_dict(user_data)
 
     format_attributes = get_profile_attributes(role=profile.status, user=user, lang=profile.language)
     text = msg_text(
@@ -356,7 +338,7 @@ async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, 
 
 async def manage_subscription(callback_query: CallbackQuery, lang: str, client_id: str, state: FSMContext) -> None:
     await state.clear()
-    subscription = CacheManager.get_subscription(client_id)
+    subscription = CacheManager.get_subscription(int(client_id))
 
     if not subscription or not subscription.enabled:
         await callback_query.answer(msg_text("payment_required", lang), show_alert=True)
