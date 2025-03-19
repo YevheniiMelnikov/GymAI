@@ -11,15 +11,14 @@ RUN apt-get update \
        gcc \
        python3-dev \
        curl \
+       git \
     && rm -rf /var/lib/apt/lists/*
 
-RUN curl -sSL https://install.python-poetry.org | python3 -
-ENV PATH="/root/.local/bin:$PATH"
-RUN poetry --version
+RUN pip install uv
 
-COPY pyproject.toml poetry.lock README.md ./
-RUN poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi
+COPY requirements.txt ./
+
+RUN uv pip install --system -r requirements.txt
 
 COPY api ./api
 COPY common ./common

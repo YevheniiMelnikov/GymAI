@@ -4,6 +4,8 @@ from contextlib import suppress
 from typing import Optional
 
 import aiohttp
+from pydantic_core import ValidationError
+
 from common.logger import logger
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
@@ -110,7 +112,7 @@ async def delete_messages(state: FSMContext) -> None:
     data = await state.get_data()
     message_ids = data.get("message_ids", [])
     for message_id in message_ids:
-        with suppress(TelegramBadRequest):
+        with suppress(TelegramBadRequest, ValidationError):
             await bot.delete_message(chat_id=data.get("chat_id"), message_id=message_id)
     await state.update_data(message_ids=[])
 

@@ -62,7 +62,7 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
             logger.error(f"Error retrieving client profile for {profile.id}: {error}")
             questionnaire = None
         reply_markup = edit_client_profile_kb(profile.language) if questionnaire else None
-        await state.update_data(role="client")
+        await state.update_data(status="client")
 
     else:
         try:
@@ -71,7 +71,7 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
             logger.error(f"Error retrieving coach profile for {profile.id}: {error}")
             questionnaire = None
         reply_markup = edit_coach_profile_kb(profile.language) if questionnaire else None
-        await state.update_data(role="coach")
+        await state.update_data(status="coach")
 
     state_to_set = States.edit_profile if questionnaire else States.name
     response_message = "choose_profile_parameter" if questionnaire else "edit_profile"
@@ -168,7 +168,7 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
             CacheManager.set_coach_data(profile.id, user_data)
             user = Coach.from_dict(user_data)
 
-    format_attributes = get_profile_attributes(role=profile.status, user=user, lang=profile.language)
+    format_attributes = get_profile_attributes(status=profile.status, user=user, lang=profile.language)
     text = msg_text(
         "client_profile" if profile.status == "client" else "coach_profile",
         profile.language,

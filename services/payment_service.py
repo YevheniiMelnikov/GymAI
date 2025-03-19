@@ -41,17 +41,14 @@ class PaymentService(APIClient):
         return params
 
     @classmethod
-    async def get_payment_link(
-        cls, action: str, amount: str, order_id: str, payment_type: str, client_email: str, profile_id: int
-    ) -> str:
-        emails = [email for email in [client_email, settings.EMAIL_HOST_USER] if email]
+    async def get_payment_link(cls, action: str, amount: str, order_id: str, payment_type: str, profile_id: int) -> str:
         params = cls._build_payment_params(
             action=action,
             amount=amount,
             order_id=order_id,
             payment_type=payment_type,
             profile_id=profile_id,
-            emails=emails,
+            emails=[settings.EMAIL_HOST_USER],
         )
 
         data = cls.payment_client.cnb_data(params)

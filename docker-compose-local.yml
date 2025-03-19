@@ -3,7 +3,7 @@ services:
     image: "postgres:17"
     container_name: db
     ports:
-      - "5432:5432"
+      - "15432:5432"
     env_file:
       - ./.env
     volumes:
@@ -19,7 +19,7 @@ services:
     image: "redis:7.4.2"
     container_name: redis
     ports:
-      - "6379:6379"
+      - "16379:6379"
     volumes:
       - redisdata:/data
     command: ["redis-server"]

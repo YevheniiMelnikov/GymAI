@@ -5,7 +5,14 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import select_gender_kb, payment_kb, select_days_kb, workout_experience_kb, yes_no_kb, select_role_kb
+from bot.keyboards import (
+    select_gender_kb,
+    payment_kb,
+    select_days_kb,
+    workout_experience_kb,
+    yes_no_kb,
+    select_status_kb,
+)
 from bot.states import States
 from common.settings import settings
 from core.cache_manager import CacheManager
@@ -33,12 +40,12 @@ async def select_language(callback_query: CallbackQuery, state: FSMContext) -> N
     profile = await get_or_load_profile(callback_query.from_user.id)
     if profile:
         await ProfileService.edit_profile(profile.id, {"language": lang_code})
-        CacheManager.set_profile_info_by_key(callback_query.from_user.id, profile.id, "language", lang_code)
+        CacheManager.set_profile_data(callback_query.from_user.id, "language", lang_code)
         profile.language = lang_code
         await show_main_menu(callback_query.message, profile, state)
     else:
         await callback_query.message.answer(
-            msg_text("choose_account_type", lang_code), reply_markup=select_role_kb(lang_code)
+            msg_text("choose_account_type", lang_code), reply_markup=select_status_kb(lang_code)
         )
         await state.update_data(lang=lang_code)
         await state.set_state(States.account_type)
@@ -51,17 +58,19 @@ async def select_language(callback_query: CallbackQuery, state: FSMContext) -> N
 async def profile_status_choice(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.answer()
     data = await state.get_data()
-    lang_code = data.get("lang", settings.DEFAULT_BOT_LANGUAGE)
-    chosen_status = callback_query.data if callback_query.data in ["coach", "client"] else "client"
+    lang = data.get("lang", settings.DEFAULT_BOT_LANGUAGE)
+    status = callback_query.data if callback_query.data in ["coach", "client"] else "client"
 
     profile_data = await ProfileService.create_profile(
-        telegram_id=callback_query.from_user.id, status=chosen_status, language=lang_code
+        telegram_id=callback_query.from_user.id, status=status, language=lang
     )
 
     if not profile_data:
-        await callback_query.message.answer(msg_text("unexpected_error", lang_code))
+        await callback_query.message.answer(msg_text("unexpected_error", lang))
         return
 
+    name_msg = await callback_query.message.answer(msg_text("name", lang))
+    await state.update_data(chat_id=callback_query.message.chat.id, message_ids=[name_msg.message_id], status=status)
     await state.set_state(States.name)
 
 
@@ -69,14 +78,14 @@ async def profile_status_choice(callback_query: CallbackQuery, state: FSMContext
 async def name(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
-    state_to_set = States.surname if data.get("role") == "coach" else States.gender
+    state_to_set = States.surname if data.get("status") == "coach" else States.gender
     await state.set_state(state_to_set)
     text = (
         msg_text("surname", data.get("lang"))
-        if data["role"] == "coach"
+        if data["status"] == "coach"
         else msg_text("choose_gender", data.get("lang"))
     )
-    reply_markup = select_gender_kb(data.get("lang")) if data["role"] == "client" else None
+    reply_markup = select_gender_kb(data.get("lang")) if data["status"] == "client" else None
     msg = await message.answer(text=text, reply_markup=reply_markup)
     await state.update_data(chat_id=message.chat.id, message_ids=[msg.message_id], name=message.text)
     await message.delete()
@@ -359,13 +368,11 @@ async def enter_wishes(message: Message, state: FSMContext):
         elif data.get("request_type") == "program":
             order_id = generate_order_id()
             await state.update_data(order_id=order_id, amount=coach.program_price)
-            email = CacheManager.get_profile_info_by_key(message.from_user.id, profile.id, "email")
             if payment_link := await PaymentService.get_payment_link(
                 action="pay",
                 amount=str(coach.program_price),
                 order_id=order_id,
                 payment_type="program",
-                client_email=email,
                 profile_id=profile.id,
             ):
                 await state.set_state(States.handle_payment)
@@ -428,7 +435,7 @@ async def delete_profile_confirmation(callback_query: CallbackQuery, state: FSMC
                 return
 
         if profile and await ProfileService.delete_profile(profile.id):
-            CacheManager.delete_profile(callback_query.from_user.id, profile.id)
+            CacheManager.delete_profile(callback_query.from_user.id)
             await callback_query.message.answer(msg_text("profile_deleted", profile.language))
             await callback_query.message.answer(msg_text("select_action", profile.language))
             await callback_query.message.delete()

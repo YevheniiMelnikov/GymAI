@@ -15,7 +15,7 @@ from services.profile_service import ProfileService
 from bot.texts.text_manager import msg_text
 
 
-async def update_profile_data(message: Message, state: FSMContext, role: str) -> None:
+async def update_profile_data(message: Message, state: FSMContext, status: str) -> None:
     data = await state.get_data()
     await delete_messages(state)
     try:
@@ -27,7 +27,7 @@ async def update_profile_data(message: Message, state: FSMContext, role: str) ->
         if profile_data:
             await ProfileService.edit_profile(profile.id, profile_data)
 
-        if role == "client":
+        if status == "client":
             CacheManager.set_client_data(profile.id, data)
             await ProfileService.edit_client_profile(profile.id, data)
         else:
@@ -77,21 +77,11 @@ async def check_assigned_clients(profile_id: int) -> bool:
 
 async def get_or_load_profile(telegram_id: int) -> Profile | None:
     try:
-        return CacheManager.get_current_profile(telegram_id)
+        return CacheManager.get_profile(telegram_id)
     except ProfileNotFoundError:
         try:
             if profile_data := await ProfileService.get_profile_by_telegram_id(telegram_id):
                 profile = Profile.from_dict(profile_data)
-                await ProfileService.reset_telegram_id(profile.id, telegram_id)
-                user_data = profile_data.get("user", {})
-
-                CacheManager.set_profile(
-                    profile=profile,
-                    username=user_data.get("username", ""),
-                    telegram_id=telegram_id,
-                    email=user_data.get("email", ""),
-                    is_current=True,
-                )
                 return profile
 
         except Exception as e:

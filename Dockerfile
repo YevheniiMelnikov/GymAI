@@ -4,7 +4,6 @@ ENV APP_HOME=/app
 ENV PYTHONPATH=$APP_HOME:/app/common
 ENV TZ=Europe/Kyiv
 
-RUN mkdir -p $APP_HOME
 WORKDIR $APP_HOME
 
 RUN apt-get update \
@@ -17,6 +16,7 @@ RUN apt-get update \
        lsb-release \
        ca-certificates \
        redis-tools \
+       git \
     && rm -rf /var/lib/apt/lists/*
 
 RUN wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/postgresql-archive-keyring.gpg \
@@ -26,13 +26,11 @@ RUN wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg -
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-RUN curl -sSL https://install.python-poetry.org | python3 -
-ENV PATH="/root/.local/bin:$PATH"
-RUN poetry --version
+RUN pip install uv
 
-COPY pyproject.toml poetry.lock README.md ./
-RUN poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi --no-root
+COPY requirements.txt ./
+
+RUN uv pip install --system -r requirements.txt
 
 COPY . .
 COPY common ./common

@@ -234,12 +234,12 @@ async def contact_client(callback_query: CallbackQuery, profile: Profile, client
 
 async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> None:
     coach_data = await ProfileService.get_profile(coach.id)
-    coach_lang = CacheManager.get_profile_info_by_key(coach_data.get("tg_id"), coach.id, "language")
+    coach_lang = CacheManager.get_profile_data(coach_data.get("tg_id"), coach.id, "language")
     data["recipient_language"] = coach_lang
     service = data.get("request_type")
     preferable_workout_type = data.get("workout_type")
     client_data = await ProfileService.get_profile(client.id)
-    client_lang = CacheManager.get_profile_info_by_key(client_data.get("tg_id"), client.id, "language")
+    client_lang = CacheManager.get_profile_data(client_data.get("tg_id"), client.id, "language")
     workout_types = await get_workout_types(coach_lang)
     preferable_workouts_type = workout_types.get(preferable_workout_type, "unknown")
     subscription = CacheManager.get_subscription(client.id)

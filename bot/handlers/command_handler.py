@@ -47,7 +47,6 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
     if profile_data := await ProfileService.get_profile_by_telegram_id(message.from_user.id):
         profile = Profile.from_dict(profile_data)
-        logger.info(f"User with profile_id={profile.id} started bot")
         await state.update_data(lang=profile.language, profile=profile_data)
         await show_main_menu(message, profile, state)
         with suppress(TelegramBadRequest):

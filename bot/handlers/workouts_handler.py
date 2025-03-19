@@ -216,7 +216,7 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext)
         client = CacheManager.get_client_by_id(profile.id)
         coach = CacheManager.get_coach_by_id(client.assigned_to.pop())
         coach_profile = await ProfileService.get_profile(coach.id)
-        coach_lang = CacheManager.get_profile_info_by_key(coach_profile.get("tg_id"), coach.id, "language")
+        coach_lang = CacheManager.get_profile_data(coach_profile.get("tg_id"), coach.id, "language")
         await send_message(
             recipient=coach,
             text=msg_text("workout_completed", coach_lang).format(name=client.name, program=program),
@@ -238,7 +238,7 @@ async def workout_description(message: Message, state: FSMContext):
     client = CacheManager.get_client_by_id(profile.id)
     coach = CacheManager.get_coach_by_id(client.assigned_to.pop())
     coach_data = await ProfileService.get_profile(coach.id)
-    coach_lang = CacheManager.get_profile_info_by_key(coach_data.get("tg_id"), coach.id, "language")
+    coach_lang = CacheManager.get_profile_data(coach_data.get("tg_id"), coach.id, "language")
     data = await state.get_data()
     day = data.get("day")
     exercises = data.get("exercises")
@@ -304,7 +304,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
         await callback_query.answer(btn_text("done", profile.language))
         client = CacheManager.get_client_by_id(client_id)
         client_data = await ProfileService.get_profile(client_id)
-        client_lang = CacheManager.get_profile_info_by_key(client_data.get("tg_id"), client.id, "language")
+        client_lang = CacheManager.get_profile_data(client_data.get("tg_id"), client.id, "language")
         if data.get("subscription"):
             subscription_data = CacheManager.get_subscription(client_id).to_dict()
             subscription_data.update(client_profile=client_id, exercises=exercises)

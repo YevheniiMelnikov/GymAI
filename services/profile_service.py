@@ -17,7 +17,6 @@ class ProfileService(APIClient):
             return user_data
 
         logger.info(f"Failed to retrieve profile for id={profile_id}. HTTP status: {status_code}")
-        return None
 
     @classmethod
     async def create_profile(cls, telegram_id: int, status: str, language: str) -> dict[str, Any] | None:
@@ -33,8 +32,8 @@ class ProfileService(APIClient):
         )
         if status_code == 201 and response_data:
             return response_data
+
         logger.error(f"Failed to create profile. status={status_code}, response={response_data}")
-        return None
 
     @classmethod
     async def get_profile_by_telegram_id(cls, telegram_id: int) -> dict[str, Any] | None:
@@ -44,8 +43,6 @@ class ProfileService(APIClient):
         )
         if status_code == 200 and profile_data:
             return profile_data
-
-        return None
 
     @classmethod
     async def delete_profile(cls, profile_id: int, token: str | None = None) -> bool:
@@ -108,10 +105,3 @@ class ProfileService(APIClient):
             return response_data
         else:
             raise ValueError(f"Failed to get coach profile for profile_id={profile_id}")
-
-    @classmethod
-    async def reset_telegram_id(cls, profile_id: int, telegram_id: int) -> bool:
-        url = urljoin(cls.api_url, f"api/v1/profiles/reset-tg/{profile_id}/")
-        data = {"telegram_id": telegram_id}
-        status_code, _ = await cls._api_request("post", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"})
-        return status_code == 200
