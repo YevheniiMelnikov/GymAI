@@ -1,6 +1,7 @@
 from typing import Any
 from urllib.parse import urljoin
 from common.logger import logger
+from core.models import Profile
 
 from services.api_service import APIClient
 from core.encryptor import Encryptor
@@ -19,7 +20,16 @@ class ProfileService(APIClient):
         logger.info(f"Failed to retrieve profile for id={profile_id}. HTTP status: {status_code}")
 
     @classmethod
-    async def create_profile(cls, telegram_id: int, status: str, language: str) -> dict[str, Any] | None:
+    async def get_profile_by_tg_id(cls, telegram_id: int) -> Profile | None:
+        url = urljoin(cls.api_url, f"api/v1/profiles/tg/{telegram_id}/")
+        status_code, profile_data = await cls._api_request(
+            "get", url, headers={"Authorization": f"Api-Key {cls.api_key}"}
+        )
+        if status_code == 200 and profile_data:
+            return Profile.from_dict(profile_data)
+
+    @classmethod
+    async def create_profile(cls, telegram_id: int, status: str, language: str) -> Profile | None:
         url = urljoin(cls.api_url, "api/v1/profiles/")
         data = {
             "tg_id": telegram_id,
@@ -31,18 +41,9 @@ class ProfileService(APIClient):
             "post", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"}
         )
         if status_code == 201 and response_data:
-            return response_data
+            return Profile.from_dict(response_data)
 
         logger.error(f"Failed to create profile. status={status_code}, response={response_data}")
-
-    @classmethod
-    async def get_profile_by_telegram_id(cls, telegram_id: int) -> dict[str, Any] | None:
-        url = urljoin(cls.api_url, f"api/v1/profiles/tg/{telegram_id}/")
-        status_code, profile_data = await cls._api_request(
-            "get", url, headers={"Authorization": f"Api-Key {cls.api_key}"}
-        )
-        if status_code == 200 and profile_data:
-            return profile_data
 
     @classmethod
     async def delete_profile(cls, profile_id: int, token: str | None = None) -> bool:

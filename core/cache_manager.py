@@ -9,7 +9,7 @@ from dateutil.parser import parse
 from common.logger import logger
 
 from core.encryptor import Encryptor
-from core.exceptions import UserServiceError
+from core.exceptions import UserServiceError, ProfileNotFoundError
 from core.models import Client, Coach, Profile, Program, Subscription
 from common.settings import settings
 
@@ -35,41 +35,47 @@ class CacheManager:
             existing_data = json.loads(cls.redis.hget(key, str(profile_id)) or "{}")
             existing_data.update(filtered_data)
             cls.redis.hset(key, str(profile_id), json.dumps(existing_data))
-            logger.debug(f"Data for profile_id {profile_id} set successfully")
         except Exception as e:
             logger.error(f"Error setting data for profile_id {profile_id}: {e}")
 
     @classmethod
     def get_profile(cls, telegram_id: int) -> Profile | None:
         key = cls._add_prefix("user_profiles")
-        profile_data = cls.redis.hget(key, str(telegram_id))
-        if profile_data:
-            try:
-                profile = json.loads(profile_data)
-                return Profile.from_dict(profile)
-            except JSONDecodeError as e:
-                logger.error(f"Error decoding JSON: {e}")
+        raw_data = cls.redis.hget(key, str(telegram_id))
+        if not raw_data:
+            raise ProfileNotFoundError(telegram_id)
+
+        try:
+            data = json.loads(raw_data)
+            if "id" not in data:
+                raise ProfileNotFoundError(telegram_id)
+            return Profile.from_dict(data)
+        except (JSONDecodeError, TypeError) as e:
+            logger.debug(f"Profile data in Redis is invalid or incomplete for user {telegram_id}: {e}")
+            raise ProfileNotFoundError(telegram_id)
 
     @classmethod
     def get_profile_data(cls, telegram_id: int, key_name: str) -> Any:
         profile = cls.get_profile(telegram_id)
         if profile:
             return profile.to_dict().get(key_name)
-        return None
 
     @classmethod
-    def set_profile_data(cls, telegram_id: int, key_name: str, value: Any) -> bool:
-        profile = cls.get_profile(telegram_id)
-        if not profile:
-            return False
-        profile_dict = profile.to_dict()
-        profile_dict[key_name] = value
+    def set_profile_data(cls, telegram_id: int, data: dict[str, Any]) -> bool:
+        allowed_fields = [
+            "language",
+            "status",
+            "tg_id",
+        ]
         try:
             key = cls._add_prefix("user_profiles")
-            cls.redis.hset(key, str(telegram_id), json.dumps(profile_dict))
+            filtered_data = {k: data[k] for k in allowed_fields if k in data}
+            existing_data = json.loads(cls.redis.hget(key, str(telegram_id)) or "{}")
+            existing_data.update(filtered_data)
+            cls.redis.hset(key, str(telegram_id), json.dumps(existing_data))
             return True
         except Exception as e:
-            logger.exception(f"Error updating field '{key_name}' for profile {telegram_id}: {e}")
+            logger.error(f"Error setting data for profile_id {telegram_id}: {e}")
             return False
 
     @classmethod

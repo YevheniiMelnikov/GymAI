@@ -25,7 +25,7 @@ from functions.menus import (
     my_clients_menu,
     show_my_profile_menu,
 )
-from functions.profiles import assign_coach, get_or_load_profile
+from functions.profiles import assign_coach, get_user_profile
 from functions.utils import handle_clients_pagination
 from functions.workout_plans import manage_program, cancel_subscription
 from core.models import Coach, Profile
@@ -74,7 +74,7 @@ async def profile_menu(callback_query: CallbackQuery, state: FSMContext) -> None
 
 @menu_router.message(States.feedback)
 async def handle_feedback(message: Message, state: FSMContext) -> None:
-    profile = await get_or_load_profile(message.from_user.id)
+    profile = await get_user_profile(message.from_user.id)
     if await process_feedback_content(message, profile):
         logger.info(f"Profile_id {profile.id} sent feedback")
         await message.answer(msg_text("feedback_sent", profile.language))
@@ -83,7 +83,7 @@ async def handle_feedback(message: Message, state: FSMContext) -> None:
 
 @menu_router.callback_query(States.choose_coach)
 async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext, bot: Bot):
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
     if callback_query.data == "back":
         await show_main_menu(callback_query.message, profile, state)
 
@@ -103,7 +103,7 @@ async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext, bo
 
 @menu_router.callback_query(States.coach_selection)
 async def coach_paginator(callback_query: CallbackQuery, state: FSMContext, bot: Bot):
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
 
     if callback_query.data == "quit":
         await callback_query.message.answer(
@@ -137,7 +137,7 @@ async def coach_paginator(callback_query: CallbackQuery, state: FSMContext, bot:
 
 @menu_router.callback_query(States.show_clients)
 async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
 
     if callback_query.data == "back":
         await callback_query.answer()
@@ -168,7 +168,7 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext):
 
 @menu_router.callback_query(States.show_subscription)
 async def show_subscription_actions(callback_query: CallbackQuery, state: FSMContext, bot: Bot):
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
     if callback_query.data == "back":
         await callback_query.answer()
         await state.set_state(States.select_service)

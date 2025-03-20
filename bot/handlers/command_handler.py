@@ -13,7 +13,7 @@ from common.settings import settings
 from core.models import Profile
 from functions.menus import show_main_menu
 from bot.texts.text_manager import msg_text
-from services.profile_service import ProfileService
+from functions.profiles import get_user_profile
 
 cmd_router = Router()
 
@@ -45,9 +45,8 @@ async def cmd_menu(message: Message, state: FSMContext) -> None:
 @cmd_router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
-    if profile_data := await ProfileService.get_profile_by_telegram_id(message.from_user.id):
-        profile = Profile.from_dict(profile_data)
-        await state.update_data(lang=profile.language, profile=profile_data)
+    if profile := await get_user_profile(message.from_user.id):
+        await state.update_data(lang=profile.language, profile=profile.to_dict())
         await show_main_menu(message, profile, state)
         with suppress(TelegramBadRequest):
             await message.delete()

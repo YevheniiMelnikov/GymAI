@@ -11,7 +11,7 @@ from bot.keyboards import workout_results_kb, workout_survey_kb
 from bot.states import States
 from common.settings import settings
 from core.cache_manager import CacheManager
-from functions.profiles import get_or_load_profile
+from functions.profiles import get_user_profile
 from services.profile_service import ProfileService
 from bot.texts.text_manager import msg_text
 
@@ -40,7 +40,7 @@ async def send_daily_survey():
         @survey_router.callback_query(F.data.startswith("yes_"))
         @survey_router.callback_query(F.data.startswith("no_"))
         async def have_you_trained(callback_query: CallbackQuery, state: FSMContext):
-            profile = await get_or_load_profile(callback_query.from_user.id)
+            profile = await get_user_profile(callback_query.from_user.id)
             subscription = CacheManager.get_subscription(profile.id)
             workout_days = subscription.workout_days
             if callback_query.data.startswith("yes"):

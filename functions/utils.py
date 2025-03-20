@@ -45,7 +45,7 @@ async def set_bot_commands(lang: Optional[str] = None) -> None:
 
 
 async def program_menu_pagination(state: FSMContext, callback_query: CallbackQuery) -> None:
-    profile = await profiles.get_or_load_profile(callback_query.from_user.id)
+    profile = await profiles.get_user_profile(callback_query.from_user.id)
 
     if callback_query.data == "quit":
         await menus.my_clients_menu(callback_query, profile, state)

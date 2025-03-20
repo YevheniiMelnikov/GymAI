@@ -11,7 +11,7 @@ from bot.states import States
 from core.cache_manager import CacheManager
 from functions.chat import send_message
 from functions.menus import show_main_menu
-from functions.profiles import get_or_load_profile
+from functions.profiles import get_user_profile
 from functions.text_utils import format_program, get_translated_week_day
 from functions.utils import delete_messages
 from core.models import Profile
@@ -21,7 +21,7 @@ from bot.texts.text_manager import msg_text, btn_text
 
 
 async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
     data = await state.get_data()
     completed_days = data.get("completed_days", data.get("day_index", 0) + 1)
     split_number = data.get("split")
@@ -78,7 +78,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
 
 
 async def reset_workout_plan(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
     data = await state.get_data()
     client_id = data.get("client_id")
     await callback_query.answer(btn_text("done", profile.language))
@@ -104,7 +104,7 @@ async def reset_workout_plan(callback_query: CallbackQuery, state: FSMContext) -
 
 
 async def next_day_workout_plan(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
     data = await state.get_data()
     completed_days = data.get("day_index", 0)
     split_number = data.get("split")

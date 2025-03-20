@@ -29,7 +29,7 @@ from bot.texts.text_manager import msg_text
 
 async def show_subscription_page(callback_query: CallbackQuery, state: FSMContext, subscription: Subscription) -> None:
     await callback_query.answer()
-    profile = await profiles.get_or_load_profile(callback_query.from_user.id)
+    profile = await profiles.get_user_profile(callback_query.from_user.id)
     payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
     next_payment_date = payment_date + relativedelta(months=1)
     next_payment_date_str = next_payment_date.strftime("%Y-%m-%d")
@@ -89,7 +89,7 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
 async def show_main_menu(message: Message, profile: Profile, state: FSMContext) -> None:
     menu = client_menu_kb if profile.status == "client" else coach_menu_kb
     await state.clear()
-    await state.update_data(profile=Profile.to_dict(profile))
+    await state.update_data(profile=profile.to_dict())
     await state.set_state(States.main_menu)
     await message.answer(msg_text("main_menu", profile.language), reply_markup=menu(profile.language))
     with suppress(TelegramBadRequest):
@@ -97,7 +97,7 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext) 
 
 
 async def show_clients(message: Message, clients: list[Client], state: FSMContext, current_index=0) -> None:
-    profile = await profiles.get_or_load_profile(message.chat.id)
+    profile = await profiles.get_user_profile(message.chat.id)
     current_index %= len(clients)
     current_client = clients[current_index]
     subscription = True if CacheManager.get_subscription(current_client.id) else False
@@ -115,12 +115,12 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
 
 
 async def show_coaches_menu(message: Message, coaches: list[Coach], bot: Bot, current_index=0) -> None:
-    profile = await profiles.get_or_load_profile(message.chat.id)
+    profile = await profiles.get_user_profile(message.chat.id)
     current_index %= len(coaches)
     current_coach = coaches[current_index]
     text = msg_text("coach_page", profile.language)
     coach_photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{current_coach.profile_photo}"
-    formatted_text = text.format(**Coach.to_dict(current_coach))
+    formatted_text = text.format(**current_coach.to_dict())
 
     try:
         media = InputMediaPhoto(media=coach_photo_url)

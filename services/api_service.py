@@ -14,7 +14,6 @@ class APIClient:
 
     @classmethod
     async def _api_request(cls, method: str, url: str, data: dict | None = None, headers: dict = None) -> tuple:
-        logger.debug(f"Executing {method.upper()} request to {url} with params: {data}")
         try:
             response = await cls.client.request(method, url, json=data, headers=headers)
             if response.is_success:
@@ -31,7 +30,7 @@ class APIClient:
                     error_data = {"error": response.text}
 
                 if response.status_code == 404:
-                    logger.info(f"Request to {url} returned 404: {error_data}")
+                    pass
                 else:
                     logger.error(
                         f"Request to {url} failed with status code {response.status_code} and response: {error_data}"

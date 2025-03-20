@@ -12,13 +12,13 @@ class ProfileAdmin(admin.ModelAdmin):
 
 @admin.register(ClientProfile)
 class ClientProfileAdmin(admin.ModelAdmin):
-    list_display = ("id", "profile", "coach", "gender", "born_in", "workout_experience")
+    list_display = ("id", "profile", "gender", "born_in", "workout_experience")
     list_filter = ("gender", "workout_experience")
-    search_fields = ("profile__name", "coach__profile__name")
+    search_fields = ("profile__name",)
 
 
 @admin.register(CoachProfile)
 class CoachProfileAdmin(admin.ModelAdmin):
-    list_display = ("id", "profile", "surname", "verified", "subscription_price", "program_price")
+    list_display = ("id", "profile", "surname", "verified", "subscription_price", "program_price", "assigned_to")
     list_filter = ("verified",)
     search_fields = ("profile__name", "surname")

@@ -13,17 +13,7 @@ class ClientProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ClientProfile
-        fields = [
-            "id",
-            "profile_data",
-            "gender",
-            "born_in",
-            "weight",
-            "health_notes",
-            "workout_experience",
-            "workout_goals",
-            "coach",
-        ]
+        fields = "__all__"
 
 
 class CoachProfileSerializer(serializers.ModelSerializer):
@@ -31,14 +21,4 @@ class CoachProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CoachProfile
-        fields = [
-            "id",
-            "profile_data",
-            "surname",
-            "additional_info",
-            "profile_photo",
-            "payment_details",
-            "subscription_price",
-            "program_price",
-            "verified",
-        ]
+        fields = "__all__"

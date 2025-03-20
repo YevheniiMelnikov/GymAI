@@ -16,11 +16,12 @@ from bot.keyboards import (
 from bot.states import States
 from common.settings import settings
 from core.cache_manager import CacheManager
+from core.exceptions import ProfileNotFoundError
 from core.file_manager import avatar_manager
 from functions.chat import client_request
 from functions.exercises import edit_subscription_days, process_new_subscription
 from functions.menus import show_main_menu, show_my_profile_menu
-from functions.profiles import get_or_load_profile, update_profile_data, check_assigned_clients
+from functions.profiles import get_user_profile, update_profile_data, check_assigned_clients
 from functions.text_utils import get_state_and_message
 from functions.utils import delete_messages, generate_order_id, set_bot_commands
 from services.payment_service import PaymentService
@@ -34,20 +35,22 @@ questionnaire_router = Router()
 async def select_language(callback_query: CallbackQuery, state: FSMContext) -> None:
     await callback_query.answer()
     await delete_messages(state)
-    lang_code = callback_query.data
-    await set_bot_commands(lang_code)
-
-    profile = await get_or_load_profile(callback_query.from_user.id)
-    if profile:
-        await ProfileService.edit_profile(profile.id, {"language": lang_code})
-        CacheManager.set_profile_data(callback_query.from_user.id, "language", lang_code)
-        profile.language = lang_code
-        await show_main_menu(callback_query.message, profile, state)
-    else:
-        await callback_query.message.answer(
-            msg_text("choose_account_type", lang_code), reply_markup=select_status_kb(lang_code)
+    lang = callback_query.data
+    await set_bot_commands(lang)
+    try:
+        profile = await get_user_profile(callback_query.from_user.id)
+        if profile:
+            await ProfileService.edit_profile(profile.id, {"language": lang})
+            CacheManager.set_profile_data(callback_query.from_user.id, dict(language=lang))
+            profile.language = lang
+            await show_main_menu(callback_query.message, profile, state)
+        else:
+            raise ProfileNotFoundError(callback_query.from_user.id)
+    except ProfileNotFoundError:
+        account_msg = await callback_query.message.answer(
+            msg_text("choose_account_type", lang), reply_markup=select_status_kb(lang)
         )
-        await state.update_data(lang=lang_code)
+        await state.update_data(lang=lang, message_ids=[account_msg.message_id], chat_id=callback_query.message.chat.id)
         await state.set_state(States.account_type)
 
     with suppress(TelegramBadRequest):
@@ -58,17 +61,15 @@ async def select_language(callback_query: CallbackQuery, state: FSMContext) -> N
 async def profile_status_choice(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.answer()
     data = await state.get_data()
+    await delete_messages(state)
     lang = data.get("lang", settings.DEFAULT_BOT_LANGUAGE)
     status = callback_query.data if callback_query.data in ["coach", "client"] else "client"
-
-    profile_data = await ProfileService.create_profile(
-        telegram_id=callback_query.from_user.id, status=status, language=lang
-    )
-
-    if not profile_data:
+    profile = await ProfileService.create_profile(telegram_id=callback_query.from_user.id, status=status, language=lang)
+    if not profile:
         await callback_query.message.answer(msg_text("unexpected_error", lang))
         return
 
+    CacheManager.set_profile_data(callback_query.from_user.id, dict(id=profile.id, status=status, language=lang))
     name_msg = await callback_query.message.answer(msg_text("name", lang))
     await state.update_data(chat_id=callback_query.message.chat.id, message_ids=[name_msg.message_id], status=status)
     await state.set_state(States.name)
@@ -315,7 +316,7 @@ async def profile_photo(message: Message, state: FSMContext) -> None:
 
 @questionnaire_router.callback_query(States.edit_profile)
 async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
     await delete_messages(state)
     await state.update_data(lang=profile.language)
     if callback_query.data == "back":
@@ -338,7 +339,7 @@ async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> No
 
 @questionnaire_router.callback_query(States.workout_type)
 async def workout_type(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
     await state.update_data(workout_type=callback_query.data)
     await state.set_state(States.enter_wishes)
     await callback_query.message.answer(msg_text("enter_wishes", profile.language))
@@ -347,7 +348,7 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
 
 @questionnaire_router.message(States.enter_wishes)
 async def enter_wishes(message: Message, state: FSMContext):
-    profile = await get_or_load_profile(message.from_user.id)
+    profile = await get_user_profile(message.from_user.id)
     client = CacheManager.get_client_by_id(profile.id)
     coach = CacheManager.get_coach_by_id(client.assigned_to.pop())
     await state.update_data(wishes=message.text, sender_name=client.name)
@@ -388,7 +389,7 @@ async def enter_wishes(message: Message, state: FSMContext):
 
 @questionnaire_router.callback_query(States.workout_days)
 async def workout_days(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
     data = await state.get_data()
     days = data.get("workout_days", [])
 
@@ -426,7 +427,7 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
 
 @questionnaire_router.callback_query(States.profile_delete)
 async def delete_profile_confirmation(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
 
     if callback_query.data == "yes":
         if profile and profile.status == "coach":

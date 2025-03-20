@@ -19,7 +19,7 @@ async def update_profile_data(message: Message, state: FSMContext, status: str) 
     data = await state.get_data()
     await delete_messages(state)
     try:
-        profile = await get_or_load_profile(message.chat.id)
+        profile = await get_user_profile(message.chat.id)
         if not profile:
             raise ValueError("Profile not found")
 
@@ -75,14 +75,11 @@ async def check_assigned_clients(profile_id: int) -> bool:
     return False
 
 
-async def get_or_load_profile(telegram_id: int) -> Profile | None:
+async def get_user_profile(telegram_id: int) -> Profile | None:
     try:
         return CacheManager.get_profile(telegram_id)
     except ProfileNotFoundError:
-        try:
-            if profile_data := await ProfileService.get_profile_by_telegram_id(telegram_id):
-                profile = Profile.from_dict(profile_data)
-                return profile
-
-        except Exception as e:
-            logger.error(f"Error occurred while fetching profile for user {telegram_id} from database: {e}")
+        profile = await ProfileService.get_profile_by_tg_id(telegram_id)
+        if profile:
+            CacheManager.set_profile_data(telegram_id, profile.to_dict())
+            return profile

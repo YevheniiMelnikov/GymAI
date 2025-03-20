@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, MISSING
 from typing import Any, Type, TypeVar
 
 T = TypeVar("T", bound="BaseEntity")
@@ -8,9 +8,18 @@ T = TypeVar("T", bound="BaseEntity")
 class BaseEntity:
     @classmethod
     def from_dict(cls: Type[T], data: dict[str, Any]) -> T:
-        fields = {field.name for field in cls.__dataclass_fields__.values()}
-        filtered_data = {key: data.get(key) for key in fields if key in data}
-        return cls(**filtered_data)
+        init_data = {}
+        for field_name, field_info in cls.__dataclass_fields__.items():
+            if field_name in data:
+                init_data[field_name] = data[field_name]
+            else:
+                if field_info.default_factory is not MISSING:
+                    init_data[field_name] = field_info.default_factory()
+                elif field_info.default is not MISSING:
+                    init_data[field_name] = field_info.default
+                else:
+                    raise TypeError(f"Field '{field_name}' is required for {cls.__name__} but not provided.")
+        return cls(**init_data)
 
     def to_dict(self) -> dict[str, Any]:
         return {field.name: getattr(self, field.name) for field in self.__dataclass_fields__.values()}
@@ -26,7 +35,6 @@ class Profile(BaseEntity):
     status: str
     tg_id: int | None = None
     language: str | None = None
-    last_used: float | None = None
 
 
 @dataclass
