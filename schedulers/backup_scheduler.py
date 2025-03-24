@@ -8,12 +8,12 @@ from datetime import datetime, timedelta
 from common.logger import logger
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from common.settings import settings
+from common.settings import Settings
 
 
 class BackupManager:
     scheduler = None
-    os.environ["PGPASSWORD"] = settings.DB_PASSWORD
+    os.environ["PGPASSWORD"] = Settings.DB_PASSWORD
     current_dir = os.path.dirname(os.path.abspath(__file__))
     backup_dir = os.path.join(os.path.dirname(current_dir), "dumps")
     postgres_backup_dir = os.path.join(backup_dir, "postgres")
@@ -28,19 +28,19 @@ class BackupManager:
     @classmethod
     async def create_postgres_backup(cls) -> None:
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        filename = f"{settings.DB_NAME}_backup_{timestamp}.dump"
+        filename = f"{Settings.DB_NAME}_backup_{timestamp}.dump"
         filepath = os.path.join(cls.postgres_backup_dir, filename)
         command = [
             "pg_dump",
             "-h",
-            settings.DB_HOST,
+            Settings.DB_HOST,
             "-p",
-            settings.DB_PORT,
+            Settings.DB_PORT,
             "-U",
-            settings.DB_USER,
+            Settings.DB_USER,
             "-F",
             "c",
-            settings.DB_NAME,
+            Settings.DB_NAME,
         ]
 
         try:
@@ -87,7 +87,7 @@ class BackupManager:
         retention_period = timedelta(days=30)
 
         for filename in os.listdir(cls.postgres_backup_dir):
-            if filename.startswith(settings.DB_NAME) and filename.endswith(".dump"):
+            if filename.startswith(Settings.DB_NAME) and filename.endswith(".dump"):
                 filepath = os.path.join(cls.postgres_backup_dir, filename)
                 file_creation_time = datetime.fromtimestamp(os.path.getctime(filepath))
                 if now - file_creation_time > retention_period:
@@ -123,4 +123,3 @@ class BackupManager:
     @classmethod
     async def shutdown(cls) -> None:
         cls.scheduler.shutdown(wait=False)
-        logger.debug("Backup scheduler stopped")

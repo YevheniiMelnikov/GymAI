@@ -14,12 +14,12 @@ from aiogram.types import BotCommand, CallbackQuery
 
 from bot.keyboards import program_edit_kb, program_view_kb, subscription_manage_kb
 from bot.states import States
-from common.settings import settings
+from common.settings import Settings
 from functions import menus, profiles, text_utils
 from core.models import Client
 from bot.texts.text_manager import msg_text, TextManager
 
-bot = Bot(settings.BOT_TOKEN)
+bot = Bot(Settings.BOT_TOKEN)
 
 
 async def short_url(url: str) -> str:
@@ -38,7 +38,7 @@ async def short_url(url: str) -> str:
 
 
 async def set_bot_commands(lang: Optional[str] = None) -> None:
-    lang = lang or settings.DEFAULT_BOT_LANGUAGE
+    lang = lang or Settings.DEFAULT_BOT_LANGUAGE
     command_texts = TextManager.commands
     commands = [BotCommand(command=cmd, description=desc[lang]) for cmd, desc in command_texts.items()]
     await bot.set_my_commands(commands)

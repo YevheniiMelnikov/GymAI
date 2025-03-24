@@ -9,7 +9,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from bot.keyboards import workout_results_kb, workout_survey_kb
 from bot.states import States
-from common.settings import settings
+from common.settings import Settings
 from core.cache_manager import CacheManager
 from functions.profiles import get_user_profile
 from services.profile_service import ProfileService
@@ -17,7 +17,7 @@ from bot.texts.text_manager import msg_text
 
 
 survey_router = Router()
-bot = Bot(settings.BOT_TOKEN)
+bot = Bot(Settings.BOT_TOKEN)
 
 
 async def send_daily_survey():
@@ -26,7 +26,7 @@ async def send_daily_survey():
         client_data = await ProfileService.get_profile(client_id)
         client_lang = (
             CacheManager.get_profile_data(client_data.get("tg_id"), client_id, "language")
-            or settings.DEFAULT_BOT_LANGUAGE
+            or Settings.DEFAULT_BOT_LANGUAGE
         )
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
         async with aiohttp.ClientSession():

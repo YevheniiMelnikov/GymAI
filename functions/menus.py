@@ -23,7 +23,7 @@ from functions.text_utils import (
     get_translated_week_day,
 )
 from services.profile_service import ProfileService
-from common.settings import settings
+from common.settings import Settings
 from bot.texts.text_manager import msg_text
 
 
@@ -258,7 +258,7 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
 
     subscription = CacheManager.get_subscription(profile.id)
     if not subscription or not subscription.enabled:
-        subscription_img = settings.BOT_PAYMENT_OPTIONS + f"subscription_{profile.language}.jpeg"
+        subscription_img = Settings.BOT_PAYMENT_OPTIONS + f"subscription_{profile.language}.jpeg"
         client_profile = CacheManager.get_client_by_id(profile.id)
         coach = CacheManager.get_coach_by_id(client_profile.assigned_to.pop())
         try:
@@ -301,7 +301,7 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
 
 
 async def show_program_promo_page(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    program_img = settings.BOT_PAYMENT_OPTIONS + f"program_{profile.language}.jpeg"
+    program_img = Settings.BOT_PAYMENT_OPTIONS + f"program_{profile.language}.jpeg"
     client_profile = CacheManager.get_client_by_id(profile.id)
     coach = CacheManager.get_coach_by_id(client_profile.assigned_to.pop())
     try:

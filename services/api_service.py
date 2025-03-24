@@ -4,12 +4,12 @@ import httpx
 from common.logger import logger
 
 from core.exceptions import UserServiceError
-from common.settings import settings
+from common.settings import Settings
 
 
 class APIClient:
-    api_url = settings.API_URL
-    api_key = settings.API_KEY
+    api_url = Settings.API_URL
+    api_key = Settings.API_KEY
     client = httpx.AsyncClient()
 
     @classmethod

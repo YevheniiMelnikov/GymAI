@@ -11,11 +11,11 @@ from common.logger import logger
 from core.encryptor import Encryptor
 from core.exceptions import UserServiceError, ProfileNotFoundError
 from core.models import Client, Coach, Profile, Program, Subscription
-from common.settings import settings
+from common.settings import Settings
 
 
 class CacheManager:
-    redis = redis.from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
+    redis = redis.from_url(Settings.REDIS_URL, encoding="utf-8", decode_responses=True)
     encryptor = Encryptor
 
     @classmethod

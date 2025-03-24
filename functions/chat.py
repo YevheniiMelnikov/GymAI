@@ -15,7 +15,7 @@ from bot.states import States
 from bot.texts.text_manager import msg_text
 from core.cache_manager import CacheManager
 from core.file_manager import avatar_manager
-from common.settings import settings
+from common.settings import Settings
 from functions.exercises import edit_subscription_exercises
 from functions.menus import show_exercises_menu, show_main_menu, manage_subscription
 from functions import profiles
@@ -24,7 +24,7 @@ from core.models import Coach, Profile, Client
 from functions.utils import program_menu_pagination
 from services.profile_service import ProfileService
 
-bot = Bot(settings.BOT_TOKEN)
+bot = Bot(Settings.BOT_TOKEN)
 message_router = Router()
 
 
@@ -42,7 +42,7 @@ async def send_message(
         language = data.get("recipient_language", "ua")
         sender_name = data.get("sender_name", "")
     else:
-        language = settings.DEFAULT_BOT_LANGUAGE
+        language = Settings.DEFAULT_BOT_LANGUAGE
         sender_name = ""
 
     recipient_data = await ProfileService.get_profile(recipient.id)
@@ -95,9 +95,9 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
     photo = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{file_name}"
     async with aiohttp.ClientSession():
         await bot.send_photo(
-            chat_id=settings.OWNER_ID,
+            chat_id=Settings.OWNER_ID,
             photo=photo,
-            caption=msg_text("new_coach_request", settings.OWNER_LANGUAGE).format(
+            caption=msg_text("new_coach_request", Settings.OWNER_LANGUAGE).format(
                 name=name,
                 surname=surname,
                 experience=experience,
@@ -278,37 +278,37 @@ async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> 
 async def process_feedback_content(message: Message, profile: Profile) -> bool:
     if message.text:
         await bot.send_message(
-            chat_id=settings.OWNER_ID,
-            text=msg_text("new_feedback", settings.OWNER_LANGUAGE).format(profile_id=profile.id, feedback=message.text),
+            chat_id=Settings.OWNER_ID,
+            text=msg_text("new_feedback", Settings.OWNER_LANGUAGE).format(profile_id=profile.id, feedback=message.text),
             parse_mode=ParseMode.HTML,
         )
         return True
 
     elif message.photo:
         await bot.send_message(
-            chat_id=settings.OWNER_ID,
-            text=msg_text("new_feedback", settings.OWNER_LANGUAGE).format(
+            chat_id=Settings.OWNER_ID,
+            text=msg_text("new_feedback", Settings.OWNER_LANGUAGE).format(
                 profile_id=profile.id, feedback=message.caption or ""
             ),
             parse_mode=ParseMode.HTML,
         )
         photo_id = message.photo[-1].file_id
         await bot.send_photo(
-            chat_id=settings.OWNER_ID,
+            chat_id=Settings.OWNER_ID,
             photo=photo_id,
         )
         return True
 
     elif message.video:
         await bot.send_message(
-            chat_id=settings.OWNER_ID,
-            text=msg_text("new_feedback", settings.OWNER_LANGUAGE).format(
+            chat_id=Settings.OWNER_ID,
+            text=msg_text("new_feedback", Settings.OWNER_LANGUAGE).format(
                 profile_id=profile.id, feedback=message.caption or ""
             ),
             parse_mode=ParseMode.HTML,
         )
         await bot.send_video(
-            chat_id=settings.OWNER_ID,
+            chat_id=Settings.OWNER_ID,
             video=message.video.file_id,
         )
         return True

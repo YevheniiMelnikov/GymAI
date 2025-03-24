@@ -13,7 +13,7 @@ from bot.keyboards import select_service_kb, choose_coach_kb, select_days_kb, gi
 from bot.states import States
 from bot.texts.text_manager import msg_text
 from core.cache_manager import CacheManager
-from common.settings import settings
+from common.settings import Settings
 from functions.chat import contact_client, process_feedback_content
 from functions.menus import (
     show_main_menu,
@@ -204,8 +204,8 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         next_payment_date = payment_date + relativedelta(months=1)
         async with aiohttp.ClientSession():
             await bot.send_message(
-                settings.OWNER_ID,
-                msg_text("subscription_cancel_request", settings.OWNER_LANGUAGE).format(
+                Settings.OWNER_ID,
+                msg_text("subscription_cancel_request", Settings.OWNER_LANGUAGE).format(
                     profile_id=profile.id,
                     contact=contact,
                     next_payment_date=next_payment_date.strftime("%Y-%m-%d"),

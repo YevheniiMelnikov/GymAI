@@ -6,7 +6,7 @@ from functions.chat import send_message, client_request
 from core.cache_manager import CacheManager
 from functions.workout_plans import cancel_subscription
 from core.models import Payment, Profile
-from common.settings import settings
+from common.settings import Settings
 from core.google_sheets_manager import SheetsManager
 from services.payment_service import PaymentService
 from services.profile_service import ProfileService
@@ -59,7 +59,7 @@ class PaymentProcessor:
                         [coach.name, coach.surname, coach.payment_details, payment.order_id, payment.amount // 2]
                     )
 
-                    if await cls.payment_service.update_payment(payment.id, {"status": settings.PAYMENT_STATUS_CLOSED}):
+                    if await cls.payment_service.update_payment(payment.id, {"status": Settings.PAYMENT_STATUS_CLOSED}):
                         logger.info(f"Payment {payment.order_id} marked as closed")
                     else:
                         logger.error(f"Failed to update payment {payment.order_id}")
@@ -83,7 +83,7 @@ class PaymentProcessor:
                     await asyncio.gather(*(cls._process_payment(p) for p in payments))
             except Exception as e:
                 logger.exception(f"Payment check error: {e}")
-            await asyncio.sleep(settings.PAYMENT_CHECK_INTERVAL)
+            await asyncio.sleep(Settings.PAYMENT_CHECK_INTERVAL)
 
     @classmethod
     async def _process_payment(cls, payment: Payment) -> None:
@@ -94,9 +94,9 @@ class PaymentProcessor:
                 return
 
             profile = Profile.from_dict(profile_data)
-            if payment.status in {settings.SUCCESS_PAYMENT_STATUS, settings.SUBSCRIBED_PAYMENT_STATUS}:
+            if payment.status in {Settings.SUCCESS_PAYMENT_STATUS, Settings.SUBSCRIBED_PAYMENT_STATUS}:
                 await cls._handle_successful_payment(payment, profile)
-            elif payment.status == settings.FAILURE_PAYMENT_STATUS:
+            elif payment.status == Settings.FAILURE_PAYMENT_STATUS:
                 await cls._handle_failed_payment(payment, profile)
             await cls.payment_service.update_payment(payment.id, {"handled": True})
         except Exception as e:
@@ -118,8 +118,8 @@ class PaymentProcessor:
                     recipient=client,
                     text=msg_text("subscription_cancel_warning", profile.language).format(
                         date=next_payment_date.strftime("%Y-%m-%d"),
-                        mail=settings.DEFAULT_FROM_EMAIL,
-                        tg=settings.TG_SUPPORT_CONTACT,
+                        mail=Settings.DEFAULT_FROM_EMAIL,
+                        tg=Settings.TG_SUPPORT_CONTACT,
                     ),
                     state=None,
                     include_incoming_message=False,
@@ -131,7 +131,7 @@ class PaymentProcessor:
         await send_message(
             recipient=client,
             text=msg_text("payment_failure", profile.language).format(
-                mail=settings.DEFAULT_FROM_EMAIL, tg=settings.TG_SUPPORT_CONTACT
+                mail=Settings.DEFAULT_FROM_EMAIL, tg=Settings.TG_SUPPORT_CONTACT
             ),
             state=None,
             include_incoming_message=False,

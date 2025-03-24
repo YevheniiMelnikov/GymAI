@@ -48,4 +48,3 @@ class SubscriptionManager:
     async def shutdown(cls) -> None:
         if cls.scheduler:
             cls.scheduler.shutdown(wait=False)
-            logger.debug("Subscription scheduler stopped")

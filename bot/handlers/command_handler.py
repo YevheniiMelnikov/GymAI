@@ -9,7 +9,7 @@ from aiogram.types import Message
 from bot.keyboards import select_language_kb
 from bot.states import States
 from common.logger import logger
-from common.settings import settings
+from common.settings import Settings
 from core.models import Profile
 from functions.menus import show_main_menu
 from bot.texts.text_manager import msg_text
@@ -22,7 +22,7 @@ cmd_router = Router()
 async def cmd_language(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile = Profile.from_dict(data.get("profile", {}))
-    lang = profile.language if profile else settings.DEFAULT_BOT_LANGUAGE
+    lang = profile.language if profile else Settings.DEFAULT_BOT_LANGUAGE
     await message.answer(msg_text("select_language", lang), reply_markup=select_language_kb())
     await state.set_state(States.select_language)
     with suppress(TelegramBadRequest):
@@ -52,9 +52,9 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
             await message.delete()
     else:
         logger.info(f"Telegram user {message.from_user.id} started bot")
-        start_msg = await message.answer(msg_text("start", settings.DEFAULT_BOT_LANGUAGE))
+        start_msg = await message.answer(msg_text("start", Settings.DEFAULT_BOT_LANGUAGE))
         language_msg = await message.answer(
-            msg_text("select_language", settings.DEFAULT_BOT_LANGUAGE), reply_markup=select_language_kb()
+            msg_text("select_language", Settings.DEFAULT_BOT_LANGUAGE), reply_markup=select_language_kb()
         )
         await state.set_state(States.select_language)
         await state.update_data(message_ids=[start_msg.message_id, language_msg.message_id])
@@ -66,7 +66,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
 async def cmd_help(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile = Profile.from_dict(data.get("profile", {}))
-    language = profile.language if profile else settings.DEFAULT_BOT_LANGUAGE
+    language = profile.language if profile else Settings.DEFAULT_BOT_LANGUAGE
     await message.answer(msg_text("help", language))
 
 
@@ -74,7 +74,7 @@ async def cmd_help(message: Message, state: FSMContext) -> None:
 async def cmd_feedback(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile = Profile.from_dict(data.get("profile", {}))
-    language = profile.language if profile else settings.DEFAULT_BOT_LANGUAGE
+    language = profile.language if profile else Settings.DEFAULT_BOT_LANGUAGE
     await message.answer(msg_text("feedback", language))
     await state.set_state(States.feedback)
     with suppress(TelegramBadRequest):
@@ -85,11 +85,11 @@ async def cmd_feedback(message: Message, state: FSMContext) -> None:
 async def cmd_policy(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile = Profile.from_dict(data.get("profile", {}))
-    lang = profile.language if profile else settings.DEFAULT_BOT_LANGUAGE
+    lang = profile.language if profile else Settings.DEFAULT_BOT_LANGUAGE
     await message.answer(
         msg_text("contract_info_message", lang).format(
-            public_offer=settings.PUBLIC_OFFER,
-            privacy_policy=settings.PRIVACY_POLICY,
+            public_offer=Settings.PUBLIC_OFFER,
+            privacy_policy=Settings.PRIVACY_POLICY,
         ),
         disable_web_page_preview=True,
     )
@@ -101,10 +101,10 @@ async def cmd_policy(message: Message, state: FSMContext) -> None:
 async def cmd_info(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile = Profile.from_dict(data.get("profile", {}))
-    lang = profile.language if profile else settings.DEFAULT_BOT_LANGUAGE
+    lang = profile.language if profile else Settings.DEFAULT_BOT_LANGUAGE
     await message.answer(
         msg_text("info", lang).format(
-            offer=settings.PUBLIC_OFFER, email=settings.DEFAULT_FROM_EMAIL, tg=settings.TG_SUPPORT_CONTACT
+            offer=Settings.PUBLIC_OFFER, email=Settings.DEFAULT_FROM_EMAIL, tg=Settings.TG_SUPPORT_CONTACT
         ),
         disable_web_page_preview=True,
     )

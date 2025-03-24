@@ -1,47 +1,53 @@
-[tool.poetry]
-name = "GymBot"
+[project]
+name = "gamemanager"
 version = "0.1.0"
 description = ""
-authors = ["Yevhenii Melnykov <evgeniy@workmail.com>"]
+authors = [
+    { name = "Yevhenii Melnykov", email = "yevhenii.melnykov@codeit.local" }
+]
 readme = "README.md"
-package-mode = false
+dependencies = [
+    "aiohttp>=3.10.5",
+    "apscheduler>=3.11.0",
+    "asyncpg>=0.30.0",
+    "celery>=5.4.0",
+    "cryptography>=44.0.0",
+    "django>=5.1.7",
+    "django-celery-beat>=2.7.0",
+    "django-extensions>=3.2.3",
+    "django-filter==25.1",
+    "django-jazzmin>=3.0.1",
+    "djangorestframework>=3.15.2",
+    "djangorestframework-api-key>=3.0.0",
+    "djangorestframework-simplejwt>=5.5.0",
+    "drf-yasg>=1.21.9",
+    "httpx>=0.28.1",
+    "loguru>=0.7.3",
+    "psycopg2-binary>=2.9.10",
+    "psycopg[binary]>=3.2.6",
+    "pyyaml>=6.0.2",
+    "python-dateutil>=2.9.0.post0",
+    "python-dotenv>=1.0.1",
+    "redis>=5.2.1",
+    "rest-framework-simplejwt>=0.0.2",
+    "setuptools>=75.8.2",
+    "uvicorn[standard]>=0.29.0",
+    "aiogram>=3.17.0",
+    "google-cloud-storage>=3.1.0",
+    "liqpay-python @ git+https://github.com/liqpay/sdk-python",
+    "gspread>=6.2.0",
+    "google-auth>=2.37.0"
+]
+requires-python = ">=3.11"
 
-[tool.poetry.dependencies]
-python = "^3.12"
-aiohttp = "^3.10.5"
-loguru = "^0.7.2"
-setuptools = "^75.8.2"
-psycopg2-binary = "^2.9.10"
-asyncpg = "^0.30.0"
-pyyaml = "^6.0.2"
-python-dotenv = "^1.0.1"
-httpx = "^0.28.1"
-redis = "^5.2.1"
-google-cloud-storage = "^3.1.0"
-apscheduler = "^3.11.0"
-python-dateutil = "^2.9.0.post0"
-aiogram = "^3.17.0"
-django = "^5.1.6"
-django-extensions = "^3.2.3"
-djangorestframework = "^3.15.2"
-djangorestframework-api-key = "^3.0.0"
-drf-yasg = "^1.21.9"
-cryptography = "^44.0.0"
-django-filter = "==25.1"
-liqpay-python = {git = "https://github.com/liqpay/sdk-python"}
-gspread = "^6.2.0"
-google-auth = "^2.37.0"
-django-jazzmin = "^3.0.1"
-pre-commit = "^4.1.0"
-
-[tool.poetry.group.dev.dependencies]
-ruff = "^0.9.4"
-pytest = "^8.3.2"
-pre-commit = "^4.0.1"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+    "pytest-django>=4.10.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.11.2",
+    "pre-commit>=4.2.0"
+]
 
 [tool.ruff.lint.isort]
 combine-as-imports = true
@@ -49,13 +55,13 @@ combine-as-imports = true
 [tool.ruff]
 line-length = 120
 exclude = [
-  ".git",
-  ".mypy_cache",
-  ".pytest_cache",
-  ".env",
-  "env",
-  "venv",
-  ".venv",
+    ".git",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".env",
+    "env",
+    "venv",
+    ".venv"
 ]
 
 [tool.ruff.lint]

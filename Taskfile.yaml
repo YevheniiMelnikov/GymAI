@@ -1,44 +1,39 @@
 version: '3'
 
 tasks:
-  localrun:
-    desc: Run bot locally
+  migrate:
+    desc: Migrate db
     cmds:
-      - docker compose -f docker-compose-local.yml up --build
+      - docker exec -it game_management_api python manage.py makemigrations
+      - docker exec -it game_management_api python manage.py migrate
 
-  build:
-    desc: Build Docker-container
+  run:
+    desc: Run application
     cmds:
-      - docker compose build
-
-  up:
-    desc: Start Docker-containers
-    cmds:
-      - docker compose up
-
-  down:
-    desc: Stop Docker-containers
-    cmds:
-      - docker compose down
+      - docker compose up --build
 
   lint:
     desc: Run linters
     cmds:
-      - ruff check --fix --config=pyproject.toml
+      - uv run ruff check --fix --config=pyproject.toml
 
   format:
     desc: Run formatter
     cmds:
-      - ruff format --config=pyproject.toml
+      - uv run ruff format --config=pyproject.toml
 
   update:
-    desc: Update dependencies and sync requirements.txt
+    desc: Update dependencies
     cmds:
-      - |
-        if [ -n "$COMSPEC" ] && [ -x "$COMSPEC" ]; then
-          powershell -Command "poetry update"
-          powershell -Command "poetry export -f requirements.txt --without-hashes -o requirements.txt"
-        else
-          poetry update
-          poetry export -f requirements.txt --without-hashes -o requirements.txt
-        fi
+      - uv lock --upgrade
+      - uv sync
+
+  test:
+    desc: Run tests with coverage
+    cmds:
+      - uv run pytest --cov=games --cov-report=term-missing
+
+  pre-commit:
+    desc: Run pre-commit hooks
+    cmds:
+      - uv run pre-commit run --all-files
