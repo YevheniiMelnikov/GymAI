@@ -17,7 +17,6 @@ from functions.text_utils import format_program, get_translated_week_day
 from functions.utils import delete_messages, generate_order_id
 from core.models import Exercise, Profile, Subscription
 from services.payment_service import PaymentService
-from services.user_service import UserService
 from services.workout_service import WorkoutService
 from bot.texts.exercises import exercise_dict
 from bot.texts.text_manager import msg_text
@@ -28,7 +27,7 @@ bot = Bot(os.environ.get("BOT_TOKEN"))
 async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Message | CallbackQuery) -> None:
     data = await state.get_data()
     await delete_messages(state)
-    profile = await profiles.get_or_load_profile(input_data.from_user.id)
+    profile = await profiles.get_user_profile(input_data.from_user.id)
     day_index = data.get("day_index", 0)
     client_id = data.get("client_id")
     exercises = data.get("exercises", {})
@@ -124,7 +123,7 @@ async def update_exercise_data(message: Message, state: FSMContext, lang: str, u
 
 
 async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = await profiles.get_or_load_profile(callback_query.from_user.id)
+    profile = await profiles.get_user_profile(callback_query.from_user.id)
     client_id = callback_query.data.split("_")[1]
     day = callback_query.data.split("_")[2]
     week_day = get_translated_week_day(profile.language, day).lower()
@@ -158,8 +157,7 @@ async def edit_subscription_days(
     payload = {"workout_days": days, "exercises": updated_exercises, "client_profile": profile.id}
     subscription_data.update(payload)
     CacheManager.update_subscription_data(profile.id, payload)
-    auth_token = await UserService.get_user_token(profile.id)
-    await WorkoutService.update_subscription(subscription_data.get("id"), subscription_data, auth_token)
+    await WorkoutService.update_subscription(subscription_data.get("id"), subscription_data)
     await state.set_state(States.show_subscription)
     await show_subscription_page(callback_query, state, subscription)
     with suppress(TelegramBadRequest):
@@ -172,13 +170,11 @@ async def process_new_subscription(callback_query: CallbackQuery, profile: Profi
     client = CacheManager.get_client_by_id(profile.id)
     coach = CacheManager.get_coach_by_id(client.assigned_to.pop())
     await state.update_data(order_id=order_id, amount=coach.subscription_price)
-    email = CacheManager.get_profile_info_by_key(callback_query.from_user.id, profile.id, "email")
     if payment_link := await PaymentService.get_payment_link(
         action="subscribe",
         amount=str(coach.subscription_price),
         order_id=order_id,
         payment_type="subscription",
-        client_email=email,
         profile_id=profile.id,
     ):
         await state.set_state(States.handle_payment)

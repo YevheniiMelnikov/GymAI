@@ -3,7 +3,7 @@ from pathlib import Path
 import yaml
 
 from bot.texts.resources import ButtonText, MessageText
-from common.settings import settings
+from common.settings import Settings
 
 ResourceType = str | MessageText | ButtonText
 
@@ -34,7 +34,7 @@ class TextManager:
 
     @classmethod
     def get_message(cls, key: str, lang: str | None) -> str:
-        lang = lang or settings.DEFAULT_BOT_LANGUAGE
+        lang = lang or Settings.DEFAULT_BOT_LANGUAGE
         try:
             return cls.messages[key][lang]
         except KeyError as e:
@@ -42,7 +42,7 @@ class TextManager:
 
     @classmethod
     def get_button(cls, key: str, lang: str | None) -> str:
-        lang = lang or settings.DEFAULT_BOT_LANGUAGE
+        lang = lang or Settings.DEFAULT_BOT_LANGUAGE
         try:
             return cls.buttons[key][lang]
         except KeyError as e:

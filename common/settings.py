@@ -1,10 +1,6 @@
 import os
 from dataclasses import dataclass
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
 
 @dataclass
 class Settings:
@@ -31,7 +27,6 @@ class Settings:
     API_KEY: str = os.getenv("API_KEY")
     API_URL: str = os.getenv("API_URL")
     SECRET_KEY: str = os.getenv("SECRET_KEY")
-    CRYPTO_KEY: str = os.getenv("CRYPTO_KEY")
 
     BOT_TOKEN: str = os.getenv("BOT_TOKEN")
     BOT_LINK = os.getenv("BOT_LINK")
@@ -39,15 +34,12 @@ class Settings:
     TG_SUPPORT_CONTACT: str = os.getenv("TG_SUPPORT_CONTACT")
     PUBLIC_OFFER: str = os.getenv("PUBLIC_OFFER")
     PRIVACY_POLICY: str = os.getenv("PRIVACY_POLICY")
-
-    EMAIL_HOST_USER: str = os.getenv("EMAIL_HOST_USER")
     DEFAULT_FROM_EMAIL: str = os.getenv("DEFAULT_FROM_EMAIL")
-    EMAIL_HOST_PASSWORD: str = os.getenv("EMAIL_HOST_PASSWORD")
 
     WEB_SERVER_HOST: str = "0.0.0.0"
     WEBHOOK_HOST: str = os.getenv("WEBHOOK_HOST")
     WEBHOOK_PORT: int = os.getenv("WEBHOOK_PORT")
-    WEBHOOK_PATH: str = f"/gym_bot/{BOT_TOKEN}"
+    WEBHOOK_PATH: str = f"/gym_bot/{BOT_TOKEN}"  # REMOVE BOT_TOKEN
     WEBHOOK_URL: str = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 
     REDIS_URL: str = os.getenv("REDIS_URL")
@@ -56,6 +48,3 @@ class Settings:
     DB_USER: str = os.getenv("DB_USER")
     DB_PASSWORD: str = os.getenv("DB_PASSWORD")
     DB_HOST: str = os.getenv("DB_HOST")
-
-
-settings = Settings()

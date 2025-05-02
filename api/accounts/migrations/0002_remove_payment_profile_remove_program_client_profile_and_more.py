@@ -25,7 +25,7 @@ class Migration(migrations.Migration):
         ),
         migrations.AddConstraint(
             model_name="profile",
-            constraint=models.UniqueConstraint(fields=("user", "current_tg_id"), name="unique_tg_id_per_user"),
+            constraint=models.UniqueConstraint(fields=("user", "tg_id"), name="unique_tg_id_per_user"),
         ),
         migrations.DeleteModel(
             name="Payment",

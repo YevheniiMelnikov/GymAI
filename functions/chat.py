@@ -15,7 +15,7 @@ from bot.states import States
 from bot.texts.text_manager import msg_text
 from core.cache_manager import CacheManager
 from core.file_manager import avatar_manager
-from common.settings import settings
+from common.settings import Settings
 from functions.exercises import edit_subscription_exercises
 from functions.menus import show_exercises_menu, show_main_menu, manage_subscription
 from functions import profiles
@@ -24,7 +24,7 @@ from core.models import Coach, Profile, Client
 from functions.utils import program_menu_pagination
 from services.profile_service import ProfileService
 
-bot = Bot(settings.BOT_TOKEN)
+bot = Bot(Settings.BOT_TOKEN)
 message_router = Router()
 
 
@@ -42,7 +42,7 @@ async def send_message(
         language = data.get("recipient_language", "ua")
         sender_name = data.get("sender_name", "")
     else:
-        language = settings.DEFAULT_BOT_LANGUAGE
+        language = Settings.DEFAULT_BOT_LANGUAGE
         sender_name = ""
 
     recipient_data = await ProfileService.get_profile(recipient.id)
@@ -56,7 +56,7 @@ async def send_message(
     async with aiohttp.ClientSession():
         if video:
             await bot.send_video(
-                chat_id=recipient_data.get("current_tg_id"),
+                chat_id=recipient_data.get("tg_id"),
                 video=video.file_id,
                 caption=formatted_text,
                 reply_markup=reply_markup,
@@ -64,7 +64,7 @@ async def send_message(
             )
         elif photo:
             await bot.send_photo(
-                chat_id=recipient_data.get("current_tg_id"),
+                chat_id=recipient_data.get("tg_id"),
                 photo=photo.file_id,
                 caption=formatted_text,
                 reply_markup=reply_markup,
@@ -72,7 +72,7 @@ async def send_message(
             )
         else:
             await bot.send_message(
-                chat_id=recipient_data.get("current_tg_id"),
+                chat_id=recipient_data.get("tg_id"),
                 text=formatted_text,
                 reply_markup=reply_markup,
                 disable_web_page_preview=True,
@@ -95,9 +95,9 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
     photo = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{file_name}"
     async with aiohttp.ClientSession():
         await bot.send_photo(
-            chat_id=settings.OWNER_ID,
+            chat_id=Settings.OWNER_ID,
             photo=photo,
-            caption=msg_text("new_coach_request", settings.OWNER_LANGUAGE).format(
+            caption=msg_text("new_coach_request", Settings.OWNER_LANGUAGE).format(
                 name=name,
                 surname=surname,
                 experience=experience,
@@ -116,13 +116,13 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
 @message_router.callback_query(F.data == "later")
 async def close_notification(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.message.delete()
-    profile = await profiles.get_or_load_profile(callback_query.from_user.id)
+    profile = await profiles.get_user_profile(callback_query.from_user.id)
     await show_main_menu(callback_query.message, profile, state)
 
 
 @message_router.callback_query(F.data == "subscription_view")
 async def subscription_view(callback_query: CallbackQuery, state: FSMContext):
-    profile = await profiles.get_or_load_profile(callback_query.from_user.id)
+    profile = await profiles.get_user_profile(callback_query.from_user.id)
     subscription_data = CacheManager.get_subscription(profile.id)
     await state.update_data(
         exercises=subscription_data.exercises,
@@ -135,7 +135,7 @@ async def subscription_view(callback_query: CallbackQuery, state: FSMContext):
 
 @message_router.callback_query(F.data.startswith("answer"))
 async def answer_message(callback_query: CallbackQuery, state: FSMContext):
-    profile = await profiles.get_or_load_profile(callback_query.from_user.id)
+    profile = await profiles.get_user_profile(callback_query.from_user.id)
     recipient_id = int(callback_query.data.split("_")[1])
     if profile.status == "client":
         sender = CacheManager.get_client_by_id(profile.id)
@@ -156,7 +156,7 @@ async def answer_message(callback_query: CallbackQuery, state: FSMContext):
 @message_router.callback_query(F.data == "previous")
 @message_router.callback_query(F.data == "next")
 async def navigate_days(callback_query: CallbackQuery, state: FSMContext):
-    profile = await profiles.get_or_load_profile(callback_query.from_user.id)
+    profile = await profiles.get_user_profile(callback_query.from_user.id)
     program = CacheManager.get_program(profile.id)
     data = await state.get_data()
     if data.get("subscription"):
@@ -177,7 +177,7 @@ async def edit_subscription(callback_query: CallbackQuery, state: FSMContext):
 
 @message_router.callback_query(F.data.startswith("create"))
 async def create_workouts(callback_query: CallbackQuery, state: FSMContext):
-    profile = await profiles.get_or_load_profile(callback_query.from_user.id)
+    profile = await profiles.get_user_profile(callback_query.from_user.id)
     await state.clear()
     parts = callback_query.data.split("_")
     service = parts[1]
@@ -195,7 +195,7 @@ async def create_workouts(callback_query: CallbackQuery, state: FSMContext):
 @message_router.callback_query(F.data.startswith("approve"))
 async def approve_coach(callback_query: CallbackQuery, state: FSMContext):
     profile_id = callback_query.data.split("_")[1]
-    await ProfileService.edit_coach_profile_kb(int(profile_id), dict(verified=True))
+    await ProfileService.edit_coach_profile(int(profile_id), dict(verified=True))
     CacheManager.set_coach_data(int(profile_id), {"verified": True})
     await callback_query.answer("👍")
     coach = CacheManager.get_coach_by_id(int(profile_id))
@@ -212,7 +212,7 @@ async def approve_coach(callback_query: CallbackQuery, state: FSMContext):
 async def decline_coach(callback_query: CallbackQuery, state: FSMContext):
     profile_id = callback_query.data.split("_")[1]
     await callback_query.answer("👎")
-    coach = CacheManager.get_coach_by_id(profile_id)
+    coach = CacheManager.get_coach_by_id(int(profile_id))
     if profile_data := await ProfileService.get_profile(int(profile_id)):
         lang = profile_data.get("language")
     else:
@@ -234,12 +234,12 @@ async def contact_client(callback_query: CallbackQuery, profile: Profile, client
 
 async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> None:
     coach_data = await ProfileService.get_profile(coach.id)
-    coach_lang = CacheManager.get_profile_info_by_key(coach_data.get("current_tg_id"), coach.id, "language")
+    coach_lang = CacheManager.get_profile_data(coach_data.get("tg_id"), "language")
     data["recipient_language"] = coach_lang
     service = data.get("request_type")
     preferable_workout_type = data.get("workout_type")
     client_data = await ProfileService.get_profile(client.id)
-    client_lang = CacheManager.get_profile_info_by_key(client_data.get("current_tg_id"), client.id, "language")
+    client_lang = CacheManager.get_profile_data(client_data.get("tg_id"), "language")
     workout_types = await get_workout_types(coach_lang)
     preferable_workouts_type = workout_types.get(preferable_workout_type, "unknown")
     subscription = CacheManager.get_subscription(client.id)
@@ -278,37 +278,37 @@ async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> 
 async def process_feedback_content(message: Message, profile: Profile) -> bool:
     if message.text:
         await bot.send_message(
-            chat_id=settings.OWNER_ID,
-            text=msg_text("new_feedback", settings.OWNER_LANGUAGE).format(profile_id=profile.id, feedback=message.text),
+            chat_id=Settings.OWNER_ID,
+            text=msg_text("new_feedback", Settings.OWNER_LANGUAGE).format(profile_id=profile.id, feedback=message.text),
             parse_mode=ParseMode.HTML,
         )
         return True
 
     elif message.photo:
         await bot.send_message(
-            chat_id=settings.OWNER_ID,
-            text=msg_text("new_feedback", settings.OWNER_LANGUAGE).format(
+            chat_id=Settings.OWNER_ID,
+            text=msg_text("new_feedback", Settings.OWNER_LANGUAGE).format(
                 profile_id=profile.id, feedback=message.caption or ""
             ),
             parse_mode=ParseMode.HTML,
         )
         photo_id = message.photo[-1].file_id
         await bot.send_photo(
-            chat_id=settings.OWNER_ID,
+            chat_id=Settings.OWNER_ID,
             photo=photo_id,
         )
         return True
 
     elif message.video:
         await bot.send_message(
-            chat_id=settings.OWNER_ID,
-            text=msg_text("new_feedback", settings.OWNER_LANGUAGE).format(
+            chat_id=Settings.OWNER_ID,
+            text=msg_text("new_feedback", Settings.OWNER_LANGUAGE).format(
                 profile_id=profile.id, feedback=message.caption or ""
             ),
             parse_mode=ParseMode.HTML,
         )
         await bot.send_video(
-            chat_id=settings.OWNER_ID,
+            chat_id=Settings.OWNER_ID,
             video=message.video.file_id,
         )
         return True

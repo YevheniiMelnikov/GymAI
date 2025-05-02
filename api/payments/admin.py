@@ -42,7 +42,6 @@ class PaymentAdmin(admin.ModelAdmin):
         "payment_type",
         "status",
         "amount",
-        "profile_email",
         "created_at_short",
         "handled",
     )

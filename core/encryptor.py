@@ -1,15 +1,39 @@
+import base64
+import hashlib
+from typing import Optional
+
 from cryptography.fernet import Fernet
 
-from common.settings import settings
+from common.logger import logger
+from common.settings import Settings
 
 
-class Encryptor:  # TODO: USE FOR SENSITIVE DATA DB FIELDS
-    cipher = Fernet(settings.CRYPTO_KEY)
-
-    @classmethod
-    def encrypt(cls, plaintext: str) -> str:
-        return cls.cipher.encrypt(plaintext.encode()).decode()
+class Encryptor:
+    _fernet = None
 
     @classmethod
-    def decrypt(cls, ciphertext: str) -> str:
-        return cls.cipher.decrypt(ciphertext.encode()).decode()
+    def _get_fernet(cls):
+        if cls._fernet is None:
+            key = hashlib.sha256(Settings.SECRET_KEY.encode()).digest()
+            fernet_key = base64.urlsafe_b64encode(key)
+            cls._fernet = Fernet(fernet_key)
+        return cls._fernet
+
+    @classmethod
+    def encrypt(cls, data: str) -> str:
+        if not data:
+            return data
+        fernet = cls._get_fernet()
+        encrypted_data = fernet.encrypt(data.encode())
+        return encrypted_data.decode()
+
+    @classmethod
+    def decrypt(cls, token: str) -> Optional[str]:
+        if not token:
+            return token
+        try:
+            fernet = cls._get_fernet()
+            decrypted_data = fernet.decrypt(token.encode())
+            return decrypted_data.decode()
+        except Exception as e:
+            logger.error(f"Decryption failed: {e}")
