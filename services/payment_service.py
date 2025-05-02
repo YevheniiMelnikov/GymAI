@@ -48,7 +48,7 @@ class PaymentService(APIClient):
             order_id=order_id,
             payment_type=payment_type,
             profile_id=profile_id,
-            emails=[Settings.EMAIL_HOST_USER],
+            emails=[Settings.EMAIL],
         )
 
         data = cls.payment_client.cnb_data(params)
