@@ -51,22 +51,24 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  bot:
-    container_name: bot
-    build:
-      context: .
-      dockerfile: Dockerfile
-    depends_on:
-      - db
-      - redis
-    env_file: .env
-    command: ["python", "-u", "/app/bot/main.py"]
-    volumes:
-      - ./google_creds.json:/app/google_creds.json:ro
-      - ./backup/dumps:/app/bot/backup/dumps
-      - ./common:/opt/common
-    ports: ["8080:8080"]
-    restart: unless-stopped
+# Uncomment 'bot' when fully running inside Docker. It's commented to allow running the Python process directly from the IDE
+
+#  bot:
+#    container_name: bot
+#    build:
+#      context: .
+#      dockerfile: Dockerfile
+#    depends_on:
+#      - db
+#      - redis
+#    env_file: .env
+#    command: ["python", "-u", "/app/bot/main.py"]
+#    volumes:
+#      - ./google_creds.json:/app/google_creds.json:ro
+#      - ./backup/dumps:/app/bot/backup/dumps
+#      - ./common:/opt/common
+#    ports: ["8080:8080"]
+#    restart: unless-stopped
 
 volumes:
   pgdata:

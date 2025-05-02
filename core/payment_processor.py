@@ -118,7 +118,7 @@ class PaymentProcessor:
                     recipient=client,
                     text=msg_text("subscription_cancel_warning", profile.language).format(
                         date=next_payment_date.strftime("%Y-%m-%d"),
-                        mail=Settings.DEFAULT_FROM_EMAIL,
+                        mail=Settings.EMAIL,
                         tg=Settings.TG_SUPPORT_CONTACT,
                     ),
                     state=None,
@@ -131,7 +131,7 @@ class PaymentProcessor:
         await send_message(
             recipient=client,
             text=msg_text("payment_failure", profile.language).format(
-                mail=Settings.DEFAULT_FROM_EMAIL, tg=Settings.TG_SUPPORT_CONTACT
+                mail=Settings.EMAIL, tg=Settings.TG_SUPPORT_CONTACT
             ),
             state=None,
             include_incoming_message=False,

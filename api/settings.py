@@ -5,7 +5,7 @@ from common.settings import Settings
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = Settings.SECRET_KEY
+SECRET_KEY = Settings.API_KEY
 DEBUG = os.environ.get("DEBUG_STATUS", "False").lower() == "true"
 
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "achieve-together.org.ua", "www.achieve-together.org.ua", "api"]
