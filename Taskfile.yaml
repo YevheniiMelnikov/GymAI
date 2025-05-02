@@ -1,26 +1,31 @@
 version: '3'
 
 tasks:
-  migrate:
-    desc: Migrate db
-    cmds:
-      - docker exec -it game_management_api python manage.py makemigrations
-      - docker exec -it game_management_api python manage.py migrate
-
   run:
-    desc: Run application
+    desc: Run production docker setup
     cmds:
-      - docker compose up --build
+      - docker compose -f docker-compose.yml up --build
+
+  localrun:
+    desc: Run bot locally
+    cmds:
+      - docker compose -f docker-compose-local.yml up --build
 
   lint:
-    desc: Run linters
+    desc: Run linters (ruff + mypy)
     cmds:
       - uv run ruff check --fix --config=pyproject.toml
+      - uv run mypy .
 
   format:
-    desc: Run formatter
+    desc: Format with Ruff
     cmds:
       - uv run ruff format --config=pyproject.toml
+
+  test:
+    desc: Run tests
+    cmds:
+      - uv run pytest
 
   update:
     desc: Update dependencies
@@ -28,10 +33,10 @@ tasks:
       - uv lock --upgrade
       - uv sync
 
-  test:
-    desc: Run tests with coverage
+  update-win:
+    desc: Sync deps in Windows venv
     cmds:
-      - uv run pytest --cov=games --cov-report=term-missing
+      - uv sync --active
 
   pre-commit:
     desc: Run pre-commit hooks
