@@ -1,33 +1,51 @@
 services:
   db:
-    image: "postgres:17"
+    image: postgres:17
     container_name: db
-    ports:
-      - "5432:5432"
-    env_file:
-      - ./.env
+    env_file: .env
+    ports: ["5432:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: unless-stopped
 
   redis:
-    image: "redis:7.4.2"
+    image: redis:7.4.2
     container_name: redis
-    ports:
-      - "6379:6379"
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    ports: ["6379:6379"]
     volumes:
       - redisdata:/data
-    command: ["redis-server"]
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 3
+    restart: unless-stopped
+
+  api:
+    container_name: api
+    build:
+      context: .
+      dockerfile: api.Dockerfile
+      args:
+        INSTALL_DEV: "true"
+    env_file: .env
+    volumes:
+      - ./common:/opt/common
+    environment:
+      RUN_MIGRATIONS: "true"
+    command: >
+      uvicorn api.asgi:application --host 0.0.0.0 --port 8000
+    ports: ["8000:8000"]
+    depends_on:
+      db:
+        condition: service_healthy
     restart: unless-stopped
 
   bot:
@@ -38,37 +56,14 @@ services:
     depends_on:
       - db
       - redis
-    ports:
-      - "8080:8080"
-    env_file:
-      - ./.env
-    command:
-      - python
-      - -u
-      - /app/bot/main.py
-    restart: unless-stopped
+    env_file: .env
+    command: ["python", "-u", "/app/bot/main.py"]
     volumes:
       - ./backup/dumps:/app/bot/backup/dumps
       - ./common:/opt/common
-
-  api:
-    container_name: api
-    build:
-      context: .
-      dockerfile: api.Dockerfile
-    depends_on:
-      db:
-        condition: service_healthy
-    ports:
-      - "8000:8000"
-    env_file:
-      - ./.env
-    volumes:
-      - ./common:/opt/common
+    ports: ["8080:8080"]
     restart: unless-stopped
 
 volumes:
   pgdata:
-    driver: local
   redisdata:
-    driver: local
