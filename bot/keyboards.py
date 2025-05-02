@@ -21,7 +21,6 @@ def client_menu_kb(lang: str) -> KbMarkup:
         [builder.add("my_profile", "my_profile")],
         [builder.add("my_program", "my_workouts")],
         [builder.add("feedback", "feedback")],
-        [builder.add("logout", "logout")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
@@ -32,18 +31,8 @@ def coach_menu_kb(lang: str) -> KbMarkup:
         [builder.add("my_profile", "my_profile")],
         [builder.add("my_clients", "my_clients")],
         [builder.add("feedback", "feedback")],
-        [builder.add("logout", "logout")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
-
-
-def action_choice_kb(lang: str) -> KbMarkup:
-    builder = ButtonsBuilder(lang)
-    buttons = [
-        [builder.add("sign_in", "sign_in")],
-        [builder.add("sign_up", "sign_up")],
-    ]
-    return KbMarkup(inline_keyboard=buttons)
 
 
 def select_gender_kb(lang: str) -> KbMarkup:
@@ -55,7 +44,7 @@ def select_gender_kb(lang: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons)
 
 
-def select_role_kb(lang: str) -> KbMarkup:
+def select_status_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
         [builder.add("client", "client")],

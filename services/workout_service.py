@@ -58,7 +58,7 @@ class WorkoutService(APIClient):
 
     @classmethod
     async def create_subscription(
-        cls, profile_id: int, workout_days: list[str], wishes: str, amount: int, auth_token: str
+        cls, profile_id: int, workout_days: list[str], wishes: str, amount: int
     ) -> int | None:
         url = urljoin(cls.api_url, "api/v1/subscriptions/")
         data = {
@@ -71,7 +71,7 @@ class WorkoutService(APIClient):
             "exercises": {},
         }
         status_code, response = await cls._api_request(
-            "post", url, data, headers={"Authorization": f"Token {auth_token}"}
+            "post", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"}
         )
         if status_code == 201 and response:
             return response.get("id")
@@ -79,10 +79,10 @@ class WorkoutService(APIClient):
         return None
 
     @classmethod
-    async def update_subscription(cls, subscription_id: int, data: dict, auth_token: str) -> bool:
+    async def update_subscription(cls, subscription_id: int, data: dict) -> bool:
         url = urljoin(cls.api_url, f"api/v1/subscriptions/{subscription_id}/")
         status_code, response = await cls._api_request(
-            "put", url, data, headers={"Authorization": f"Token {auth_token}"}
+            "put", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"}
         )
         if status_code == 200:
             return True

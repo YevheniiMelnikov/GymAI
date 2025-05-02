@@ -1,6 +1,5 @@
 import json
 import random
-import time
 from datetime import datetime, timedelta
 from json import JSONDecodeError
 from typing import Any
@@ -10,13 +9,13 @@ from dateutil.parser import parse
 from common.logger import logger
 
 from core.encryptor import Encryptor
-from core.exceptions import ProfileNotFoundError, UserServiceError
+from core.exceptions import UserServiceError, ProfileNotFoundError
 from core.models import Client, Coach, Profile, Program, Subscription
-from common.settings import settings
+from common.settings import Settings
 
 
 class CacheManager:
-    redis = redis.from_url(settings.REDIS_URL, encoding="utf-8", decode_responses=True)
+    redis = redis.from_url(Settings.REDIS_URL, encoding="utf-8", decode_responses=True)
     encryptor = Encryptor
 
     @classmethod
@@ -29,16 +28,6 @@ class CacheManager:
             cls.redis.close()
 
     @classmethod
-    def _get_profile_data(cls, telegram_id: int) -> list[dict[str, Any]]:
-        key = cls._add_prefix("user_profiles")
-        profiles_data = cls.redis.hget(key, str(telegram_id)) or "[]"
-        try:
-            return json.loads(profiles_data)
-        except JSONDecodeError as e:
-            logger.error(f"JSON decode error: {e}")
-            return []
-
-    @classmethod
     def _set_data(cls, key: str, profile_id: int, data: dict[str, Any], allowed_fields: list[str]) -> None:
         try:
             key = cls._add_prefix(key)
@@ -46,61 +35,59 @@ class CacheManager:
             existing_data = json.loads(cls.redis.hget(key, str(profile_id)) or "{}")
             existing_data.update(filtered_data)
             cls.redis.hset(key, str(profile_id), json.dumps(existing_data))
-            logger.debug(f"Data for profile_id {profile_id} has been updated in {key}: {filtered_data}")
         except Exception as e:
-            logger.error(f"Failed to set or update data for {profile_id} in {key}", e)
+            logger.error(f"Error setting data for profile_id {profile_id}: {e}")
 
     @classmethod
-    def _update_profile_data(cls, telegram_id: int, profiles_data: list[dict[str, Any]]) -> None:
+    def get_profile(cls, telegram_id: int) -> Profile | None:
         key = cls._add_prefix("user_profiles")
-        cls.redis.hset(key, str(telegram_id), json.dumps(profiles_data))
+        raw_data = cls.redis.hget(key, str(telegram_id))
+        if not raw_data:
+            raise ProfileNotFoundError(telegram_id)
 
-    @classmethod
-    def set_profile(
-        cls, profile: Profile, username: str, telegram_id: int, email: str, is_current: bool = True
-    ) -> None:
         try:
-            current_profiles = cls._get_profile_data(telegram_id)
-            profile_data = {
-                "id": profile.id,
-                "status": profile.status,
-                "language": profile.language,
-                "username": username,
-                "email": email,
-                "is_current": is_current,
-                "last_used": time.time(),
-                "current_tg_id": telegram_id,
-            }
-            existing_profile_index = next((i for i, p in enumerate(current_profiles) if p["id"] == profile.id), None)
-            if existing_profile_index is not None:
-                current_profiles[existing_profile_index].update(profile_data)
-            else:
-                current_profiles.append(profile_data)
-
-            for p in current_profiles:
-                if p["id"] != profile.id:
-                    p["is_current"] = False
-                    p["current_tg_id"] = None
-
-            cls._update_profile_data(telegram_id, current_profiles)
-            logger.debug(f"Profile {profile.id} set for user {telegram_id}")
-
-        except Exception as e:
-            logger.error(f"Failed to set profile for user {telegram_id}: {e}")
-
-    @classmethod
-    def get_current_profile(cls, telegram_id: int) -> Profile:
-        current_profiles = [
-            Profile.from_dict(data) for data in cls._get_profile_data(telegram_id) if data.get("is_current", True)
-        ]
-        if current_profiles:
-            return max(current_profiles, key=lambda p: p.last_used)
-        else:
+            data = json.loads(raw_data)
+            if "id" not in data:
+                raise ProfileNotFoundError(telegram_id)
+            return Profile.from_dict(data)
+        except (JSONDecodeError, TypeError) as e:
+            logger.debug(f"Profile data in Redis is invalid or incomplete for user {telegram_id}: {e}")
             raise ProfileNotFoundError(telegram_id)
 
     @classmethod
-    def get_profiles(cls, telegram_id: int) -> list[Profile]:
-        return [Profile.from_dict(data) for data in cls._get_profile_data(telegram_id)]
+    def get_profile_data(cls, telegram_id: int, key_name: str) -> Any:
+        profile = cls.get_profile(telegram_id)
+        if profile:
+            return profile.to_dict().get(key_name)
+
+    @classmethod
+    def set_profile_data(cls, telegram_id: int, data: dict[str, Any]) -> bool:
+        allowed_fields = [
+            "language",
+            "status",
+            "tg_id",
+        ]
+        try:
+            key = cls._add_prefix("user_profiles")
+            filtered_data = {k: data[k] for k in allowed_fields if k in data}
+            existing_data = json.loads(cls.redis.hget(key, str(telegram_id)) or "{}")
+            existing_data.update(filtered_data)
+            cls.redis.hset(key, str(telegram_id), json.dumps(existing_data))
+            return True
+        except Exception as e:
+            logger.error(f"Error setting data for profile_id {telegram_id}: {e}")
+            return False
+
+    @classmethod
+    def delete_profile(cls, telegram_id: int) -> bool:
+        try:
+            key = cls._add_prefix("user_profiles")
+            cls.redis.hdel(key, str(telegram_id))
+            logger.info(f"Profile for telegram_id {telegram_id} has been deleted")
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting profile for telegram_id {telegram_id}: {e}")
+            return False
 
     @classmethod
     def get_coaches(cls) -> list[Coach] | None:
@@ -119,59 +106,6 @@ class CacheManager:
         except Exception as e:
             logger.info(f"Failed to retrieve coach data: {e}")
             return None
-
-    @classmethod
-    def deactivate_profiles(cls, telegram_id: int) -> None:
-        try:
-            profiles_data = cls._get_profile_data(telegram_id)
-            for profile_data in profiles_data:
-                profile_data["is_current"] = False
-            cls._update_profile_data(telegram_id, profiles_data)
-            logger.debug(f"Profiles of user {telegram_id} deactivated")
-        except Exception as e:
-            logger.error(f"Failed to deactivate profiles of user {telegram_id}: {e}")
-
-    @classmethod
-    def get_profile_info_by_key(cls, telegram_id: int, profile_id: int, key: str) -> str | None:
-        profiles = cls._get_profile_data(telegram_id)
-        for profile_data in profiles:
-            if profile_data.get("id") == profile_id:
-                return profile_data.get(key)
-        return None
-
-    @classmethod
-    def set_profile_info_by_key(cls, telegram_id: int, profile_id: int, key: str, value: Any) -> bool:
-        try:
-            profiles_data = cls._get_profile_data(telegram_id)
-            for profile_data in profiles_data:
-                if profile_data.get("id") == profile_id:
-                    profile_data[key] = value
-                    break
-            else:
-                return False
-            cls._update_profile_data(telegram_id, profiles_data)
-            return True
-        except Exception as e:
-            logger.exception(f"Failed to set profile info for profile_id {profile_id}: {e}")
-            return False
-
-    @classmethod
-    def delete_profile(cls, telegram_id: int, profile_id: int) -> bool:
-        try:
-            profiles_data = cls._get_profile_data(telegram_id)
-            updated_profiles_data = [p for p in profiles_data if p["id"] != profile_id]
-            key = cls._add_prefix("user_profiles")
-
-            if not updated_profiles_data:
-                cls.redis.hdel(key, str(telegram_id))
-            else:
-                cls._update_profile_data(telegram_id, updated_profiles_data)
-
-            logger.info(f"Profile {profile_id} deleted for tg user {telegram_id}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to delete profile_id {profile_id} for tg user {telegram_id}: {e}")
-            return False
 
     @classmethod
     def set_client_data(cls, profile_id: int, client_data: dict[str, Any]) -> None:
@@ -374,7 +308,6 @@ class CacheManager:
                 if payment_date := data.get("payment_date"):
                     payment_date = parse(payment_date)
                     data["payment_date"] = payment_date.strftime("%Y-%m-%d")
-
                 return Subscription.from_dict(data)
             else:
                 logger.debug(f"No subscription data found for profile_id {profile_id}")

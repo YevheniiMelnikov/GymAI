@@ -30,13 +30,12 @@ from functions.menus import (
     show_my_subscription_menu,
     show_my_program_menu,
 )
-from functions.profiles import get_or_load_profile
+from functions.profiles import get_user_profile
 from functions.text_utils import format_program, get_translated_week_day
 from functions.utils import program_menu_pagination, short_url, delete_messages
 from functions.workout_plans import reset_workout_plan, save_workout_plan, next_day_workout_plan
 from core.models import Exercise, Program
 from services.profile_service import ProfileService
-from services.user_service import UserService
 from services.workout_service import WorkoutService
 from bot.texts.text_manager import msg_text, btn_text
 
@@ -45,7 +44,7 @@ program_router = Router()
 
 @program_router.callback_query(States.select_service)
 async def program_type(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
     if callback_query.data == "subscription":
         await show_my_subscription_menu(callback_query, profile, state)
 
@@ -59,7 +58,7 @@ async def program_type(callback_query: CallbackQuery, state: FSMContext):
 @program_router.message(States.workouts_number, F.text)
 async def workouts_number_choice(message: Message, state: FSMContext):
     await delete_messages(state)
-    profile = await get_or_load_profile(message.from_user.id)
+    profile = await get_user_profile(message.from_user.id)
     try:
         workouts_per_week = int(message.text)
         if workouts_per_week < 1 or workouts_per_week > 7:
@@ -86,7 +85,7 @@ async def program_manage(callback_query: CallbackQuery, state: FSMContext) -> No
     await delete_messages(state)
     if callback_query.data == "quit":
         await callback_query.answer()
-        profile = await get_or_load_profile(callback_query.from_user.id)
+        profile = await get_user_profile(callback_query.from_user.id)
         await show_main_menu(callback_query.message, profile, state)
 
     elif callback_query.data == "add_next_day":
@@ -103,7 +102,7 @@ async def program_manage(callback_query: CallbackQuery, state: FSMContext) -> No
 @program_router.message(States.add_exercise_name)
 async def set_exercise_name(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
-    profile = await get_or_load_profile(message.from_user.id)
+    profile = await get_user_profile(message.from_user.id)
     link_to_gif = await find_exercise_gif(message.text)
     shorted_link = await short_url(link_to_gif) if link_to_gif else None
 
@@ -120,7 +119,7 @@ async def set_exercise_name(message: Message, state: FSMContext) -> None:
 @program_router.callback_query(States.enter_sets)
 async def set_exercise_sets(callback_query: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(sets=callback_query.data)
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
     await callback_query.answer(msg_text("saved", profile.language))
     data = await state.get_data()
     if data.get("edit_mode"):
@@ -135,7 +134,7 @@ async def set_exercise_sets(callback_query: CallbackQuery, state: FSMContext) ->
 
 @program_router.callback_query(States.enter_reps)
 async def set_exercise_reps(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
     await callback_query.answer(msg_text("saved", profile.language))
     data = await state.get_data()
     if data.get("edit_mode"):
@@ -157,7 +156,7 @@ async def set_exercise_reps(callback_query: CallbackQuery, state: FSMContext) ->
 @program_router.message(States.exercise_weight)
 @program_router.callback_query(States.exercise_weight, F.data == "skip_weight")
 async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMContext) -> None:
-    profile = await get_or_load_profile(input_data.from_user.id)
+    profile = await get_user_profile(input_data.from_user.id)
     data = await state.get_data()
     exercise_name = data.get("exercise_name")
     sets = data.get("sets")
@@ -204,7 +203,7 @@ async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMCon
 
 @program_router.callback_query(States.workout_survey)
 async def send_workout_results(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
     data = await state.get_data()
     day = data.get("day")
     exercises = data.get("exercises", {})
@@ -217,7 +216,7 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext)
         client = CacheManager.get_client_by_id(profile.id)
         coach = CacheManager.get_coach_by_id(client.assigned_to.pop())
         coach_profile = await ProfileService.get_profile(coach.id)
-        coach_lang = CacheManager.get_profile_info_by_key(coach_profile.get("current_tg_id"), coach.id, "language")
+        coach_lang = CacheManager.get_profile_data(coach_profile.get("tg_id"), coach.id, "language")
         await send_message(
             recipient=coach,
             text=msg_text("workout_completed", coach_lang).format(name=client.name, program=program),
@@ -235,11 +234,11 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext)
 
 @program_router.message(States.workout_description)
 async def workout_description(message: Message, state: FSMContext):
-    profile = await get_or_load_profile(message.from_user.id)
+    profile = await get_user_profile(message.from_user.id)
     client = CacheManager.get_client_by_id(profile.id)
     coach = CacheManager.get_coach_by_id(client.assigned_to.pop())
     coach_data = await ProfileService.get_profile(coach.id)
-    coach_lang = CacheManager.get_profile_info_by_key(coach_data.get("current_tg_id"), coach.id, "language")
+    coach_lang = CacheManager.get_profile_data(coach_data.get("tg_id"), coach.id, "language")
     data = await state.get_data()
     day = data.get("day")
     exercises = data.get("exercises")
@@ -258,7 +257,7 @@ async def workout_description(message: Message, state: FSMContext):
 
 @program_router.callback_query(States.program_edit)
 async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
     data = await state.get_data()
     exercises = data.get("exercises", {})
     client_id = data.get("client_id")
@@ -305,12 +304,11 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
         await callback_query.answer(btn_text("done", profile.language))
         client = CacheManager.get_client_by_id(client_id)
         client_data = await ProfileService.get_profile(client_id)
-        client_lang = CacheManager.get_profile_info_by_key(client_data.get("current_tg_id"), client.id, "language")
+        client_lang = CacheManager.get_profile_data(client_data.get("tg_id"), "language")
         if data.get("subscription"):
             subscription_data = CacheManager.get_subscription(client_id).to_dict()
             subscription_data.update(client_profile=client_id, exercises=exercises)
-            auth_token = await UserService.get_user_token(client_id)
-            await WorkoutService.update_subscription(subscription_data.get("id"), subscription_data, auth_token)
+            await WorkoutService.update_subscription(subscription_data.get("id"), subscription_data)
             CacheManager.update_subscription_data(
                 profile_id=client_id, subscription_data={"exercises": exercises, "client_profile": client_id}
             )
@@ -368,7 +366,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
 @program_router.callback_query(States.edit_exercise)
 async def select_exercise_to_edit(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.answer()
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
     data = await state.get_data()
     exercises = data.get("exercises")
     exercise_index = int(callback_query.data)
@@ -399,7 +397,7 @@ async def select_exercise_to_edit(callback_query: CallbackQuery, state: FSMConte
 @program_router.callback_query(States.edit_exercise_parameter)
 async def exercise_edit_options(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.answer()
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
     if callback_query.data == "weight":
         kb = InlineKeyboardBuilder()
         kb.button(text=btn_text("quit", profile.language), callback_data="skip_weight")
@@ -422,7 +420,7 @@ async def exercise_edit_options(callback_query: CallbackQuery, state: FSMContext
 @program_router.callback_query(States.delete_exercise)
 async def delete_exercise(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.answer()
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
     data = await state.get_data()
     exercises = data.get("exercises")
     day_index = str(data.get("day_index"))
@@ -444,7 +442,7 @@ async def delete_exercise(callback_query: CallbackQuery, state: FSMContext):
 
 @program_router.callback_query(States.subscription_manage)
 async def subscription_manage(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
     data = await state.get_data()
     days = data.get("days", [])
     day_index = data.get("day_index", 0)
@@ -473,7 +471,7 @@ async def subscription_manage(callback_query: CallbackQuery, state: FSMContext):
 
 @program_router.callback_query(States.program_view)
 async def program_view(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
     data = await state.get_data()
     if callback_query.data == "quit":
         await callback_query.answer()
@@ -494,15 +492,14 @@ async def program_view(callback_query: CallbackQuery, state: FSMContext):
 
 @program_router.callback_query(States.confirm_subscription_reset)
 async def confirm_subscription_reset(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
     data = await state.get_data()
     if callback_query.data == "yes":
         await callback_query.answer(msg_text("workout_plan_deleted", profile.language), show_alert=True)
         CacheManager.update_subscription_data(profile.id, dict(exercises={}, workout_days=data.get("workout_days")))
         subscription_data = CacheManager.get_subscription(profile.id).to_dict()
         subscription_data.update(client_profile=profile.id)
-        auth_token = await UserService.get_user_token(profile.id)
-        await WorkoutService.update_subscription(subscription_data.get("id"), subscription_data, auth_token)
+        await WorkoutService.update_subscription(subscription_data.get("id"), subscription_data)
         client = CacheManager.get_client_by_id(profile.id)
         coach = CacheManager.get_coach_by_id(client.assigned_to.pop())
         await send_message(
@@ -519,7 +516,7 @@ async def confirm_subscription_reset(callback_query: CallbackQuery, state: FSMCo
 
 @program_router.callback_query(States.program_action_choice)
 async def program_action_choice(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_or_load_profile(callback_query.from_user.id)
+    profile = await get_user_profile(callback_query.from_user.id)
     data = await state.get_data()
     if callback_query.data == "show_old":
         await callback_query.answer()

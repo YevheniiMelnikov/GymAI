@@ -10,7 +10,7 @@ from core.exceptions import UserServiceError
 from functions.chat import send_message
 from core.models import Profile
 from functions.menus import show_main_menu
-from functions.profiles import get_or_load_profile
+from functions.profiles import get_user_profile
 from bot.texts.text_manager import msg_text
 from services.profile_service import ProfileService
 
@@ -21,7 +21,7 @@ chat_router = Router()
 @chat_router.message(States.contact_client, F.text | F.photo | F.video)
 async def contact_client(message: Message, state: FSMContext):
     data = await state.get_data()
-    profile = await get_or_load_profile(message.from_user.id)
+    profile = await get_user_profile(message.from_user.id)
 
     try:
         client = CacheManager.get_client_by_id(data.get("recipient_id"))
@@ -63,7 +63,7 @@ async def contact_client(message: Message, state: FSMContext):
 @chat_router.message(States.contact_coach, F.text | F.photo | F.video)
 async def contact_coach(message: Message, state: FSMContext):
     data = await state.get_data()
-    profile = await get_or_load_profile(message.from_user.id)
+    profile = await get_user_profile(message.from_user.id)
 
     try:
         coach = CacheManager.get_coach_by_id(data.get("recipient_id"))

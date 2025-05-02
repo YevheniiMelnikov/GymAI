@@ -28,7 +28,6 @@ class ButtonText(Enum):
     my_clients = auto()
     my_profile = auto()
     my_program = auto()
-    logout = auto()
     edit = auto()
     program = auto()
     program_price = auto()
@@ -85,24 +84,9 @@ class ButtonText(Enum):
 
 
 class MessageText(Enum):
-    username = auto()
-    password = auto()
-    email = auto()
-    password_retype = auto()
-    password_reset_sent = auto()
-    registration_successful = auto()
-    invalid_credentials = auto()
-    password_mismatch = auto()
-    password_requirements = auto()
-    username_unavailable = auto()
-    reset_password_offer = auto()
-    password_unsafe = auto()
     invalid_content = auto()
     questionnaire_not_completed = auto()
     unexpected_error = auto()
-    signed_in = auto()
-    logout = auto()
-    email_unavailable = auto()
 
     client_profile = auto()
     client_page = auto()

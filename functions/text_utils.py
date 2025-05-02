@@ -1,4 +1,3 @@
-import re
 from typing import Any, Optional
 
 from aiogram.fsm.state import State
@@ -21,12 +20,7 @@ def validate_password(password: str) -> bool:
     return True
 
 
-def validate_email(email: str) -> bool:
-    pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$"
-    return bool(re.match(pattern, email))
-
-
-def get_profile_attributes(role: str, user: Optional[Client | Coach], lang: str) -> dict[str, str]:
+def get_profile_attributes(status: str, user: Optional[Client | Coach], lang: str) -> dict[str, str]:
     def get_attr(attr_name: str) -> str:
         return getattr(user, attr_name, "") if user else ""
 
@@ -39,7 +33,7 @@ def get_profile_attributes(role: str, user: Optional[Client | Coach], lang: str)
         False: msg_text("not_verified", lang),
     }
 
-    if role == "client":
+    if status == "client":
         attributes = {
             "name": get_attr("name"),
             "gender": genders.get(get_attr("gender"), ""),
@@ -102,7 +96,7 @@ async def get_client_page(client: Client, lang_code: str, subscription: bool, da
         "workout_goals": client.workout_goals,
         "health_notes": client.health_notes,
         "weight": client.weight,
-        "language": CacheManager.get_profile_info_by_key(client_data.get("current_tg_id"), client.id, "language"),
+        "language": CacheManager.get_profile_data(client_data.get("tg_id"), client.id, "language"),
         "subscription": texts.get("enabled") if subscription else texts.get("disabled"),
         "status": texts.get(client.status),
     }

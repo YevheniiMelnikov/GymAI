@@ -3,7 +3,6 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from common.logger import logger
 from core.cache_manager import CacheManager
 from services.payment_service import PaymentService
-from services.user_service import UserService
 from services.workout_service import WorkoutService
 
 
@@ -13,10 +12,7 @@ class SubscriptionManager:
     @staticmethod
     async def _run_deactivation(subscription_id, profile_id):
         try:
-            auth_token = await UserService.get_user_token(profile_id)
-            await WorkoutService.update_subscription(
-                subscription_id, {"client_profile": profile_id, "enabled": False}, auth_token
-            )
+            await WorkoutService.update_subscription(subscription_id, {"client_profile": profile_id, "enabled": False})
             CacheManager.update_subscription_data(profile_id, {"enabled": False})
             CacheManager.reset_program_payment_status(profile_id, "subscription")
             logger.info(f"Subscription {subscription_id} for user {profile_id} deactivated")
@@ -52,4 +48,3 @@ class SubscriptionManager:
     async def shutdown(cls) -> None:
         if cls.scheduler:
             cls.scheduler.shutdown(wait=False)
-            logger.debug("Subscription scheduler stopped")

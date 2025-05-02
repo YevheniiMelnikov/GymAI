@@ -1,4 +1,3 @@
-import os
 from contextlib import suppress
 from datetime import datetime
 
@@ -24,16 +23,13 @@ from functions.text_utils import (
     get_translated_week_day,
 )
 from services.profile_service import ProfileService
-from common.settings import settings
+from common.settings import Settings
 from bot.texts.text_manager import msg_text
-
-
-bot = Bot(os.environ.get("BOT_TOKEN"))
 
 
 async def show_subscription_page(callback_query: CallbackQuery, state: FSMContext, subscription: Subscription) -> None:
     await callback_query.answer()
-    profile = await profiles.get_or_load_profile(callback_query.from_user.id)
+    profile = await profiles.get_user_profile(callback_query.from_user.id)
     payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
     next_payment_date = payment_date + relativedelta(months=1)
     next_payment_date_str = next_payment_date.strftime("%Y-%m-%d")
@@ -66,7 +62,7 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
             logger.error(f"Error retrieving client profile for {profile.id}: {error}")
             questionnaire = None
         reply_markup = edit_client_profile_kb(profile.language) if questionnaire else None
-        await state.update_data(role="client")
+        await state.update_data(status="client")
 
     else:
         try:
@@ -75,7 +71,7 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
             logger.error(f"Error retrieving coach profile for {profile.id}: {error}")
             questionnaire = None
         reply_markup = edit_coach_profile_kb(profile.language) if questionnaire else None
-        await state.update_data(role="coach")
+        await state.update_data(status="coach")
 
     state_to_set = States.edit_profile if questionnaire else States.name
     response_message = "choose_profile_parameter" if questionnaire else "edit_profile"
@@ -93,7 +89,7 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
 async def show_main_menu(message: Message, profile: Profile, state: FSMContext) -> None:
     menu = client_menu_kb if profile.status == "client" else coach_menu_kb
     await state.clear()
-    await state.update_data(profile=Profile.to_dict(profile))
+    await state.update_data(profile=profile.to_dict())
     await state.set_state(States.main_menu)
     await message.answer(msg_text("main_menu", profile.language), reply_markup=menu(profile.language))
     with suppress(TelegramBadRequest):
@@ -101,7 +97,7 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext) 
 
 
 async def show_clients(message: Message, clients: list[Client], state: FSMContext, current_index=0) -> None:
-    profile = await profiles.get_or_load_profile(message.chat.id)
+    profile = await profiles.get_user_profile(message.chat.id)
     current_index %= len(clients)
     current_client = clients[current_index]
     subscription = True if CacheManager.get_subscription(current_client.id) else False
@@ -118,13 +114,13 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
     await state.set_state(States.show_clients)
 
 
-async def show_coaches_menu(message: Message, coaches: list[Coach], current_index=0) -> None:
-    profile = await profiles.get_or_load_profile(message.chat.id)
+async def show_coaches_menu(message: Message, coaches: list[Coach], bot: Bot, current_index=0) -> None:
+    profile = await profiles.get_user_profile(message.chat.id)
     current_index %= len(coaches)
     current_coach = coaches[current_index]
     text = msg_text("coach_page", profile.language)
     coach_photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{current_coach.profile_photo}"
-    formatted_text = text.format(**Coach.to_dict(current_coach))
+    formatted_text = text.format(**current_coach.to_dict())
 
     try:
         media = InputMediaPhoto(media=coach_photo_url)
@@ -165,28 +161,14 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
         await callback_query.answer()
         user_data = await ProfileService.get_profile(profile.id)
 
-        if user_data is None:
-            logger.warning(f"No user data found for profile {profile.id}, initiating profile creation.")
-            await profiles.start_profile_creation(callback_query.message, profile, state)
-            return
+        if profile.status == "client":
+            CacheManager.set_client_data(profile.id, user_data)
+            user = Client.from_dict(user_data)
+        else:
+            CacheManager.set_coach_data(profile.id, user_data)
+            user = Coach.from_dict(user_data)
 
-        if None in user_data.values():
-            logger.warning(f"Incomplete profile data for {profile.id}, initiating profile creation.")
-            await profiles.start_profile_creation(callback_query.message, profile, state)
-            return
-
-        try:
-            if profile.status == "client":
-                CacheManager.set_client_data(profile.id, user_data)
-                user = Client.from_dict(user_data)
-            else:
-                CacheManager.set_coach_data(profile.id, user_data)
-                user = Coach.from_dict(user_data)
-        except TypeError:
-            await profiles.start_profile_creation(callback_query.message, profile, state)
-            return
-
-    format_attributes = get_profile_attributes(role=profile.status, user=user, lang=profile.language)
+    format_attributes = get_profile_attributes(status=profile.status, user=user, lang=profile.language)
     text = msg_text(
         "client_profile" if profile.status == "client" else "coach_profile",
         profile.language,
@@ -276,7 +258,7 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
 
     subscription = CacheManager.get_subscription(profile.id)
     if not subscription or not subscription.enabled:
-        subscription_img = settings.BOT_PAYMENT_OPTIONS + f"subscription_{profile.language}.jpeg"
+        subscription_img = Settings.BOT_PAYMENT_OPTIONS + f"subscription_{profile.language}.jpeg"
         client_profile = CacheManager.get_client_by_id(profile.id)
         coach = CacheManager.get_coach_by_id(client_profile.assigned_to.pop())
         try:
@@ -319,7 +301,7 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
 
 
 async def show_program_promo_page(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    program_img = settings.BOT_PAYMENT_OPTIONS + f"program_{profile.language}.jpeg"
+    program_img = Settings.BOT_PAYMENT_OPTIONS + f"program_{profile.language}.jpeg"
     client_profile = CacheManager.get_client_by_id(profile.id)
     coach = CacheManager.get_coach_by_id(client_profile.assigned_to.pop())
     try:
@@ -356,7 +338,7 @@ async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, 
 
 async def manage_subscription(callback_query: CallbackQuery, lang: str, client_id: str, state: FSMContext) -> None:
     await state.clear()
-    subscription = CacheManager.get_subscription(client_id)
+    subscription = CacheManager.get_subscription(int(client_id))
 
     if not subscription or not subscription.enabled:
         await callback_query.answer(msg_text("payment_required", lang), show_alert=True)

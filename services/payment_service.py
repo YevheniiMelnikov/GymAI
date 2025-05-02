@@ -7,13 +7,13 @@ from liqpay import LiqPay
 
 from services.api_service import APIClient
 from core.models import Payment
-from common.settings import settings
+from common.settings import Settings
 
 
 class PaymentService(APIClient):
     API_BASE_PATH = "api/v1/payments/"
     SUBSCRIPTIONS_PATH = "api/v1/subscriptions/"
-    payment_client = LiqPay(settings.PAYMENT_PUB_KEY, settings.PAYMENT_PRIVATE_KEY)
+    payment_client = LiqPay(Settings.PAYMENT_PUB_KEY, Settings.PAYMENT_PRIVATE_KEY)
 
     @classmethod
     def _build_payment_params(
@@ -26,8 +26,8 @@ class PaymentService(APIClient):
             "description": f"{payment_type} payment from profile {profile_id}",
             "order_id": order_id,
             "version": "3",
-            "server_url": settings.PAYMENT_CALLBACK_URL,
-            "result_url": settings.BOT_LINK,
+            "server_url": Settings.PAYMENT_CALLBACK_URL,
+            "result_url": Settings.BOT_LINK,
             "rro_info": {"delivery_emails": emails},
         }
 
@@ -41,23 +41,20 @@ class PaymentService(APIClient):
         return params
 
     @classmethod
-    async def get_payment_link(
-        cls, action: str, amount: str, order_id: str, payment_type: str, client_email: str, profile_id: int
-    ) -> str:
-        emails = [email for email in [client_email, settings.EMAIL_HOST_USER] if email]
+    async def get_payment_link(cls, action: str, amount: str, order_id: str, payment_type: str, profile_id: int) -> str:
         params = cls._build_payment_params(
             action=action,
             amount=amount,
             order_id=order_id,
             payment_type=payment_type,
             profile_id=profile_id,
-            emails=emails,
+            emails=[Settings.EMAIL_HOST_USER],
         )
 
         data = cls.payment_client.cnb_data(params)
         signature = cls.payment_client.cnb_signature(params)
         query_string = urlencode({"data": data, "signature": signature})
-        return urljoin(settings.CHECKOUT_URL, f"?{query_string}")
+        return urljoin(Settings.CHECKOUT_URL, f"?{query_string}")
 
     @classmethod
     async def unsubscribe(cls, order_id: str) -> bool:
@@ -138,7 +135,7 @@ class PaymentService(APIClient):
 
     @classmethod
     async def get_unclosed_payments(cls) -> list[Payment]:
-        return await cls._get_filtered_payments(lambda p: p.get("status") == settings.SUCCESS_PAYMENT_STATUS)
+        return await cls._get_filtered_payments(lambda p: p.get("status") == Settings.SUCCESS_PAYMENT_STATUS)
 
     @classmethod
     async def get_expired_subscriptions(cls, expired_before: str) -> list[dict]:

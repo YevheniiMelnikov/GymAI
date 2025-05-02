@@ -4,6 +4,8 @@ from contextlib import suppress
 from typing import Optional
 
 import aiohttp
+from pydantic_core import ValidationError
+
 from common.logger import logger
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
@@ -12,12 +14,12 @@ from aiogram.types import BotCommand, CallbackQuery
 
 from bot.keyboards import program_edit_kb, program_view_kb, subscription_manage_kb
 from bot.states import States
-from common.settings import settings
+from common.settings import Settings
 from functions import menus, profiles, text_utils
 from core.models import Client
 from bot.texts.text_manager import msg_text, TextManager
 
-bot = Bot(settings.BOT_TOKEN)
+bot = Bot(Settings.BOT_TOKEN)
 
 
 async def short_url(url: str) -> str:
@@ -36,14 +38,14 @@ async def short_url(url: str) -> str:
 
 
 async def set_bot_commands(lang: Optional[str] = None) -> None:
-    lang = lang or settings.DEFAULT_BOT_LANGUAGE
+    lang = lang or Settings.DEFAULT_BOT_LANGUAGE
     command_texts = TextManager.commands
     commands = [BotCommand(command=cmd, description=desc[lang]) for cmd, desc in command_texts.items()]
     await bot.set_my_commands(commands)
 
 
 async def program_menu_pagination(state: FSMContext, callback_query: CallbackQuery) -> None:
-    profile = await profiles.get_or_load_profile(callback_query.from_user.id)
+    profile = await profiles.get_user_profile(callback_query.from_user.id)
 
     if callback_query.data == "quit":
         await menus.my_clients_menu(callback_query, profile, state)
@@ -110,7 +112,7 @@ async def delete_messages(state: FSMContext) -> None:
     data = await state.get_data()
     message_ids = data.get("message_ids", [])
     for message_id in message_ids:
-        with suppress(TelegramBadRequest):
+        with suppress(TelegramBadRequest, ValidationError):
             await bot.delete_message(chat_id=data.get("chat_id"), message_id=message_id)
     await state.update_data(message_ids=[])
 

@@ -1,9 +1,9 @@
 from typing import Any
 from urllib.parse import urljoin
 from common.logger import logger
+from core.models import Profile
 
 from services.api_service import APIClient
-from core.models import Profile
 from core.encryptor import Encryptor
 
 
@@ -17,55 +17,33 @@ class ProfileService(APIClient):
         if status_code == 200 and user_data:
             return user_data
 
-        logger.info(f"Failed to retrieve email for profile_id {profile_id}. HTTP status: {status_code}")
-        return None
+        logger.info(f"Failed to retrieve profile for id={profile_id}. HTTP status: {status_code}")
 
     @classmethod
-    async def get_profile_by_username(cls, username: str) -> Profile | None:
-        url = urljoin(cls.api_url, f"api/v1/profiles/{username}/")
-        status_code, profile_data = await cls._api_request(
-            "get", url, headers={"Authorization": f"Api-Key {cls.api_key}"}
-        )
-
-        if status_code == 404:
-            logger.info(f"Profile for username {username} not found.")
-            return None
-
-        if status_code != 200 or not profile_data:
-            logger.warning(f"Failed to retrieve profile for {username}. HTTP status: {status_code}")
-            return None
-
-        profile_fields = profile_data.get("profile_data", {})
-        combined_data = {"id": profile_data.get("id"), "status": profile_fields.get("status"), **profile_fields}
-
-        extra_fields = [
-            "surname",
-            "additional_info",
-            "profile_photo",
-            "payment_details",
-            "subscription_price",
-            "program_price",
-            "verified",
-            "workout_experience",
-            "workout_goals",
-            "health_notes",
-            "weight",
-            "born_in",
-        ]
-
-        combined_data.update({field: profile_data.get(field) for field in extra_fields if field in profile_data})
-        return Profile.from_dict(combined_data)
-
-    @classmethod
-    async def get_profile_by_telegram_id(cls, telegram_id: int) -> dict[str, Any] | None:
+    async def get_profile_by_tg_id(cls, telegram_id: int) -> Profile | None:
         url = urljoin(cls.api_url, f"api/v1/profiles/tg/{telegram_id}/")
         status_code, profile_data = await cls._api_request(
             "get", url, headers={"Authorization": f"Api-Key {cls.api_key}"}
         )
         if status_code == 200 and profile_data:
-            return profile_data
+            return Profile.from_dict(profile_data)
 
-        return None
+    @classmethod
+    async def create_profile(cls, telegram_id: int, status: str, language: str) -> Profile | None:
+        url = urljoin(cls.api_url, "api/v1/profiles/")
+        data = {
+            "tg_id": telegram_id,
+            "status": status,
+            "language": language,
+        }
+
+        status_code, response_data = await cls._api_request(
+            "post", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"}
+        )
+        if status_code == 201 and response_data:
+            return Profile.from_dict(response_data)
+
+        logger.error(f"Failed to create profile. status={status_code}, response={response_data}")
 
     @classmethod
     async def delete_profile(cls, profile_id: int, token: str | None = None) -> bool:
@@ -77,8 +55,8 @@ class ProfileService(APIClient):
     @classmethod
     async def edit_profile(cls, profile_id: int, data: dict) -> bool:
         url = urljoin(cls.api_url, f"api/v1/profiles/{profile_id}/")
-        fields = ["current_tg_id", "language", "name", "assigned_to"]
-        filtered_data = {key: data[key] for key in fields if key in data and data[key] is not None}
+        fields = ["tg_id", "language", "name", "assigned_to"]
+        filtered_data = {k: data[k] for k in fields if k in data and data[k] is not None}
         status_code, _ = await cls._api_request(
             "put", url, filtered_data, headers={"Authorization": f"Api-Key {cls.api_key}"}
         )
@@ -88,7 +66,7 @@ class ProfileService(APIClient):
     async def edit_client_profile(cls, profile_id: int, data: dict) -> bool:
         url = urljoin(cls.api_url, f"api/v1/client-profiles/{profile_id}/")
         fields = ["gender", "born_in", "workout_experience", "workout_goals", "health_notes", "weight", "coach"]
-        filtered_data = {key: data[key] for key in fields if key in data and data[key] is not None}
+        filtered_data = {k: data[k] for k in fields if k in data and data[k] is not None}
         filtered_data["profile_id"] = profile_id
         status_code, _ = await cls._api_request(
             "put", url, filtered_data, headers={"Authorization": f"Api-Key {cls.api_key}"}
@@ -110,7 +88,7 @@ class ProfileService(APIClient):
         if "payment_details" in data:
             data["payment_details"] = cls.encrypter.encrypt(data["payment_details"])
 
-        filtered_data = {key: data[key] for key in fields if key in data and data[key] is not None}
+        filtered_data = {k: data[k] for k in fields if k in data and data[k] is not None}
         filtered_data["profile_id"] = profile_id
         url = urljoin(cls.api_url, f"api/v1/coach-profiles/{profile_id}/")
         status_code, _ = await cls._api_request(
@@ -124,15 +102,7 @@ class ProfileService(APIClient):
         status_code, response_data = await cls._api_request(
             "get", url, headers={"Authorization": f"Api-Key {cls.api_key}"}
         )
-
         if status_code == 200 and response_data:
             return response_data
         else:
-            raise ValueError(f"Failed to get coach profile for profile_id {profile_id}")
-
-    @classmethod
-    async def reset_telegram_id(cls, profile_id: int, telegram_id: int) -> bool:
-        url = urljoin(cls.api_url, f"api/v1/profiles/reset-tg/{profile_id}/")
-        data = {"telegram_id": telegram_id}
-        status_code, _ = await cls._api_request("post", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"})
-        return status_code == 200
+            raise ValueError(f"Failed to get coach profile for profile_id={profile_id}")

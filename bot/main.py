@@ -6,7 +6,7 @@ from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
 from common.logger import logger
-from common.settings import settings
+from common.settings import Settings
 from bot.middlewares import ProfileMiddleware
 from bot.handlers.routers_configurator import configure_routers
 from functions.utils import set_bot_commands
@@ -33,17 +33,17 @@ async def on_shutdown(bot: Bot) -> None:
 async def start_web_app(app: web.Application) -> web.AppRunner:
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, host=settings.WEB_SERVER_HOST, port=settings.WEBHOOK_PORT)
+    site = web.TCPSite(runner, host=Settings.WEB_SERVER_HOST, port=Settings.WEBHOOK_PORT)
     await site.start()
     return runner
 
 
 async def main() -> None:
-    bot = Bot(token=settings.BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
+    bot = Bot(token=Settings.BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
     await bot.delete_webhook(drop_pending_updates=True)
-    await bot.set_webhook(url=settings.WEBHOOK_URL)
+    await bot.set_webhook(url=Settings.WEBHOOK_URL)
 
-    dp = Dispatcher(storage=RedisStorage.from_url(settings.REDIS_URL))
+    dp = Dispatcher(storage=RedisStorage.from_url(Settings.REDIS_URL))
     dp.message.middleware.register(ProfileMiddleware())
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
@@ -51,7 +51,7 @@ async def main() -> None:
 
     app = web.Application()
     app["bot"] = bot
-    SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=settings.WEBHOOK_PATH)
+    SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=Settings.WEBHOOK_PATH)
     setup_application(app, dp, bot=bot)
     runner = await start_web_app(app)
     logger.info("Bot started")

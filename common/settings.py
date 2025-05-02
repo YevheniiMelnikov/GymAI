@@ -1,10 +1,6 @@
 import os
 from dataclasses import dataclass
 
-from dotenv import load_dotenv
-
-load_dotenv()
-
 
 @dataclass
 class Settings:
@@ -38,10 +34,7 @@ class Settings:
     TG_SUPPORT_CONTACT: str = os.getenv("TG_SUPPORT_CONTACT")
     PUBLIC_OFFER: str = os.getenv("PUBLIC_OFFER")
     PRIVACY_POLICY: str = os.getenv("PRIVACY_POLICY")
-
-    EMAIL_HOST_USER: str = os.getenv("EMAIL_HOST_USER")
     DEFAULT_FROM_EMAIL: str = os.getenv("DEFAULT_FROM_EMAIL")
-    EMAIL_HOST_PASSWORD: str = os.getenv("EMAIL_HOST_PASSWORD")
 
     WEB_SERVER_HOST: str = "0.0.0.0"
     WEBHOOK_HOST: str = os.getenv("WEBHOOK_HOST")
@@ -55,6 +48,3 @@ class Settings:
     DB_USER: str = os.getenv("DB_USER")
     DB_PASSWORD: str = os.getenv("DB_PASSWORD")
     DB_HOST: str = os.getenv("DB_HOST")
-
-
-settings = Settings()

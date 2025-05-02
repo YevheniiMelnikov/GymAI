@@ -9,15 +9,15 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from bot.keyboards import workout_results_kb, workout_survey_kb
 from bot.states import States
-from common.settings import settings
+from common.settings import Settings
 from core.cache_manager import CacheManager
-from functions.profiles import get_or_load_profile
+from functions.profiles import get_user_profile
 from services.profile_service import ProfileService
 from bot.texts.text_manager import msg_text
 
 
 survey_router = Router()
-bot = Bot(settings.BOT_TOKEN)
+bot = Bot(Settings.BOT_TOKEN)
 
 
 async def send_daily_survey():
@@ -25,13 +25,13 @@ async def send_daily_survey():
     for client_id in clients:
         client_data = await ProfileService.get_profile(client_id)
         client_lang = (
-            CacheManager.get_profile_info_by_key(client_data.get("current_tg_id"), client_id, "language")
-            or settings.DEFAULT_BOT_LANGUAGE
+            CacheManager.get_profile_data(client_data.get("tg_id"), client_id, "language")
+            or Settings.DEFAULT_BOT_LANGUAGE
         )
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
         async with aiohttp.ClientSession():
             await bot.send_message(
-                chat_id=client_data.get("current_tg_id"),
+                chat_id=client_data.get("tg_id"),
                 text=msg_text("have_you_trained", client_lang),
                 reply_markup=workout_survey_kb(client_lang, yesterday),
                 disable_notification=True,
@@ -40,7 +40,7 @@ async def send_daily_survey():
         @survey_router.callback_query(F.data.startswith("yes_"))
         @survey_router.callback_query(F.data.startswith("no_"))
         async def have_you_trained(callback_query: CallbackQuery, state: FSMContext):
-            profile = await get_or_load_profile(callback_query.from_user.id)
+            profile = await get_user_profile(callback_query.from_user.id)
             subscription = CacheManager.get_subscription(profile.id)
             workout_days = subscription.workout_days
             if callback_query.data.startswith("yes"):
