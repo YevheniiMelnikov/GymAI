@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 from common.settings import Settings
+from common.logger import *
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -28,33 +29,6 @@ INSTALLED_APPS = [
     "rest_framework_api_key",
     "drf_yasg",
 ]
-
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "handlers": {
-        "loguru": {
-            "level": "DEBUG",
-            "class": "common.logger.InterceptHandler",
-        },
-    },
-    "root": {
-        "handlers": ["loguru"],
-        "level": "DEBUG",
-    },
-    "loggers": {
-        "django": {
-            "handlers": ["loguru"],
-            "level": "INFO",
-            "propagate": False,
-        },
-        "django.request": {
-            "handlers": ["loguru"],
-            "level": "ERROR",
-            "propagate": False,
-        },
-    },
-}
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -98,7 +72,7 @@ DATABASES = {
     }
 }
 
-LANGUAGE_CODE = "ru"
+LANGUAGE_CODE = Settings.OWNER_LANGUAGE
 TIME_ZONE = "Europe/Kyiv"
 USE_I18N = True
 USE_TZ = False

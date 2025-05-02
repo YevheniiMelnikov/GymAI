@@ -5,7 +5,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
-from common.logger import logger
+from loguru import logger
 from common.settings import Settings
 from bot.middlewares import ProfileMiddleware
 from bot.handlers.routers_configurator import configure_routers

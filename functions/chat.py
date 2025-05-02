@@ -2,7 +2,7 @@ from contextlib import suppress
 from typing import Any
 
 import aiohttp
-from common.logger import logger
+from loguru import logger
 from aiogram import F, Router, Bot
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest

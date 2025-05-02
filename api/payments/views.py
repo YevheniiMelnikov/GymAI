@@ -1,7 +1,7 @@
 import base64
 import json
 
-from common.logger import logger
+from loguru import logger
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend

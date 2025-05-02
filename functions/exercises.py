@@ -8,7 +8,7 @@ from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import payment_kb, program_edit_kb, program_manage_kb
 from bot.states import States
-from common.logger import logger
+from loguru import logger
 from core.cache_manager import CacheManager
 from core.file_manager import gif_manager
 from functions.menus import show_subscription_page

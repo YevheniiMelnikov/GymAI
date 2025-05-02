@@ -1,6 +1,6 @@
 from typing import Any
 from urllib.parse import urljoin
-from common.logger import logger
+from loguru import logger
 from core.models import Profile
 
 from services.api_service import APIClient

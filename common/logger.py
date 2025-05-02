@@ -2,27 +2,58 @@ import logging
 import sys
 from loguru import logger
 
-logger.remove()
-logger.configure(
-    handlers=[
-        {
-            "sink": sys.stdout,
+from common.settings import Settings
+
+
+def configure_loguru():
+    logger.remove()
+    logger.configure(
+        handlers=[  # type: ignore
+            {
+                "sink": sys.stdout,
+                "level": "DEBUG",
+                "format": "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",  # noqa
+                "colorize": True,
+            },
+            {
+                "sink": "gym_bot.log",
+                "level": Settings.LOG_LEVEL,
+                "serialize": False,
+                "format": "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} - {message}",
+                "rotation": "100 MB",
+                "retention": "30 days",
+                "compression": "zip",
+                "enqueue": True,
+            },
+        ]
+    )
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "loguru": {
             "level": "DEBUG",
-            "format": "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",  # noqa
-            "colorize": True,
+            "class": "common.logger.InterceptHandler",
         },
-        {
-            "sink": "gym_bot.log",
+    },
+    "root": {
+        "handlers": ["loguru"],
+        "level": "DEBUG",
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["loguru"],
             "level": "INFO",
-            "serialize": False,
-            "format": "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} - {message}",
-            "rotation": "100 MB",
-            "retention": "30 days",
-            "compression": "zip",
-            "enqueue": True,
+            "propagate": False,
         },
-    ]
-)
+        "django.request": {
+            "handlers": ["loguru"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+    },
+}
 
 
 class InterceptHandler(logging.Handler):

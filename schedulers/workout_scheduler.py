@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from common.logger import logger
+from loguru import logger
 from aiogram import Bot, F, Router
 from aiogram.client.session import aiohttp
 from aiogram.fsm.context import FSMContext

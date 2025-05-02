@@ -6,7 +6,7 @@ from typing import Any
 
 import redis
 from dateutil.parser import parse
-from common.logger import logger
+from loguru import logger
 
 from core.encryptor import Encryptor
 from core.exceptions import UserServiceError, ProfileNotFoundError

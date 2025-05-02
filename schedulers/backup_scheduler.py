@@ -5,7 +5,7 @@ import subprocess
 import shutil
 from datetime import datetime, timedelta
 
-from common.logger import logger
+from loguru import logger
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from common.settings import Settings

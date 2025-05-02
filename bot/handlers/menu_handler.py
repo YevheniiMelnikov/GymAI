@@ -1,7 +1,7 @@
 from contextlib import suppress
 from datetime import datetime
 
-from common.logger import logger
+from loguru import logger
 from aiogram import Bot, Router
 from aiogram.client.session import aiohttp
 from aiogram.exceptions import TelegramBadRequest

@@ -4,7 +4,7 @@ from typing import Optional
 
 from cryptography.fernet import Fernet
 
-from common.logger import logger
+from loguru import logger
 from common.settings import Settings
 
 

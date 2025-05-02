@@ -6,7 +6,7 @@ from typing import Optional
 import aiohttp
 from pydantic_core import ValidationError
 
-from common.logger import logger
+from loguru import logger
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext

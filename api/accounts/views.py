@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_api_key.permissions import HasAPIKey
 
-from common.logger import logger
+from loguru import logger
 
 from .models import Profile, ClientProfile, CoachProfile
 from .serializers import ProfileSerializer, CoachProfileSerializer, ClientProfileSerializer

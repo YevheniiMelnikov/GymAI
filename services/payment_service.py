@@ -2,7 +2,7 @@ import datetime
 from urllib.parse import urljoin, urlencode
 from typing import Any
 
-from common.logger import logger
+from loguru import logger
 from liqpay import LiqPay
 
 from services.api_service import APIClient
