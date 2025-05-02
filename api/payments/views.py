@@ -19,7 +19,7 @@ from payments.serializers import ProgramSerializer, SubscriptionSerializer, Paym
 
 from accounts.models import ClientProfile
 
-from common.settings import settings
+from common.settings import Settings
 
 
 class ProgramViewSet(ModelViewSet):  # TODO: SEPARATE THIS
@@ -119,8 +119,8 @@ class PaymentWebhookView(APIView):
                 logger.error("Missing data or signature in payment webhook request")
                 return JsonResponse({"detail": "Missing data or signature."}, status=status.HTTP_400_BAD_REQUEST)
 
-            liqpay_client = LiqPay(settings.PAYMENT_PUB_KEY, settings.PAYMENT_PRIVATE_KEY)
-            sign = liqpay_client.str_to_sign(settings.PAYMENT_PRIVATE_KEY + data + settings.PAYMENT_PRIVATE_KEY)
+            liqpay_client = LiqPay(Settings.PAYMENT_PUB_KEY, Settings.PAYMENT_PRIVATE_KEY)
+            sign = liqpay_client.str_to_sign(Settings.PAYMENT_PRIVATE_KEY + data + Settings.PAYMENT_PRIVATE_KEY)
             if sign != signature:
                 logger.error("Invalid signature received in payment webhook")
                 return JsonResponse({"detail": "Invalid signature"}, status=status.HTTP_400_BAD_REQUEST)

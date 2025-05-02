@@ -37,6 +37,7 @@ services:
         INSTALL_DEV: "true"
     env_file: .env
     volumes:
+      - .:/app
       - ./common:/opt/common
     environment:
       RUN_MIGRATIONS: "true"
@@ -45,6 +46,8 @@ services:
     ports: ["8000:8000"]
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
 
@@ -59,6 +62,7 @@ services:
     env_file: .env
     command: ["python", "-u", "/app/bot/main.py"]
     volumes:
+      - ./google_creds.json:/app/google_creds.json:ro
       - ./backup/dumps:/app/bot/backup/dumps
       - ./common:/opt/common
     ports: ["8080:8080"]

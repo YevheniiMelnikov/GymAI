@@ -1,11 +1,11 @@
 import os
 from pathlib import Path
 
-from common.settings import settings
+from common.settings import Settings
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = settings.SECRET_KEY
+SECRET_KEY = Settings.SECRET_KEY
 DEBUG = os.environ.get("DEBUG_STATUS", "False").lower() == "true"
 
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "achieve-together.org.ua", "www.achieve-together.org.ua", "api"]
@@ -87,11 +87,11 @@ TEMPLATES = [
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql_psycopg2",
-        "NAME": settings.DB_NAME,
-        "USER": settings.DB_USER,
-        "PASSWORD": settings.DB_PASSWORD,
-        "HOST": settings.DB_HOST,
-        "PORT": settings.DB_PORT,
+        "NAME": Settings.DB_NAME,
+        "USER": Settings.DB_USER,
+        "PASSWORD": Settings.DB_PASSWORD,
+        "HOST": Settings.DB_HOST,
+        "PORT": Settings.DB_PORT,
         "TEST": {
             "NAME": "test_db",
         },
@@ -123,6 +123,6 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticatedOrReadOnly"],
 }
 
-DOMAIN = settings.DOMAIN
-SITE_NAME = settings.SITE_NAME
+DOMAIN = Settings.DOMAIN
+SITE_NAME = Settings.SITE_NAME
 CORS_ALLOWED_ORIGINS = ["*"]

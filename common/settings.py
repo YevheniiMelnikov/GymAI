@@ -15,11 +15,6 @@ class Settings:
     OWNER_LANGUAGE = "ru"
     DEBUG_LEVEL: str = os.getenv("DEBUG_LEVEL", "INFO")
 
-    PAYMENT_PRIVATE_KEY: str = os.getenv("PAYMENT_PRIVATE_KEY")
-    PAYMENT_PUB_KEY: str = os.getenv("PAYMENT_PUB_KEY")
-    CHECKOUT_URL: str = os.getenv("CHECKOUT_URL")
-    PAYMENT_CALLBACK_URL: str = os.getenv("PAYMENT_CALLBACK_URL")
-
     GOOGLE_APPLICATION_CREDENTIALS: str = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
     SPREADSHEET_ID: str = os.getenv("SPREADSHEET_ID")
 
@@ -41,6 +36,11 @@ class Settings:
     WEBHOOK_PORT: int = os.getenv("WEBHOOK_PORT")
     WEBHOOK_PATH: str = f"/gym_bot/{BOT_TOKEN}"  # REMOVE BOT_TOKEN
     WEBHOOK_URL: str = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
+
+    PAYMENT_PRIVATE_KEY: str = os.getenv("PAYMENT_PRIVATE_KEY")
+    PAYMENT_PUB_KEY: str = os.getenv("PAYMENT_PUB_KEY")
+    CHECKOUT_URL: str = os.getenv("CHECKOUT_URL")
+    PAYMENT_CALLBACK_URL: str = f"{WEBHOOK_HOST}/payment-webhook/"
 
     REDIS_URL: str = os.getenv("REDIS_URL")
     DB_PORT: str = os.getenv("DB_PORT")

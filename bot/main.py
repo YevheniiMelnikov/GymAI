@@ -54,7 +54,7 @@ async def main() -> None:
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=Settings.WEBHOOK_PATH)
     setup_application(app, dp, bot=bot)
     runner = await start_web_app(app)
-    logger.info("Bot started")
+    logger.success("Bot started")
     stop_event = asyncio.Event()
 
     try:
