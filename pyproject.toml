@@ -4,10 +4,12 @@ version = "0.1.0"
 description = ""
 authors = [{ name = "Yevhenii Melnykov", email = "evgeniy@workmail.com" }]
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 
 dependencies = [
+    "uvicorn>=0.34.2",
     "aiohttp>=3.10.5",
+    "liqpay-python @ git+https://github.com/liqpay/sdk-python",
     "loguru>=0.7.2",
     "setuptools>=75.8.2",
     "psycopg[binary]>=3.2.6",
@@ -30,16 +32,18 @@ dependencies = [
     "django-filter==25.1",
     "gspread>=6.2.0",
     "google-auth>=2.37.0",
-    "django-jazzmin>=3.0.1",
+    "django-jazzmin>=3.0.1"
 ]
 
-[dependency-groups.dev]
-ruff = ">=0.11.2"
-pytest = ">=8.3.5"
-mypy = ">=1.15.0"
-pre-commit = ">=4.2.0"
-types-python-dateutil = "*"
-types-redis = "*"
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.11.2",
+    "pytest>=8.3.5",
+    "mypy>=1.15.0",
+    "pre-commit>=4.2.0",
+    "types-python-dateutil",
+    "types-redis"
+]
 
 [tool.ruff]
 line-length = 120

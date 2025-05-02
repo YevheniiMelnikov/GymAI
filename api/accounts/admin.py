@@ -5,7 +5,7 @@ from .models import Profile, ClientProfile, CoachProfile
 
 @admin.register(Profile)
 class ProfileAdmin(admin.ModelAdmin):
-    list_display = ("id", "status", "tg_id", "language", "name")
+    list_display = ("id", "status", "tg_id", "language")
     list_filter = ("status", "language")
     search_fields = ("tg_id", "name")
 

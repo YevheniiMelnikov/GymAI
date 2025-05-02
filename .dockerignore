@@ -1,56 +1,39 @@
 # Python
 __pycache__/
 *.py[cod]
-*.pyo
-*.pyd
-*.so
-
-# Byte-compiled, compiled, cache
 .mypy_cache/
 .pytest_cache/
 .coverage
 *.log
 
 # Virtualenvs
-.venv/
-venv/
+.venv*
 env/
-.env/
-.venv-win/
 site/
 
-# Dependency manager
+# Dependency managers
 poetry.lock
 Pipfile.lock
-requirements.txt
 *.egg-info/
 dist/
 build/
 
 # Editor/IDE
-*.swp
-*.bak
-*~
 .vscode/
 .idea/
-*.code-workspace
+*.swp
+*.bak
 
 # Git
 .git/
 .gitignore
 
 # Docker
+Dockerfile
 .dockerignore
-Dockerfile*
 docker-compose*.yml
 
-# OS/system
-.DS_Store
-Thumbs.db
-
-# Project specific
-static/
-media/
-node_modules/
+# Sensitive / local only
 .env
-uv.lock
+.env.*
+google_creds.json

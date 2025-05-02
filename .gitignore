@@ -163,3 +163,4 @@ google_creds.json
 docker-compose-local.yml
 gym_bot.log
 .venv-win/
+staticfiles/
