@@ -1,16 +1,56 @@
+# Python
 __pycache__/
-*.egg
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Byte-compiled, compiled, cache
+.mypy_cache/
+.pytest_cache/
+.coverage
+*.log
+
+# Virtualenvs
+.venv/
+venv/
+env/
+.env/
+.venv-win/
+site/
+
+# Dependency manager
+poetry.lock
+Pipfile.lock
+requirements.txt
 *.egg-info/
 dist/
 build/
-.eggs/
-.env
-venv/
-.venv/
-*.log
-*.pot
-.mypy_cache/
-.pytest_cache/
-.idea/
+
+# Editor/IDE
+*.swp
+*.bak
 *~
-.git
+.vscode/
+.idea/
+*.code-workspace
+
+# Git
+.git/
+.gitignore
+
+# Docker
+.dockerignore
+Dockerfile*
+docker-compose*.yml
+
+# OS/system
+.DS_Store
+Thumbs.db
+
+# Project specific
+static/
+media/
+node_modules/
+.env
+uv.lock

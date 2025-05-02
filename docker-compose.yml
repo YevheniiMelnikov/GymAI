@@ -1,55 +1,54 @@
 services:
   db:
-    image: "postgres:17"
+    image: postgres:17
     container_name: db
-    ports:
-      - "5432:5432"
-    env_file:
-      - ./.env
-    networks:
-      - monitoring
+    env_file: .env
+    ports: ["5432:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks: [monitoring]
 
   redis:
-    image: "redis:7.4.2"
+    image: redis:7.4.2
     container_name: redis
-    ports:
-      - "6379:6379"
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    ports: ["6379:6379"]
     volumes:
       - redisdata:/data
-      - ./redis.conf:/usr/local/etc/redis/redis.conf
-    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
-    networks:
-      - monitoring
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 3
     restart: unless-stopped
+    networks: [monitoring]
 
   api:
     container_name: api
     build:
       context: .
       dockerfile: api.Dockerfile
+      args:
+        INSTALL_DEV: "false"
+    env_file: .env
+    environment:
+      RUN_MIGRATIONS: "true"
+    volumes:
+      - ./common:/opt/common
     depends_on:
       db:
         condition: service_healthy
-    ports:
-      - "8000:8000"
-    env_file:
-      - ./.env
-    networks:
-      - monitoring
+    command: >
+      uvicorn api.asgi:application --host 0.0.0.0 --port 8000
     restart: unless-stopped
+    networks: [monitoring]
 
   bot:
     container_name: bot
@@ -60,19 +59,15 @@ services:
       - api
       - db
       - redis
-    ports:
-      - "8080:8000"
-    env_file:
-      - ./.env
-    command:
-      - python
-      - -u
-      - /app/bot/main.py
-    networks:
-      - monitoring
-    restart: unless-stopped
+    env_file: .env
+    command: ["python", "-u", "/app/bot/main.py"]
     volumes:
       - ./backup/dumps:/app/bot/backup/dumps
+      - ./common:/opt/common
+    ports: ["8080:8000"]
+    restart: unless-stopped
+    networks: [monitoring]
+
   nginx:
     image: nginx:latest
     container_name: nginx
@@ -84,16 +79,13 @@ services:
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - ./static:/opt/api/staticfiles:ro
     depends_on:
-      - bot
-    networks:
-      - monitoring
+      - api
     restart: unless-stopped
+    networks: [monitoring]
 
 volumes:
   pgdata:
-    driver: local
   redisdata:
-    driver: local
 
 networks:
   monitoring:

@@ -1,26 +1,142 @@
 # GymBot
 
-## Requirements
-
-- Docker
-- Docker Compose
+GymBot — платформа для взаимодействия между Telegram-ботом и Django API. Проект использует Docker, Uvicorn, Redis и PostgreSQL. Вся инфраструктура собрана по лучшим практикам: с `uv`, `Taskfile`, pre-commit-хуками и строгой типизацией.
 
 ---
 
-## Installation and Run
+## 🚀 Features
 
-### Step 1: Preparation
+- Django API с документацией и административной панелью
+- Telegram-бот на `aiogram` с доступом к API
+- Обмен данными через Redis и PostgreSQL
+- ASGI-сервер на `uvicorn` (Django)
+- Прокси через Nginx + HTTPS
+- Полностью dockerized окружение
+- AOF + LRU конфиг Redis
 
-1. Provide a `.env` file in the root folder with the required environment variables. Use .env.example as template
+---
 
-### Step 2: Build and Run Containers
+## 🧰 Requirements
 
-1. Build the containers:
-    ```bash
-    docker compose build
-    ```
+- Docker
+- Docker Compose
+- Python 3.13+ (для запуска без контейнеров)
 
-2. Start the application:
-    ```bash
-    docker compose up
-    ```
+---
+
+## 🛠 Установка и запуск
+
+### 1. Настрой окружение
+
+Создай `.env` файл:
+
+    cp .env.example .env
+
+### 2. Собери и запусти сервисы
+
+    task run
+
+Либо вручную:
+
+    docker compose up --build
+
+---
+
+## 🤖 Бот
+
+Бот запускается в отдельном контейнере:
+
+- Исходники: `bot/`
+- Точка входа: `bot/main.py`
+- Бэкапы монтируются из `backup/dumps`
+
+---
+
+## 🌐 API
+
+ASGI-приложение (Django) запускается через `uvicorn`.
+
+- Админка: http://localhost:8080/admin/
+- Документация: http://localhost:8080/api/schema/swagger-ui/
+- Healthcheck: http://localhost:8000/health/
+
+---
+
+## 🔁 Redis
+
+Redis настроен с `appendonly.aof`, `maxmemory 256mb`, `allkeys-lru`:
+
+- Конфигурация: `redis.conf`
+- Хранилище: `redisdata` том
+
+---
+
+## 🧪 Тесты
+
+    task test
+
+Или вручную:
+
+    uv run pytest
+
+---
+
+## 🧱 Taskfile команды
+
+Проект использует [Taskfile](https://taskfile.dev/) для удобного запуска:
+
+| Команда     | Описание                                |
+|-------------|------------------------------------------|
+| run         | Запустить все сервисы через docker      |
+| localrun    | Локальная разработка с `docker-compose-local.yml` |
+| test        | Запустить тесты                         |
+| lint        | Проверка линтером (ruff + mypy)         |
+| format      | Отформатировать код                     |
+| update      | Обновить зависимости                    |
+| pre-commit  | Прогнать все хуки                       |
+
+Пример:
+
+    task lint
+
+---
+
+## 🧹 Pre-Commit
+
+Установленные хуки:
+
+- `ruff` — автоформат и lint
+- `mypy` — статическая проверка типов
+- `pytest` — автотесты
+- `uv-lock` — контроль lock-файла
+- базовые хуки: `check-yaml`, `trailing-whitespace`, `end-of-file-fixer`
+
+Установка:
+
+    uv run pre-commit install
+
+Запуск вручную:
+
+    task pre-commit
+
+---
+
+## 🚀 Продакшн-деплой
+
+    docker compose -f docker-compose.yml up -d --build
+
+Проверь доступность:
+
+    curl http://localhost:8000/health/
+
+---
+
+## 🔐 Nginx
+
+Реверс-прокси работает с HTTPS (Let's Encrypt), и перенаправляет:
+
+- `/static/` → статика Django
+- `/api/` → API-сервер
+- `/` → Telegram-бот
+
+Файл: `nginx.conf`

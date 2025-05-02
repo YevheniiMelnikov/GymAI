@@ -1,31 +1,17 @@
 FROM python:3.13-slim
 
-ENV APP_HOME=/opt
-ENV PYTHONPATH=$APP_HOME:/opt/common
-ENV TZ=Europe/Kyiv
+ARG INSTALL_DEV=false
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-WORKDIR $APP_HOME
+WORKDIR /app
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-       gcc \
-       python3-dev \
-       curl \
-    && rm -rf /var/lib/apt/lists/*
+COPY pyproject.toml .
+COPY uv.lock .
+RUN pip install uv && uv pip install -r <(uv pip compile --quiet)
 
-RUN curl -sSL https://install.python-poetry.org | python3 -
-ENV PATH="/root/.local/bin:$PATH"
-RUN poetry --version
+COPY . .
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
-COPY pyproject.toml poetry.lock README.md ./
-RUN poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi
-
-COPY api ./api
-COPY common ./common
-
-RUN python api/manage.py collectstatic --noinput
-
-EXPOSE 8000
-
-CMD ["bash", "-c", "python api/manage.py migrate && python api/manage.py runserver 0.0.0.0:8000"]
+CMD ["uvicorn", "config.asgi:application", "--host", "0.0.0.0", "--port", "8000"]
