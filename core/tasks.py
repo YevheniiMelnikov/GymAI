@@ -4,8 +4,8 @@ import subprocess
 from datetime import datetime, timedelta
 from celery import Celery, shared_task
 from config.env_settings import Settings
-from services.payment_service import PaymentService
-from services.workout_service import WorkoutService
+from core.services.payment_service import PaymentService
+from core.services import WorkoutService
 from core.cache_manager import CacheManager
 
 celery_app = Celery("project")

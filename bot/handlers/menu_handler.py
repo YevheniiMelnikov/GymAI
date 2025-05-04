@@ -29,7 +29,7 @@ from functions.profiles import assign_coach, get_user_profile
 from functions.utils import handle_clients_pagination
 from functions.workout_plans import manage_program, cancel_subscription
 from core.models import Coach, Profile
-from services.payment_service import PaymentService
+from core.services.payment_service import PaymentService
 
 menu_router = Router()
 

@@ -15,8 +15,8 @@ from functions.profiles import get_user_profile
 from functions.text_utils import format_program, get_translated_week_day
 from functions.utils import delete_messages
 from core.models import Profile
-from services.profile_service import ProfileService
-from services.workout_service import WorkoutService
+from core.services.profile_service import ProfileService
+from core.services import WorkoutService
 from bot.texts.text_manager import msg_text, btn_text
 
 

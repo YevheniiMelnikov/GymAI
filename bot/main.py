@@ -11,7 +11,7 @@ from bot.middlewares import ProfileMiddleware
 from bot.handlers.routers_configurator import configure_routers
 from functions.utils import set_bot_commands
 from core.payment_processor import PaymentProcessor
-from schedulers import workout_scheduler
+from core import workout_scheduler
 
 
 async def on_startup() -> None:

@@ -5,13 +5,13 @@ from aiogram.types import Message
 from google.cloud import storage
 
 
-class FileManager:
+class GCStorageService:
     def __init__(self, bucket_name: str):
         self.bucket_name = bucket_name
         self.storage_client = storage.Client()
         self.bucket = self.storage_client.bucket(bucket_name)
 
-    def upload_image_to_gcs(self, source_file_name: str) -> bool:
+    def load_file_to_bucket(self, source_file_name: str) -> bool:
         try:
             blob = self.bucket.blob(os.path.basename(source_file_name))
             blob.upload_from_filename(source_file_name)
@@ -22,7 +22,7 @@ class FileManager:
             return False
 
     @staticmethod
-    async def save_profile_photo(message: Message) -> str | None:
+    async def save_image(message: Message) -> str | None:
         try:
             photo = message.photo[-1]
             file_id = photo.file_id
@@ -38,7 +38,7 @@ class FileManager:
             return None
 
     @staticmethod
-    def clean_up_local_file(file: str) -> None:
+    def clean_up_file(file: str) -> None:
         if os.path.exists(file):
             os.remove(file)
             logger.debug(f"File {file[:10]}...jpg successfully deleted")
@@ -51,5 +51,5 @@ class FileManager:
         return file_size <= max_size_mb
 
 
-avatar_manager = FileManager("coach_avatars")
-gif_manager = FileManager("exercises_guide")
+avatar_manager = GCStorageService("coach_avatars")
+gif_manager = GCStorageService("exercises_guide")

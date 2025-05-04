@@ -12,7 +12,7 @@ from core.models import Profile
 from functions.menus import show_main_menu
 from functions.profiles import get_user_profile
 from bot.texts.text_manager import msg_text
-from services.profile_service import ProfileService
+from core.services.profile_service import ProfileService
 
 
 chat_router = Router()

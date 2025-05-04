@@ -17,16 +17,16 @@ from bot.states import States
 from config.env_settings import Settings
 from core.cache_manager import CacheManager
 from core.exceptions import ProfileNotFoundError
-from core.file_manager import avatar_manager
+from core.services.storage_service import avatar_manager
 from functions.chat import client_request
 from functions.exercises import edit_subscription_days, process_new_subscription
 from functions.menus import show_main_menu, show_my_profile_menu
 from functions.profiles import get_user_profile, update_profile_data, check_assigned_clients
 from functions.text_utils import get_state_and_message
 from functions.utils import delete_messages, generate_order_id, set_bot_commands
-from services.payment_service import PaymentService
+from core.services.payment_service import PaymentService
 from bot.texts.text_manager import msg_text
-from services.profile_service import ProfileService
+from core.services.profile_service import ProfileService
 
 questionnaire_router = Router()
 
@@ -296,15 +296,15 @@ async def enter_subscription_price(message: Message, state: FSMContext) -> None:
 async def profile_photo(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
-    local_file = await avatar_manager.save_profile_photo(message)
+    local_file = await avatar_manager.save_image(message)
 
     if local_file and avatar_manager.check_file_size(local_file, 20):
-        if avatar_manager.upload_image_to_gcs(local_file):
+        if avatar_manager.load_file_to_bucket(local_file):
             uploaded_msg = await message.answer(msg_text("photo_uploaded", data.get("lang")))
             await state.update_data(
                 profile_photo=local_file, chat_id=message.chat.id, message_ids=[uploaded_msg.message_id]
             )
-            avatar_manager.clean_up_local_file(local_file)
+            avatar_manager.clean_up_file(local_file)
             await update_profile_data(message, state, "coach")
         else:
             await message.answer(msg_text("photo_upload_fail", data.get("lang")))

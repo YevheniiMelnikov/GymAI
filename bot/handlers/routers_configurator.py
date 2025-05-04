@@ -8,7 +8,7 @@ from bot.handlers.payment_handler import payment_router
 from bot.handlers.questionnaire_handler import questionnaire_router
 from bot.handlers.workouts_handler import program_router
 from functions.chat import message_router
-from schedulers.workout_scheduler import survey_router
+from core.workout_scheduler import survey_router
 
 
 def configure_routers(dp: Dispatcher) -> None:

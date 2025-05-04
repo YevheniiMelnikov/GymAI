@@ -15,8 +15,8 @@ from functions.menus import show_main_menu
 from functions.profiles import get_user_profile
 from functions.workout_plans import cache_program_data
 from core.models import Client, Coach
-from services.payment_service import PaymentService
-from services.workout_service import WorkoutService
+from core.services.payment_service import PaymentService
+from core.services import WorkoutService
 from bot.texts.text_manager import msg_text, btn_text
 
 payment_router = Router()

@@ -14,7 +14,7 @@ from bot.keyboards import new_coach_kb
 from bot.states import States
 from bot.texts.text_manager import msg_text
 from core.cache_manager import CacheManager
-from core.file_manager import avatar_manager
+from core.services.storage_service import avatar_manager
 from config.env_settings import Settings
 from functions.exercises import edit_subscription_exercises
 from functions.menus import show_exercises_menu, show_main_menu, manage_subscription
@@ -22,7 +22,7 @@ from functions import profiles
 from functions.text_utils import format_new_client_message, get_client_page, get_workout_types
 from core.models import Coach, Profile, Client
 from functions.utils import program_menu_pagination
-from services.profile_service import ProfileService
+from core.services.profile_service import ProfileService
 
 bot = Bot(Settings.BOT_TOKEN)
 message_router = Router()

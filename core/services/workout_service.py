@@ -2,7 +2,7 @@ from datetime import datetime
 from urllib.parse import urljoin
 from loguru import logger
 
-from services.api_service import APIClient
+from core.services.api_service import APIClient
 from core.exceptions import UserServiceError
 from core.models import Exercise
 

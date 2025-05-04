@@ -2,15 +2,16 @@ import asyncio
 from datetime import datetime, timezone
 from loguru import logger
 from dateutil.relativedelta import relativedelta
+
+from core.services.workout_service import WorkoutService
 from functions.chat import send_message, client_request
 from core.cache_manager import CacheManager
 from functions.workout_plans import cancel_subscription
 from core.models import Payment, Profile
 from config.env_settings import Settings
-from core.google_sheets_manager import SheetsManager
-from services.payment_service import PaymentService
-from services.profile_service import ProfileService
-from services.workout_service import WorkoutService
+from core.services.gsheets_service import SheetsManager
+from core.services.payment_service import PaymentService
+from core.services.profile_service import ProfileService
 from bot.texts.text_manager import msg_text
 
 

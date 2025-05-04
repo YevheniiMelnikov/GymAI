@@ -5,7 +5,7 @@ from loguru import logger
 
 from core.models import Profile
 from core.encryptor import Encryptor
-from services.api_service import APIClient
+from core.services.api_service import APIClient
 
 
 class ProfileService(APIClient):

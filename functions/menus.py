@@ -13,7 +13,7 @@ from bot.keyboards import *
 from bot.states import States
 from core.cache_manager import CacheManager
 from core.exceptions import UserServiceError
-from core.file_manager import avatar_manager
+from core.services.storage_service import avatar_manager
 from functions import profiles
 from core.models import Client, Coach, Profile, Subscription
 from functions.text_utils import (
@@ -22,7 +22,7 @@ from functions.text_utils import (
     format_program,
     get_translated_week_day,
 )
-from services.profile_service import ProfileService
+from core.services.profile_service import ProfileService
 from config.env_settings import Settings
 from bot.texts.text_manager import msg_text
 
