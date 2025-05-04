@@ -2,7 +2,7 @@ import logging
 import sys
 from loguru import logger
 
-from env_settings import Settings
+from config.env_settings import Settings
 
 
 def configure_loguru():
@@ -35,7 +35,7 @@ LOGGING = {
     "handlers": {
         "loguru": {
             "level": "DEBUG",
-            "class": "common.logger.InterceptHandler",
+            "class": "config.logger.InterceptHandler",
         },
     },
     "root": {

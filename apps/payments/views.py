@@ -14,10 +14,10 @@ from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 from rest_framework_api_key.permissions import HasAPIKey
 
-from payments.models import Program, Subscription, Payment
-from payments.serializers import ProgramSerializer, SubscriptionSerializer, PaymentSerializer
+from apps.payments.models import Program, Subscription, Payment
+from apps.payments.serializers import ProgramSerializer, SubscriptionSerializer, PaymentSerializer
 
-from accounts.models import ClientProfile
+from apps.profiles.models import ClientProfile
 
 from config.env_settings import Settings
 

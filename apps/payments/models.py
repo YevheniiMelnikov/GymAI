@@ -2,7 +2,7 @@ from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.db.models import JSONField
 
-from accounts.models import ClientProfile, Profile
+from apps.profiles.models import ClientProfile, Profile
 
 
 class Program(models.Model):
@@ -13,9 +13,9 @@ class Program(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)  # type: ignore
 
     class Meta:
-        verbose_name = "program"
-        verbose_name_plural = "programs"
-        app_label = "payments"
+        verbose_name = "Program"
+        verbose_name_plural = "Programs"
+        app_label = "apps.payments"
 
 
 class Subscription(models.Model):
@@ -29,9 +29,9 @@ class Subscription(models.Model):
     payment_date = models.CharField(max_length=100, null=True, blank=True)  # type: ignore
 
     class Meta:
-        verbose_name = "subscription"
-        verbose_name_plural = "subscriptions"
-        app_label = "payments"
+        verbose_name = "Subscription"
+        verbose_name_plural = "Subscriptions"
+        app_label = "apps.payments"
 
 
 class Payment(models.Model):
@@ -46,6 +46,6 @@ class Payment(models.Model):
     updated_at = models.DateTimeField(auto_now=True)  # type: ignore
 
     class Meta:
-        verbose_name = "payment"
-        verbose_name_plural = "payments"
-        app_label = "payments"
+        verbose_name = "Payment"
+        verbose_name_plural = "Payments"
+        app_label = "apps.payments"

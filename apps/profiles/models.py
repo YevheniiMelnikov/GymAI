@@ -13,7 +13,7 @@ class Profile(Model):
     class Meta:
         verbose_name = "profile"
         verbose_name_plural = "profiles"
-        app_label = "profiles"
+        app_label = "apps.profiles"
 
 
 class ClientProfile(Model):
@@ -28,9 +28,9 @@ class ClientProfile(Model):
     assigned_to = ArrayField(models.IntegerField(), default=list, blank=True)
 
     class Meta:
-        verbose_name = "client profile"
-        verbose_name_plural = "client profiles"
-        app_label = "profiles"
+        verbose_name = "ClientProfile"
+        verbose_name_plural = "ClientProfiles"
+        app_label = "apps.profiles"
 
 
 class CoachProfile(Model):
@@ -46,6 +46,6 @@ class CoachProfile(Model):
     assigned_to = ArrayField(models.IntegerField(), default=list, blank=True)
 
     class Meta:
-        verbose_name = "coach profile"
-        verbose_name_plural = "coach profiles"
-        app_label = "profiles"
+        verbose_name = "CoachProfile"
+        verbose_name_plural = "CoachProfiles"
+        app_label = "apps.profiles"
