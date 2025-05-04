@@ -2,7 +2,7 @@ from contextlib import suppress
 from typing import Any
 
 import aiohttp
-from common.logger import logger
+from loguru import logger
 from aiogram import F, Router, Bot
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
@@ -15,7 +15,7 @@ from bot.states import States
 from bot.texts.text_manager import msg_text
 from core.cache_manager import CacheManager
 from core.file_manager import avatar_manager
-from common.settings import Settings
+from config.env_settings import Settings
 from functions.exercises import edit_subscription_exercises
 from functions.menus import show_exercises_menu, show_main_menu, manage_subscription
 from functions import profiles

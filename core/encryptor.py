@@ -4,8 +4,8 @@ from typing import Optional
 
 from cryptography.fernet import Fernet
 
-from common.logger import logger
-from common.settings import Settings
+from loguru import logger
+from config.env_settings import Settings
 
 
 class Encryptor:

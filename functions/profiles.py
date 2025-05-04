@@ -1,6 +1,6 @@
 from contextlib import suppress
 
-from common.logger import logger
+from loguru import logger
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message

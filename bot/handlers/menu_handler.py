@@ -1,7 +1,7 @@
 from contextlib import suppress
 from datetime import datetime
 
-from common.logger import logger
+from loguru import logger
 from aiogram import Bot, Router
 from aiogram.client.session import aiohttp
 from aiogram.exceptions import TelegramBadRequest
@@ -13,7 +13,7 @@ from bot.keyboards import select_service_kb, choose_coach_kb, select_days_kb, gi
 from bot.states import States
 from bot.texts.text_manager import msg_text
 from core.cache_manager import CacheManager
-from common.settings import Settings
+from config.env_settings import Settings
 from functions.chat import contact_client, process_feedback_content
 from functions.menus import (
     show_main_menu,

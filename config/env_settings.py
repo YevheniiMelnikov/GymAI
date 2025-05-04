@@ -22,7 +22,7 @@ class Settings:
     DEFAULT_BOT_LANGUAGE: str = "ua"
     OWNER_LANGUAGE = "ru"
 
-    DEBUG_LEVEL: str = os.getenv("DEBUG_LEVEL", "INFO")
+    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     DOMAIN: str = must_getenv("DOMAIN")
     API_KEY: str = must_getenv("API_KEY")
     API_URL: str = must_getenv("API_URL")

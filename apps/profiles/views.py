@@ -1,13 +1,12 @@
 from django.shortcuts import get_object_or_404
 
 from rest_framework import generics, status
-from rest_framework.permissions import IsAuthenticatedOrReadOnly
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_api_key.permissions import HasAPIKey
 
-from common.logger import logger
+from loguru import logger
 
 from .models import Profile, ClientProfile, CoachProfile
 from .serializers import ProfileSerializer, CoachProfileSerializer, ClientProfileSerializer
@@ -55,26 +54,26 @@ class ProfileAPIUpdate(APIView):
 class ProfileAPIDestroy(generics.RetrieveDestroyAPIView):
     serializer_class = ProfileSerializer
     queryset = Profile.objects.all()
-    permission_classes = [HasAPIKey | IsAuthenticatedOrReadOnly]
+    permission_classes = [HasAPIKey]
     lookup_field = "id"
 
 
 class ProfileAPIList(generics.ListCreateAPIView):
     serializer_class = ProfileSerializer
     queryset = Profile.objects.all()
-    permission_classes = [HasAPIKey | IsAuthenticatedOrReadOnly]
+    permission_classes = [HasAPIKey]
 
 
 class CoachProfileView(generics.ListAPIView):
     queryset = CoachProfile.objects.all()
     serializer_class = CoachProfileSerializer
-    permission_classes = [HasAPIKey | IsAuthenticatedOrReadOnly]
+    permission_classes = [HasAPIKey]
 
 
 class CoachProfileUpdate(generics.RetrieveUpdateAPIView):
     queryset = CoachProfile.objects.all()
     serializer_class = CoachProfileSerializer
-    permission_classes = [HasAPIKey | IsAuthenticatedOrReadOnly]
+    permission_classes = [HasAPIKey]
     lookup_field = "id"
 
     def get_object(self):
@@ -91,13 +90,13 @@ class CoachProfileUpdate(generics.RetrieveUpdateAPIView):
 class ClientProfileView(generics.ListAPIView):
     queryset = ClientProfile.objects.all()
     serializer_class = ClientProfileSerializer
-    permission_classes = [HasAPIKey | IsAuthenticatedOrReadOnly]
+    permission_classes = [HasAPIKey]
 
 
 class ClientProfileUpdate(generics.RetrieveUpdateAPIView):
     queryset = ClientProfile.objects.all()
     serializer_class = ClientProfileSerializer
-    permission_classes = [HasAPIKey | IsAuthenticatedOrReadOnly]
+    permission_classes = [HasAPIKey]
     lookup_field = "id"
 
     def get_object(self):

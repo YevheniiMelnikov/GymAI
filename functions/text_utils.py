@@ -9,17 +9,6 @@ from services.profile_service import ProfileService
 from bot.texts.text_manager import msg_text, btn_text
 
 
-def validate_password(password: str) -> bool:
-    if len(password) < 8:
-        return False
-    if not any(char.isdigit() for char in password):
-        return False
-    if not any(char.isalpha() for char in password):
-        return False
-
-    return True
-
-
 def get_profile_attributes(status: str, user: Optional[Client | Coach], lang: str) -> dict[str, str]:
     def get_attr(attr_name: str) -> str:
         return getattr(user, attr_name, "") if user else ""

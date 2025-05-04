@@ -2,6 +2,8 @@ from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.db.models import Model
 
+from apps.profiles.fields import EncryptedField
+
 
 class Profile(Model):
     status = models.CharField(max_length=50, default="client")
@@ -11,7 +13,7 @@ class Profile(Model):
     class Meta:
         verbose_name = "profile"
         verbose_name_plural = "profiles"
-        app_label = "accounts"
+        app_label = "apps.profiles"
 
 
 class ClientProfile(Model):
@@ -26,9 +28,9 @@ class ClientProfile(Model):
     assigned_to = ArrayField(models.IntegerField(), default=list, blank=True)
 
     class Meta:
-        verbose_name = "client profile"
-        verbose_name_plural = "client profiles"
-        app_label = "accounts"
+        verbose_name = "ClientProfile"
+        verbose_name_plural = "ClientProfiles"
+        app_label = "apps.profiles"
 
 
 class CoachProfile(Model):
@@ -37,13 +39,13 @@ class CoachProfile(Model):
     surname = models.CharField(max_length=50, null=True, blank=True)
     additional_info = models.CharField(max_length=250, null=True, blank=True)
     profile_photo = models.CharField(max_length=250, null=True, blank=True)
-    payment_details = models.CharField(max_length=250, null=True, blank=True)
+    payment_details = EncryptedField(max_length=250, null=True, blank=True)
     subscription_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     program_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     verified = models.BooleanField(default=False)
     assigned_to = ArrayField(models.IntegerField(), default=list, blank=True)
 
     class Meta:
-        verbose_name = "coach profile"
-        verbose_name_plural = "coach profiles"
-        app_label = "accounts"
+        verbose_name = "CoachProfile"
+        verbose_name_plural = "CoachProfiles"
+        app_label = "apps.profiles"

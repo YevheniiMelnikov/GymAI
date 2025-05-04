@@ -1,10 +1,10 @@
-from django.forms import CharField
+from django.db.models import CharField
 from django.utils.translation import gettext_lazy as _
 
 from core.encryptor import Encryptor
 
 
-class EncryptedTokenField(CharField):
+class EncryptedField(CharField):
     description = _("Encrypted string")
 
     def __init__(self, *args, **kwargs):

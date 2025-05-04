@@ -38,11 +38,11 @@ services:
     env_file: .env
     volumes:
       - .:/app
-      - ./common:/opt/common
+      - ./config:/app/config
     environment:
       RUN_MIGRATIONS: "true"
     command: >
-      uvicorn api.asgi:application --host 0.0.0.0 --port 8000
+      uvicorn config.asgi:application --host 0.0.0.0 --port 8000
     ports: ["8000:8000"]
     depends_on:
       db:
@@ -65,8 +65,8 @@ services:
 #    command: ["python", "-u", "/app/bot/main.py"]
 #    volumes:
 #      - ./google_creds.json:/app/google_creds.json:ro
-#      - ./backup/dumps:/app/bot/backup/dumps
-#      - ./common:/opt/common
+#      - ./dumps:/app/dumps
+#      - ./config:/app/config
 #    ports: ["8080:8080"]
 #    restart: unless-stopped
 

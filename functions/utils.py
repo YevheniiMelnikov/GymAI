@@ -6,7 +6,7 @@ from typing import Optional
 import aiohttp
 from pydantic_core import ValidationError
 
-from common.logger import logger
+from loguru import logger
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
@@ -14,7 +14,7 @@ from aiogram.types import BotCommand, CallbackQuery
 
 from bot.keyboards import program_edit_kb, program_view_kb, subscription_manage_kb
 from bot.states import States
-from common.settings import Settings
+from config.env_settings import Settings
 from functions import menus, profiles, text_utils
 from core.models import Client
 from bot.texts.text_manager import msg_text, TextManager

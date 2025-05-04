@@ -1,6 +1,6 @@
 import os
 
-from common.logger import logger
+from loguru import logger
 from aiogram.types import Message
 from google.cloud import storage
 

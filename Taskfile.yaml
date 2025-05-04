@@ -44,3 +44,9 @@ tasks:
     desc: Run pre-commit hooks
     cmds:
       - uv run pre-commit run --all-files
+
+  migrate:
+    desc: Make and apply Django migrations
+    cmds:
+      - uv run --env-file .env python manage.py makemigrations
+      - uv run --env-file .env python manage.py migrate

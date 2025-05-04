@@ -1,4 +1,4 @@
-from common.logger import logger
+from loguru import logger
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message

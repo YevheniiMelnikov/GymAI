@@ -1,7 +1,7 @@
 from contextlib import suppress
 from datetime import datetime
 
-from common.logger import logger
+from loguru import logger
 from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
@@ -23,7 +23,7 @@ from functions.text_utils import (
     get_translated_week_day,
 )
 from services.profile_service import ProfileService
-from common.settings import Settings
+from config.env_settings import Settings
 from bot.texts.text_manager import msg_text
 
 

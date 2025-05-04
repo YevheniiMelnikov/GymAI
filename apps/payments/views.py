@@ -1,25 +1,25 @@
 import base64
 import json
 
-from common.logger import logger
+from loguru import logger
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404
 from django_filters.rest_framework import DjangoFilterBackend
 from liqpay import LiqPay
 from rest_framework import status, generics
 from rest_framework.exceptions import PermissionDenied, NotFound
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ModelViewSet
 from rest_framework_api_key.permissions import HasAPIKey
 
-from payments.models import Program, Subscription, Payment
-from payments.serializers import ProgramSerializer, SubscriptionSerializer, PaymentSerializer
+from apps.payments.models import Program, Subscription, Payment
+from apps.payments.serializers import ProgramSerializer, SubscriptionSerializer, PaymentSerializer
 
-from accounts.models import ClientProfile
+from apps.profiles.models import ClientProfile
 
-from common.settings import Settings
+from config.env_settings import Settings
 
 
 class ProgramViewSet(ModelViewSet):  # TODO: SEPARATE THIS
@@ -92,7 +92,7 @@ class ProgramViewSet(ModelViewSet):  # TODO: SEPARATE THIS
 class SubscriptionViewSet(ModelViewSet):  # TODO: SEPARATE THIS
     queryset = Subscription.objects.all().select_related("client_profile")
     serializer_class = SubscriptionSerializer
-    permission_classes = [IsAuthenticated | HasAPIKey]
+    permission_classes = [HasAPIKey]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ["enabled", "payment_date"]
 
@@ -109,7 +109,7 @@ class SubscriptionViewSet(ModelViewSet):  # TODO: SEPARATE THIS
 class PaymentWebhookView(APIView):
     permission_classes = [AllowAny]
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs):  # TODO: MOVE BUSINESS LOGIC TO SERVICE
         try:
             logger.debug("Received payment webhook request")
             data = request.POST.get("data")
@@ -163,7 +163,7 @@ class PaymentWebhookView(APIView):
 class PaymentListView(generics.ListAPIView):
     queryset = Payment.objects.all()
     serializer_class = PaymentSerializer
-    permission_classes = [IsAuthenticated | HasAPIKey]
+    permission_classes = [HasAPIKey]
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -177,7 +177,7 @@ class PaymentListView(generics.ListAPIView):
 class PaymentDetailView(generics.RetrieveUpdateAPIView):
     queryset = Payment.objects.all()
     serializer_class = PaymentSerializer
-    permission_classes = [IsAuthenticated | HasAPIKey]
+    permission_classes = [HasAPIKey]
 
     def patch(self, request, *args, **kwargs):
         kwargs["partial"] = True
@@ -193,4 +193,4 @@ class PaymentDetailView(generics.RetrieveUpdateAPIView):
 class PaymentCreateView(generics.CreateAPIView):
     queryset = Payment.objects.all()
     serializer_class = PaymentSerializer
-    permission_classes = [IsAuthenticated | HasAPIKey]
+    permission_classes = [HasAPIKey]

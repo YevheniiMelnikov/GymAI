@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from common.logger import logger
+from loguru import logger
 from aiogram import Bot, F, Router
 from aiogram.client.session import aiohttp
 from aiogram.fsm.context import FSMContext
@@ -9,7 +9,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from bot.keyboards import workout_results_kb, workout_survey_kb
 from bot.states import States
-from common.settings import Settings
+from config.env_settings import Settings
 from core.cache_manager import CacheManager
 from functions.profiles import get_user_profile
 from services.profile_service import ProfileService

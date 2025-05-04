@@ -13,7 +13,6 @@ dependencies = [
     "loguru>=0.7.2",
     "setuptools>=75.8.2",
     "psycopg[binary]>=3.2.6",
-    "asyncpg>=0.30.0",
     "pyyaml>=6.0.2",
     "python-dotenv>=1.0.1",
     "httpx>=0.28.1",
@@ -22,17 +21,13 @@ dependencies = [
     "apscheduler>=3.11.0",
     "python-dateutil>=2.9.0.post0",
     "aiogram>=3.17.0",
-    "django>=5.1.6",
-    "django-extensions>=3.2.3",
     "djangorestframework>=3.15.2",
     "djangorestframework-api-key>=3.0.0",
-    "drf-yasg>=1.21.9",
-    "djoser>=2.3.1",
     "cryptography>=44.0.0",
     "django-filter==25.1",
     "gspread>=6.2.0",
     "google-auth>=2.37.0",
-    "django-jazzmin>=3.0.1"
+    "django>=5.2",
 ]
 
 [project.optional-dependencies]
@@ -47,7 +42,7 @@ dev = [
 
 [tool.ruff]
 line-length = 120
-exclude = [".git", ".mypy_cache", ".pytest_cache", ".env", "env", "venv", ".venv"]
+exclude = [".git", ".mypy_cache", ".pytest_cache", ".env", "env", "venv", ".venv", "venv-win"]
 
 [tool.ruff.lint]
 select = ["E", "F"]
@@ -60,4 +55,4 @@ combine-as-imports = true
 python_version = "3.13"
 ignore_missing_imports = true
 strict_optional = true
-exclude = '(\.venv|\.env|env|\.mypy_cache|\.pytest_cache|\.git)'
+exclude = '(\.venv|\venv-win|\.env|env|\.mypy_cache|\.pytest_cache|\.git)'

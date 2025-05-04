@@ -1,6 +1,6 @@
 from datetime import datetime
 from urllib.parse import urljoin
-from common.logger import logger
+from loguru import logger
 
 from services.api_service import APIClient
 from core.exceptions import UserServiceError

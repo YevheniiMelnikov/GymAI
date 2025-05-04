@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from common.logger import logger
+from loguru import logger
 from core.cache_manager import CacheManager
 from services.payment_service import PaymentService
 from services.workout_service import WorkoutService

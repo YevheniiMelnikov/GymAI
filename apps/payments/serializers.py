@@ -1,8 +1,8 @@
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
-from accounts.serializers import ClientProfileSerializer
-from payments.models import Program, Subscription, Payment
+from apps.profiles.serializers import ClientProfileSerializer
+from apps.payments.models import Program, Subscription, Payment
 
 
 class ProgramSerializer(serializers.ModelSerializer):
