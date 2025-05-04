@@ -14,7 +14,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("payment-webhook/", PaymentWebhookView.as_view(), name="payment-webhook"),
     path("api/v1/drf-auth/", include("rest_framework.urls")),
-    path("api/v1/", include("accounts.urls")),
+    path("api/v1/", include("profiles.urls")),
     path("api/v1/", include("payments.urls")),
     path("", include("home.urls")),
 ]

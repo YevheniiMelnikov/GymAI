@@ -41,12 +41,12 @@ services:
     environment:
       RUN_MIGRATIONS: "true"
     volumes:
-      - ./common:/opt/common
+      - ./config:/app/config
     depends_on:
       db:
         condition: service_healthy
     command: >
-      uvicorn api.asgi:application --host 0.0.0.0 --port 8000
+      uvicorn config.asgi:application --host 0.0.0.0 --port 8000
     restart: unless-stopped
     networks: [monitoring]
 
@@ -63,8 +63,8 @@ services:
     command: ["python", "-u", "/app/bot/main.py"]
     volumes:
       - ./google_creds.json:/app/google_creds.json:ro
-      - ./backup/dumps:/app/bot/backup/dumps
-      - ./common:/opt/common
+      - ./dumps:/app/dumps
+      - ./config:/app/config
     ports: ["8080:8000"]
     restart: unless-stopped
     networks: [monitoring]
@@ -78,7 +78,7 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
-      - ./static:/opt/api/staticfiles:ro
+      - ./static:/app/staticfiles:ro
     depends_on:
       - api
     restart: unless-stopped

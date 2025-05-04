@@ -14,7 +14,7 @@ from bot.keyboards import (
     select_status_kb,
 )
 from bot.states import States
-from common.settings import Settings
+from config.env_settings import Settings
 from core.cache_manager import CacheManager
 from core.exceptions import ProfileNotFoundError
 from core.file_manager import avatar_manager

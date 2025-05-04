@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from loguru import logger
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from common.settings import Settings
+from config.env_settings import Settings
 
 
 class BackupManager:
@@ -70,7 +70,7 @@ class BackupManager:
                 logger.error(f"Redis SAVE command failed: {result_save.stderr}")
                 return
 
-            source_dump = "/opt/redis/data/dump.rdb"
+            source_dump = "/app/redis/data/dump.rdb"
             if not os.path.exists(source_dump):
                 logger.error(f"Source dump.rdb not found at {source_dump}")
                 return

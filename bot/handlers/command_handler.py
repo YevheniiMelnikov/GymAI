@@ -9,7 +9,7 @@ from aiogram.types import Message
 from bot.keyboards import select_language_kb
 from bot.states import States
 from loguru import logger
-from common.settings import Settings
+from config.env_settings import Settings
 from core.models import Profile
 from functions.menus import show_main_menu
 from bot.texts.text_manager import msg_text

@@ -4,7 +4,7 @@ import httpx
 from loguru import logger
 
 from core.exceptions import UserServiceError
-from common.settings import Settings
+from config.env_settings import Settings
 
 
 class APIClient:

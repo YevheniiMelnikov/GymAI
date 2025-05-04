@@ -23,7 +23,7 @@ from functions.text_utils import (
     get_translated_week_day,
 )
 from services.profile_service import ProfileService
-from common.settings import Settings
+from config.env_settings import Settings
 from bot.texts.text_manager import msg_text
 
 

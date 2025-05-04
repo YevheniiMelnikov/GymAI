@@ -2,7 +2,7 @@ import logging
 import sys
 from loguru import logger
 
-from common.settings import Settings
+from env_settings import Settings
 
 
 def configure_loguru():
@@ -27,6 +27,7 @@ def configure_loguru():
             },
         ]
     )
+
 
 LOGGING = {
     "version": 1,

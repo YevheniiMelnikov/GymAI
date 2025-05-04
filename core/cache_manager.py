@@ -11,7 +11,7 @@ from loguru import logger
 from core.encryptor import Encryptor
 from core.exceptions import UserServiceError, ProfileNotFoundError
 from core.models import Client, Coach, Profile, Program, Subscription
-from common.settings import Settings
+from config.env_settings import Settings
 
 
 class CacheManager:

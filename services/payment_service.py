@@ -7,7 +7,7 @@ from liqpay import LiqPay
 
 from services.api_service import APIClient
 from core.models import Payment
-from common.settings import Settings
+from config.env_settings import Settings
 
 
 class PaymentService(APIClient):
@@ -88,6 +88,7 @@ class PaymentService(APIClient):
     ) -> tuple[int, dict[str, Any]]:
         url = urljoin(cls.api_url, endpoint)
         try:
+            print(f"data: {data}, url: {url}, key: {cls.api_key}")
             status_code, response = await cls._api_request(
                 method=method, url=url, data=data, headers={"Authorization": f"Api-Key {cls.api_key}"}
             )

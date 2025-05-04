@@ -6,7 +6,7 @@ from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
 from loguru import logger
-from common.settings import Settings
+from config.env_settings import Settings
 from bot.middlewares import ProfileMiddleware
 from bot.handlers.routers_configurator import configure_routers
 from functions.utils import set_bot_commands
@@ -64,7 +64,6 @@ async def main() -> None:
     finally:
         await runner.cleanup()
         dp.shutdown()
-        logger.info("Bot stopped")
 
 
 if __name__ == "__main__":

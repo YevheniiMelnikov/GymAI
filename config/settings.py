@@ -1,8 +1,8 @@
 import os
 from pathlib import Path
 
-from common.settings import Settings
-from common.logger import *
+from env_settings import Settings
+from logger import *
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -11,7 +11,7 @@ DEBUG = os.environ.get("DEBUG_STATUS", "False").lower() == "true"
 
 ALLOWED_HOSTS = ["localhost", "127.0.0.1", "achieve-together.org.ua", "www.achieve-together.org.ua", "api"]
 
-ASGI_APPLICATION = "api.asgi.application"
+ASGI_APPLICATION = "config.asgi.application"
 
 INSTALLED_APPS = [
     "jazzmin",
@@ -21,7 +21,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "accounts.apps.AccountsConfig",
+    "profiles.apps.ProfilesConfig",
     "payments.apps.PaymentsConfig",
     "home.apps.HomeConfig",
     "rest_framework",
@@ -72,7 +72,7 @@ DATABASES = {
     }
 }
 
-LANGUAGE_CODE = Settings.OWNER_LANGUAGE
+LANGUAGE_CODE = "EN"
 TIME_ZONE = "Europe/Kyiv"
 USE_I18N = True
 USE_TZ = False
@@ -87,14 +87,13 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 10,
     "DEFAULT_RENDERER_CLASSES": [
         "rest_framework.renderers.JSONRenderer",
-        "rest_framework.renderers.BrowsableAPIRenderer",
     ],
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.TokenAuthentication",
-        "rest_framework.authentication.BasicAuthentication",
-        "rest_framework.authentication.SessionAuthentication",
+        "rest_framework_api_key.authentication.APIKeyAuthentication",
     ],
-    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticatedOrReadOnly"],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework_api_key.permissions.HasAPIKey",
+    ],
 }
 
 DOMAIN = Settings.DOMAIN

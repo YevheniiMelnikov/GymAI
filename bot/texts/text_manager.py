@@ -3,7 +3,7 @@ from pathlib import Path
 import yaml
 
 from bot.texts.resources import ButtonText, MessageText
-from common.settings import Settings
+from config.env_settings import Settings
 
 ResourceType = str | MessageText | ButtonText
 
