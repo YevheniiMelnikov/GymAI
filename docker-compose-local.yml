@@ -45,10 +45,38 @@ services:
       uvicorn config.asgi:application --host 0.0.0.0 --port 8000
     ports: ["8000:8000"]
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      db:    {condition: service_healthy}
+      redis: {condition: service_healthy}
+    restart: unless-stopped
+
+  celery:
+    container_name: celery_worker
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env
+    command: celery -A project.tasks worker -l info
+    volumes:
+      - .:/app
+      - ./config:/app/config
+    depends_on:
+      - redis
+      - db
+    restart: unless-stopped
+
+  beat:
+    container_name: celery_beat
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env
+    command: celery -A project.tasks beat -l info
+    volumes:
+      - .:/app
+      - ./config:/app/config
+    depends_on:
+      - redis
+      - db
     restart: unless-stopped
 
 # Uncomment 'bot' when fully running inside Docker. It's commented to allow running the Python process directly from the IDE
