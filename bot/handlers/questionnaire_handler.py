@@ -17,7 +17,7 @@ from bot.states import States
 from config.env_settings import Settings
 from core.cache_manager import CacheManager
 from core.exceptions import ProfileNotFoundError
-from core.services.storage_service import avatar_manager
+from core.services.gstorage_service import avatar_manager
 from functions.chat import client_request
 from functions.exercises import edit_subscription_days, process_new_subscription
 from functions.menus import show_main_menu, show_my_profile_menu
@@ -62,7 +62,7 @@ async def profile_status_choice(callback_query: CallbackQuery, state: FSMContext
     await callback_query.answer()
     data = await state.get_data()
     await delete_messages(state)
-    lang = data.get("lang", Settings.DEFAULT_BOT_LANGUAGE)
+    lang = data.get("lang", Settings.BOT_LANG)
     status = callback_query.data if callback_query.data in ["coach", "client"] else "client"
     profile = await ProfileService.create_profile(telegram_id=callback_query.from_user.id, status=status, language=lang)
     if not profile:

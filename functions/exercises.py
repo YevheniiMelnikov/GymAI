@@ -10,7 +10,7 @@ from bot.keyboards import payment_kb, program_edit_kb, program_manage_kb
 from bot.states import States
 from loguru import logger
 from core.cache_manager import CacheManager
-from core.services.storage_service import gif_manager
+from core.services.gstorage_service import gif_manager
 from functions.menus import show_subscription_page
 from functions import profiles
 from functions.text_utils import format_program, get_translated_week_day

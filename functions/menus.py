@@ -13,7 +13,7 @@ from bot.keyboards import *
 from bot.states import States
 from core.cache_manager import CacheManager
 from core.exceptions import UserServiceError
-from core.services.storage_service import avatar_manager
+from core.services.gstorage_service import avatar_manager
 from functions import profiles
 from core.models import Client, Coach, Profile, Subscription
 from functions.text_utils import (

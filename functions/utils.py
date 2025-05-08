@@ -38,7 +38,7 @@ async def short_url(url: str) -> str:
 
 
 async def set_bot_commands(lang: Optional[str] = None) -> None:
-    lang = lang or Settings.DEFAULT_BOT_LANGUAGE
+    lang = lang or Settings.BOT_LANG
     command_texts = TextManager.commands
     commands = [BotCommand(command=cmd, description=desc[lang]) for cmd, desc in command_texts.items()]
     await bot.set_my_commands(commands)

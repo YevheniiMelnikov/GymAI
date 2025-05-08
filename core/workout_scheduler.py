@@ -25,8 +25,7 @@ async def send_daily_survey():
     for client_id in clients:
         client_data = await ProfileService.get_profile(client_id)
         client_lang = (
-            CacheManager.get_profile_data(client_data.get("tg_id"), client_id, "language")
-            or Settings.DEFAULT_BOT_LANGUAGE
+            CacheManager.get_profile_data(client_data.get("tg_id"), client_id, "language") or Settings.BOT_LANG
         )
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
         async with aiohttp.ClientSession():

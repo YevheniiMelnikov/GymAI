@@ -205,7 +205,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         async with aiohttp.ClientSession():
             await bot.send_message(
                 Settings.OWNER_ID,
-                msg_text("subscription_cancel_request", Settings.OWNER_LANGUAGE).format(
+                msg_text("subscription_cancel_request", Settings.OWNER_LANG).format(
                     profile_id=profile.id,
                     contact=contact,
                     next_payment_date=next_payment_date.strftime("%Y-%m-%d"),

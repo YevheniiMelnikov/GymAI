@@ -9,7 +9,7 @@ from core.cache_manager import CacheManager
 from functions.workout_plans import cancel_subscription
 from core.models import Payment, Profile
 from config.env_settings import Settings
-from core.services.gsheets_service import SheetsManager
+from core.services.gsheets_service import GSheetsService
 from core.services.payment_service import PaymentService
 from core.services.profile_service import ProfileService
 from bot.texts.text_manager import msg_text
@@ -71,7 +71,7 @@ class PaymentProcessor:
 
             if payments_data:
                 loop = asyncio.get_running_loop()
-                await loop.run_in_executor(None, SheetsManager.create_new_payment_sheet, payments_data)
+                await loop.run_in_executor(None, GSheetsService.create_new_payment_sheet, payments_data)
 
         except Exception as e:
             logger.error(f"Failed to process unclosed payments: {e}")
