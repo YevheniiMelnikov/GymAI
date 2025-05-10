@@ -33,6 +33,16 @@ celery_app.conf.update(
             "task": "project.tasks.deactivate_expired_subscriptions",
             "schedule": crontab(hour=1, minute=0),
         },
+        "unclosed-payments-monthly": {
+            "task": "project.tasks.process_unclosed_payments",
+            "schedule": crontab(day_of_month=1, hour=8, minute=0),
+            "options": {"queue": "maintenance"},
+        },
+        "send_daily_survey": {
+            "task": "project.tasks.send_daily_survey",
+            "schedule": crontab(hour=9, minute=0),
+            "options": {"queue": "maintenance"},
+        },
     },
 )
 

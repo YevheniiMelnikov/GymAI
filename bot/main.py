@@ -12,14 +12,6 @@ from config.env_settings import Settings
 from bot.middlewares import ProfileMiddleware
 from bot.handlers.routers_configurator import configure_routers
 from functions.utils import set_bot_commands
-from core.payment_processor import PaymentProcessor
-from core import workout_scheduler
-
-
-async def on_startup() -> None:
-    await set_bot_commands()
-    await workout_scheduler.run()
-    PaymentProcessor.run()
 
 
 async def on_shutdown(bot: Bot) -> None:
@@ -38,10 +30,10 @@ async def main() -> None:
     bot = Bot(token=Settings.BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
     await bot.delete_webhook(drop_pending_updates=True)
     await bot.set_webhook(url=Settings.WEBHOOK_URL)
+    await set_bot_commands()
 
     dp = Dispatcher(storage=RedisStorage.from_url(Settings.REDIS_URL))
     dp.message.middleware.register(ProfileMiddleware())
-    dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
     configure_routers(dp)
 

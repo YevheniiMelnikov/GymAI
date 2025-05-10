@@ -8,7 +8,6 @@ from bot.handlers.payment_handler import payment_router
 from bot.handlers.questionnaire_handler import questionnaire_router
 from bot.handlers.workouts_handler import program_router
 from functions.chat import message_router
-from core.workout_scheduler import survey_router
 
 
 def configure_routers(dp: Dispatcher) -> None:
@@ -16,7 +15,6 @@ def configure_routers(dp: Dispatcher) -> None:
         cmd_router,
         message_router,
         chat_router,
-        survey_router,
         menu_router,
         questionnaire_router,
         invalid_content_router,
