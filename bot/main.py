@@ -6,6 +6,8 @@ from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
 from loguru import logger
+
+from bot.handlers.internal.payment import internal_payment_handler
 from config.env_settings import Settings
 from bot.middlewares import ProfileMiddleware
 from bot.handlers.routers_configurator import configure_routers
@@ -46,6 +48,7 @@ async def main() -> None:
     app = web.Application()
     app["bot"] = bot
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=Settings.WEBHOOK_PATH)
+    app.router.add_post("/internal/payment/process/", internal_payment_handler)
     setup_application(app, dp, bot=bot)
     runner = await start_web_app(app)
     logger.success("Bot started")

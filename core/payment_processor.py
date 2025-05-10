@@ -23,7 +23,6 @@ class PaymentProcessor:
 
     @classmethod
     def run(cls) -> None:
-        asyncio.create_task(cls._check_payments_loop())
         asyncio.create_task(cls._schedule_unclosed_payment_check())
 
     @classmethod
@@ -57,7 +56,7 @@ class PaymentProcessor:
                         continue
 
                     payments_data.append(
-                        [coach.name, coach.surname, coach.payment_details, payment.order_id, payment.amount // 2]
+                        [coach.name, coach.surname, coach.payment_details, payment.order_id, int(payment.amount * 0.7)]
                     )
 
                     if await cls.payment_service.update_payment(payment.id, {"status": Settings.PAYMENT_STATUS_CLOSED}):
@@ -75,16 +74,6 @@ class PaymentProcessor:
 
         except Exception as e:
             logger.error(f"Failed to process unclosed payments: {e}")
-
-    @classmethod
-    async def _check_payments_loop(cls) -> None:
-        while True:
-            try:
-                if payments := await cls.payment_service.get_unhandled_payments():
-                    await asyncio.gather(*(cls._process_payment(p) for p in payments))
-            except Exception as e:
-                logger.exception(f"Payment check error: {e}")
-            await asyncio.sleep(Settings.PAYMENT_CHECK_INTERVAL)
 
     @classmethod
     async def _process_payment(cls, payment: Payment) -> None:
@@ -208,3 +197,11 @@ class PaymentProcessor:
             client=client,
             data={"request_type": "program", "workout_type": program.workout_type, "wishes": program.wishes},
         )
+
+    @classmethod
+    async def handle_webhook_event(cls, order_id: str, status_: str, error: str = "") -> None:
+        payment: Payment = await cls.payment_service.update_status_by_order(order_id, status_, error)
+        if not payment:
+            return
+
+        await cls._process_payment(payment)

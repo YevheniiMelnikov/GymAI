@@ -1,4 +1,5 @@
 import datetime
+from collections.abc import Sequence
 from urllib.parse import urljoin, urlencode
 from typing import Any
 
@@ -6,7 +7,7 @@ from loguru import logger
 from liqpay import LiqPay
 
 from core.services.api_service import APIClient
-from core.models import Payment
+from core.models import Payment, Subscription
 from config.env_settings import Settings
 
 
@@ -131,15 +132,11 @@ class PaymentService(APIClient):
         return [Payment.from_dict(p) for p in payments if filter_func(p)]
 
     @classmethod
-    async def get_unhandled_payments(cls) -> list[Payment]:
-        return await cls._get_filtered_payments(lambda p: not p.get("handled"))
-
-    @classmethod
     async def get_unclosed_payments(cls) -> list[Payment]:
         return await cls._get_filtered_payments(lambda p: p.get("status") == Settings.SUCCESS_PAYMENT_STATUS)
 
     @classmethod
-    async def get_expired_subscriptions(cls, expired_before: str) -> list[dict]:
+    async def get_expired_subscriptions(cls, expired_before: str) -> list[Subscription]:
         status_code, response = await cls._handle_payment_api_request(
             method="get",
             endpoint=cls.SUBSCRIPTIONS_PATH,
@@ -150,7 +147,8 @@ class PaymentService(APIClient):
             logger.error(f"Failed to get expired subscriptions: HTTP {status_code}")
             return []
 
-        return response.get("results", [])
+        results: Sequence[dict] = response.get("results", [])
+        return [Subscription.from_dict(item) for item in results]
 
     @classmethod
     async def get_last_subscription_payment(cls, profile_id: int) -> str | None:
@@ -164,3 +162,35 @@ class PaymentService(APIClient):
         payments = response["results"]
         last_payment = max(payments, key=lambda x: x["created_at"])
         return last_payment["order_id"]
+
+    @classmethod
+    async def update_status_by_order(cls, order_id: str, status_: str, error: str = "") -> Payment | None:
+        payment, payment_id = await cls._get_payment_by_order_id(order_id)
+        if payment_id is None:
+            logger.error(f"Payment {order_id} not found")
+            return None
+
+        ok = await cls.update_payment(
+            payment_id,
+            {"status": status_, "error": error, "handled": False},
+        )
+        if ok:
+            logger.info(f"Payment {order_id} set to '{status_}'")
+            payment.status = status_
+            payment.error = error
+            return payment
+
+        logger.error(f"Failed to update payment {order_id}")
+        return None
+
+    @classmethod
+    async def _get_payment_by_order_id(cls, order_id: str) -> tuple[Payment | None, int | None]:
+        status_code, response = await cls._handle_payment_api_request(
+            method="get",
+            endpoint=cls.API_BASE_PATH,
+            data={"order_id": order_id},
+        )
+        if status_code == 200 and response.get("results"):
+            raw = response["results"][0]
+            return Payment.from_dict(raw), raw["id"]
+        return None, None

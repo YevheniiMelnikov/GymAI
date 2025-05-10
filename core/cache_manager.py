@@ -55,10 +55,11 @@ class CacheManager:
             raise ProfileNotFoundError(telegram_id)
 
     @classmethod
-    def get_profile_data(cls, telegram_id: int, key_name: str) -> Any:
+    def get_profile_data(cls, telegram_id: int, key_name: str) -> dict[str, Any] | None:
         profile = cls.get_profile(telegram_id)
         if profile:
             return profile.to_dict().get(key_name)
+        return
 
     @classmethod
     def set_profile_data(cls, telegram_id: int, data: dict[str, Any]) -> bool:

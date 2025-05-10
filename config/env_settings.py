@@ -31,6 +31,7 @@ class Settings:
 
     BOT_TOKEN: str = must_getenv("BOT_TOKEN")
     BOT_LINK: str = os.getenv("BOT_LINK")
+    BOT_INTERNAL_URL: str = must_getenv("BOT_INTERNAL_URL")
     WEB_SERVER_HOST: str = "0.0.0.0"
     WEBHOOK_HOST: str = must_getenv("WEBHOOK_HOST")
     WEBHOOK_PORT: int = must_getenv("WEBHOOK_PORT")

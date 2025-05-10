@@ -13,7 +13,7 @@ ALLOWED_HOSTS = [
     "achieve-together.org.ua",
     "www.achieve-together.org.ua",
     "api",
-]  # move to settings
+]  # move to .env
 ASGI_APPLICATION = "config.asgi.application"
 
 INSTALLED_APPS = [
@@ -23,6 +23,7 @@ INSTALLED_APPS = [
     "apps.profiles.apps.ProfilesConfig",
     "apps.payments.apps.PaymentsConfig",
     "apps.home.apps.HomeConfig",
+    "apps.workout_plans.apps.WorkoutPlansConfig",
     "rest_framework",
     "rest_framework_api_key",
 ]

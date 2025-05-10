@@ -75,13 +75,13 @@ def deactivate_expired_subscriptions(self):
         since = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
         subs = await PaymentService.get_expired_subscriptions(since)
         for sub in subs:
-            s_id, p_id = sub.get("id"), sub.get("user")
-            if not s_id or not p_id:
+            if not sub.id or not sub.client_profile:
                 logger.warning(f"Invalid subscription: {sub}")
                 continue
-            await WorkoutService.update_subscription(s_id, dict(enabled=False, client_profile=p_id))
-            CacheManager.update_subscription_data(p_id, dict(enabled=False))
-            CacheManager.reset_program_payment_status(p_id, "subscription")
-            logger.info(f"Subscription {s_id} deactivated for user {p_id}")
+
+            await WorkoutService.update_subscription(sub.id, dict(enabled=False, client_profile=sub.client_profile))
+            CacheManager.update_subscription_data(sub.client_profile, dict(enabled=False))
+            CacheManager.reset_program_payment_status(sub.client_profile, "subscription")
+            logger.info(f"Subscription {sub.id} deactivated for user {sub.client_profile}")
 
     asyncio.run(_deactivate())
