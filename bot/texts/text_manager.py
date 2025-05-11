@@ -34,7 +34,7 @@ class TextManager:
 
     @classmethod
     def get_message(cls, key: str, lang: str | None) -> str:
-        lang = lang or Settings.DEFAULT_BOT_LANGUAGE
+        lang = lang or Settings.BOT_LANG
         try:
             return cls.messages[key][lang]
         except KeyError as e:
@@ -42,7 +42,7 @@ class TextManager:
 
     @classmethod
     def get_button(cls, key: str, lang: str | None) -> str:
-        lang = lang or Settings.DEFAULT_BOT_LANGUAGE
+        lang = lang or Settings.BOT_LANG
         try:
             return cls.buttons[key][lang]
         except KeyError as e:

@@ -7,7 +7,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -46,8 +46,7 @@ services:
     volumes:
       - ./config:/app/config
     depends_on:
-      db:
-        condition: service_healthy
+      db: {condition: service_healthy}
     command: >
       uvicorn config.asgi:application --host 0.0.0.0 --port 8000
     restart: unless-stopped
@@ -69,6 +68,36 @@ services:
       - ./dumps:/app/dumps
       - ./config:/app/config
     ports: ["8080:8000"]
+    restart: unless-stopped
+    networks: [monitoring]
+
+  celery:
+    container_name: celery_worker
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env
+    command: celery -A config.celery worker -l info
+    volumes:
+      - ./config:/app/config
+    depends_on:
+      - redis
+      - db
+    restart: unless-stopped
+    networks: [monitoring]
+
+  beat:
+    container_name: celery_beat
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env
+    command: celery -A config.celery beat -l info
+    volumes:
+      - ./config:/app/config
+    depends_on:
+      - redis
+      - db
     restart: unless-stopped
     networks: [monitoring]
 

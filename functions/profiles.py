@@ -11,7 +11,7 @@ from functions import menus
 from functions import chat
 from functions.utils import delete_messages
 from core.models import Client, Coach, Profile
-from services.profile_service import ProfileService
+from core.services.profile_service import ProfileService
 from bot.texts.text_manager import msg_text
 
 

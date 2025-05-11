@@ -67,9 +67,18 @@ class Coach(BaseEntity):
 
 
 @dataclass
+class Exercise(BaseEntity):
+    name: str
+    sets: str
+    reps: str
+    gif_link: str | None
+    weight: str | None
+
+
+@dataclass
 class Program(BaseEntity):
     id: int
-    exercises_by_day: dict[str, list]
+    exercises_by_day: dict[str, list[Exercise]]
     created_at: float
     profile: int
     split_number: int
@@ -87,16 +96,7 @@ class Subscription(BaseEntity):
     workout_type: str
     wishes: str
     workout_days: list[str] = field(default_factory=list)
-    exercises: dict[str, list[tuple[str, int]]] = field(default_factory=dict)
-
-
-@dataclass
-class Exercise(BaseEntity):
-    name: str
-    sets: str
-    reps: str
-    gif_link: str | None
-    weight: str | None
+    exercises: dict[str, list[tuple[str, int]]] = field(default_factory=dict)  # TODO: REDUCE OVERCOMPLEXITY
 
 
 @dataclass

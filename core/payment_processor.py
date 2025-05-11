@@ -2,15 +2,16 @@ import asyncio
 from datetime import datetime, timezone
 from loguru import logger
 from dateutil.relativedelta import relativedelta
+
+from core.services.workout_service import WorkoutService
 from functions.chat import send_message, client_request
 from core.cache_manager import CacheManager
 from functions.workout_plans import cancel_subscription
 from core.models import Payment, Profile
 from config.env_settings import Settings
-from core.google_sheets_manager import SheetsManager
-from services.payment_service import PaymentService
-from services.profile_service import ProfileService
-from services.workout_service import WorkoutService
+from core.services.gsheets_service import GSheetsService
+from core.services.payment_service import PaymentService
+from core.services.profile_service import ProfileService
 from bot.texts.text_manager import msg_text
 
 
@@ -19,71 +20,6 @@ class PaymentProcessor:
     payment_service = PaymentService
     profile_service = ProfileService
     workout_service = WorkoutService
-
-    @classmethod
-    def run(cls) -> None:
-        asyncio.create_task(cls._check_payments_loop())
-        asyncio.create_task(cls._schedule_unclosed_payment_check())
-
-    @classmethod
-    async def _schedule_unclosed_payment_check(cls) -> None:
-        while True:
-            now = datetime.now(timezone.utc)
-            target_time = now.replace(day=1, hour=8, minute=0, second=0, microsecond=0)
-            if now >= target_time:
-                target_time += relativedelta(months=1)
-            delay = (target_time - now).total_seconds()
-            await asyncio.sleep(delay)
-            await cls._process_unclosed_payments()
-
-    @classmethod
-    async def _process_unclosed_payments(cls) -> None:
-        try:
-            payments = await cls.payment_service.get_unclosed_payments()
-            payments_data = []
-
-            for payment in payments:
-                client = cls.cache_manager.get_client_by_id(payment.profile)
-                if not client or not client.assigned_to:
-                    logger.warning(f"Skipping payment {payment.order_id} - invalid client or no assigned coaches")
-                    continue
-
-                try:
-                    coach_id = client.assigned_to[0]
-                    coach = cls.cache_manager.get_coach_by_id(coach_id)
-                    if not coach:
-                        logger.error(f"Coach {coach_id} not found for payment {payment.order_id}")
-                        continue
-
-                    payments_data.append(
-                        [coach.name, coach.surname, coach.payment_details, payment.order_id, payment.amount // 2]
-                    )
-
-                    if await cls.payment_service.update_payment(payment.id, {"status": Settings.PAYMENT_STATUS_CLOSED}):
-                        logger.info(f"Payment {payment.order_id} marked as closed")
-                    else:
-                        logger.error(f"Failed to update payment {payment.order_id}")
-
-                except Exception as e:
-                    logger.error(f"Error processing payment {payment.order_id}: {e}")
-                    continue
-
-            if payments_data:
-                loop = asyncio.get_running_loop()
-                await loop.run_in_executor(None, SheetsManager.create_new_payment_sheet, payments_data)
-
-        except Exception as e:
-            logger.error(f"Failed to process unclosed payments: {e}")
-
-    @classmethod
-    async def _check_payments_loop(cls) -> None:
-        while True:
-            try:
-                if payments := await cls.payment_service.get_unhandled_payments():
-                    await asyncio.gather(*(cls._process_payment(p) for p in payments))
-            except Exception as e:
-                logger.exception(f"Payment check error: {e}")
-            await asyncio.sleep(Settings.PAYMENT_CHECK_INTERVAL)
 
     @classmethod
     async def _process_payment(cls, payment: Payment) -> None:
@@ -207,3 +143,50 @@ class PaymentProcessor:
             client=client,
             data={"request_type": "program", "workout_type": program.workout_type, "wishes": program.wishes},
         )
+
+    @classmethod
+    async def handle_webhook_event(cls, order_id: str, status_: str, error: str = "") -> None:
+        payment: Payment = await cls.payment_service.update_status_by_order(order_id, status_, error)
+        if not payment:
+            return
+
+        await cls._process_payment(payment)
+
+    @classmethod
+    async def process_unclosed_payments(cls) -> None:
+        try:
+            payments = await cls.payment_service.get_unclosed_payments()
+            payments_data = []
+
+            for payment in payments:
+                client = cls.cache_manager.get_client_by_id(payment.profile)
+                if not client or not client.assigned_to:
+                    logger.warning(f"Skipping payment {payment.order_id} - invalid client or no assigned coaches")
+                    continue
+
+                try:
+                    coach_id = client.assigned_to[0]
+                    coach = cls.cache_manager.get_coach_by_id(coach_id)
+                    if not coach:
+                        logger.error(f"Coach {coach_id} not found for payment {payment.order_id}")
+                        continue
+
+                    payments_data.append(
+                        [coach.name, coach.surname, coach.payment_details, payment.order_id, int(payment.amount * 0.7)]
+                    )
+
+                    if await cls.payment_service.update_payment(payment.id, {"status": Settings.PAYMENT_STATUS_CLOSED}):
+                        logger.info(f"Payment {payment.order_id} marked as closed")
+                    else:
+                        logger.error(f"Failed to update payment {payment.order_id}")
+
+                except Exception as e:
+                    logger.error(f"Error processing payment {payment.order_id}: {e}")
+                    continue
+
+            if payments_data:
+                loop = asyncio.get_running_loop()
+                await loop.run_in_executor(None, GSheetsService.create_new_payment_sheet, payments_data)
+
+        except Exception as e:
+            logger.error(f"Failed to process unclosed payments: {e}")

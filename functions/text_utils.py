@@ -5,7 +5,7 @@ from aiogram.fsm.state import State
 from bot.states import States
 from core.cache_manager import CacheManager
 from core.models import Client, Coach, Exercise
-from services.profile_service import ProfileService
+from core.services.profile_service import ProfileService
 from bot.texts.text_manager import msg_text, btn_text
 
 

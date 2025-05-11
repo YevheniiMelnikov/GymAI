@@ -29,7 +29,7 @@ from functions.profiles import assign_coach, get_user_profile
 from functions.utils import handle_clients_pagination
 from functions.workout_plans import manage_program, cancel_subscription
 from core.models import Coach, Profile
-from services.payment_service import PaymentService
+from core.services.payment_service import PaymentService
 
 menu_router = Router()
 
@@ -205,7 +205,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         async with aiohttp.ClientSession():
             await bot.send_message(
                 Settings.OWNER_ID,
-                msg_text("subscription_cancel_request", Settings.OWNER_LANGUAGE).format(
+                msg_text("subscription_cancel_request", Settings.OWNER_LANG).format(
                     profile_id=profile.id,
                     contact=contact,
                     next_payment_date=next_payment_date.strftime("%Y-%m-%d"),

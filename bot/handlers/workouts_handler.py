@@ -35,8 +35,8 @@ from functions.text_utils import format_program, get_translated_week_day
 from functions.utils import program_menu_pagination, short_url, delete_messages
 from functions.workout_plans import reset_workout_plan, save_workout_plan, next_day_workout_plan
 from core.models import Exercise, Program
-from services.profile_service import ProfileService
-from services.workout_service import WorkoutService
+from core.services.profile_service import ProfileService
+from core.services import WorkoutService
 from bot.texts.text_manager import msg_text, btn_text
 
 program_router = Router()

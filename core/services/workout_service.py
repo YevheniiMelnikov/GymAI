@@ -1,19 +1,25 @@
 from datetime import datetime
+from typing import Any
 from urllib.parse import urljoin
 from loguru import logger
 
-from services.api_service import APIClient
+from core.services.api_service import APIClient
 from core.exceptions import UserServiceError
-from core.models import Exercise
+from core.models import Exercise, Program
 
 
 class WorkoutService(APIClient):
     @classmethod
-    async def save_program(cls, client_id: int, exercises: dict[int, Exercise], split_number: int, wishes: str) -> dict:
+    async def save_program(
+        cls, client_id: int, exercises: dict[str, list[Exercise]], split_number: int, wishes: str
+    ) -> Program:
         url = urljoin(cls.api_url, "api/v1/programs/")
+        exercises_payload: dict[str, list[dict[str, Any]]] = {
+            day: [e.to_dict() for e in items if isinstance(e, Exercise)] for day, items in exercises.items()
+        }  # TODO: REDUCE OVERCOMPLEXITY
         data = {
             "client_profile": client_id,
-            "exercises_by_day": exercises,
+            "exercises_by_day": exercises_payload,
             "split_number": split_number,
             "wishes": wishes,
         }
@@ -27,13 +33,14 @@ class WorkoutService(APIClient):
                 logger.error(f"Failed to save program for client {client_id}: {response}")
                 raise UserServiceError(f"Failed to save program, received status {status_code}: {response}")
 
-            return dict(
+            return Program(
                 id=response.get("id"),
                 split_number=split_number,
                 exercises_by_day=exercises,
                 created_at=response.get("created_at"),
-                client_profile=client_id,
+                profile=client_id,
                 wishes=wishes,
+                workout_type=response.get("workout_type"),
             )
 
         except UserServiceError as e:

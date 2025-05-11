@@ -19,8 +19,9 @@ class Settings:
     PAYMENT_STATUS_CLOSED: str = "CLOSED"
     PAYMENT_CHECK_INTERVAL: int = 60
     SITE_NAME: str = "AchieveTogether"
-    DEFAULT_BOT_LANGUAGE: str = "ua"
-    OWNER_LANGUAGE = "ru"
+    TIME_ZONE: str = must_getenv("TIME_ZONE", "Europe/Kyiv")
+    BOT_LANG: str = must_getenv("BOT_LANG")
+    OWNER_LANG: str = must_getenv("OWNER_LANG")
 
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     DOMAIN: str = must_getenv("DOMAIN")
@@ -30,6 +31,7 @@ class Settings:
 
     BOT_TOKEN: str = must_getenv("BOT_TOKEN")
     BOT_LINK: str = os.getenv("BOT_LINK")
+    BOT_INTERNAL_URL: str = must_getenv("BOT_INTERNAL_URL")
     WEB_SERVER_HOST: str = "0.0.0.0"
     WEBHOOK_HOST: str = must_getenv("WEBHOOK_HOST")
     WEBHOOK_PORT: int = must_getenv("WEBHOOK_PORT")
@@ -52,5 +54,5 @@ class Settings:
     DB_PORT: str = must_getenv("DB_PORT")
     DB_NAME: str = must_getenv("DB_NAME")
     DB_USER: str = must_getenv("DB_USER")
-    DB_PASSWORD: str = must_getenv("DB_PASSWORD")
+    DB_PASSWORD: str = must_getenv("POSTGRES_PASSWORD")
     DB_HOST: str = must_getenv("DB_HOST")

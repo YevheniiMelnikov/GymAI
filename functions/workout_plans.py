@@ -9,14 +9,14 @@ from aiogram.types import CallbackQuery
 from bot.keyboards import program_edit_kb, program_manage_kb, program_view_kb, subscription_view_kb
 from bot.states import States
 from core.cache_manager import CacheManager
+from core.services.workout_service import WorkoutService
 from functions.chat import send_message
 from functions.menus import show_main_menu
 from functions.profiles import get_user_profile
 from functions.text_utils import format_program, get_translated_week_day
 from functions.utils import delete_messages
 from core.models import Profile
-from services.profile_service import ProfileService
-from services.workout_service import WorkoutService
+from core.services.profile_service import ProfileService
 from bot.texts.text_manager import msg_text, btn_text
 
 
@@ -31,7 +31,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
             await callback_query.answer(msg_text("saved", profile.language))
             client = CacheManager.get_client_by_id(client_id)
             client_data = await ProfileService.get_profile(client_id)
-            client_lang = CacheManager.get_profile_data(client_data.get("tg_id"), client_id, "language")
+            client_lang = CacheManager.get_profile_data(client_data.get("tg_id"), "language")
             if data.get("subscription"):
                 subscription_data = CacheManager.get_subscription(client_id).to_dict()
                 subscription_data.update(client_profile=client_id, exercises=exercises)

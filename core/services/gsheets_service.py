@@ -7,7 +7,7 @@ from gspread import Worksheet
 from config.env_settings import Settings
 
 
-class SheetsManager:
+class GSheetsService:
     SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
     DRIVE_SCOPE = "https://www.googleapis.com/auth/drive"
     creds = Settings.GOOGLE_APPLICATION_CREDENTIALS

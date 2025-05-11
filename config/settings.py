@@ -7,7 +7,13 @@ from config.logger import *
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = Settings.API_KEY
 DEBUG = os.environ.get("DEBUG_STATUS", "False").lower() == "true"
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "achieve-together.org.ua", "www.achieve-together.org.ua", "api"]
+ALLOWED_HOSTS = [
+    "localhost",
+    "127.0.0.1",
+    "achieve-together.org.ua",
+    "www.achieve-together.org.ua",
+    "api",
+]  # move to .env
 ASGI_APPLICATION = "config.asgi.application"
 
 INSTALLED_APPS = [
@@ -17,6 +23,7 @@ INSTALLED_APPS = [
     "apps.profiles.apps.ProfilesConfig",
     "apps.payments.apps.PaymentsConfig",
     "apps.home.apps.HomeConfig",
+    "apps.workout_plans.apps.WorkoutPlansConfig",
     "rest_framework",
     "rest_framework_api_key",
 ]
@@ -59,7 +66,7 @@ DATABASES = {
 }
 
 LANGUAGE_CODE = "EN"
-TIME_ZONE = "Europe/Kyiv"
+TIME_ZONE = Settings.TIME_ZONE
 USE_I18N = True
 USE_TZ = False
 STATIC_URL = "/static/"
@@ -79,4 +86,4 @@ REST_FRAMEWORK = {
 
 DOMAIN = Settings.DOMAIN
 SITE_NAME = Settings.SITE_NAME
-CORS_ALLOWED_ORIGINS = ["*"]
+CORS_ALLOWED_ORIGINS = ["*"]  # move to settings

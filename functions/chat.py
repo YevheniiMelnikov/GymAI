@@ -14,7 +14,7 @@ from bot.keyboards import new_coach_kb
 from bot.states import States
 from bot.texts.text_manager import msg_text
 from core.cache_manager import CacheManager
-from core.file_manager import avatar_manager
+from core.services.gstorage_service import avatar_manager
 from config.env_settings import Settings
 from functions.exercises import edit_subscription_exercises
 from functions.menus import show_exercises_menu, show_main_menu, manage_subscription
@@ -22,7 +22,7 @@ from functions import profiles
 from functions.text_utils import format_new_client_message, get_client_page, get_workout_types
 from core.models import Coach, Profile, Client
 from functions.utils import program_menu_pagination
-from services.profile_service import ProfileService
+from core.services.profile_service import ProfileService
 
 bot = Bot(Settings.BOT_TOKEN)
 message_router = Router()
@@ -42,7 +42,7 @@ async def send_message(
         language = data.get("recipient_language", "ua")
         sender_name = data.get("sender_name", "")
     else:
-        language = Settings.DEFAULT_BOT_LANGUAGE
+        language = Settings.BOT_LANG
         sender_name = ""
 
     recipient_data = await ProfileService.get_profile(recipient.id)
@@ -97,7 +97,7 @@ async def notify_about_new_coach(tg_id: int, profile: Profile, data: dict[str, A
         await bot.send_photo(
             chat_id=Settings.OWNER_ID,
             photo=photo,
-            caption=msg_text("new_coach_request", Settings.OWNER_LANGUAGE).format(
+            caption=msg_text("new_coach_request", Settings.OWNER_LANG).format(
                 name=name,
                 surname=surname,
                 experience=experience,
@@ -202,7 +202,7 @@ async def approve_coach(callback_query: CallbackQuery, state: FSMContext):
     if profile_data := await ProfileService.get_profile(int(profile_id)):
         lang = profile_data.get("language")
     else:
-        lang = "ua"
+        lang = Settings.BOT_LANG
     await send_message(coach, msg_text("coach_verified", lang), state, include_incoming_message=False)
     await callback_query.message.delete()
     logger.info(f"Coach verification for profile_id {profile_id} approved")
@@ -216,7 +216,7 @@ async def decline_coach(callback_query: CallbackQuery, state: FSMContext):
     if profile_data := await ProfileService.get_profile(int(profile_id)):
         lang = profile_data.get("language")
     else:
-        lang = "ua"
+        lang = Settings.BOT_LANG
     await send_message(coach, msg_text("coach_declined", lang), state, include_incoming_message=False)
     await callback_query.message.delete()
     logger.info(f"Coach verification for profile_id {profile_id} declined")
@@ -243,7 +243,7 @@ async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> 
     workout_types = await get_workout_types(coach_lang)
     preferable_workouts_type = workout_types.get(preferable_workout_type, "unknown")
     subscription = CacheManager.get_subscription(client.id)
-    client_page = await get_client_page(client, coach_lang, subscription, data)
+    client_page = await get_client_page(client, coach_lang, subscription is not None, data)
     text = await format_new_client_message(data, coach_lang, client_lang, preferable_workouts_type)
     reply_markup = (
         client_msg_bk(coach_lang, client.id)
@@ -268,7 +268,7 @@ async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> 
 
     await send_message(
         recipient=coach,
-        text=msg_text("client_page, coach_lang").format(**client_page),
+        text=msg_text("client_page", coach_lang).format(**client_page),
         state=None,
         reply_markup=reply_markup,
         include_incoming_message=False,
@@ -279,7 +279,7 @@ async def process_feedback_content(message: Message, profile: Profile) -> bool:
     if message.text:
         await bot.send_message(
             chat_id=Settings.OWNER_ID,
-            text=msg_text("new_feedback", Settings.OWNER_LANGUAGE).format(profile_id=profile.id, feedback=message.text),
+            text=msg_text("new_feedback", Settings.OWNER_LANG).format(profile_id=profile.id, feedback=message.text),
             parse_mode=ParseMode.HTML,
         )
         return True
@@ -287,7 +287,7 @@ async def process_feedback_content(message: Message, profile: Profile) -> bool:
     elif message.photo:
         await bot.send_message(
             chat_id=Settings.OWNER_ID,
-            text=msg_text("new_feedback", Settings.OWNER_LANGUAGE).format(
+            text=msg_text("new_feedback", Settings.OWNER_LANG).format(
                 profile_id=profile.id, feedback=message.caption or ""
             ),
             parse_mode=ParseMode.HTML,
@@ -302,7 +302,7 @@ async def process_feedback_content(message: Message, profile: Profile) -> bool:
     elif message.video:
         await bot.send_message(
             chat_id=Settings.OWNER_ID,
-            text=msg_text("new_feedback", Settings.OWNER_LANGUAGE).format(
+            text=msg_text("new_feedback", Settings.OWNER_LANG).format(
                 profile_id=profile.id, feedback=message.caption or ""
             ),
             parse_mode=ParseMode.HTML,

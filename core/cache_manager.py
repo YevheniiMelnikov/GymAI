@@ -59,6 +59,7 @@ class CacheManager:
         profile = cls.get_profile(telegram_id)
         if profile:
             return profile.to_dict().get(key_name)
+        return
 
     @classmethod
     def set_profile_data(cls, telegram_id: int, data: dict[str, Any]) -> bool:

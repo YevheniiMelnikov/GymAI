@@ -1,9 +1,9 @@
 from loguru import logger
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery
 
-from bot.keyboards import new_message_kb
+from bot.keyboards import new_message_kb, workout_results_kb
 from bot.states import States
 from core.cache_manager import CacheManager
 from core.exceptions import UserServiceError
@@ -12,7 +12,7 @@ from core.models import Profile
 from functions.menus import show_main_menu
 from functions.profiles import get_user_profile
 from bot.texts.text_manager import msg_text
-from services.profile_service import ProfileService
+from core.services.profile_service import ProfileService
 
 
 chat_router = Router()
@@ -110,3 +110,42 @@ async def contact_coach(message: Message, state: FSMContext):
     await message.answer(msg_text("message_sent", profile.language))
     logger.debug(f"Client {profile.id} sent message to coach {coach.id}")
     await show_main_menu(message, profile, state)
+
+
+@chat_router.callback_query(F.data.startswith("yes_"))
+@chat_router.callback_query(F.data.startswith("no_"))
+async def have_you_trained(callback_query: CallbackQuery, state: FSMContext):
+    profile = await get_user_profile(callback_query.from_user.id)
+    subscription = CacheManager.get_subscription(profile.id)
+
+    try:
+        _, weekday = callback_query.data.split("_", 1)
+    except ValueError:
+        await callback_query.answer("❓")
+        return
+
+    workout_days = subscription.workout_days or []
+    try:
+        day_index = workout_days.index(weekday)
+    except ValueError:
+        day_index = -1
+
+    if callback_query.data.startswith("yes"):
+        exercises = subscription.exercises.get(str(day_index)) or subscription.exercises.get(weekday)
+
+        await state.update_data(
+            exercises=exercises,
+            day=weekday,
+            day_index=day_index,
+        )
+        await callback_query.answer("🔥")
+        await callback_query.message.answer(
+            msg_text("workout_results", profile.language),
+            reply_markup=workout_results_kb(profile.language),
+        )
+        await callback_query.message.delete()
+        await state.set_state(States.workout_survey)
+    else:
+        await callback_query.answer("😢")
+        await callback_query.message.delete()
+        logger.debug(f"User {profile.id} reported no training on {weekday}")
