@@ -11,13 +11,13 @@ from bot.states import States
 from loguru import logger
 from core.cache_manager import CacheManager
 from core.services.gstorage_service import gif_manager
+from core.services.workout_service import WorkoutService
 from functions.menus import show_subscription_page
 from functions import profiles
 from functions.text_utils import format_program, get_translated_week_day
 from functions.utils import delete_messages, generate_order_id
 from core.models import Exercise, Profile, Subscription
 from core.services.payment_service import PaymentService
-from core.services import WorkoutService
 from bot.texts.exercises import exercise_dict
 from bot.texts.text_manager import msg_text
 

@@ -2,7 +2,7 @@ from celery import Celery
 from celery.schedules import crontab
 from config.env_settings import Settings
 
-celery_app = Celery("project")
+celery_app = Celery("gym_bot")
 
 celery_app.conf.update(
     broker_url=Settings.REDIS_URL,
@@ -15,35 +15,37 @@ celery_app.conf.update(
     task_time_limit=600,
     beat_schedule={
         "pg_backup": {
-            "task": "project.tasks.pg_backup",
+            "task": "core.tasks.pg_backup",
             "schedule": crontab(hour=2, minute=0),
             "options": {"queue": "maintenance"},
         },
         "redis_backup": {
-            "task": "project.tasks.redis_backup",
+            "task": "core.tasks.redis_backup",
             "schedule": crontab(hour=2, minute=1),
             "options": {"queue": "maintenance"},
         },
         "cleanup_backups": {
-            "task": "project.tasks.cleanup_backups",
+            "task": "core.tasks.cleanup_backups",
             "schedule": crontab(hour=2, minute=2),
             "options": {"queue": "maintenance"},
         },
         "deactivate_subs": {
-            "task": "project.tasks.deactivate_expired_subscriptions",
+            "task": "core.tasks.deactivate_expired_subscriptions",
             "schedule": crontab(hour=1, minute=0),
         },
         "unclosed-payments-monthly": {
-            "task": "project.tasks.process_unclosed_payments",
+            "task": "core.tasks.process_unclosed_payments",
             "schedule": crontab(day_of_month=1, hour=8, minute=0),
             "options": {"queue": "maintenance"},
         },
         "send_daily_survey": {
-            "task": "project.tasks.send_daily_survey",
+            "task": "core.tasks.send_daily_survey",
             "schedule": crontab(hour=9, minute=0),
             "options": {"queue": "maintenance"},
         },
     },
 )
 
-celery_app.autodiscover_tasks(["project"])
+celery_app.autodiscover_tasks(["core"])
+
+__all__ = ("celery_app",)

@@ -77,7 +77,7 @@ services:
       context: .
       dockerfile: Dockerfile
     env_file: .env
-    command: celery -A project.tasks worker -l info
+    command: celery -A config.celery worker -l info
     volumes:
       - ./config:/app/config
     depends_on:
@@ -92,7 +92,7 @@ services:
       context: .
       dockerfile: Dockerfile
     env_file: .env
-    command: celery -A project.tasks beat -l info
+    command: celery -A config.celery beat -l info
     volumes:
       - ./config:/app/config
     depends_on:

@@ -14,8 +14,8 @@ from config.env_settings import Settings
 from core.cache_manager import CacheManager
 from core.payment_processor import PaymentProcessor
 from core.services.profile_service import ProfileService
-from services.payment_service import PaymentService
-from services.workout_service import WorkoutService
+from core.services.payment_service import PaymentService
+from core.services.workout_service import WorkoutService
 
 _dumps_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dumps")
 _pg_dir = os.path.join(_dumps_dir, "postgres")
@@ -25,7 +25,7 @@ os.makedirs(_redis_dir, exist_ok=True)
 os.environ["PGPASSWORD"] = Settings.DB_PASSWORD
 
 
-@shared_task(name="project.tasks.pg_backup", bind=True, autoretry_for=(Exception,), max_retries=3)
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)
 def pg_backup(self):
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
     path = os.path.join(_pg_dir, f"{Settings.DB_NAME}_backup_{ts}.dump")
@@ -51,7 +51,7 @@ def pg_backup(self):
         raise
 
 
-@shared_task(name="project.tasks.redis_backup", bind=True, autoretry_for=(Exception,), max_retries=3)
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)
 def redis_backup(self):
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
     src = "/app/redis/data/dump.rdb"
@@ -63,7 +63,7 @@ def redis_backup(self):
     logger.info(f"Redis backup saved {dest}")
 
 
-@shared_task(name="project.tasks.cleanup_backups", bind=True, autoretry_for=(Exception,), max_retries=3)
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)
 def cleanup_backups(self):
     cutoff = datetime.now() - timedelta(days=30)
     for root in (_pg_dir, _redis_dir):
@@ -73,9 +73,7 @@ def cleanup_backups(self):
                 logger.info(f"Deleted old backup {f.path}")
 
 
-@shared_task(
-    name="project.tasks.deactivate_expired_subscriptions", bind=True, autoretry_for=(Exception,), max_retries=3
-)
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)
 def deactivate_expired_subscriptions(self):
     async def _deactivate():
         since = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -93,22 +91,12 @@ def deactivate_expired_subscriptions(self):
     asyncio.run(_deactivate())
 
 
-@shared_task(
-    name="project.tasks.process_unclosed_payments",
-    bind=True,
-    autoretry_for=(Exception,),
-    max_retries=3,
-)
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)
 def process_unclosed_payments(self):
     asyncio.run(PaymentProcessor.process_unclosed_payments())
 
 
-@shared_task(
-    name="project.tasks.send_daily_survey",
-    bind=True,
-    autoretry_for=(Exception,),
-    max_retries=3,
-)
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)
 def send_daily_survey(self):
     asyncio.run(_send_daily_survey())
 
