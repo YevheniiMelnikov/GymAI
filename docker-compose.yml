@@ -51,6 +51,11 @@ services:
       uvicorn config.asgi:application --host 0.0.0.0 --port 8000
     restart: unless-stopped
     networks: [monitoring]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
 
   bot:
     container_name: bot
@@ -58,9 +63,9 @@ services:
       context: .
       dockerfile: Dockerfile
     depends_on:
-      - api
-      - db
-      - redis
+      api:   {condition: service_healthy}
+      db:    {condition: service_healthy}
+      redis: {condition: service_healthy}
     env_file: .env
     command: ["python", "-u", "/app/bot/main.py"]
     volumes:
@@ -81,8 +86,8 @@ services:
     volumes:
       - ./config:/app/config
     depends_on:
-      - redis
-      - db
+      redis: {condition: service_healthy}
+      db:    {condition: service_healthy}
     restart: unless-stopped
     networks: [monitoring]
 
@@ -96,8 +101,8 @@ services:
     volumes:
       - ./config:/app/config
     depends_on:
-      - redis
-      - db
+      redis: {condition: service_healthy}
+      db:    {condition: service_healthy}
     restart: unless-stopped
     networks: [monitoring]
 
@@ -112,14 +117,6 @@ services:
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - ./static:/app/staticfiles:ro
     depends_on:
-      - api
+      api: {condition: service_healthy}
     restart: unless-stopped
     networks: [monitoring]
-
-volumes:
-  pgdata:
-  redisdata:
-
-networks:
-  monitoring:
-    external: true

@@ -47,6 +47,11 @@ services:
     depends_on:
       db:    {condition: service_healthy}
       redis: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
 
   celery:
@@ -60,8 +65,8 @@ services:
       - .:/app
       - ./config:/app/config
     depends_on:
-      - redis
-      - db
+      redis: {condition: service_healthy}
+      db:    {condition: service_healthy}
     restart: unless-stopped
 
   beat:
@@ -75,8 +80,8 @@ services:
       - .:/app
       - ./config:/app/config
     depends_on:
-      - redis
-      - db
+      redis: {condition: service_healthy}
+      db:    {condition: service_healthy}
     restart: unless-stopped
 
 # Uncomment 'bot' when fully running inside Docker. It's commented to allow running the Python process directly from the IDE
@@ -87,8 +92,8 @@ services:
 #      context: .
 #      dockerfile: Dockerfile
 #    depends_on:
-#      - db
-#      - redis
+#      redis: {condition: service_healthy}
+#      db:    {condition: service_healthy}
 #    env_file: .env
 #    command: ["python", "-u", "/app/bot/main.py"]
 #    volumes:
