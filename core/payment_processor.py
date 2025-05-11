@@ -212,9 +212,7 @@ class PaymentProcessor:
                             [coach.name, coach.surname, coach.payment_details, payment.order_id, payout_amount]
                         )
                     else:
-                        logger.error(
-                            f"Failed to update payment {payment.order_id} status to closed"
-                        )
+                        logger.error(f"Failed to update payment {payment.order_id} status to closed")
 
                 except Exception as e:
                     logger.error(

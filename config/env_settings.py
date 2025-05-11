@@ -20,10 +20,15 @@ class Settings:
     PAYMENT_CHECK_INTERVAL: int = 60
     COACH_PAYOUT_RATE: float = 0.7
     SITE_NAME: str = "AchieveTogether"
+    API_MAX_RETRIES: int = 3
+    API_RETRY_INITIAL_DELAY: int = 1
+    API_RETRY_BACKOFF_FACTOR: int = 2
+    API_RETRY_MAX_DELAY: int = 10
+    API_TIMEOUT: int = 10
+
     TIME_ZONE: str = must_getenv("TIME_ZONE", "Europe/Kyiv")
     BOT_LANG: str = must_getenv("BOT_LANG", "ua")
     OWNER_LANG: str = must_getenv("OWNER_LANG", "ru")
-
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     API_KEY: str = must_getenv("API_KEY")
     API_URL: str = must_getenv("API_URL")
