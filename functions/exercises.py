@@ -1,13 +1,9 @@
-import os
 from contextlib import suppress
 
-from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import payment_kb, program_edit_kb, program_manage_kb
-from bot.states import States
 from loguru import logger
 from core.cache_manager import CacheManager
 from core.services.gstorage_service import gif_manager
@@ -20,8 +16,8 @@ from core.models import Exercise, Profile, Subscription
 from core.services.payment_service import PaymentService
 from bot.texts.exercises import exercise_dict
 from bot.texts.text_manager import msg_text
-
-bot = Bot(os.environ.get("BOT_TOKEN"))
+from bot.keyboards import payment_kb, program_edit_kb, program_manage_kb
+from bot.states import States
 
 
 async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Message | CallbackQuery) -> None:

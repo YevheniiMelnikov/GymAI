@@ -25,6 +25,7 @@ from functions.text_utils import (
 from core.services.profile_service import ProfileService
 from config.env_settings import Settings
 from bot.texts.text_manager import msg_text
+from functions.utils import fetch_user, answer_profile
 
 
 async def show_subscription_page(callback_query: CallbackQuery, state: FSMContext, subscription: Subscription) -> None:
@@ -150,52 +151,25 @@ async def show_coaches_menu(message: Message, coaches: list[Coach], bot: Bot, cu
 
 
 async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    try:
-        user = (
-            CacheManager.get_client_by_id(profile.id)
-            if profile.status == "client"
-            else CacheManager.get_coach_by_id(profile.id)
-        )
-    except UserServiceError as error:
-        logger.error(f"Error retrieving user data for profile {profile.id} (status: {profile.status}): {error}")
-        await callback_query.answer()
-        user_data = await ProfileService.get_profile(profile.id)
-
-        if profile.status == "client":
-            CacheManager.set_client_data(profile.id, user_data)
-            user = Client.from_dict(user_data)
-        else:
-            CacheManager.set_coach_data(profile.id, user_data)
-            user = Coach.from_dict(user_data)
-
-    format_attributes = get_profile_attributes(status=profile.status, user=user, lang=profile.language)
+    user = await fetch_user(profile)
     text = msg_text(
         "client_profile" if profile.status == "client" else "coach_profile",
         profile.language,
-    ).format(**format_attributes)
+    ).format(**get_profile_attributes(status=profile.status, user=user, lang=profile.language))
 
-    if profile.status == "coach" and getattr(user, "profile_photo", None):
-        photo = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{user.profile_photo}"
-        try:
-            await callback_query.message.answer_photo(photo, text, reply_markup=profile_menu_kb(profile.language))
-        except TelegramBadRequest:
-            logger.error(f"Profile image of profile_id {profile.id} not found")
-            await callback_query.message.answer(text, reply_markup=profile_menu_kb(profile.language))
-    else:
-        await callback_query.message.answer(text, reply_markup=profile_menu_kb(profile.language))
-
+    await answer_profile(callback_query, profile, user, text)
     await state.set_state(States.profile)
     with suppress(TelegramBadRequest):
         await callback_query.message.delete()
 
 
-async def my_clients_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+async def my_clients_menu(callback_query: CallbackQuery, coach_profile: Profile, state: FSMContext) -> None:
     try:
-        coach = CacheManager.get_coach_by_id(profile.id)
+        coach = CacheManager.get_coach_by_id(coach_profile.id)
         assigned_ids = coach.assigned_to if coach.assigned_to else None
     except UserServiceError as error:
-        logger.error(f"Error retrieving coach data for profile {profile.id}: {error}")
-        await callback_query.answer(msg_text("coach_info_message", profile.language), show_alert=True)
+        logger.error(f"Error retrieving coach data for profile {coach_profile.id}: {error}")
+        await callback_query.answer(msg_text("coach_info_message", coach_profile.language), show_alert=True)
         return
 
     if assigned_ids:
@@ -207,17 +181,16 @@ async def my_clients_menu(callback_query: CallbackQuery, profile: Profile, state
             clients = []
             for profile_id in assigned_ids:
                 try:
-                    profile_data = await ProfileService.get_profile(profile_id)
-                    if profile_data:
-                        clients.append(Client.from_dict(profile_data))
+                    if client_profile := await ProfileService.get_profile(profile_id):
+                        clients.append(client_profile)
                 except Exception as e:
                     logger.error(f"Error retrieving profile data for client {profile_id}: {e}")
                     continue
         await show_clients(callback_query.message, clients, state)
     else:
         if not coach.verified:
-            await callback_query.answer(msg_text("coach_info_message", profile.language), show_alert=True)
-        await callback_query.answer(msg_text("no_clients", profile.language), show_alert=True)
+            await callback_query.answer(msg_text("coach_info_message", coach_profile.language), show_alert=True)
+        await callback_query.answer(msg_text("no_clients", coach_profile.language), show_alert=True)
         await state.set_state(States.main_menu)
         return
 

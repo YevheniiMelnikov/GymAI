@@ -30,8 +30,8 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
         if completed_days >= split_number:
             await callback_query.answer(msg_text("saved", profile.language))
             client = CacheManager.get_client_by_id(client_id)
-            client_data = await ProfileService.get_profile(client_id)
-            client_lang = CacheManager.get_profile_data(client_data.get("tg_id"), "language")
+            client_profile = await ProfileService.get_profile(client_id)
+            client_lang = CacheManager.get_profile_data(client_profile.tg_id, "language")
             if data.get("subscription"):
                 subscription_data = CacheManager.get_subscription(client_id).to_dict()
                 subscription_data.update(client_profile=client_id, exercises=exercises)

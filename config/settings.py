@@ -84,6 +84,6 @@ REST_FRAMEWORK = {
     ],
 }
 
-DOMAIN = Settings.DOMAIN
+DOMAIN = Settings.API_URL
 SITE_NAME = Settings.SITE_NAME
 CORS_ALLOWED_ORIGINS = ["*"]  # move to settings

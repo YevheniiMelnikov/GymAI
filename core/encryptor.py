@@ -14,7 +14,7 @@ class Encryptor:
     @classmethod
     def _get_fernet(cls):
         if cls._fernet is None:
-            key = hashlib.sha256(Settings.SECRET_KEY.encode()).digest()
+            key = hashlib.sha256(Settings.API_KEY.encode()).digest()
             fernet_key = base64.urlsafe_b64encode(key)
             cls._fernet = Fernet(fernet_key)
         return cls._fernet
@@ -30,7 +30,7 @@ class Encryptor:
     @classmethod
     def decrypt(cls, token: str) -> Optional[str]:
         if not token:
-            return token
+            return
         try:
             fernet = cls._get_fernet()
             decrypted_data = fernet.decrypt(token.encode())

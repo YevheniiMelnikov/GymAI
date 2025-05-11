@@ -18,20 +18,20 @@ class Settings:
     SUBSCRIBED_PAYMENT_STATUS: str = "subscribed"
     PAYMENT_STATUS_CLOSED: str = "CLOSED"
     PAYMENT_CHECK_INTERVAL: int = 60
+    COACH_PAYOUT_RATE: float = 0.7
     SITE_NAME: str = "AchieveTogether"
     TIME_ZONE: str = must_getenv("TIME_ZONE", "Europe/Kyiv")
-    BOT_LANG: str = must_getenv("BOT_LANG")
-    OWNER_LANG: str = must_getenv("OWNER_LANG")
+    BOT_LANG: str = must_getenv("BOT_LANG", "ua")
+    OWNER_LANG: str = must_getenv("OWNER_LANG", "ru")
 
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
-    DOMAIN: str = must_getenv("DOMAIN")
     API_KEY: str = must_getenv("API_KEY")
     API_URL: str = must_getenv("API_URL")
-    REDIS_URL: str = must_getenv("REDIS_URL")
+    REDIS_URL: str = must_getenv("REDIS_URL", "redis://redis:6379")
 
     BOT_TOKEN: str = must_getenv("BOT_TOKEN")
     BOT_LINK: str = os.getenv("BOT_LINK")
-    BOT_INTERNAL_URL: str = must_getenv("BOT_INTERNAL_URL")
+    BOT_INTERNAL_URL: str = must_getenv("BOT_INTERNAL_URL", "http://localhost:8000/")
     WEB_SERVER_HOST: str = "0.0.0.0"
     WEBHOOK_HOST: str = must_getenv("WEBHOOK_HOST")
     WEBHOOK_PORT: int = must_getenv("WEBHOOK_PORT")
@@ -51,8 +51,8 @@ class Settings:
     CHECKOUT_URL: str = must_getenv("CHECKOUT_URL")
     PAYMENT_CALLBACK_URL: str = f"{WEBHOOK_HOST}/payment-webhook/"
 
-    DB_PORT: str = must_getenv("DB_PORT")
-    DB_NAME: str = must_getenv("DB_NAME")
-    DB_USER: str = must_getenv("DB_USER")
-    DB_PASSWORD: str = must_getenv("POSTGRES_PASSWORD")
-    DB_HOST: str = must_getenv("DB_HOST")
+    DB_PORT: str = must_getenv("DB_PORT", "5432")
+    DB_NAME: str = must_getenv("DB_NAME", "postgres")
+    DB_USER: str = must_getenv("DB_USER", "postgres")
+    DB_PASSWORD: str = must_getenv("POSTGRES_PASSWORD", "password")
+    DB_HOST: str = must_getenv("DB_HOST", "db")
