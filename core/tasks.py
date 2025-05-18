@@ -4,11 +4,11 @@ import subprocess
 import asyncio
 from datetime import datetime, timedelta
 
-from aiogram import Bot
 from celery import shared_task
 from loguru import logger
 
 from bot.keyboards import workout_survey_kb
+from bot.singleton import bot
 from bot.texts.text_manager import msg_text
 from config.env_settings import Settings
 from core.cache import Cache
@@ -109,25 +109,21 @@ async def _send_daily_survey() -> None:
 
     yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
 
-    bot = Bot(Settings.BOT_TOKEN)
-    try:
-        for client_id in clients:
-            profile_data = await ProfileService.get_profile(client_id)
-            if not profile_data or not profile_data.get("tg_id"):
-                logger.warning(f"Profile {client_id} invalid, skip")
-                continue
+    for client_id in clients:
+        profile_data = await ProfileService.get_profile(client_id)
+        if not profile_data or not profile_data.get("tg_id"):
+            logger.warning(f"Profile {client_id} invalid, skip")
+            continue
 
-            lang = Cache.profile.get_profile_data(profile_data["tg_id"], "language") or Settings.BOT_LANG
+        lang = Cache.profile.get_profile_data(profile_data["tg_id"], "language") or Settings.BOT_LANG
 
-            try:
-                await bot.send_message(
-                    chat_id=profile_data["tg_id"],
-                    text=msg_text("have_you_trained", lang),
-                    reply_markup=workout_survey_kb(lang, yesterday),
-                    disable_notification=True,
-                )
-                logger.info(f"Survey sent to {client_id}")
-            except Exception as e:
-                logger.error(f"Survey push failed for {client_id}: {e}")
-    finally:
-        await bot.session.close()
+        try:
+            await bot.send_message(
+                chat_id=profile_data["tg_id"],
+                text=msg_text("have_you_trained", lang),
+                reply_markup=workout_survey_kb(lang, yesterday),
+                disable_notification=True,
+            )
+            logger.info(f"Survey sent to {client_id}")
+        except Exception as e:
+            logger.error(f"Survey push failed for {client_id}: {e}")

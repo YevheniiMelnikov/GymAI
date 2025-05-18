@@ -8,8 +8,7 @@ from functions.profiles import get_user_profile
 
 class ProfileMiddleware(BaseMiddleware):
     async def __call__(self, handler: Callable[..., Awaitable], message: Message, state: FSMContext) -> Awaitable:
-        profile = await get_user_profile(message.from_user.id)
-        if profile:
+        if profile := await get_user_profile(message.from_user.id):
             if isinstance(state, FSMContext):
                 await state.update_data(profile=profile)
         else:

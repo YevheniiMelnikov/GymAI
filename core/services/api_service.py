@@ -1,4 +1,5 @@
 from json import JSONDecodeError
+import asyncio
 
 import httpx
 from loguru import logger
@@ -10,40 +11,54 @@ from config.env_settings import Settings
 class APIClient:
     api_url = Settings.API_URL
     api_key = Settings.API_KEY
-    client = httpx.AsyncClient()
+    client = httpx.AsyncClient(timeout=Settings.API_TIMEOUT)
+
+    max_retries = Settings.API_MAX_RETRIES
+    initial_delay = Settings.API_RETRY_INITIAL_DELAY
+    backoff_factor = Settings.API_RETRY_BACKOFF_FACTOR
+    max_delay = Settings.API_RETRY_MAX_DELAY
 
     @classmethod
-    async def _api_request(cls, method: str, url: str, data: dict | None = None, headers: dict = None) -> tuple:
-        try:
-            response = await cls.client.request(method, url, json=data, headers=headers)
-            if response.is_success:
-                try:
-                    json_data = response.json()
-                    return response.status_code, json_data
-                except JSONDecodeError:
-                    logger.warning(f"Failed to decode JSON from response for {url}")
-                    return response.status_code, None
-            else:
+    async def _api_request(cls, method: str, url: str, data: dict = None, headers: dict = None) -> tuple:
+        headers = headers or {}
+        if cls.api_key:
+            headers.setdefault("Authorization", f"Bearer {cls.api_key}")
+
+        delay = cls.initial_delay
+
+        for attempt in range(1, cls.max_retries + 1):
+            try:
+                response = await cls.client.request(method, url, json=data, headers=headers)
+
+                if response.is_success:
+                    try:
+                        return response.status_code, response.json()
+                    except JSONDecodeError:
+                        logger.warning(f"Failed to decode JSON from response for {url}")
+                        return response.status_code, None
+
                 try:
                     error_data = response.json()
                 except JSONDecodeError:
                     error_data = {"error": response.text}
 
                 if response.status_code == 404:
-                    pass
-                else:
-                    logger.error(
-                        f"Request to {url} failed with status code {response.status_code} and response: {error_data}"
-                    )
+                    return response.status_code, error_data
 
+                logger.error(f"Request to {url} failed with {response.status_code}: {error_data}")
+                if response.status_code >= 500 or response.status_code == 429:
+                    raise httpx.HTTPStatusError("Retryable error", request=response.request, response=response)
                 return response.status_code, error_data
 
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error occurred: {e}")
-            raise UserServiceError(f"HTTP request failed with status {e.response.status_code}: {e}") from e
-        except httpx.HTTPError as e:
-            logger.exception("HTTP error occurred")
-            raise UserServiceError(f"HTTP request failed: {e}") from e
-        except Exception as e:
-            logger.exception("Unexpected error occurred")
-            raise UserServiceError(f"Unexpected error occurred: {e}") from e
+            except (httpx.HTTPStatusError, httpx.HTTPError) as e:
+                logger.warning(f"Attempt {attempt} failed: {e}. Retrying in {delay:.1f}s...")
+                if attempt == cls.max_retries:
+                    raise UserServiceError(f"Request to {url} failed after {attempt} attempts: {e}") from e
+                await asyncio.sleep(delay)
+                delay = min(delay * cls.backoff_factor, cls.max_delay)
+                return
+
+            except Exception as e:
+                logger.exception("Unexpected error occurred")
+                raise UserServiceError(f"Unexpected error: {e}") from e
+        return

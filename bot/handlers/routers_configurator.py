@@ -6,7 +6,7 @@ from bot.handlers.invalid_content_handler import invalid_content_router
 from bot.handlers.menu_handler import menu_router
 from bot.handlers.payment_handler import payment_router
 from bot.handlers.questionnaire_handler import questionnaire_router
-from bot.handlers.workouts_handler import program_router
+from bot.handlers.workout_handler import program_router
 from functions.chat import message_router
 
 

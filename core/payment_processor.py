@@ -21,6 +21,9 @@ class PaymentProcessor:
     profile_service = ProfileService
     workout_service = WorkoutService
 
+    STATUS_WAITING_FOR_SUBSCRIPTION = "waiting_for_subscription"
+    STATUS_WAITING_FOR_PROGRAM = "waiting_for_program"
+
     @classmethod
     async def _process_payment(cls, payment: Payment) -> None:
         try:
@@ -48,21 +51,28 @@ class PaymentProcessor:
         if payment.payment_type == "subscription":
             subscription = cls.cache.workout.get_subscription(profile.id)
             if subscription and subscription.enabled:
-                payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
-                next_payment_date = payment_date + relativedelta(months=1)
-                await send_message(
-                    recipient=client,
-                    text=msg_text("subscription_cancel_warning", profile.language).format(
-                        date=next_payment_date.strftime("%Y-%m-%d"),
-                        mail=Settings.EMAIL,
-                        tg=Settings.TG_SUPPORT_CONTACT,
-                    ),
-                    state=None,
-                    include_incoming_message=False,
-                )
-                await cancel_subscription(next_payment_date, profile.id, subscription.id)
-                logger.info(f"Subscription for profile_id {profile.id} deactivated")
-                return
+                try:
+                    payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
+                    next_payment_date = payment_date + relativedelta(months=1)
+                    await send_message(
+                        recipient=client,
+                        text=msg_text("subscription_cancel_warning", profile.language).format(
+                            date=next_payment_date.strftime("%Y-%m-%d"),
+                            mail=Settings.EMAIL,
+                            tg=Settings.TG_SUPPORT_CONTACT,
+                        ),
+                        state=None,
+                        include_incoming_message=False,
+                    )
+                    await cancel_subscription(next_payment_date, profile.id, subscription.id)
+                    logger.info(f"Subscription for profile_id {profile.id} deactivated due to failed payment")
+                    return
+                except ValueError as e:
+                    logger.error(
+                        f"Invalid date format for subscription payment_date: {subscription.payment_date} — {e}"
+                    )
+                except Exception as e:
+                    logger.exception(f"Error processing failed subscription payment for profile {profile.id}: {e}")
 
         await send_message(
             recipient=client,
@@ -94,21 +104,34 @@ class PaymentProcessor:
 
     @classmethod
     async def _process_subscription_payment(cls, profile: Profile) -> None:
-        cls.cache.client.set_client_data(profile.id, dict(status="waiting_for_subscription"))
+        cls.cache.client.set_client_data(profile.id, dict(status=cls.STATUS_WAITING_FOR_SUBSCRIPTION))
         subscription = cls.cache.workout.get_subscription(profile.id)
         if not subscription:
             logger.error(f"Subscription not found for profile {profile.id}")
             return
 
         current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        was_enabled = subscription.enabled
+
         cls.cache.workout.update_subscription(profile.id, dict(enabled=True, payment_date=current_date))
         await cls.workout_service.update_subscription(
             subscription.id, dict(enabled=True, price=subscription.price, payment_date=current_date)
         )
-        if not subscription.enabled:
+
+        if not was_enabled:
             client = cls.cache.client.get_client(profile.id)
+            if not client or not client.assigned_to:
+                logger.error(
+                    f"Cannot activate subscription for profile {profile.id} — client or assigned coach missing"
+                )
+                return
+
             coach_id = client.assigned_to[0]
             coach = cls.cache.coach.get_coach(coach_id)
+            if not coach:
+                logger.error(f"Coach {coach_id} not found for profile {profile.id}")
+                return
+
             await client_request(
                 coach,
                 client,
@@ -121,7 +144,7 @@ class PaymentProcessor:
 
     @classmethod
     async def _process_program_payment(cls, profile: Profile) -> None:
-        cls.cache.client.set_client_data(profile.id, dict(status="waiting_for_program"))
+        cls.cache.client.set_client_data(profile.id, dict(status=cls.STATUS_WAITING_FOR_PROGRAM))
         program = cls.cache.workout.get_program(profile.id)
         if not program:
             logger.error(f"Program not found for profile {profile.id}")
@@ -129,7 +152,7 @@ class PaymentProcessor:
 
         client = cls.cache.client.get_client(profile.id)
         if not client or not client.assigned_to:
-            logger.error(f"Invalid client or no assigned coaches for profile {profile.id}")
+            logger.error(f"Client or coach not found for profile {profile.id}")
             return
 
         coach_id = client.assigned_to[0]
@@ -146,8 +169,9 @@ class PaymentProcessor:
 
     @classmethod
     async def handle_webhook_event(cls, order_id: str, status_: str, error: str = "") -> None:
-        payment: Payment = await cls.payment_service.update_payment_status(order_id, status_, error)
+        payment: Payment = await cls.payment_service.update_status_by_order(order_id, status_, error)
         if not payment:
+            logger.warning(f"Payment not found for order_id {order_id}")
             return
 
         await cls._process_payment(payment)
@@ -156,37 +180,33 @@ class PaymentProcessor:
     async def process_unclosed_payments(cls) -> None:
         try:
             payments = await cls.payment_service.get_unclosed_payments()
-            payments_data = []
+            payout_data = []
 
             for payment in payments:
                 client = cls.cache.client.get_client(payment.profile)
                 if not client or not client.assigned_to:
-                    logger.warning(f"Skipping payment {payment.order_id} - invalid client or no assigned coaches")
+                    logger.warning(f"Skipping payment {payment.order_id} — client or assigned coach missing")
                     continue
 
-                try:
-                    coach_id = client.assigned_to[0]
-                    coach = cls.cache.coach.get_coach(coach_id)
-                    if not coach:
-                        logger.error(f"Coach {coach_id} not found for payment {payment.order_id}")
-                        continue
-
-                    payments_data.append(
-                        [coach.name, coach.surname, coach.payment_details, payment.order_id, int(payment.amount * 0.7)]
-                    )
-
-                    if await cls.payment_service.update_payment(payment.id, dict(status=Settings.PAYMENT_STATUS_CLOSED)):
-                        logger.info(f"Payment {payment.order_id} marked as closed")
-                    else:
-                        logger.error(f"Failed to update payment {payment.order_id}")
-
-                except Exception as e:
-                    logger.error(f"Error processing payment {payment.order_id}: {e}")
+                coach_id = client.assigned_to[0]
+                coach = cls.cache.coach.get_coach(coach_id)
+                if not coach:
+                    logger.error(f"Coach {coach_id} not found for payment {payment.order_id}")
                     continue
 
-            if payments_data:
+                updated = await cls.payment_service.update_payment(
+                    payment.id, dict(status=Settings.PAYMENT_STATUS_CLOSED)
+                )
+                if updated:
+                    logger.info(f"Payment {payment.order_id} marked as closed")
+                    amount = int(payment.amount * Settings.COACH_PAYOUT_RATE)
+                    payout_data.append([coach.name, coach.surname, coach.payment_details, payment.order_id, amount])
+                else:
+                    logger.error(f"Failed to mark payment {payment.order_id} as closed")
+
+            if payout_data:
                 loop = asyncio.get_running_loop()
-                await loop.run_in_executor(None, GSheetsService.create_new_payment_sheet, payments_data)
+                await loop.run_in_executor(None, GSheetsService.create_new_payment_sheet, payout_data)
 
         except Exception as e:
             logger.error(f"Failed to process unclosed payments: {e}")

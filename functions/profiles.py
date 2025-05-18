@@ -57,8 +57,7 @@ async def assign_coach(coach: Coach, client: Client) -> None:
         await ProfileService.edit_profile(coach.id, {"assigned_to": coach_clients})
 
     coach_profile = await ProfileService.get_coach_profile(coach.id)
-    coach_profile_id = int(coach_profile["id"])
-    await ProfileService.edit_client_profile(client.id, dict(coach=coach_profile_id))
+    await ProfileService.edit_client_profile(client.id, dict(coach=coach_profile.id))
     Cache.client.set_client_data(client.id, {"assigned_to": [coach.id]})
     await ProfileService.edit_profile(client.id, {"assigned_to": [coach.id]})
 
@@ -83,3 +82,5 @@ async def get_user_profile(telegram_id: int) -> Profile | None:
         if profile:
             Cache.profile.set_profile_data(telegram_id, profile.to_dict())
             return profile
+
+    return

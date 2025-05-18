@@ -76,7 +76,7 @@ async def get_client_page(client: Client, lang_code: str, subscription: bool, da
         "waiting_for_text": msg_text("waiting_for_text", lang_code),
     }
 
-    client_data = await ProfileService.get_profile(client.id)
+    client_profile = await ProfileService.get_profile(client.id)
     page = {
         "name": client.name,
         "gender": texts.get(client.gender, ""),
@@ -85,7 +85,7 @@ async def get_client_page(client: Client, lang_code: str, subscription: bool, da
         "workout_goals": client.workout_goals,
         "health_notes": client.health_notes,
         "weight": client.weight,
-        "language": Cache.profile.get_profile_data(client_data.get("tg_id"), "language"),
+        "language": client_profile.language,
         "subscription": texts.get("enabled") if subscription else texts.get("disabled"),
         "status": texts.get(client.status),
     }

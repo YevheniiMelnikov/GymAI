@@ -8,7 +8,6 @@ from bot.states import States
 from core.cache import Cache
 from core.exceptions import UserServiceError
 from functions.chat import send_message
-from core.models import Profile
 from functions.menus import show_main_menu
 from functions.profiles import get_user_profile
 from bot.texts.text_manager import msg_text
@@ -27,7 +26,7 @@ async def contact_client(message: Message, state: FSMContext):
         client = Cache.client.get_client(data.get("recipient_id"))
         if client.status == "waiting_for_text":
             Cache.client.set_client_data(client.id, {"status": "default"})
-        client_profile = Profile.from_dict(await ProfileService.get_profile(client.id))
+        client_profile = await ProfileService.get_profile(client.id)
         coach_name = Cache.coach.get_coach(profile.id).name
     except Exception as e:
         logger.error(f"Can't get data: {e}")
@@ -70,7 +69,7 @@ async def contact_coach(message: Message, state: FSMContext):
         if not coach:
             raise UserServiceError("Coach not found in cache", 404, f"recipient_id: {data.get('recipient_id')}")
 
-        coach_profile = Profile.from_dict(await ProfileService.get_profile(coach.id))
+        coach_profile = await ProfileService.get_profile(coach.id)
         if not coach_profile:
             raise UserServiceError("Coach profile not found", 404, f"coach_id: {coach.id}")
 

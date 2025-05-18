@@ -52,9 +52,7 @@ class CoachCacheManager(BaseCacheManager):
         if not raw:
             logger.debug(f"No data found for profile_id {profile_id} in cache")
             raise UserServiceError(
-                message="No coach data found",
-                code=404,
-                details=f"Coach ID: {profile_id} not found in Redis cache"
+                message="No coach data found", code=404, details=f"Coach ID: {profile_id} not found in Redis cache"
             )
         try:
             data = json.loads(raw)
@@ -65,7 +63,5 @@ class CoachCacheManager(BaseCacheManager):
         except Exception as e:
             logger.error(f"Failed to get data for profile_id {profile_id} from cache: {e}")
             raise UserServiceError(
-                message="Failed to get coach data",
-                code=500,
-                details=f"Error: {e}, Coach ID: {profile_id}"
+                message="Failed to get coach data", code=500, details=f"Error: {e}, Coach ID: {profile_id}"
             )

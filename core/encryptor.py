@@ -30,7 +30,7 @@ class Encryptor:
     @classmethod
     def decrypt(cls, token: str) -> Optional[str]:
         if not token:
-            return token
+            return
         try:
             fernet = cls._get_fernet()
             decrypted_data = fernet.decrypt(token.encode())
