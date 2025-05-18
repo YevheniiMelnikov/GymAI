@@ -11,7 +11,7 @@ from bot.keyboards import workout_survey_kb
 from bot.singleton import bot
 from bot.texts.text_manager import msg_text
 from config.env_settings import Settings
-from core.cache_manager import CacheManager
+from core.cache import Cache
 from core.payment_processor import PaymentProcessor
 from core.services.profile_service import ProfileService
 from core.services.payment_service import PaymentService
@@ -84,8 +84,8 @@ def deactivate_expired_subscriptions(self):
                 continue
 
             await WorkoutService.update_subscription(sub.id, dict(enabled=False, client_profile=sub.client_profile))
-            CacheManager.update_subscription_data(sub.client_profile, dict(enabled=False))
-            CacheManager.reset_program_payment_status(sub.client_profile, "subscription")
+            Cache.workout.update_subscription(sub.client_profile, dict(enabled=False))
+            Cache.workout.reset_payment_status(sub.client_profile, "subscription")
             logger.info(f"Subscription {sub.id} deactivated for user {sub.client_profile}")
 
     asyncio.run(_deactivate())
@@ -102,22 +102,24 @@ def send_daily_survey(self):
 
 
 async def _send_daily_survey() -> None:
-    clients = CacheManager.get_clients_to_survey()
+    clients = Cache.client.get_clients_to_survey()
     if not clients:
         logger.info("No clients to survey today")
         return
 
     yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
+
     for client_id in clients:
-        profile = await ProfileService.get_profile(client_id)
-        if not profile:
+        profile_data = await ProfileService.get_profile(client_id)
+        if not profile_data or not profile_data.get("tg_id"):
             logger.warning(f"Profile {client_id} invalid, skip")
             continue
 
-        lang = CacheManager.get_profile_data(profile.tg_id, "language") or Settings.BOT_LANG
+        lang = Cache.profile.get_profile_data(profile_data["tg_id"], "language") or Settings.BOT_LANG
+
         try:
             await bot.send_message(
-                chat_id=profile.tg_id,
+                chat_id=profile_data["tg_id"],
                 text=msg_text("have_you_trained", lang),
                 reply_markup=workout_survey_kb(lang, yesterday),
                 disable_notification=True,

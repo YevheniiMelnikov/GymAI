@@ -7,6 +7,7 @@ import aiohttp
 from pydantic_core import ValidationError
 
 from loguru import logger
+from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BotCommand, CallbackQuery
@@ -15,7 +16,7 @@ from bot.keyboards import program_edit_kb, program_view_kb, subscription_manage_
 from bot.singleton import bot
 from bot.states import States
 from config.env_settings import Settings
-from core.cache_manager import CacheManager
+from core.cache import Cache
 from core.exceptions import UserServiceError
 from core.services.gstorage_service import avatar_manager
 from core.services.profile_service import ProfileService
@@ -127,13 +128,13 @@ def generate_order_id() -> str:
 async def fetch_user(profile: Profile) -> Client | Coach:
     cache_get, cache_set, entity_cls = {
         "client": (
-            CacheManager.get_client_by_id,
-            CacheManager.set_client_data,
+            Cache.client.get_client,
+            Cache.client.set_client_data,
             Client,
         ),
         "coach": (
-            CacheManager.get_coach_by_id,
-            CacheManager.set_coach_data,
+            Cache.coach.get_coach,
+            Cache.coach.set_coach_data,
             Coach,
         ),
     }[profile.status]
