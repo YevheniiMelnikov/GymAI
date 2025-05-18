@@ -10,13 +10,14 @@ from rest_framework.exceptions import ValidationError
 
 from bot.keyboards import select_service_kb, workout_type_kb
 from bot.states import States
-from core.cache_manager import CacheManager
+
+from core.cache import Cache
+from core.services.workout_service import WorkoutService
 from functions.menus import show_main_menu
 from functions.profiles import get_user_profile
 from functions.workout_plans import cache_program_data
 from core.models import Client, Coach
 from core.services.payment_service import PaymentService
-from core.services import WorkoutService
 from bot.texts.text_manager import msg_text, btn_text
 
 payment_router = Router()
@@ -26,7 +27,7 @@ payment_router = Router()
 async def get_the_gift(callback_query: CallbackQuery, state: FSMContext):
     profile = await get_user_profile(callback_query.from_user.id)
     await callback_query.answer(btn_text("done", profile.language))
-    CacheManager.set_client_data(profile.id, {"status": "waiting_for_text"})
+    Cache.client.set_client_data(profile.id, {"status": "waiting_for_text"})
     await callback_query.message.answer(
         msg_text("workout_type", profile.language), reply_markup=workout_type_kb(profile.language)
     )
@@ -49,9 +50,9 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
         return
 
     option = callback_query.data.split("_")[1]
-    client = CacheManager.get_client_by_id(profile.id)
+    client = Cache.client.get_client(profile.id)
     coach_id = client.assigned_to.pop()
-    coach = CacheManager.get_coach_by_id(coach_id)
+    coach = Cache.coach.get_coach(coach_id)
     await state.update_data(request_type=option, client=Client.to_dict(client), coach=Coach.to_dict(coach))
     await callback_query.message.answer(
         msg_text("workout_type", profile.language), reply_markup=workout_type_kb(profile.language)
@@ -72,8 +73,8 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
             cache_program_data(data, profile.id)
         else:
             days = data.get("workout_days", [])
-            client = CacheManager.get_client_by_id(profile.id)
-            coach = CacheManager.get_coach_by_id(client.assigned_to.pop())
+            client = Cache.client.get_client(profile.id)
+            coach = Cache.coach.get_coach(client.assigned_to.pop())
             try:
                 subscription_id = await WorkoutService.create_subscription(
                     profile.id, days, data.get("wishes"), coach.subscription_price
@@ -93,8 +94,8 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
                 "workout_type": data.get("workout_type"),
                 "wishes": data.get("wishes"),
             }
-            CacheManager.save_subscription(profile.id, subscription_data)
-        CacheManager.set_payment_status(profile.id, True, data.get("request_type"))
+            Cache.workout.update_program(profile.id, subscription_data)
+        Cache.workout.set_payment_status(profile.id, True, data.get("request_type"))
         await PaymentService.create_payment(profile.id, data.get("request_type"), order_id, amount)
         await callback_query.answer(msg_text("payment_in_progress", profile.language), show_alert=True)
 

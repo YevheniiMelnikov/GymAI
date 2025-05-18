@@ -5,7 +5,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
-from core.cache_manager import CacheManager
+from core.cache import Cache
 from core.exceptions import ProfileNotFoundError
 from functions import menus
 from functions import chat
@@ -28,13 +28,13 @@ async def update_profile_data(message: Message, state: FSMContext, status: str) 
             await ProfileService.edit_profile(profile.id, profile_data)
 
         if status == "client":
-            CacheManager.set_client_data(profile.id, data)
+            Cache.client.set_client_data(profile.id, data)
             await ProfileService.edit_client_profile(profile.id, data)
         else:
             if not data.get("edit_mode"):
                 await message.answer(msg_text("wait_for_verification", data.get("lang")))
-                await chat.notify_about_new_coach(message.from_user.id, profile, data)
-            CacheManager.set_coach_data(profile.id, data)
+                await chat.send_coach_request(message.from_user.id, profile, data)
+            Cache.coach.set_coach_data(profile.id, data)
             await ProfileService.edit_coach_profile(profile.id, data)
 
         await message.answer(msg_text("your_data_updated", data.get("lang")))
@@ -53,22 +53,22 @@ async def assign_coach(coach: Coach, client: Client) -> None:
     coach_clients = coach.assigned_to if isinstance(coach.assigned_to, list) else []
     if client.id not in coach_clients:
         coach_clients.append(int(client.id))
-        CacheManager.set_coach_data(coach.id, {"assigned_to": coach_clients})
+        Cache.coach.set_coach_data(coach.id, {"assigned_to": coach_clients})
         await ProfileService.edit_profile(coach.id, {"assigned_to": coach_clients})
 
     coach_profile = await ProfileService.get_coach_profile(coach.id)
     coach_profile_id = int(coach_profile["id"])
     await ProfileService.edit_client_profile(client.id, dict(coach=coach_profile_id))
-    CacheManager.set_client_data(client.id, {"assigned_to": [coach.id]})
+    Cache.client.set_client_data(client.id, {"assigned_to": [coach.id]})
     await ProfileService.edit_profile(client.id, {"assigned_to": [coach.id]})
 
 
 async def check_assigned_clients(profile_id: int) -> bool:
-    coach = CacheManager.get_coach_by_id(profile_id)
+    coach = Cache.coach.get_coach(profile_id)
     assigned_clients = coach.assigned_to
     for client_id in assigned_clients:
-        subscription = CacheManager.get_subscription(client_id)
-        waiting_program = CacheManager.check_payment_status(client_id, "program")
+        subscription = Cache.workout.get_subscription(client_id)
+        waiting_program = Cache.workout.check_payment_status(client_id, "program")
         if subscription.enabled or waiting_program:
             return True
 
@@ -77,9 +77,9 @@ async def check_assigned_clients(profile_id: int) -> bool:
 
 async def get_user_profile(telegram_id: int) -> Profile | None:
     try:
-        return CacheManager.get_profile(telegram_id)
+        return Cache.profile.get_profile(telegram_id)
     except ProfileNotFoundError:
         profile = await ProfileService.get_profile_by_tg_id(telegram_id)
         if profile:
-            CacheManager.set_profile_data(telegram_id, profile.to_dict())
+            Cache.profile.set_profile_data(telegram_id, profile.to_dict())
             return profile

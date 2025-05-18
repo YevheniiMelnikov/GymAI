@@ -3,9 +3,9 @@ from datetime import datetime, timezone
 from loguru import logger
 from dateutil.relativedelta import relativedelta
 
+from core.cache import Cache
 from core.services.workout_service import WorkoutService
 from functions.chat import send_message, client_request
-from core.cache_manager import CacheManager
 from functions.workout_plans import cancel_subscription
 from core.models import Payment, Profile
 from config.env_settings import Settings
@@ -16,7 +16,7 @@ from bot.texts.text_manager import msg_text
 
 
 class PaymentProcessor:
-    cache_manager = CacheManager
+    cache = Cache
     payment_service = PaymentService
     profile_service = ProfileService
     workout_service = WorkoutService
@@ -34,19 +34,19 @@ class PaymentProcessor:
                 await cls._handle_successful_payment(payment, profile)
             elif payment.status == Settings.FAILURE_PAYMENT_STATUS:
                 await cls._handle_failed_payment(payment, profile)
-            await cls.payment_service.update_payment(payment.id, {"handled": True})
+            await cls.payment_service.update_payment(payment.id, dict(handled=True))
         except Exception as e:
             logger.exception(f"Payment processing failed for {payment.id}: {e}")
 
     @classmethod
     async def _handle_failed_payment(cls, payment: Payment, profile: Profile) -> None:
-        client = cls.cache_manager.get_client_by_id(profile.id)
+        client = cls.cache.client.get_client(profile.id)
         if not client:
             logger.error(f"Client not found for profile {profile.id}")
             return
 
         if payment.payment_type == "subscription":
-            subscription = cls.cache_manager.get_subscription(profile.id)
+            subscription = cls.cache.workout.get_subscription(profile.id)
             if subscription and subscription.enabled:
                 payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
                 next_payment_date = payment_date + relativedelta(months=1)
@@ -75,7 +75,7 @@ class PaymentProcessor:
 
     @classmethod
     async def _handle_successful_payment(cls, payment: Payment, profile: Profile) -> None:
-        client = cls.cache_manager.get_client_by_id(profile.id)
+        client = cls.cache.client.get_client(profile.id)
         if not client:
             logger.error(f"Client not found for profile {profile.id}")
             return
@@ -94,46 +94,46 @@ class PaymentProcessor:
 
     @classmethod
     async def _process_subscription_payment(cls, profile: Profile) -> None:
-        cls.cache_manager.set_client_data(profile.id, {"status": "waiting_for_subscription"})
-        subscription = cls.cache_manager.get_subscription(profile.id)
+        cls.cache.client.set_client_data(profile.id, dict(status="waiting_for_subscription"))
+        subscription = cls.cache.workout.get_subscription(profile.id)
         if not subscription:
             logger.error(f"Subscription not found for profile {profile.id}")
             return
 
         current_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        cls.cache_manager.update_subscription_data(profile.id, {"enabled": True, "payment_date": current_date})
+        cls.cache.workout.update_subscription(profile.id, dict(enabled=True, payment_date=current_date))
         await cls.workout_service.update_subscription(
-            subscription.id, {"enabled": True, "price": subscription.price, "payment_date": current_date}
+            subscription.id, dict(enabled=True, price=subscription.price, payment_date=current_date)
         )
         if not subscription.enabled:
-            client = cls.cache_manager.get_client_by_id(profile.id)
+            client = cls.cache.client.get_client(profile.id)
             coach_id = client.assigned_to[0]
-            coach = cls.cache_manager.get_coach_by_id(coach_id)
+            coach = cls.cache.coach.get_coach(coach_id)
             await client_request(
                 coach,
                 client,
-                {
-                    "request_type": "subscription",
-                    "workout_type": subscription.workout_type,
-                    "wishes": subscription.wishes,
-                },
+                dict(
+                    request_type="subscription",
+                    workout_type=subscription.workout_type,
+                    wishes=subscription.wishes,
+                ),
             )
 
     @classmethod
     async def _process_program_payment(cls, profile: Profile) -> None:
-        cls.cache_manager.set_client_data(profile.id, {"status": "waiting_for_program"})
-        program = cls.cache_manager.get_program(profile.id)
+        cls.cache.client.set_client_data(profile.id, dict(status="waiting_for_program"))
+        program = cls.cache.workout.get_program(profile.id)
         if not program:
             logger.error(f"Program not found for profile {profile.id}")
             return
 
-        client = cls.cache_manager.get_client_by_id(profile.id)
+        client = cls.cache.client.get_client(profile.id)
         if not client or not client.assigned_to:
             logger.error(f"Invalid client or no assigned coaches for profile {profile.id}")
             return
 
         coach_id = client.assigned_to[0]
-        coach = cls.cache_manager.get_coach_by_id(coach_id)
+        coach = cls.cache.coach.get_coach(coach_id)
         if not coach:
             logger.error(f"Coach {coach_id} not found for profile {profile.id}")
             return
@@ -141,12 +141,12 @@ class PaymentProcessor:
         await client_request(
             coach=coach,
             client=client,
-            data={"request_type": "program", "workout_type": program.workout_type, "wishes": program.wishes},
+            data=dict(request_type="program", workout_type=program.workout_type, wishes=program.wishes),
         )
 
     @classmethod
     async def handle_webhook_event(cls, order_id: str, status_: str, error: str = "") -> None:
-        payment: Payment = await cls.payment_service.update_status_by_order(order_id, status_, error)
+        payment: Payment = await cls.payment_service.update_payment_status(order_id, status_, error)
         if not payment:
             return
 
@@ -159,14 +159,14 @@ class PaymentProcessor:
             payments_data = []
 
             for payment in payments:
-                client = cls.cache_manager.get_client_by_id(payment.profile)
+                client = cls.cache.client.get_client(payment.profile)
                 if not client or not client.assigned_to:
                     logger.warning(f"Skipping payment {payment.order_id} - invalid client or no assigned coaches")
                     continue
 
                 try:
                     coach_id = client.assigned_to[0]
-                    coach = cls.cache_manager.get_coach_by_id(coach_id)
+                    coach = cls.cache.coach.get_coach(coach_id)
                     if not coach:
                         logger.error(f"Coach {coach_id} not found for payment {payment.order_id}")
                         continue
@@ -175,7 +175,7 @@ class PaymentProcessor:
                         [coach.name, coach.surname, coach.payment_details, payment.order_id, int(payment.amount * 0.7)]
                     )
 
-                    if await cls.payment_service.update_payment(payment.id, {"status": Settings.PAYMENT_STATUS_CLOSED}):
+                    if await cls.payment_service.update_payment(payment.id, dict(status=Settings.PAYMENT_STATUS_CLOSED)):
                         logger.info(f"Payment {payment.order_id} marked as closed")
                     else:
                         logger.error(f"Failed to update payment {payment.order_id}")

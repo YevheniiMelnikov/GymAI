@@ -15,7 +15,7 @@ from bot.keyboards import (
 )
 from bot.states import States
 from config.env_settings import Settings
-from core.cache_manager import CacheManager
+from core.cache import Cache
 from core.exceptions import ProfileNotFoundError
 from core.services.gstorage_service import avatar_manager
 from functions.chat import client_request
@@ -41,7 +41,7 @@ async def select_language(callback_query: CallbackQuery, state: FSMContext) -> N
         profile = await get_user_profile(callback_query.from_user.id)
         if profile:
             await ProfileService.edit_profile(profile.id, {"language": lang})
-            CacheManager.set_profile_data(callback_query.from_user.id, dict(language=lang))
+            Cache.profile.set_profile_data(callback_query.from_user.id, dict(language=lang))
             profile.language = lang
             await show_main_menu(callback_query.message, profile, state)
         else:
@@ -69,7 +69,7 @@ async def profile_status_choice(callback_query: CallbackQuery, state: FSMContext
         await callback_query.message.answer(msg_text("unexpected_error", lang))
         return
 
-    CacheManager.set_profile_data(callback_query.from_user.id, dict(id=profile.id, status=status, language=lang))
+    Cache.profile.set_profile_data(callback_query.from_user.id, dict(id=profile.id, status=status, language=lang))
     name_msg = await callback_query.message.answer(msg_text("name", lang))
     await state.update_data(chat_id=callback_query.message.chat.id, message_ids=[name_msg.message_id], status=status)
     await state.set_state(States.name)
@@ -349,8 +349,8 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
 @questionnaire_router.message(States.enter_wishes)
 async def enter_wishes(message: Message, state: FSMContext):
     profile = await get_user_profile(message.from_user.id)
-    client = CacheManager.get_client_by_id(profile.id)
-    coach = CacheManager.get_coach_by_id(client.assigned_to.pop())
+    client = Cache.client.get_client(profile.id)
+    coach = Cache.coach.get_coach(client.assigned_to.pop())
     await state.update_data(wishes=message.text, sender_name=client.name)
     data = await state.get_data()
 
@@ -397,7 +397,7 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
         if days:
             await state.update_data(workout_days=days)
             if data.get("edit_mode"):
-                subscription = CacheManager.get_subscription(profile.id)
+                subscription = Cache.workout.get_subscription(profile.id)
                 if len(subscription.workout_days) == len(days):
                     await edit_subscription_days(callback_query, days, profile, state, subscription)
                 else:
@@ -436,7 +436,7 @@ async def delete_profile_confirmation(callback_query: CallbackQuery, state: FSMC
                 return
 
         if profile and await ProfileService.delete_profile(profile.id):
-            CacheManager.delete_profile(callback_query.from_user.id)
+            Cache.profile.delete_profile(callback_query.from_user.id)
             await callback_query.message.answer(msg_text("profile_deleted", profile.language))
             await callback_query.message.answer(msg_text("select_action", profile.language))
             await callback_query.message.delete()

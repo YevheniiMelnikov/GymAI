@@ -5,7 +5,7 @@ from aiogram.types import Message, CallbackQuery
 
 from bot.keyboards import new_message_kb, workout_results_kb
 from bot.states import States
-from core.cache_manager import CacheManager
+from core.cache import Cache
 from core.exceptions import UserServiceError
 from functions.chat import send_message
 from core.models import Profile
@@ -24,11 +24,11 @@ async def contact_client(message: Message, state: FSMContext):
     profile = await get_user_profile(message.from_user.id)
 
     try:
-        client = CacheManager.get_client_by_id(data.get("recipient_id"))
+        client = Cache.client.get_client(data.get("recipient_id"))
         if client.status == "waiting_for_text":
-            CacheManager.set_client_data(client.id, {"status": "default"})
+            Cache.client.set_client_data(client.id, {"status": "default"})
         client_profile = Profile.from_dict(await ProfileService.get_profile(client.id))
-        coach_name = CacheManager.get_coach_by_id(profile.id).name
+        coach_name = Cache.coach.get_coach(profile.id).name
     except Exception as e:
         logger.error(f"Can't get data: {e}")
         await message.answer(msg_text("unexpected_error", profile.language))
@@ -66,7 +66,7 @@ async def contact_coach(message: Message, state: FSMContext):
     profile = await get_user_profile(message.from_user.id)
 
     try:
-        coach = CacheManager.get_coach_by_id(data.get("recipient_id"))
+        coach = Cache.coach.get_coach(data.get("recipient_id"))
         if not coach:
             raise UserServiceError("Coach not found in cache", 404, f"recipient_id: {data.get('recipient_id')}")
 
@@ -74,7 +74,7 @@ async def contact_coach(message: Message, state: FSMContext):
         if not coach_profile:
             raise UserServiceError("Coach profile not found", 404, f"coach_id: {coach.id}")
 
-        client_name = CacheManager.get_client_by_id(profile.id).name
+        client_name = Cache.client.get_client(profile.id).name
         if not client_name:
             raise UserServiceError("Client name not found", 404, f"profile_id: {profile.id}")
 
@@ -116,7 +116,7 @@ async def contact_coach(message: Message, state: FSMContext):
 @chat_router.callback_query(F.data.startswith("no_"))
 async def have_you_trained(callback_query: CallbackQuery, state: FSMContext):
     profile = await get_user_profile(callback_query.from_user.id)
-    subscription = CacheManager.get_subscription(profile.id)
+    subscription = Cache.workout.get_subscription(profile.id)
 
     try:
         _, weekday = callback_query.data.split("_", 1)
