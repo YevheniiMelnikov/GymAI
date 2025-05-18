@@ -8,6 +8,7 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 from loguru import logger
 
 from bot.handlers.internal.payment import internal_payment_handler
+from bot.singleton import set_bot
 from config.env_settings import Settings
 from bot.middlewares import ProfileMiddleware
 from bot.handlers.routers_configurator import configure_routers
@@ -28,6 +29,7 @@ async def start_web_app(app: web.Application) -> web.AppRunner:
 
 async def main() -> None:
     bot = Bot(token=Settings.BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
+    set_bot(bot)
     await bot.delete_webhook(drop_pending_updates=True)
     await bot.set_webhook(url=Settings.WEBHOOK_URL)
     await set_bot_commands()

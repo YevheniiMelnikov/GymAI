@@ -78,7 +78,7 @@ class Exercise(BaseEntity):
 @dataclass
 class Program(BaseEntity):
     id: int
-    exercises_by_day: dict[str, list[Exercise]]
+    exercises_by_day: dict[str, list[Exercise]]  # TODO: REDUCE OVERCOMPLEXITY
     created_at: float
     profile: int
     split_number: int

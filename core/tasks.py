@@ -4,14 +4,14 @@ import subprocess
 import asyncio
 from datetime import datetime, timedelta
 
-from aiogram import Bot
 from celery import shared_task
 from loguru import logger
 
 from bot.keyboards import workout_survey_kb
+from bot.singleton import bot
 from bot.texts.text_manager import msg_text
 from config.env_settings import Settings
-from core.cache_manager import CacheManager
+from core.cache import Cache
 from core.payment_processor import PaymentProcessor
 from core.services.profile_service import ProfileService
 from core.services.payment_service import PaymentService
@@ -84,8 +84,8 @@ def deactivate_expired_subscriptions(self):
                 continue
 
             await WorkoutService.update_subscription(sub.id, dict(enabled=False, client_profile=sub.client_profile))
-            CacheManager.update_subscription_data(sub.client_profile, dict(enabled=False))
-            CacheManager.reset_program_payment_status(sub.client_profile, "subscription")
+            Cache.workout.update_subscription(sub.client_profile, dict(enabled=False))
+            Cache.workout.reset_payment_status(sub.client_profile, "subscription")
             logger.info(f"Subscription {sub.id} deactivated for user {sub.client_profile}")
 
     asyncio.run(_deactivate())
@@ -102,32 +102,28 @@ def send_daily_survey(self):
 
 
 async def _send_daily_survey() -> None:
-    clients = CacheManager.get_clients_to_survey()
+    clients = Cache.client.get_clients_to_survey()
     if not clients:
         logger.info("No clients to survey today")
         return
 
     yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
 
-    bot = Bot(Settings.BOT_TOKEN)
-    try:
-        for client_id in clients:
-            profile_data = await ProfileService.get_profile(client_id)
-            if not profile_data or not profile_data.get("tg_id"):
-                logger.warning(f"Profile {client_id} invalid, skip")
-                continue
+    for client_id in clients:
+        profile_data = await ProfileService.get_profile(client_id)
+        if not profile_data or not profile_data.get("tg_id"):
+            logger.warning(f"Profile {client_id} invalid, skip")
+            continue
 
-            lang = CacheManager.get_profile_data(profile_data["tg_id"], "language") or Settings.BOT_LANG
+        lang = Cache.profile.get_profile_data(profile_data["tg_id"], "language") or Settings.BOT_LANG
 
-            try:
-                await bot.send_message(
-                    chat_id=profile_data["tg_id"],
-                    text=msg_text("have_you_trained", lang),
-                    reply_markup=workout_survey_kb(lang, yesterday),
-                    disable_notification=True,
-                )
-                logger.info(f"Survey sent to {client_id}")
-            except Exception as e:
-                logger.error(f"Survey push failed for {client_id}: {e}")
-    finally:
-        await bot.session.close()
+        try:
+            await bot.send_message(
+                chat_id=profile_data["tg_id"],
+                text=msg_text("have_you_trained", lang),
+                reply_markup=workout_survey_kb(lang, yesterday),
+                disable_notification=True,
+            )
+            logger.info(f"Survey sent to {client_id}")
+        except Exception as e:
+            logger.error(f"Survey push failed for {client_id}: {e}")

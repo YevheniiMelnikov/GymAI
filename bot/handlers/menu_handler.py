@@ -12,8 +12,8 @@ from dateutil.relativedelta import relativedelta
 from bot.keyboards import select_service_kb, choose_coach_kb, select_days_kb, gift_kb, yes_no_kb
 from bot.states import States
 from bot.texts.text_manager import msg_text
-from core.cache_manager import CacheManager
 from config.env_settings import Settings
+from core.cache import Cache
 from functions.chat import contact_client, process_feedback_content
 from functions.menus import (
     show_main_menu,
@@ -88,7 +88,7 @@ async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext, bo
         await show_main_menu(callback_query.message, profile, state)
 
     else:
-        coaches = CacheManager.get_coaches()
+        coaches = Cache.coach.get_coaches()
         if not coaches:
             await callback_query.answer(msg_text("no_coaches", profile.language), show_alert=True)
             return
@@ -125,8 +125,8 @@ async def coach_paginator(callback_query: CallbackQuery, state: FSMContext, bot:
     if action == "selected":
         await callback_query.answer(msg_text("saved", profile.language))
         coach_id = callback_query.data.split("_")[1]
-        coach = CacheManager.get_coach_by_id(int(coach_id))
-        client = CacheManager.get_client_by_id(profile.id)
+        coach = Cache.coach.get_coach(int(coach_id))
+        client = Cache.client.get_client(profile.id)
         await assign_coach(coach, client)
         await state.set_state(States.gift)
         await callback_query.message.answer(msg_text("gift", profile.language), reply_markup=gift_kb(profile.language))
@@ -187,7 +187,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
 
     elif callback_query.data == "contact":
         await callback_query.answer()
-        client = CacheManager.get_client_by_id(profile.id)
+        client = Cache.client.get_client(profile.id)
         coach_id = client.assigned_to.pop()
         await state.update_data(recipient_id=coach_id, sender_name=client.name)
         await state.set_state(States.contact_coach)
@@ -198,7 +198,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         await callback_query.answer(msg_text("subscription_canceled", profile.language), show_alert=True)
         user = await bot.get_chat(callback_query.from_user.id)
         contact = f"@{user.username}" if user.username else callback_query.from_user.id
-        subscription = CacheManager.get_subscription(profile.id)
+        subscription = Cache.workout.get_subscription(profile.id)
         order_id = await PaymentService.get_last_subscription_payment(profile.id)
         payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
         next_payment_date = payment_date + relativedelta(months=1)
@@ -220,7 +220,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
 
     else:
         await callback_query.answer()
-        subscription = CacheManager.get_subscription(profile.id)
+        subscription = Cache.workout.get_subscription(profile.id)
         workout_days = subscription.workout_days
         await state.update_data(exercises=subscription.exercises, days=workout_days, split=len(workout_days))
         await show_exercises_menu(callback_query, state, profile)

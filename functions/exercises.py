@@ -1,15 +1,12 @@
-import os
 from contextlib import suppress
 
-from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import payment_kb, program_edit_kb, program_manage_kb
-from bot.states import States
 from loguru import logger
-from core.cache_manager import CacheManager
+
+from core.cache import Cache
 from core.services.gstorage_service import gif_manager
 from core.services.workout_service import WorkoutService
 from functions.menus import show_subscription_page
@@ -20,8 +17,8 @@ from core.models import Exercise, Profile, Subscription
 from core.services.payment_service import PaymentService
 from bot.texts.exercises import exercise_dict
 from bot.texts.text_manager import msg_text
-
-bot = Bot(os.environ.get("BOT_TOKEN"))
+from bot.keyboards import payment_kb, program_edit_kb, program_manage_kb
+from bot.states import States
 
 
 async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Message | CallbackQuery) -> None:
@@ -42,7 +39,7 @@ async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Messa
         else:
             if not any(ex["name"] == exercise.name for ex in exercises[str(day_index)]):
                 exercises[str(day_index)].append(exercise.to_dict())
-        subscription_data = CacheManager.get_subscription(client_id)
+        subscription_data = Cache.workout.get_subscription(client_id)
         split_number = len(subscription_data.workout_days)
         program = await format_program({days[day_index]: exercises[str(day_index)]}, days[day_index])
     else:
@@ -52,7 +49,7 @@ async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Messa
         else:
             if not any(ex["name"] == exercise.name for ex in exercises[str(day_index)]):
                 exercises[str(day_index)].append(exercise.to_dict())
-        program_data = CacheManager.get_program(client_id)
+        program_data = Cache.workout.get_program(client_id)
         split_number = data.get("split", program_data.split_number)
         program = await format_program({str(day_index): exercises[str(day_index)]}, day_index)
 
@@ -80,7 +77,7 @@ async def find_exercise_gif(exercise: str) -> str | None:
         exercise = exercise.lower()
         for filename, synonyms in exercise_dict.items():
             if exercise in (syn.lower() for syn in synonyms):
-                cached_filename = CacheManager.get_exercise_gif(exercise)
+                cached_filename = Cache.workout.get_exercise_gif(exercise)
                 if cached_filename:
                     return f"https://storage.googleapis.com/{gif_manager.bucket_name}/{cached_filename}"
 
@@ -90,7 +87,7 @@ async def find_exercise_gif(exercise: str) -> str | None:
                     if matching_blob.exists():
                         file_url = f"https://storage.googleapis.com/{gif_manager.bucket_name}/{matching_blob.name}"
                         for synonym in synonyms:
-                            CacheManager.cache_gif_filename(synonym.lower(), matching_blob.name)
+                            Cache.workout.cache_gif_filename(synonym.lower(), matching_blob.name)
                         return file_url
 
     except Exception as e:
@@ -124,10 +121,10 @@ async def update_exercise_data(message: Message, state: FSMContext, lang: str, u
 
 async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMContext) -> None:
     profile = await profiles.get_user_profile(callback_query.from_user.id)
-    client_id = callback_query.data.split("_")[1]
+    client_id = int(callback_query.data.split("_")[1])
     day = callback_query.data.split("_")[2]
     week_day = get_translated_week_day(profile.language, day).lower()
-    subscription = CacheManager.get_subscription(client_id)
+    subscription = Cache.workout.get_subscription(client_id)
     day_index = subscription.workout_days.index(day)
     program_text = await format_program(subscription.exercises, 0)
     await state.update_data(
@@ -156,7 +153,7 @@ async def edit_subscription_days(
     updated_exercises = {days[i]: exercises for i, exercises in enumerate(exercises.values())}
     payload = {"workout_days": days, "exercises": updated_exercises, "client_profile": profile.id}
     subscription_data.update(payload)
-    CacheManager.update_subscription_data(profile.id, payload)
+    Cache.workout.update_subscription(profile.id, payload)
     await WorkoutService.update_subscription(subscription_data.get("id"), subscription_data)
     await state.set_state(States.show_subscription)
     await show_subscription_page(callback_query, state, subscription)
@@ -167,8 +164,8 @@ async def edit_subscription_days(
 async def process_new_subscription(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     await callback_query.answer(msg_text("checkbox_reminding", profile.language), show_alert=True)
     order_id = generate_order_id()
-    client = CacheManager.get_client_by_id(profile.id)
-    coach = CacheManager.get_coach_by_id(client.assigned_to.pop())
+    client = Cache.client.get_client(profile.id)
+    coach = Cache.coach.get_coach(client.assigned_to.pop())
     await state.update_data(order_id=order_id, amount=coach.subscription_price)
     if payment_link := await PaymentService.get_payment_link(
         action="subscribe",

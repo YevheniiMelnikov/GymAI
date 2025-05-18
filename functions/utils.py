@@ -12,14 +12,17 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BotCommand, CallbackQuery
 
-from bot.keyboards import program_edit_kb, program_view_kb, subscription_manage_kb
+from bot.keyboards import program_edit_kb, program_view_kb, subscription_manage_kb, profile_menu_kb
+from bot.singleton import bot
 from bot.states import States
 from config.env_settings import Settings
+from core.cache import Cache
+from core.exceptions import UserServiceError
+from core.services.gstorage_service import avatar_manager
+from core.services.profile_service import ProfileService
 from functions import menus, profiles, text_utils
-from core.models import Client
+from core.models import Client, Profile, Coach
 from bot.texts.text_manager import msg_text, TextManager
-
-bot = Bot(Settings.BOT_TOKEN)
 
 
 async def short_url(url: str) -> str:
@@ -120,3 +123,39 @@ async def delete_messages(state: FSMContext) -> None:
 def generate_order_id() -> str:
     characters = string.ascii_letters + string.digits
     return "".join(secrets.choice(characters) for _ in range(12))
+
+
+async def fetch_user(profile: Profile) -> Client | Coach:
+    cache_get, cache_set, entity_cls = {
+        "client": (
+            Cache.client.get_client,
+            Cache.client.set_client_data,
+            Client,
+        ),
+        "coach": (
+            Cache.coach.get_coach,
+            Cache.coach.set_coach_data,
+            Coach,
+        ),
+    }[profile.status]
+
+    try:
+        return cache_get(profile.id)
+    except UserServiceError as e:
+        logger.error(f"Error retrieving {profile.status} data for profile {profile.id}: {e}")
+        raw = await ProfileService.get_profile(profile.id)
+        user = entity_cls.from_dict(raw.to_dict())
+        cache_set(profile.id, user.to_dict())
+        return user
+
+
+async def answer_profile(cbq: CallbackQuery, profile: Profile, user: Coach | Client, text: str) -> None:
+    if profile.status == "coach" and getattr(user, "profile_photo", None):
+        photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{user.profile_photo}"
+        try:
+            await cbq.message.answer_photo(photo_url, text, reply_markup=profile_menu_kb(profile.language))
+            return
+        except TelegramBadRequest:
+            logger.warning("Photo not found for coach %s", profile.id)
+
+    await cbq.message.answer(text, reply_markup=profile_menu_kb(profile.language))
