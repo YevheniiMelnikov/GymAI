@@ -21,7 +21,7 @@ from bot.keyboards import (
 )
 from bot.states import States
 from core.cache import Cache
-from core.services.workout_service import WorkoutService
+from core.services import APIService
 from functions.chat import send_message
 from functions.exercises import update_exercise_data, save_exercise, find_exercise_gif
 from functions.menus import (
@@ -36,7 +36,6 @@ from functions.text_utils import format_program, get_translated_week_day
 from functions.utils import program_menu_pagination, short_url, delete_messages
 from functions.workout_plans import reset_workout_plan, save_workout_plan, next_day_workout_plan
 from core.models import Exercise, Program
-from core.services.profile_service import ProfileService
 from bot.texts.text_manager import msg_text, btn_text
 
 program_router = Router()
@@ -215,7 +214,7 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext)
         await callback_query.answer(msg_text("keep_going", profile.language), show_alert=True)
         client = Cache.client.get_client(profile.id)
         coach = Cache.coach.get_coach(client.assigned_to.pop())
-        coach_profile = await ProfileService.get_profile(coach.id)
+        coach_profile = await APIService.profile.get_profile(coach.id)
         coach_lang = Cache.profile.get_profile_data(coach_profile.tg_id, "language")
         await send_message(
             recipient=coach,
@@ -237,7 +236,7 @@ async def workout_description(message: Message, state: FSMContext):
     profile = await get_user_profile(message.from_user.id)
     client = Cache.client.get_client(profile.id)
     coach = Cache.coach.get_coach(client.assigned_to.pop())
-    coach_profile = await ProfileService.get_profile(coach.id)
+    coach_profile = await APIService.profile.get_profile(coach.id)
     coach_lang = coach_profile.language
     data = await state.get_data()
     day = data.get("day")
@@ -302,13 +301,13 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
 
     elif callback_query.data == "finish_editing":
         await callback_query.answer(btn_text("done", profile.language))
-        client_profile = await ProfileService.get_profile(client_id)
+        client_profile = await APIService.profile.get_profile(client_id)
         client_lang = client_profile.language
         client = Cache.client.get_client(client_id)
         if data.get("subscription"):
             subscription_data = Cache.workout.get_subscription(client_id).to_dict()
             subscription_data.update(client_profile=client_id, exercises=exercises)
-            await WorkoutService.update_subscription(subscription_data.get("id"), subscription_data)
+            await APIService.workout.update_subscription(subscription_data.get("id"), subscription_data)
             Cache.workout.update_subscription(
                 profile_id=client_id, subscription_data=dict(exercises=exercises, client_profile=client_id)
             )
@@ -323,7 +322,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
         else:
             current_program = Cache.workout.get_program(client_id)
             program_text = await format_program(exercises, 0)
-            if program := await WorkoutService.save_program(
+            if program := await APIService.workout.save_program(
                 client_id, exercises, current_program.split_number, current_program.wishes
             ):
                 program_data = program.to_dict()
@@ -500,7 +499,7 @@ async def confirm_subscription_reset(callback_query: CallbackQuery, state: FSMCo
         Cache.workout.update_subscription(profile.id, dict(exercises={}, workout_days=data.get("workout_days")))
         subscription_data = Cache.workout.get_subscription(profile.id).to_dict()
         subscription_data.update(client_profile=profile.id)
-        await WorkoutService.update_subscription(subscription_data.get("id"), subscription_data)
+        await APIService.workout.update_subscription(subscription_data.get("id"), subscription_data)
         client = Cache.client.get_client(profile.id)
         coach = Cache.coach.get_coach(client.assigned_to.pop())
         await send_message(

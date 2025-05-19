@@ -17,16 +17,15 @@ from bot.states import States
 from config.env_settings import Settings
 from core.cache import Cache
 from core.exceptions import ProfileNotFoundError
-from core.services.gstorage_service import avatar_manager
+from core.services import APIService
+from core.services.outer.gstorage_service import avatar_manager
 from functions.chat import client_request
 from functions.exercises import edit_subscription_days, process_new_subscription
 from functions.menus import show_main_menu, show_my_profile_menu
 from functions.profiles import get_user_profile, update_profile_data, check_assigned_clients
 from functions.text_utils import get_state_and_message
 from functions.utils import delete_messages, generate_order_id, set_bot_commands
-from core.services.payment_service import PaymentService
 from bot.texts.text_manager import msg_text
-from core.services.profile_service import ProfileService
 
 questionnaire_router = Router()
 
@@ -40,7 +39,7 @@ async def select_language(callback_query: CallbackQuery, state: FSMContext) -> N
     try:
         profile = await get_user_profile(callback_query.from_user.id)
         if profile:
-            await ProfileService.edit_profile(profile.id, {"language": lang})
+            await APIService.profile.edit_profile(profile.id, {"language": lang})
             Cache.profile.set_profile_data(callback_query.from_user.id, dict(language=lang))
             profile.language = lang
             await show_main_menu(callback_query.message, profile, state)
@@ -64,7 +63,9 @@ async def profile_status_choice(callback_query: CallbackQuery, state: FSMContext
     await delete_messages(state)
     lang = data.get("lang", Settings.BOT_LANG)
     status = callback_query.data if callback_query.data in ["coach", "client"] else "client"
-    profile = await ProfileService.create_profile(telegram_id=callback_query.from_user.id, status=status, language=lang)
+    profile = await APIService.profile.create_profile(
+        telegram_id=callback_query.from_user.id, status=status, language=lang
+    )
     if not profile:
         await callback_query.message.answer(msg_text("unexpected_error", lang))
         return
@@ -369,7 +370,7 @@ async def enter_wishes(message: Message, state: FSMContext):
         elif data.get("request_type") == "program":
             order_id = generate_order_id()
             await state.update_data(order_id=order_id, amount=coach.program_price)
-            if payment_link := await PaymentService.get_payment_link(
+            if payment_link := await APIService.payment.get_payment_link(
                 action="pay",
                 amount=str(coach.program_price),
                 order_id=order_id,
@@ -435,7 +436,7 @@ async def delete_profile_confirmation(callback_query: CallbackQuery, state: FSMC
                 await callback_query.answer(msg_text("unable_to_delete_profile", profile.language))
                 return
 
-        if profile and await ProfileService.delete_profile(profile.id):
+        if profile and await APIService.profile.delete_profile(profile.id):
             Cache.profile.delete_profile(callback_query.from_user.id)
             await callback_query.message.answer(msg_text("profile_deleted", profile.language))
             await callback_query.message.answer(msg_text("select_action", profile.language))

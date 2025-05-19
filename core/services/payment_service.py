@@ -6,7 +6,7 @@ from typing import Any
 from loguru import logger
 from liqpay import LiqPay
 
-from core.services.api_service import APIClient
+from core.services.api_client import APIClient
 from core.models import Payment, Subscription
 from config.env_settings import Settings
 

@@ -7,14 +7,13 @@ from aiogram.types import CallbackQuery, Message
 from loguru import logger
 
 from core.cache import Cache
-from core.services.gstorage_service import gif_manager
-from core.services.workout_service import WorkoutService
+from core.services import APIService
+from core.services.outer.gstorage_service import gif_manager
 from functions.menus import show_subscription_page
 from functions import profiles
 from functions.text_utils import format_program, get_translated_week_day
 from functions.utils import delete_messages, generate_order_id
 from core.models import Exercise, Profile, Subscription
-from core.services.payment_service import PaymentService
 from bot.texts.exercises import exercise_dict
 from bot.texts.text_manager import msg_text
 from bot.keyboards import payment_kb, program_edit_kb, program_manage_kb
@@ -154,7 +153,7 @@ async def edit_subscription_days(
     payload = {"workout_days": days, "exercises": updated_exercises, "client_profile": profile.id}
     subscription_data.update(payload)
     Cache.workout.update_subscription(profile.id, payload)
-    await WorkoutService.update_subscription(subscription_data.get("id"), subscription_data)
+    await APIService.workout.update_subscription(subscription_data.get("id"), subscription_data)
     await state.set_state(States.show_subscription)
     await show_subscription_page(callback_query, state, subscription)
     with suppress(TelegramBadRequest):
@@ -167,7 +166,7 @@ async def process_new_subscription(callback_query: CallbackQuery, profile: Profi
     client = Cache.client.get_client(profile.id)
     coach = Cache.coach.get_coach(client.assigned_to.pop())
     await state.update_data(order_id=order_id, amount=coach.subscription_price)
-    if payment_link := await PaymentService.get_payment_link(
+    if payment_link := await APIService.payment.get_payment_link(
         action="subscribe",
         amount=str(coach.subscription_price),
         order_id=order_id,

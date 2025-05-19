@@ -17,8 +17,8 @@ from bot.texts.text_manager import msg_text
 from config.env_settings import Settings
 from core.cache import Cache
 from core.models import Coach, Profile, Client
-from core.services.gstorage_service import avatar_manager
-from core.services.profile_service import ProfileService
+from core.services import APIService
+from core.services.outer.gstorage_service import avatar_manager
 from functions.exercises import edit_subscription_exercises
 from functions.menus import show_exercises_menu, show_main_menu, manage_subscription
 from functions import profiles
@@ -45,7 +45,7 @@ async def send_message(
         language = Settings.BOT_LANG
         sender_name = ""
 
-    recipient_profile = await ProfileService.get_profile(recipient.id)
+    recipient_profile = await APIService.profile.get_profile(recipient.id)
     assert recipient_profile
 
     if include_incoming_message:
@@ -195,11 +195,11 @@ async def create_workouts(callback_query: CallbackQuery, state: FSMContext):
 @message_router.callback_query(F.data.startswith("approve"))
 async def approve_coach(callback_query: CallbackQuery, state: FSMContext):
     profile_id = int(callback_query.data.split("_")[1])
-    await ProfileService.edit_coach_profile(profile_id, dict(verified=True))
+    await APIService.profile.edit_coach_profile(profile_id, dict(verified=True))
     Cache.coach.set_coach_data(profile_id, {"verified": True})
     await callback_query.answer("👍")
     coach = Cache.coach.get_coach(profile_id)
-    profile = await ProfileService.get_profile(profile_id)
+    profile = await APIService.profile.get_profile(profile_id)
     lang = profile.language if profile else Settings.BOT_LANG
     await send_message(coach, msg_text("coach_verified", lang), state, include_incoming_message=False)
     await callback_query.message.delete()
@@ -211,7 +211,7 @@ async def decline_coach(callback_query: CallbackQuery, state: FSMContext):
     profile_id = int(callback_query.data.split("_")[1])
     await callback_query.answer("👎")
     coach = Cache.coach.get_coach(profile_id)
-    profile = await ProfileService.get_profile(profile_id)
+    profile = await APIService.profile.get_profile(profile_id)
     lang = profile.language if profile else Settings.BOT_LANG
     await send_message(coach, msg_text("coach_declined", lang), state, include_incoming_message=False)
     await callback_query.message.delete()
@@ -229,12 +229,12 @@ async def contact_client(callback_query: CallbackQuery, profile: Profile, client
 
 
 async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> None:
-    coach_profile = await ProfileService.get_profile(coach.id)
+    coach_profile = await APIService.profile.get_profile(coach.id)
     coach_lang = coach_profile.language
     data["recipient_language"] = coach_lang
     service = data.get("request_type")
     preferable_workout_type = data.get("workout_type")
-    client_profile = await ProfileService.get_profile(client.id)
+    client_profile = await APIService.profile.get_profile(client.id)
     workout_types = await get_workout_types(coach_lang)
     preferable_workouts_type = workout_types.get(preferable_workout_type, "unknown")
     subscription = Cache.workout.get_subscription(client.id)
