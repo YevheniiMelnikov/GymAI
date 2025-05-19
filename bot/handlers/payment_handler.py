@@ -12,12 +12,11 @@ from bot.keyboards import select_service_kb, workout_type_kb
 from bot.states import States
 
 from core.cache import Cache
-from core.services.workout_service import WorkoutService
+from core.services import APIService
 from functions.menus import show_main_menu
 from functions.profiles import get_user_profile
 from functions.workout_plans import cache_program_data
 from core.models import Client, Coach
-from core.services.payment_service import PaymentService
 from bot.texts.text_manager import msg_text, btn_text
 
 payment_router = Router()
@@ -76,7 +75,7 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
             client = Cache.client.get_client(profile.id)
             coach = Cache.coach.get_coach(client.assigned_to.pop())
             try:
-                subscription_id = await WorkoutService.create_subscription(
+                subscription_id = await APIService.workout.create_subscription(
                     profile.id, days, data.get("wishes"), coach.subscription_price
                 )
             except ValidationError as e:
@@ -96,7 +95,7 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
             }
             Cache.workout.update_program(profile.id, subscription_data)
         Cache.workout.set_payment_status(profile.id, True, data.get("request_type"))
-        await PaymentService.create_payment(profile.id, data.get("request_type"), order_id, amount)
+        await APIService.payment.create_payment(profile.id, data.get("request_type"), order_id, amount)
         await callback_query.answer(msg_text("payment_in_progress", profile.language), show_alert=True)
 
     await show_main_menu(callback_query.message, profile, state)

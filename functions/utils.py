@@ -7,7 +7,6 @@ import aiohttp
 from pydantic_core import ValidationError
 
 from loguru import logger
-from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BotCommand, CallbackQuery
@@ -18,8 +17,8 @@ from bot.states import States
 from config.env_settings import Settings
 from core.cache import Cache
 from core.exceptions import UserServiceError
-from core.services.gstorage_service import avatar_manager
-from core.services.profile_service import ProfileService
+from core.services import APIService
+from core.services.outer.gstorage_service import avatar_manager
 from functions import menus, profiles, text_utils
 from core.models import Client, Profile, Coach
 from bot.texts.text_manager import msg_text, TextManager
@@ -143,7 +142,7 @@ async def fetch_user(profile: Profile) -> Client | Coach:
         return cache_get(profile.id)
     except UserServiceError as e:
         logger.error(f"Error retrieving {profile.status} data for profile {profile.id}: {e}")
-        raw = await ProfileService.get_profile(profile.id)
+        raw = await APIService.profile.get_profile(profile.id)
         user = entity_cls.from_dict(raw.to_dict())
         cache_set(profile.id, user.to_dict())
         return user

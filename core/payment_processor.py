@@ -9,7 +9,7 @@ from functions.chat import send_message, client_request
 from functions.workout_plans import cancel_subscription
 from core.models import Payment, Profile
 from config.env_settings import Settings
-from core.services.gsheets_service import GSheetsService
+from core.services.outer.gsheets_service import GSheetsService
 from core.services.payment_service import PaymentService
 from core.services.profile_service import ProfileService
 from bot.texts.text_manager import msg_text

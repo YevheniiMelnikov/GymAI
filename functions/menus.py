@@ -13,7 +13,8 @@ from bot.keyboards import *
 from bot.states import States
 from core.cache import Cache
 from core.exceptions import UserServiceError
-from core.services.gstorage_service import avatar_manager
+from core.services import APIService
+from core.services.outer.gstorage_service import avatar_manager
 from functions import profiles
 from core.models import Client, Coach, Profile, Subscription
 from functions.text_utils import (
@@ -22,7 +23,6 @@ from functions.text_utils import (
     format_program,
     get_translated_week_day,
 )
-from core.services.profile_service import ProfileService
 from config.env_settings import Settings
 from bot.texts.text_manager import msg_text
 from functions.utils import fetch_user, answer_profile
@@ -181,7 +181,7 @@ async def my_clients_menu(callback_query: CallbackQuery, coach_profile: Profile,
             clients = []
             for profile_id in assigned_ids:
                 try:
-                    if client_profile := await ProfileService.get_profile(profile_id):
+                    if client_profile := await APIService.profile.get_profile(profile_id):
                         clients.append(client_profile)
                 except Exception as e:
                     logger.error(f"Error retrieving profile data for client {profile_id}: {e}")

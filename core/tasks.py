@@ -13,9 +13,7 @@ from bot.texts.text_manager import msg_text
 from config.env_settings import Settings
 from core.cache import Cache
 from core.payment_processor import PaymentProcessor
-from core.services.profile_service import ProfileService
-from core.services.payment_service import PaymentService
-from core.services.workout_service import WorkoutService
+from core.services import APIService
 
 _dumps_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dumps")
 _pg_dir = os.path.join(_dumps_dir, "postgres")
@@ -77,13 +75,13 @@ def cleanup_backups(self):
 def deactivate_expired_subscriptions(self):
     async def _deactivate():
         since = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-        subs = await PaymentService.get_expired_subscriptions(since)
+        subs = await APIService.payment.get_expired_subscriptions(since)
         for sub in subs:
             if not sub.id or not sub.client_profile:
                 logger.warning(f"Invalid subscription: {sub}")
                 continue
 
-            await WorkoutService.update_subscription(sub.id, dict(enabled=False, client_profile=sub.client_profile))
+            await APIService.workout.update_subscription(sub.id, dict(enabled=False, client_profile=sub.client_profile))
             Cache.workout.update_subscription(sub.client_profile, dict(enabled=False))
             Cache.workout.reset_payment_status(sub.client_profile, "subscription")
             logger.info(f"Subscription {sub.id} deactivated for user {sub.client_profile}")
@@ -110,7 +108,7 @@ async def _send_daily_survey() -> None:
     yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
 
     for client_id in clients:
-        profile_data = await ProfileService.get_profile(client_id)
+        profile_data = await APIService.profile.get_profile(client_id)
         if not profile_data or not profile_data.get("tg_id"):
             logger.warning(f"Profile {client_id} invalid, skip")
             continue

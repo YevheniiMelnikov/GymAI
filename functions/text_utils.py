@@ -3,9 +3,8 @@ from typing import Any, Optional
 from aiogram.fsm.state import State
 
 from bot.states import States
-from core.cache import Cache
 from core.models import Client, Coach, Exercise
-from core.services.profile_service import ProfileService
+from core.services import APIService
 from bot.texts.text_manager import msg_text, btn_text
 
 
@@ -76,7 +75,7 @@ async def get_client_page(client: Client, lang_code: str, subscription: bool, da
         "waiting_for_text": msg_text("waiting_for_text", lang_code),
     }
 
-    client_profile = await ProfileService.get_profile(client.id)
+    client_profile = await APIService.profile.get_profile(client.id)
     page = {
         "name": client.name,
         "gender": texts.get(client.gender, ""),

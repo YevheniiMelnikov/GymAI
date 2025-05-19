@@ -14,6 +14,7 @@ from bot.states import States
 from bot.texts.text_manager import msg_text
 from config.env_settings import Settings
 from core.cache import Cache
+from core.services import APIService
 from functions.chat import contact_client, process_feedback_content
 from functions.menus import (
     show_main_menu,
@@ -29,7 +30,6 @@ from functions.profiles import assign_coach, get_user_profile
 from functions.utils import handle_clients_pagination
 from functions.workout_plans import manage_program, cancel_subscription
 from core.models import Coach, Profile
-from core.services.payment_service import PaymentService
 
 menu_router = Router()
 
@@ -199,7 +199,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         user = await bot.get_chat(callback_query.from_user.id)
         contact = f"@{user.username}" if user.username else callback_query.from_user.id
         subscription = Cache.workout.get_subscription(profile.id)
-        order_id = await PaymentService.get_last_subscription_payment(profile.id)
+        order_id = await APIService.payment.get_last_subscription_payment(profile.id)
         payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
         next_payment_date = payment_date + relativedelta(months=1)
         async with aiohttp.ClientSession():
@@ -213,7 +213,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
                 ),
             )
 
-        await PaymentService.unsubscribe(order_id)
+        await APIService.payment.unsubscribe(order_id)
         await cancel_subscription(next_payment_date, profile.id, subscription.id)
         logger.info(f"Subscription for profile_id {profile.id} deactivated")
         await show_main_menu(callback_query.message, profile, state)
