@@ -28,7 +28,7 @@ class Settings:
 
     TIME_ZONE: str = must_getenv("TIME_ZONE", "Europe/Kyiv")
     BOT_LANG: str = must_getenv("BOT_LANG", "ua")
-    OWNER_LANG: str = must_getenv("OWNER_LANG", "ru")
+    ADMIN_LANG: str = must_getenv("ADMIN_LANG", "ru")
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     API_KEY: str = must_getenv("API_KEY")
     API_URL: str = must_getenv("API_URL")
@@ -49,7 +49,7 @@ class Settings:
     PUBLIC_OFFER: str = must_getenv("PUBLIC_OFFER")
     PRIVACY_POLICY: str = must_getenv("PRIVACY_POLICY")
     EMAIL: str = must_getenv("EMAIL")
-    OWNER_ID: str = must_getenv("OWNER_ID")
+    ADMIN_ID: str = must_getenv("ADMIN_ID")
 
     PAYMENT_PRIVATE_KEY: str = must_getenv("PAYMENT_PRIVATE_KEY")
     PAYMENT_PUB_KEY: str = must_getenv("PAYMENT_PUB_KEY")

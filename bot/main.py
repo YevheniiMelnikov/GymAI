@@ -11,7 +11,7 @@ from bot.handlers.internal.payment import internal_payment_handler
 from bot.singleton import set_bot
 from config.env_settings import Settings
 from bot.middlewares import ProfileMiddleware
-from bot.handlers.routers_configurator import configure_routers
+from bot.handlers.routers_collector import configure_routers
 from core.cache.base import BaseCacheManager
 from functions.utils import set_bot_commands
 

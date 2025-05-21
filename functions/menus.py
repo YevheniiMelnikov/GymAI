@@ -90,7 +90,7 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
 async def show_main_menu(message: Message, profile: Profile, state: FSMContext) -> None:
     menu = client_menu_kb if profile.status == "client" else coach_menu_kb
     await state.clear()
-    await state.update_data(profile=profile.to_dict())
+    await state.update_data(profile=profile.model_dump())
     await state.set_state(States.main_menu)
     await message.answer(msg_text("main_menu", profile.language), reply_markup=menu(profile.language))
     with suppress(TelegramBadRequest):
@@ -121,7 +121,7 @@ async def show_coaches_menu(message: Message, coaches: list[Coach], bot: Bot, cu
     current_coach = coaches[current_index]
     text = msg_text("coach_page", profile.language)
     coach_photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{current_coach.profile_photo}"
-    formatted_text = text.format(**current_coach.to_dict())
+    formatted_text = text.format(**current_coach.model_dump())
 
     try:
         media = InputMediaPhoto(media=coach_photo_url)
@@ -265,7 +265,7 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
             await callback_query.message.answer(
                 msg_text("select_action", profile.language), reply_markup=program_action_kb(profile.language)
             )
-            await state.update_data(program=program.to_dict())
+            await state.update_data(program=program.model_dump())
             await state.set_state(States.program_action_choice)
     else:
         await show_program_promo_page(callback_query, profile, state)

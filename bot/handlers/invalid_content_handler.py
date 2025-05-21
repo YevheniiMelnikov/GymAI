@@ -1,9 +1,10 @@
-from aiogram import F, Router
+from aiogram import Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from bot.states import States
 from bot.texts.text_manager import msg_text
+from config.env_settings import Settings
 
 invalid_content_router = Router()
 
@@ -13,28 +14,36 @@ async def handle_invalid_content(message: Message, lang: str) -> None:
     await message.delete()
 
 
-@invalid_content_router.message(States.username)
-@invalid_content_router.message(States.select_language)
-@invalid_content_router.message(States.password)
-@invalid_content_router.message(States.born_in)
-@invalid_content_router.message(States.account_type)
-@invalid_content_router.message(States.gender)
-@invalid_content_router.message(States.workout_goals)
-@invalid_content_router.message(States.weight)
-@invalid_content_router.message(States.workout_experience)
-@invalid_content_router.message(States.health_notes)
-@invalid_content_router.message(States.name)
-@invalid_content_router.message(States.payment_choice)
-@invalid_content_router.message(States.select_service)
-@invalid_content_router.message(States.work_experience)
-@invalid_content_router.message(States.additional_info)
-@invalid_content_router.message(States.payment_details)
-@invalid_content_router.message(States.profile_photo, F.text)
-@invalid_content_router.message(States.contact_client)
-@invalid_content_router.message(States.main_menu)
-@invalid_content_router.message(States.profile_delete)
-@invalid_content_router.message(States.gift)
-@invalid_content_router.message(States.program_edit)
+HANDLED_STATES = [
+    States.username,
+    States.select_language,
+    States.password,
+    States.born_in,
+    States.account_type,
+    States.gender,
+    States.workout_goals,
+    States.weight,
+    States.workout_experience,
+    States.health_notes,
+    States.name,
+    States.payment_choice,
+    States.select_service,
+    States.work_experience,
+    States.additional_info,
+    States.payment_details,
+    States.profile_photo,
+    States.contact_client,
+    States.main_menu,
+    States.profile_delete,
+    States.gift,
+    States.program_edit,
+]
+
+
 async def invalid_data_handler(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
-    await handle_invalid_content(message, data.get("lang", "ua"))
+    await handle_invalid_content(message, data.get("lang", Settings.BOT_LANG))
+
+
+for state_ in HANDLED_STATES:
+    invalid_content_router.message(state_)(invalid_data_handler)

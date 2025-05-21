@@ -85,9 +85,9 @@ async def send_coach_request(tg_id: int, profile: Profile, data: dict[str, Any])
     photo = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{file_name}"
     async with aiohttp.ClientSession():
         await bot.send_photo(
-            chat_id=Settings.OWNER_ID,
+            chat_id=Settings.ADMIN_ID,
             photo=photo,
-            caption=msg_text("new_coach_request", Settings.OWNER_LANG).format(
+            caption=msg_text("new_coach_request", Settings.ADMIN_LANG).format(
                 name=name,
                 surname=surname,
                 experience=experience,
@@ -157,37 +157,37 @@ async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> 
 async def process_feedback_content(message: Message, profile: Profile) -> bool:
     if message.text:
         await bot.send_message(
-            chat_id=Settings.OWNER_ID,
-            text=msg_text("new_feedback", Settings.OWNER_LANG).format(profile_id=profile.id, feedback=message.text),
+            chat_id=Settings.ADMIN_ID,
+            text=msg_text("new_feedback", Settings.ADMIN_LANG).format(profile_id=profile.id, feedback=message.text),
             parse_mode=ParseMode.HTML,
         )
         return True
 
     elif message.photo:
         await bot.send_message(
-            chat_id=Settings.OWNER_ID,
-            text=msg_text("new_feedback", Settings.OWNER_LANG).format(
+            chat_id=Settings.ADMIN_ID,
+            text=msg_text("new_feedback", Settings.ADMIN_LANG).format(
                 profile_id=profile.id, feedback=message.caption or ""
             ),
             parse_mode=ParseMode.HTML,
         )
         photo_id = message.photo[-1].file_id
         await bot.send_photo(
-            chat_id=Settings.OWNER_ID,
+            chat_id=Settings.ADMIN_ID,
             photo=photo_id,
         )
         return True
 
     elif message.video:
         await bot.send_message(
-            chat_id=Settings.OWNER_ID,
-            text=msg_text("new_feedback", Settings.OWNER_LANG).format(
+            chat_id=Settings.ADMIN_ID,
+            text=msg_text("new_feedback", Settings.ADMIN_LANG).format(
                 profile_id=profile.id, feedback=message.caption or ""
             ),
             parse_mode=ParseMode.HTML,
         )
         await bot.send_video(
-            chat_id=Settings.OWNER_ID,
+            chat_id=Settings.ADMIN_ID,
             video=message.video.file_id,
         )
         return True

@@ -12,16 +12,17 @@ from bot.states import States
 from core.cache import Cache
 from core.services import APIService
 from functions.menus import show_main_menu
-from functions.profiles import get_user_profile
 from functions.workout_plans import cache_program_data
 from bot.texts.text_manager import msg_text, btn_text
+from core.models import Profile
 
 payment_router = Router()
 
 
 @payment_router.callback_query(States.gift, F.data == "get")
 async def get_the_gift(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_user_profile(callback_query.from_user.id)
+    data = await state.get_data()
+    profile = Profile.model_validate(data["profile"])
     await callback_query.answer(btn_text("done", profile.language))
     await Cache.client.update_client(profile.id, dict(status="waiting_for_text"))
     await callback_query.message.answer(
@@ -35,7 +36,8 @@ async def get_the_gift(callback_query: CallbackQuery, state: FSMContext):
 @payment_router.callback_query(States.payment_choice)
 async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.answer()
-    profile = await get_user_profile(callback_query.from_user.id)
+    data = await state.get_data()
+    profile = Profile.model_validate(data["profile"])
     if callback_query.data == "back":
         await state.set_state(States.select_service)
         await callback_query.message.answer(
@@ -60,9 +62,9 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
 
 @payment_router.callback_query(States.handle_payment)
 async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_user_profile(callback_query.from_user.id)
+    data = await state.get_data()
+    profile = Profile.model_validate(data["profile"])
     if callback_query.data == "done":
-        data = await state.get_data()
         order_id = data.get("order_id")
         amount = data.get("amount")
         if data.get("request_type") == "program":

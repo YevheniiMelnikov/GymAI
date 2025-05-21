@@ -155,8 +155,9 @@ async def edit_subscription_days(
     state: FSMContext,
     subscription: Subscription,
 ) -> None:
-    subscription_data: dict = subscription.to_dict()
-    exercises: list[DayExercises] = subscription_data.get("exercises", [])
+    subscription_data = subscription.model_dump()
+    exercises_data = subscription_data.get("exercises", [])
+    exercises = [DayExercises.model_validate(e) for e in exercises_data]
     updated_exercises: dict[str, list[dict]] = {
         days[i]: [e.model_dump() for e in day.exercises] for i, day in enumerate(exercises)
     }
