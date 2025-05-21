@@ -16,10 +16,10 @@ from core.services import APIService
 from functions.chat import send_message
 from functions.exercises import edit_subscription_exercises
 from functions.menus import show_main_menu, manage_subscription, show_exercises_menu
-from functions.profiles import get_user_profile
 from bot.texts.text_manager import msg_text
 from functions.text_utils import _msg
 from functions.utils import program_menu_pagination
+from functions.profiles import Profile
 
 chat_router = Router()
 
@@ -27,7 +27,7 @@ chat_router = Router()
 @chat_router.message(States.contact_client, F.text | F.photo | F.video)
 async def contact_client(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
-    profile = await get_user_profile(message.from_user.id)
+    profile = Profile.model_validate(data["profile"])
     assert profile is not None
 
     client = await Cache.client.get_client(data.get("recipient_id"))
@@ -75,7 +75,7 @@ async def contact_client(message: Message, state: FSMContext) -> None:
 @chat_router.message(States.contact_coach, F.text | F.photo | F.video)
 async def contact_coach(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
-    profile = await get_user_profile(message.from_user.id)
+    profile = Profile.model_validate(data["profile"])
     assert profile is not None
 
     coach = await Cache.coach.get_coach(data.get("recipient_id"))
@@ -119,7 +119,8 @@ async def contact_coach(message: Message, state: FSMContext) -> None:
 
 @chat_router.callback_query(F.data.startswith("yes_") | F.data.startswith("no_"))
 async def have_you_trained(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = await get_user_profile(callback_query.from_user.id)
+    data = await state.get_data()
+    profile = Profile.model_validate(data["profile"])
     assert profile is not None
     subscription = await Cache.workout.get_subscription(profile.id)
     assert subscription is not None
@@ -152,14 +153,17 @@ async def have_you_trained(callback_query: CallbackQuery, state: FSMContext) -> 
 @chat_router.callback_query(F.data.in_(["quit", "later"]))
 async def close_notification(callback_query: CallbackQuery, state: FSMContext) -> None:
     await _msg(callback_query.message).delete()
-    profile = await get_user_profile(callback_query.from_user.id)
-    if profile:
+    data = await state.get_data()
+    profile_dict = data.get("profile")
+    if profile_dict:
+        profile = Profile.model_validate(profile_dict)
         await show_main_menu(_msg(callback_query.message), profile, state)
 
 
 @chat_router.callback_query(F.data == "subscription_view")
 async def subscription_view(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = await get_user_profile(callback_query.from_user.id)
+    data = await state.get_data()
+    profile = Profile.model_validate(data["profile"])
     assert profile is not None
     subscription = await Cache.workout.get_subscription(profile.id)
     assert subscription is not None
@@ -175,7 +179,8 @@ async def subscription_view(callback_query: CallbackQuery, state: FSMContext) ->
 
 @chat_router.callback_query(F.data.startswith("answer"))
 async def answer_message(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = await get_user_profile(callback_query.from_user.id)
+    data = await state.get_data()
+    profile = Profile.model_validate(data["profile"])
     assert profile is not None
 
     recipient_id = int(callback_query.data.split("_", 1)[1])
@@ -199,12 +204,11 @@ async def answer_message(callback_query: CallbackQuery, state: FSMContext) -> No
 
 @chat_router.callback_query(F.data.in_(["previous", "next"]))
 async def navigate_days(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = await get_user_profile(callback_query.from_user.id)
+    data = await state.get_data()
+    profile = Profile.model_validate(data["profile"])
     assert profile is not None
 
     program = await Cache.workout.get_program(profile.id)
-    data = await state.get_data()
-
     if data.get("subscription"):
         subscription = await Cache.workout.get_subscription(profile.id)
         assert subscription is not None
@@ -226,7 +230,8 @@ async def edit_subscription(callback_query: CallbackQuery, state: FSMContext) ->
 
 @chat_router.callback_query(F.data.startswith("create"))
 async def create_workouts(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = await get_user_profile(callback_query.from_user.id)
+    data = await state.get_data()
+    profile = Profile.model_validate(data["profile"])
     assert profile is not None
 
     await state.clear()

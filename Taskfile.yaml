@@ -30,15 +30,15 @@ tasks:
       - uv run pytest
 
   update:
-    desc: Update dependencies
+    desc: Update dependencies (main + dev)
     cmds:
       - uv lock --upgrade
-      - uv sync
+      - uv sync --extra dev
 
   update-win:
-    desc: Sync deps in Windows venv
+    desc: Sync deps in Windows venv (main + dev)
     cmds:
-      - uv sync --active
+      - uv sync --extra dev --active
 
   pre-commit:
     desc: Run pre-commit hooks

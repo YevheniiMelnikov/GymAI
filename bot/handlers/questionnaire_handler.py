@@ -17,12 +17,13 @@ from bot.states import States
 from config.env_settings import Settings
 from core.cache import Cache
 from core.exceptions import ProfileNotFoundError
+from core.models import Profile
 from core.services import APIService
 from core.services.outer.gstorage_service import avatar_manager
 from functions.chat import client_request
 from functions.exercises import edit_subscription_days, process_new_subscription
 from functions.menus import show_main_menu, show_my_profile_menu
-from functions.profiles import get_user_profile, update_profile_data, check_assigned_clients
+from functions.profiles import update_profile_data, check_assigned_clients
 from functions.text_utils import get_state_and_message
 from functions.utils import delete_messages, generate_order_id, set_bot_commands
 from bot.texts.text_manager import msg_text
@@ -37,11 +38,12 @@ async def select_language(callback_query: CallbackQuery, state: FSMContext) -> N
     lang = callback_query.data
     await set_bot_commands(lang)
     try:
-        profile = await get_user_profile(callback_query.from_user.id)
+        profile = await APIService.profile.get_profile_by_tg_id(callback_query.from_user.id)
         if profile:
             await APIService.profile.update_profile(profile.id, {"language": lang})
             await Cache.profile.update_profile(callback_query.from_user.id, dict(language=lang))
             profile.language = lang
+            await state.update_data(profile=profile.model_dump())
             await show_main_menu(callback_query.message, profile, state)
         else:
             raise ProfileNotFoundError(callback_query.from_user.id)
@@ -71,6 +73,7 @@ async def profile_status_choice(callback_query: CallbackQuery, state: FSMContext
         return
 
     await Cache.profile.save_profile(callback_query.from_user.id, dict(id=profile.id, status=status, language=lang))
+    await state.update_data(profile=profile.model_dump())
     name_msg = await callback_query.message.answer(msg_text("name", lang))
     await state.update_data(chat_id=callback_query.message.chat.id, message_ids=[name_msg.message_id], status=status)
     await state.set_state(States.name)
@@ -317,7 +320,8 @@ async def profile_photo(message: Message, state: FSMContext) -> None:
 
 @questionnaire_router.callback_query(States.edit_profile)
 async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = await get_user_profile(callback_query.from_user.id)
+    data = await state.get_data()
+    profile = Profile.model_validate(data["profile"])
     await delete_messages(state)
     await state.update_data(lang=profile.language)
     if callback_query.data == "back":
@@ -340,7 +344,8 @@ async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> No
 
 @questionnaire_router.callback_query(States.workout_type)
 async def workout_type(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_user_profile(callback_query.from_user.id)
+    data = await state.get_data()
+    profile = Profile.model_validate(data["profile"])
     await state.update_data(workout_type=callback_query.data)
     await state.set_state(States.enter_wishes)
     await callback_query.message.answer(msg_text("enter_wishes", profile.language))
@@ -349,7 +354,8 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
 
 @questionnaire_router.message(States.enter_wishes)
 async def enter_wishes(message: Message, state: FSMContext):
-    profile = await get_user_profile(message.from_user.id)
+    data = await state.get_data()
+    profile = Profile.model_validate(data["profile"])
     client = await Cache.client.get_client(profile.id)
     coach = await Cache.coach.get_coach(client.assigned_to.pop())
     await state.update_data(wishes=message.text, sender_name=client.name)
@@ -390,8 +396,8 @@ async def enter_wishes(message: Message, state: FSMContext):
 
 @questionnaire_router.callback_query(States.workout_days)
 async def workout_days(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_user_profile(callback_query.from_user.id)
     data = await state.get_data()
+    profile = Profile.model_validate(data["profile"])
     days = data.get("workout_days", [])
 
     if callback_query.data == "complete":
@@ -428,7 +434,8 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
 
 @questionnaire_router.callback_query(States.profile_delete)
 async def delete_profile_confirmation(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = await get_user_profile(callback_query.from_user.id)
+    data = await state.get_data()
+    profile = Profile.model_validate(data["profile"])
 
     if callback_query.data == "yes":
         if profile and profile.status == "coach":

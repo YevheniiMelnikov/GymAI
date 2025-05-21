@@ -36,7 +36,7 @@ from functions.menus import (
     my_clients_menu,
     show_my_profile_menu,
 )
-from functions.profiles import assign_coach, get_user_profile
+from functions.profiles import assign_coach
 from functions.utils import handle_clients_pagination
 from functions.workout_plans import manage_program, cancel_subscription
 
@@ -93,7 +93,9 @@ async def profile_menu(callback_query: CallbackQuery, state: FSMContext) -> None
 
 @menu_router.message(States.feedback)
 async def handle_feedback(message: Message, state: FSMContext) -> None:
-    profile = await get_user_profile(message.from_user.id)
+    data = await state.get_data()
+    profile_data = data.get("profile")
+    profile = Profile.model_validate(profile_data) if profile_data else None
     assert profile is not None
 
     if await process_feedback_content(message, profile):
@@ -104,7 +106,9 @@ async def handle_feedback(message: Message, state: FSMContext) -> None:
 
 @menu_router.callback_query(States.choose_coach)
 async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
-    profile = await get_user_profile(callback_query.from_user.id)
+    data = await state.get_data()
+    profile_data = data.get("profile")
+    profile = Profile.model_validate(profile_data) if profile_data else None
     assert profile is not None
 
     msg = cast(Message, callback_query.message)
@@ -128,7 +132,9 @@ async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext, bo
 
 @menu_router.callback_query(States.coach_selection)
 async def coach_paginator(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
-    profile = await get_user_profile(callback_query.from_user.id)
+    data = await state.get_data()
+    profile_data = data.get("profile")
+    profile = Profile.model_validate(profile_data) if profile_data else None
     assert profile is not None
 
     msg = cast(Message, callback_query.message)
@@ -167,7 +173,9 @@ async def coach_paginator(callback_query: CallbackQuery, state: FSMContext, bot:
 
 @menu_router.callback_query(States.show_clients)
 async def client_paginator(callback_query: CallbackQuery, state: FSMContext) -> None:
-    profile = await get_user_profile(callback_query.from_user.id)
+    data = await state.get_data()
+    profile_data = data.get("profile")
+    profile = Profile.model_validate(profile_data) if profile_data else None
     assert profile is not None
 
     msg = cast(Message, callback_query.message)
@@ -200,7 +208,9 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext) -> 
 
 @menu_router.callback_query(States.show_subscription)
 async def show_subscription_actions(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
-    profile = await get_user_profile(callback_query.from_user.id)
+    data = await state.get_data()
+    profile_data = data.get("profile")
+    profile = Profile.model_validate(profile_data) if profile_data else None
     assert profile is not None
 
     msg = cast(Message, callback_query.message)
@@ -251,8 +261,8 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
 
         async with aiohttp.ClientSession():
             await bot.send_message(
-                Settings.OWNER_ID,
-                msg_text("subscription_cancel_request", Settings.OWNER_LANG).format(
+                Settings.ADMIN_ID,
+                msg_text("subscription_cancel_request", Settings.ADMIN_LANG).format(
                     profile_id=profile.id,
                     contact=contact,
                     next_payment_date=next_payment_date.strftime("%Y-%m-%d"),

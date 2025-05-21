@@ -58,7 +58,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
         program_text = await format_program(exercises, 0)
         current_program = await Cache.workout.get_program(client_id)
         if program := await APIService.workout.save_program(client_id, exercises, split_number, current_program.wishes):
-            program_data = program.to_dict()
+            program_data = program.model_dump()
             program_data.update(workout_type=current_program.workout_type, split_number=split_number)
             await Cache.workout.save_program(client_id, program_data)
             await Cache.workout.reset_payment_status(client_id, "program")
