@@ -16,9 +16,9 @@ RESOURCES = {
 
 
 class TextManager:
-    messages = {}
-    buttons = {}
-    commands = {}
+    messages: dict[str, dict[str, str]] = {}
+    buttons: dict[str, dict[str, str]] = {}
+    commands: dict[str, dict[str, str]] = {}
 
     @classmethod
     def load_resources(cls) -> None:

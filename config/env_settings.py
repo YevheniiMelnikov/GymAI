@@ -35,19 +35,19 @@ class Settings:
     REDIS_URL: str = must_getenv("REDIS_URL", "redis://redis:6379")
 
     BOT_TOKEN: str = must_getenv("BOT_TOKEN")
-    BOT_LINK: str = os.getenv("BOT_LINK")
+    BOT_LINK: str = must_getenv("BOT_LINK")
     BOT_INTERNAL_URL: str = must_getenv("BOT_INTERNAL_URL", "http://localhost:8000/")
     WEB_SERVER_HOST: str = "0.0.0.0"
     WEBHOOK_HOST: str = must_getenv("WEBHOOK_HOST")
-    WEBHOOK_PORT: int = must_getenv("WEBHOOK_PORT")
+    WEBHOOK_PORT: int = int(must_getenv("WEBHOOK_PORT"))
     WEBHOOK_PATH: str = f"/gym_bot/{BOT_TOKEN}"
     WEBHOOK_URL: str = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 
     GOOGLE_APPLICATION_CREDENTIALS: str = must_getenv("GOOGLE_APPLICATION_CREDENTIALS")
     SPREADSHEET_ID: str = must_getenv("SPREADSHEET_ID")
-    TG_SUPPORT_CONTACT: str = os.getenv("TG_SUPPORT_CONTACT")
-    PUBLIC_OFFER: str = os.getenv("PUBLIC_OFFER")
-    PRIVACY_POLICY: str = os.getenv("PRIVACY_POLICY")
+    TG_SUPPORT_CONTACT: str = must_getenv("TG_SUPPORT_CONTACT")
+    PUBLIC_OFFER: str = must_getenv("PUBLIC_OFFER")
+    PRIVACY_POLICY: str = must_getenv("PRIVACY_POLICY")
     EMAIL: str = must_getenv("EMAIL")
     OWNER_ID: str = must_getenv("OWNER_ID")
 

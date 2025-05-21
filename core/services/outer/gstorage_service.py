@@ -24,11 +24,22 @@ class GCStorageService:
     @staticmethod
     async def save_image(message: Message) -> str | None:
         try:
+            if not message.photo:
+                return None
             photo = message.photo[-1]
             file_id = photo.file_id
-            file = await message.bot.get_file(file_id)
+
+            bot = message.bot
+            if bot is None:
+                return None
+
+            file = await bot.get_file(file_id)
+            if file.file_path is None:
+                return None
+
             local_file_path = f"{file_id}.jpg"
-            await message.bot.download_file(file.file_path, destination=local_file_path)
+            await bot.download_file(file.file_path, destination=local_file_path)
+
             logger.debug(f"File {file_id[:10]}...jpg successfully saved locally")
             await message.delete()
             return local_file_path

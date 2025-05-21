@@ -14,9 +14,6 @@ from bot.keyboards import (
     edit_exercise_data_kb,
     reps_number_kb,
     sets_number_kb,
-    program_edit_kb,
-    select_service_kb,
-    incoming_request_kb,
     program_manage_kb,
 )
 from bot.states import States
@@ -27,15 +24,14 @@ from functions.exercises import update_exercise_data, save_exercise, find_exerci
 from functions.menus import (
     show_main_menu,
     my_clients_menu,
-    show_program_promo_page,
     show_my_subscription_menu,
     show_my_program_menu,
 )
 from functions.profiles import get_user_profile
-from functions.text_utils import format_program, get_translated_week_day
+from functions.text_utils import format_program
 from functions.utils import program_menu_pagination, short_url, delete_messages
 from functions.workout_plans import reset_workout_plan, save_workout_plan, next_day_workout_plan
-from core.models import Exercise, Program
+from core.models import Exercise, DayExercises
 from bot.texts.text_manager import msg_text, btn_text
 
 program_router = Router()
@@ -107,7 +103,7 @@ async def set_exercise_name(message: Message, state: FSMContext) -> None:
 
     if link_to_gif:
         gif_file_name = link_to_gif.split("/")[-1]
-        Cache.workout.cache_gif_filename(message.text, gif_file_name)
+        await Cache.workout.cache_gif_filename(message.text, gif_file_name)
 
     await message.answer(msg_text("enter_sets", profile.language), reply_markup=sets_number_kb())
     await message.delete()
@@ -183,21 +179,24 @@ async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMCon
         return
 
     if data.get("subscription"):
-        subscription = Cache.workout.get_subscription(data.get("client_id"))
-        exercises = subscription.exercises
+        subscription = await Cache.workout.get_subscription(data.get("client_id"))
+        exercises: list[DayExercises] = subscription.exercises
     else:
-        exercises = data.get("exercises", {})
-    day_index = data.get("day_index", 0)
-    if str(day_index) not in exercises:
-        exercises[str(day_index)] = [dict(gif_link=gif_link, name=exercise_name, reps=reps, sets=sets, weight=weight)]
-    else:
-        exercises[str(day_index)].append(
-            dict(gif_link=gif_link, name=exercise_name, reps=reps, sets=sets, weight=weight)
-        )  # TODO: REDUCE OVERCOMPLEXITY
-    await state.update_data(exercises=exercises)
+        exercises: list[DayExercises] = data.get("exercises", [])
 
-    exercise = Exercise(name=exercise_name, sets=sets, reps=reps, gif_link=gif_link, weight=str(weight))
-    await save_exercise(state, exercise, input_data)
+    day_index = str(data.get("day_index", 0))
+    day_entry = next((d for d in exercises if d.day == day_index), None)
+    new_exercise = Exercise(
+        name=exercise_name, sets=sets, reps=reps, gif_link=gif_link, weight=str(weight) if weight is not None else None
+    )
+
+    if day_entry:
+        day_entry.exercises.append(new_exercise)
+    else:
+        exercises.append(DayExercises(day=day_index, exercises=[new_exercise]))
+
+    await state.update_data(exercises=exercises)
+    await save_exercise(state, new_exercise, input_data)
 
 
 @program_router.callback_query(States.workout_survey)
@@ -205,17 +204,19 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext)
     profile = await get_user_profile(callback_query.from_user.id)
     data = await state.get_data()
     day = data.get("day")
-    exercises = data.get("exercises", {})
     day_index = data.get("day_index", 0)
+    exercises: list[DayExercises] = data.get("exercises", [])
+    program = await format_program(exercises, day_index)
 
-    program = await format_program({str(day_index): exercises}, day_index)
     if callback_query.data == "completed":
         await callback_query.answer()
         await callback_query.answer(msg_text("keep_going", profile.language), show_alert=True)
-        client = Cache.client.get_client(profile.id)
-        coach = Cache.coach.get_coach(client.assigned_to.pop())
+
+        client = await Cache.client.get_client(profile.id)
+        coach = await Cache.coach.get_coach(client.assigned_to.pop())
         coach_profile = await APIService.profile.get_profile(coach.id)
-        coach_lang = Cache.profile.get_profile_data(coach_profile.tg_id, "language")
+        coach_lang = coach_profile.language
+
         await send_message(
             recipient=coach,
             text=msg_text("workout_completed", coach_lang).format(name=client.name, program=program),
@@ -223,10 +224,13 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext)
             reply_markup=workout_feedback_kb(coach_lang, client.id, day),
             include_incoming_message=False,
         )
+
         await show_main_menu(callback_query.message, profile, state)
+
     else:
         await callback_query.answer(msg_text("workout_description", profile.language), show_alert=True)
         await state.set_state(States.workout_description)
+
     with suppress(TelegramBadRequest):
         await callback_query.message.delete()
 
@@ -234,22 +238,29 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext)
 @program_router.message(States.workout_description)
 async def workout_description(message: Message, state: FSMContext):
     profile = await get_user_profile(message.from_user.id)
-    client = Cache.client.get_client(profile.id)
-    coach = Cache.coach.get_coach(client.assigned_to.pop())
+    client = await Cache.client.get_client(profile.id)
+    coach = await Cache.coach.get_coach(client.assigned_to.pop())
     coach_profile = await APIService.profile.get_profile(coach.id)
     coach_lang = coach_profile.language
+
     data = await state.get_data()
-    day = data.get("day")
-    exercises = data.get("exercises")
     day_index = data.get("day_index")
-    program = await format_program(dict({str(day_index): exercises}), day_index)
+    exercises: list[DayExercises] = data.get("exercises", [])
+    day_data = next((d for d in exercises if d.day == str(day_index)), None)
+    program = await format_program(exercises, day_index) if day_data else ""
+
     await send_message(
         recipient=coach,
-        text=msg_text("workout_feedback", coach_lang).format(name=client.name, feedback=message.text, program=program),
+        text=msg_text("workout_feedback", coach_lang).format(
+            name=client.name,
+            feedback=message.text,
+            program=program,
+        ),
         state=state,
-        reply_markup=workout_feedback_kb(coach_lang, client.id, day),
+        reply_markup=workout_feedback_kb(coach_lang, client.id, data.get("day")),
         include_incoming_message=False,
     )
+
     await message.answer(msg_text("keep_going", profile.language))
     await show_main_menu(message, profile, state)
 
@@ -258,17 +269,19 @@ async def workout_description(message: Message, state: FSMContext):
 async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
     profile = await get_user_profile(callback_query.from_user.id)
     data = await state.get_data()
-    exercises = data.get("exercises", {})
+    exercises: list[DayExercises] = data.get("exercises", [])
     client_id = data.get("client_id")
     day_index = str(data.get("day_index", 0))
+
+    day_data = next((d for d in exercises if d.day == day_index), None)
 
     if callback_query.data == "exercise_add":
         await callback_query.answer()
         exercise_msg = await callback_query.message.answer(msg_text("enter_exercise", profile.language))
-        if data.get("subscription"):
-            exercises = exercises.get(day_index, [])
+        if not day_data:
+            exercises.append(DayExercises(day=day_index, exercises=[]))
         else:
-            await state.update_data(exercise_index=len(exercises) + 1)
+            await state.update_data(exercise_index=len(day_data.exercises))
         await state.update_data(
             exercises=exercises,
             message_ids=[exercise_msg.message_id],
@@ -287,31 +300,41 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
 
     elif callback_query.data == "exercise_delete":
         await callback_query.answer()
-        await callback_query.message.answer(
-            msg_text("select_exercise", profile.language), reply_markup=select_exercise_kb(exercises[day_index])
-        )
+        if day_data:
+            await callback_query.message.answer(
+                msg_text("select_exercise", profile.language),
+                reply_markup=select_exercise_kb(day_data.exercises),
+            )
+        else:
+            await callback_query.message.answer(msg_text("no_exercises_found", profile.language))
         await state.set_state(States.delete_exercise)
 
     elif callback_query.data == "exercise_edit":
         await state.update_data(edit_mode=True)
-        await callback_query.message.answer(
-            msg_text("select_exercise", profile.language), reply_markup=select_exercise_kb(exercises[day_index])
-        )
+        if day_data:
+            await callback_query.message.answer(
+                msg_text("select_exercise", profile.language),
+                reply_markup=select_exercise_kb(day_data.exercises),
+            )
+        else:
+            await callback_query.message.answer(msg_text("no_exercises_found", profile.language))
         await state.set_state(States.edit_exercise)
 
     elif callback_query.data == "finish_editing":
         await callback_query.answer(btn_text("done", profile.language))
         client_profile = await APIService.profile.get_profile(client_id)
         client_lang = client_profile.language
-        client = Cache.client.get_client(client_id)
+        client = await Cache.client.get_client(client_id)
+
         if data.get("subscription"):
-            subscription_data = Cache.workout.get_subscription(client_id).to_dict()
+            subscription_data = await Cache.workout.get_subscription(client_id).to_dict()
             subscription_data.update(client_profile=client_id, exercises=exercises)
             await APIService.workout.update_subscription(subscription_data.get("id"), subscription_data)
-            Cache.workout.update_subscription(
-                profile_id=client_id, subscription_data=dict(exercises=exercises, client_profile=client_id)
+            await Cache.workout.update_subscription(
+                profile_id=client_id,
+                updates=dict(exercises=exercises, client_profile=client_id),
             )
-            Cache.workout.reset_payment_status(client_id, "subscription")
+            await Cache.workout.reset_payment_status(client_id, "subscription")
             await send_message(
                 recipient=client,
                 text=msg_text("new_program", client_lang),
@@ -320,15 +343,15 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
                 include_incoming_message=False,
             )
         else:
-            current_program = Cache.workout.get_program(client_id)
+            current_program = await Cache.workout.get_program(client_id)
             program_text = await format_program(exercises, 0)
             if program := await APIService.workout.save_program(
                 client_id, exercises, current_program.split_number, current_program.wishes
             ):
                 program_data = program.to_dict()
                 program_data.update(workout_type=current_program.workout_type)
-                Cache.workout.save_program(client_id, program_data)
-                Cache.workout.reset_payment_status(client_id, "program")
+                await Cache.workout.save_program(client_id, program_data)
+                await Cache.workout.reset_payment_status(client_id, "program")
             await send_message(
                 recipient=client,
                 text=msg_text("new_program", client_lang),
@@ -343,16 +366,16 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
                 include_incoming_message=False,
             )
 
-        Cache.client.set_client_data(client_id, {"status": "default"})
+        await Cache.client.update_client(client_id, dict(status="default"))
         await show_main_menu(callback_query.message, profile, state)
         return
 
     else:
         if data.get("subscription"):
-            subscription = Cache.workout.get_subscription(client_id)
+            subscription = await Cache.workout.get_subscription(client_id)
             split_number = len(subscription.workout_days)
         else:
-            program = Cache.workout.get_program(client_id)
+            program = await Cache.workout.get_program(client_id)
             split_number = program.split_number
 
         await state.update_data(split=split_number)
@@ -368,169 +391,26 @@ async def select_exercise_to_edit(callback_query: CallbackQuery, state: FSMConte
     await callback_query.answer()
     profile = await get_user_profile(callback_query.from_user.id)
     data = await state.get_data()
-    exercises = data.get("exercises")
+    exercises: list[DayExercises] = data.get("exercises", [])
     exercise_index = int(callback_query.data)
-    current_index = 0
-    selected_exercise = None
 
-    for sublist in exercises:
-        if isinstance(sublist, dict):
-            keys = list(sublist.keys())
-            if current_index + len(keys) > exercise_index:
-                selected_exercise = sublist.get(keys[exercise_index - current_index])
-                break
-            current_index += len(keys)
-        elif isinstance(sublist, list):
-            if current_index + len(sublist) > exercise_index:
-                selected_exercise = sublist[exercise_index - current_index]
-                break
-            current_index += len(sublist)
+    flat_exercises = [
+        (day_idx, idx, ex) for day_idx, day in enumerate(exercises) for idx, ex in enumerate(day.exercises)
+    ]
 
-    await state.update_data(selected_exercise=selected_exercise, exercise_index=exercise_index)
+    if exercise_index >= len(flat_exercises):
+        await callback_query.message.answer(msg_text("invalid_content", profile.language))
+        return
+
+    day_idx, local_idx, selected_exercise = flat_exercises[exercise_index]
+
+    await state.update_data(
+        selected_exercise=selected_exercise,
+        exercise_index=exercise_index,
+        selected_day_index=day_idx,
+        selected_ex_index=local_idx,
+    )
     await callback_query.message.answer(
         msg_text("parameter_to_edit", profile.language), reply_markup=edit_exercise_data_kb(profile.language)
     )
-    await state.set_state(States.edit_exercise_parameter)
     await callback_query.message.delete()
-
-
-@program_router.callback_query(States.edit_exercise_parameter)
-async def exercise_edit_options(callback_query: CallbackQuery, state: FSMContext):
-    await callback_query.answer()
-    profile = await get_user_profile(callback_query.from_user.id)
-    if callback_query.data == "weight":
-        kb = InlineKeyboardBuilder()
-        kb.button(text=btn_text("quit", profile.language), callback_data="skip_weight")
-        await callback_query.message.answer(
-            msg_text("exercise_weight", profile.language), reply_markup=kb.as_markup(one_time_keyboard=True)
-        )
-        await state.set_state(States.exercise_weight)
-
-    elif callback_query.data == "reps":
-        await callback_query.message.answer(msg_text("enter_reps", profile.language), reply_markup=reps_number_kb())
-        await state.set_state(States.enter_reps)
-
-    elif callback_query.data == "sets":
-        await callback_query.message.answer(msg_text("enter_sets", profile.language), reply_markup=sets_number_kb())
-        await state.set_state(States.enter_sets)
-
-    await callback_query.message.delete()
-
-
-@program_router.callback_query(States.delete_exercise)
-async def delete_exercise(callback_query: CallbackQuery, state: FSMContext):
-    await callback_query.answer()
-    profile = await get_user_profile(callback_query.from_user.id)
-    data = await state.get_data()
-    exercises = data.get("exercises")
-    day_index = str(data.get("day_index"))
-    exercise_index = callback_query.data
-    daily_exercises = exercises.get(day_index)
-    daily_exercises.pop(int(exercise_index))
-    await state.update_data(exercises=exercises)
-    await state.set_state(States.program_edit)
-    program = await format_program({str(day_index): exercises[str(day_index)]}, int(day_index))
-    await callback_query.message.answer(
-        msg_text("program_page", profile.language).format(program=program, day=int(day_index) + 1),
-        disable_web_page_preview=True,
-    )
-    await callback_query.message.answer(
-        msg_text("continue_editing", profile.language), reply_markup=program_edit_kb(profile.language)
-    )
-    await callback_query.message.delete()
-
-
-@program_router.callback_query(States.subscription_manage)
-async def subscription_manage(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_user_profile(callback_query.from_user.id)
-    data = await state.get_data()
-    days = data.get("days", [])
-    day_index = data.get("day_index", 0)
-    exercises = data.get("exercises", {})
-
-    if callback_query.data == "back":
-        await my_clients_menu(callback_query, profile, state)
-        return
-
-    if callback_query.data == "edit":
-        await callback_query.answer()
-        program_text = await format_program({str(day_index): exercises[str(day_index)]}, day_index)
-        await state.set_state(States.program_edit)
-        week_day = get_translated_week_day(profile.language, days[day_index]).lower()
-        await callback_query.message.answer(
-            msg_text("program_page", profile.language).format(program=program_text, day=week_day),
-            disable_web_page_preview=True,
-            reply_markup=program_edit_kb(profile.language),
-        )
-        await callback_query.message.delete()
-        return
-
-    await state.update_data(split=len(days))
-    await program_menu_pagination(state, callback_query)
-
-
-@program_router.callback_query(States.program_view)
-async def program_view(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_user_profile(callback_query.from_user.id)
-    data = await state.get_data()
-    if callback_query.data == "quit":
-        await callback_query.answer()
-        await state.set_state(States.select_service)
-        await callback_query.message.answer(
-            msg_text("select_service", profile.language),
-            reply_markup=select_service_kb(profile.language),
-        )
-        with suppress(TelegramBadRequest):
-            await callback_query.message.delete()
-        return
-
-    exercises = data.get("exercises")
-    split = data.get("split")
-    await state.update_data(exercises=exercises, split=split)
-    await program_menu_pagination(state, callback_query)
-
-
-@program_router.callback_query(States.confirm_subscription_reset)
-async def confirm_subscription_reset(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_user_profile(callback_query.from_user.id)
-    data = await state.get_data()
-    if callback_query.data == "yes":
-        await callback_query.answer(msg_text("workout_plan_deleted", profile.language), show_alert=True)
-        Cache.workout.update_subscription(profile.id, dict(exercises={}, workout_days=data.get("workout_days")))
-        subscription_data = Cache.workout.get_subscription(profile.id).to_dict()
-        subscription_data.update(client_profile=profile.id)
-        await APIService.workout.update_subscription(subscription_data.get("id"), subscription_data)
-        client = Cache.client.get_client(profile.id)
-        coach = Cache.coach.get_coach(client.assigned_to.pop())
-        await send_message(
-            recipient=coach,
-            text=msg_text("workout_days_changed", profile.language).format(name=client.name),
-            state=state,
-            reply_markup=incoming_request_kb(profile.language, "subscription", client.id),
-            include_incoming_message=False,
-        )
-    await show_main_menu(callback_query.message, profile, state)
-    with suppress(TelegramBadRequest):
-        await callback_query.message.delete()
-
-
-@program_router.callback_query(States.program_action_choice)
-async def program_action_choice(callback_query: CallbackQuery, state: FSMContext):
-    profile = await get_user_profile(callback_query.from_user.id)
-    data = await state.get_data()
-    if callback_query.data == "show_old":
-        await callback_query.answer()
-        program = Program.from_dict(data.get("program"))
-        program_text = await format_program(program.exercises_by_day, 0)
-        await callback_query.message.answer(
-            msg_text("program_page", profile.language).format(program=program_text, day=1),
-            reply_markup=program_view_kb(profile.language),
-            disable_web_page_preview=True,
-        )
-        await state.update_data(exercises=program.exercises_by_day, split=program.split_number, client=True)
-        await state.set_state(States.program_view)
-    else:
-        await callback_query.answer(msg_text("program_delete_warning", profile.language), show_alert=True)
-        await show_program_promo_page(callback_query, profile, state)
-    with suppress(TelegramBadRequest):
-        await callback_query.message.delete()

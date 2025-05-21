@@ -1,44 +1,16 @@
-from dataclasses import dataclass, field, MISSING
-from typing import Any, Type, TypeVar
+from datetime import datetime
 
-T = TypeVar("T", bound="BaseEntity")
-
-
-@dataclass
-class BaseEntity:
-    @classmethod
-    def from_dict(cls: Type[T], data: dict[str, Any]) -> T:
-        init_data = {}
-        for field_name, field_info in cls.__dataclass_fields__.items():
-            if field_name in data:
-                init_data[field_name] = data[field_name]
-            else:
-                if field_info.default_factory is not MISSING:
-                    init_data[field_name] = field_info.default_factory()
-                elif field_info.default is not MISSING:
-                    init_data[field_name] = field_info.default
-                else:
-                    raise TypeError(f"Field '{field_name}' is required for {cls.__name__} but not provided.")
-        return cls(**init_data)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {field.name: getattr(self, field.name) for field in self.__dataclass_fields__.values()}
-
-    def __repr__(self) -> str:
-        field_str = ", ".join(f"{name}={getattr(self, name)!r}" for name in self.__dataclass_fields__)
-        return f"{self.__class__.__name__}({field_str})"
+from pydantic import BaseModel, Field, field_validator
 
 
-@dataclass
-class Profile(BaseEntity):
+class Profile(BaseModel):
     id: int
     status: str
-    tg_id: int | None = None
-    language: str | None = None
+    tg_id: int
+    language: str
 
 
-@dataclass
-class Client(BaseEntity):
+class Client(BaseModel):
     id: int
     name: str
     gender: str
@@ -48,11 +20,10 @@ class Client(BaseEntity):
     health_notes: str
     weight: int
     status: str = "default"
-    assigned_to: list[int] = field(default_factory=list)
+    assigned_to: list[int] = Field(default_factory=list)
 
 
-@dataclass
-class Coach(BaseEntity):
+class Coach(BaseModel):
     id: int
     name: str
     surname: str
@@ -62,23 +33,26 @@ class Coach(BaseEntity):
     profile_photo: str
     subscription_price: int
     program_price: int
-    assigned_to: list[int] = field(default_factory=list)
+    assigned_to: list[int] = Field(default_factory=list)
     verified: bool = False
 
 
-@dataclass
-class Exercise(BaseEntity):
+class Exercise(BaseModel):
     name: str
     sets: str
     reps: str
-    gif_link: str | None
-    weight: str | None
+    gif_link: str | None = None
+    weight: str | None = None
 
 
-@dataclass
-class Program(BaseEntity):
+class DayExercises(BaseModel):
+    day: str
+    exercises: list[Exercise]
+
+
+class Program(BaseModel):
     id: int
-    exercises_by_day: dict[str, list[Exercise]]  # TODO: REDUCE OVERCOMPLEXITY
+    exercises_by_day: list[DayExercises] = Field(default_factory=list)
     created_at: float
     profile: int
     split_number: int
@@ -86,8 +60,7 @@ class Program(BaseEntity):
     wishes: str
 
 
-@dataclass
-class Subscription(BaseEntity):
+class Subscription(BaseModel):
     id: int
     payment_date: str
     enabled: bool
@@ -95,12 +68,18 @@ class Subscription(BaseEntity):
     client_profile: int
     workout_type: str
     wishes: str
-    workout_days: list[str] = field(default_factory=list)
-    exercises: dict[str, list[tuple[str, int]]] = field(default_factory=dict)  # TODO: REDUCE OVERCOMPLEXITY
+    workout_days: list[str] = Field(default_factory=list)
+    exercises: list[DayExercises] = Field(default_factory=list)
+
+    @field_validator("payment_date", mode="before")
+    def normalize_payment_date(cls, v: str) -> str:
+        try:
+            return datetime.fromisoformat(v).strftime("%Y-%m-%d")
+        except Exception:
+            return v
 
 
-@dataclass
-class Payment(BaseEntity):
+class Payment(BaseModel):
     id: int
     profile: int
     payment_type: str

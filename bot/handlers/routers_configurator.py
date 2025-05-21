@@ -7,13 +7,11 @@ from bot.handlers.menu_handler import menu_router
 from bot.handlers.payment_handler import payment_router
 from bot.handlers.questionnaire_handler import questionnaire_router
 from bot.handlers.workout_handler import program_router
-from functions.chat import message_router
 
 
 def configure_routers(dp: Dispatcher) -> None:
     routers = [
         cmd_router,
-        message_router,
         chat_router,
         menu_router,
         questionnaire_router,

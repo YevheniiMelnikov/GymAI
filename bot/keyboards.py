@@ -4,6 +4,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.buttons_builder import ButtonsBuilder
 from bot.texts.text_manager import btn_text
+from core.models import Exercise
 
 
 def select_language_kb() -> KbMarkup:
@@ -217,7 +218,6 @@ def workout_type_kb(lang: str) -> KbMarkup:
     buttons = [
         [builder.add("gym_workout", "gym")],
         [builder.add("home_workout", "home")],
-        [builder.add("street_workout", "street")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
@@ -337,7 +337,7 @@ def show_subscriptions_kb(lang: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def select_exercise_kb(exercises: list[dict]) -> KbMarkup:
+def select_exercise_kb(exercises: list[Exercise]) -> KbMarkup:
     buttons = []
     for index, exercise in enumerate(exercises):
         buttons.append([KbBtn(text=exercise.get("name"), callback_data=str(index))])

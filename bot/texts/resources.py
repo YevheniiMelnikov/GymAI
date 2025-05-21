@@ -1,7 +1,12 @@
 from enum import Enum, auto
 
 
-class ButtonText(Enum):
+class AutoName(str, Enum):
+    def _generate_next_value_(name, start, count, last_values):
+        return name
+
+
+class ButtonText(AutoName):
     female = auto()
     male = auto()
     client = auto()
@@ -55,7 +60,6 @@ class ButtonText(Enum):
     experienced = auto()
     gym_workout = auto()
     home_workout = auto()
-    street_workout = auto()
 
     add_exercise = auto()
     next_day = auto()
@@ -83,7 +87,7 @@ class ButtonText(Enum):
         return f"buttons.{self.name}"
 
 
-class MessageText(Enum):
+class MessageText(AutoName):
     invalid_content = auto()
     questionnaire_not_completed = auto()
     unexpected_error = auto()

@@ -1,5 +1,7 @@
 import logging
 import sys
+import types
+
 from loguru import logger
 
 from config.env_settings import Settings
@@ -59,12 +61,16 @@ LOGGING = {
 
 class InterceptHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
+        from typing import Union
+
+        loguru_level: Union[str, int]
         try:
             loguru_level = logger.level(record.levelname).name
         except Exception:
             loguru_level = record.levelno
 
-        frame, depth = logging.currentframe(), 2
+        frame: types.FrameType | None = logging.currentframe()
+        depth = 2
         while frame and frame.f_code.co_filename == logging.__file__:
             frame = frame.f_back
             depth += 1

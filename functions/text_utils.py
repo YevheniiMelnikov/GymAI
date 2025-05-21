@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 from typing import Any, Optional
 
 from aiogram.fsm.state import State
+from aiogram.types import Message, InaccessibleMessage
 
 from bot.states import States
-from core.models import Client, Coach, Exercise
+from core.models import Client, Coach, DayExercises
 from core.services import APIService
 from bot.texts.text_manager import msg_text, btn_text
 
@@ -117,7 +120,6 @@ async def get_service_types(language: str) -> dict:
 async def get_workout_types(language: str) -> dict:
     return {
         "home": btn_text("home_workout", language),
-        "street": btn_text("street_workout", language),
         "gym": btn_text("gym_workout", language),
     }
 
@@ -135,12 +137,14 @@ def get_translated_week_day(lang_code: str, day: str) -> str:
     return days.get(day)
 
 
-async def format_program(exercises: dict[str, Any], day: int) -> str:
-    program_lines = []
-    exercises_data = exercises.get(str(day), [])
-    exercises = [Exercise(**e) if isinstance(e, dict) else e for e in exercises_data]
+async def format_program(exercises: list[DayExercises], day: int) -> str:
+    day_key = str(day)
+    day_entry = next((d for d in exercises if d.day == day_key), None)
+    if not day_entry:
+        return ""
 
-    for idx, exercise in enumerate(exercises):
+    program_lines = []
+    for idx, exercise in enumerate(day_entry.exercises):
         line = f"{idx + 1}. {exercise.name} | {exercise.sets} x {exercise.reps}"
         if exercise.weight:
             line += f" | {exercise.weight} kg"
@@ -149,3 +153,8 @@ async def format_program(exercises: dict[str, Any], day: int) -> str:
         program_lines.append(line)
 
     return "\n".join(program_lines)
+
+
+def _msg(m: Message | InaccessibleMessage | None) -> Message:
+    assert isinstance(m, Message)
+    return m

@@ -82,8 +82,8 @@ def deactivate_expired_subscriptions(self):
                 continue
 
             await APIService.workout.update_subscription(sub.id, dict(enabled=False, client_profile=sub.client_profile))
-            Cache.workout.update_subscription(sub.client_profile, dict(enabled=False))
-            Cache.workout.reset_payment_status(sub.client_profile, "subscription")
+            await Cache.workout.update_subscription(sub.client_profile, dict(enabled=False))
+            await Cache.workout.reset_payment_status(sub.client_profile, "subscription")
             logger.info(f"Subscription {sub.id} deactivated for user {sub.client_profile}")
 
     asyncio.run(_deactivate())
@@ -100,7 +100,7 @@ def send_daily_survey(self):
 
 
 async def _send_daily_survey() -> None:
-    clients = Cache.client.get_clients_to_survey()
+    clients = await Cache.client.get_clients_to_survey()
     if not clients:
         logger.info("No clients to survey today")
         return
@@ -108,18 +108,18 @@ async def _send_daily_survey() -> None:
     yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
 
     for client_id in clients:
-        profile_data = await APIService.profile.get_profile(client_id)
-        if not profile_data or not profile_data.get("tg_id"):
+        profile = await APIService.profile.get_profile(client_id)
+        if not profile:
             logger.warning(f"Profile {client_id} invalid, skip")
             continue
 
-        lang = Cache.profile.get_profile_data(profile_data["tg_id"], "language") or Settings.BOT_LANG
-
         try:
+            if bot is None:
+                raise RuntimeError("Bot instance is not initialized")
             await bot.send_message(
-                chat_id=profile_data["tg_id"],
-                text=msg_text("have_you_trained", lang),
-                reply_markup=workout_survey_kb(lang, yesterday),
+                chat_id=profile.tg_id,
+                text=msg_text("have_you_trained", profile.language),
+                reply_markup=workout_survey_kb(profile.language, yesterday),
                 disable_notification=True,
             )
             logger.info(f"Survey sent to {client_id}")

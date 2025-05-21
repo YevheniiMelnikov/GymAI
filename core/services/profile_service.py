@@ -1,8 +1,7 @@
 from urllib.parse import urljoin
-
 from loguru import logger
 
-from core.models import Profile, Coach
+from core.models import Profile
 from core.encryptor import Encryptor
 from core.services.api_client import APIClient
 
@@ -19,9 +18,9 @@ class ProfileService(APIClient):
             headers={"Authorization": f"Api-Key {cls.api_key}"},
         )
         if status_code == 200 and user_data:
-            return Profile.from_dict(user_data)
+            return Profile.model_validate(user_data)
         logger.info(f"Failed to retrieve profile for id={profile_id}. HTTP status: {status_code}")
-        return
+        return None
 
     @classmethod
     async def get_profile_by_tg_id(cls, telegram_id: int) -> Profile | None:
@@ -32,8 +31,8 @@ class ProfileService(APIClient):
             headers={"Authorization": f"Api-Key {cls.api_key}"},
         )
         if status_code == 200 and profile_data:
-            return Profile.from_dict(profile_data)
-        return
+            return Profile.model_validate(profile_data)
+        return None
 
     @classmethod
     async def create_profile(cls, telegram_id: int, status: str, language: str) -> Profile | None:
@@ -50,83 +49,61 @@ class ProfileService(APIClient):
             headers={"Authorization": f"Api-Key {cls.api_key}"},
         )
         if status_code == 201 and response_data:
-            return Profile.from_dict(response_data)
+            return Profile.model_validate(response_data)
         logger.error(f"Failed to create profile. status={status_code}, response={response_data}")
-        return
+        return None
 
     @classmethod
     async def delete_profile(cls, profile_id: int, token: str | None = None) -> bool:
         url = urljoin(cls.api_url, f"api/v1/profiles/{profile_id}/delete/")
         headers = {"Authorization": f"Token {token}"} if token else {}
         status_code, _ = await cls._api_request("delete", url, headers=headers)
-        return status_code == 204
+        if status_code != 204:
+            logger.error(f"Failed to delete profile {profile_id}. HTTP status: {status_code}")
+            return False
+        else:
+            logger.info(f"Successfully deleted profile {profile_id}")
+            return True
 
     @classmethod
-    async def edit_profile(cls, profile_id: int, data: dict) -> None:
+    async def update_profile(cls, profile_id: int, profile_data: dict) -> None:
         url = urljoin(cls.api_url, f"api/v1/profiles/{profile_id}/")
-        fields = ["tg_id", "language", "name", "assigned_to"]
-        filtered_data = {k: data[k] for k in fields if k in data and data[k] is not None}
-        await cls._api_request(
+        status_code, _ = await cls._api_request(
             "put",
             url,
-            filtered_data,
+            profile_data,
             headers={"Authorization": f"Api-Key {cls.api_key}"},
         )
+        if status_code not in {200, 204}:
+            logger.error(f"Failed to update profile {profile_id}. HTTP status: {status_code}")
 
     @classmethod
-    async def edit_client_profile(cls, profile_id: int, data: dict) -> None:
+    async def update_client_profile(cls, profile_id: int, profile_data: dict) -> None:
         url = urljoin(cls.api_url, f"api/v1/client-profiles/{profile_id}/")
-        fields = [
-            "gender",
-            "born_in",
-            "workout_experience",
-            "workout_goals",
-            "health_notes",
-            "weight",
-            "coach",
-        ]
-        filtered_data = {k: data[k] for k in fields if k in data and data[k] is not None}
-        filtered_data["profile_id"] = profile_id
-        await cls._api_request(
+        payload = profile_data.copy()
+        payload["profile_id"] = profile_id
+        status_code, _ = await cls._api_request(
             "put",
             url,
-            filtered_data,
+            payload,
             headers={"Authorization": f"Api-Key {cls.api_key}"},
         )
+        if status_code not in {200, 204}:
+            logger.error(f"Failed to update client profile {profile_id}. HTTP status: {status_code}")
 
     @classmethod
-    async def edit_coach_profile(cls, profile_id: int, data: dict) -> None:
-        fields = [
-            "surname",
-            "work_experience",
-            "additional_info",
-            "payment_details",
-            "program_price",
-            "subscription_price",
-            "profile_photo",
-            "verified",
-        ]
-        if "payment_details" in data:
-            data["payment_details"] = cls.encrypter.encrypt(data["payment_details"])
-
-        filtered_data = {k: data[k] for k in fields if k in data and data[k] is not None}
-        filtered_data["profile_id"] = profile_id
+    async def update_coach_profile(cls, profile_id: int, profile_data: dict) -> None:
         url = urljoin(cls.api_url, f"api/v1/coach-profiles/{profile_id}/")
-        await cls._api_request(
+        payload = profile_data.copy()
+        payload["profile_id"] = profile_id
+        if "payment_details" in payload:
+            payload["payment_details"] = cls.encrypter.encrypt(payload["payment_details"])
+
+        status_code, _ = await cls._api_request(
             "put",
             url,
-            filtered_data,
+            payload,
             headers={"Authorization": f"Api-Key {cls.api_key}"},
         )
-
-    @classmethod
-    async def get_coach_profile(cls, profile_id: int) -> Coach:
-        url = urljoin(cls.api_url, f"api/v1/coach-profiles/{profile_id}/")
-        status_code, response_data = await cls._api_request(
-            "get",
-            url,
-            headers={"Authorization": f"Api-Key {cls.api_key}"},
-        )
-        if status_code == 200 and response_data:
-            return Coach.from_dict(response_data)
-        raise ValueError(f"Failed to get coach profile for profile_id={profile_id}")
+        if status_code not in {200, 204}:
+            logger.error(f"Failed to update coach profile {profile_id}. HTTP status: {status_code}")

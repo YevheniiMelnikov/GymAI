@@ -30,10 +30,11 @@ class Encryptor:
     @classmethod
     def decrypt(cls, token: str) -> Optional[str]:
         if not token:
-            return
+            return None
         try:
             fernet = cls._get_fernet()
             decrypted_data = fernet.decrypt(token.encode())
             return decrypted_data.decode()
         except Exception as e:
             logger.error(f"Decryption failed: {e}")
+            return None
