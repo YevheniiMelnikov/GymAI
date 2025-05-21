@@ -27,12 +27,11 @@ class PaymentProcessor:
     @classmethod
     async def _process_payment(cls, payment: Payment) -> None:
         try:
-            profile_data = await cls.profile_service.get_profile(payment.profile)
-            if not profile_data:
+            profile = await cls.profile_service.get_profile(payment.profile)
+            if not profile:
                 logger.error(f"Profile not found for payment {payment.id}")
                 return
 
-            profile = Profile.model_validate(profile_data)
             if payment.status in {Settings.SUCCESS_PAYMENT_STATUS, Settings.SUBSCRIBED_PAYMENT_STATUS}:
                 await cls._handle_successful_payment(payment, profile)
             elif payment.status == Settings.FAILURE_PAYMENT_STATUS:
