@@ -5,21 +5,20 @@ from loguru import logger
 
 from core.services.api_client import APIClient
 from core.exceptions import UserServiceError
-from core.models import Exercise, Program
+from core.models import Program, DayExercises
+from functions.utils import serialize_day_exercises
 
 
 class WorkoutService(APIClient):
     @classmethod
     async def save_program(
-        cls, client_id: int, exercises: dict[str, list[Exercise]], split_number: int, wishes: str
+        cls, client_id: int, exercises: list[DayExercises], split_number: int, wishes: str
     ) -> Program:
         url = urljoin(cls.api_url, "api/v1/programs/")
-        exercises_payload: dict[str, list[dict[str, Any]]] = {
-            day: [e.to_dict() for e in items if isinstance(e, Exercise)] for day, items in exercises.items()
-        }  # TODO: REDUCE OVERCOMPLEXITY
+
         data = {
             "client_profile": client_id,
-            "exercises_by_day": exercises_payload,
+            "exercises_by_day": serialize_day_exercises(exercises),
             "split_number": split_number,
             "wishes": wishes,
         }
@@ -52,16 +51,13 @@ class WorkoutService(APIClient):
             raise UserServiceError(f"Unexpected error occurred while saving program: {str(e)}") from e
 
     @classmethod
-    async def update_program(cls, program_id: int, data: dict) -> bool:
+    async def update_program(cls, program_id: int, data: dict[str, Any]) -> None:
         url = urljoin(cls.api_url, f"api/v1/programs/{program_id}/")
         status_code, response = await cls._api_request(
             "put", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"}
         )
-        if status_code == 200:
-            logger.debug(f"Program {program_id} updated successfully")
-            return True
-        logger.error(f"Failed to update program {program_id}. HTTP status: {status_code}")
-        return False
+        if not status_code == 200:
+            logger.error(f"Failed to update program {program_id}. HTTP status: {status_code}, response: {response}")
 
     @classmethod
     async def create_subscription(
@@ -75,23 +71,25 @@ class WorkoutService(APIClient):
             "workout_days": workout_days,
             "payment_date": datetime.today().strftime("%Y-%m-%d"),
             "wishes": wishes,
-            "exercises": {},
+            "exercises": [],
         }
         status_code, response = await cls._api_request(
             "post", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"}
         )
         if status_code == 201 and response:
             return response.get("id")
-        logger.error(f"Failed to create subscription for profile {profile_id}. HTTP status: {status_code}")
+        logger.error(
+            f"Failed to create subscription for profile {profile_id}. HTTP status: {status_code}, response: {response}"
+        )
         return None
 
     @classmethod
-    async def update_subscription(cls, subscription_id: int, data: dict) -> bool:
+    async def update_subscription(cls, subscription_id: int, data: dict[str, Any]) -> None:
         url = urljoin(cls.api_url, f"api/v1/subscriptions/{subscription_id}/")
         status_code, response = await cls._api_request(
             "put", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"}
         )
-        if status_code == 200:
-            return True
-        logger.error(f"Failed to update subscription {subscription_id}. HTTP status: {status_code}")
-        return False
+        if not status_code == 200:
+            logger.error(
+                f"Failed to update subscription {subscription_id}. HTTP status: {status_code}, response: {response}"
+            )

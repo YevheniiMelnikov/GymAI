@@ -1,7 +1,7 @@
 import secrets
 import string
 from contextlib import suppress
-from typing import Optional
+from typing import Optional, Any
 
 import aiohttp
 from pydantic_core import ValidationError
@@ -19,8 +19,9 @@ from core.cache import Cache
 from core.exceptions import UserServiceError
 from core.services import APIService
 from core.services.outer.gstorage_service import avatar_manager
+from core.validators import validate_or_raise
 from functions import menus, profiles, text_utils
-from core.models import Client, Profile, Coach
+from core.models import Client, Profile, Coach, DayExercises, Exercise
 from bot.texts.text_manager import msg_text, TextManager
 
 
@@ -55,7 +56,14 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
 
     data = await state.get_data()
     current_day = data.get("day_index", 0)
-    exercises = data.get("exercises", {})
+    exercises = data.get("exercises", [])
+
+    if isinstance(exercises, dict):
+        exercises = [
+            DayExercises(day=k, exercises=[Exercise.model_validate(e) if isinstance(e, dict) else e for e in v])
+            for k, v in exercises.items()
+        ]
+
     split_number = data.get("split")
 
     if data.get("client"):
@@ -97,7 +105,9 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
 
 async def handle_clients_pagination(callback_query: CallbackQuery, profile, index: int, state: FSMContext) -> None:
     data = await state.get_data()
-    clients = [Client.from_dict(data) for data in data.get("clients")]
+    clients = [
+        validate_or_raise(client_data, Client, context="clients list") for client_data in data.get("clients", [])
+    ]
 
     if not clients:
         await callback_query.answer(msg_text("no_clients", profile.language))
@@ -125,27 +135,28 @@ def generate_order_id() -> str:
 
 
 async def fetch_user(profile: Profile) -> Client | Coach:
-    cache_get, cache_set, entity_cls = {
-        "client": (
-            Cache.client.get_client,
-            Cache.client.set_client_data,
-            Client,
-        ),
-        "coach": (
-            Cache.coach.get_coach,
-            Cache.coach.set_coach_data,
-            Coach,
-        ),
-    }[profile.status]
+    if profile.status == "client":
+        try:
+            return await Cache.client.get_client(profile.id)
+        except UserServiceError as e:
+            logger.error(f"Error retrieving client data for profile {profile.id}: {e}")
+            raw_profile = await APIService.profile.get_profile(profile.id)
+            client = Client.model_validate(raw_profile.model_dump())
+            await Cache.client.update_client(profile.id, client.model_dump())
+            return client
 
-    try:
-        return cache_get(profile.id)
-    except UserServiceError as e:
-        logger.error(f"Error retrieving {profile.status} data for profile {profile.id}: {e}")
-        raw = await APIService.profile.get_profile(profile.id)
-        user = entity_cls.from_dict(raw.to_dict())
-        cache_set(profile.id, user.to_dict())
-        return user
+    elif profile.status == "coach":
+        try:
+            return await Cache.coach.get_coach(profile.id)
+        except UserServiceError as e:
+            logger.error(f"Error retrieving coach data for profile {profile.id}: {e}")
+            raw_profile = await APIService.profile.get_profile(profile.id)
+            coach = Coach.model_validate(raw_profile.model_dump())
+            await Cache.coach.update_coach(profile.id, coach.model_dump())
+            return coach
+
+    else:
+        raise ValueError(f"Unknown profile status: {profile.status}")
 
 
 async def answer_profile(cbq: CallbackQuery, profile: Profile, user: Coach | Client, text: str) -> None:
@@ -158,3 +169,7 @@ async def answer_profile(cbq: CallbackQuery, profile: Profile, user: Coach | Cli
             logger.warning("Photo not found for coach %s", profile.id)
 
     await cbq.message.answer(text, reply_markup=profile_menu_kb(profile.language))
+
+
+def serialize_day_exercises(exercises: list[DayExercises]) -> dict[str, list[dict[str, Any]]]:
+    return {day.day: [e.model_dump() for e in day.exercises] for day in exercises if isinstance(day, DayExercises)}

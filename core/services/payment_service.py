@@ -5,6 +5,7 @@ from typing import Any
 
 from loguru import logger
 from liqpay import LiqPay
+from pydantic_core._pydantic_core import ValidationError
 
 from core.services.api_client import APIClient
 from core.models import Payment, Subscription
@@ -89,7 +90,7 @@ class PaymentService(APIClient):
     ) -> tuple[int, dict[str, Any]]:
         url = urljoin(cls.api_url, endpoint)
         try:
-            print(f"data: {data}, url: {url}, key: {cls.api_key}")
+            logger.debug(f"Sending {method.upper()} request to {url} with data: {data}")
             status_code, response = await cls._api_request(
                 method=method, url=url, data=data, headers={"Authorization": f"Api-Key {cls.api_key}"}
             )
@@ -112,14 +113,17 @@ class PaymentService(APIClient):
                 "status": "pending",
             },
         )
-        return status_code == 201
+        if status_code != 201:
+            logger.error(f"Failed to create payment for profile {profile_id}. HTTP status: {status_code}")
+            return False
+        return True
 
     @classmethod
     async def update_payment(cls, payment_id: int, data: dict) -> bool:
         status_code, _ = await cls._handle_payment_api_request(
             method="put", endpoint=f"{cls.API_BASE_PATH}{payment_id}/", data=data
         )
-        return status_code == 200
+        return status_code in {200, 204}
 
     @classmethod
     async def _get_filtered_payments(cls, filter_func) -> list[Payment]:
@@ -129,7 +133,7 @@ class PaymentService(APIClient):
             return []
 
         payments = response.get("results", [])
-        return [Payment.from_dict(p) for p in payments if filter_func(p)]
+        return [Payment.model_validate(p) for p in payments if filter_func(p)]
 
     @classmethod
     async def get_unclosed_payments(cls) -> list[Payment]:
@@ -148,7 +152,7 @@ class PaymentService(APIClient):
             return []
 
         results: Sequence[dict] = response.get("results", [])
-        return [Subscription.from_dict(item) for item in results]
+        return [Subscription.model_validate(item) for item in results]
 
     @classmethod
     async def get_last_subscription_payment(cls, profile_id: int) -> str | None:
@@ -157,11 +161,12 @@ class PaymentService(APIClient):
         )
 
         if status_code != 200 or not response.get("results"):
+            logger.error(f"Failed to get last subscription payment: HTTP {status_code}")
             return None
 
         payments = response["results"]
-        last_payment = max(payments, key=lambda x: x["created_at"])
-        return last_payment["order_id"]
+        last_payment = max(payments, key=lambda x: x.get("created_at") or "")
+        return last_payment.get("order_id")
 
     @classmethod
     async def update_payment_status(cls, order_id: str, status_: str, error: str = "") -> Payment | None:
@@ -192,5 +197,11 @@ class PaymentService(APIClient):
         )
         if status_code == 200 and response.get("results"):
             raw = response["results"][0]
-            return Payment.from_dict(raw), raw["id"]
+            try:
+                payment = Payment.model_validate(raw)
+                return payment, raw["id"]
+            except ValidationError as e:
+                logger.error(f"Invalid payment data from API for order_id={order_id}: {e}")
+                return None, None
+
         return None, None

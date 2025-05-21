@@ -12,6 +12,7 @@ from bot.singleton import set_bot
 from config.env_settings import Settings
 from bot.middlewares import ProfileMiddleware
 from bot.handlers.routers_configurator import configure_routers
+from core.cache.base import BaseCacheManager
 from functions.utils import set_bot_commands
 
 
@@ -28,6 +29,9 @@ async def start_web_app(app: web.Application) -> web.AppRunner:
 
 
 async def main() -> None:
+    if not await BaseCacheManager.healthcheck():
+        raise SystemExit("Redis is not responding to ping — exiting")
+
     bot = Bot(token=Settings.BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
     set_bot(bot)
     await bot.delete_webhook(drop_pending_updates=True)
