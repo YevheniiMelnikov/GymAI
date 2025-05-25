@@ -53,50 +53,29 @@ ignore = ["F405", "F403"]
 combine-as-imports = true
 
 [tool.pyrefly]
-project_includes = ["bot", "apps", "core", "config", "functions"]
-project_excludes = [
-  "**/.[!/.]*",
-  "**/tests",
-  "**/__pycache__",
-  "**/migrations/**",
-  "**/static/**",
-  "**/templates/**"
-]
-search_path = ["bot", "apps", "core", "config", "functions"]
-site_package_path = [".venv/lib/python3.13/site-packages"]
-
-python_platform = "linux"
-python_version = "3.13"
+project_includes = ["bot", "apps", "core", "config"]
+project_excludes = ["**/.[!/.]*", "**/__pycache__/**", "**/static/**", "**/templates/**"]
 python_interpreter = ".venv/bin/python3"
 
 ignore_errors_in_generated_code = true
-ignore_missing_source = true
-use_untyped_imports = true
-
-replace_imports_with_any = [
-  "sympy.*",
-  "unittest.*",
-  "pytest.*",
-  "pandas.core.series",
-  "core.models"
-]
+replace_imports_with_any = ["core.models"]
 
 [tool.pyrefly.errors]
 bad-assignment = true
 invalid-argument = true
-assert-type = false
 annotation-mismatch = true
 no-matching-overload = true
 bad-return = true
+assert-type = true
+bad-argument-type = true
+async-error = true
+import-error = true
 
 [[tool.pyrefly.sub_config]]
 matches = "**/tests/**"
 replace_imports_with_any = ["pytest.*"]
-[tool.pyrefly.sub_config.errors]
-assert-type = false
 
 [[tool.pyrefly.sub_config]]
 matches = "**/migrations/**"
 [tool.pyrefly.sub_config.errors]
 bad-assignment = false
-invalid-argument = false
