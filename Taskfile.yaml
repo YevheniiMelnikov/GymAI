@@ -14,10 +14,10 @@ tasks:
       - docker compose -f docker-compose-local.yml up --build
 
   lint:
-    desc: Run linters (ruff + mypy)
+    desc: Run linters (ruff + pyrefly)
     cmds:
       - uv run ruff check --fix --config=pyproject.toml
-      - uv run mypy .
+      - uv run pyrefly check .
 
   format:
     desc: Format with Ruff

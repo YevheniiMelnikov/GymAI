@@ -20,12 +20,12 @@ from core.exceptions import ProfileNotFoundError
 from core.models import Profile
 from core.services import APIService
 from core.services.outer.gstorage_service import avatar_manager
-from functions.chat import client_request
-from functions.exercises import edit_subscription_days, process_new_subscription
-from functions.menus import show_main_menu, show_my_profile_menu
-from functions.profiles import update_profile_data, check_assigned_clients
-from functions.text_utils import get_state_and_message
-from functions.utils import delete_messages, generate_order_id, set_bot_commands
+from bot.functions.chat import client_request
+from bot.functions.exercises import edit_subscription_days, process_new_subscription
+from bot.functions.menus import show_main_menu, show_my_profile_menu
+from bot.functions.profiles import update_profile_data, check_assigned_clients
+from bot.functions.text_utils import get_state_and_message
+from bot.functions.utils import delete_messages, generate_order_id, set_bot_commands
 from bot.texts.text_manager import msg_text
 
 questionnaire_router = Router()
@@ -328,7 +328,7 @@ async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> No
         await show_main_menu(callback_query.message, profile, state)
         return
 
-    state_to_set, message_text = get_state_and_message(callback_query.data, profile.language)
+    state_to_set, message_text = get_state_and_message(callback_query.data, profile.language)  # type: ignore
     if state_to_set == States.subscription_price:
         price_warning_msg = await callback_query.message.answer(msg_text("price_warning", profile.language))
         await state.update_data(

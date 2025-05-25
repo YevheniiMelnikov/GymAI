@@ -12,14 +12,14 @@ from bot.keyboards import new_message_kb, workout_results_kb
 from bot.states import States
 from config.env_settings import Settings
 from core.cache import Cache
+from core.models import Profile
 from core.services import APIService
-from functions.chat import send_message
-from functions.exercises import edit_subscription_exercises
-from functions.menus import show_main_menu, manage_subscription, show_exercises_menu
+from bot.functions.chat import send_message
+from bot.functions.exercises import edit_subscription_exercises
+from bot.functions.menus import show_main_menu, manage_subscription, show_exercises_menu
 from bot.texts.text_manager import msg_text
-from functions.text_utils import _msg
-from functions.utils import program_menu_pagination
-from functions.profiles import Profile
+from bot.functions.text_utils import _msg
+from bot.functions.utils import program_menu_pagination
 
 chat_router = Router()
 
@@ -135,7 +135,15 @@ async def have_you_trained(callback_query: CallbackQuery, state: FSMContext) -> 
     day_index = workout_days.index(weekday) if weekday in workout_days else -1
 
     if callback_query.data.startswith("yes"):
-        exercises = subscription.exercises.get(str(day_index)) or subscription.exercises.get(weekday)
+        exercises = next(
+            (
+                day.exercises
+                for day in subscription.exercises
+                if day.day == weekday or subscription.exercises.index(day) == day_index
+            ),
+            [],
+        )
+
         await state.update_data(exercises=exercises, day=weekday, day_index=day_index)
         await callback_query.answer("🔥")
         await _msg(callback_query.message).answer(

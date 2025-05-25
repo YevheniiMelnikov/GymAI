@@ -15,9 +15,9 @@ from core.cache import Cache
 from core.exceptions import UserServiceError
 from core.services import APIService
 from core.services.outer.gstorage_service import avatar_manager
-from functions import profiles
-from core.models import Client, Coach, Profile, Subscription
-from functions.text_utils import (
+from bot.functions import profiles
+from core.models import Client, Coach, Profile, Subscription, DayExercises
+from bot.functions.text_utils import (
     get_client_page,
     get_profile_attributes,
     format_program,
@@ -25,7 +25,7 @@ from functions.text_utils import (
 )
 from config.env_settings import Settings
 from bot.texts.text_manager import msg_text
-from functions.utils import fetch_user, answer_profile
+from bot.functions.utils import fetch_user, answer_profile
 
 
 async def show_subscription_page(callback_query: CallbackQuery, state: FSMContext, subscription: Subscription) -> None:
@@ -293,9 +293,10 @@ async def show_program_promo_page(callback_query: CallbackQuery, profile: Profil
 
 async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, profile: Profile) -> None:
     data = await state.get_data()
-    exercises = data.get("exercises", {})
-    days = data.get("days", [])
+    exercises_data = data.get("exercises", [])
+    exercises = [DayExercises.model_validate(e) for e in exercises_data]
     program = await format_program(exercises, day=0)
+    days = data.get("days", [])
     week_day = get_translated_week_day(profile.language, days[0]).lower()
 
     await callback_query.message.answer(

@@ -11,8 +11,8 @@ from bot.states import States
 
 from core.cache import Cache
 from core.services import APIService
-from functions.menus import show_main_menu
-from functions.workout_plans import cache_program_data
+from bot.functions.menus import show_main_menu
+from bot.functions.workout_plans import cache_program_data
 from bot.texts.text_manager import msg_text, btn_text
 from core.models import Profile
 
@@ -47,7 +47,7 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
         await callback_query.message.delete()
         return
 
-    option = callback_query.data.split("_")[1]
+    option = callback_query.data.split("_")[1]  # type: ignore
     client = await Cache.client.get_client(profile.id)
     coach_id = client.assigned_to.pop()
     coach = await Cache.coach.get_coach(coach_id)

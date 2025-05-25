@@ -19,24 +19,24 @@ from bot.keyboards import (
 from bot.states import States
 from core.cache import Cache
 from core.services import APIService
-from functions.chat import send_message
-from functions.exercises import update_exercise_data, save_exercise, find_exercise_gif
-from functions.menus import (
+from bot.functions.chat import send_message
+from bot.functions.exercises import update_exercise_data, save_exercise, find_exercise_gif
+from bot.functions.menus import (
     show_main_menu,
     my_clients_menu,
     show_my_subscription_menu,
     show_my_program_menu,
 )
-from functions.text_utils import format_program
-from functions.utils import program_menu_pagination, short_url, delete_messages
-from functions.workout_plans import reset_workout_plan, save_workout_plan, next_day_workout_plan
+from bot.functions.text_utils import format_program
+from bot.functions.utils import program_menu_pagination, short_url, delete_messages
+from bot.functions.workout_plans import reset_workout_plan, save_workout_plan, next_day_workout_plan
 from core.models import Exercise, DayExercises, Profile
 from bot.texts.text_manager import msg_text, btn_text
 
-program_router = Router()
+workout_router = Router()
 
 
-@program_router.callback_query(States.select_service)
+@workout_router.callback_query(States.select_service)
 async def program_type(callback_query: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
@@ -48,7 +48,7 @@ async def program_type(callback_query: CallbackQuery, state: FSMContext):
         await show_main_menu(callback_query.message, profile, state)
 
 
-@program_router.message(States.workouts_number, F.text)
+@workout_router.message(States.workouts_number, F.text)
 async def workouts_number_choice(message: Message, state: FSMContext):
     await delete_messages(state)
     data = await state.get_data()
@@ -74,7 +74,7 @@ async def workouts_number_choice(message: Message, state: FSMContext):
     await state.set_state(States.program_manage)
 
 
-@program_router.callback_query(States.program_manage)
+@workout_router.callback_query(States.program_manage)
 async def program_manage(callback_query: CallbackQuery, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
@@ -90,8 +90,8 @@ async def program_manage(callback_query: CallbackQuery, state: FSMContext) -> No
         await save_workout_plan(callback_query, state)
 
 
-@program_router.message(States.program_manage)
-@program_router.message(States.add_exercise_name)
+@workout_router.message(States.program_manage)
+@workout_router.message(States.add_exercise_name)
 async def set_exercise_name(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
@@ -109,7 +109,7 @@ async def set_exercise_name(message: Message, state: FSMContext) -> None:
     await state.set_state(States.enter_sets)
 
 
-@program_router.callback_query(States.enter_sets)
+@workout_router.callback_query(States.enter_sets)
 async def set_exercise_sets(callback_query: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(sets=callback_query.data)
     data = await state.get_data()
@@ -125,7 +125,7 @@ async def set_exercise_sets(callback_query: CallbackQuery, state: FSMContext) ->
     await state.set_state(States.enter_reps)
 
 
-@program_router.callback_query(States.enter_reps)
+@workout_router.callback_query(States.enter_reps)
 async def set_exercise_reps(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
@@ -146,8 +146,8 @@ async def set_exercise_reps(callback_query: CallbackQuery, state: FSMContext) ->
     await state.set_state(States.exercise_weight)
 
 
-@program_router.message(States.exercise_weight)
-@program_router.callback_query(States.exercise_weight, F.data == "skip_weight")
+@workout_router.message(States.exercise_weight)
+@workout_router.callback_query(States.exercise_weight, F.data == "skip_weight")
 async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
@@ -197,7 +197,7 @@ async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMCon
     await save_exercise(state, new_exercise, input_data)
 
 
-@program_router.callback_query(States.workout_survey)
+@workout_router.callback_query(States.workout_survey)
 async def send_workout_results(callback_query: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
@@ -233,7 +233,7 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext)
         await callback_query.message.delete()
 
 
-@program_router.message(States.workout_description)
+@workout_router.message(States.workout_description)
 async def workout_description(message: Message, state: FSMContext):
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
@@ -263,7 +263,7 @@ async def workout_description(message: Message, state: FSMContext):
     await show_main_menu(message, profile, state)
 
 
-@program_router.callback_query(States.program_edit)
+@workout_router.callback_query(States.program_edit)
 async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
@@ -385,7 +385,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
         await callback_query.message.delete()
 
 
-@program_router.callback_query(States.edit_exercise)
+@workout_router.callback_query(States.edit_exercise)
 async def select_exercise_to_edit(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.answer()
     data = await state.get_data()
