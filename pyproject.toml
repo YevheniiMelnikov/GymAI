@@ -29,7 +29,6 @@ dependencies = [
     "google-auth>=2.37.0",
     "django>=5.2",
     "celery>=5.5.2",
-    "pyrefly>=0.16.2",
 ]
 
 [project.optional-dependencies]
@@ -39,6 +38,7 @@ dev = [
     "pre-commit>=4.2.0",
     "types-python-dateutil",
     "types-redis",
+    "pyrefly>=0.16.2",
 ]
 
 [tool.ruff]
