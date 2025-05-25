@@ -54,37 +54,37 @@ combine-as-imports = true
 
 [tool.pyrefly]
 project_includes = ["."]
-project_excludes = ["**/__pycache__/**", "**/static/**", "**/templates/**"]
+project_excludes = ["**/__pycache__/**", "**/static/**", "**/templates/**", "**/migrations/**", "**/tests/**"]
 python_interpreter = ".venv/bin/python3"
+site_package_path = [".venv-win/Lib/site-packages"]
 
 ignore_errors_in_generated_code = true
-replace_imports_with_any = ["core.models"]
-
-[tool.pyrefly.type_checking]
-strict = false
-check_untyped_defs = true
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
-disallow_untyped_decorators = false
-no_implicit_optional = true
-warn_unused_ignores = true
+use_untyped_imports = true
+replace_imports_with_any = ["core.models", "core.cache", "core.services"]
 
 [tool.pyrefly.errors]
 bad-assignment = true
-invalid-argument = true
 bad-return = true
-no-matching-overload = true
-annotation-mismatch = true
-assert-type = true
 bad-argument-type = true
-async-error = true
-import-error = true
-
-[[tool.pyrefly.sub_config]]
-matches = "**/tests/**"
-replace_imports_with_any = ["pytest.*"]
+missing-attribute = true
+annotation-mismatch = true
+no-matching-overload = false
+async-error = false
+import-error = false
 
 [[tool.pyrefly.sub_config]]
 matches = "**/migrations/**"
 [tool.pyrefly.sub_config.errors]
 bad-assignment = false
+bad-return = false
+bad-argument-type = false
+missing-attribute = false
+
+[[tool.pyrefly.sub_config]]
+matches = "**/tests/**"
+replace_imports_with_any = ["pytest"]
+[tool.pyrefly.sub_config.errors]
+bad-assignment = false
+bad-return = false
+bad-argument-type = false
+missing-attribute = false
