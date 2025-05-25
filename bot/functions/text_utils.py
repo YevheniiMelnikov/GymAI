@@ -14,8 +14,10 @@ from bot.texts.text_manager import msg_text, btn_text
 def genders(lang: str) -> dict[str, str]:
     return {"male": btn_text("male", lang), "female": btn_text("female", lang)}
 
+
 def verification_status(lang: str) -> dict[bool, str]:
     return {True: msg_text("verified", lang), False: msg_text("not_verified", lang)}
+
 
 def client_statuses(lang: str) -> dict[str, str]:
     return {
@@ -29,17 +31,20 @@ def client_statuses(lang: str) -> dict[str, str]:
         "waiting_for_text": msg_text("waiting_for_text", lang),
     }
 
+
 def service_types(lang: str) -> dict[str, str]:
     return {
         "subscription": btn_text("subscription", lang),
         "program": btn_text("program", lang),
     }
 
+
 def workout_types(lang: str) -> dict[str, str]:
     return {
         "home": btn_text("home_workout", lang),
         "gym": btn_text("gym_workout", lang),
     }
+
 
 def days_of_week(lang: str) -> dict[str, str]:
     return {
@@ -51,6 +56,7 @@ def days_of_week(lang: str) -> dict[str, str]:
         "saturday": btn_text("saturday", lang),
         "sunday": btn_text("sunday", lang),
     }
+
 
 def state_msgs(callback: str, lang: str) -> tuple[State, str]:
     mapping = {
@@ -71,6 +77,7 @@ def state_msgs(callback: str, lang: str) -> tuple[State, str]:
 def get_profile_attributes(status: str, user: Optional[Client | Coach], lang: str) -> dict[str, str]:
     def get(attr: str) -> str:
         return getattr(user, attr, "") if user else ""
+
     if status == "client":
         return {
             "name": get("name"),

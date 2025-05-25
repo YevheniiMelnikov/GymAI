@@ -8,9 +8,9 @@ from aiogram.types import Message
 from core.cache import Cache
 from core.exceptions import ProfileNotFoundError
 from core.services import APIService
-from functions import menus
-from functions.chat import send_coach_request
-from functions.utils import delete_messages
+from bot.functions import menus
+from bot.functions.chat import send_coach_request
+from bot.functions.utils import delete_messages
 from core.models import Client, Coach, Profile
 from bot.texts.text_manager import msg_text
 

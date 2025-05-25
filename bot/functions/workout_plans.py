@@ -11,11 +11,11 @@ from bot.states import States
 from core.cache import Cache
 from core.models import Profile, DayExercises
 from core.services import APIService
-from functions.chat import send_message
-from functions.menus import show_main_menu
-from functions.profiles import get_user_profile
-from functions.text_utils import format_program, get_translated_week_day
-from functions.utils import delete_messages
+from bot.functions.chat import send_message
+from bot.functions.menus import show_main_menu
+from bot.functions.profiles import get_user_profile
+from bot.functions.text_utils import format_program, get_translated_week_day
+from bot.functions.utils import delete_messages
 from bot.texts.text_manager import msg_text, btn_text
 
 
@@ -42,7 +42,8 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
     client_lang = client_profile.language
 
     if data.get("subscription"):
-        subscription_data = await Cache.workout.get_subscription(client_id).model_dump()
+        subscription = await Cache.workout.get_subscription(client_id)
+        subscription_data = subscription.model_dump()
         subscription_data.update(client_profile=client_id, exercises=exercises)
         await APIService.workout.update_subscription(subscription_data.get("id"), subscription_data)
         await Cache.workout.update_subscription(client_id, dict(exercises=exercises, client_profile=client_id))

@@ -13,7 +13,7 @@ from config.env_settings import Settings
 from bot.middlewares import ProfileMiddleware
 from bot.handlers.routers_collector import configure_routers
 from core.cache.base import BaseCacheManager
-from functions.utils import set_bot_commands
+from bot.functions.utils import set_bot_commands
 
 
 async def on_shutdown(bot: Bot) -> None:

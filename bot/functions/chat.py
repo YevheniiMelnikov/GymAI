@@ -15,7 +15,7 @@ from core.cache import Cache
 from core.models import Coach, Profile, Client
 from core.services import APIService
 from core.services.outer.gstorage_service import avatar_manager
-from functions.text_utils import format_new_client_message, get_client_page, get_workout_types
+from bot.functions.text_utils import format_new_client_message, get_client_page, get_workout_types
 
 
 async def send_message(

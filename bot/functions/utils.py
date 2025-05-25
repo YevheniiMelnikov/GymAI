@@ -20,7 +20,8 @@ from core.exceptions import UserServiceError
 from core.services import APIService
 from core.services.outer.gstorage_service import avatar_manager
 from core.validators import validate_or_raise
-from functions import menus, profiles, text_utils
+from bot.functions import text_utils
+from bot.functions import menus, profiles
 from core.models import Client, Profile, Coach, DayExercises, Exercise
 from bot.texts.text_manager import msg_text, TextManager
 

@@ -9,10 +9,10 @@ from loguru import logger
 from core.cache import Cache
 from core.services import APIService
 from core.services.outer.gstorage_service import gif_manager
-from functions.menus import show_subscription_page
-from functions import profiles
-from functions.text_utils import format_program, get_translated_week_day
-from functions.utils import delete_messages, generate_order_id
+from bot.functions.menus import show_subscription_page
+from bot.functions import profiles
+from bot.functions.text_utils import format_program, get_translated_week_day
+from bot.functions.utils import delete_messages, generate_order_id
 from core.models import Exercise, Profile, Subscription, DayExercises
 from bot.texts.exercises import exercise_dict
 from bot.texts.text_manager import msg_text

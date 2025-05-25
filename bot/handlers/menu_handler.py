@@ -25,8 +25,8 @@ from config.env_settings import Settings
 from core.cache import Cache
 from core.models import Coach, Profile
 from core.services import APIService
-from functions.chat import contact_client, process_feedback_content
-from functions.menus import (
+from bot.functions.chat import contact_client, process_feedback_content
+from bot.functions.menus import (
     show_main_menu,
     show_exercises_menu,
     manage_subscription,
@@ -36,9 +36,9 @@ from functions.menus import (
     my_clients_menu,
     show_my_profile_menu,
 )
-from functions.profiles import assign_coach
-from functions.utils import handle_clients_pagination
-from functions.workout_plans import manage_program, cancel_subscription
+from bot.functions.profiles import assign_coach
+from bot.functions.utils import handle_clients_pagination
+from bot.functions.workout_plans import manage_program, cancel_subscription
 
 menu_router = Router()
 
