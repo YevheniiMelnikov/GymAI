@@ -32,6 +32,7 @@ class WorkoutService(APIClient):
                 logger.error(f"Failed to save program for client {client_id}: {response}")
                 raise UserServiceError(f"Failed to save program, received status {status_code}: {response}")
 
+            response = response or {}
             return Program(
                 id=response.get("id"),
                 split_number=split_number,

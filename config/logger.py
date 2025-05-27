@@ -71,7 +71,8 @@ class InterceptHandler(logging.Handler):
 
         frame: types.FrameType | None = logging.currentframe()
         depth = 2
-        while frame and frame.f_code.co_filename == logging.__file__:
+        logging_file = getattr(logging, "__file__", None)
+        while frame and logging_file and frame.f_code.co_filename == logging_file:
             frame = frame.f_back
             depth += 1
 

@@ -1,26 +1,27 @@
 from datetime import datetime
-
+from typing import Annotated
 from pydantic import BaseModel, Field, field_validator
+from enums import PaymentType, ProfileStatus, ClientStatus, Language, Gender
 
 
 class Profile(BaseModel):
     id: int
-    status: str
+    status: Annotated[ProfileStatus, Field()]
     tg_id: int
-    language: str
+    language: Annotated[Language, Field()]
 
 
 class Client(BaseModel):
     id: int
     profile: int
     name: str
-    gender: str
+    gender: Gender
     born_in: str
     workout_experience: str
     workout_goals: str
     health_notes: str
     weight: int
-    status: str = "default"
+    status: ClientStatus = ClientStatus.default
     assigned_to: list[int] = Field(default_factory=list)
 
 
@@ -84,7 +85,7 @@ class Subscription(BaseModel):
 class Payment(BaseModel):
     id: int
     profile: int
-    payment_type: str
+    payment_type: PaymentType
     order_id: str
     amount: int
     status: str

@@ -201,7 +201,7 @@ async def my_clients_menu(callback_query: CallbackQuery, coach_profile: Profile,
             logger.error(f"Error retrieving client data for IDs {assigned_ids}: {error}")
             for profile_id in assigned_ids:
                 try:
-                    if cl_profile := await APIService.profile.get_client_profile(profile_id):
+                    if cl_profile := await APIService.profile.get_client_by_profile_id(profile_id):
                         clients.append(cast(Client, cl_profile))
                 except Exception as e:
                     logger.error(f"Error retrieving profile data for client {profile_id}: {e}")

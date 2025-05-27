@@ -92,9 +92,13 @@ class PaymentService(APIClient):
         try:
             logger.debug(f"Sending {method.upper()} request to {url} with data: {data}")
             status_code, response = await cls._api_request(
-                method=method, url=url, data=data or {}, headers={"Authorization": f"Api-Key {cls.api_key}"}
+                method=method,
+                url=url,
+                data=data or {},
+                headers={"Authorization": f"Api-Key {cls.api_key}"},
             )
-            return status_code, response
+            response_dict = response if response is not None else {}
+            return status_code, response_dict
         except Exception as e:
             logger.error(f"API {method.upper()} request to {endpoint} failed with error: {e}")
             return 500, {}

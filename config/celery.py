@@ -2,18 +2,16 @@ from celery import Celery
 from celery.schedules import crontab
 from config.env_settings import Settings
 
-celery_app = Celery("gym_bot")
-
-celery_app.conf.update(
-    broker_url=Settings.REDIS_URL,
-    result_backend=Settings.REDIS_URL,
-    timezone=Settings.TIME_ZONE,
-    task_serializer="json",
-    accept_content=["json"],
-    task_acks_late=True,
-    worker_max_tasks_per_child=100,
-    task_time_limit=600,
-    beat_schedule={
+celery_config = {
+    "broker_url": Settings.REDIS_URL,
+    "result_backend": Settings.REDIS_URL,
+    "timezone": Settings.TIME_ZONE,
+    "task_serializer": "json",
+    "accept_content": ["json"],
+    "task_acks_late": True,
+    "worker_max_tasks_per_child": 100,
+    "task_time_limit": 600,
+    "beat_schedule": {
         "pg_backup": {
             "task": "core.tasks.pg_backup",
             "schedule": crontab(hour=2, minute=0),
@@ -44,7 +42,9 @@ celery_app.conf.update(
             "options": {"queue": "maintenance"},
         },
     },
-)
+}
+
+celery_app = Celery("gym_bot", config_source=celery_config)
 
 celery_app.autodiscover_tasks(["core"])
 
