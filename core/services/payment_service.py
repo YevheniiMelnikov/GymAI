@@ -92,7 +92,7 @@ class PaymentService(APIClient):
         try:
             logger.debug(f"Sending {method.upper()} request to {url} with data: {data}")
             status_code, response = await cls._api_request(
-                method=method, url=url, data=data, headers={"Authorization": f"Api-Key {cls.api_key}"}
+                method=method, url=url, data=data or {}, headers={"Authorization": f"Api-Key {cls.api_key}"}
             )
             return status_code, response
         except Exception as e:
@@ -171,7 +171,7 @@ class PaymentService(APIClient):
     @classmethod
     async def update_payment_status(cls, order_id: str, status_: str, error: str = "") -> Payment | None:
         payment, payment_id = await cls._get_payment_by_order_id(order_id)
-        if payment_id is None:
+        if payment_id is None or payment is None:
             logger.error(f"Payment {order_id} not found")
             return None
 

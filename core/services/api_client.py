@@ -1,5 +1,6 @@
 from json import JSONDecodeError
 import asyncio
+from typing import Optional
 
 import httpx
 from loguru import logger
@@ -19,7 +20,13 @@ class APIClient:
     max_delay = Settings.API_RETRY_MAX_DELAY
 
     @classmethod
-    async def _api_request(cls, method: str, url: str, data: dict = None, headers: dict = None) -> tuple:
+    async def _api_request(
+        cls,
+        method: str,
+        url: str,
+        data: Optional[dict] = None,
+        headers: Optional[dict] = None,
+    ) -> tuple[int, Optional[dict]]:
         headers = headers or {}
         if cls.api_key:
             headers.setdefault("Authorization", f"Bearer {cls.api_key}")
@@ -56,9 +63,9 @@ class APIClient:
                     raise UserServiceError(f"Request to {url} failed after {attempt} attempts: {e}") from e
                 await asyncio.sleep(delay)
                 delay = min(delay * cls.backoff_factor, cls.max_delay)
-                return
 
             except Exception as e:
                 logger.exception("Unexpected error occurred")
                 raise UserServiceError(f"Unexpected error: {e}") from e
-        return
+
+        return 500, None

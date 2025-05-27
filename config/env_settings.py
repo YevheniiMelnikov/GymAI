@@ -27,7 +27,7 @@ class Settings:
     API_TIMEOUT: int = 10
 
     TIME_ZONE: str = must_getenv("TIME_ZONE", "Europe/Kyiv")
-    BOT_LANG: str = must_getenv("BOT_LANG", "ua")
+    DEFAULT_LANG: str = must_getenv("DEFAULT_LANG", "ua")
     ADMIN_LANG: str = must_getenv("ADMIN_LANG", "ru")
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     API_KEY: str = must_getenv("API_KEY")

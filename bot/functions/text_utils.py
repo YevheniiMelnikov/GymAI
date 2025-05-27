@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any, Optional, cast
 
 from aiogram.fsm.state import State
-from aiogram.types import Message, InaccessibleMessage
 
 from bot.states import States
 from core.models import Client, Coach, DayExercises
 from core.services import APIService
-from bot.texts.text_manager import msg_text, btn_text
+from bot.texts import msg_text, btn_text
 
 
 def genders(lang: str) -> dict[str, str]:
@@ -58,7 +57,7 @@ def days_of_week(lang: str) -> dict[str, str]:
     }
 
 
-def state_msgs(callback: str, lang: str) -> tuple[State, str]:
+def state_msgs(callback: str, lang: str) -> tuple[State | None, str | None]:
     mapping = {
         "workout_experience": (States.workout_experience, msg_text("workout_experience", lang)),
         "workout_goals": (States.workout_goals, msg_text("workout_goals", lang)),
@@ -76,7 +75,9 @@ def state_msgs(callback: str, lang: str) -> tuple[State, str]:
 
 def get_profile_attributes(status: str, user: Optional[Client | Coach], lang: str) -> dict[str, str]:
     def get(attr: str) -> str:
-        return getattr(user, attr, "") if user else ""
+        val = getattr(user, attr, "") if user else ""
+        # Исправлено: приведение к str, если атрибут может быть не строкой
+        return str(val) if val is not None else ""
 
     if status == "client":
         return {
@@ -89,6 +90,10 @@ def get_profile_attributes(status: str, user: Optional[Client | Coach], lang: st
             "notes": get("health_notes"),
         }
     else:
+        verified_value = getattr(user, "verified", False) if user else False
+        # Проверка на bool для verified
+        if not isinstance(verified_value, bool):
+            verified_value = bool(verified_value)
         return {
             "name": get("name"),
             "experience": get("work_experience"),
@@ -96,12 +101,15 @@ def get_profile_attributes(status: str, user: Optional[Client | Coach], lang: st
             "payment_details": get("payment_details"),
             "subscription_price": get("subscription_price"),
             "program_price": get("program_price"),
-            "verif_status": verification_status(lang).get(get("verified"), msg_text("not_verified", lang)),
+            "verif_status": verification_status(lang).get(verified_value, msg_text("not_verified", lang)),
         }
 
 
 def get_state_and_message(callback: str, lang: str) -> tuple[State, str]:
-    return state_msgs(callback, lang)
+    state_msg = state_msgs(callback, lang)
+    if state_msg[0] is None or state_msg[1] is None:
+        return States.name, ""
+    return cast(tuple[State, str], state_msg)
 
 
 async def get_client_page(client: Client, lang_code: str, subscription: bool, data: dict[str, Any]) -> dict[str, Any]:
@@ -115,12 +123,12 @@ async def get_client_page(client: Client, lang_code: str, subscription: bool, da
         "workout_goals": client.workout_goals,
         "health_notes": client.health_notes,
         "weight": client.weight,
-        "language": client_profile.language,
+        "language": client_profile.language if client_profile and hasattr(client_profile, "language") else "",
         "subscription": statuses.get("enabled") if subscription else statuses.get("disabled"),
-        "status": statuses.get(client.status),
+        "status": statuses.get(client.status, ""),
     }
     if data.get("new_client"):
-        page["status"] = statuses.get("waiting_for_text")
+        page["status"] = statuses.get("waiting_for_text", "")
     return page
 
 
@@ -130,7 +138,7 @@ async def format_new_client_message(
     if data.get("new_client"):
         return msg_text("new_client", coach_lang).format(lang=client_lang, workout_type=preferable_type)
     else:
-        service = service_types(coach_lang).get(data.get("request_type"))
+        service = service_types(coach_lang).get(data.get("request_type", ""), "")
         return msg_text("incoming_request", coach_lang).format(
             service=service, lang=client_lang, workout_type=preferable_type
         )
@@ -144,8 +152,10 @@ def get_workout_types(language: str) -> dict[str, str]:
     return workout_types(language)
 
 
-def get_translated_week_day(lang_code: str, day: str) -> str:
-    return days_of_week(lang_code).get(day)
+def get_translated_week_day(lang_code: str, day: str | None) -> str:
+    if day is None:
+        return ""
+    return days_of_week(lang_code).get(day, "")
 
 
 async def format_program(exercises: list[DayExercises], day: int) -> str:
@@ -164,8 +174,3 @@ async def format_program(exercises: list[DayExercises], day: int) -> str:
         program_lines.append(line)
 
     return "\n".join(program_lines)
-
-
-def _msg(m: Message | InaccessibleMessage | None) -> Message:
-    assert isinstance(m, Message)
-    return m

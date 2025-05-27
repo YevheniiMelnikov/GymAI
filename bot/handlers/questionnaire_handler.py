@@ -1,6 +1,8 @@
 from contextlib import suppress
+from typing import cast
 
-from aiogram import F, Router
+from aiogram import Router
+
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -25,7 +27,7 @@ from bot.functions.exercises import edit_subscription_days, process_new_subscrip
 from bot.functions.menus import show_main_menu, show_my_profile_menu
 from bot.functions.profiles import update_profile_data, check_assigned_clients
 from bot.functions.text_utils import get_state_and_message
-from bot.functions.utils import delete_messages, generate_order_id, set_bot_commands
+from bot.functions.utils import delete_messages, generate_order_id, set_bot_commands, answer_msg, del_msg
 from bot.texts.text_manager import msg_text
 
 questionnaire_router = Router()
@@ -35,7 +37,7 @@ questionnaire_router = Router()
 async def select_language(callback_query: CallbackQuery, state: FSMContext) -> None:
     await callback_query.answer()
     await delete_messages(state)
-    lang = callback_query.data
+    lang = callback_query.data or Settings.DEFAULT_LANG
     await set_bot_commands(lang)
     try:
         profile = await APIService.profile.get_profile_by_tg_id(callback_query.from_user.id)
@@ -43,19 +45,28 @@ async def select_language(callback_query: CallbackQuery, state: FSMContext) -> N
             await APIService.profile.update_profile(profile.id, {"language": lang})
             await Cache.profile.update_profile(callback_query.from_user.id, dict(language=lang))
             profile.language = lang
-            await state.update_data(profile=profile.model_dump())
-            await show_main_menu(callback_query.message, profile, state)
+            message = callback_query.message
+            if message is not None:
+                await show_main_menu(cast(Message, message), profile, state)
         else:
             raise ProfileNotFoundError(callback_query.from_user.id)
     except ProfileNotFoundError:
-        account_msg = await callback_query.message.answer(
-            msg_text("choose_account_type", lang), reply_markup=select_status_kb(lang)
-        )
-        await state.update_data(lang=lang, message_ids=[account_msg.message_id], chat_id=callback_query.message.chat.id)
+        account_msg = None
+        if callback_query.message is not None:
+            account_msg = await answer_msg(
+                cast(Message, callback_query.message),
+                msg_text("choose_account_type", lang),
+                reply_markup=select_status_kb(lang),
+            )
+        if account_msg is not None and callback_query.message is not None:
+            await state.update_data(
+                lang=lang,
+                message_ids=[account_msg.message_id],
+                chat_id=callback_query.message.chat.id,
+            )
         await state.set_state(States.account_type)
 
-    with suppress(TelegramBadRequest):
-        await callback_query.message.delete()
+    await del_msg(cast(Message | CallbackQuery | None, callback_query))
 
 
 @questionnaire_router.callback_query(States.account_type)
@@ -63,258 +74,307 @@ async def profile_status_choice(callback_query: CallbackQuery, state: FSMContext
     await callback_query.answer()
     data = await state.get_data()
     await delete_messages(state)
-    lang = data.get("lang", Settings.BOT_LANG)
-    status = callback_query.data if callback_query.data in ["coach", "client"] else "client"
-    profile = await APIService.profile.create_profile(
-        telegram_id=callback_query.from_user.id, status=status, language=lang
-    )
-    if not profile:
-        await callback_query.message.answer(msg_text("unexpected_error", lang))
+    lang = data.get("lang", Settings.DEFAULT_LANG)
+    status = callback_query.data if callback_query.data in ("coach", "client") else "client"
+    profile = await APIService.profile.create_profile(tg_id=callback_query.from_user.id, status=status, language=lang)
+    if profile is None:
+        if callback_query.message is not None:
+            await answer_msg(cast(Message, callback_query.message), msg_text("unexpected_error", lang))
         return
 
     await Cache.profile.save_profile(callback_query.from_user.id, dict(id=profile.id, status=status, language=lang))
     await state.update_data(profile=profile.model_dump())
-    name_msg = await callback_query.message.answer(msg_text("name", lang))
-    await state.update_data(chat_id=callback_query.message.chat.id, message_ids=[name_msg.message_id], status=status)
+    if callback_query.message is not None:
+        msg = await answer_msg(cast(Message, callback_query.message), msg_text("name", lang))
+        if msg is not None:
+            await state.update_data(chat_id=callback_query.message.chat.id, message_ids=[msg.message_id], status=status)
     await state.set_state(States.name)
 
 
-@questionnaire_router.message(States.name, F.text)
+@questionnaire_router.message(States.name)
 async def name(message: Message, state: FSMContext) -> None:
+    if not message.text:
+        return
+
     await delete_messages(state)
     data = await state.get_data()
+    lang = data.get("lang", Settings.DEFAULT_LANG)
+    text = msg_text("surname", lang) if data.get("status") == "coach" else msg_text("choose_gender", lang)
+    reply_markup = select_gender_kb(lang) if data.get("status") == "client" else None
+    msg = await answer_msg(message, text=text, reply_markup=reply_markup)
+    await state.update_data(chat_id=message.chat.id, message_ids=[msg.message_id] if msg else [], name=message.text)
     state_to_set = States.surname if data.get("status") == "coach" else States.gender
     await state.set_state(state_to_set)
-    text = (
-        msg_text("surname", data.get("lang"))
-        if data["status"] == "coach"
-        else msg_text("choose_gender", data.get("lang"))
-    )
-    reply_markup = select_gender_kb(data.get("lang")) if data["status"] == "client" else None
-    msg = await message.answer(text=text, reply_markup=reply_markup)
-    await state.update_data(chat_id=message.chat.id, message_ids=[msg.message_id], name=message.text)
-    await message.delete()
+    await del_msg(cast(Message | CallbackQuery | None, message))
 
 
 @questionnaire_router.callback_query(States.gender)
 async def gender(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
-    await callback_query.answer(msg_text("saved", data.get("lang")))
-    age_msg = await callback_query.message.answer(msg_text("born_in", data.get("lang")))
+    lang = data.get("lang", Settings.DEFAULT_LANG)
+    await callback_query.answer(msg_text("saved", lang))
+    msg = None
+    if callback_query.message is not None:
+        msg = await answer_msg(cast(Message, callback_query.message), msg_text("born_in", lang))
     await state.update_data(
-        gender=callback_query.data, chat_id=callback_query.message.chat.id, message_ids=[age_msg.message_id]
+        gender=callback_query.data,
+        chat_id=callback_query.message.chat.id if callback_query.message else 0,
+        message_ids=[msg.message_id] if msg else [],
     )
-    await callback_query.message.delete()
+    await del_msg(cast(Message | CallbackQuery | None, callback_query))
     await state.set_state(States.born_in)
 
 
-@questionnaire_router.message(States.born_in, F.text)
+@questionnaire_router.message(States.born_in)
 async def born_in(message: Message, state: FSMContext) -> None:
+    if not message.text:
+        return
+
     await delete_messages(state)
     data = await state.get_data()
-    goals_msg = await message.answer(msg_text("workout_goals", data.get("lang")))
-    await state.update_data(born_in=message.text, chat_id=message.chat.id, message_ids=[goals_msg.message_id])
+    lang = data.get("lang", Settings.DEFAULT_LANG)
+    msg = await answer_msg(message, msg_text("workout_goals", lang))
+    await state.update_data(born_in=message.text, chat_id=message.chat.id, message_ids=[msg.message_id] if msg else [])
     await state.set_state(States.workout_goals)
-    await message.delete()
+    await del_msg(cast(Message | CallbackQuery | None, message))
 
 
-@questionnaire_router.message(States.workout_goals, F.text)
+@questionnaire_router.message(States.workout_goals)
 async def workout_goals(message: Message, state: FSMContext) -> None:
+    if not message.text:
+        return
+
     await delete_messages(state)
     await state.update_data(workout_goals=message.text)
     data = await state.get_data()
     if data.get("edit_mode"):
-        await update_profile_data(message, state, "client")
+        await update_profile_data(cast(Message, message), state, "client")
         return
 
-    experience_msg = await message.answer(
-        msg_text("workout_experience", data.get("lang")),
-        reply_markup=workout_experience_kb(data.get("lang")),
+    lang = data.get("lang", Settings.DEFAULT_LANG)
+    msg = await answer_msg(
+        message,
+        msg_text("workout_experience", lang),
+        reply_markup=workout_experience_kb(lang),
     )
-    await state.update_data(chat_id=message.chat.id, message_ids=[experience_msg.message_id])
+    await state.update_data(chat_id=message.chat.id, message_ids=[msg.message_id] if msg else [])
     await state.set_state(States.workout_experience)
-    await message.delete()
+    await del_msg(cast(Message | CallbackQuery | None, message))
 
 
 @questionnaire_router.callback_query(States.workout_experience)
 async def workout_experience(callback_query: CallbackQuery, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
-    await callback_query.answer(msg_text("saved", data.get("lang")))
+    lang = data.get("lang", Settings.DEFAULT_LANG)
+    await callback_query.answer(msg_text("saved", lang))
     await state.update_data(workout_experience=callback_query.data)
     if data.get("edit_mode"):
-        await update_profile_data(callback_query.message, state, "client")
+        if callback_query.message is not None:
+            await update_profile_data(cast(Message, callback_query.message), state, "client")
         return
 
-    weight_msg = await callback_query.message.answer(msg_text("weight", data.get("lang")))
-    await state.update_data(chat_id=callback_query.message.chat.id, message_ids=[weight_msg.message_id])
+    if callback_query.message is not None:
+        msg = await answer_msg(cast(Message, callback_query.message), msg_text("weight", lang))
+        await state.update_data(chat_id=callback_query.message.chat.id, message_ids=[msg.message_id] if msg else [])
     await state.set_state(States.weight)
-    with suppress(TelegramBadRequest):
-        await callback_query.message.delete()
+    await del_msg(cast(Message | CallbackQuery | None, callback_query))
 
 
-@questionnaire_router.message(States.weight, F.text)
+@questionnaire_router.message(States.weight)
 async def weight(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
+    lang = data.get("lang", Settings.DEFAULT_LANG)
     await delete_messages(state)
-    if not all(map(lambda x: x.isdigit(), message.text.split())):
-        await message.answer(msg_text("invalid_content", data.get("lang")))
+
+    if not message.text or not all(x.isdigit() for x in message.text.split()):
+        await answer_msg(message, msg_text("invalid_content", lang))
         await state.set_state(States.weight)
         return
 
     await state.update_data(weight=message.text)
     if data.get("edit_mode"):
-        await update_profile_data(message, state, "client")
+        await update_profile_data(cast(Message, message), state, "client")
         return
 
-    health_msg = await message.answer(msg_text("health_notes", data.get("lang")))
-    await state.update_data(chat_id=message.chat.id, message_ids=[health_msg.message_id])
+    msg = await answer_msg(message, msg_text("health_notes", lang))
+    await state.update_data(chat_id=message.chat.id, message_ids=[msg.message_id] if msg else [])
     await state.set_state(States.health_notes)
-    await message.delete()
+    await del_msg(cast(Message | CallbackQuery | None, message))
 
 
-@questionnaire_router.message(States.health_notes, F.text)
+@questionnaire_router.message(States.health_notes)
 async def health_notes(message: Message, state: FSMContext) -> None:
+    if not message.text:
+        return
+
     await delete_messages(state)
     await state.update_data(health_notes=message.text)
-    await update_profile_data(message, state, "client")
+    await update_profile_data(cast(Message, message), state, "client")
 
 
-@questionnaire_router.message(States.surname, F.text)
+@questionnaire_router.message(States.surname)
 async def surname(message: Message, state: FSMContext) -> None:
-    await delete_messages(state)
-    data = await state.get_data()
-    await state.update_data(surname=message.text)
-    if data.get("edit_mode"):
-        await update_profile_data(message, state, "coach")
+    if not message.text:
         return
 
-    work_experience_msg = await message.answer(msg_text("work_experience", data.get("lang")))
-    await state.update_data(chat_id=message.chat.id, message_ids=[work_experience_msg.message_id])
-    await state.set_state(States.work_experience)
-    await message.delete()
-
-
-@questionnaire_router.message(States.work_experience, F.text)
-async def work_experience(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
-    if not all(map(lambda x: x.isdigit(), message.text.split())):
-        await message.answer(msg_text("invalid_content", data.get("lang")))
-        await message.answer(msg_text("work_experience", data.get("lang")))
+    lang = data.get("lang", Settings.DEFAULT_LANG)
+    await state.update_data(surname=message.text)
+    if data.get("edit_mode"):
+        await update_profile_data(cast(Message, message), state, "coach")
+        return
+
+    msg = await answer_msg(message, msg_text("work_experience", lang))
+    await state.update_data(chat_id=message.chat.id, message_ids=[msg.message_id] if msg else [])
+    await state.set_state(States.work_experience)
+    await del_msg(cast(Message | CallbackQuery | None, message))
+
+
+@questionnaire_router.message(States.work_experience)
+async def work_experience(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    lang = data.get("lang", Settings.DEFAULT_LANG)
+    await delete_messages(state)
+
+    if not message.text or not all(x.isdigit() for x in message.text.split()):
+        await answer_msg(message, msg_text("invalid_content", lang))
+        await answer_msg(message, msg_text("work_experience", lang))
         await state.set_state(States.work_experience)
         return
 
     await state.update_data(work_experience=message.text)
     if data.get("edit_mode"):
-        await update_profile_data(message, state, "coach")
+        await update_profile_data(cast(Message, message), state, "coach")
         return
 
-    additional_info_msg = await message.answer(msg_text("additional_info", data.get("lang")))
-    await state.update_data(chat_id=message.chat.id, message_ids=[additional_info_msg.message_id])
+    msg = await answer_msg(message, msg_text("additional_info", lang))
+    await state.update_data(chat_id=message.chat.id, message_ids=[msg.message_id] if msg else [])
     await state.set_state(States.additional_info)
-    await message.delete()
+    await del_msg(cast(Message | CallbackQuery | None, message))
 
 
-@questionnaire_router.message(States.additional_info, F.text)
+@questionnaire_router.message(States.additional_info)
 async def additional_info(message: Message, state: FSMContext) -> None:
+    if not message.text:
+        return
+
     data = await state.get_data()
+    lang = data.get("lang", Settings.DEFAULT_LANG)
     await delete_messages(state)
     await state.update_data(additional_info=message.text)
     if data.get("edit_mode"):
-        await update_profile_data(message, state, "coach")
+        await update_profile_data(cast(Message, message), state, "coach")
         return
 
-    payment_details_msg = await message.answer(msg_text("payment_details", data.get("lang")))
-    await state.update_data(chat_id=message.chat.id, message_ids=[payment_details_msg.message_id])
+    msg = await answer_msg(message, msg_text("payment_details", lang))
+    await state.update_data(chat_id=message.chat.id, message_ids=[msg.message_id] if msg else [])
     await state.set_state(States.payment_details)
-    await message.delete()
+    await del_msg(cast(Message | CallbackQuery | None, message))
 
 
-@questionnaire_router.message(States.payment_details, F.text)
+@questionnaire_router.message(States.payment_details)
 async def payment_details(message: Message, state: FSMContext) -> None:
+    if not message.text:
+        return
+
     await state.update_data(payment_details=message.text.replace(" ", ""))
+
     data = await state.get_data()
+    lang = data.get("lang", Settings.DEFAULT_LANG)
     await delete_messages(state)
     card_number = message.text.replace(" ", "")
-    if not all(map(lambda x: x.isdigit(), card_number)) or len(card_number) != 16:
-        await message.answer(msg_text("invalid_content", data.get("lang")))
-        await message.delete()
+    if not all(x.isdigit() for x in card_number) or len(card_number) != 16:
+        await answer_msg(message, msg_text("invalid_content", lang))
+        await del_msg(cast(Message | CallbackQuery | None, message))
         return
 
     if data.get("edit_mode"):
-        await update_profile_data(message, state, "coach")
+        await update_profile_data(cast(Message, message), state, "coach")
         return
 
-    program_price_msg = await message.answer(msg_text("enter_program_price", data.get("lang")))
-    await state.update_data(chat_id=message.chat.id, message_ids=[program_price_msg.message_id])
+    msg = await answer_msg(message, msg_text("enter_program_price", lang))
+    await state.update_data(chat_id=message.chat.id, message_ids=[msg.message_id] if msg else [])
     await state.set_state(States.program_price)
-    await message.delete()
+    await del_msg(cast(Message | CallbackQuery | None, message))
 
 
-@questionnaire_router.message(States.program_price, F.text)
+@questionnaire_router.message(States.program_price)
 async def enter_program_price(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
-    if not all(map(lambda x: x.isdigit(), message.text)):
-        await message.answer(msg_text("invalid_content", data.get("lang")))
-        await message.delete()
+    lang = data.get("lang", Settings.DEFAULT_LANG)
+
+    if not message.text or not all(x.isdigit() for x in message.text):
+        await answer_msg(message, msg_text("invalid_content", lang))
+        await del_msg(cast(Message | CallbackQuery | None, message))
         return
 
     if data.get("edit_mode"):
         await state.update_data(program_price=message.text)
-        await update_profile_data(message, state, "coach")
+        await update_profile_data(cast(Message, message), state, "coach")
         return
 
-    subscription_price_msg = await message.answer(msg_text("enter_subscription_price", data.get("lang")))
+    msg = await answer_msg(message, msg_text("enter_subscription_price", lang))
     await state.update_data(
-        program_price=message.text, message_ids=[subscription_price_msg.message_id], chat_id=message.chat.id
+        program_price=message.text,
+        message_ids=[msg.message_id] if msg else [],
+        chat_id=message.chat.id,
     )
     await state.set_state(States.subscription_price)
-    await message.delete()
+    await del_msg(cast(Message | CallbackQuery | None, message))
 
 
-@questionnaire_router.message(States.subscription_price, F.text)
+@questionnaire_router.message(States.subscription_price)
 async def enter_subscription_price(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
-    if not all(map(lambda x: x.isdigit(), message.text)):
-        await message.answer(msg_text("invalid_content", data.get("lang")))
-        await message.delete()
+    lang = data.get("lang", Settings.DEFAULT_LANG)
+
+    if not message.text or not all(x.isdigit() for x in message.text):
+        await answer_msg(message, msg_text("invalid_content", lang))
+        await del_msg(cast(Message | CallbackQuery | None, message))
         return
 
     if data.get("edit_mode"):
         await state.update_data(subscription_price=message.text)
-        await update_profile_data(message, state, "coach")
+        await update_profile_data(cast(Message, message), state, "coach")
         return
 
-    photo_msg = await message.answer(msg_text("upload_photo", data.get("lang")))
+    msg = await answer_msg(message, msg_text("upload_photo", lang))
     await state.update_data(
-        subscription_price=message.text, chat_id=message.chat.id, message_ids=[photo_msg.message_id]
+        subscription_price=message.text,
+        chat_id=message.chat.id,
+        message_ids=[msg.message_id] if msg else [],
     )
     await state.set_state(States.profile_photo)
-    await message.delete()
+    await del_msg(cast(Message | CallbackQuery | None, message))
 
 
-@questionnaire_router.message(States.profile_photo, F.photo)
+@questionnaire_router.message(States.profile_photo)
 async def profile_photo(message: Message, state: FSMContext) -> None:
+    if not message.photo:
+        await answer_msg(message, msg_text("invalid_content", Settings.DEFAULT_LANG))
+        return
+
     await delete_messages(state)
     data = await state.get_data()
+    lang = data.get("lang", Settings.DEFAULT_LANG)
     local_file = await avatar_manager.save_image(message)
 
     if local_file and avatar_manager.check_file_size(local_file, 20):
         if avatar_manager.load_file_to_bucket(local_file):
-            uploaded_msg = await message.answer(msg_text("photo_uploaded", data.get("lang")))
-            await state.update_data(
-                profile_photo=local_file, chat_id=message.chat.id, message_ids=[uploaded_msg.message_id]
-            )
+            msg = await answer_msg(message, msg_text("photo_uploaded", lang))
+            if msg:
+                await state.update_data(profile_photo=local_file, chat_id=message.chat.id, message_ids=[msg.message_id])
             avatar_manager.clean_up_file(local_file)
-            await update_profile_data(message, state, "coach")
+            await update_profile_data(cast(Message, message), state, "coach")
         else:
-            await message.answer(msg_text("photo_upload_fail", data.get("lang")))
+            await answer_msg(message, msg_text("photo_upload_fail", lang))
             await state.set_state(States.profile_photo)
     else:
-        await message.answer(msg_text("photo_upload_fail", data.get("lang")))
+        await answer_msg(message, msg_text("photo_upload_fail", lang))
         await state.set_state(States.profile_photo)
 
 
@@ -323,23 +383,35 @@ async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> No
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     await delete_messages(state)
-    await state.update_data(lang=profile.language)
+    await state.update_data(lang=profile.language or Settings.DEFAULT_LANG)
     if callback_query.data == "back":
-        await show_main_menu(callback_query.message, profile, state)
+        message = callback_query.message
+        if message is not None:
+            await show_main_menu(cast(Message, message), profile, state)
         return
 
-    state_to_set, message_text = get_state_and_message(callback_query.data, profile.language)  # type: ignore
+    state_to_set, message_text = get_state_and_message(
+        callback_query.data or "", profile.language or Settings.DEFAULT_LANG
+    )
     if state_to_set == States.subscription_price:
-        price_warning_msg = await callback_query.message.answer(msg_text("price_warning", profile.language))
-        await state.update_data(
-            price_warning_msg_ids=[price_warning_msg.message_id], chat_id=callback_query.message.chat.id
-        )
+        msg = None
+        if callback_query.message is not None:
+            msg = await answer_msg(
+                cast(Message, callback_query.message),
+                msg_text("price_warning", profile.language or Settings.DEFAULT_LANG),
+            )
+        if msg and callback_query.message:
+            await state.update_data(price_warning_msg_ids=[msg.message_id], chat_id=callback_query.message.chat.id)
     await state.update_data(edit_mode=True)
-    reply_markup = workout_experience_kb(profile.language) if state_to_set == States.workout_experience else None
-    await callback_query.message.answer(message_text, lang=profile.language, reply_markup=reply_markup)
+    reply_markup = (
+        workout_experience_kb(profile.language or Settings.DEFAULT_LANG)
+        if state_to_set == States.workout_experience
+        else None
+    )
+    if callback_query.message is not None:
+        await answer_msg(cast(Message, callback_query.message), message_text, reply_markup=reply_markup)
     await state.set_state(state_to_set)
-    with suppress(TelegramBadRequest):
-        await callback_query.message.delete()
+    await del_msg(cast(Message | CallbackQuery | None, callback_query))
 
 
 @questionnaire_router.callback_query(States.workout_type)
@@ -348,50 +420,70 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
     profile = Profile.model_validate(data["profile"])
     await state.update_data(workout_type=callback_query.data)
     await state.set_state(States.enter_wishes)
-    await callback_query.message.answer(msg_text("enter_wishes", profile.language))
-    await callback_query.message.delete()
+    if callback_query.message is not None:
+        await answer_msg(
+            cast(Message, callback_query.message), msg_text("enter_wishes", profile.language or Settings.DEFAULT_LANG)
+        )
+    await del_msg(cast(Message | CallbackQuery | None, callback_query))
 
 
 @questionnaire_router.message(States.enter_wishes)
 async def enter_wishes(message: Message, state: FSMContext):
+    if not message.text:
+        return
+
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     client = await Cache.client.get_client(profile.id)
+
+    if not client or not client.assigned_to:
+        return
+
     coach = await Cache.coach.get_coach(client.assigned_to.pop())
     await state.update_data(wishes=message.text, sender_name=client.name)
     data = await state.get_data()
 
     if data.get("new_client"):
-        await message.answer(msg_text("coach_selected", profile.language).format(name=coach.name))
+        if message is not None:
+            await answer_msg(
+                message, msg_text("coach_selected", profile.language or Settings.DEFAULT_LANG).format(name=coach.name)
+            )
         await client_request(coach, client, data)
-        await show_main_menu(message, profile, state)
-        with suppress(TelegramBadRequest):
-            await message.delete()
+        if message is not None:
+            await show_main_menu(cast(Message, message), profile, state)
+            await del_msg(cast(Message | CallbackQuery | None, message))
     else:
         if data.get("request_type") == "subscription":
             await state.set_state(States.workout_days)
-            await message.answer(
-                text=msg_text("select_days", profile.language), reply_markup=select_days_kb(profile.language, [])
-            )
+            if message is not None:
+                await answer_msg(
+                    message,
+                    text=msg_text("select_days", profile.language or Settings.DEFAULT_LANG),
+                    reply_markup=select_days_kb(profile.language or Settings.DEFAULT_LANG, []),
+                )
         elif data.get("request_type") == "program":
             order_id = generate_order_id()
             await state.update_data(order_id=order_id, amount=coach.program_price)
-            if payment_link := await APIService.payment.get_payment_link(
+            payment_link = await APIService.payment.get_payment_link(
                 action="pay",
                 amount=str(coach.program_price),
                 order_id=order_id,
                 payment_type="program",
                 profile_id=profile.id,
-            ):
+            )
+            if payment_link:
                 await state.set_state(States.handle_payment)
-                await message.answer(
-                    msg_text("follow_link", profile.language),
-                    reply_markup=payment_kb(profile.language, payment_link, "program"),
-                )
+                if message is not None:
+                    await answer_msg(
+                        message,
+                        msg_text("follow_link", profile.language or Settings.DEFAULT_LANG),
+                        reply_markup=payment_kb(profile.language or Settings.DEFAULT_LANG, payment_link, "program"),
+                    )
             else:
-                await message.answer(msg_text("unexpected_error", profile.language))
-        with suppress(TelegramBadRequest):
-            await message.delete()
+                if message is not None:
+                    await answer_msg(message, msg_text("unexpected_error", profile.language or Settings.DEFAULT_LANG))
+        if message is not None:
+            await del_msg(cast(Message | CallbackQuery | None, message))
 
 
 @questionnaire_router.callback_query(States.workout_days)
@@ -405,16 +497,18 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
             await state.update_data(workout_days=days)
             if data.get("edit_mode"):
                 subscription = await Cache.workout.get_subscription(profile.id)
-                if len(subscription.workout_days) == len(days):
+                if subscription and len(subscription.workout_days) == len(days):
                     await edit_subscription_days(callback_query, days, profile, state, subscription)
                 else:
-                    await callback_query.message.answer(
-                        msg_text("workout_plan_delete_warning", profile.language),
-                        reply_markup=yes_no_kb(profile.language),
-                    )
+                    if callback_query.message is not None:
+                        await answer_msg(
+                            cast(Message, callback_query.message),
+                            msg_text("workout_plan_delete_warning", profile.language or Settings.DEFAULT_LANG),
+                            reply_markup=yes_no_kb(profile.language or Settings.DEFAULT_LANG),
+                        )
                     await state.set_state(States.confirm_subscription_reset)
             else:
-                await callback_query.answer(msg_text("saved", profile.language))
+                await callback_query.answer(msg_text("saved", profile.language or Settings.DEFAULT_LANG))
                 await process_new_subscription(callback_query, profile, state)
         else:
             await callback_query.answer("❌")
@@ -426,8 +520,12 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
 
         await state.update_data(workout_days=days)
 
-        with suppress(TelegramBadRequest):
-            await callback_query.message.edit_reply_markup(reply_markup=select_days_kb(profile.language, days))
+        if callback_query.message is not None:
+            with suppress(TelegramBadRequest, AttributeError):
+                if isinstance(callback_query.message, Message):
+                    await callback_query.message.edit_reply_markup(
+                        reply_markup=select_days_kb(profile.language or Settings.DEFAULT_LANG, days)
+                    )
 
         await state.set_state(States.workout_days)
 
@@ -440,17 +538,29 @@ async def delete_profile_confirmation(callback_query: CallbackQuery, state: FSMC
     if callback_query.data == "yes":
         if profile and profile.status == "coach":
             if await check_assigned_clients(profile.id):
-                await callback_query.answer(msg_text("unable_to_delete_profile", profile.language))
+                await answer_msg(
+                    cast(Message | CallbackQuery, callback_query),
+                    msg_text("unable_to_delete_profile", profile.language or Settings.DEFAULT_LANG),
+                )
                 return
 
         if profile and await APIService.profile.delete_profile(profile.id):
             await Cache.profile.delete_profile(callback_query.from_user.id)
-            await callback_query.message.answer(msg_text("profile_deleted", profile.language))
-            await callback_query.message.answer(msg_text("select_action", profile.language))
-            await callback_query.message.delete()
+            await answer_msg(
+                cast(Message | CallbackQuery, callback_query),
+                msg_text("profile_deleted", profile.language or Settings.DEFAULT_LANG),
+            )
+            await answer_msg(
+                cast(Message | CallbackQuery, callback_query),
+                msg_text("select_action", profile.language or Settings.DEFAULT_LANG),
+            )
+            await del_msg(cast(Message | CallbackQuery | None, callback_query))
             await state.clear()
-
         else:
-            await callback_query.message.answer(msg_text("unexpected_error", profile.language))
+            await answer_msg(
+                cast(Message | CallbackQuery, callback_query),
+                msg_text("unexpected_error", profile.language or Settings.DEFAULT_LANG),
+            )
     else:
-        await show_my_profile_menu(callback_query, profile, state)
+        if callback_query.message is not None:
+            await show_my_profile_menu(cast(CallbackQuery, callback_query), profile, state)

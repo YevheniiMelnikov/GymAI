@@ -42,7 +42,7 @@ HANDLED_STATES = [
 
 async def invalid_data_handler(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
-    await handle_invalid_content(message, data.get("lang", Settings.BOT_LANG))
+    await handle_invalid_content(message, data.get("lang", Settings.DEFAULT_LANG))
 
 
 for state_ in HANDLED_STATES:

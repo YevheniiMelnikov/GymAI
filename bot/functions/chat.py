@@ -1,13 +1,13 @@
-from typing import Any
+from typing import Any, cast
 
 import aiohttp
+from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import *
-from bot.keyboards import new_coach_kb
-from bot.singleton import bot
+from bot.functions.utils import get_bot, answer_msg
+from bot.keyboards import new_coach_kb, incoming_request_kb, client_msg_bk
 from bot.states import States
 from bot.texts.text_manager import msg_text
 from config.env_settings import Settings
@@ -29,19 +29,26 @@ async def send_message(
 ) -> None:
     if state:
         data = await state.get_data()
-        language = data.get("recipient_language", "ua")
-        sender_name = data.get("sender_name", "")
+        language = cast(str, data.get("recipient_language", Settings.DEFAULT_LANG))
+        sender_name = cast(str, data.get("sender_name", ""))
     else:
-        language = Settings.BOT_LANG
+        language = Settings.DEFAULT_LANG
         sender_name = ""
 
     recipient_profile = await APIService.profile.get_profile(recipient.id)
-    assert recipient_profile
+    if recipient_profile is None:
+        # Log and stop to avoid AttributeError on .language or .tg_id
+        from loguru import logger
 
-    if include_incoming_message:
-        formatted_text = msg_text("incoming_message", language).format(name=sender_name, message=text)
-    else:
-        formatted_text = text
+        logger.error(f"Profile not found for recipient id {recipient.id} in send_message")
+        return
+
+    formatted_text = (
+        msg_text("incoming_message", language).format(name=sender_name, message=text)
+        if include_incoming_message
+        else text
+    )
+    bot: Bot = get_bot()
 
     async with aiohttp.ClientSession():
         if video:
@@ -78,11 +85,13 @@ async def send_coach_request(tg_id: int, profile: Profile, data: dict[str, Any])
     card = data.get("payment_details")
     subscription_price = data.get("subscription_price")
     program_price = data.get("program_price")
+    bot: Bot = get_bot()
     user = await bot.get_chat(tg_id)
     contact = f"@{user.username}" if user.username else tg_id
 
     file_name = data.get("profile_photo")
     photo = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{file_name}"
+
     async with aiohttp.ClientSession():
         await bot.send_photo(
             chat_id=Settings.ADMIN_ID,
@@ -103,10 +112,12 @@ async def send_coach_request(tg_id: int, profile: Profile, data: dict[str, Any])
 
 
 async def contact_client(callback_query: CallbackQuery, profile: Profile, client_id: str, state: FSMContext) -> None:
+    message = cast(Message, callback_query.message)
     await callback_query.answer()
-    await callback_query.message.answer(msg_text("enter_your_message", profile.language))
-    await callback_query.message.delete()
+    await answer_msg(callback_query, msg_text("enter_your_message", profile.language))
+    await message.delete()
     coach = await Cache.coach.get_coach(profile.id)
+    assert coach is not None
     await state.clear()
     await state.update_data(recipient_id=client_id, sender_name=coach.name)
     await state.set_state(States.contact_client)
@@ -114,36 +125,42 @@ async def contact_client(callback_query: CallbackQuery, profile: Profile, client
 
 async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> None:
     coach_profile = await APIService.profile.get_profile(coach.id)
+    if coach_profile is None:
+        from loguru import logger
+
+        logger.error(f"Coach profile not found for id {coach.id} in client_request")
+        return
     coach_lang = coach_profile.language
     data["recipient_language"] = coach_lang
-    service = data.get("request_type")
-    preferable_workout_type = data.get("workout_type")
+
+    service = cast(str, data.get("request_type"))
+    preferable_workout_type = cast(str, data.get("workout_type"))
+    wishes = data.get("wishes")
+
     client_profile = await APIService.profile.get_profile(client.id)
-    workout_types = await get_workout_types(coach_lang)
+    if client_profile is None:
+        from loguru import logger
+
+        logger.error(f"Client profile not found for id {client.id} in client_request")
+        return
+
+    workout_types: dict[str, str] = get_workout_types(coach_lang)
     preferable_workouts_type = workout_types.get(preferable_workout_type, "unknown")
     subscription = await Cache.workout.get_subscription(client.id)
+
     client_page = await get_client_page(client, coach_lang, subscription is not None, data)
     text = await format_new_client_message(data, coach_lang, client_profile.language, preferable_workouts_type)
+
     reply_markup = (
         client_msg_bk(coach_lang, client.id)
         if data.get("new_client")
         else incoming_request_kb(coach_lang, service, client.id)
     )
 
-    await send_message(
-        recipient=coach,
-        text=text,
-        state=None,
-        include_incoming_message=False,
-    )
+    await send_message(recipient=coach, text=text, state=None, include_incoming_message=False)
 
-    if data.get("wishes"):
-        await send_message(
-            recipient=coach,
-            text=data.get("wishes"),
-            state=None,
-            include_incoming_message=False,
-        )
+    if wishes:
+        await send_message(recipient=coach, text=cast(str, wishes), state=None, include_incoming_message=False)
 
     await send_message(
         recipient=coach,
@@ -155,43 +172,30 @@ async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> 
 
 
 async def process_feedback_content(message: Message, profile: Profile) -> bool:
+    text = msg_text("new_feedback", Settings.ADMIN_LANG).format(
+        profile_id=profile.id,
+        feedback=message.text or message.caption or "",
+    )
+    bot: Bot = get_bot()
+
     if message.text:
         await bot.send_message(
             chat_id=Settings.ADMIN_ID,
-            text=msg_text("new_feedback", Settings.ADMIN_LANG).format(profile_id=profile.id, feedback=message.text),
+            text=text,
             parse_mode=ParseMode.HTML,
         )
         return True
 
     elif message.photo:
-        await bot.send_message(
-            chat_id=Settings.ADMIN_ID,
-            text=msg_text("new_feedback", Settings.ADMIN_LANG).format(
-                profile_id=profile.id, feedback=message.caption or ""
-            ),
-            parse_mode=ParseMode.HTML,
-        )
         photo_id = message.photo[-1].file_id
-        await bot.send_photo(
-            chat_id=Settings.ADMIN_ID,
-            photo=photo_id,
-        )
+        await bot.send_message(chat_id=Settings.ADMIN_ID, text=text, parse_mode=ParseMode.HTML)
+        await bot.send_photo(chat_id=Settings.ADMIN_ID, photo=photo_id)
         return True
 
     elif message.video:
-        await bot.send_message(
-            chat_id=Settings.ADMIN_ID,
-            text=msg_text("new_feedback", Settings.ADMIN_LANG).format(
-                profile_id=profile.id, feedback=message.caption or ""
-            ),
-            parse_mode=ParseMode.HTML,
-        )
-        await bot.send_video(
-            chat_id=Settings.ADMIN_ID,
-            video=message.video.file_id,
-        )
+        await bot.send_message(chat_id=Settings.ADMIN_ID, text=text, parse_mode=ParseMode.HTML)
+        await bot.send_video(chat_id=Settings.ADMIN_ID, video=message.video.file_id)
         return True
 
-    else:
-        await message.answer(msg_text("invalid_content", profile.language))
-        return False
+    await answer_msg(message, msg_text("invalid_content", profile.language))
+    return False

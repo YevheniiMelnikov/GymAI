@@ -39,11 +39,15 @@ dev = [
     "types-python-dateutil",
     "types-redis",
     "pyrefly>=0.16.2",
+    "django-stubs>=4.2.7",
+    "djangorestframework-stubs>=3.14.5",
+    "mypy-extensions>=1.0.0",
+    "types-PyYAML>=6.0.12.20240311"
 ]
 
 [tool.ruff]
 line-length = 120
-exclude = [".git", ".pytest_cache", ".env", "env", "venv", ".venv", "venv-win"]
+exclude = [".git", ".pytest_cache", ".env", "env", "venv", ".venv", ".venv-win"]
 
 [tool.ruff.lint]
 select = ["E", "F"]
@@ -56,11 +60,8 @@ combine-as-imports = true
 project_includes = ["."]
 project_excludes = ["**/__pycache__/**", "**/static/**", "**/templates/**", "**/migrations/**", "**/tests/**"]
 python_interpreter = ".venv/bin/python3"
-site_package_path = [".venv-win/Lib/site-packages"]
-
 ignore_errors_in_generated_code = true
 use_untyped_imports = true
-replace_imports_with_any = ["core.models", "core.cache", "core.services"]
 
 [tool.pyrefly.errors]
 bad-assignment = true
@@ -71,20 +72,9 @@ annotation-mismatch = true
 no-matching-overload = false
 async-error = false
 import-error = false
+bad-override = false
+not-callable = false
 
-[[tool.pyrefly.sub_config]]
-matches = "**/migrations/**"
-[tool.pyrefly.sub_config.errors]
-bad-assignment = false
-bad-return = false
-bad-argument-type = false
-missing-attribute = false
-
-[[tool.pyrefly.sub_config]]
-matches = "**/tests/**"
-replace_imports_with_any = ["pytest"]
-[tool.pyrefly.sub_config.errors]
-bad-assignment = false
-bad-return = false
-bad-argument-type = false
-missing-attribute = false
+[[ignore_errors_in_path]]
+path = "**/magic_filter/**"
+errors = ["bad-argument-type"]

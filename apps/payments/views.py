@@ -57,17 +57,17 @@ class PaymentWebhookView(APIView):
 
 
 class PaymentListView(generics.ListAPIView):
-    queryset = Payment.objects.all()
+    queryset = Payment.objects.all()  # type: ignore[attr-defined]
     serializer_class = PaymentSerializer
     permission_classes = [HasAPIKey]
 
     def get_queryset(self):
         qs = super().get_queryset()
-        status_param = self.request.query_params.get("status")
+        status_param = self.request.GET.get("status")
         if status_param:
             qs = qs.filter(status=status_param)
 
-        order_id = self.request.query_params.get("order_id")
+        order_id = self.request.GET.get("order_id")
         if order_id:
             qs = qs.filter(order_id=order_id)
 
@@ -75,7 +75,7 @@ class PaymentListView(generics.ListAPIView):
 
 
 class PaymentDetailView(generics.RetrieveUpdateAPIView):
-    queryset = Payment.objects.all()
+    queryset = Payment.objects.all()  # type: ignore[attr-defined]
     serializer_class = PaymentSerializer
     permission_classes = [HasAPIKey]
 
@@ -91,6 +91,6 @@ class PaymentDetailView(generics.RetrieveUpdateAPIView):
 
 
 class PaymentCreateView(generics.CreateAPIView):
-    queryset = Payment.objects.all()
+    queryset = Payment.objects.all()  # type: ignore[attr-defined]
     serializer_class = PaymentSerializer
     permission_classes = [HasAPIKey]

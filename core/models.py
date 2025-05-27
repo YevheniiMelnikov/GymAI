@@ -12,6 +12,7 @@ class Profile(BaseModel):
 
 class Client(BaseModel):
     id: int
+    profile: int
     name: str
     gender: str
     born_in: str
@@ -25,6 +26,7 @@ class Client(BaseModel):
 
 class Coach(BaseModel):
     id: int
+    profile: int
     name: str
     surname: str
     work_experience: int
