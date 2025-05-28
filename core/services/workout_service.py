@@ -6,7 +6,7 @@ from loguru import logger
 from core.services.api_client import APIClient
 from core.exceptions import UserServiceError
 from core.models import Program, DayExercises
-from bot.functions.utils import serialize_day_exercises
+from bot.utils.exercises import serialize_day_exercises
 
 
 class WorkoutService(APIClient):

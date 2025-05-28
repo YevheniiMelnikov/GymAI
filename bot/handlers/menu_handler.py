@@ -23,21 +23,21 @@ from config.env_settings import Settings
 from core.cache import Cache
 from core.models import Coach, Profile
 from core.services import APIService
-from bot.functions.chat import contact_client, process_feedback_content
-from bot.functions.menus import (
+from bot.utils.chat import contact_client, process_feedback_content
+from bot.utils.menus import (
     show_main_menu,
     show_exercises_menu,
     manage_subscription,
     show_coaches_menu,
     show_profile_editing_menu,
     show_my_workouts_menu,
-    my_clients_menu,
+    show_my_clients_menu,
     show_my_profile_menu,
+    clients_menu_pagination,
 )
-from bot.functions.profiles import assign_coach
-from bot.functions.utils import handle_clients_pagination
-from bot.functions.workout_plans import manage_program, cancel_subscription
-from bot.functions.utils import del_msg
+from bot.utils.profiles import assign_coach
+from bot.utils.workout_plans import manage_program, cancel_subscription
+from bot.utils.other import del_msg
 
 menu_router = Router()
 
@@ -64,7 +64,7 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
         await show_my_profile_menu(callback_query, profile, state)
 
     elif cb_data == "my_clients":
-        await my_clients_menu(callback_query, profile, state)
+        await show_my_clients_menu(callback_query, profile, state)
 
     elif cb_data == "my_workouts":
         await show_my_workouts_menu(callback_query, profile, state)
@@ -231,7 +231,7 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext) -> 
         await callback_query.answer(msg_text("out_of_range", profile.language))
         return
 
-    await handle_clients_pagination(callback_query, profile, index, state)
+    await clients_menu_pagination(callback_query, profile, index, state)
 
 
 @menu_router.callback_query(States.show_subscription)

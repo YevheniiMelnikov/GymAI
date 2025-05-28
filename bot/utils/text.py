@@ -5,7 +5,7 @@ from typing import Any, Optional, cast
 from aiogram.fsm.state import State
 
 from bot.states import States
-from core.models import Client, Coach, DayExercises
+from core.models import Client, Coach
 from core.services import APIService
 from bot.texts import msg_text, btn_text
 
@@ -76,7 +76,6 @@ def state_msgs(callback: str, lang: str) -> tuple[State | None, str | None]:
 def get_profile_attributes(status: str, user: Optional[Client | Coach], lang: str) -> dict[str, str]:
     def get(attr: str) -> str:
         val = getattr(user, attr, "") if user else ""
-        # Исправлено: приведение к str, если атрибут может быть не строкой
         return str(val) if val is not None else ""
 
     if status == "client":
@@ -91,7 +90,6 @@ def get_profile_attributes(status: str, user: Optional[Client | Coach], lang: st
         }
     else:
         verified_value = getattr(user, "verified", False) if user else False
-        # Проверка на bool для verified
         if not isinstance(verified_value, bool):
             verified_value = bool(verified_value)
         return {
@@ -144,10 +142,6 @@ async def format_new_client_message(
         )
 
 
-def get_service_types(language: str) -> dict[str, str]:
-    return service_types(language)
-
-
 def get_workout_types(language: str) -> dict[str, str]:
     return workout_types(language)
 
@@ -156,21 +150,3 @@ def get_translated_week_day(lang_code: str, day: str | None) -> str:
     if day is None:
         return ""
     return days_of_week(lang_code).get(day, "")
-
-
-async def format_program(exercises: list[DayExercises], day: int) -> str:
-    day_key = str(day)
-    day_entry = next((d for d in exercises if d.day == day_key), None)
-    if not day_entry:
-        return ""
-
-    program_lines = []
-    for idx, exercise in enumerate(day_entry.exercises):
-        line = f"{idx + 1}. {exercise.name} | {exercise.sets} x {exercise.reps}"
-        if exercise.weight:
-            line += f" | {exercise.weight} kg"
-        if exercise.gif_link:
-            line += f" | <a href='{exercise.gif_link}'>GIF</a>"
-        program_lines.append(line)
-
-    return "\n".join(program_lines)

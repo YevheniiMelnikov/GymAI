@@ -3,7 +3,7 @@ from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
 from typing import Callable, Awaitable
 
-from bot.functions.profiles import get_user_profile
+from bot.utils.profiles import get_user_profile
 
 
 class ProfileMiddleware(BaseMiddleware):

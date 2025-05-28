@@ -3,16 +3,19 @@ from typing import cast
 from loguru import logger
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery
+from aiogram.exceptions import TelegramBadRequest
 
+from bot.keyboards import profile_menu_kb
 from config.env_settings import Settings
 from core.cache import Cache
-from core.exceptions import ProfileNotFoundError
+from core.exceptions import ProfileNotFoundError, UserServiceError
 from core.services import APIService
-from bot.functions import menus
-from bot.functions.chat import send_coach_request
-from bot.functions.utils import delete_messages, del_msg, answer_msg
+from bot.utils import menus
+from bot.utils.chat import send_coach_request
+from bot.utils.other import delete_messages, del_msg, answer_msg
 from core.models import Client, Coach, Profile
 from bot.texts.text_manager import msg_text
+from core.services.outer.gstorage_service import avatar_manager
 
 
 async def update_profile_data(message: Message, state: FSMContext, status: str) -> None:
@@ -79,6 +82,54 @@ async def check_assigned_clients(profile_id: int) -> bool:
             return True
 
     return False
+
+
+async def fetch_user(profile: Profile) -> Client | Coach:
+    if profile.status == "client":
+        try:
+            return await Cache.client.get_client(profile.id)
+        except UserServiceError as e:
+            logger.info(f"Client data for profile {profile.id} not found: {e}")
+            client = await APIService.profile.get_client_by_profile_id(profile.id)
+            if client is None:
+                raise ValueError(f"Profile not found for id {profile.id}")
+            await Cache.client.update_client(profile.id, client.model_dump())
+            return client
+
+    elif profile.status == "coach":
+        try:
+            return await Cache.coach.get_coach(profile.id)
+        except UserServiceError as e:
+            logger.info(f"Coach data for profile {profile.id} not found: {e}")
+            coach = await APIService.profile.get_coach_by_profile_id(profile.id)
+            if coach is None:
+                raise ValueError(f"Profile not found for id {profile.id}")
+            await Cache.coach.update_coach(profile.id, coach.model_dump())
+            return coach
+
+    else:
+        raise ValueError(f"Unknown profile status: {profile.status}")
+
+
+async def answer_profile(cbq: CallbackQuery, profile: Profile, user: Coach | Client, text: str) -> None:
+    message = cbq.message
+    if not message or not isinstance(message, Message):
+        return
+
+    if (
+        profile.status == "coach"
+        and isinstance(user, Coach)
+        and hasattr(user, "profile_photo")
+        and getattr(user, "profile_photo", None)
+    ):
+        photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{user.profile_photo}"
+        try:
+            await message.answer_photo(photo_url, text, reply_markup=profile_menu_kb(profile.language))
+            return
+        except TelegramBadRequest:
+            logger.warning("Photo not found for coach %s", profile.id)
+
+    await message.answer(text, reply_markup=profile_menu_kb(profile.language))
 
 
 async def get_user_profile(telegram_id: int) -> Profile | None:

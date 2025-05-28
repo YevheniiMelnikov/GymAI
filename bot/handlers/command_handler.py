@@ -11,9 +11,9 @@ from bot.states import States
 from loguru import logger
 from config.env_settings import Settings
 from core.models import Profile
-from bot.functions.menus import show_main_menu
+from bot.utils.menus import show_main_menu
 from bot.texts.text_manager import msg_text
-from bot.functions.profiles import get_user_profile
+from bot.utils.profiles import get_user_profile
 
 cmd_router = Router()
 

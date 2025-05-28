@@ -5,8 +5,8 @@ from dateutil.relativedelta import relativedelta
 
 from core.cache import Cache
 from core.services.workout_service import WorkoutService
-from bot.functions.chat import send_message, client_request
-from bot.functions.workout_plans import cancel_subscription
+from bot.utils.chat import send_message, client_request
+from bot.utils.workout_plans import cancel_subscription
 from core.models import Payment, Profile
 from config.env_settings import Settings
 from core.services.outer.gsheets_service import GSheetsService

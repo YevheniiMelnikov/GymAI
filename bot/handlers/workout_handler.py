@@ -17,23 +17,22 @@ from bot.keyboards import (
 from bot.states import States
 from core.cache import Cache
 from core.services import APIService
-from bot.functions.chat import send_message
-from bot.functions.exercises import update_exercise_data, save_exercise, find_exercise_gif
-from bot.functions.menus import (
+from bot.utils.chat import send_message
+from bot.utils.exercises import update_exercise_data, save_exercise, find_exercise_gif, format_program
+from bot.utils.menus import (
     show_main_menu,
-    my_clients_menu,
+    show_my_clients_menu,
     show_my_subscription_menu,
     show_my_program_menu,
-)
-from bot.functions.text_utils import format_program
-from bot.functions.utils import (
     program_menu_pagination,
+)
+from bot.utils.other import (
     short_url,
     delete_messages,
     answer_msg,
     del_msg,
 )
-from bot.functions.workout_plans import reset_workout_plan, save_workout_plan, next_day_workout_plan
+from bot.utils.workout_plans import reset_workout_plan, save_workout_plan, next_day_workout_plan
 from core.models import Exercise, DayExercises, Profile
 from bot.texts import msg_text, btn_text
 
@@ -332,7 +331,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
 
     elif callback_query.data == "quit":
         await callback_query.answer()
-        await my_clients_menu(callback_query, profile, state)
+        await show_my_clients_menu(callback_query, profile, state)
         return
 
     elif callback_query.data == "reset":

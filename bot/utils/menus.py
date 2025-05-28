@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from contextlib import suppress
 from datetime import datetime
 from typing import cast
@@ -11,22 +13,25 @@ from aiogram.types import CallbackQuery, InputMediaPhoto, Message
 from dateutil.relativedelta import relativedelta
 
 from bot import keyboards as kb
+from bot.utils.profiles import fetch_user, answer_profile
+from bot.keyboards import program_view_kb, subscription_manage_kb, program_edit_kb
 from bot.states import States
+from bot.texts import msg_text
 from core.cache import Cache
 from core.exceptions import UserServiceError
 from core.services import APIService
 from core.services.outer.gstorage_service import avatar_manager
-from bot.functions import profiles
-from core.models import Client, Coach, Profile, Subscription, DayExercises
-from bot.functions.text_utils import (
+from bot.utils import profiles
+from core.models import Client, Coach, Profile, Subscription, DayExercises, Exercise
+from bot.utils.text import (
     get_client_page,
     get_profile_attributes,
-    format_program,
     get_translated_week_day,
 )
+from bot.utils.exercises import format_program
 from config.env_settings import Settings
-from bot.texts.text_manager import msg_text
-from bot.functions.utils import fetch_user, answer_profile, answer_msg, del_msg
+from bot.utils.other import answer_msg, del_msg
+from core.validators import validate_or_raise
 
 
 async def show_subscription_page(callback_query: CallbackQuery, state: FSMContext, subscription: Subscription) -> None:
@@ -181,7 +186,7 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
     await del_msg(cast(Message | CallbackQuery | None, callback_query))
 
 
-async def my_clients_menu(callback_query: CallbackQuery, coach_profile: Profile, state: FSMContext) -> None:
+async def show_my_clients_menu(callback_query: CallbackQuery, coach_profile: Profile, state: FSMContext) -> None:
     language = cast(str, coach_profile.language)
 
     try:
@@ -416,3 +421,84 @@ async def manage_subscription(callback_query: CallbackQuery, lang: str, client_i
         await state.set_state(States.subscription_manage)
 
     await del_msg(cast(Message | CallbackQuery | None, message))
+
+
+async def clients_menu_pagination(
+    callback_query: CallbackQuery, profile: Profile, index: int, state: FSMContext
+) -> None:
+    data = await state.get_data()
+    clients = [
+        validate_or_raise(client_data, Client, context="clients list") for client_data in data.get("clients", [])
+    ]
+
+    if not clients:
+        await callback_query.answer(msg_text("no_clients", profile.language))
+        return
+
+    if index < 0 or index >= len(clients):
+        await callback_query.answer(msg_text("out_of_range", profile.language))
+        return
+
+    message = callback_query.message
+    if message and isinstance(message, Message):
+        await show_clients(message, clients, state, index)
+
+
+async def program_menu_pagination(state: FSMContext, callback_query: CallbackQuery) -> None:
+    profile = await profiles.get_user_profile(callback_query.from_user.id)
+    assert profile
+
+    if callback_query.data == "quit":
+        await show_my_clients_menu(callback_query, profile, state)
+        return
+
+    data = await state.get_data()
+    current_day = data.get("day_index", 0)
+    exercises = data.get("exercises", [])
+
+    if isinstance(exercises, dict):
+        exercises = [
+            DayExercises(day=k, exercises=[Exercise.model_validate(e) if isinstance(e, dict) else e for e in v])
+            for k, v in exercises.items()
+        ]
+
+    split_number = data.get("split")
+    assert split_number is not None
+
+    if data.get("client"):
+        reply_markup = program_view_kb(profile.language)
+        state_to_set = States.program_view
+    else:
+        reply_markup = (
+            subscription_manage_kb(profile.language) if data.get("subscription") else program_edit_kb(profile.language)
+        )
+        state_to_set = States.subscription_manage if data.get("subscription") else States.program_edit
+
+    await state.set_state(state_to_set)
+    current_day += -1 if callback_query.data in ["prev_day", "previous"] else 1
+
+    if current_day < 0 or current_day >= split_number:
+        current_day = max(0, min(current_day, split_number - 1))
+        await callback_query.answer(msg_text("out_of_range", profile.language))
+        await state.update_data(day_index=current_day)
+        return
+
+    await state.update_data(day_index=current_day)
+
+    program_text = await format_program(exercises, current_day)
+    days = data.get("days", [])
+    next_day = (
+        get_translated_week_day(profile.language, days[current_day]).lower()
+        if data.get("subscription")
+        else current_day + 1
+    )
+    with suppress(TelegramBadRequest):
+        message = callback_query.message
+        if message and isinstance(message, Message):
+            await message.edit_text(
+                msg_text("program_page", profile.language).format(program=program_text, day=next_day),
+                reply_markup=reply_markup,
+                disable_web_page_preview=True,
+            )
+
+    await callback_query.answer()

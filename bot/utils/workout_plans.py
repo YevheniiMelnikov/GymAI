@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 from datetime import datetime
 from typing import cast, Optional
@@ -5,17 +7,18 @@ from typing import cast, Optional
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import program_edit_kb, program_manage_kb, program_view_kb, subscription_view_kb
+from bot.keyboards import program_edit_kb, program_manage_kb, program_view_kb, subscription_view_kb, payment_kb
 from bot.states import States
 from config.env_settings import Settings
 from core.cache import Cache
-from core.models import Profile, DayExercises
+from core.models import Profile, DayExercises, Subscription
 from core.services import APIService
-from bot.functions.chat import send_message
-from bot.functions.menus import show_main_menu
-from bot.functions.profiles import get_user_profile
-from bot.functions.text_utils import format_program, get_translated_week_day
-from bot.functions.utils import delete_messages, del_msg, answer_msg
+from bot.utils.chat import send_message
+from bot.utils.menus import show_main_menu, show_subscription_page
+from bot.utils.profiles import get_user_profile
+from bot.utils.text import get_translated_week_day
+from bot.utils.exercises import format_program
+from bot.utils.other import delete_messages, del_msg, answer_msg, generate_order_id
 from bot.texts import msg_text, btn_text
 
 
@@ -285,3 +288,67 @@ async def cancel_subscription(next_payment_date: datetime, profile_id: int, subs
     await APIService.workout.update_subscription(subscription_id, dict(client_profile=profile_id, enabled=False))
     await Cache.workout.save_subscription(profile_id, dict(enabled=False))
     await Cache.workout.reset_payment_status(profile_id, "subscription")
+
+
+async def process_new_subscription(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    language = cast(str, profile.language or "ua")
+
+    await callback_query.answer(msg_text("checkbox_reminding", language), show_alert=True)
+
+    order_id = generate_order_id()
+    client = await Cache.client.get_client(profile.id)
+    if not client or not client.assigned_to:
+        return
+    coach = await Cache.coach.get_coach(client.assigned_to.pop())
+    if not coach:
+        return
+
+    await state.update_data(order_id=order_id, amount=coach.subscription_price)
+
+    payment_link = await APIService.payment.get_payment_link(
+        action="subscribe",
+        amount=str(coach.subscription_price),
+        order_id=order_id,
+        payment_type="subscription",
+        profile_id=profile.id,
+    )
+
+    if not isinstance(callback_query.message, Message):
+        return
+
+    message = callback_query.message
+    if payment_link:
+        await state.set_state(States.handle_payment)
+        await answer_msg(
+            message,
+            msg_text("follow_link", language),
+            reply_markup=payment_kb(language, payment_link, "subscription"),
+        )
+    else:
+        await answer_msg(message, msg_text("unexpected_error", language))
+
+    await del_msg(message)
+
+
+async def edit_subscription_days(
+    callback_query: CallbackQuery,
+    days: list[str],
+    profile: Profile,
+    state: FSMContext,
+    subscription: Subscription,
+) -> None:
+    subscription_data = subscription.model_dump()
+    exercises_data = subscription_data.get("exercises", [])
+    exercises = [DayExercises.model_validate(e) for e in exercises_data]
+    updated_exercises = {days[i]: [e.model_dump() for e in day.exercises] for i, day in enumerate(exercises)}
+
+    payload = {"workout_days": days, "exercises": updated_exercises, "client_profile": profile.id}
+    subscription_data.update(payload)
+
+    await Cache.workout.update_subscription(profile.id, payload)
+    await APIService.workout.update_subscription(cast(int, subscription_data["id"]), subscription_data)
+
+    await state.set_state(States.show_subscription)
+    await show_subscription_page(callback_query, state, subscription)
+    if isinstance(callback_query, CallbackQuery) and isinstance(callback_query.message, Message):
+        await del_msg(callback_query.message)

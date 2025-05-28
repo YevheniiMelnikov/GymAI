@@ -5,14 +5,14 @@ from aiogram import Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.functions.utils import del_msg
+from bot.utils.other import del_msg
 from bot.keyboards import select_service_kb, workout_type_kb
 from bot.states import States
 
 from core.cache import Cache
 from core.services import APIService
-from bot.functions.menus import show_main_menu
-from bot.functions.workout_plans import cache_program_data
+from bot.utils.menus import show_main_menu
+from bot.utils.workout_plans import cache_program_data
 from bot.texts import msg_text, btn_text
 from core.models import Profile
 

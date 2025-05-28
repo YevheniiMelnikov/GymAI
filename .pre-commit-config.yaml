@@ -23,7 +23,7 @@ repos:
     hooks:
       - id: pyrefly
         name: pyrefly
-        entry: bash -c 'exit 0' # replace with 'uv run pyrefly check .' to enable
+        entry: uv run pyrefly check .
         language: system
         types: [python]
         pass_filenames: false

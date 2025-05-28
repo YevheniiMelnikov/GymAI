@@ -22,12 +22,12 @@ from core.exceptions import ProfileNotFoundError
 from core.models import Profile
 from core.services import APIService
 from core.services.outer.gstorage_service import avatar_manager
-from bot.functions.chat import client_request
-from bot.functions.exercises import edit_subscription_days, process_new_subscription
-from bot.functions.menus import show_main_menu, show_my_profile_menu
-from bot.functions.profiles import update_profile_data, check_assigned_clients
-from bot.functions.text_utils import get_state_and_message
-from bot.functions.utils import delete_messages, generate_order_id, set_bot_commands, answer_msg, del_msg
+from bot.utils.chat import client_request
+from bot.utils.workout_plans import process_new_subscription, edit_subscription_days
+from bot.utils.menus import show_main_menu, show_my_profile_menu
+from bot.utils.profiles import update_profile_data, check_assigned_clients
+from bot.utils.text import get_state_and_message
+from bot.utils.other import delete_messages, generate_order_id, set_bot_commands, answer_msg, del_msg
 from bot.texts.text_manager import msg_text
 
 questionnaire_router = Router()

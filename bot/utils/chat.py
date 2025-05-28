@@ -6,7 +6,7 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.functions.utils import get_bot, answer_msg
+from bot.utils.other import get_bot, answer_msg
 from bot.keyboards import new_coach_kb, incoming_request_kb, client_msg_bk
 from bot.states import States
 from bot.texts.text_manager import msg_text
@@ -15,7 +15,7 @@ from core.cache import Cache
 from core.models import Coach, Profile, Client
 from core.services import APIService
 from core.services.outer.gstorage_service import avatar_manager
-from bot.functions.text_utils import format_new_client_message, get_client_page, get_workout_types
+from bot.utils.text import format_new_client_message, get_client_page, get_workout_types
 
 
 async def send_message(

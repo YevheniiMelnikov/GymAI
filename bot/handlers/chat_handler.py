@@ -15,11 +15,11 @@ from config.env_settings import Settings
 from core.cache import Cache
 from core.models import Profile
 from core.services import APIService
-from bot.functions.chat import send_message
-from bot.functions.exercises import edit_subscription_exercises
-from bot.functions.menus import show_main_menu, manage_subscription, show_exercises_menu
+from bot.utils.chat import send_message
+from bot.utils.exercises import edit_subscription_exercises
+from bot.utils.menus import show_main_menu, manage_subscription, show_exercises_menu, program_menu_pagination
 from bot.texts.text_manager import msg_text
-from bot.functions.utils import program_menu_pagination, del_msg, answer_msg
+from bot.utils.other import del_msg, answer_msg
 
 chat_router = Router()
 

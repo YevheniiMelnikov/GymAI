@@ -1,20 +1,19 @@
-from typing import cast
+from __future__ import annotations
 
+from typing import cast, Any
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from loguru import logger
 
-from bot.functions.menus import show_subscription_page
-from bot.functions import profiles
-from bot.functions.text_utils import format_program, get_translated_week_day
-from bot.functions.utils import delete_messages, generate_order_id, answer_msg, del_msg
-from bot.keyboards import payment_kb, program_edit_kb, program_manage_kb
+from bot.utils import profiles
+from bot.utils.text import get_translated_week_day
+from bot.utils.other import delete_messages, answer_msg, del_msg
+from bot.keyboards import program_edit_kb, program_manage_kb
 from bot.states import States
 from bot.texts.exercises import exercise_dict
 from bot.texts.text_manager import msg_text
 from core.cache import Cache
-from core.models import Exercise, Profile, Subscription, DayExercises
-from core.services import APIService
+from core.models import Exercise, DayExercises
 from core.services.outer.gstorage_service import gif_manager
 
 
@@ -192,65 +191,23 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
         await del_msg(callback_query.message)
 
 
-async def edit_subscription_days(
-    callback_query: CallbackQuery,
-    days: list[str],
-    profile: Profile,
-    state: FSMContext,
-    subscription: Subscription,
-) -> None:
-    subscription_data = subscription.model_dump()
-    exercises_data = subscription_data.get("exercises", [])
-    exercises = [DayExercises.model_validate(e) for e in exercises_data]
-    updated_exercises = {days[i]: [e.model_dump() for e in day.exercises] for i, day in enumerate(exercises)}
-
-    payload = {"workout_days": days, "exercises": updated_exercises, "client_profile": profile.id}
-    subscription_data.update(payload)
-
-    await Cache.workout.update_subscription(profile.id, payload)
-    await APIService.workout.update_subscription(cast(int, subscription_data["id"]), subscription_data)
-
-    await state.set_state(States.show_subscription)
-    await show_subscription_page(callback_query, state, subscription)
-    if isinstance(callback_query, CallbackQuery) and isinstance(callback_query.message, Message):
-        await del_msg(callback_query.message)
+def serialize_day_exercises(exercises: list[DayExercises]) -> dict[str, list[dict[str, Any]]]:
+    return {day.day: [e.model_dump() for e in day.exercises] for day in exercises if isinstance(day, DayExercises)}
 
 
-async def process_new_subscription(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    language = cast(str, profile.language or "ua")
+async def format_program(exercises: list[DayExercises], day: int) -> str:
+    day_key = str(day)
+    day_entry = next((d for d in exercises if d.day == day_key), None)
+    if not day_entry:
+        return ""
 
-    await callback_query.answer(msg_text("checkbox_reminding", language), show_alert=True)
+    program_lines = []
+    for idx, exercise in enumerate(day_entry.exercises):
+        line = f"{idx + 1}. {exercise.name} | {exercise.sets} x {exercise.reps}"
+        if exercise.weight:
+            line += f" | {exercise.weight} kg"
+        if exercise.gif_link:
+            line += f" | <a href='{exercise.gif_link}'>GIF</a>"
+        program_lines.append(line)
 
-    order_id = generate_order_id()
-    client = await Cache.client.get_client(profile.id)
-    if not client or not client.assigned_to:
-        return
-    coach = await Cache.coach.get_coach(client.assigned_to.pop())
-    if not coach:
-        return
-
-    await state.update_data(order_id=order_id, amount=coach.subscription_price)
-
-    payment_link = await APIService.payment.get_payment_link(
-        action="subscribe",
-        amount=str(coach.subscription_price),
-        order_id=order_id,
-        payment_type="subscription",
-        profile_id=profile.id,
-    )
-
-    if not isinstance(callback_query.message, Message):
-        return
-
-    message = callback_query.message
-    if payment_link:
-        await state.set_state(States.handle_payment)
-        await answer_msg(
-            message,
-            msg_text("follow_link", language),
-            reply_markup=payment_kb(language, payment_link, "subscription"),
-        )
-    else:
-        await answer_msg(message, msg_text("unexpected_error", language))
-
-    await del_msg(message)
+    return "\n".join(program_lines)
