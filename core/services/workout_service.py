@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 from urllib.parse import urljoin
 from loguru import logger
@@ -62,13 +63,13 @@ class WorkoutService(APIClient):
 
     @classmethod
     async def create_subscription(
-        cls, profile_id: int, workout_days: list[str], wishes: str, amount: int
+        cls, profile_id: int, workout_days: list[str], wishes: str, amount: Decimal
     ) -> int | None:
         url = urljoin(cls.api_url, "api/v1/subscriptions/")
         data = {
             "client_profile": profile_id,
             "enabled": False,
-            "price": amount,
+            "price": str(amount),
             "workout_days": workout_days,
             "payment_date": datetime.today().strftime("%Y-%m-%d"),
             "wishes": wishes,

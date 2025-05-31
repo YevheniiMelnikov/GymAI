@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import InvalidOperation, Decimal
 from typing import cast
 
 from aiogram import Router
@@ -84,55 +85,69 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
 async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
-    if callback_query.data == "done":
-        order_id = data.get("order_id")
-        amount = data.get("amount")
-        request_type = data.get("request_type")
-        wishes = data.get("wishes")
-        workout_type = data.get("workout_type")
-        workout_days = data.get("workout_days", [])
 
-        if not isinstance(order_id, str) or not isinstance(amount, int) or not isinstance(request_type, str):
-            await callback_query.answer("Invalid payment data", show_alert=True)
+    if callback_query.data != "done":
+        await callback_query.answer("Unexpected action", show_alert=True)
+        return
+
+    order_id = data.get("order_id")
+    amount = data.get("amount")
+    request_type = data.get("request_type")
+    wishes = data.get("wishes")
+    workout_type = data.get("workout_type")
+    workout_days = data.get("workout_days", [])
+
+    if not isinstance(order_id, str) or not isinstance(request_type, str):
+        await callback_query.answer("Invalid payment data", show_alert=True)
+        return
+
+    try:
+        amount = Decimal(str(amount)).quantize(Decimal("0.01"))
+        if amount <= 0:
+            raise ValueError("Amount must be positive")
+    except (InvalidOperation, TypeError, ValueError):
+        await callback_query.answer("Invalid amount format", show_alert=True)
+        return
+
+    if request_type == "program":
+        await cache_program_data(data, profile.id)
+    else:
+        client = await Cache.client.get_client(profile.id)
+        if not client or not client.assigned_to:
+            await callback_query.answer("Client or coach not found", show_alert=True)
             return
 
-        if request_type == "program":
-            await cache_program_data(data, profile.id)
-        else:
-            client = await Cache.client.get_client(profile.id)
-            if not client or not client.assigned_to:
-                await callback_query.answer("Client or coach not found", show_alert=True)
-                return
-            coach_id = client.assigned_to.pop()
-            coach = await Cache.coach.get_coach(coach_id)
-            if not coach:
-                await callback_query.answer("Coach not found", show_alert=True)
-                return
+        coach_id = client.assigned_to.pop()
+        coach = await Cache.coach.get_coach(coach_id)
+        if not coach:
+            await callback_query.answer("Coach not found", show_alert=True)
+            return
 
-            if not isinstance(wishes, str):
-                wishes = ""
+        if not isinstance(wishes, str):
+            wishes = ""
 
-            subscription_id = await APIService.workout.create_subscription(
-                profile.id, workout_days, wishes, coach.subscription_price
-            )
+        subscription_id = await APIService.workout.create_subscription(
+            profile.id, workout_days, wishes, coach.subscription_price
+        )
 
-            subscription_data = {
-                "id": subscription_id,
-                "payment_date": datetime.today().strftime("%Y-%m-%d"),
-                "enabled": False,
-                "price": coach.subscription_price,
-                "client_profile": profile.id,
-                "workout_days": workout_days,
-                "workout_type": workout_type,
-                "wishes": wishes,
-            }
-            await Cache.workout.update_program(profile.id, subscription_data)
+        subscription_data = {
+            "id": subscription_id,
+            "payment_date": datetime.today().strftime("%Y-%m-%d"),
+            "enabled": False,
+            "price": coach.subscription_price,
+            "client_profile": profile.id,
+            "workout_days": workout_days,
+            "workout_type": workout_type,
+            "wishes": wishes,
+        }
+        await Cache.workout.update_program(profile.id, subscription_data)
 
-        await Cache.workout.set_payment_status(profile.id, True, request_type)
-        await APIService.payment.create_payment(profile.id, request_type, order_id, amount)
-        await callback_query.answer(msg_text("payment_in_progress", profile.language), show_alert=True)
+    await Cache.workout.set_payment_status(profile.id, True, request_type)
+    await APIService.payment.create_payment(profile.id, request_type, order_id, amount)
+    await callback_query.answer(msg_text("payment_in_progress", profile.language), show_alert=True)
 
     message = callback_query.message
     if message and isinstance(message, Message):
         await show_main_menu(message, profile, state)
-    await del_msg(cast(Message | CallbackQuery | None, callback_query))
+
+    await del_msg(callback_query)

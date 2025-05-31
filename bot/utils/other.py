@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import re
 import secrets
 import string
 from contextlib import suppress
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from typing import Optional, cast
 
 import aiohttp
@@ -84,3 +86,14 @@ async def del_msg(msg_obj: Message | CallbackQuery | None) -> None:
         return
     with suppress(TelegramBadRequest):
         await message.delete()
+
+
+def parse_price(raw: str) -> Decimal:
+    price_re = re.compile(r"^\d{1,8}(\.\d{1,2})?$")
+
+    if not price_re.fullmatch(raw):
+        raise ValueError("Price must be 0-99 999 999.99 (max 2 decimals)")
+    try:
+        return Decimal(raw).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    except InvalidOperation as exc:
+        raise ValueError("Invalid decimal value") from exc

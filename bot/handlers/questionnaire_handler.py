@@ -27,7 +27,7 @@ from bot.utils.workout_plans import process_new_subscription, edit_subscription_
 from bot.utils.menus import show_main_menu, show_my_profile_menu
 from bot.utils.profiles import update_profile_data, check_assigned_clients
 from bot.utils.text import get_state_and_message
-from bot.utils.other import delete_messages, generate_order_id, set_bot_commands, answer_msg, del_msg
+from bot.utils.other import delete_messages, generate_order_id, set_bot_commands, answer_msg, del_msg, parse_price
 from bot.texts.text_manager import msg_text
 
 questionnaire_router = Router()
@@ -305,20 +305,26 @@ async def enter_program_price(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
     lang = data.get("lang", Settings.DEFAULT_LANG)
-
-    if not message.text or not all(x.isdigit() for x in message.text):
+    if not message.text:
         await answer_msg(message, msg_text("invalid_content", lang))
-        await del_msg(cast(Message | CallbackQuery | None, message))
+        await del_msg(message)
+        return
+
+    try:
+        price = parse_price(message.text)
+    except ValueError:
+        await answer_msg(message, msg_text("invalid_content", lang))
+        await del_msg(message)
         return
 
     if data.get("edit_mode"):
-        await state.update_data(program_price=message.text)
+        await state.update_data(program_price=str(price))
         await update_profile_data(cast(Message, message), state, "coach")
         return
 
     msg = await answer_msg(message, msg_text("enter_subscription_price", lang))
     await state.update_data(
-        program_price=message.text,
+        program_price=str(price),
         message_ids=[msg.message_id] if msg else [],
         chat_id=message.chat.id,
     )
@@ -331,20 +337,26 @@ async def enter_subscription_price(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
     lang = data.get("lang", Settings.DEFAULT_LANG)
-
-    if not message.text or not all(x.isdigit() for x in message.text):
+    if not message.text:
         await answer_msg(message, msg_text("invalid_content", lang))
-        await del_msg(cast(Message | CallbackQuery | None, message))
+        await del_msg(message)
+        return
+
+    try:
+        price = parse_price(message.text)
+    except ValueError:
+        await answer_msg(message, msg_text("invalid_content", lang))
+        await del_msg(message)
         return
 
     if data.get("edit_mode"):
-        await state.update_data(subscription_price=message.text)
+        await state.update_data(subscription_price=str(price))
         await update_profile_data(cast(Message, message), state, "coach")
         return
 
     msg = await answer_msg(message, msg_text("upload_photo", lang))
     await state.update_data(
-        subscription_price=message.text,
+        subscription_price=str(price),
         chat_id=message.chat.id,
         message_ids=[msg.message_id] if msg else [],
     )
@@ -466,7 +478,7 @@ async def enter_wishes(message: Message, state: FSMContext):
             await state.update_data(order_id=order_id, amount=coach.program_price)
             payment_link = await APIService.payment.get_payment_link(
                 action="pay",
-                amount=str(coach.program_price),
+                amount=coach.program_price,
                 order_id=order_id,
                 payment_type="program",
                 profile_id=profile.id,

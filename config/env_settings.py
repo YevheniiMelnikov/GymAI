@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Optional
 
 
@@ -18,7 +19,7 @@ class Settings:
     SUBSCRIBED_PAYMENT_STATUS: str = "subscribed"
     PAYMENT_STATUS_CLOSED: str = "CLOSED"
     PAYMENT_CHECK_INTERVAL: int = 60
-    COACH_PAYOUT_RATE: float = 0.7
+    COACH_PAYOUT_RATE: Decimal = Decimal("0.7")
     SITE_NAME: str = "AchieveTogether"
     API_MAX_RETRIES: int = 3
     API_RETRY_INITIAL_DELAY: int = 1

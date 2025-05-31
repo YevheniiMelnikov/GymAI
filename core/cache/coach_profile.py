@@ -1,5 +1,7 @@
 import json
 import random
+from typing import Any
+
 from loguru import logger
 
 from core.models import Coach
@@ -30,7 +32,7 @@ class CoachCacheManager(BaseCacheManager):
             return []
 
     @classmethod
-    async def update_coach(cls, profile_id: int, profile_data: dict) -> None:
+    async def update_coach(cls, profile_id: int, profile_data: dict[str, Any]) -> None:
         try:
             if profile_data.get("payment_details"):
                 profile_data["payment_details"] = cls.encryptor.encrypt(profile_data["payment_details"])
@@ -39,7 +41,7 @@ class CoachCacheManager(BaseCacheManager):
             logger.error(f"Failed to update coach {profile_id}: {e}")
 
     @classmethod
-    async def save_coach(cls, profile_id: int, profile_data: dict) -> None:
+    async def save_coach(cls, profile_id: int, profile_data: dict[str, Any]) -> None:
         try:
             if profile_data.get("payment_details"):
                 profile_data["payment_details"] = cls.encryptor.encrypt(profile_data["payment_details"])

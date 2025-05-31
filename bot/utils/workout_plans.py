@@ -307,7 +307,7 @@ async def process_new_subscription(callback_query: CallbackQuery, profile: Profi
 
     payment_link = await APIService.payment.get_payment_link(
         action="subscribe",
-        amount=str(coach.subscription_price),
+        amount=coach.subscription_price,
         order_id=order_id,
         payment_type="subscription",
         profile_id=profile.id,

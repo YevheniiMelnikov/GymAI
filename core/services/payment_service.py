@@ -1,4 +1,5 @@
 import datetime
+from decimal import Decimal, ROUND_HALF_UP
 from collections.abc import Sequence
 from urllib.parse import urljoin, urlencode
 from typing import Any
@@ -19,11 +20,17 @@ class PaymentService(APIClient):
 
     @classmethod
     def _build_payment_params(
-        cls, action: str, amount: str, order_id: str, payment_type: str, profile_id: int, emails: list[str]
+        cls,
+        action: str,
+        amount: Decimal,
+        order_id: str,
+        payment_type: str,
+        profile_id: int,
+        emails: list[str],
     ) -> dict:
         params = {
             "action": action,
-            "amount": amount,
+            "amount": str(amount.quantize(Decimal("0.01"), ROUND_HALF_UP)),
             "currency": "UAH",
             "description": f"{payment_type} payment from profile {profile_id}",
             "order_id": order_id,
@@ -36,14 +43,21 @@ class PaymentService(APIClient):
         if action == "subscribe":
             params.update(
                 {
-                    "subscribe_date_start": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "subscribe_date_start": datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S"),
                     "subscribe_periodicity": "month",
                 }
             )
         return params
 
     @classmethod
-    async def get_payment_link(cls, action: str, amount: str, order_id: str, payment_type: str, profile_id: int) -> str:
+    async def get_payment_link(
+        cls,
+        action: str,
+        amount: Decimal,
+        order_id: str,
+        payment_type: str,
+        profile_id: int,
+    ) -> str:
         params = cls._build_payment_params(
             action=action,
             amount=amount,
@@ -63,20 +77,13 @@ class PaymentService(APIClient):
         try:
             response = cls.payment_client.api(
                 "request",
-                {
-                    "action": "unsubscribe",
-                    "version": "3",
-                    "order_id": order_id,
-                },
+                {"action": "unsubscribe", "version": "3", "order_id": order_id},
             )
-
             if response.get("status") == "unsubscribed":
                 logger.info(f"Successfully unsubscribed order {order_id}")
                 return True
-
             logger.error(f"Unsubscribe failed for order {order_id}: {response}")
             return False
-
         except Exception as e:
             logger.error(f"Unsubscribe error for {order_id}: {e}")
             return False
@@ -97,14 +104,13 @@ class PaymentService(APIClient):
                 data=data or {},
                 headers={"Authorization": f"Api-Key {cls.api_key}"},
             )
-            response_dict = response if response is not None else {}
-            return status_code, response_dict
+            return status_code, response if response is not None else {}
         except Exception as e:
             logger.error(f"API {method.upper()} request to {endpoint} failed with error: {e}")
             return 500, {}
 
     @classmethod
-    async def create_payment(cls, profile_id: int, payment_option: str, order_id: str, amount: int) -> bool:
+    async def create_payment(cls, profile_id: int, payment_option: str, order_id: str, amount: Decimal) -> bool:
         status_code, _ = await cls._handle_payment_api_request(
             method="post",
             endpoint=urljoin(cls.API_BASE_PATH, "create/"),
@@ -113,14 +119,11 @@ class PaymentService(APIClient):
                 "handled": False,
                 "order_id": order_id,
                 "payment_type": payment_option,
-                "amount": amount,
+                "amount": str(amount.quantize(Decimal("0.01"), ROUND_HALF_UP)),
                 "status": "pending",
             },
         )
-        if status_code != 201:
-            logger.error(f"Failed to create payment for profile {profile_id}. HTTP status: {status_code}")
-            return False
-        return True
+        return status_code == 201
 
     @classmethod
     async def update_payment(cls, payment_id: int, data: dict) -> bool:
@@ -132,16 +135,16 @@ class PaymentService(APIClient):
     @classmethod
     async def _get_filtered_payments(cls, filter_func) -> list[Payment]:
         status_code, response = await cls._handle_payment_api_request(method="get", endpoint=cls.API_BASE_PATH)
-
         if status_code != 200:
             return []
-
         payments = response.get("results", [])
         return [Payment.model_validate(p) for p in payments if filter_func(p)]
 
     @classmethod
     async def get_unclosed_payments(cls) -> list[Payment]:
-        return await cls._get_filtered_payments(lambda p: p.get("status") == Settings.SUCCESS_PAYMENT_STATUS)
+        return await cls._get_filtered_payments(
+            lambda p: p.get("status") == Settings.SUCCESS_PAYMENT_STATUS and not p.get("handled")
+        )
 
     @classmethod
     async def get_expired_subscriptions(cls, expired_before: str) -> list[Subscription]:
@@ -150,24 +153,22 @@ class PaymentService(APIClient):
             endpoint=cls.SUBSCRIPTIONS_PATH,
             data={"enabled": "True", "payment_date__lte": expired_before},
         )
-
         if status_code != 200:
             logger.error(f"Failed to get expired subscriptions: HTTP {status_code}")
             return []
-
         results: Sequence[dict] = response.get("results", [])
         return [Subscription.model_validate(item) for item in results]
 
     @classmethod
     async def get_last_subscription_payment(cls, profile_id: int) -> str | None:
         status_code, response = await cls._handle_payment_api_request(
-            method="get", endpoint=cls.API_BASE_PATH, data={"profile": profile_id, "payment_type": "subscription"}
+            method="get",
+            endpoint=cls.API_BASE_PATH,
+            data={"profile": profile_id, "payment_type": "subscription"},
         )
-
         if status_code != 200 or not response.get("results"):
             logger.error(f"Failed to get last subscription payment: HTTP {status_code}")
             return None
-
         payments = response["results"]
         last_payment = max(payments, key=lambda x: x.get("created_at") or "")
         return last_payment.get("order_id")
@@ -179,25 +180,21 @@ class PaymentService(APIClient):
             logger.error(f"Payment {order_id} not found")
             return None
 
-        ok = await cls.update_payment(
-            payment_id,
-            {"status": status_, "error": error, "handled": False},
-        )
-        if ok:
-            logger.info(f"Payment {order_id} set to '{status_}'")
-            payment.status = status_
-            payment.error = error
-            return payment
+        ok = await cls.update_payment(payment_id, {"status": status_, "error": error, "handled": False})
+        if not ok:
+            logger.error(f"Failed to update payment {order_id}")
+            return None
 
-        logger.error(f"Failed to update payment {order_id}")
-        return None
+        logger.info(f"Payment {order_id} set to '{status_}'")
+        payment.status = status_
+        payment.error = error
+        payment.handled = False
+        return payment
 
     @classmethod
     async def _get_payment_by_order_id(cls, order_id: str) -> tuple[Payment | None, int | None]:
         status_code, response = await cls._handle_payment_api_request(
-            method="get",
-            endpoint=cls.API_BASE_PATH,
-            data={"order_id": order_id},
+            method="get", endpoint=cls.API_BASE_PATH, data={"order_id": order_id}
         )
         if status_code == 200 and response.get("results"):
             raw = response["results"][0]
@@ -206,6 +203,4 @@ class PaymentService(APIClient):
                 return payment, raw["id"]
             except ValidationError as e:
                 logger.error(f"Invalid payment data from API for order_id={order_id}: {e}")
-                return None, None
-
         return None, None

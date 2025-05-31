@@ -29,12 +29,11 @@ services:
     restart: unless-stopped
 
   api:
-    container_name: api
     build:
       context: .
       dockerfile: api.Dockerfile
-      args:
-        INSTALL_DEV: "true"
+      args: { INSTALL_DEV: "true" }
+    container_name: api
     env_file: .env
     volumes:
       - .:/app
@@ -45,8 +44,8 @@ services:
       uvicorn config.asgi:application --host 0.0.0.0 --port 8000
     ports: ["8000:8000"]
     depends_on:
-      db:    {condition: service_healthy}
-      redis: {condition: service_healthy}
+      db:    { condition: service_healthy }
+      redis: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
       interval: 60s
@@ -55,33 +54,37 @@ services:
     restart: unless-stopped
 
   celery:
-    container_name: celery_worker
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: celery_worker
     env_file: .env
-    command: celery -A config.celery worker -l info
+    command: >
+      celery -A core.celery_app worker
+             -l info
+             -Q default,maintenance
+             -P asyncio
     volumes:
       - .:/app
       - ./config:/app/config
     depends_on:
-      redis: {condition: service_healthy}
-      db:    {condition: service_healthy}
+      db:    { condition: service_healthy }
+      redis: { condition: service_healthy }
     restart: unless-stopped
 
   beat:
-    container_name: celery_beat
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: celery_beat
     env_file: .env
-    command: celery -A config.celery beat -l info
+    command: celery -A core.celery_app beat -l info
     volumes:
       - .:/app
       - ./config:/app/config
     depends_on:
-      redis: {condition: service_healthy}
-      db:    {condition: service_healthy}
+      db:    { condition: service_healthy }
+      redis: { condition: service_healthy }
     restart: unless-stopped
 
 # Uncomment 'bot' when fully running inside Docker. It's commented to allow running the Python process directly from the IDE

@@ -1,7 +1,10 @@
 from datetime import datetime
 from typing import Annotated
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, condecimal
 from enums import PaymentType, ProfileStatus, ClientStatus, Language, Gender
+
+
+Price = condecimal(max_digits=10, decimal_places=2, gt=0)
 
 
 class Profile(BaseModel):
@@ -34,8 +37,8 @@ class Coach(BaseModel):
     additional_info: str
     payment_details: str
     profile_photo: str
-    subscription_price: int
-    program_price: int
+    subscription_price: Price
+    program_price: Price
     assigned_to: list[int] = Field(default_factory=list)
     verified: bool = False
 
@@ -87,7 +90,7 @@ class Payment(BaseModel):
     profile: int
     payment_type: PaymentType
     order_id: str
-    amount: int
+    amount: Price
     status: str
     created_at: float
     updated_at: float

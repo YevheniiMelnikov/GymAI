@@ -1,3 +1,5 @@
+from decimal import Decimal
+from typing import Any
 from urllib.parse import urljoin
 from loguru import logger
 
@@ -53,7 +55,7 @@ class ProfileService(APIClient):
             return True
 
     @classmethod
-    async def update_profile(cls, profile_id: int, data: dict) -> bool:
+    async def update_profile(cls, profile_id: int, data: dict[str, Any]) -> bool:
         url = urljoin(cls.api_url, f"api/v1/profiles/{profile_id}/")
         status, _ = await cls._api_request("put", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"})
         if status in (200, 204):
@@ -63,7 +65,7 @@ class ProfileService(APIClient):
         return False
 
     @classmethod
-    async def update_client_profile(cls, client_id: int, data: dict) -> bool:
+    async def update_client_profile(cls, client_id: int, data: dict[str, Any]) -> bool:
         url = urljoin(cls.api_url, f"api/v1/client-profiles/pk/{client_id}/")
         status, _ = await cls._api_request("put", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"})
         if status in (200, 204):
@@ -73,8 +75,13 @@ class ProfileService(APIClient):
         return False
 
     @classmethod
-    async def update_coach_profile(cls, coach_id: int, data: dict) -> bool:
+    async def update_coach_profile(cls, coach_id: int, data: dict[str, Any]) -> bool:
         url = urljoin(cls.api_url, f"api/v1/coach-profiles/pk/{coach_id}/")
+
+        for price_field in ("program_price", "subscription_price"):
+            if price_field in data and isinstance(data[price_field], Decimal):
+                data[price_field] = str(data[price_field])
+
         if "payment_details" in data and data["payment_details"]:
             data["payment_details"] = cls.encrypter.encrypt(data["payment_details"])
         status, _ = await cls._api_request("put", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"})

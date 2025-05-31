@@ -11,6 +11,7 @@ celery_config = {
     "task_acks_late": True,
     "worker_max_tasks_per_child": 100,
     "task_time_limit": 600,
+    "worker_pool": "asyncio",
     "beat_schedule": {
         "pg_backup": {
             "task": "core.tasks.pg_backup",
@@ -45,7 +46,6 @@ celery_config = {
 }
 
 celery_app = Celery("gym_bot", config_source=celery_config)
-
 celery_app.autodiscover_tasks(["core"])
 
 __all__ = ("celery_app",)
