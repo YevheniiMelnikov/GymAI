@@ -1,0 +1,504 @@
+from __future__ import annotations
+
+from contextlib import suppress
+from datetime import datetime
+from typing import cast
+
+from loguru import logger
+from aiogram import Bot
+from aiogram.enums import ParseMode
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, InputMediaPhoto, Message
+from dateutil.relativedelta import relativedelta
+
+from bot import keyboards as kb
+from bot.utils.profiles import fetch_user, answer_profile
+from bot.keyboards import program_view_kb, subscription_manage_kb, program_edit_kb
+from bot.states import States
+from bot.texts import msg_text
+from core.cache import Cache
+from core.exceptions import UserServiceError
+from core.services import APIService
+from core.services.outer.gstorage_service import avatar_manager
+from bot.utils import profiles
+from core.models import Client, Coach, Profile, Subscription, DayExercises, Exercise
+from bot.utils.text import (
+    get_client_page,
+    get_profile_attributes,
+    get_translated_week_day,
+)
+from bot.utils.exercises import format_program
+from config.env_settings import Settings
+from bot.utils.other import answer_msg, del_msg
+from core.validators import validate_or_raise
+
+
+async def show_subscription_page(callback_query: CallbackQuery, state: FSMContext, subscription: Subscription) -> None:
+    await callback_query.answer()
+    profile = await profiles.get_user_profile(callback_query.from_user.id)
+    assert profile
+    language = cast(str, profile.language)
+
+    payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
+    next_payment_date = payment_date + relativedelta(months=1)
+    next_payment_date_str = next_payment_date.strftime("%Y-%m-%d")
+    enabled_status = "✅" if subscription.enabled else "❌"
+    translated_week_days = ", ".join(get_translated_week_day(language, x) for x in subscription.workout_days)
+
+    await state.set_state(States.show_subscription)
+    message = callback_query.message
+
+    if message and isinstance(message, Message):
+        await answer_msg(
+            message,
+            msg_text("subscription_page", language).format(
+                next_payment_date=next_payment_date_str,
+                enabled=enabled_status,
+                price=subscription.price,
+                days=translated_week_days,
+            ),
+            reply_markup=kb.show_subscriptions_kb(language),
+        )
+        await del_msg(message)
+
+
+async def show_profile_editing_menu(message: Message, profile: Profile, state: FSMContext) -> None:
+    await state.clear()
+    await state.update_data(lang=profile.language)
+
+    user_profile: Client | Coach | None
+    if profile.status == "client":
+        try:
+            user_profile = await Cache.client.get_client(profile.id)
+        except UserServiceError as error:
+            logger.error(f"Error retrieving client profile for {profile.id}: {error}")
+            user_profile = None
+        reply_markup = kb.edit_client_profile_kb(profile.language) if user_profile else None
+        await state.update_data(status="client")
+    else:
+        try:
+            user_profile = await Cache.coach.get_coach(profile.id)
+        except UserServiceError as error:
+            logger.error(f"Error retrieving coach profile for {profile.id}: {error}")
+            user_profile = None
+        reply_markup = kb.edit_coach_profile_kb(profile.language) if user_profile else None
+        await state.update_data(status="coach")
+
+    state_to_set = States.edit_profile if user_profile else States.name
+    response_message = "choose_profile_parameter" if user_profile else "edit_profile"
+    profile_msg = await answer_msg(
+        message,
+        msg_text(response_message, profile.language),
+        reply_markup=reply_markup,
+    )
+    assert profile_msg
+    with suppress(TelegramBadRequest):
+        await del_msg(cast(Message | CallbackQuery | None, message))
+
+    await state.update_data(message_ids=[profile_msg.message_id], chat_id=message.chat.id)
+    await state.set_state(state_to_set)
+
+    if not user_profile:
+        name_msg = await answer_msg(message, msg_text("name", profile.language))
+        assert name_msg
+        await state.update_data(message_ids=[profile_msg.message_id, name_msg.message_id])
+
+
+async def show_main_menu(message: Message, profile: Profile, state: FSMContext) -> None:
+    menu = kb.client_menu_kb if profile.status == "client" else kb.coach_menu_kb
+    await state.clear()
+    await state.update_data(profile=profile.model_dump())
+    await state.set_state(States.main_menu)
+    await answer_msg(message, msg_text("main_menu", profile.language), reply_markup=menu(profile.language))
+    await del_msg(cast(Message | CallbackQuery | None, message))
+
+
+async def show_clients(message: Message, clients: list[Client], state: FSMContext, current_index: int = 0) -> None:
+    profile = await profiles.get_user_profile(message.chat.id)
+    assert profile
+    language = cast(str, profile.language)
+
+    current_index %= len(clients)
+    current_client = clients[current_index]
+
+    subscription_active = await Cache.workout.get_subscription(current_client.id) is not None
+    data = await state.get_data()
+    client_info = await get_client_page(current_client, language, subscription_active, data)
+
+    await state.update_data(clients=[Client.model_dump(c) for c in clients])
+    await message.edit_text(
+        msg_text("client_page", language).format(**client_info),
+        reply_markup=kb.client_select_kb(language, current_client.id, current_index),
+        parse_mode=ParseMode.HTML,
+    )
+    await state.set_state(States.show_clients)
+
+
+async def show_coaches_menu(message: Message, coaches: list[Coach], bot: Bot, current_index: int = 0) -> None:
+    profile = await profiles.get_user_profile(message.chat.id)
+    assert profile
+    language = cast(str, profile.language)
+
+    current_index %= len(coaches)
+    current_coach = coaches[current_index]
+    coach_photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{current_coach.profile_photo}"
+    formatted_text = msg_text("coach_page", language).format(**current_coach.model_dump())
+
+    try:
+        media = InputMediaPhoto(media=coach_photo_url)
+        if message.photo:
+            await message.edit_media(media=media)
+            await message.edit_caption(
+                caption=formatted_text,
+                reply_markup=kb.coach_select_kb(language, current_coach.id, current_index),
+                parse_mode=ParseMode.HTML,
+            )
+        else:
+            await bot.send_photo(
+                message.chat.id,
+                photo=coach_photo_url,
+                caption=formatted_text,
+                reply_markup=kb.coach_select_kb(language, current_coach.id, current_index),
+                parse_mode=ParseMode.HTML,
+            )
+    except TelegramBadRequest:
+        await answer_msg(
+            message,
+            text=formatted_text,
+            reply_markup=kb.coach_select_kb(language, current_coach.id, current_index),
+            parse_mode=ParseMode.HTML,
+        )
+        await del_msg(cast(Message | CallbackQuery | None, message))
+
+
+async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    user = await fetch_user(profile)
+    language = cast(str, profile.language)
+
+    text = msg_text(
+        "client_profile" if profile.status == "client" else "coach_profile",
+        language,
+    ).format(**get_profile_attributes(status=profile.status, user=user, lang=language))
+
+    await answer_profile(callback_query, profile, user, text)
+    await state.set_state(States.profile)
+    await del_msg(cast(Message | CallbackQuery | None, callback_query))
+
+
+async def show_my_clients_menu(callback_query: CallbackQuery, coach_profile: Profile, state: FSMContext) -> None:
+    language = cast(str, coach_profile.language)
+
+    try:
+        coach = await Cache.coach.get_coach(coach_profile.id)
+        assigned_ids = coach.assigned_to if coach.assigned_to else None
+    except UserServiceError as error:
+        logger.error(f"Error retrieving coach data for profile {coach_profile.id}: {error}")
+        await callback_query.answer(msg_text("coach_info_message", language), show_alert=True)
+        return
+
+    if assigned_ids:
+        await callback_query.answer()
+        clients: list[Client] = []
+        try:
+            clients = [await Cache.client.get_client(cid) for cid in assigned_ids]
+        except UserServiceError as error:
+            logger.error(f"Error retrieving client data for IDs {assigned_ids}: {error}")
+            for profile_id in assigned_ids:
+                try:
+                    if cl_profile := await APIService.profile.get_client_by_profile_id(profile_id):
+                        clients.append(cast(Client, cl_profile))
+                except Exception as e:
+                    logger.error(f"Error retrieving profile data for client {profile_id}: {e}")
+
+        message = cast(Message, callback_query.message)
+        assert message
+        await show_clients(message, clients, state)
+    else:
+        if not coach.verified:
+            await callback_query.answer(msg_text("coach_info_message", language), show_alert=True)
+        await callback_query.answer(msg_text("no_clients", language), show_alert=True)
+        await state.set_state(States.main_menu)
+
+
+async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    language = cast(str, profile.language)
+
+    try:
+        client = await Cache.client.get_client(profile.id)
+    except UserServiceError as error:
+        logger.error(f"Error retrieving client data for profile {profile.id}: {error}")
+        await callback_query.answer(msg_text("questionnaire_not_completed", language), show_alert=True)
+        message = cast(Message, callback_query.message)
+        assert message
+        await show_profile_editing_menu(message, profile, state)
+        return
+
+    message = cast(Message, callback_query.message)
+    assert message
+
+    if not client.assigned_to:
+        await answer_msg(
+            message,
+            msg_text("no_program", language),
+            reply_markup=kb.choose_coach_kb(language),
+        )
+        await state.set_state(States.choose_coach)
+    else:
+        await state.set_state(States.select_service)
+        await answer_msg(
+            message,
+            msg_text("select_service", language),
+            reply_markup=kb.select_service_kb(language),
+        )
+
+    await del_msg(cast(Message | CallbackQuery | None, message))
+
+
+async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    language = cast(str, profile.language)
+    message = cast(Message, callback_query.message)
+    assert message
+
+    if await Cache.workout.check_payment_status(profile.id, "subscription"):
+        await callback_query.answer(msg_text("program_not_ready", language), show_alert=True)
+        return
+
+    subscription = await Cache.workout.get_subscription(profile.id)
+    if not subscription or not subscription.enabled:
+        subscription_img = Settings.BOT_PAYMENT_OPTIONS + f"subscription_{language}.jpeg"
+        client_profile = await Cache.client.get_client(profile.id)
+        coach = await Cache.coach.get_coach(client_profile.assigned_to.pop())
+
+        try:
+            await answer_msg(
+                message,
+                caption=msg_text("subscription_price", language).format(price=coach.subscription_price),
+                photo=subscription_img,
+                reply_markup=kb.choose_payment_options_kb(language, "subscription"),
+            )
+        except TelegramBadRequest:
+            await answer_msg(
+                message,
+                msg_text("image_error", language),
+                reply_markup=kb.choose_payment_options_kb(language, "subscription"),
+            )
+        await state.set_state(States.payment_choice)
+    else:
+        if subscription.exercises:
+            await state.update_data(exercises=subscription.exercises, subscription=True)
+            await show_subscription_page(callback_query, state, subscription)
+
+    await del_msg(cast(Message | CallbackQuery | None, message))
+
+
+async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    language = cast(str, profile.language)
+    message = cast(Message, callback_query.message)
+    assert message
+
+    if program := await Cache.workout.get_program(profile.id):
+        if await Cache.workout.check_payment_status(profile.id, "program"):
+            await callback_query.answer(msg_text("program_not_ready", language), show_alert=True)
+            return
+
+        await answer_msg(
+            message,
+            msg_text("select_action", language),
+            reply_markup=kb.program_action_kb(language),
+        )
+        await state.update_data(program=program.model_dump())
+        await state.set_state(States.program_action_choice)
+    else:
+        await show_program_promo_page(callback_query, profile, state)
+
+    await del_msg(cast(Message | CallbackQuery | None, message))
+
+
+async def show_program_promo_page(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    language = cast(str, profile.language)
+    message = cast(Message, callback_query.message)
+    assert message
+
+    program_img = Settings.BOT_PAYMENT_OPTIONS + f"program_{language}.jpeg"
+    client_profile = await Cache.client.get_client(profile.id)
+    coach = await Cache.coach.get_coach(client_profile.assigned_to.pop())
+
+    try:
+        await answer_msg(
+            message,
+            caption=msg_text("program_price", language).format(price=coach.program_price),
+            photo=program_img,
+            reply_markup=kb.choose_payment_options_kb(language, "program"),
+        )
+    except TelegramBadRequest:
+        await answer_msg(
+            message,
+            msg_text("image_error", language),
+            reply_markup=kb.choose_payment_options_kb(language, "program"),
+        )
+    await state.set_state(States.payment_choice)
+
+
+async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, profile: Profile) -> None:
+    data = await state.get_data()
+    exercises_data = data.get("exercises", [])
+    exercises = [DayExercises.model_validate(e) for e in exercises_data]
+
+    program = await format_program(exercises, day=0)
+    days = data.get("days", [])
+    week_day = get_translated_week_day(profile.language, days[0]).lower() if days else ""
+
+    message = cast(Message, callback_query.message)
+    assert message
+
+    language = cast(str, profile.language)
+
+    await answer_msg(
+        message,
+        msg_text("program_page", language).format(program=program, day=week_day),
+        reply_markup=kb.program_view_kb(language),
+        disable_web_page_preview=True,
+    )
+
+    await state.update_data(client=True, day_index=0)
+    await state.set_state(States.program_view)
+    await del_msg(cast(Message | CallbackQuery | None, message))
+
+
+async def manage_subscription(callback_query: CallbackQuery, lang: str, client_id: str, state: FSMContext) -> None:
+    await state.clear()
+    subscription = await Cache.workout.get_subscription(int(client_id))
+    message = cast(Message, callback_query.message)
+    assert message
+
+    if not subscription or not subscription.enabled:
+        await callback_query.answer(msg_text("payment_required", lang), show_alert=True)
+        await state.set_state(States.show_clients)
+        return
+
+    await callback_query.answer()
+    days = subscription.workout_days
+    week_day = get_translated_week_day(lang, days[0]).lower()
+
+    if not subscription.exercises:
+        await answer_msg(message, msg_text("no_program", lang))
+        workouts_per_week = len(days)
+        await answer_msg(message, msg_text("workouts_per_week", lang).format(days=workouts_per_week))
+        await answer_msg(message, msg_text("program_guide", lang))
+        day_1_msg = await answer_msg(
+            message,
+            msg_text("enter_daily_program", lang).format(day=week_day),
+            reply_markup=kb.program_manage_kb(lang, workouts_per_week),
+        )
+        assert day_1_msg
+        await state.update_data(
+            chat_id=message.chat.id,
+            message_ids=[day_1_msg.message_id],
+            split=workouts_per_week,
+            days=days,
+            day_index=0,
+            exercises={},
+            client_id=client_id,
+            subscription=True,
+        )
+        await state.set_state(States.program_manage)
+    else:
+        program_text = await format_program(subscription.exercises, 0)
+        await answer_msg(
+            message,
+            msg_text("program_page", lang).format(program=program_text, day=week_day),
+            reply_markup=kb.subscription_manage_kb(lang),
+            disable_web_page_preview=True,
+        )
+        await state.update_data(
+            exercises=subscription.exercises,
+            days=days,
+            client_id=client_id,
+            day_index=0,
+            subscription=True,
+        )
+        await state.set_state(States.subscription_manage)
+
+    await del_msg(cast(Message | CallbackQuery | None, message))
+
+
+async def clients_menu_pagination(
+    callback_query: CallbackQuery, profile: Profile, index: int, state: FSMContext
+) -> None:
+    data = await state.get_data()
+    clients = [
+        validate_or_raise(client_data, Client, context="clients list") for client_data in data.get("clients", [])
+    ]
+
+    if not clients:
+        await callback_query.answer(msg_text("no_clients", profile.language))
+        return
+
+    if index < 0 or index >= len(clients):
+        await callback_query.answer(msg_text("out_of_range", profile.language))
+        return
+
+    message = callback_query.message
+    if message and isinstance(message, Message):
+        await show_clients(message, clients, state, index)
+
+
+async def program_menu_pagination(state: FSMContext, callback_query: CallbackQuery) -> None:
+    profile = await profiles.get_user_profile(callback_query.from_user.id)
+    assert profile
+
+    if callback_query.data == "quit":
+        await show_my_clients_menu(callback_query, profile, state)
+        return
+
+    data = await state.get_data()
+    current_day = data.get("day_index", 0)
+    exercises = data.get("exercises", [])
+
+    if isinstance(exercises, dict):
+        exercises = [
+            DayExercises(day=k, exercises=[Exercise.model_validate(e) if isinstance(e, dict) else e for e in v])
+            for k, v in exercises.items()
+        ]
+
+    split_number = data.get("split")
+    assert split_number is not None
+
+    if data.get("client"):
+        reply_markup = program_view_kb(profile.language)
+        state_to_set = States.program_view
+    else:
+        reply_markup = (
+            subscription_manage_kb(profile.language) if data.get("subscription") else program_edit_kb(profile.language)
+        )
+        state_to_set = States.subscription_manage if data.get("subscription") else States.program_edit
+
+    await state.set_state(state_to_set)
+    current_day += -1 if callback_query.data in ["prev_day", "previous"] else 1
+
+    if current_day < 0 or current_day >= split_number:
+        current_day = max(0, min(current_day, split_number - 1))
+        await callback_query.answer(msg_text("out_of_range", profile.language))
+        await state.update_data(day_index=current_day)
+        return
+
+    await state.update_data(day_index=current_day)
+
+    program_text = await format_program(exercises, current_day)
+    days = data.get("days", [])
+    next_day = (
+        get_translated_week_day(profile.language, days[current_day]).lower()
+        if data.get("subscription")
+        else current_day + 1
+    )
+    with suppress(TelegramBadRequest):
+        message = callback_query.message
+        if message and isinstance(message, Message):
+            await message.edit_text(
+                msg_text("program_page", profile.language).format(program=program_text, day=next_day),
+                reply_markup=reply_markup,
+                disable_web_page_preview=True,
+            )
+
+    await callback_query.answer()

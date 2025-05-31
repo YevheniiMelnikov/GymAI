@@ -39,11 +39,15 @@ dev = [
     "types-python-dateutil",
     "types-redis",
     "pyrefly>=0.16.2",
+    "django-stubs>=4.2.7",
+    "djangorestframework-stubs>=3.14.5",
+    "mypy-extensions>=1.0.0",
+    "types-PyYAML>=6.0.12.20240311"
 ]
 
 [tool.ruff]
 line-length = 120
-exclude = [".git", ".pytest_cache", ".env", "env", "venv", ".venv", "venv-win"]
+exclude = [".git", ".pytest_cache", ".env", "env", "venv", ".venv", ".venv-win"]
 
 [tool.ruff.lint]
 select = ["E", "F"]
@@ -53,50 +57,24 @@ ignore = ["F405", "F403"]
 combine-as-imports = true
 
 [tool.pyrefly]
-project_includes = ["bot", "apps", "core", "config", "functions"]
-project_excludes = [
-  "**/.[!/.]*",
-  "**/tests",
-  "**/__pycache__",
-  "**/migrations/**",
-  "**/static/**",
-  "**/templates/**"
-]
-search_path = ["bot", "apps", "core", "config", "functions"]
-site_package_path = [".venv/lib/python3.13/site-packages"]
-
-python_platform = "linux"
-python_version = "3.13"
+project_includes = ["."]
+project_excludes = ["**/__pycache__/**", "**/static/**", "**/templates/**", "**/migrations/**", "**/tests/**"]
 python_interpreter = ".venv/bin/python3"
-
 ignore_errors_in_generated_code = true
-ignore_missing_source = true
 use_untyped_imports = true
-
-replace_imports_with_any = [
-  "sympy.*",
-  "unittest.*",
-  "pytest.*",
-  "pandas.core.series",
-  "core.models"
-]
 
 [tool.pyrefly.errors]
 bad-assignment = true
-invalid-argument = true
-assert-type = false
-annotation-mismatch = true
-no-matching-overload = true
 bad-return = true
+bad-argument-type = true
+missing-attribute = true
+annotation-mismatch = true
+no-matching-overload = false
+async-error = false
+import-error = false
+bad-override = false
+not-callable = false
 
-[[tool.pyrefly.sub_config]]
-matches = "**/tests/**"
-replace_imports_with_any = ["pytest.*"]
-[tool.pyrefly.sub_config.errors]
-assert-type = false
-
-[[tool.pyrefly.sub_config]]
-matches = "**/migrations/**"
-[tool.pyrefly.sub_config.errors]
-bad-assignment = false
-invalid-argument = false
+[[ignore_errors_in_path]]
+path = "**/magic_filter/**"
+errors = ["bad-argument-type"]

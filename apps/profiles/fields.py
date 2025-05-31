@@ -5,7 +5,7 @@ from core.encryptor import Encryptor
 
 
 class EncryptedField(CharField):
-    description = _("Encrypted string")
+    description = str(_("Encrypted string"))
 
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("max_length", 256)

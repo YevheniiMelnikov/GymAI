@@ -1,7 +1,6 @@
 import os
 import shutil
 import subprocess
-import asyncio
 from datetime import datetime, timedelta
 
 from celery import shared_task
@@ -14,6 +13,7 @@ from config.env_settings import Settings
 from core.cache import Cache
 from core.payment_processor import PaymentProcessor
 from core.services import APIService
+from core.services.outer.gsheets_service import GSheetsService
 
 _dumps_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dumps")
 _pg_dir = os.path.join(_dumps_dir, "postgres")
@@ -72,34 +72,26 @@ def cleanup_backups(self):
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)
-def deactivate_expired_subscriptions(self):
-    async def _deactivate():
-        since = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-        subs = await APIService.payment.get_expired_subscriptions(since)
-        for sub in subs:
-            if not sub.id or not sub.client_profile:
-                logger.warning(f"Invalid subscription: {sub}")
-                continue
-
-            await APIService.workout.update_subscription(sub.id, dict(enabled=False, client_profile=sub.client_profile))
-            await Cache.workout.update_subscription(sub.client_profile, dict(enabled=False))
-            await Cache.workout.reset_payment_status(sub.client_profile, "subscription")
-            logger.info(f"Subscription {sub.id} deactivated for user {sub.client_profile}")
-
-    asyncio.run(_deactivate())
+async def deactivate_expired_subscriptions(self):
+    since = (datetime.now() - timedelta(days=1)).date().isoformat()
+    subs = await APIService.payment.get_expired_subscriptions(since)
+    for sub in subs:
+        if not sub.id or not sub.client_profile:
+            logger.warning(f"Invalid subscription: {sub}")
+            continue
+        await APIService.workout.update_subscription(sub.id, {"enabled": False, "client_profile": sub.client_profile})
+        await Cache.workout.update_subscription(sub.client_profile, {"enabled": False})
+        await Cache.workout.reset_payment_status(sub.client_profile, "subscription")
+        logger.info(f"Subscription {sub.id} deactivated for user {sub.client_profile}")
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)
-def process_unclosed_payments(self):
-    asyncio.run(PaymentProcessor.process_unclosed_payments())
+async def process_unclosed_payments(self):
+    await PaymentProcessor.process_unclosed_payments()
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)
-def send_daily_survey(self):
-    asyncio.run(_send_daily_survey())
-
-
-async def _send_daily_survey() -> None:
+async def send_daily_survey(self):
     clients = await Cache.client.get_clients_to_survey()
     if not clients:
         logger.info("No clients to survey today")
@@ -107,12 +99,13 @@ async def _send_daily_survey() -> None:
 
     yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
 
+    payout_data = []
+
     for client_id in clients:
         profile = await APIService.profile.get_profile(client_id)
         if not profile:
             logger.warning(f"Profile {client_id} invalid, skip")
             continue
-
         try:
             if bot is None:
                 raise RuntimeError("Bot instance is not initialized")
@@ -125,3 +118,6 @@ async def _send_daily_survey() -> None:
             logger.info(f"Survey sent to {client_id}")
         except Exception as e:
             logger.error(f"Survey push failed for {client_id}: {e}")
+
+    if payout_data:
+        await GSheetsService.create_new_payment_sheet(payout_data)

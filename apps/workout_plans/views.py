@@ -1,7 +1,10 @@
+from typing import Sequence, Type, cast, Any
+
 from django_filters.rest_framework import DjangoFilterBackend
 from loguru import logger
 from rest_framework import status
-from rest_framework.exceptions import PermissionDenied, NotFound
+from rest_framework.exceptions import NotFound
+from rest_framework.filters import BaseFilterBackend
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 from rest_framework_api_key.permissions import HasAPIKey
@@ -12,84 +15,99 @@ from apps.workout_plans.serializers import ProgramSerializer, SubscriptionSerial
 
 
 class ProgramViewSet(ModelViewSet):
-    queryset = Program.objects.all().select_related("client_profile")
+    queryset = Program.objects.all().select_related("client_profile")  # type: ignore[assignment]
     serializer_class = ProgramSerializer
     permission_classes = [HasAPIKey]
 
-    def get_queryset(self):
-        queryset = super().get_queryset().select_related("client_profile")
-        client_profile_id = self.request.query_params.get("client_profile")
+    def _filter_by_client(self, qs: Any) -> Any:
+        client_id = self.request.query_params.get("client_profile")
+        if client_id:
+            logger.debug(f"Filtering Program queryset by client_profile_id={client_id}")
+            qs = qs.filter(client_profile_id=client_id)
+        return qs
 
-        if client_profile_id is not None:
-            queryset = queryset.filter(client_profile_id=client_profile_id)
+    def get_queryset(self) -> Any:
+        base_qs = super().get_queryset().select_related("client_profile")
+        return self._filter_by_client(base_qs)
 
-        return queryset
-
-    def perform_create_or_update(self, serializer, client_profile_id, exercises):
-        api_key = self.request.headers.get("Authorization")
-        if not api_key or not HasAPIKey().has_permission(self.request, self):
-            logger.error("API Key missing or invalid")
-            raise PermissionDenied("API Key must be provided")
-
-        logger.debug(f"Retrieving ClientProfile with profile_id: {client_profile_id}")
+    @staticmethod
+    def _get_client(client_id: int) -> ClientProfile:
+        logger.debug(f"Fetching ClientProfile pk={client_id}")
         try:
-            client_profile = ClientProfile.objects.get(profile__id=client_profile_id)
+            return ClientProfile.objects.get(pk=client_id)  # type: ignore[return-value]
         except ClientProfile.DoesNotExist:
-            logger.error(f"ClientProfile with profile_id {client_profile_id} does not exist.")
-            raise NotFound(f"ClientProfile with profile_id {client_profile_id} does not exist.")
+            logger.error(f"ClientProfile pk={client_id} not found")
+            raise NotFound(f"ClientProfile pk={client_id} not found")
 
-        existing_program = Program.objects.filter(client_profile=client_profile).first()
-        if existing_program:
-            logger.info(f"Updating existing Program for client_profile_id: {client_profile_id}")
-            existing_program.exercises_by_day = exercises
-            existing_program.save()
-            return existing_program
-        else:
-            logger.info(f"Creating new Program for client_profile_id: {client_profile_id}")
-            return serializer.save(client_profile=client_profile, exercises_by_day=exercises)
+    def _create_or_update(self, client_id: int, exercises: Any, instance: Program | None = None) -> Program:
+        client = self._get_client(client_id)
 
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        if instance:
+            logger.info(f"Updating Program id={getattr(instance, 'id', None)} for client_profile pk={client_id}")
+            instance.exercises_by_day = exercises
+            instance.save()
+            return instance
 
-        client_profile_id = request.data.get("client_profile")
+        existing = Program.objects.filter(client_profile=client).first()
+        if existing:  # type: ignore[truthy-function]
+            logger.info(
+                f"Patching existing Program id={getattr(existing, 'id', None)} for client_profile pk={client_id}"
+            )
+            existing = cast(Program, existing)
+            existing.exercises_by_day = exercises
+            existing.save()
+            return existing
+
+        logger.info(f"Creating Program for client_profile pk={client_id}")
+        return Program.objects.create(  # type: ignore[return-value]
+            client_profile=client, exercises_by_day=exercises
+        )
+
+    def create(self, request: Any, *args: Any, **kwargs: Any) -> Response:
+        client_id = request.data.get("client_profile")
         exercises = request.data.get("exercises_by_day")
 
-        if not client_profile_id:
-            logger.error("Client profile ID was not provided in request data.")
-            raise PermissionDenied("Client profile ID must be provided.")
+        if not client_id:
+            logger.error("client_profile is required in request data")
+            return Response({"error": "client_profile is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        instance = self.perform_create_or_update(serializer, client_profile_id, exercises)
-        headers = self.get_success_headers(serializer.data)
-        logger.info(f"Program created/updated successfully for client_profile_id: {client_profile_id}")
-        return Response(ProgramSerializer(instance).data, status=status.HTTP_201_CREATED, headers=headers)
+        program = self._create_or_update(int(client_id), exercises)
+        status_code = (
+            status.HTTP_201_CREATED
+            if getattr(program, "created_at", None) == getattr(program, "updated_at", None)
+            else status.HTTP_200_OK
+        )
+        logger.info(f"Program id={getattr(program, 'id', None)} processed (status_code={status_code})")
+        return Response(ProgramSerializer(program).data, status=status_code)
 
-    def update(self, request, *args, **kwargs):
+    def update(self, request: Any, *args: Any, **kwargs: Any) -> Response:
         partial = kwargs.pop("partial", False)
-        instance = self.get_object()
+        instance: Program = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
 
-        profile_id = request.data.get("profile")
-        exercises = request.data.get("exercises_by_day")
+        client_id_raw = request.data.get("client_profile") or getattr(instance, "client_profile_id", None)
+        if client_id_raw is None:
+            logger.error("client_profile is required")
+            return Response({"error": "client_profile is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        self.perform_create_or_update(serializer, profile_id, exercises)
-        logger.info(f"Program updated for profile_id: {profile_id}")
-        return Response(serializer.data)
+        exercises = serializer.validated_data.get("exercises_by_day", instance.exercises_by_day)
+
+        program = self._create_or_update(int(client_id_raw), exercises, instance=instance)
+        logger.info(f"Program id={getattr(program, 'id', None)} updated")
+        return Response(self.get_serializer(program).data, status=status.HTTP_200_OK)
 
 
 class SubscriptionViewSet(ModelViewSet):
-    queryset = Subscription.objects.all().select_related("client_profile")
+    queryset = Subscription.objects.all().select_related("client_profile")  # type: ignore[assignment]
     serializer_class = SubscriptionSerializer
     permission_classes = [HasAPIKey]
-    filter_backends = [DjangoFilterBackend]
+    filter_backends: Sequence[Type[BaseFilterBackend]] = [DjangoFilterBackend]  # type: ignore[assignment]
     filterset_fields = ["enabled", "payment_date"]
 
-    def get_queryset(self):
-        queryset = super().get_queryset().select_related("client_profile")
-        client_profile_id = self.request.query_params.get("client_profile")
-
-        if client_profile_id is not None:
-            queryset = queryset.filter(client_profile_id=client_profile_id)
-
-        return queryset
+    def get_queryset(self) -> Any:
+        qs = super().get_queryset().select_related("client_profile")
+        client_id = self.request.query_params.get("client_profile")
+        if client_id:
+            qs = qs.filter(client_profile_id=client_id)
+        return qs

@@ -340,7 +340,7 @@ def show_subscriptions_kb(lang: str) -> KbMarkup:
 def select_exercise_kb(exercises: list[Exercise]) -> KbMarkup:
     buttons = []
     for index, exercise in enumerate(exercises):
-        buttons.append([KbBtn(text=exercise.get("name"), callback_data=str(index))])
+        buttons.append([KbBtn(text=exercise.name, callback_data=str(index))])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 

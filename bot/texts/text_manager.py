@@ -34,7 +34,7 @@ class TextManager:
 
     @classmethod
     def get_message(cls, key: str, lang: str | None) -> str:
-        lang = lang or Settings.BOT_LANG
+        lang = lang or Settings.DEFAULT_LANG
         try:
             return cls.messages[key][lang]
         except KeyError as e:
@@ -42,14 +42,11 @@ class TextManager:
 
     @classmethod
     def get_button(cls, key: str, lang: str | None) -> str:
-        lang = lang or Settings.BOT_LANG
+        lang = lang or Settings.DEFAULT_LANG
         try:
             return cls.buttons[key][lang]
         except KeyError as e:
             raise ValueError(f"Button key '{key}' ({lang}) not found") from e
-
-
-TextManager.load_resources()
 
 
 def msg_text(msg_key: str, lang: str | None) -> str:

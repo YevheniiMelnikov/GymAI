@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 from urllib.parse import urljoin
 from loguru import logger
@@ -6,7 +7,7 @@ from loguru import logger
 from core.services.api_client import APIClient
 from core.exceptions import UserServiceError
 from core.models import Program, DayExercises
-from bot.functions.utils import serialize_day_exercises
+from bot.utils.exercises import serialize_day_exercises
 
 
 class WorkoutService(APIClient):
@@ -32,6 +33,7 @@ class WorkoutService(APIClient):
                 logger.error(f"Failed to save program for client {client_id}: {response}")
                 raise UserServiceError(f"Failed to save program, received status {status_code}: {response}")
 
+            response = response or {}
             return Program(
                 id=response.get("id"),
                 split_number=split_number,
@@ -61,13 +63,13 @@ class WorkoutService(APIClient):
 
     @classmethod
     async def create_subscription(
-        cls, profile_id: int, workout_days: list[str], wishes: str, amount: int
+        cls, profile_id: int, workout_days: list[str], wishes: str, amount: Decimal
     ) -> int | None:
         url = urljoin(cls.api_url, "api/v1/subscriptions/")
         data = {
             "client_profile": profile_id,
             "enabled": False,
-            "price": amount,
+            "price": str(amount),
             "workout_days": workout_days,
             "payment_date": datetime.today().strftime("%Y-%m-%d"),
             "wishes": wishes,

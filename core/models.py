@@ -1,38 +1,44 @@
 from datetime import datetime
+from typing import Annotated
+from pydantic import BaseModel, Field, field_validator, condecimal
+from enums import PaymentType, ProfileStatus, ClientStatus, Language, Gender
 
-from pydantic import BaseModel, Field, field_validator
+
+Price = condecimal(max_digits=10, decimal_places=2, gt=0)
 
 
 class Profile(BaseModel):
     id: int
-    status: str
+    status: Annotated[ProfileStatus, Field()]
     tg_id: int
-    language: str
+    language: Annotated[Language, Field()]
 
 
 class Client(BaseModel):
     id: int
+    profile: int
     name: str
-    gender: str
+    gender: Gender
     born_in: str
     workout_experience: str
     workout_goals: str
     health_notes: str
     weight: int
-    status: str = "default"
+    status: ClientStatus = ClientStatus.default
     assigned_to: list[int] = Field(default_factory=list)
 
 
 class Coach(BaseModel):
     id: int
+    profile: int
     name: str
     surname: str
     work_experience: int
     additional_info: str
     payment_details: str
     profile_photo: str
-    subscription_price: int
-    program_price: int
+    subscription_price: Price
+    program_price: Price
     assigned_to: list[int] = Field(default_factory=list)
     verified: bool = False
 
@@ -82,9 +88,9 @@ class Subscription(BaseModel):
 class Payment(BaseModel):
     id: int
     profile: int
-    payment_type: str
+    payment_type: PaymentType
     order_id: str
-    amount: int
+    amount: Price
     status: str
     created_at: float
     updated_at: float

@@ -1,9 +1,11 @@
 import json
+from decimal import Decimal
+from json import JSONDecodeError
 from typing import Any, ClassVar
+
 from loguru import logger
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
-from json import JSONDecodeError
 
 from config.env_settings import Settings
 
@@ -16,16 +18,20 @@ class BaseCacheManager:
     )
 
     @classmethod
-    async def healthcheck(cls) -> bool:
-        try:
-            return await cls.redis.ping()
-        except Exception as e:
-            logger.critical(f"Redis healthcheck failed: {e}")
-            return False
-
-    @classmethod
     def _add_prefix(cls, key: str) -> str:
         return f"app:{key}"
+
+    @staticmethod
+    def _json_safe(data: dict[str, Any]) -> dict[str, Any]:
+        safe: dict[str, Any] = {}
+        for k, v in data.items():
+            if isinstance(v, Decimal):
+                safe[k] = str(v)
+            elif isinstance(v, dict):
+                safe[k] = BaseCacheManager._json_safe(v)
+            else:
+                safe[k] = v
+        return safe
 
     @classmethod
     async def close_pool(cls) -> None:
@@ -34,6 +40,14 @@ class BaseCacheManager:
             logger.info("Redis connection closed.")
         except Exception as e:
             logger.error(f"Error closing Redis connection: {e}")
+
+    @classmethod
+    async def healthcheck(cls) -> bool:
+        try:
+            return await cls.redis.ping()
+        except Exception as e:
+            logger.critical(f"Redis healthcheck failed: {e}")
+            return False
 
     @classmethod
     async def get(cls, key: str, field: str) -> str | None:
@@ -79,7 +93,8 @@ class BaseCacheManager:
     @classmethod
     async def set_json(cls, key: str, field: str, data: dict[str, Any]) -> None:
         try:
-            await cls.set(key, field, json.dumps(data))
+            safe = cls._json_safe(data)
+            await cls.set(key, field, json.dumps(safe))
         except RedisError as e:
             logger.error(f"Redis SET JSON error [{key}:{field}]: {e}")
 
@@ -88,6 +103,7 @@ class BaseCacheManager:
         try:
             existing = await cls.get_json(key, field) or {}
             existing.update(updates)
-            await cls.set_json(key, field, existing)
+            safe = cls._json_safe(existing)
+            await cls.set_json(key, field, safe)
         except RedisError as e:
             logger.error(f"Redis UPDATE JSON error [{key}:{field}]: {e}")
