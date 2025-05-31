@@ -10,10 +10,11 @@ from bot.keyboards import select_language_kb
 from bot.states import States
 from loguru import logger
 from config.env_settings import Settings
+from core.cache import Cache
+from core.exceptions import ProfileNotFoundError
 from core.models import Profile
 from bot.utils.menus import show_main_menu
 from bot.texts.text_manager import msg_text
-from bot.utils.profiles import get_user_profile
 
 cmd_router = Router()
 
@@ -48,17 +49,16 @@ async def cmd_menu(message: Message, state: FSMContext) -> None:
 @cmd_router.message(Command("start"))
 async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
-
     if not message.from_user:
         return
 
-    profile = await get_user_profile(message.from_user.id)
-    if profile is not None:
+    try:
+        profile = await Cache.profile.get_profile(message.from_user.id)
         await state.update_data(lang=profile.language, profile=profile.model_dump())
         await show_main_menu(message, profile, state)
         with suppress(TelegramBadRequest):
             await message.delete()
-    else:
+    except ProfileNotFoundError:
         logger.info(f"Telegram user {message.from_user.id} started bot")
         start_msg = await message.answer(msg_text("start", Settings.DEFAULT_LANG))
         language_msg = await message.answer(

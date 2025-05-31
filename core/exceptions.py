@@ -10,6 +10,6 @@ class UserServiceError(Exception):
 
 
 class ProfileNotFoundError(Exception):
-    def __init__(self, telegram_id: int):
-        super().__init__(f"No current profile found for user {telegram_id}")
-        self.telegram_id = telegram_id
+    def __init__(self, tg_id: int):
+        super().__init__(f"No current profile found for user {tg_id}")
+        self.tg_id = tg_id

@@ -5,13 +5,13 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from loguru import logger
 
-from bot.utils import profiles
 from bot.utils.text import get_translated_week_day
 from bot.utils.other import delete_messages, answer_msg, del_msg
 from bot.keyboards import program_edit_kb, program_manage_kb
 from bot.states import States
 from bot.texts.exercises import exercise_dict
 from bot.texts.text_manager import msg_text
+from config.env_settings import Settings
 from core.cache import Cache
 from core.models import Exercise, DayExercises
 from core.services.outer.gstorage_service import gif_manager
@@ -24,20 +24,17 @@ async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Messa
     if not input_data.from_user:
         return
 
-    profile = await profiles.get_user_profile(input_data.from_user.id)
-    if not profile:
-        return
-    language = cast(str, profile.language or "ua")
-
+    profile = await Cache.profile.get_profile(input_data.from_user.id)
+    assert profile
     client_id = cast(int | None, data.get("client_id"))
     if not client_id:
         return
 
     day_index = cast(int, data.get("day_index", 0))
     exercises: list[DayExercises] = data.get("exercises", [])
-
     day_str = str(day_index)
     day_entry = next((d for d in exercises if d.day == day_str), None)
+    lang = cast(str, profile.language or Settings.DEFAULT_LANG)
 
     if not day_entry:
         day_entry = DayExercises(day=day_str, exercises=[exercise])
@@ -48,7 +45,7 @@ async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Messa
     if data.get("subscription"):
         days: list[str] = cast(list[str], data.get("days"))
         current_day = days[day_index]
-        day_label = get_translated_week_day(language, current_day).lower()
+        day_label = get_translated_week_day(lang, current_day).lower()
         split_number = len(days)
     else:
         day_label = day_index + 1
@@ -68,11 +65,11 @@ async def save_exercise(state: FSMContext, exercise: Exercise, input_data: Messa
     if not msg:
         return
 
-    exercise_msg = await answer_msg(msg, msg_text("enter_exercise", language))
+    exercise_msg = await answer_msg(msg, msg_text("enter_exercise", lang))
     program_msg = await answer_msg(
         msg,
-        msg_text("program_page", language).format(program=program, day=day_label),
-        reply_markup=program_manage_kb(language, split_number),
+        msg_text("program_page", lang).format(program=program, day=day_label),
+        reply_markup=program_manage_kb(lang, split_number),
         disable_web_page_preview=True,
     )
 
@@ -148,17 +145,11 @@ async def update_exercise_data(message: Message, state: FSMContext, lang: str, u
 
 
 async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMContext) -> None:
-    if not callback_query.from_user:
+    if not callback_query.from_user or not callback_query.data:
         return
 
-    profile = await profiles.get_user_profile(callback_query.from_user.id)
-    if not profile:
-        return
-    language = cast(str, profile.language or "ua")
-
-    if not callback_query.data:
-        return
-
+    profile = await Cache.profile.get_profile(callback_query.from_user.id)
+    assert profile
     parts = cast(str, callback_query.data).split("_")
     client_id = int(parts[1])
     day = parts[2]
@@ -167,6 +158,7 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
     if not subscription:
         return
 
+    language = cast(str, profile.language or "ua")
     week_day = get_translated_week_day(language, day).lower()
     day_index = subscription.workout_days.index(day)
     program_text = await format_program(subscription.exercises, day_index)

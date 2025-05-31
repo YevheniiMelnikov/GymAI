@@ -16,12 +16,12 @@ class ProfileByTelegramIDView(APIView):
     permission_classes = [HasAPIKey]
     serializer_class = ProfileSerializer
 
-    def get(self, request: Request, telegram_id: int) -> Response:
+    def get(self, request: Request, tg_id: int) -> Response:
         try:
-            profile = Profile.objects.get(tg_id=telegram_id)
+            profile = Profile.objects.get(tg_id=tg_id)
             return Response(self.serializer_class(profile).data, status=status.HTTP_200_OK)
         except Profile.DoesNotExist:
-            logger.info(f"Profile not found for tg_id={telegram_id}")
+            logger.info(f"Profile not found for tg_id={tg_id}")
             return Response({"error": "Profile not found"}, status=status.HTTP_404_NOT_FOUND)
 
 

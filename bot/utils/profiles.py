@@ -8,7 +8,7 @@ from aiogram.exceptions import TelegramBadRequest
 from bot.keyboards import profile_menu_kb
 from config.env_settings import Settings
 from core.cache import Cache
-from core.exceptions import ProfileNotFoundError, UserServiceError
+from core.exceptions import UserServiceError
 from core.services import APIService
 from bot.utils import menus
 from bot.utils.chat import send_coach_request
@@ -23,10 +23,8 @@ async def update_profile_data(message: Message, state: FSMContext, status: str) 
     await delete_messages(state)
 
     try:
-        profile = await get_user_profile(message.chat.id)
-        if not profile:
-            raise ValueError("Profile not found")
-
+        profile = await Cache.profile.get_profile(message.chat.id)
+        assert profile
         user_data = {**data, "id": profile.id}
         if status == "client":
             if data.get("edit_mode"):
@@ -130,13 +128,3 @@ async def answer_profile(cbq: CallbackQuery, profile: Profile, user: Coach | Cli
             logger.warning("Photo not found for coach %s", profile.id)
 
     await message.answer(text, reply_markup=profile_menu_kb(profile.language))
-
-
-async def get_user_profile(telegram_id: int) -> Profile | None:
-    try:
-        return await Cache.profile.get_profile(telegram_id)
-    except ProfileNotFoundError:
-        if profile := await APIService.profile.get_profile_by_tg_id(telegram_id):
-            await Cache.profile.update_profile(telegram_id, profile.model_dump())
-            return profile
-    return None

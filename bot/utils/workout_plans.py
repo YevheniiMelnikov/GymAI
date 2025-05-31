@@ -16,7 +16,6 @@ from core.models import Profile, DayExercises, Subscription
 from core.services import APIService
 from bot.utils.chat import send_message
 from bot.utils.menus import show_main_menu, show_subscription_page
-from bot.utils.profiles import get_user_profile
 from bot.utils.text import get_translated_week_day
 from bot.utils.exercises import format_program
 from bot.utils.other import delete_messages, del_msg, answer_msg, generate_order_id
@@ -27,29 +26,26 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
     if not callback_query.from_user:
         return
 
-    profile = await get_user_profile(callback_query.from_user.id)
-    if not profile:
-        return
+    profile = await Cache.profile.get_profile(callback_query.from_user.id)
+    assert profile
 
     data = await state.get_data()
+    completed_days = data.get("completed_days")
+    if completed_days is None:
+        completed_days = data.get("day_index", 0) + 1
 
-    completed_days = data.get("completed_days", data.get("day_index", 0) + 1)
-    split_number = data.get("split")
-    if split_number is None:
-        split_number = 0
-
+    split_number = data.get("split") or 0
     client_id = cast(Optional[int], data.get("client_id"))
     if client_id is None:
         return
 
     exercises: list[DayExercises] = data.get("exercises", [])
-
     has_exercises = any(day.exercises for day in exercises)
     if not has_exercises:
         await answer_msg(callback_query, msg_text("no_exercises_to_save", profile.language))
         return
 
-    if completed_days is not None and split_number is not None and completed_days < split_number:
+    if completed_days < split_number:
         await answer_msg(callback_query, msg_text("complete_all_days", profile.language), show_alert=True)
         return
 
@@ -79,12 +75,12 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
         program_text = await format_program(exercises, 0)
         current_program = await Cache.workout.get_program(client_id)
         wishes: str = getattr(current_program, "wishes", "") or ""
-        program = await APIService.workout.save_program(client_id, exercises, split_number or 1, wishes)
+        program = await APIService.workout.save_program(client_id, exercises, split_number, wishes)
         if program is not None:
             program_data = program.model_dump()
             program_data.update(
                 workout_type=getattr(current_program, "workout_type", None),
-                split_number=split_number or 1,
+                split_number=split_number,
             )
             await Cache.workout.save_program(client_id, program_data)
             await Cache.workout.reset_payment_status(client_id, "program")
@@ -113,10 +109,8 @@ async def reset_workout_plan(callback_query: CallbackQuery, state: FSMContext) -
     if not callback_query.from_user:
         return
 
-    profile = await get_user_profile(callback_query.from_user.id)
-    if not profile:
-        return
-
+    profile = await Cache.profile.get_profile(callback_query.from_user.id)
+    assert profile
     data = await state.get_data()
     client_id = cast(Optional[int], data.get("client_id"))
     if client_id is None:
@@ -156,10 +150,8 @@ async def next_day_workout_plan(callback_query: CallbackQuery, state: FSMContext
     if not callback_query.from_user:
         return
 
-    profile = await get_user_profile(callback_query.from_user.id)
-    if not profile:
-        return
-
+    profile = await Cache.profile.get_profile(callback_query.from_user.id)
+    assert profile
     data = await state.get_data()
     completed_days = data.get("day_index", 0)
     split_number = data.get("split")

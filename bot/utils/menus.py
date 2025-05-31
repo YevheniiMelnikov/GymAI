@@ -21,7 +21,6 @@ from core.cache import Cache
 from core.exceptions import UserServiceError
 from core.services import APIService
 from core.services.outer.gstorage_service import avatar_manager
-from bot.utils import profiles
 from core.models import Client, Coach, Profile, Subscription, DayExercises, Exercise
 from bot.utils.text import (
     get_client_page,
@@ -36,7 +35,7 @@ from core.validators import validate_or_raise
 
 async def show_subscription_page(callback_query: CallbackQuery, state: FSMContext, subscription: Subscription) -> None:
     await callback_query.answer()
-    profile = await profiles.get_user_profile(callback_query.from_user.id)
+    profile = await Cache.profile.get_profile(callback_query.from_user.id)
     assert profile
     language = cast(str, profile.language)
 
@@ -115,7 +114,7 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext) 
 
 
 async def show_clients(message: Message, clients: list[Client], state: FSMContext, current_index: int = 0) -> None:
-    profile = await profiles.get_user_profile(message.chat.id)
+    profile = await Cache.profile.get_profile(message.chat.id)
     assert profile
     language = cast(str, profile.language)
 
@@ -136,7 +135,7 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
 
 
 async def show_coaches_menu(message: Message, coaches: list[Coach], bot: Bot, current_index: int = 0) -> None:
-    profile = await profiles.get_user_profile(message.chat.id)
+    profile = await Cache.profile.get_profile(message.chat.id)
     assert profile
     language = cast(str, profile.language)
 
@@ -445,7 +444,7 @@ async def clients_menu_pagination(
 
 
 async def program_menu_pagination(state: FSMContext, callback_query: CallbackQuery) -> None:
-    profile = await profiles.get_user_profile(callback_query.from_user.id)
+    profile = await Cache.profile.get_profile(callback_query.from_user.id)
     assert profile
 
     if callback_query.data == "quit":
