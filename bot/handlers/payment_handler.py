@@ -11,6 +11,7 @@ from bot.keyboards import select_service_kb, workout_type_kb
 from bot.states import States
 
 from core.cache import Cache
+from core.enums import ClientStatus
 from core.services import APIService
 from bot.utils.menus import show_main_menu
 from bot.utils.workout_plans import cache_program_data
@@ -28,7 +29,7 @@ async def get_the_gift(callback_query: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     await callback_query.answer(btn_text("done", profile.language))
-    await Cache.client.update_client(profile.id, dict(status="waiting_for_text"))
+    await Cache.client.update_client(profile.id, dict(status=ClientStatus.waiting_for_text))
     message = callback_query.message
     assert message
     await message.answer(msg_text("workout_type", profile.language), reply_markup=workout_type_kb(profile.language))

@@ -46,6 +46,6 @@ celery_config = {
 }
 
 celery_app = Celery("gym_bot", config_source=celery_config)
-celery_app.autodiscover_tasks(["core"])
+celery_app.autodiscover_tasks(["core", "apps.payments"])
 
 __all__ = ("celery_app",)

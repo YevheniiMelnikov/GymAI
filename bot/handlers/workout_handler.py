@@ -16,6 +16,7 @@ from bot.keyboards import (
 )
 from bot.states import States
 from core.cache import Cache
+from core.enums import ClientStatus
 from core.services import APIService
 from bot.utils.chat import send_message
 from bot.utils.exercises import update_exercise_data, save_exercise, find_exercise_gif, format_program
@@ -414,7 +415,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
                 include_incoming_message=False,
             )
 
-        await Cache.client.update_client(client_id, dict(status="default"))
+        await Cache.client.update_client(client_id, dict(status=ClientStatus.default))
         message = cast(Message, callback_query.message)
         assert message is not None
         await show_main_menu(message, profile, state)

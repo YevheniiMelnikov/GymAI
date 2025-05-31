@@ -1,5 +1,6 @@
 import base64
 import json
+from typing import Any
 
 from loguru import logger
 from django.http import JsonResponse
@@ -11,6 +12,7 @@ from rest_framework_api_key.permissions import HasAPIKey
 
 from apps.payments.models import Payment
 from apps.payments.serializers import PaymentSerializer
+from apps.payments.tasks import process_payment_webhook
 
 from config.env_settings import Settings
 
@@ -19,37 +21,32 @@ class PaymentWebhookView(APIView):
     permission_classes = [AllowAny]
 
     @staticmethod
+    def _verify_signature(raw_data: str, signature: str) -> bool:
+        lp = LiqPay(Settings.PAYMENT_PUB_KEY, Settings.PAYMENT_PRIVATE_KEY)
+        expected = lp.str_to_sign(f"{Settings.PAYMENT_PRIVATE_KEY}{raw_data}{Settings.PAYMENT_PRIVATE_KEY}")
+        return signature == expected
+
+    @staticmethod
     def post(request, *args, **kwargs):
         try:
-            raw_data = request.POST.get("data")
-            signature = request.POST.get("signature")
+            raw_data: str | None = request.POST.get("data")
+            signature: str | None = request.POST.get("signature")
+
             if not raw_data or not signature:
                 return JsonResponse({"detail": "Missing fields"}, status=400)
 
-            lp = LiqPay(Settings.PAYMENT_PUB_KEY, Settings.PAYMENT_PRIVATE_KEY)
-            expected_sig = lp.str_to_sign(Settings.PAYMENT_PRIVATE_KEY + raw_data + Settings.PAYMENT_PRIVATE_KEY)
-            if signature != expected_sig:
+            if not PaymentWebhookView._verify_signature(raw_data, signature):
                 return JsonResponse({"detail": "Invalid signature"}, status=400)
 
-            payment_info = json.loads(base64.b64decode(raw_data).decode())
-            payload = {
-                "order_id": payment_info.get("order_id"),
-                "status": payment_info.get("status"),
-                "err_description": payment_info.get("err_description", ""),
-            }
+            payment_info: dict[str, Any] = json.loads(base64.b64decode(raw_data).decode())
 
-            import requests
-
-            resp = requests.post(
-                f"{Settings.BOT_INTERNAL_URL}/internal/payment/process/",
-                json=payload,
-                headers={"Authorization": f"Api-Key {Settings.API_KEY}"},
-                timeout=5,
+            process_payment_webhook.delay(
+                order_id=payment_info.get("order_id"),
+                status=payment_info.get("status"),
+                err_description=payment_info.get("err_description", ""),
             )
 
-            if resp.status_code == 200:
-                return JsonResponse({"result": "OK"}, status=200)
-            return JsonResponse({"result": "FAILURE"}, status=200)
+            return JsonResponse({"result": "OK"}, status=200)
 
         except Exception as exc:
             logger.exception("Webhook processing error")

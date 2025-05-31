@@ -1,8 +1,7 @@
 from datetime import datetime
 from typing import Annotated
 from pydantic import BaseModel, Field, field_validator, condecimal
-from enums import PaymentType, ProfileStatus, ClientStatus, Language, Gender
-
+from enums import PaymentType, ProfileStatus, ClientStatus, Language, Gender, PaymentStatus
 
 Price = condecimal(max_digits=10, decimal_places=2, gt=0)
 
@@ -91,8 +90,9 @@ class Payment(BaseModel):
     payment_type: PaymentType
     order_id: str
     amount: Price
-    status: str
+    status: PaymentStatus
     created_at: float
     updated_at: float
-    handled: bool = False
+    processed: bool = False
+    payout_handled: bool = False
     error: str | None = None

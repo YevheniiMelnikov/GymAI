@@ -14,6 +14,8 @@ class ProfileStatus(str, Enum):
 class ClientStatus(str, Enum):
     waiting_for_text = "waiting_for_text"
     default = "default"
+    waiting_for_subscription = "waiting_for_subscription"
+    waiting_for_program = "waiting_for_program"
 
 
 class Language(str, Enum):
@@ -25,3 +27,10 @@ class Language(str, Enum):
 class Gender(str, Enum):
     male = "male"
     female = "female"
+
+
+class PaymentStatus(str, Enum):
+    PENDING = "pending"
+    SUCCESS = "success"
+    FAILURE = "failure"
+    CLOSED = "closed"

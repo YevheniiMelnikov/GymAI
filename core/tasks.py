@@ -13,7 +13,6 @@ from config.env_settings import Settings
 from core.cache import Cache
 from core.payment_processor import PaymentProcessor
 from core.services import APIService
-from core.services.outer.gsheets_service import GSheetsService
 
 _dumps_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dumps")
 _pg_dir = os.path.join(_dumps_dir, "postgres")
@@ -99,8 +98,6 @@ async def send_daily_survey(self):
 
     yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
 
-    payout_data = []
-
     for client_id in clients:
         profile = await APIService.profile.get_profile(client_id)
         if not profile:
@@ -109,7 +106,7 @@ async def send_daily_survey(self):
         try:
             if bot is None:
                 raise RuntimeError("Bot instance is not initialized")
-            await bot.send_message(
+            await bot.send_message(  # TODO: SEND HOOK TO INTERNAL BOT HANDLER AND USE TG FROM THERE
                 chat_id=profile.tg_id,
                 text=msg_text("have_you_trained", profile.language),
                 reply_markup=workout_survey_kb(profile.language, yesterday),
@@ -118,6 +115,3 @@ async def send_daily_survey(self):
             logger.info(f"Survey sent to {client_id}")
         except Exception as e:
             logger.error(f"Survey push failed for {client_id}: {e}")
-
-    if payout_data:
-        await GSheetsService.create_new_payment_sheet(payout_data)
