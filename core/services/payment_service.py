@@ -8,6 +8,7 @@ from loguru import logger
 from liqpay import LiqPay
 from pydantic_core._pydantic_core import ValidationError
 
+from core.enums import PaymentStatus
 from core.services.api_client import APIClient
 from core.models import Payment, Subscription
 from config.env_settings import Settings
@@ -110,17 +111,24 @@ class PaymentService(APIClient):
             return 500, {}
 
     @classmethod
-    async def create_payment(cls, profile_id: int, payment_option: str, order_id: str, amount: Decimal) -> bool:
+    async def create_payment(
+        cls,
+        profile_id: int,
+        payment_option: str,
+        order_id: str,
+        amount: Decimal,
+    ) -> bool:
         status_code, _ = await cls._handle_payment_api_request(
             method="post",
             endpoint=urljoin(cls.API_BASE_PATH, "create/"),
             data={
                 "profile": profile_id,
-                "handled": False,
                 "order_id": order_id,
                 "payment_type": payment_option,
                 "amount": str(amount.quantize(Decimal("0.01"), ROUND_HALF_UP)),
                 "status": "pending",
+                "processed": False,
+                "payout_handled": False,
             },
         )
         return status_code == 201
@@ -143,7 +151,11 @@ class PaymentService(APIClient):
     @classmethod
     async def get_unclosed_payments(cls) -> list[Payment]:
         return await cls._get_filtered_payments(
-            lambda p: p.get("status") == Settings.SUCCESS_PAYMENT_STATUS and not p.get("handled")
+            lambda p: (
+                p.get("status") == Settings.SUCCESS_PAYMENT_STATUS
+                and p.get("processed") is True
+                and not p.get("payout_handled")
+            )
         )
 
     @classmethod
@@ -180,15 +192,18 @@ class PaymentService(APIClient):
             logger.error(f"Payment {order_id} not found")
             return None
 
-        ok = await cls.update_payment(payment_id, {"status": status_, "error": error, "handled": False})
+        ok = await cls.update_payment(
+            payment_id, {"status": PaymentStatus(status_), "error": error, "processed": False, "payout_handled": False}
+        )
         if not ok:
             logger.error(f"Failed to update payment {order_id}")
             return None
 
-        logger.info(f"Payment {order_id} set to '{status_}'")
-        payment.status = status_
+        logger.info(f"Payment {order_id} set to '{PaymentStatus(status_)}'")
+        payment.status = PaymentStatus(status_)
         payment.error = error
-        payment.handled = False
+        payment.processed = False
+        payment.payout_handled = False
         return payment
 
     @classmethod

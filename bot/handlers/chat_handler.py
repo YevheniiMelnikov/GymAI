@@ -13,6 +13,7 @@ from bot.keyboards import new_message_kb, workout_results_kb
 from bot.states import States
 from config.env_settings import Settings
 from core.cache import Cache
+from core.enums import ClientStatus
 from core.models import Profile
 from core.services import APIService
 from bot.utils.chat import send_message
@@ -45,8 +46,8 @@ async def contact_client(message: Message, state: FSMContext) -> None:
     coach = await Cache.coach.get_coach(profile.id)
     assert coach is not None
 
-    if client.status == "waiting_for_text":
-        await Cache.client.update_client(client.id, {"status": "default"})
+    if client.status == ClientStatus.waiting_for_text:
+        await Cache.client.update_client(client.id, {"status": ClientStatus.default})
 
     await state.update_data(sender_name=coach.name, recipient_language=client_profile.language)
 
@@ -239,8 +240,8 @@ async def answer_message(callback_query: CallbackQuery, state: FSMContext) -> No
         sender = await Cache.coach.get_coach(profile.id)
         state_to_set = States.contact_client
         client = await Cache.client.get_client(recipient_id)
-        if client and client.status == "waiting_for_text":
-            await Cache.client.update_client(recipient_id, {"status": "default"})
+        if client and client.status == ClientStatus.waiting_for_text:
+            await Cache.client.update_client(recipient_id, {"status": ClientStatus.default})
 
     assert sender is not None
 

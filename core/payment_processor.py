@@ -5,6 +5,7 @@ from loguru import logger
 from dateutil.relativedelta import relativedelta
 
 from core.cache import Cache
+from core.enums import PaymentStatus, ClientStatus
 from core.services.workout_service import WorkoutService
 from bot.utils.chat import send_message, client_request
 from bot.utils.workout_plans import cancel_subscription
@@ -22,28 +23,28 @@ class PaymentProcessor:
     profile_service = ProfileService
     workout_service = WorkoutService
 
-    STATUS_WAITING_FOR_SUBSCRIPTION = "waiting_for_subscription"
-    STATUS_WAITING_FOR_PROGRAM = "waiting_for_program"
-
     @classmethod
     async def _process_payment(cls, payment: Payment) -> None:
-        if payment.handled:
-            logger.info(f"Payment {payment.id} already handled")
+        if payment.processed:
+            logger.info(f"Payment {payment.id} already processed")
             return
+
         try:
             profile = await cls.profile_service.get_profile(payment.profile)
             if not profile:
                 logger.error(f"Profile not found for payment {payment.id}")
                 return
 
-            if payment.status in {Settings.SUCCESS_PAYMENT_STATUS, Settings.SUBSCRIBED_PAYMENT_STATUS}:
+            if payment.status == PaymentStatus.SUCCESS:
                 await cls._handle_successful_payment(payment, profile)
-            elif payment.status == Settings.FAILURE_PAYMENT_STATUS:
+            elif payment.status == PaymentStatus.FAILURE:
                 await cls._handle_failed_payment(payment, profile)
+
         except Exception as e:
             logger.exception(f"Payment processing failed for {payment.id}: {e}")
+
         finally:
-            await cls.payment_service.update_payment(payment.id, {"handled": True})
+            await cls.payment_service.update_payment(payment.id, {"processed": True})
 
     @classmethod
     async def _handle_failed_payment(cls, payment: Payment, profile: Profile) -> None:
@@ -108,7 +109,7 @@ class PaymentProcessor:
 
     @classmethod
     async def _process_subscription_payment(cls, profile: Profile) -> None:
-        await cls.cache.client.update_client(profile.id, {"status": cls.STATUS_WAITING_FOR_SUBSCRIPTION})
+        await cls.cache.client.update_client(profile.id, {"status": ClientStatus.waiting_for_subscription})
         subscription = await cls.cache.workout.get_subscription(profile.id)
         if not subscription:
             logger.error(f"Subscription not found for profile {profile.id}")
@@ -149,7 +150,7 @@ class PaymentProcessor:
 
     @classmethod
     async def _process_program_payment(cls, profile: Profile) -> None:
-        await cls.cache.client.update_client(profile.id, {"status": cls.STATUS_WAITING_FOR_PROGRAM})
+        await cls.cache.client.update_client(profile.id, {"status": ClientStatus.waiting_for_program})
         program = await cls.cache.workout.get_program(profile.id)
         if not program:
             logger.error(f"Program not found for profile {profile.id}")
@@ -188,13 +189,13 @@ class PaymentProcessor:
                 logger.info("No unclosed payments found")
                 return
 
-            payout_data: list[list[str]] = []
+            payout_rows: list[list[str]] = []
 
             for payment in payments:
                 try:
                     client = await cls.cache.client.get_client(payment.profile)
                     if not client or not client.assigned_to:
-                        logger.warning(f"Skipping payment {payment.order_id} — client or assigned coach missing")
+                        logger.warning(f"Skip payment {payment.order_id}: client/coach missing")
                         continue
 
                     coach_id = client.assigned_to[0]
@@ -207,24 +208,24 @@ class PaymentProcessor:
                         Decimal("0.01"), ROUND_HALF_UP
                     )
 
-                    update_success = await cls.payment_service.update_payment(
-                        payment.id, {"status": Settings.PAYMENT_STATUS_CLOSED, "handled": True}
+                    ok = await cls.payment_service.update_payment(
+                        payment.id, {"status": PaymentStatus.CLOSED, "payout_handled": True}
                     )
-                    if not update_success:
-                        logger.error(f"Failed to mark payment {payment.order_id} as closed")
+                    if not ok:
+                        logger.error(f"Cannot mark payment {payment.order_id} as closed")
                         continue
 
-                    payout_data.append(
+                    payout_rows.append(
                         [coach.name, coach.surname, coach.payment_details, payment.order_id, str(amount)]
-                    )
-                    logger.info(f"Payment {payment.order_id} marked as closed, payout: {amount} UAH")
+                    )  # TODO: SEND WEBHOOK TO INTERNAL BOT HANDLER AND NOTIFY COACH
+                    logger.info(f"Payment {payment.order_id} closed, payout {amount} UAH")
 
-                except Exception as inner_error:
-                    logger.exception(f"Failed to process payment {payment.order_id}: {inner_error}")
+                except Exception as e:
+                    logger.exception(f"Failed to process payment {payment.order_id}: {e}")
 
-            if payout_data:
-                await asyncio.to_thread(GSheetsService.create_new_payment_sheet, payout_data)
-                logger.info(f"Payout sheet created with {len(payout_data)} records")
+            if payout_rows:
+                await asyncio.to_thread(GSheetsService.create_new_payment_sheet, payout_rows)
+                logger.info(f"Payout sheet created: {len(payout_rows)} rows")
 
-        except Exception as outer_error:
-            logger.exception(f"Failed to process unclosed payments batch: {outer_error}")
+        except Exception as e:
+            logger.exception(f"Failed batch payout: {e}")

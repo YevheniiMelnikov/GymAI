@@ -18,7 +18,7 @@ def verification_status(lang: str) -> dict[bool, str]:
     return {True: msg_text("verified", lang), False: msg_text("not_verified", lang)}
 
 
-def client_statuses(lang: str) -> dict[str, str]:
+def client_params(lang: str) -> dict[str, str]:
     return {
         "male": btn_text("male", lang),
         "female": btn_text("female", lang),
@@ -111,22 +111,22 @@ def get_state_and_message(callback: str, lang: str) -> tuple[State, str]:
 
 
 async def get_client_page(client: Client, lang_code: str, subscription: bool, data: dict[str, Any]) -> dict[str, Any]:
-    statuses = client_statuses(lang_code)
+    params = client_params(lang_code)
     client_profile = await APIService.profile.get_profile(client.id)
     page = {
         "name": client.name,
-        "gender": statuses.get(client.gender, ""),
+        "gender": params.get(client.gender, ""),
         "born_in": client.born_in,
         "workout_experience": client.workout_experience,
         "workout_goals": client.workout_goals,
         "health_notes": client.health_notes,
         "weight": client.weight,
         "language": client_profile.language if client_profile and hasattr(client_profile, "language") else "",
-        "subscription": statuses.get("enabled") if subscription else statuses.get("disabled"),
-        "status": statuses.get(client.status, ""),
+        "subscription": params.get("enabled") if subscription else params.get("disabled"),
+        "status": params.get(client.status, ""),
     }
     if data.get("new_client"):
-        page["status"] = statuses.get("waiting_for_text", "")
+        page["status"] = params.get("waiting_for_text", "")
     return page
 
 

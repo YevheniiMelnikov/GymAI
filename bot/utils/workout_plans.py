@@ -11,6 +11,7 @@ from bot.keyboards import program_edit_kb, program_manage_kb, program_view_kb, s
 from bot.states import States
 from config.env_settings import Settings
 from core.cache import Cache
+from core.enums import ClientStatus
 from core.models import Profile, DayExercises, Subscription
 from core.services import APIService
 from bot.utils.chat import send_message
@@ -102,7 +103,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
             include_incoming_message=False,
         )
 
-    await Cache.client.update_client(client_id, {"status": "default"})
+    await Cache.client.update_client(client_id, {"status": ClientStatus.default})
     message = callback_query.message
     if message and isinstance(message, Message):
         await show_main_menu(message, profile, state)
@@ -131,7 +132,7 @@ async def reset_workout_plan(callback_query: CallbackQuery, state: FSMContext) -
         subscription_data.update(client_profile=client_id, exercises=[])
         await APIService.workout.update_subscription(cast(int, subscription_data.get("id")), subscription_data)
         await Cache.workout.update_subscription(client_id, {"exercises": [], "client_profile": client_id})
-        await Cache.client.update_client(client_id, {"status": "waiting_for_subscription"})
+        await Cache.client.update_client(client_id, {"status": ClientStatus.waiting_for_subscription})
         await Cache.workout.set_payment_status(client_id, True, "subscription")
     else:
         program = await Cache.workout.get_program(client_id)
@@ -139,7 +140,7 @@ async def reset_workout_plan(callback_query: CallbackQuery, state: FSMContext) -
         if program_id is not None:
             await APIService.workout.update_program(program_id, dict(exercises_by_day=[]))
         await Cache.workout.update_program(client_id, dict(exercises_by_day=[]))
-        await Cache.client.update_client(client_id, {"status": "waiting_for_program"})
+        await Cache.client.update_client(client_id, {"status": ClientStatus.waiting_for_program})
         await Cache.workout.set_payment_status(client_id, True, "program")
 
     await state.clear()
