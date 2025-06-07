@@ -6,13 +6,16 @@ from datetime import datetime, timedelta
 from celery import shared_task
 from loguru import logger
 
+from aiogram import Bot
+from dependency_injector.wiring import inject, Provide
+
 from bot.keyboards import workout_survey_kb
-from bot.singleton import bot
 from bot.texts.text_manager import msg_text
 from bot.utils.profiles import get_clients_to_survey
-from config.env_settings import Settings
+from config.env_settings import settings
 from core.cache import Cache
 from core.schemas import Profile
+from core.containers import App
 from core.payment_processor import PaymentProcessor
 from core.services import APIService
 
@@ -21,24 +24,24 @@ _pg_dir = os.path.join(_dumps_dir, "postgres")
 _redis_dir = os.path.join(_dumps_dir, "redis")
 os.makedirs(_pg_dir, exist_ok=True)
 os.makedirs(_redis_dir, exist_ok=True)
-os.environ["PGPASSWORD"] = Settings.DB_PASSWORD
+os.environ["PGPASSWORD"] = settings.DB_PASSWORD
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)
 def pg_backup(self):
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
-    path = os.path.join(_pg_dir, f"{Settings.DB_NAME}_backup_{ts}.dump")
+    path = os.path.join(_pg_dir, f"{settings.DB_NAME}_backup_{ts}.dump")
     cmd = [
         "pg_dump",
         "-h",
-        Settings.DB_HOST,
+        settings.DB_HOST,
         "-p",
-        Settings.DB_PORT,
+        settings.DB_PORT,
         "-U",
-        Settings.DB_USER,
+        settings.DB_USER,
         "-F",
         "c",
-        Settings.DB_NAME,
+        settings.DB_NAME,
     ]
     try:
         with open(path, "wb") as f:
@@ -91,8 +94,9 @@ async def process_unclosed_payments(self):
     await PaymentProcessor.process_unclosed_payments()
 
 
+@inject
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)
-async def send_daily_survey(self):
+async def send_daily_survey(self, bot: Bot = Provide[App.bot]):
     try:
         clients: list[Profile] = await get_clients_to_survey()
     except Exception as e:

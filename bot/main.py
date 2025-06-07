@@ -34,7 +34,7 @@ async def main() -> None:
     container = App()
     container.config.bot_token.from_value(Settings.BOT_TOKEN)  # type: ignore[attr-defined]
     container.config.parse_mode.from_value("HTML")  # type: ignore[attr-defined]
-    container.wire(modules=["bot.handlers", "bot.utils"])
+    container.wire(modules=["bot.handlers", "bot.utils", "core.tasks"])
     bot = container.bot()
     await bot.delete_webhook(drop_pending_updates=True)
     await bot.set_webhook(url=Settings.WEBHOOK_URL)

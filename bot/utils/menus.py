@@ -257,8 +257,9 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
     language = cast(str, profile.language)
     message = cast(Message, callback_query.message)
     assert message
+    client = await Cache.client.get_client(profile.id)
 
-    if await Cache.payment.check_payment_status(profile.id, "subscription"):
+    if await Cache.payment.get_status(client.id, "subscription"):
         await callback_query.answer(msg_text("program_not_ready", language), show_alert=True)
         return
 
