@@ -87,3 +87,18 @@ REST_FRAMEWORK = {
 DOMAIN = Settings.API_URL
 SITE_NAME = Settings.SITE_NAME
 CORS_ALLOWED_ORIGINS = ["*"]  # move to settings
+
+REDIS_URL = Settings.REDIS_URL
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": REDIS_URL,
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "SERIALIZER": "django_redis.serializers.json.JSONSerializer",
+            "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
+        },
+        "TIMEOUT": 60 * 60,
+    }
+}

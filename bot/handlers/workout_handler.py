@@ -5,6 +5,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from loguru import logger
+
 from bot.keyboards import (
     workout_feedback_kb,
     select_exercise_kb,
@@ -15,11 +17,12 @@ from bot.keyboards import (
     program_manage_kb,
 )
 from bot.states import States
+from bot.texts.exercises import exercise_dict
 from core.cache import Cache
 from core.enums import ClientStatus
 from core.services import APIService
 from bot.utils.chat import send_message
-from bot.utils.exercises import update_exercise_data, save_exercise, find_exercise_gif, format_program
+from bot.utils.exercises import update_exercise_data, save_exercise, format_program, create_exercise
 from bot.utils.menus import (
     show_main_menu,
     show_my_clients_menu,
@@ -34,8 +37,10 @@ from bot.utils.other import (
     del_msg,
 )
 from bot.utils.workout_plans import reset_workout_plan, save_workout_plan, next_day_workout_plan
-from core.models import Exercise, DayExercises, Profile
+from core.schemas import DayExercises, Profile
 from bot.texts import msg_text, btn_text
+from core.exceptions import SubscriptionNotFoundError
+from core.services.outer import gif_manager
 
 workout_router = Router()
 
@@ -110,7 +115,7 @@ async def set_exercise_name(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     exercise_name = message.text or ""
-    link_to_gif = await find_exercise_gif(exercise_name)
+    link_to_gif = await gif_manager.find_gif(exercise_name, exercise_dict)
     shorted_link = await short_url(link_to_gif) if link_to_gif else None
 
     if link_to_gif:
@@ -177,22 +182,17 @@ async def set_exercise_reps(callback_query: CallbackQuery, state: FSMContext) ->
 async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
-    exercise_name = cast(str, data.get("exercise_name", ""))
-    sets = cast(str, data.get("sets", ""))
-    reps = cast(str, data.get("reps", ""))
-    gif_link = data.get("gif_link")
     await delete_messages(state)
 
     if isinstance(input_data, CallbackQuery):
         if input_data.data != "skip_weight":
             return
-
-    elif isinstance(input_data, Message):
+    else:
         if not input_data.text:
             await input_data.answer(msg_text("invalid_content", profile.language))
             return
 
-    weight = None
+    weight: int | None = None
     if isinstance(input_data, CallbackQuery):
         await input_data.answer()
         message = cast(Message, input_data.message)
@@ -213,28 +213,23 @@ async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMCon
 
     if data.get("subscription"):
         client_id = cast(int, data.get("client_id"))
-        subscription = await Cache.workout.get_subscription(client_id)
-        exercises: list[DayExercises] = subscription.exercises if subscription else []
+        try:
+            subscription = await Cache.workout.get_latest_subscription(client_id)
+            exercises_to_modify: list[DayExercises] = subscription.exercises
+        except SubscriptionNotFoundError:
+            logger.info(
+                f"Subscription not found for client_id={client_id} in set_exercise_weight – "
+                "starting with empty exercises list."
+            )
+            exercises_to_modify = []
     else:
-        exercises = [DayExercises.model_validate(e) for e in data.get("exercises", [])]
+        raw_exercises = data.get("exercises", [])
+        exercises_to_modify = [
+            ex if isinstance(ex, DayExercises) else DayExercises.model_validate(ex) for ex in raw_exercises
+        ]
 
-    day_index = str(data.get("day_index", 0))
-    day_entry = next((d for d in exercises if d.day == day_index), None)
-    new_exercise = Exercise(
-        name=exercise_name,
-        sets=sets,
-        reps=reps,
-        gif_link=gif_link,
-        weight=str(weight) if weight is not None else None,
-    )
-
-    if day_entry:
-        day_entry.exercises.append(new_exercise)
-    else:
-        exercises.append(DayExercises(day=day_index, exercises=[new_exercise]))
-
-    await state.update_data(exercises=exercises)
-    await save_exercise(state, new_exercise, message)
+    new_exercise = await create_exercise(data, exercises_to_modify, state, weight)
+    await save_exercise(state, new_exercise, message, profile)
 
 
 @workout_router.callback_query(States.workout_survey)
@@ -252,7 +247,7 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext)
 
         client = await Cache.client.get_client(profile.id)
         coach = await Cache.coach.get_coach(client.assigned_to.pop())
-        coach_profile = await APIService.profile.get_profile(coach.id)
+        coach_profile = await APIService.profile.get_profile(coach.profile)
         coach_lang = cast(str, coach_profile.language)
 
         await send_message(
@@ -278,7 +273,7 @@ async def workout_description(message: Message, state: FSMContext):
     profile = Profile.model_validate(data["profile"])
     client = await Cache.client.get_client(profile.id)
     coach = await Cache.coach.get_coach(client.assigned_to.pop())
-    coach_profile = await APIService.profile.get_profile(coach.id)
+    coach_profile = await APIService.profile.get_profile(coach.profile)
     coach_lang = cast(str, coach_profile.language)
 
     day_index = cast(int, data.get("day_index"))
@@ -364,25 +359,22 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
 
     elif callback_query.data == "finish_editing":
         await callback_query.answer(btn_text("done", profile.language))
-        client_profile = await APIService.profile.get_profile(client_id)
-        client_lang = cast(str, client_profile.language)
         client = await Cache.client.get_client(client_id)
+        client_profile = await APIService.profile.get_profile(client.profile)
+        client_lang = cast(str, client_profile.language)
 
         if data.get("subscription"):
-            subscription = await Cache.workout.get_subscription(client_id)
-            if subscription is None:
-                subscription = None  # Just to be explicit
-            else:
+            if subscription := await Cache.workout.get_latest_subscription(client_id):
                 subscription_data = subscription.model_dump()
                 subscription_data.update(client_profile=client_id, exercises=exercises)
                 await APIService.workout.update_subscription(
                     cast(int, subscription_data.get("id", 0)), subscription_data
                 )
                 await Cache.workout.update_subscription(
-                    profile_id=client_id,
+                    client_id=client_id,
                     updates=dict(exercises=exercises, client_profile=client_id),
                 )
-                await Cache.workout.reset_payment_status(client_id, "subscription")
+                await Cache.payment.reset_status(client_id, "subscription")
                 await send_message(
                     recipient=client,
                     text=msg_text("new_program", client_lang),
@@ -400,7 +392,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
                     program_data = program.model_dump()
                     program_data.update(workout_type=current_program.workout_type)
                     await Cache.workout.save_program(client_id, program_data)
-                    await Cache.workout.reset_payment_status(client_id, "program")
+                    await Cache.payment.reset_status(client_id, "program")
             await send_message(
                 recipient=client,
                 text=msg_text("new_program", client_lang),
@@ -422,7 +414,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
 
     else:
         if data.get("subscription"):
-            subscription = await Cache.workout.get_subscription(client_id)
+            subscription = await Cache.workout.get_latest_subscription(client_id)
             split_number = len(subscription.workout_days) if subscription else 1
         else:
             program = await Cache.workout.get_program(client_id)

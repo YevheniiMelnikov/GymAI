@@ -1,5 +1,6 @@
 from aiogram import Dispatcher
 
+from bot.handlers.admin_handler import admin_router
 from bot.handlers.chat_handler import chat_router
 from bot.handlers.command_handler import cmd_router
 from bot.handlers.invalid_content_handler import invalid_content_router
@@ -18,6 +19,7 @@ def configure_routers(dp: Dispatcher) -> None:
         invalid_content_router,
         workout_router,
         payment_router,
+        admin_router,
     ]
     for router in routers:
         dp.include_router(router)

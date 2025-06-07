@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from typing import cast
 
 from loguru import logger
@@ -8,14 +9,18 @@ from aiogram.exceptions import TelegramBadRequest
 from bot.keyboards import profile_menu_kb
 from config.env_settings import Settings
 from core.cache import Cache
-from core.exceptions import ProfileNotFoundError, UserServiceError
+from core.exceptions import (
+    CoachNotFoundError,
+    SubscriptionNotFoundError,
+    ClientNotFoundError,
+)
 from core.services import APIService
 from bot.utils import menus
 from bot.utils.chat import send_coach_request
 from bot.utils.other import delete_messages, del_msg, answer_msg
-from core.models import Client, Coach, Profile
+from core.schemas import Client, Coach, Profile
 from bot.texts.text_manager import msg_text
-from core.services.outer.gstorage_service import avatar_manager
+from core.services.outer import avatar_manager
 
 
 async def update_profile_data(message: Message, state: FSMContext, status: str) -> None:
@@ -23,19 +28,19 @@ async def update_profile_data(message: Message, state: FSMContext, status: str) 
     await delete_messages(state)
 
     try:
-        profile = await get_user_profile(message.chat.id)
-        if not profile:
-            raise ValueError("Profile not found")
-
+        profile = await Cache.profile.get_profile(message.chat.id)
+        assert profile is not None
         user_data = {**data, "id": profile.id}
         if status == "client":
+            client = await Cache.client.get_client(profile.id)
             if data.get("edit_mode"):
-                await Cache.client.update_client(profile.id, user_data)
+                await Cache.client.update_client(client.id, user_data)
             else:
                 await Cache.client.save_client(profile.id, user_data)
-            await APIService.profile.update_client_profile(profile.id, user_data)
+            await APIService.profile.update_client_profile(client.id, user_data)
 
         else:
+            coach = await Cache.coach.get_coach(profile.id)
             if not data.get("edit_mode"):
                 if message.from_user:
                     await answer_msg(
@@ -44,8 +49,8 @@ async def update_profile_data(message: Message, state: FSMContext, status: str) 
                     await send_coach_request(message.from_user.id, profile, data)
                     await Cache.coach.save_coach(profile.id, user_data)
             else:
-                await Cache.coach.update_coach(profile.id, user_data)
-            await APIService.profile.update_coach_profile(profile.id, user_data)
+                await Cache.coach.update_coach(coach.id, user_data)
+            await APIService.profile.update_coach_profile(coach.id, user_data)
 
         await answer_msg(message, msg_text("your_data_updated", data.get("lang", Settings.DEFAULT_LANG)))
         await menus.show_main_menu(message, profile, state)
@@ -70,15 +75,23 @@ async def assign_coach(coach: Coach, client: Client) -> None:
 
 
 async def check_assigned_clients(profile_id: int) -> bool:
-    coach = await Cache.coach.get_coach(profile_id)
-    if not coach:
+    try:
+        coach = await Cache.coach.get_coach(profile_id)
+    except CoachNotFoundError:
+        logger.info(f"Coach not found for profile_id {profile_id} in check_assigned_clients.")
         return False
+
     assigned_clients = coach.assigned_to or []
 
     for client_id in assigned_clients:
-        subscription = await Cache.workout.get_subscription(client_id)
-        waiting_program = await Cache.workout.check_payment_status(client_id, "program")
-        if subscription and subscription.enabled or waiting_program:
+        try:
+            subscription = await Cache.workout.get_latest_subscription(client_id)
+            if subscription.enabled:
+                return True
+        except SubscriptionNotFoundError:
+            pass
+
+        if await Cache.payment.check_payment_status(client_id, "program"):
             return True
 
     return False
@@ -88,25 +101,20 @@ async def fetch_user(profile: Profile) -> Client | Coach:
     if profile.status == "client":
         try:
             return await Cache.client.get_client(profile.id)
-        except UserServiceError as e:
-            logger.info(f"Client data for profile {profile.id} not found: {e}")
-            client = await APIService.profile.get_client_by_profile_id(profile.id)
-            if client is None:
-                raise ValueError(f"Profile not found for id {profile.id}")
-            await Cache.client.update_client(profile.id, client.model_dump())
-            return client
+        except ClientNotFoundError:
+            logger.error(
+                f"ClientNotFoundError for an existing profile {profile.id}. This might indicate data inconsistency."
+            )
+            raise ValueError(f"Client data not found for existing profile id {profile.id}")
 
     elif profile.status == "coach":
         try:
             return await Cache.coach.get_coach(profile.id)
-        except UserServiceError as e:
-            logger.info(f"Coach data for profile {profile.id} not found: {e}")
-            coach = await APIService.profile.get_coach_by_profile_id(profile.id)
-            if coach is None:
-                raise ValueError(f"Profile not found for id {profile.id}")
-            await Cache.coach.update_coach(profile.id, coach.model_dump())
-            return coach
-
+        except CoachNotFoundError:
+            logger.error(
+                f"CoachNotFoundError for an existing profile {profile.id}. This might indicate data inconsistency."
+            )
+            raise ValueError(f"Coach data not found for existing profile id {profile.id}")
     else:
         raise ValueError(f"Unknown profile status: {profile.status}")
 
@@ -132,11 +140,40 @@ async def answer_profile(cbq: CallbackQuery, profile: Profile, user: Coach | Cli
     await message.answer(text, reply_markup=profile_menu_kb(profile.language))
 
 
-async def get_user_profile(telegram_id: int) -> Profile | None:
+async def get_clients_to_survey() -> list[Profile]:
+    clients_with_workout: list[Profile] = []
+
     try:
-        return await Cache.profile.get_profile(telegram_id)
-    except ProfileNotFoundError:
-        if profile := await APIService.profile.get_profile_by_tg_id(telegram_id):
-            await Cache.profile.update_profile(telegram_id, profile.model_dump())
-            return profile
-    return None
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
+        raw_clients = await Cache.client.get_all("clients") or []
+
+        for client_id_str in raw_clients:
+            try:
+                client_id = int(client_id_str)
+
+                subscription = await Cache.workout.get_latest_subscription(client_id)
+                if not subscription:
+                    continue
+
+                if not isinstance(subscription.workout_days, list):
+                    logger.warning(f"Invalid workout_days format for client_id={client_id}")
+                    continue
+
+                if (
+                    subscription.enabled
+                    and subscription.exercises
+                    and yesterday in [day.lower() for day in subscription.workout_days]
+                ):
+                    client = await Cache.client.get_client(client_id)
+                    profile = await APIService.profile.get_profile(client.profile)
+                    if profile is not None:
+                        clients_with_workout.append(profile)
+
+            except Exception as client_err:
+                logger.warning(f"Skipping client_id={client_id_str} due to error: {client_err}")
+                continue
+
+    except Exception as e:
+        logger.error(f"Failed to load clients for survey: {e}")
+
+    return clients_with_workout

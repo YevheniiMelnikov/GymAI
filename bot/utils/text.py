@@ -5,7 +5,7 @@ from typing import Any, Optional, cast
 from aiogram.fsm.state import State
 
 from bot.states import States
-from core.models import Client, Coach
+from core.schemas import Client, Coach
 from core.services import APIService
 from bot.texts import msg_text, btn_text
 
@@ -112,7 +112,7 @@ def get_state_and_message(callback: str, lang: str) -> tuple[State, str]:
 
 async def get_client_page(client: Client, lang_code: str, subscription: bool, data: dict[str, Any]) -> dict[str, Any]:
     params = client_params(lang_code)
-    client_profile = await APIService.profile.get_profile(client.id)
+    client_profile = await APIService.profile.get_profile(client.profile)
     page = {
         "name": client.name,
         "gender": params.get(client.gender, ""),
@@ -136,7 +136,7 @@ async def format_new_client_message(
     if data.get("new_client"):
         return msg_text("new_client", coach_lang).format(lang=client_lang, workout_type=preferable_type)
     else:
-        service = service_types(coach_lang).get(data.get("request_type", ""), "")
+        service = service_types(coach_lang).get(data.get("service_type", ""), "")
         return msg_text("incoming_request", coach_lang).format(
             service=service, lang=client_lang, workout_type=preferable_type
         )

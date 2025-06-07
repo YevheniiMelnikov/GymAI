@@ -30,7 +30,7 @@ class Gender(str, Enum):
 
 
 class PaymentStatus(str, Enum):
-    PENDING = "pending"
-    SUCCESS = "success"
-    FAILURE = "failure"
-    CLOSED = "closed"
+    PENDING = "PENDING"
+    SUCCESS = "SUCCESS"
+    FAILURE = "FAILURE"
+    CLOSED = "CLOSED"

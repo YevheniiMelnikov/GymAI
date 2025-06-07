@@ -10,6 +10,36 @@ class UserServiceError(Exception):
 
 
 class ProfileNotFoundError(Exception):
-    def __init__(self, telegram_id: int):
-        super().__init__(f"No current profile found for user {telegram_id}")
-        self.telegram_id = telegram_id
+    def __init__(self, tg_id: int):
+        super().__init__(f"No current profile found for user {tg_id}")
+        self.tg_id = tg_id
+
+
+class ClientNotFoundError(Exception):
+    def __init__(self, profile_id: int):
+        super().__init__(f"Client data not found for profile_id {profile_id}")
+        self.profile_id = profile_id
+
+
+class CoachNotFoundError(Exception):
+    def __init__(self, profile_id: int):
+        super().__init__(f"Coach data not found for profile_id {profile_id}")
+        self.profile_id = profile_id
+
+
+class SubscriptionNotFoundError(Exception):
+    def __init__(self, profile_id: int):
+        super().__init__(f"Subscription not found for profile_id {profile_id}")
+        self.profile_id = profile_id
+
+
+class ProgramNotFoundError(Exception):
+    def __init__(self, profile_id: int):
+        super().__init__(f"Program not found for profile_id {profile_id}")
+        self.profile_id = profile_id
+
+
+class PaymentNotFoundError(Exception):
+    def __init__(self, profile_id: int):
+        super().__init__(f"Payment not found for profile_id {profile_id}")
+        self.profile_id = profile_id

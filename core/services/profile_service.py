@@ -3,7 +3,7 @@ from typing import Any
 from urllib.parse import urljoin
 from loguru import logger
 
-from core.models import Profile, Client, Coach
+from core.schemas import Profile, Client, Coach
 from core.encryptor import Encryptor
 from core.services.api_client import APIClient
 

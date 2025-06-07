@@ -4,6 +4,8 @@ from loguru import logger
 from aiogram.types import Message
 from google.cloud import storage
 
+from core.cache import Cache
+
 
 class GCStorageService:
     def __init__(self, bucket_name: str):
@@ -62,5 +64,26 @@ class GCStorageService:
         return file_size <= max_size_mb
 
 
-avatar_manager = GCStorageService("coach_avatars")
-gif_manager = GCStorageService("exercises_guide")
+class ExerciseGIFStorage(GCStorageService):
+    async def find_gif(self, exercise: str, exercise_dict: dict[str, list[str]]) -> str | None:
+        try:
+            exercise_lc = exercise.lower()
+            for filename, synonyms in exercise_dict.items():
+                if exercise_lc in (syn.lower() for syn in synonyms):
+                    cached = await Cache.workout.get_exercise_gif(exercise_lc)
+                    if cached:
+                        return f"https://storage.googleapis.com/{self.bucket_name}/{cached}"
+
+                    blobs = list(self.bucket.list_blobs(prefix=filename))
+                    if blobs:
+                        blob = blobs[0]
+                        if blob.exists():
+                            file_url = f"https://storage.googleapis.com/{self.bucket_name}/{blob.name}"
+                            for syn in synonyms:
+                                await Cache.workout.cache_gif_filename(syn.lower(), blob.name)
+                            return file_url
+        except Exception as e:
+            logger.error(f"Failed to find gif for exercise {exercise}: {e}")
+
+        logger.debug(f"No matching file found for exercise: {exercise}")
+        return None

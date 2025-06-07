@@ -3,7 +3,7 @@ from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
 from typing import Callable, Awaitable
 
-from bot.utils.profiles import get_user_profile
+from core.cache import Cache
 
 
 class ProfileMiddleware(BaseMiddleware):
@@ -11,7 +11,7 @@ class ProfileMiddleware(BaseMiddleware):
         user_id = getattr(message.from_user, "id", None)
         profile = None
         if user_id is not None:
-            profile = await get_user_profile(user_id)
+            profile = await Cache.profile.get_profile(user_id)
         if isinstance(state, FSMContext):
             await state.update_data(profile=profile.model_dump() if profile else None)
         return await handler(message, state)

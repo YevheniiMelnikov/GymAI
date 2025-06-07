@@ -1,17 +1,17 @@
 import datetime
-from decimal import Decimal, ROUND_HALF_UP
 from collections.abc import Sequence
-from urllib.parse import urljoin, urlencode
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
+from urllib.parse import urlencode, urljoin
 
-from loguru import logger
 from liqpay import LiqPay
+from loguru import logger
 from pydantic_core._pydantic_core import ValidationError
 
-from core.enums import PaymentStatus
-from core.services.api_client import APIClient
-from core.models import Payment, Subscription
 from config.env_settings import Settings
+from core.enums import PaymentStatus
+from core.schemas import Payment, Subscription
+from core.services.api_client import APIClient
 
 
 class PaymentService(APIClient):
@@ -26,14 +26,14 @@ class PaymentService(APIClient):
         amount: Decimal,
         order_id: str,
         payment_type: str,
-        profile_id: int,
+        client_id: int,
         emails: list[str],
     ) -> dict:
         params = {
             "action": action,
             "amount": str(amount.quantize(Decimal("0.01"), ROUND_HALF_UP)),
             "currency": "UAH",
-            "description": f"{payment_type} payment from profile {profile_id}",
+            "description": f"{payment_type} payment from client {client_id}",
             "order_id": order_id,
             "version": "3",
             "server_url": Settings.PAYMENT_CALLBACK_URL,
@@ -57,14 +57,14 @@ class PaymentService(APIClient):
         amount: Decimal,
         order_id: str,
         payment_type: str,
-        profile_id: int,
+        client_id: int,
     ) -> str:
         params = cls._build_payment_params(
             action=action,
             amount=amount,
             order_id=order_id,
             payment_type=payment_type,
-            profile_id=profile_id,
+            client_id=client_id,
             emails=[Settings.EMAIL],
         )
 
@@ -91,10 +91,7 @@ class PaymentService(APIClient):
 
     @classmethod
     async def _handle_payment_api_request(
-        cls,
-        method: str,
-        endpoint: str,
-        data: dict | None = None,
+        cls, method: str, endpoint: str, data: dict | None = None
     ) -> tuple[int, dict[str, Any]]:
         url = urljoin(cls.api_url, endpoint)
         try:
@@ -107,26 +104,20 @@ class PaymentService(APIClient):
             )
             return status_code, response if response is not None else {}
         except Exception as e:
-            logger.error(f"API {method.upper()} request to {endpoint} failed with error: {e}")
+            logger.error(f"API {method.upper()} request to {endpoint} failed: {e}")
             return 500, {}
 
     @classmethod
-    async def create_payment(
-        cls,
-        profile_id: int,
-        payment_option: str,
-        order_id: str,
-        amount: Decimal,
-    ) -> bool:
+    async def create_payment(cls, client_id: int, service_type: str, order_id: str, amount: Decimal) -> bool:
         status_code, _ = await cls._handle_payment_api_request(
             method="post",
             endpoint=urljoin(cls.API_BASE_PATH, "create/"),
             data={
-                "profile": profile_id,
+                "client_profile": client_id,
                 "order_id": order_id,
-                "payment_type": payment_option,
+                "payment_type": service_type,
                 "amount": str(amount.quantize(Decimal("0.01"), ROUND_HALF_UP)),
-                "status": "pending",
+                "status": PaymentStatus.PENDING,
                 "processed": False,
                 "payout_handled": False,
             },
@@ -172,11 +163,11 @@ class PaymentService(APIClient):
         return [Subscription.model_validate(item) for item in results]
 
     @classmethod
-    async def get_last_subscription_payment(cls, profile_id: int) -> str | None:
+    async def get_last_subscription_payment(cls, client_id: int) -> str | None:
         status_code, response = await cls._handle_payment_api_request(
             method="get",
             endpoint=cls.API_BASE_PATH,
-            data={"profile": profile_id, "payment_type": "subscription"},
+            data={"client_profile": client_id, "payment_type": "subscription"},
         )
         if status_code != 200 or not response.get("results"):
             logger.error(f"Failed to get last subscription payment: HTTP {status_code}")
@@ -193,7 +184,13 @@ class PaymentService(APIClient):
             return None
 
         ok = await cls.update_payment(
-            payment_id, {"status": PaymentStatus(status_), "error": error, "processed": False, "payout_handled": False}
+            payment_id,
+            {
+                "status": PaymentStatus(status_),
+                "error": error,
+                "processed": False,
+                "payout_handled": False,
+            },
         )
         if not ok:
             logger.error(f"Failed to update payment {order_id}")
@@ -219,3 +216,23 @@ class PaymentService(APIClient):
             except ValidationError as e:
                 logger.error(f"Invalid payment data from API for order_id={order_id}: {e}")
         return None, None
+
+    @classmethod
+    async def get_latest_payment(cls, client_id: int, payment_type: str) -> Payment | None:
+        status_code, response = await cls._handle_payment_api_request(
+            method="get",
+            endpoint=cls.API_BASE_PATH,
+            data={
+                "client_profile": client_id,
+                "payment_type": payment_type,
+                "ordering": "-created_at",
+                "limit": 1,
+            },
+        )
+        if status_code != 200 or not response.get("results"):
+            return None
+        try:
+            return Payment.model_validate(response["results"][0])
+        except ValidationError as e:
+            logger.error(f"Invalid payment data for client_id={client_id}: {e}")
+            return None

@@ -7,6 +7,8 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from loguru import logger
+
 from bot.keyboards import (
     select_gender_kb,
     payment_kb,
@@ -18,10 +20,9 @@ from bot.keyboards import (
 from bot.states import States
 from config.env_settings import Settings
 from core.cache import Cache
-from core.exceptions import ProfileNotFoundError
-from core.models import Profile
+from core.exceptions import ProfileNotFoundError, ClientNotFoundError
+from core.schemas import Profile
 from core.services import APIService
-from core.services.outer.gstorage_service import avatar_manager
 from bot.utils.chat import client_request
 from bot.utils.workout_plans import process_new_subscription, edit_subscription_days
 from bot.utils.menus import show_main_menu, show_my_profile_menu
@@ -29,6 +30,7 @@ from bot.utils.profiles import update_profile_data, check_assigned_clients
 from bot.utils.text import get_state_and_message
 from bot.utils.other import delete_messages, generate_order_id, set_bot_commands, answer_msg, del_msg, parse_price
 from bot.texts.text_manager import msg_text
+from core.services.outer import avatar_manager
 
 questionnaire_router = Router()
 
@@ -44,7 +46,6 @@ async def select_language(callback_query: CallbackQuery, state: FSMContext) -> N
         if profile:
             await APIService.profile.update_profile(profile.id, {"language": lang})
             await Cache.profile.update_profile(callback_query.from_user.id, dict(language=lang))
-            profile.language = lang
             message = callback_query.message
             if message is not None:
                 await show_main_menu(cast(Message, message), profile, state)
@@ -78,8 +79,7 @@ async def profile_status_choice(callback_query: CallbackQuery, state: FSMContext
     status = callback_query.data if callback_query.data in ("coach", "client") else "client"
     profile = await APIService.profile.create_profile(tg_id=callback_query.from_user.id, status=status, language=lang)
     if profile is None:
-        if callback_query.message is not None:
-            await answer_msg(cast(Message, callback_query.message), msg_text("unexpected_error", lang))
+        await callback_query.answer(msg_text("unexpected_error", lang), show_alert=True)
         return
 
     await Cache.profile.save_profile(callback_query.from_user.id, dict(id=profile.id, status=status, language=lang))
@@ -465,7 +465,7 @@ async def enter_wishes(message: Message, state: FSMContext):
             await show_main_menu(cast(Message, message), profile, state)
             await del_msg(cast(Message | CallbackQuery | None, message))
     else:
-        if data.get("request_type") == "subscription":
+        if data.get("service_type") == "subscription":
             await state.set_state(States.workout_days)
             if message is not None:
                 await answer_msg(
@@ -473,7 +473,7 @@ async def enter_wishes(message: Message, state: FSMContext):
                     text=msg_text("select_days", profile.language or Settings.DEFAULT_LANG),
                     reply_markup=select_days_kb(profile.language or Settings.DEFAULT_LANG, []),
                 )
-        elif data.get("request_type") == "program":
+        elif data.get("service_type") == "program":
             order_id = generate_order_id()
             await state.update_data(order_id=order_id, amount=coach.program_price)
             payment_link = await APIService.payment.get_payment_link(
@@ -481,7 +481,7 @@ async def enter_wishes(message: Message, state: FSMContext):
                 amount=coach.program_price,
                 order_id=order_id,
                 payment_type="program",
-                profile_id=profile.id,
+                client_id=client.id,
             )
             if payment_link:
                 await state.set_state(States.handle_payment)
@@ -502,15 +502,21 @@ async def enter_wishes(message: Message, state: FSMContext):
 async def workout_days(callback_query: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
-    days = data.get("workout_days", [])
+    try:
+        client = await Cache.client.get_client(profile.id)
+    except ClientNotFoundError:
+        logger.error(f"Client profile not found for profile {profile.id}")
+        await callback_query.answer(msg_text("unexpected_error", profile.language or Settings.DEFAULT_LANG))
+        return
 
+    days = data.get("workout_days", [])
     if callback_query.data == "complete":
         if days:
             await state.update_data(workout_days=days)
             if data.get("edit_mode"):
-                subscription = await Cache.workout.get_subscription(profile.id)
+                subscription = await Cache.workout.get_latest_subscription(client.id)
                 if subscription and len(subscription.workout_days) == len(days):
-                    await edit_subscription_days(callback_query, days, profile, state, subscription)
+                    await edit_subscription_days(callback_query, days, client.id, state, subscription)
                 else:
                     if callback_query.message is not None:
                         await answer_msg(

@@ -9,8 +9,10 @@ from loguru import logger
 from bot.keyboards import workout_survey_kb
 from bot.singleton import bot
 from bot.texts.text_manager import msg_text
+from bot.utils.profiles import get_clients_to_survey
 from config.env_settings import Settings
 from core.cache import Cache
+from core.schemas import Profile
 from core.payment_processor import PaymentProcessor
 from core.services import APIService
 
@@ -80,7 +82,7 @@ async def deactivate_expired_subscriptions(self):
             continue
         await APIService.workout.update_subscription(sub.id, {"enabled": False, "client_profile": sub.client_profile})
         await Cache.workout.update_subscription(sub.client_profile, {"enabled": False})
-        await Cache.workout.reset_payment_status(sub.client_profile, "subscription")
+        await Cache.payment.reset_status(sub.client_profile, "subscription")
         logger.info(f"Subscription {sub.id} deactivated for user {sub.client_profile}")
 
 
@@ -91,27 +93,30 @@ async def process_unclosed_payments(self):
 
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)
 async def send_daily_survey(self):
-    clients = await Cache.client.get_clients_to_survey()
+    try:
+        clients: list[Profile] = await get_clients_to_survey()
+    except Exception as e:
+        logger.error(f"Unexpected error in retrieving clients: {e}")
+        return
+
     if not clients:
         logger.info("No clients to survey today")
         return
 
     yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
 
-    for client_id in clients:
-        profile = await APIService.profile.get_profile(client_id)
-        if not profile:
-            logger.warning(f"Profile {client_id} invalid, skip")
-            continue
+    for client_profile in clients:
         try:
             if bot is None:
                 raise RuntimeError("Bot instance is not initialized")
+
             await bot.send_message(  # TODO: SEND HOOK TO INTERNAL BOT HANDLER AND USE TG FROM THERE
-                chat_id=profile.tg_id,
-                text=msg_text("have_you_trained", profile.language),
-                reply_markup=workout_survey_kb(profile.language, yesterday),
+                chat_id=client_profile.tg_id,
+                text=msg_text("have_you_trained", client_profile.language),
+                reply_markup=workout_survey_kb(client_profile.language, yesterday),
                 disable_notification=True,
             )
-            logger.info(f"Survey sent to {client_id}")
+            logger.info(f"Survey sent to profile {client_profile.id}")
+
         except Exception as e:
-            logger.error(f"Survey push failed for {client_id}: {e}")
+            logger.error(f"Survey push failed for profile_id={client_profile.id}: {e}")
