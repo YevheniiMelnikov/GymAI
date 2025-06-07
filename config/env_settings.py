@@ -26,6 +26,7 @@ class Settings:
     API_RETRY_BACKOFF_FACTOR: int = 2
     API_RETRY_MAX_DELAY: int = 10
     API_TIMEOUT: int = 10
+    CACHE_TTL: int = 60 * 5
 
     TIME_ZONE: str = must_getenv("TIME_ZONE", "Europe/Kyiv")
     DEFAULT_LANG: str = must_getenv("DEFAULT_LANG", "ua")

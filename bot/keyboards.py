@@ -4,7 +4,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.buttons_builder import ButtonsBuilder
 from bot.texts.text_manager import btn_text
-from core.models import Exercise
+from core.schemas import Exercise
 
 
 def select_language_kb() -> KbMarkup:
@@ -381,9 +381,9 @@ def yes_no_kb(lang: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def payment_kb(lang: str, link: str, request_type: str) -> KbMarkup:
+def payment_kb(lang: str, link: str, service_type: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
-    pay_button = KbBtn(text=btn_text("pay", lang), callback_data=request_type, url=link)
+    pay_button = KbBtn(text=btn_text("pay", lang), callback_data=service_type, url=link)
     done_button = builder.add("done", "done")
     buttons = [
         [pay_button, done_button],

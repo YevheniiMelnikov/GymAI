@@ -1,11 +1,11 @@
 from django.db import models
 
-from apps.profiles.models import Profile
+from apps.profiles.models import ClientProfile
 
 
 class Payment(models.Model):
     payment_type = models.CharField(max_length=50)
-    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="payments")
+    client_profile = models.ForeignKey(ClientProfile, on_delete=models.CASCADE, related_name="payments")
     order_id = models.CharField(max_length=100, unique=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     status = models.CharField(max_length=50, default="PENDING")  # liqpay status

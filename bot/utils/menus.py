@@ -18,10 +18,8 @@ from bot.keyboards import program_view_kb, subscription_manage_kb, program_edit_
 from bot.states import States
 from bot.texts import msg_text
 from core.cache import Cache
-from core.exceptions import UserServiceError
-from core.services import APIService
-from core.services.outer.gstorage_service import avatar_manager
-from core.models import Client, Coach, Profile, Subscription, DayExercises, Exercise
+from core.exceptions import ClientNotFoundError, CoachNotFoundError
+from core.schemas import Client, Coach, Profile, Subscription, DayExercises, Exercise
 from bot.utils.text import (
     get_client_page,
     get_profile_attributes,
@@ -30,13 +28,14 @@ from bot.utils.text import (
 from bot.utils.exercises import format_program
 from config.env_settings import Settings
 from bot.utils.other import answer_msg, del_msg
+from core.services.outer import avatar_manager
 from core.validators import validate_or_raise
 
 
 async def show_subscription_page(callback_query: CallbackQuery, state: FSMContext, subscription: Subscription) -> None:
     await callback_query.answer()
     profile = await Cache.profile.get_profile(callback_query.from_user.id)
-    assert profile
+    assert profile is not None
     language = cast(str, profile.language)
 
     payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
@@ -66,22 +65,22 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
     await state.clear()
     await state.update_data(lang=profile.language)
 
-    user_profile: Client | Coach | None
+    user_profile: Client | Coach | None = None
+    reply_markup = None
+
     if profile.status == "client":
         try:
             user_profile = await Cache.client.get_client(profile.id)
-        except UserServiceError as error:
-            logger.error(f"Error retrieving client profile for {profile.id}: {error}")
-            user_profile = None
-        reply_markup = kb.edit_client_profile_kb(profile.language) if user_profile else None
+            reply_markup = kb.edit_client_profile_kb(profile.language)
+        except ClientNotFoundError:
+            logger.info(f"Client data not found for profile {profile.id} during profile editing setup.")
         await state.update_data(status="client")
     else:
         try:
             user_profile = await Cache.coach.get_coach(profile.id)
-        except UserServiceError as error:
-            logger.error(f"Error retrieving coach profile for {profile.id}: {error}")
-            user_profile = None
-        reply_markup = kb.edit_coach_profile_kb(profile.language) if user_profile else None
+            reply_markup = kb.edit_coach_profile_kb(profile.language)
+        except CoachNotFoundError:
+            logger.info(f"Coach data not found for profile {profile.id} during profile editing setup.")
         await state.update_data(status="coach")
 
     state_to_set = States.edit_profile if user_profile else States.name
@@ -115,13 +114,13 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext) 
 
 async def show_clients(message: Message, clients: list[Client], state: FSMContext, current_index: int = 0) -> None:
     profile = await Cache.profile.get_profile(message.chat.id)
-    assert profile
+    assert profile is not None
     language = cast(str, profile.language)
 
     current_index %= len(clients)
     current_client = clients[current_index]
 
-    subscription_active = await Cache.workout.get_subscription(current_client.id) is not None
+    subscription_active = await Cache.workout.get_latest_subscription(current_client.id) is not None
     data = await state.get_data()
     client_info = await get_client_page(current_client, language, subscription_active, data)
 
@@ -136,8 +135,12 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
 
 async def show_coaches_menu(message: Message, coaches: list[Coach], bot: Bot, current_index: int = 0) -> None:
     profile = await Cache.profile.get_profile(message.chat.id)
-    assert profile
+    assert profile is not None
     language = cast(str, profile.language)
+
+    if not coaches:
+        await answer_msg(message, msg_text("no_coaches", language))
+        return
 
     current_index %= len(coaches)
     current_coach = coaches[current_index]
@@ -185,30 +188,26 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
     await del_msg(cast(Message | CallbackQuery | None, callback_query))
 
 
-async def show_my_clients_menu(callback_query: CallbackQuery, coach_profile: Profile, state: FSMContext) -> None:
-    language = cast(str, coach_profile.language)
-
-    try:
-        coach = await Cache.coach.get_coach(coach_profile.id)
-        assigned_ids = coach.assigned_to if coach.assigned_to else None
-    except UserServiceError as error:
-        logger.error(f"Error retrieving coach data for profile {coach_profile.id}: {error}")
-        await callback_query.answer(msg_text("coach_info_message", language), show_alert=True)
-        return
+async def show_my_clients_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    language = cast(str, profile.language)
+    coach = await Cache.coach.get_coach(profile.id)
+    assert coach
+    assigned_ids = coach.assigned_to if coach.assigned_to else []
 
     if assigned_ids:
         await callback_query.answer()
         clients: list[Client] = []
-        try:
-            clients = [await Cache.client.get_client(cid) for cid in assigned_ids]
-        except UserServiceError as error:
-            logger.error(f"Error retrieving client data for IDs {assigned_ids}: {error}")
-            for profile_id in assigned_ids:
-                try:
-                    if cl_profile := await APIService.profile.get_client_by_profile_id(profile_id):
-                        clients.append(cast(Client, cl_profile))
-                except Exception as e:
-                    logger.error(f"Error retrieving profile data for client {profile_id}: {e}")
+        for cid in assigned_ids:
+            try:
+                client = await Cache.client.get_client(cid)
+                clients.append(client)
+            except ClientNotFoundError:
+                logger.warning(f"Client data not found for ID {cid} while listing coach's clients. Skipping.")
+
+        if not clients:
+            await callback_query.answer(msg_text("no_clients", language), show_alert=True)
+            await state.set_state(States.main_menu)
+            return
 
         message = cast(Message, callback_query.message)
         assert message
@@ -225,8 +224,8 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
 
     try:
         client = await Cache.client.get_client(profile.id)
-    except UserServiceError as error:
-        logger.error(f"Error retrieving client data for profile {profile.id}: {error}")
+    except ClientNotFoundError:
+        logger.error(f"Client data not found for profile {profile.id} in show_my_workouts_menu.")
         await callback_query.answer(msg_text("questionnaire_not_completed", language), show_alert=True)
         message = cast(Message, callback_query.message)
         assert message
@@ -259,11 +258,11 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
     message = cast(Message, callback_query.message)
     assert message
 
-    if await Cache.workout.check_payment_status(profile.id, "subscription"):
+    if await Cache.payment.check_payment_status(profile.id, "subscription"):
         await callback_query.answer(msg_text("program_not_ready", language), show_alert=True)
         return
 
-    subscription = await Cache.workout.get_subscription(profile.id)
+    subscription = await Cache.workout.get_latest_subscription(profile.id)
     if not subscription or not subscription.enabled:
         subscription_img = Settings.BOT_PAYMENT_OPTIONS + f"subscription_{language}.jpeg"
         client_profile = await Cache.client.get_client(profile.id)
@@ -287,24 +286,25 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
         if subscription.exercises:
             await state.update_data(exercises=subscription.exercises, subscription=True)
             await show_subscription_page(callback_query, state, subscription)
-
+        else:
+            await callback_query.answer(msg_text("program_not_ready", language), show_alert=True)
     await del_msg(cast(Message | CallbackQuery | None, message))
 
 
 async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    language = cast(str, profile.language)
     message = cast(Message, callback_query.message)
     assert message
+    client = await Cache.client.get_client(profile.id)
 
-    if program := await Cache.workout.get_program(profile.id):
-        if await Cache.workout.check_payment_status(profile.id, "program"):
-            await callback_query.answer(msg_text("program_not_ready", language), show_alert=True)
+    if program := await Cache.workout.get_program(client.id):
+        if await Cache.payment.get_status(client.id, "program"):
+            await callback_query.answer(msg_text("program_not_ready", profile.language), show_alert=True)
             return
 
         await answer_msg(
             message,
-            msg_text("select_action", language),
-            reply_markup=kb.program_action_kb(language),
+            msg_text("select_action", profile.language),
+            reply_markup=kb.program_action_kb(profile.language),
         )
         await state.update_data(program=program.model_dump())
         await state.set_state(States.program_action_choice)
@@ -367,7 +367,8 @@ async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, 
 
 async def manage_subscription(callback_query: CallbackQuery, lang: str, client_id: str, state: FSMContext) -> None:
     await state.clear()
-    subscription = await Cache.workout.get_subscription(int(client_id))
+    subscription = await Cache.workout.get_latest_subscription(int(client_id))
+    assert subscription
     message = cast(Message, callback_query.message)
     assert message
 
@@ -445,7 +446,7 @@ async def clients_menu_pagination(
 
 async def program_menu_pagination(state: FSMContext, callback_query: CallbackQuery) -> None:
     profile = await Cache.profile.get_profile(callback_query.from_user.id)
-    assert profile
+    assert profile is not None
 
     if callback_query.data == "quit":
         await show_my_clients_menu(callback_query, profile, state)

@@ -1,3 +1,4 @@
+from .payment import PaymentCacheManager
 from .profile import ProfileCacheManager
 from .client_profile import ClientCacheManager
 from .coach_profile import CoachCacheManager
@@ -9,3 +10,4 @@ class Cache:
     client = ClientCacheManager
     coach = CoachCacheManager
     workout = WorkoutCacheManager
+    payment = PaymentCacheManager

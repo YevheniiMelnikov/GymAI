@@ -57,9 +57,9 @@ class DayExercises(BaseModel):
 
 class Program(BaseModel):
     id: int
+    client_profile: int
     exercises_by_day: list[DayExercises] = Field(default_factory=list)
     created_at: float
-    profile: int
     split_number: int
     workout_type: str
     wishes: str
@@ -67,14 +67,14 @@ class Program(BaseModel):
 
 class Subscription(BaseModel):
     id: int
-    payment_date: str
+    client_profile: int
     enabled: bool
     price: int
-    client_profile: int
     workout_type: str
     wishes: str
     workout_days: list[str] = Field(default_factory=list)
     exercises: list[DayExercises] = Field(default_factory=list)
+    payment_date: str
 
     @field_validator("payment_date", mode="before")
     def normalize_payment_date(cls, v: str) -> str:
@@ -86,7 +86,7 @@ class Subscription(BaseModel):
 
 class Payment(BaseModel):
     id: int
-    profile: int
+    client_profile: int
     payment_type: PaymentType
     order_id: str
     amount: Price

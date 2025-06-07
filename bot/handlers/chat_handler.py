@@ -11,10 +11,9 @@ from aiogram.types import Message, CallbackQuery
 
 from bot.keyboards import new_message_kb, workout_results_kb
 from bot.states import States
-from config.env_settings import Settings
 from core.cache import Cache
 from core.enums import ClientStatus
-from core.models import Profile
+from core.schemas import Profile
 from core.services import APIService
 from bot.utils.chat import send_message
 from bot.utils.exercises import edit_subscription_exercises
@@ -41,7 +40,7 @@ async def contact_client(message: Message, state: FSMContext) -> None:
         return
     client = await Cache.client.get_client(recipient_id)
     assert client is not None
-    client_profile = await APIService.profile.get_profile(client.id)
+    client_profile = await APIService.profile.get_profile(client.profile)
     assert client_profile is not None
     coach = await Cache.coach.get_coach(profile.id)
     assert coach is not None
@@ -97,7 +96,7 @@ async def contact_coach(message: Message, state: FSMContext) -> None:
         return
     coach = await Cache.coach.get_coach(recipient_id)
     assert coach is not None
-    coach_profile = await APIService.profile.get_profile(coach.id)
+    coach_profile = await APIService.profile.get_profile(coach.profile)
     assert coach_profile is not None
     client = await Cache.client.get_client(profile.id)
     assert client is not None
@@ -142,7 +141,7 @@ async def have_you_trained(callback_query: CallbackQuery, state: FSMContext) -> 
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     assert profile is not None
-    subscription = await Cache.workout.get_subscription(profile.id)
+    subscription = await Cache.workout.get_latest_subscription(profile.id)
     assert subscription is not None
 
     data_str = cast(str, callback_query.data)
@@ -205,7 +204,7 @@ async def subscription_view(callback_query: CallbackQuery, state: FSMContext) ->
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     assert profile is not None
-    subscription = await Cache.workout.get_subscription(profile.id)
+    subscription = await Cache.workout.get_latest_subscription(profile.id)
     assert subscription is not None
 
     await state.update_data(
@@ -241,7 +240,7 @@ async def answer_message(callback_query: CallbackQuery, state: FSMContext) -> No
         state_to_set = States.contact_client
         client = await Cache.client.get_client(recipient_id)
         if client and client.status == ClientStatus.waiting_for_text:
-            await Cache.client.update_client(recipient_id, {"status": ClientStatus.default})
+            await Cache.client.update_client(client.id, {"status": ClientStatus.default})
 
     assert sender is not None
 
@@ -260,10 +259,11 @@ async def navigate_days(callback_query: CallbackQuery, state: FSMContext) -> Non
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     assert profile is not None
+    client = await Cache.client.get_client(profile.id)
+    program = await Cache.workout.get_program(client.id)
 
-    program = await Cache.workout.get_program(profile.id)
     if data.get("subscription"):
-        subscription = await Cache.workout.get_subscription(profile.id)
+        subscription = await Cache.workout.get_latest_subscription(client.id)
         assert subscription is not None
         split_number = len(subscription.workout_days)
         exercises = subscription.exercises
@@ -306,51 +306,3 @@ async def create_workouts(callback_query: CallbackQuery, state: FSMContext) -> N
         with suppress(TelegramBadRequest):
             if callback_query.message and isinstance(callback_query.message, Message):
                 await del_msg(callback_query.message)
-
-
-@chat_router.callback_query()
-async def approve_coach(callback_query: CallbackQuery, state: FSMContext) -> None:
-    if not callback_query.data or not callback_query.data.startswith("approve"):
-        return
-
-    data_str = cast(str, callback_query.data)
-    try:
-        profile_id = int(data_str.split("_", 1)[1])
-    except (IndexError, ValueError):
-        await callback_query.answer("Invalid profile id")
-        return
-
-    await APIService.profile.update_coach_profile(profile_id, {"verified": True})
-    await Cache.coach.update_coach(profile_id, {"verified": True})
-    await callback_query.answer("👍")
-    coach = await Cache.coach.get_coach(profile_id)
-    profile = await APIService.profile.get_profile(profile_id)
-    lang = profile.language if profile else Settings.DEFAULT_LANG
-    if coach:
-        await send_message(coach, msg_text("coach_verified", lang), state, include_incoming_message=False)
-    if callback_query.message and isinstance(callback_query.message, Message):
-        await del_msg(callback_query.message)
-    logger.info(f"Coach verification for profile_id {profile_id} approved")
-
-
-@chat_router.callback_query()
-async def decline_coach(callback_query: CallbackQuery, state: FSMContext) -> None:
-    if not callback_query.data or not callback_query.data.startswith("decline"):
-        return
-
-    data_str = cast(str, callback_query.data)
-    try:
-        profile_id = int(data_str.split("_", 1)[1])
-    except (IndexError, ValueError):
-        await callback_query.answer("Invalid profile id")
-        return
-
-    await callback_query.answer("👎")
-    coach = await Cache.coach.get_coach(profile_id)
-    profile = await APIService.profile.get_profile(profile_id)
-    lang = profile.language if profile else Settings.DEFAULT_LANG
-    if coach:
-        await send_message(coach, msg_text("coach_declined", lang), state, include_incoming_message=False)
-    if callback_query.message and isinstance(callback_query.message, Message):
-        await del_msg(callback_query.message)
-    logger.info(f"Coach verification for profile_id {profile_id} declined")

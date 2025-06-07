@@ -2,19 +2,26 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from typing import cast, Optional
+from typing import cast
 
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from loguru import logger
 
-from bot.keyboards import program_edit_kb, program_manage_kb, program_view_kb, subscription_view_kb, payment_kb
+from bot.keyboards import program_edit_kb, program_manage_kb, subscription_view_kb, payment_kb
 from bot.states import States
 from config.env_settings import Settings
 from core.cache import Cache
-from core.enums import ClientStatus
-from core.models import Profile, DayExercises, Subscription
+from core.enums import ClientStatus, PaymentStatus
+from core.schemas import Profile, DayExercises, Subscription, Program
+from core.exceptions import (
+    ClientNotFoundError,
+    SubscriptionNotFoundError,
+    ProgramNotFoundError,
+    ProfileNotFoundError,
+)
 from core.services import APIService
-from bot.utils.chat import send_message
+from bot.utils.chat import send_message, send_program
 from bot.utils.menus import show_main_menu, show_subscription_page
 from bot.utils.text import get_translated_week_day
 from bot.utils.exercises import format_program
@@ -27,21 +34,26 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
         return
 
     profile = await Cache.profile.get_profile(callback_query.from_user.id)
-    assert profile
+    assert profile is not None
 
     data = await state.get_data()
-    completed_days = data.get("completed_days")
-    if completed_days is None:
-        completed_days = data.get("day_index", 0) + 1
-
+    completed_days = data.get("completed_days") or data.get("day_index", 0) + 1
     split_number = data.get("split") or 0
-    client_id = cast(Optional[int], data.get("client_id"))
-    if client_id is None:
+
+    client_id_str = data.get("client_id")
+    if client_id_str is None:
+        logger.error("client_id not found in state for save_workout_plan")
+        await callback_query.answer(msg_text("error_generic", profile.language), show_alert=True)
         return
 
-    exercises: list[DayExercises] = data.get("exercises", [])
-    has_exercises = any(day.exercises for day in exercises)
-    if not has_exercises:
+    client_id = int(client_id_str)
+
+    raw_exercises = data.get("exercises", [])
+    exercises: list[DayExercises] = [
+        DayExercises.model_validate(ex) if isinstance(ex, dict) else ex for ex in raw_exercises
+    ]
+
+    if not any(day.exercises for day in exercises):
         await answer_msg(callback_query, msg_text("no_exercises_to_save", profile.language))
         return
 
@@ -51,55 +63,79 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
 
     await callback_query.answer(msg_text("saved", profile.language))
 
-    client = await Cache.client.get_client(client_id)
-    client_profile = await APIService.profile.get_profile(client_id)
-    client_lang = getattr(client_profile, "language", None) or Settings.DEFAULT_LANG
+    try:
+        client = await Cache.client.get_client(client_id)
+    except ClientNotFoundError:
+        logger.error(f"Client {client_id} not found in save_workout_plan")
+        await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
+        return
+
+    client_profile = await APIService.profile.get_profile(client.profile)
+    client_lang = client_profile.language if client_profile else Settings.DEFAULT_LANG
 
     if data.get("subscription"):
-        subscription = await Cache.workout.get_subscription(client_id)
-        if not subscription:
+        try:
+            subscription = await Cache.workout.get_latest_subscription(client_id)
+            serialized_exercises = [ex.model_dump() for ex in exercises]
+
+            subscription_data = subscription.model_dump()
+            subscription_data.update(
+                client_profile=client_id,
+                exercises=serialized_exercises,
+            )
+
+            await APIService.workout.update_subscription(subscription.id, subscription_data)
+            await Cache.workout.update_subscription(
+                client_id,
+                {
+                    "exercises": serialized_exercises,
+                    "client_profile": client_id,
+                },
+            )
+            await Cache.payment.reset_status(client_id, "subscription")
+
+            await send_message(
+                recipient=client,
+                text=msg_text("new_program", client_lang),
+                state=state,
+                reply_markup=subscription_view_kb(client_lang),
+                include_incoming_message=False,
+            )
+        except SubscriptionNotFoundError:
+            logger.error(f"Subscription not found for client {client_id} during save_workout_plan, cannot update.")
+            await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
             return
-        subscription_data = subscription.model_dump()
-        subscription_data.update(client_profile=client_id, exercises=exercises)
-        await APIService.workout.update_subscription(cast(int, subscription_data.get("id")), subscription_data)
-        await Cache.workout.update_subscription(client_id, dict(exercises=exercises, client_profile=client_id))
-        await Cache.workout.reset_payment_status(client_id, "subscription")
-        await send_message(
-            recipient=client,
-            text=msg_text("new_program", client_lang),
-            state=state,
-            reply_markup=subscription_view_kb(client_lang),
-            include_incoming_message=False,
-        )
     else:
         program_text = await format_program(exercises, 0)
-        current_program = await Cache.workout.get_program(client_id)
-        wishes: str = getattr(current_program, "wishes", "") or ""
-        program = await APIService.workout.save_program(client_id, exercises, split_number, wishes)
-        if program is not None:
-            program_data = program.model_dump()
+
+        try:
+            current_program = await Cache.workout.get_program(client_id)
+            wishes = current_program.wishes
+            workout_type = getattr(current_program, "workout_type", data.get("workout_type"))
+        except ProgramNotFoundError:
+            logger.info(f"Original program not found for client {client_id} when saving new one. Will create new.")
+            wishes = ""
+            workout_type = data.get("workout_type")
+
+        saved_program = await APIService.workout.save_program(client_id, exercises, split_number, wishes)
+
+        if saved_program:
+            program_data = saved_program.model_dump()
             program_data.update(
-                workout_type=getattr(current_program, "workout_type", None),
+                workout_type=workout_type,
                 split_number=split_number,
             )
             await Cache.workout.save_program(client_id, program_data)
-            await Cache.workout.reset_payment_status(client_id, "program")
+            await Cache.payment.reset_status(client_id, "program")
+        else:
+            logger.error(f"Failed to save program via API for client {client_id}")
+            await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
+            return
 
-        await send_message(
-            recipient=client,
-            text=msg_text("new_program", client_lang),
-            state=state,
-            include_incoming_message=False,
-        )
-        await send_message(
-            recipient=client,
-            text=msg_text("program_page", client_lang).format(program=program_text, day=1),
-            state=state,
-            reply_markup=program_view_kb(client_lang),
-            include_incoming_message=False,
-        )
+        await send_program(client, client_lang, program_text, state)
 
     await Cache.client.update_client(client_id, {"status": ClientStatus.default})
+
     message = callback_query.message
     if message and isinstance(message, Message):
         await show_main_menu(message, profile, state)
@@ -109,40 +145,57 @@ async def reset_workout_plan(callback_query: CallbackQuery, state: FSMContext) -
     if not callback_query.from_user:
         return
 
-    profile = await Cache.profile.get_profile(callback_query.from_user.id)
-    assert profile
-    data = await state.get_data()
-    client_id = cast(Optional[int], data.get("client_id"))
-    if client_id is None:
+    try:
+        profile = await Cache.profile.get_profile(callback_query.from_user.id)
+    except ProfileNotFoundError:
+        logger.warning(f"Profile not found for user {callback_query.from_user.id} in reset_workout_plan")
         return
 
+    data = await state.get_data()
+    client_id_str = data.get("client_id")
+    if client_id_str is None:
+        logger.error("client_id not found in state for reset_workout_plan")
+        return
+
+    client_id = int(client_id_str)
+    split_number = data.get("split", 1)
     await callback_query.answer(btn_text("done", profile.language))
 
     if data.get("subscription"):
-        subscription = await Cache.workout.get_subscription(client_id)
-        if not subscription:
+        try:
+            subscription = await Cache.workout.get_latest_subscription(client_id)
+            subscription_data = subscription.model_dump()
+            subscription_data.update(client_profile=client_id, exercises=[])
+
+            await APIService.workout.update_subscription(subscription.id, subscription_data)
+            await Cache.workout.update_subscription(
+                client_id,
+                {
+                    "exercises": [],
+                    "client_profile": client_id,
+                },
+            )
+            await Cache.client.update_client(client_id, {"status": ClientStatus.waiting_for_subscription})
+            await Cache.payment.set_status(client_id, "subscription", PaymentStatus.PENDING)
+        except SubscriptionNotFoundError:
+            logger.error(f"Subscription not found for client {client_id}, cannot reset")
             return
-        subscription_data = subscription.model_dump()
-        subscription_data.update(client_profile=client_id, exercises=[])
-        await APIService.workout.update_subscription(cast(int, subscription_data.get("id")), subscription_data)
-        await Cache.workout.update_subscription(client_id, {"exercises": [], "client_profile": client_id})
-        await Cache.client.update_client(client_id, {"status": ClientStatus.waiting_for_subscription})
-        await Cache.workout.set_payment_status(client_id, True, "subscription")
     else:
-        program = await Cache.workout.get_program(client_id)
-        program_id = getattr(program, "id", None)
-        if program_id is not None:
-            await APIService.workout.update_program(program_id, dict(exercises_by_day=[]))
-        await Cache.workout.update_program(client_id, dict(exercises_by_day=[]))
+        try:
+            program = await Cache.workout.get_program(client_id)
+        except ProgramNotFoundError:
+            logger.info(f"Program not found for client {client_id} to reset")
+            await answer_msg(callback_query, msg_text("unexpected_error", profile.language))
+            return
+
+        await APIService.workout.update_program(program.id, {"exercises_by_day": []})
+        await Cache.workout.update_program(client_id, {"exercises_by_day": []})
         await Cache.client.update_client(client_id, {"status": ClientStatus.waiting_for_program})
-        await Cache.workout.set_payment_status(client_id, True, "program")
 
     await state.clear()
-    message = callback_query.message
-    if message and isinstance(message, Message):
-        await answer_msg(message, msg_text("enter_daily_program", profile.language).format(day=1))
-        await del_msg(message)
-    await state.update_data(client_id=client_id, exercises=[], day_index=0)
+    await answer_msg(callback_query, msg_text("enter_daily_program", profile.language).format(day=1))
+    await del_msg(callback_query)
+    await state.update_data(client_id=client_id, exercises=[], day_index=0, split=split_number)
     await state.set_state(States.program_manage)
 
 
@@ -151,7 +204,7 @@ async def next_day_workout_plan(callback_query: CallbackQuery, state: FSMContext
         return
 
     profile = await Cache.profile.get_profile(callback_query.from_user.id)
-    assert profile
+    assert profile is not None
     data = await state.get_data()
     completed_days = data.get("day_index", 0)
     split_number = data.get("split")
@@ -206,10 +259,14 @@ async def next_day_workout_plan(callback_query: CallbackQuery, state: FSMContext
 
 
 async def manage_program(callback_query: CallbackQuery, profile: Profile, client_id: str, state: FSMContext) -> None:
-    program_paid = await Cache.workout.check_payment_status(int(client_id), "program")
-    workout_data = await Cache.workout.get_program(int(client_id))
+    program_paid = await Cache.payment.is_payed(int(client_id), "program")
+    workout_program: Program | None = None
+    try:
+        workout_program = await Cache.workout.get_program(int(client_id))
+    except ProgramNotFoundError:
+        logger.info(f"Program not found for client {client_id} in manage_program.")
 
-    if not program_paid and not workout_data:
+    if not program_paid and not workout_program:
         await callback_query.answer(msg_text("payment_required", profile.language), show_alert=True)
         await state.set_state(States.show_clients)
         return
@@ -218,11 +275,11 @@ async def manage_program(callback_query: CallbackQuery, profile: Profile, client
     if not message or not isinstance(message, Message):
         return
 
-    if workout_data and getattr(workout_data, "exercises_by_day", None):
-        program = await format_program(getattr(workout_data, "exercises_by_day", []), 0)
+    if workout_program and getattr(workout_program, "exercises_by_day", None):
+        program_text = await format_program(workout_program.exercises_by_day, 0)
         program_msg = await answer_msg(
             message,
-            msg_text("program_page", profile.language).format(program=program, day=1),
+            msg_text("program_page", profile.language).format(program=program_text, day=1),
             reply_markup=program_edit_kb(profile.language),
             disable_web_page_preview=True,
         )
@@ -234,7 +291,7 @@ async def manage_program(callback_query: CallbackQuery, profile: Profile, client
         await state.update_data(
             chat_id=message.chat.id,
             message_ids=message_ids,
-            exercises=getattr(workout_data, "exercises_by_day", []),
+            exercises=workout_program.exercises_by_day,
             client_id=client_id,
             day_index=0,
         )
@@ -260,31 +317,31 @@ async def manage_program(callback_query: CallbackQuery, profile: Profile, client
     await del_msg(message)
 
 
-async def cache_program_data(data: dict, profile_id: int) -> None:
+async def cache_program_data(data: dict, client_id: int) -> None:
     program_data = {
         "id": 1,
         "workout_type": data.get("workout_type"),
         "exercises_by_day": [],
         "created_at": datetime.now().timestamp(),
-        "profile": profile_id,
+        "client_profile": client_id,
         "split_number": 1,
         "wishes": data.get("wishes") or "",
     }
-    await Cache.workout.save_program(profile_id, program_data)
+    await Cache.workout.save_program(client_id, program_data)
 
 
-async def cancel_subscription(next_payment_date: datetime, profile_id: int, subscription_id: int) -> None:
+async def cancel_subscription(next_payment_date: datetime, client_id: int, subscription_id: int) -> None:
     now = datetime.now()
     delay = (next_payment_date - now).total_seconds()
     if delay > 0:
         await asyncio.sleep(delay)
-    await APIService.workout.update_subscription(subscription_id, dict(client_profile=profile_id, enabled=False))
-    await Cache.workout.save_subscription(profile_id, dict(enabled=False))
-    await Cache.workout.reset_payment_status(profile_id, "subscription")
+    await APIService.workout.update_subscription(subscription_id, dict(client_profile=client_id, enabled=False))
+    await Cache.workout.save_subscription(client_id, dict(enabled=False))
+    await Cache.payment.reset_status(client_id, "subscription")
 
 
 async def process_new_subscription(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    language = cast(str, profile.language or "ua")
+    language = cast(str, profile.language or Settings.DEFAULT_LANG)
 
     await callback_query.answer(msg_text("checkbox_reminding", language), show_alert=True)
 
@@ -303,7 +360,7 @@ async def process_new_subscription(callback_query: CallbackQuery, profile: Profi
         amount=coach.subscription_price,
         order_id=order_id,
         payment_type="subscription",
-        profile_id=profile.id,
+        client_id=client.id,
     )
 
     if not isinstance(callback_query.message, Message):
@@ -326,7 +383,7 @@ async def process_new_subscription(callback_query: CallbackQuery, profile: Profi
 async def edit_subscription_days(
     callback_query: CallbackQuery,
     days: list[str],
-    profile: Profile,
+    client_id: int,
     state: FSMContext,
     subscription: Subscription,
 ) -> None:
@@ -335,10 +392,10 @@ async def edit_subscription_days(
     exercises = [DayExercises.model_validate(e) for e in exercises_data]
     updated_exercises = {days[i]: [e.model_dump() for e in day.exercises] for i, day in enumerate(exercises)}
 
-    payload = {"workout_days": days, "exercises": updated_exercises, "client_profile": profile.id}
+    payload = {"workout_days": days, "exercises": updated_exercises, "client_profile": client_id}
     subscription_data.update(payload)
 
-    await Cache.workout.update_subscription(profile.id, payload)
+    await Cache.workout.update_subscription(client_id, payload)
     await APIService.workout.update_subscription(cast(int, subscription_data["id"]), subscription_data)
 
     await state.set_state(States.show_subscription)

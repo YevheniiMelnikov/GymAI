@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import cast
 
 from aiogram import Bot, Router
 from aiogram.client.session import aiohttp
@@ -21,7 +20,7 @@ from bot.states import States
 from bot.texts.text_manager import msg_text
 from config.env_settings import Settings
 from core.cache import Cache
-from core.models import Coach, Profile
+from core.schemas import Coach, Profile
 from core.services import APIService
 from bot.utils.chat import contact_client, process_feedback_content
 from bot.utils.menus import (
@@ -38,6 +37,7 @@ from bot.utils.menus import (
 from bot.utils.profiles import assign_coach
 from bot.utils.workout_plans import manage_program, cancel_subscription
 from bot.utils.other import del_msg
+from core.exceptions import ClientNotFoundError, CoachNotFoundError, SubscriptionNotFoundError
 
 menu_router = Router()
 
@@ -180,11 +180,21 @@ async def coach_paginator(callback_query: CallbackQuery, state: FSMContext, bot:
 
     if action == "selected":
         await callback_query.answer(msg_text("saved", profile.language))
-        coach_id = index
-        coach = await Cache.coach.get_coach(coach_id)
-        client = await Cache.client.get_client(profile.id)
-        if client is not None and coach is not None:
-            await assign_coach(coach, client)
+        try:
+            coach = await Cache.coach.get_coach(index)
+            client = await Cache.client.get_client(profile.id)
+
+        except CoachNotFoundError:
+            logger.warning(f"Coach not found for index {index}")
+            await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
+            return
+
+        except ClientNotFoundError:
+            logger.warning(f"Client not found for profile_id {profile.id}")
+            await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
+            return
+
+        await assign_coach(coach, client)
         await state.set_state(States.gift)
         await message.answer(msg_text("gift", profile.language), reply_markup=gift_kb(profile.language))
         await del_msg(message)
@@ -246,6 +256,13 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         return
     cb_data = callback_query.data or ""
 
+    try:
+        client = await Cache.client.get_client(profile.id)
+    except ClientNotFoundError:
+        logger.warning(f"Client not found for profile_id {profile.id}")
+        await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
+        return
+
     if cb_data == "back":
         await callback_query.answer()
         await state.set_state(States.select_service)
@@ -265,9 +282,6 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
 
     elif cb_data == "contact":
         await callback_query.answer()
-        client = await Cache.client.get_client(profile.id)
-        if client is None or not client.assigned_to:
-            return
         coach_id = client.assigned_to.pop()
         await state.update_data(recipient_id=coach_id, sender_name=client.name)
         await state.set_state(States.contact_coach)
@@ -284,12 +298,14 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
             return
         contact = f"@{user_chat.username}" if user_chat.username else callback_query.from_user.id
 
-        subscription = await Cache.workout.get_subscription(profile.id)
+        subscription = await Cache.workout.get_latest_subscription(profile.id)
         if subscription is None:
             return
 
-        order_id_opt = await APIService.payment.get_last_subscription_payment(profile.id)
-        order_id = cast(str, order_id_opt)
+        order_id = await APIService.payment.get_last_subscription_payment(client.id)
+        if order_id is None:
+            await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
+            return
 
         payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
         next_payment_date = payment_date + relativedelta(months=1)
@@ -306,15 +322,19 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
             )
 
         await APIService.payment.unsubscribe(order_id)
-        await cancel_subscription(next_payment_date, profile.id, subscription.id)
-        logger.info(f"Subscription for profile_id {profile.id} deactivated")
+        await cancel_subscription(next_payment_date, client.id, subscription.id)
+        logger.info(f"Subscription for client_id {client.id} deactivated")
         await show_main_menu(message, profile, state)
 
     else:
         await callback_query.answer()
-        subscription = await Cache.workout.get_subscription(profile.id)
-        if subscription is None:
+        try:
+            subscription = await Cache.workout.get_latest_subscription(client.id)
+        except SubscriptionNotFoundError:
+            logger.warning(f"Subscription not found for client_id {client.id}")
+            await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
             return
+
         workout_days = subscription.workout_days
         await state.update_data(
             exercises=subscription.exercises,

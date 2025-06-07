@@ -12,7 +12,7 @@ from loguru import logger
 from config.env_settings import Settings
 from core.cache import Cache
 from core.exceptions import ProfileNotFoundError
-from core.models import Profile
+from core.schemas import Profile
 from bot.utils.menus import show_main_menu
 from bot.texts.text_manager import msg_text
 

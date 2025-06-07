@@ -4,12 +4,12 @@ from loguru import logger
 
 from base import BaseCacheManager
 from core.exceptions import ProfileNotFoundError
-from core.models import Profile
+from core.schemas import Profile
 from core.services import ProfileService
 
 
 class ProfileCacheManager(BaseCacheManager):
-    service = ProfileService  # ➋
+    service = ProfileService
 
     @classmethod
     async def _deserialize(cls, raw: str, tg_id: int) -> Profile:

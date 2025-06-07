@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Any, cast
 
 import aiohttp
@@ -6,16 +8,16 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+from bot.texts import msg_text
 from bot.utils.other import get_bot, answer_msg
-from bot.keyboards import new_coach_kb, incoming_request_kb, client_msg_bk
+from bot.keyboards import new_coach_kb, incoming_request_kb, client_msg_bk, program_view_kb
 from bot.states import States
-from bot.texts.text_manager import msg_text
 from config.env_settings import Settings
 from core.cache import Cache
-from core.models import Coach, Profile, Client
+from core.schemas import Coach, Profile, Client
 from core.services import APIService
-from core.services.outer.gstorage_service import avatar_manager
 from bot.utils.text import format_new_client_message, get_client_page, get_workout_types
+from core.services.outer import avatar_manager
 
 
 async def send_message(
@@ -35,9 +37,8 @@ async def send_message(
         language = Settings.DEFAULT_LANG
         sender_name = ""
 
-    recipient_profile = await APIService.profile.get_profile(recipient.id)
+    recipient_profile = await APIService.profile.get_profile(recipient.profile)
     if recipient_profile is None:
-        # Log and stop to avoid AttributeError on .language or .tg_id
         from loguru import logger
 
         logger.error(f"Profile not found for recipient id {recipient.id} in send_message")
@@ -124,7 +125,7 @@ async def contact_client(callback_query: CallbackQuery, profile: Profile, client
 
 
 async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> None:
-    coach_profile = await APIService.profile.get_profile(coach.id)
+    coach_profile = await APIService.profile.get_profile(coach.profile)
     if coach_profile is None:
         from loguru import logger
 
@@ -133,11 +134,11 @@ async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> 
     coach_lang = coach_profile.language
     data["recipient_language"] = coach_lang
 
-    service = cast(str, data.get("request_type"))
+    service = cast(str, data.get("service_type"))
     preferable_workout_type = cast(str, data.get("workout_type"))
     wishes = data.get("wishes")
 
-    client_profile = await APIService.profile.get_profile(client.id)
+    client_profile = await APIService.profile.get_profile(client.profile)
     if client_profile is None:
         from loguru import logger
 
@@ -146,7 +147,7 @@ async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> 
 
     workout_types: dict[str, str] = get_workout_types(coach_lang)
     preferable_workouts_type = workout_types.get(preferable_workout_type, "unknown")
-    subscription = await Cache.workout.get_subscription(client.id)
+    subscription = await Cache.workout.get_latest_subscription(client.id)
 
     client_page = await get_client_page(client, coach_lang, subscription is not None, data)
     text = await format_new_client_message(data, coach_lang, client_profile.language, preferable_workouts_type)
@@ -199,3 +200,19 @@ async def process_feedback_content(message: Message, profile: Profile) -> bool:
 
     await answer_msg(message, msg_text("invalid_content", profile.language))
     return False
+
+
+async def send_program(client: Client, client_lang: str, program_text: str, state: FSMContext) -> None:
+    await send_message(
+        recipient=client,
+        text=msg_text("new_program", client_lang),
+        state=state,
+        include_incoming_message=False,
+    )
+    await send_message(
+        recipient=client,
+        text=msg_text("program_page", client_lang).format(program=program_text, day=1),
+        state=state,
+        reply_markup=program_view_kb(client_lang),
+        include_incoming_message=False,
+    )
