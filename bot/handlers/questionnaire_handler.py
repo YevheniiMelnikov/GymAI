@@ -1,12 +1,11 @@
 from contextlib import suppress
 from typing import cast
 
-from aiogram import Router
-
+from aiogram import Router, Bot
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
-
+from dependency_injector.wiring import inject, Provide
 from loguru import logger
 
 from bot.keyboards import (
@@ -20,6 +19,7 @@ from bot.keyboards import (
 from bot.states import States
 from config.env_settings import Settings
 from core.cache import Cache
+from core.containers import App
 from core.exceptions import ProfileNotFoundError, ClientNotFoundError
 from core.schemas import Profile
 from core.services import APIService
@@ -36,11 +36,16 @@ questionnaire_router = Router()
 
 
 @questionnaire_router.callback_query(States.select_language)
-async def select_language(callback_query: CallbackQuery, state: FSMContext) -> None:
+@inject
+async def select_language(
+    callback_query: CallbackQuery,
+    state: FSMContext,
+    bot: Bot = Provide[App.bot],
+) -> None:
     await callback_query.answer()
     await delete_messages(state)
     lang = callback_query.data or Settings.DEFAULT_LANG
-    await set_bot_commands(lang)
+    await set_bot_commands(bot, lang)
     try:
         profile = await APIService.profile.get_profile_by_tg_id(callback_query.from_user.id)
         if profile:

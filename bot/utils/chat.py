@@ -7,19 +7,22 @@ from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from dependency_injector.wiring import inject, Provide
 
 from bot.texts import msg_text
-from bot.utils.other import get_bot, answer_msg
+from bot.utils.other import answer_msg
 from bot.keyboards import new_coach_kb, incoming_request_kb, client_msg_bk, program_view_kb
 from bot.states import States
 from config.env_settings import Settings
 from core.cache import Cache
+from core.containers import App
 from core.schemas import Coach, Profile, Client
 from core.services import APIService
 from bot.utils.text import format_new_client_message, get_client_page, get_workout_types
 from core.services.outer import avatar_manager
 
 
+@inject
 async def send_message(
     recipient: Client | Coach,
     text: str,
@@ -28,6 +31,7 @@ async def send_message(
     include_incoming_message: bool = True,
     photo=None,
     video=None,
+    bot: Bot = Provide[App.bot],
 ) -> None:
     if state:
         data = await state.get_data()
@@ -49,7 +53,6 @@ async def send_message(
         if include_incoming_message
         else text
     )
-    bot: Bot = get_bot()
 
     async with aiohttp.ClientSession():
         if video:
@@ -78,7 +81,13 @@ async def send_message(
             )
 
 
-async def send_coach_request(tg_id: int, profile: Profile, data: dict[str, Any]) -> None:
+@inject
+async def send_coach_request(
+    tg_id: int,
+    profile: Profile,
+    data: dict[str, Any],
+    bot: Bot = Provide[App.bot],
+) -> None:
     name = data.get("name")
     surname = data.get("surname")
     experience = data.get("work_experience")
@@ -86,7 +95,6 @@ async def send_coach_request(tg_id: int, profile: Profile, data: dict[str, Any])
     card = data.get("payment_details")
     subscription_price = data.get("subscription_price")
     program_price = data.get("program_price")
-    bot: Bot = get_bot()
     user = await bot.get_chat(tg_id)
     contact = f"@{user.username}" if user.username else tg_id
 
@@ -172,12 +180,16 @@ async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> 
     )
 
 
-async def process_feedback_content(message: Message, profile: Profile) -> bool:
+@inject
+async def process_feedback_content(
+    message: Message,
+    profile: Profile,
+    bot: Bot = Provide[App.bot],
+) -> bool:
     text = msg_text("new_feedback", Settings.ADMIN_LANG).format(
         profile_id=profile.id,
         feedback=message.text or message.caption or "",
     )
-    bot: Bot = get_bot()
 
     if message.text:
         await bot.send_message(

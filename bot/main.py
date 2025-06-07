@@ -1,19 +1,18 @@
 import asyncio
 from aiohttp import web
 from aiogram import Bot, Dispatcher
-from aiogram.client.default import DefaultBotProperties
 from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
 from loguru import logger
 
 from bot.handlers.internal.payment import internal_payment_handler
-from bot.singleton import set_bot
 from config.env_settings import Settings
 from bot.middlewares import ProfileMiddleware
 from bot.handlers import configure_routers
 from core.cache.base import BaseCacheManager
 from bot.utils.other import set_bot_commands
+from core.containers import App
 
 
 async def on_shutdown(bot: Bot) -> None:
@@ -32,11 +31,14 @@ async def main() -> None:
     if not await BaseCacheManager.healthcheck():
         raise SystemExit("Redis is not responding to ping — exiting")
 
-    bot = Bot(token=Settings.BOT_TOKEN, default=DefaultBotProperties(parse_mode="HTML"))
-    set_bot(bot)
+    container = App()
+    container.config.bot_token.from_value(Settings.BOT_TOKEN)  # type: ignore[attr-defined]
+    container.config.parse_mode.from_value("HTML")  # type: ignore[attr-defined]
+    container.wire(modules=["bot.handlers", "bot.utils"])
+    bot = container.bot()
     await bot.delete_webhook(drop_pending_updates=True)
     await bot.set_webhook(url=Settings.WEBHOOK_URL)
-    await set_bot_commands()
+    await set_bot_commands(bot)
 
     dp = Dispatcher(storage=RedisStorage.from_url(Settings.REDIS_URL))
     dp.message.middleware.register(ProfileMiddleware())

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import aiohttp
 from aiogram import Bot, Router
-from aiogram.client.session import aiohttp
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from dateutil.relativedelta import relativedelta
