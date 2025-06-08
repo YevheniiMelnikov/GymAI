@@ -19,7 +19,7 @@ tasks:
       DJANGO_SETTINGS_MODULE: config.settings
     cmds:
       - uv run ruff check --fix --config=pyproject.toml
-      - uv run pyrefly check .
+      - uv run pyrefly check
 
   format:
     desc: Format with Ruff
