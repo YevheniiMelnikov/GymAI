@@ -1,4 +1,9 @@
 import os
+import pytest
+from django.core.management import call_command
+from django.db import connection
+from apps.profiles.models import Profile, ClientProfile, CoachProfile
+from apps.payments.models import Payment
 
 env_defaults = {
         'API_KEY': 'test_api_key',
@@ -28,10 +33,6 @@ def pytest_configure():
     pass
 
 
-import pytest
-from django.core.management import call_command
-
-
 @pytest.fixture(autouse=True, scope="session")
 def apply_migrations(django_db_setup, django_db_blocker):
     with django_db_blocker.unblock():
@@ -40,14 +41,8 @@ def apply_migrations(django_db_setup, django_db_blocker):
 
 @pytest.fixture(autouse=True, scope="session")
 def create_tables(django_db_setup, django_db_blocker):
-    from django.db import connection
-    from apps.profiles.models import Profile, ClientProfile, CoachProfile
-    from apps.payments.models import Payment
-
     with django_db_blocker.unblock():
         with connection.schema_editor() as editor:
             for model in (Profile, ClientProfile, CoachProfile, Payment):
                 editor.create_model(model)
 
-
-import pytest
