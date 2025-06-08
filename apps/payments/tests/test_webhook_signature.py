@@ -1,7 +1,4 @@
-import pytest
-
 from apps.payments.views import PaymentWebhookView
-
 
 def test_verify_signature(monkeypatch):
     def fake_str_to_sign(_data):
