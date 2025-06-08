@@ -60,7 +60,7 @@ services:
     container_name: celery_worker
     env_file: .env
     command: >
-      celery -A core.celery_app worker
+      celery -A config.celery:celery_app worker
              -l info
              -Q default,maintenance
              -P asyncio
@@ -78,7 +78,7 @@ services:
       dockerfile: Dockerfile
     container_name: celery_beat
     env_file: .env
-    command: celery -A core.celery_app beat -l info
+    command: celery -A config.celery:celery_app beat -l info
     volumes:
       - .:/app
       - ./config:/app/config
