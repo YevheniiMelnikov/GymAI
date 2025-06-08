@@ -15,7 +15,8 @@ from bot.states import States
 from core.cache import Cache
 from core.cache.payment import PaymentCacheManager
 from core.enums import ClientStatus, PaymentStatus
-from core.services import APIService, PaymentService
+from core.services import APIService
+from core.services.payment_service import PaymentService
 from bot.utils.menus import show_main_menu
 from bot.utils.workout_plans import cache_program_data
 from bot.texts import msg_text, btn_text
