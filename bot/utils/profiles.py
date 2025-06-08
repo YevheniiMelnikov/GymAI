@@ -91,7 +91,7 @@ async def check_assigned_clients(profile_id: int) -> bool:
         except SubscriptionNotFoundError:
             pass
 
-        if await Cache.payment.check_payment_status(client_id, "program"):
+        if await Cache.payment.get_status(client_id, "program"):
             return True
 
     return False
