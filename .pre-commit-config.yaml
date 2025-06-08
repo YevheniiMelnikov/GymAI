@@ -19,8 +19,8 @@ repos:
     hooks:
       - id: uv-lock
 
- - repo: local
-   hooks:
+  - repo: local
+    hooks:
      - id: pyrefly
        name: pyrefly
        entry: uv run pyrefly check .
