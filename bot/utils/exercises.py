@@ -11,7 +11,6 @@ from bot.keyboards import program_edit_kb, program_manage_kb
 from bot.states import States
 from bot.texts.text_manager import msg_text
 from config.env_settings import settings
-from core.cache import Cache
 from core.schemas import Exercise, DayExercises, Subscription, Profile
 from core.exceptions import ProgramNotFoundError, SubscriptionNotFoundError, ProfileNotFoundError
 
@@ -61,6 +60,8 @@ async def save_exercise(
         split_number = data.get("split")
         if split_number is None:
             try:
+                from core.cache import Cache
+
                 program = await Cache.workout.get_program(client_id)
                 split_number = program.split_number
             except ProgramNotFoundError:
@@ -135,6 +136,8 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
     if not callback_query.from_user or not callback_query.data:
         return
     try:
+        from core.cache import Cache
+
         profile = await Cache.profile.get_profile(callback_query.from_user.id)
     except ProfileNotFoundError:
         logger.warning(f"Profile not found for user {callback_query.from_user.id} in edit_subscription_exercises")
@@ -147,6 +150,8 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
 
     subscription: Subscription
     try:
+        from core.cache import Cache
+
         subscription = await Cache.workout.get_latest_subscription(client_id)
     except SubscriptionNotFoundError:
         logger.error(f"Subscription not found for client {client_id} in edit_subscription_exercises.")

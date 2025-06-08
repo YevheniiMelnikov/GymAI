@@ -19,7 +19,7 @@ tasks:
       DJANGO_SETTINGS_MODULE: config.settings
     cmds:
       - uv run ruff check --fix --config=pyproject.toml
-      - uv run pyrefly check .
+      - uv run pyrefly check
 
   format:
     desc: Format with Ruff
@@ -28,19 +28,16 @@ tasks:
 
   test:
     desc: Run tests
+    env:
+      DJANGO_SETTINGS_MODULE: config.test_settings
     cmds:
-      - uv run pytest
+      - uv run pytest -q
 
   update:
     desc: Update dependencies (main + dev)
     cmds:
       - uv lock --upgrade
       - uv sync --extra dev
-
-  update-win:
-    desc: Sync deps in Windows venv (main + dev)
-    cmds:
-      - uv sync --extra dev --active
 
   pre-commit:
     desc: Run pre-commit hooks

@@ -110,7 +110,7 @@ class MessageText(AutoName):
     edit_profile = auto()
     choose_profile_parameter = auto()
     update_your_data = auto()
-    name = auto()
+    name = auto()  # pyre-ignore[bad-override]
     surname = auto()
     work_experience = auto()
     payment_details = auto()

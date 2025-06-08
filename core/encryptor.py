@@ -1,6 +1,6 @@
 import base64
 import hashlib
-from typing import Optional
+from typing import Optional, ClassVar
 
 from cryptography.fernet import Fernet
 
@@ -9,10 +9,10 @@ from config.env_settings import settings
 
 
 class Encryptor:
-    _fernet = None
+    _fernet: ClassVar[Optional[Fernet]] = None
 
     @classmethod
-    def _get_fernet(cls):
+    def _get_fernet(cls) -> Fernet:
         if cls._fernet is None:
             key = hashlib.sha256(settings.API_KEY.encode()).digest()
             fernet_key = base64.urlsafe_b64encode(key)

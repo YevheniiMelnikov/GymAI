@@ -195,7 +195,7 @@ class PaymentService(APIClient):
             return None
 
         logger.info(f"Payment {order_id} set to '{PaymentStatus(status_)}'")
-        payment.status = PaymentStatus(status_)
+        payment.status = PaymentStatus(status_)  # pyre-ignore[bad-assignment]
         payment.error = error
         payment.processed = False
         payment.payout_handled = False

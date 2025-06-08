@@ -3,7 +3,7 @@ from loguru import logger
 
 from .base import BaseCacheManager
 from core.enums import PaymentStatus
-from core.services import PaymentService
+from core.services.payment_service import PaymentService
 from core.exceptions import PaymentNotFoundError
 
 

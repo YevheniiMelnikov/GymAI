@@ -2,11 +2,10 @@ import json
 from typing import Any
 from loguru import logger
 
-from core.cache import Cache
 from core.schemas import Subscription, Program
 from .base import BaseCacheManager
 from core.validators import validate_or_raise
-from core.services import WorkoutService
+from core.services.workout_service import WorkoutService
 from core.exceptions import SubscriptionNotFoundError, ProgramNotFoundError
 
 
@@ -16,6 +15,8 @@ class WorkoutCacheManager(BaseCacheManager):
     @classmethod
     async def save_subscription(cls, client_id: int, subscription_data: dict) -> None:
         try:
+            from core.cache import Cache
+
             await cls.set("workout_plans:subscriptions", str(client_id), json.dumps(subscription_data))
             await Cache.payment.reset_status(client_id, "subscription")
             logger.debug(f"Subscription saved for client_id={client_id}")

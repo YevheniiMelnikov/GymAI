@@ -1,7 +1,14 @@
 from datetime import datetime
 from typing import Annotated
 from pydantic import BaseModel, Field, field_validator, condecimal
-from enums import PaymentType, ProfileStatus, ClientStatus, Language, Gender, PaymentStatus
+from core.enums import (
+    PaymentType,
+    ProfileStatus,
+    ClientStatus,
+    Language,
+    Gender,
+    PaymentStatus,
+)
 
 Price = condecimal(max_digits=10, decimal_places=2, gt=0)
 

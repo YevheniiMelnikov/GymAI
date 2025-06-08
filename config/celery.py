@@ -11,7 +11,7 @@ celery_config = {
     "task_acks_late": True,
     "worker_max_tasks_per_child": 100,
     "task_time_limit": 600,
-    "worker_pool": "asyncio",
+    "worker_pool": "threads",
     "beat_schedule": {
         "pg_backup": {
             "task": "core.tasks.pg_backup",

@@ -1,18 +1,28 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 from django.core.cache import cache
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 from rest_framework_api_key.permissions import HasAPIKey
 
 from apps.workout_plans.serializers import ProgramSerializer, SubscriptionSerializer
 from apps.workout_plans.repos import ProgramRepository, SubscriptionRepository
+from apps.workout_plans.models import Subscription
+
+
+def _parse_client_id(client_id_str: Optional[str]) -> Optional[int]:
+    if client_id_str is None:
+        return None
+    try:
+        return int(client_id_str)
+    except (ValueError, TypeError):
+        return None
 
 
 @method_decorator(cache_page(60 * 5), name="list")
@@ -23,7 +33,8 @@ class ProgramViewSet(ModelViewSet):
 
     def get_queryset(self):
         qs = ProgramRepository.base_qs()
-        client_id = self.request.query_params.get("client_profile")
+        client_id_str = self.request.query_params.get("client_profile")
+        client_id = _parse_client_id(client_id_str)
         return ProgramRepository.filter_by_client(qs, client_id)
 
     def create(self, request: Any, *args: Any, **kwargs: Any) -> Response:
@@ -81,29 +92,30 @@ class SubscriptionViewSet(ModelViewSet):
 
     def get_queryset(self):
         qs = SubscriptionRepository.base_qs()
-        client_id = self.request.query_params.get("client_profile")
+        client_id_str = self.request.query_params.get("client_profile")
+        client_id = _parse_client_id(client_id_str)
         return SubscriptionRepository.filter_by_client(qs, client_id)
 
-    def perform_create(self, serializer):
+    def perform_create(self, serializer: serializers.BaseSerializer) -> None:  # pyre-ignore[bad-override]
         sub = serializer.save()
         cache.delete_many(
             [
                 "subscriptions:list",
-                f"subscriptions:list:client:{sub.client_profile_id}",
+                f"subscriptions:list:client:{sub.client_profile_id}",  # pyre-ignore[missing-attribute]
             ]
         )
 
-    def perform_update(self, serializer):
+    def perform_update(self, serializer: serializers.BaseSerializer) -> None:  # pyre-ignore[bad-override]
         sub = serializer.save()
         cache.delete_many(
             [
                 "subscriptions:list",
-                f"subscriptions:list:client:{sub.client_profile_id}",
+                f"subscriptions:list:client:{sub.client_profile_id}",  # pyre-ignore[missing-attribute]
             ]
         )
 
-    def perform_destroy(self, instance):
-        client_id = instance.client_profile_id
+    def perform_destroy(self, instance: Subscription) -> None:  # pyre-ignore[bad-override]
+        client_id = instance.client_profile_id  # pyre-ignore[missing-attribute]
         super().perform_destroy(instance)
         cache.delete_many(
             [
