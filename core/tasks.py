@@ -5,18 +5,10 @@ from datetime import datetime, timedelta
 
 from celery import shared_task
 from loguru import logger
+import httpx
 
-from aiogram import Bot
-from dependency_injector.wiring import inject, Provide
-
-from bot.keyboards import workout_survey_kb
-from bot.texts.text_manager import msg_text
-from bot.utils.profiles import get_clients_to_survey
 from config.env_settings import settings
 from core.cache import Cache
-from core.schemas import Profile
-from core.containers import App
-from core.payment_processor import PaymentProcessor
 from core.services import APIService
 
 _dumps_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dumps")
@@ -90,37 +82,40 @@ async def deactivate_expired_subscriptions(self):
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)
-async def process_unclosed_payments(self):
-    await PaymentProcessor.process_unclosed_payments()
+def process_unclosed_payments(self):
+    async def _call_bot() -> None:
+        url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/process_unclosed_payments/"
+        headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
 
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.post(url, headers=headers)
+            resp.raise_for_status()
 
-@inject
-@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)
-async def send_daily_survey(self, bot: Bot = Provide[App.bot]):
     try:
-        clients: list[Profile] = await get_clients_to_survey()
-    except Exception as e:
-        logger.error(f"Unexpected error in retrieving clients: {e}")
-        return
+        import asyncio
 
-    if not clients:
-        logger.info("No clients to survey today")
-        return
+        asyncio.run(_call_bot())
 
-    yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
+    except Exception as exc:
+        logger.warning(f"Bot call failed for unclosed payments: {exc}")
+        raise self.retry(exc=exc)
 
-    for client_profile in clients:
-        try:
-            if bot is None:
-                raise RuntimeError("Bot instance is not initialized")
 
-            await bot.send_message(  # TODO: SEND HOOK TO INTERNAL BOT HANDLER AND USE TG FROM THERE
-                chat_id=client_profile.tg_id,
-                text=msg_text("have_you_trained", client_profile.language),
-                reply_markup=workout_survey_kb(client_profile.language, yesterday),
-                disable_notification=True,
-            )
-            logger.info(f"Survey sent to profile {client_profile.id}")
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)
+def send_daily_survey(self):
+    async def _call_bot() -> None:
+        url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/send_daily_survey/"
+        headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
 
-        except Exception as e:
-            logger.error(f"Survey push failed for profile_id={client_profile.id}: {e}")
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.post(url, headers=headers)
+            resp.raise_for_status()
+
+    try:
+        import asyncio
+
+        asyncio.run(_call_bot())
+
+    except Exception as exc:
+        logger.warning(f"Bot call failed for daily survey: {exc}")
+        raise self.retry(exc=exc)

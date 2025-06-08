@@ -6,7 +6,11 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 
 from loguru import logger
 
-from bot.handlers.internal.payment import internal_payment_handler
+from bot.handlers.internal import (
+    internal_payment_handler,
+    internal_process_unclosed_payments,
+    internal_send_daily_survey,
+)
 from config.env_settings import settings
 from bot.middlewares import ProfileMiddleware
 from bot.handlers import configure_routers
@@ -55,6 +59,11 @@ async def main() -> None:
         raise ValueError("WEBHOOK_PATH is not set in environment variables")
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=settings.WEBHOOK_PATH)
     app.router.add_post("/internal/payment/process/", internal_payment_handler)
+    app.router.add_post("/internal/tasks/send_daily_survey/", internal_send_daily_survey)
+    app.router.add_post(
+        "/internal/tasks/process_unclosed_payments/",
+        internal_process_unclosed_payments,
+    )
     setup_application(app, dp, bot=bot)
     runner = await start_web_app(app)
     logger.success("Bot started")
