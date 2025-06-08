@@ -65,6 +65,7 @@ combine-as-imports = true
 [tool.pyrefly]
 project_includes = ["."]
 project_excludes = [
+    ".git/**",
     "**/__pycache__/**",
     "**/static/**",
     "**/templates/**",
