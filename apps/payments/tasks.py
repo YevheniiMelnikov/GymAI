@@ -5,7 +5,7 @@ from loguru import logger
 from config.env_settings import settings
 
 
-@shared_task(bind=True, max_retries=3, retry_backoff=30, retry_backoff_max=300)
+@shared_task(bind=True, max_retries=3, retry_backoff=30, retry_backoff_max=300)  # pyre-ignore[not-callable]
 def process_payment_webhook(self, order_id: str, status: str, err_description: str = "") -> None:
     async def _call_bot() -> None:
         url = f"{settings.BOT_INTERNAL_URL}/internal/payment/process/"

@@ -6,13 +6,14 @@ from django.core.cache import cache
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django_filters.rest_framework import DjangoFilterBackend
-from rest_framework import status
+from rest_framework import status, serializers
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 from rest_framework_api_key.permissions import HasAPIKey
 
 from apps.workout_plans.serializers import ProgramSerializer, SubscriptionSerializer
 from apps.workout_plans.repos import ProgramRepository, SubscriptionRepository
+from apps.workout_plans.models import Subscription
 
 
 def _parse_client_id(client_id_str: Optional[str]) -> Optional[int]:
@@ -95,26 +96,26 @@ class SubscriptionViewSet(ModelViewSet):
         client_id = _parse_client_id(client_id_str)
         return SubscriptionRepository.filter_by_client(qs, client_id)
 
-    def perform_create(self, serializer):
+    def perform_create(self, serializer: serializers.BaseSerializer) -> None:  # pyre-ignore[bad-override]
         sub = serializer.save()
         cache.delete_many(
             [
                 "subscriptions:list",
-                f"subscriptions:list:client:{sub.client_profile_id}",
+                f"subscriptions:list:client:{sub.client_profile_id}",  # pyre-ignore[missing-attribute]
             ]
         )
 
-    def perform_update(self, serializer):
+    def perform_update(self, serializer: serializers.BaseSerializer) -> None:  # pyre-ignore[bad-override]
         sub = serializer.save()
         cache.delete_many(
             [
                 "subscriptions:list",
-                f"subscriptions:list:client:{sub.client_profile_id}",
+                f"subscriptions:list:client:{sub.client_profile_id}",  # pyre-ignore[missing-attribute]
             ]
         )
 
-    def perform_destroy(self, instance):
-        client_id = instance.client_profile_id
+    def perform_destroy(self, instance: Subscription) -> None:  # pyre-ignore[bad-override]
+        client_id = instance.client_profile_id  # pyre-ignore[missing-attribute]
         super().perform_destroy(instance)
         cache.delete_many(
             [

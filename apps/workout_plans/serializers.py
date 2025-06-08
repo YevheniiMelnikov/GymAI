@@ -24,7 +24,7 @@ class ProgramSerializer(serializers.ModelSerializer):
     client_profile = ClientProfileSerializer(read_only=True)
     exercises_by_day = DayExercisesSerializer(many=True)
 
-    class Meta:
+    class Meta:  # pyre-ignore[bad-override]
         model = Program
         fields = "__all__"
 
@@ -40,11 +40,11 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     client_profile = ClientProfileSerializer(read_only=True)
     exercises = DayExercisesSerializer(many=True)
 
-    class Meta:
+    class Meta:  # pyre-ignore[bad-override]
         model = Subscription
         fields = "__all__"
 
-    def validate(self, data: dict[str, Any]) -> dict[str, Any]:
+    def validate(self, data: dict[str, Any]) -> dict[str, Any]:  # pyre-ignore[bad-override]
         user = self.context["request"].user
 
         if not user.is_authenticated:

@@ -64,7 +64,17 @@ combine-as-imports = true
 
 [tool.pyrefly]
 project_includes = ["."]
-project_excludes = ["**/__pycache__/**", "**/static/**", "**/templates/**", "**/migrations/**", "**/tests/**"]
+project_excludes = [
+    "**/__pycache__/**",
+    "**/static/**",
+    "**/templates/**",
+    "**/migrations/**",
+    "**/tests/**",
+    "**/venv/**",
+    "**/.venv/**",
+    "**/venv-win/**",
+    "**/.venv-win/**",
+]
 python_interpreter = ".venv/bin/python3"
 ignore_errors_in_generated_code = true
 use_untyped_imports = true
