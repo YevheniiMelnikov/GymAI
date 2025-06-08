@@ -28,6 +28,8 @@ tasks:
 
   test:
     desc: Run tests
+    env:
+      DJANGO_SETTINGS_MODULE: config.test_settings
     cmds:
       - uv run --env-file .env pytest -q
 
