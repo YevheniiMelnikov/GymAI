@@ -140,3 +140,6 @@ Redis настроен с `appendonly.aof`, `maxmemory 256mb`, `allkeys-lru`:
 - `/` → Telegram-бот
 
 Файл: `nginx.conf`
+После правки конфигурации пересобери образ и перезапусти контейнер:
+
+    docker compose up -d --build nginx
