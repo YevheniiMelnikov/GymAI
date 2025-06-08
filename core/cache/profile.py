@@ -2,7 +2,7 @@ import json
 from json import JSONDecodeError
 from loguru import logger
 
-from base import BaseCacheManager
+from .base import BaseCacheManager
 from core.exceptions import ProfileNotFoundError
 from core.schemas import Profile
 from core.services import ProfileService

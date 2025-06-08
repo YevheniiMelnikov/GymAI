@@ -4,7 +4,7 @@ from loguru import logger
 
 from core.cache import Cache
 from core.schemas import Subscription, Program
-from base import BaseCacheManager
+from .base import BaseCacheManager
 from core.validators import validate_or_raise
 from core.services import WorkoutService
 from core.exceptions import SubscriptionNotFoundError, ProgramNotFoundError

@@ -4,7 +4,7 @@ from typing import Any
 
 from core.schemas import Client
 from core.exceptions import ClientNotFoundError
-from base import BaseCacheManager
+from .base import BaseCacheManager
 from core.validators import validate_or_raise
 from core.services import ProfileService
 
