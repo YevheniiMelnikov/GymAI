@@ -1,7 +1,7 @@
 from typing import cast
 from loguru import logger
 
-from base import BaseCacheManager
+from .base import BaseCacheManager
 from core.enums import PaymentStatus
 from core.services import PaymentService
 from core.exceptions import PaymentNotFoundError
