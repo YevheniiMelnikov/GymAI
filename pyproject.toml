@@ -32,9 +32,6 @@ dependencies = [
     "django-redis>=5.4.0",
     "dependency-injector>=4.47.1",
     "pydantic-settings>=2.9.1",
-    "factory-boy==3.3.0",
-    "pytest-django==4.8.0",
-    "pytest-asyncio>=0.23",
 ]
 
 [project.optional-dependencies]
@@ -48,7 +45,10 @@ dev = [
     "django-stubs>=4.2.7",
     "djangorestframework-stubs>=3.14.5",
     "mypy-extensions>=1.0.0",
-    "types-PyYAML>=6.0.12.20240311"
+    "types-PyYAML>=6.0.12.20240311",
+    "factory-boy==3.3.0",
+    "pytest-django==4.8.0",
+    "pytest-asyncio>=0.23",
 ]
 
 [tool.ruff]
@@ -75,12 +75,3 @@ bad-return = true
 bad-argument-type = true
 missing-attribute = true
 annotation-mismatch = true
-no-matching-overload = false
-async-error = false
-import-error = false
-bad-override = false
-not-callable = false
-
-[[ignore_errors_in_path]]
-path = "**/magic_filter/**"
-errors = ["bad-argument-type"]

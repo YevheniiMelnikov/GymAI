@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 from django.core.cache import cache
 from django.utils.decorators import method_decorator
@@ -15,6 +15,15 @@ from apps.workout_plans.serializers import ProgramSerializer, SubscriptionSerial
 from apps.workout_plans.repos import ProgramRepository, SubscriptionRepository
 
 
+def _parse_client_id(client_id_str: Optional[str]) -> Optional[int]:
+    if client_id_str is None:
+        return None
+    try:
+        return int(client_id_str)
+    except (ValueError, TypeError):
+        return None
+
+
 @method_decorator(cache_page(60 * 5), name="list")
 class ProgramViewSet(ModelViewSet):
     queryset = ProgramRepository.base_qs()  # type: ignore[assignment]
@@ -23,7 +32,8 @@ class ProgramViewSet(ModelViewSet):
 
     def get_queryset(self):
         qs = ProgramRepository.base_qs()
-        client_id = self.request.query_params.get("client_profile")
+        client_id_str = self.request.query_params.get("client_profile")
+        client_id = _parse_client_id(client_id_str)
         return ProgramRepository.filter_by_client(qs, client_id)
 
     def create(self, request: Any, *args: Any, **kwargs: Any) -> Response:
@@ -81,7 +91,8 @@ class SubscriptionViewSet(ModelViewSet):
 
     def get_queryset(self):
         qs = SubscriptionRepository.base_qs()
-        client_id = self.request.query_params.get("client_profile")
+        client_id_str = self.request.query_params.get("client_profile")
+        client_id = _parse_client_id(client_id_str)
         return SubscriptionRepository.filter_by_client(qs, client_id)
 
     def perform_create(self, serializer):

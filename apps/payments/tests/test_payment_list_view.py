@@ -6,6 +6,7 @@ from apps.payments.models import Payment
 from apps.payments.views import PaymentListView
 from apps.profiles.models import Profile, ClientProfile
 
+
 @pytest.mark.skip(reason="SQLite test DB lacks postgres features")
 @pytest.mark.django_db
 def test_payment_list_filters():
@@ -22,4 +23,3 @@ def test_payment_list_filters():
     assert response.status_code == 200
     assert len(response.data["results"]) == 1
     assert response.data["results"][0]["order_id"] == "1"
-

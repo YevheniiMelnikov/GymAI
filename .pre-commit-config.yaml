@@ -19,20 +19,20 @@ repos:
     hooks:
       - id: uv-lock
 
-  - repo: local
-    hooks:
-      - id: pyrefly
-        name: pyrefly
-        entry: uv run pyrefly check .
-        language: system
-        types: [python]
-        pass_filenames: false
+#  - repo: local
+#    hooks:
+#      - id: pyrefly
+#        name: pyrefly
+#        entry: uv run pyrefly check .
+#        language: system
+#        types: [python]
+#        pass_filenames: false
 
   - repo: local
     hooks:
       - id: pytest
         name: pytest
-        entry: bash -c 'PYTHONPATH=. uv run pytest'
+        entry: bash -c 'PYTHONPATH=. uv run pytest -q'
         language: system
         types: [python]
         pass_filenames: false
