@@ -1,13 +1,10 @@
 import base64
 import json
-from unittest.mock import MagicMock
 
 import pytest
 from django.test import RequestFactory
-from django.urls import reverse
 
 from apps.payments.views import PaymentWebhookView
-
 
 @pytest.mark.django_db
 def test_webhook_view_valid(monkeypatch):
