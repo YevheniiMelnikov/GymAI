@@ -39,11 +39,6 @@ tasks:
       - uv lock --upgrade
       - uv sync --extra dev
 
-  update-win:
-    desc: Sync deps in Windows venv (main + dev)
-    cmds:
-      - uv sync --extra dev --active
-
   pre-commit:
     desc: Run pre-commit hooks
     cmds:

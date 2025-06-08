@@ -83,7 +83,7 @@ services:
       celery -A config.celery:celery_app worker
              -l info
              -Q default,maintenance
-             -P asyncio
+             -P threads
     volumes:
       - ./google_creds.json:/app/google_creds.json:ro
       - ./dumps:/app/dumps
