@@ -7,7 +7,7 @@ from rest_framework.exceptions import NotFound
 
 from apps.profiles.models import ClientProfile
 from apps.workout_plans.models import Program, Subscription
-from config.env_settings import Settings
+from config.env_settings import settings
 
 
 class ProgramRepository:
@@ -27,10 +27,10 @@ class ProgramRepository:
     def filter_by_client(qs: QuerySet[Program], client_id: Optional[int]) -> QuerySet[Program]:
         if client_id:
             key = ProgramRepository._list_key(client_id)
-            result = cache.get_or_set(key, lambda: qs.filter(client_profile_id=client_id), Settings.CACHE_TTL)
+            result = cache.get_or_set(key, lambda: qs.filter(client_profile_id=client_id), settings.CACHE_TTL)
             return cast(QuerySet[Program], result)
         key = ProgramRepository._list_key()
-        result = cache.get_or_set(key, lambda: qs, Settings.CACHE_TTL)
+        result = cache.get_or_set(key, lambda: qs, settings.CACHE_TTL)
         return cast(QuerySet[Program], result)
 
     @staticmethod

@@ -9,7 +9,7 @@ from aiogram.types import Message
 from bot.keyboards import select_language_kb
 from bot.states import States
 from loguru import logger
-from config.env_settings import Settings
+from config.env_settings import settings
 from core.cache import Cache
 from core.exceptions import ProfileNotFoundError
 from core.schemas import Profile
@@ -24,7 +24,7 @@ async def cmd_language(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile_data = data.get("profile", {})
     profile = Profile.model_validate(profile_data) if profile_data else None
-    lang = profile.language if profile else Settings.DEFAULT_LANG
+    lang = profile.language if profile else settings.DEFAULT_LANG
     await message.answer(msg_text("select_language", lang), reply_markup=select_language_kb())
     await state.set_state(States.select_language)
     with suppress(TelegramBadRequest):
@@ -40,7 +40,7 @@ async def cmd_menu(message: Message, state: FSMContext) -> None:
         await show_main_menu(message, profile, state)
     else:
         await state.set_state(States.select_language)
-        await message.answer(msg_text("select_language", Settings.DEFAULT_LANG), reply_markup=select_language_kb())
+        await message.answer(msg_text("select_language", settings.DEFAULT_LANG), reply_markup=select_language_kb())
 
     with suppress(TelegramBadRequest):
         await message.delete()
@@ -60,9 +60,9 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
             await message.delete()
     except ProfileNotFoundError:
         logger.info(f"Telegram user {message.from_user.id} started bot")
-        start_msg = await message.answer(msg_text("start", Settings.DEFAULT_LANG))
+        start_msg = await message.answer(msg_text("start", settings.DEFAULT_LANG))
         language_msg = await message.answer(
-            msg_text("select_language", Settings.DEFAULT_LANG), reply_markup=select_language_kb()
+            msg_text("select_language", settings.DEFAULT_LANG), reply_markup=select_language_kb()
         )
         await state.set_state(States.select_language)
         message_ids = []
@@ -80,7 +80,7 @@ async def cmd_help(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile_data = data.get("profile", {})
     profile = Profile.model_validate(profile_data) if profile_data else None
-    language = profile.language if profile else Settings.DEFAULT_LANG
+    language = profile.language if profile else settings.DEFAULT_LANG
     await message.answer(msg_text("help", language))
 
 
@@ -89,7 +89,7 @@ async def cmd_feedback(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile_data = data.get("profile", {})
     profile = Profile.model_validate(profile_data) if profile_data else None
-    language = profile.language if profile else Settings.DEFAULT_LANG
+    language = profile.language if profile else settings.DEFAULT_LANG
     await message.answer(msg_text("feedback", language))
     await state.set_state(States.feedback)
     with suppress(TelegramBadRequest):
@@ -101,11 +101,11 @@ async def cmd_policy(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile_data = data.get("profile", {})
     profile = Profile.model_validate(profile_data) if profile_data else None
-    lang = profile.language if profile else Settings.DEFAULT_LANG
+    lang = profile.language if profile else settings.DEFAULT_LANG
     await message.answer(
         msg_text("contract_info_message", lang).format(
-            public_offer=Settings.PUBLIC_OFFER,
-            privacy_policy=Settings.PRIVACY_POLICY,
+            public_offer=settings.PUBLIC_OFFER,
+            privacy_policy=settings.PRIVACY_POLICY,
         ),
         disable_web_page_preview=True,
     )
@@ -118,10 +118,10 @@ async def cmd_info(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile_data = data.get("profile", {})
     profile = Profile.model_validate(profile_data) if profile_data else None
-    lang = profile.language if profile else Settings.DEFAULT_LANG
+    lang = profile.language if profile else settings.DEFAULT_LANG
     await message.answer(
         msg_text("info", lang).format(
-            offer=Settings.PUBLIC_OFFER, email=Settings.EMAIL, tg=Settings.TG_SUPPORT_CONTACT
+            offer=settings.PUBLIC_OFFER, email=settings.EMAIL, tg=settings.TG_SUPPORT_CONTACT
         ),
         disable_web_page_preview=True,
     )

@@ -1,11 +1,11 @@
 from celery import Celery
 from celery.schedules import crontab
-from config.env_settings import Settings
+from config.env_settings import settings
 
 celery_config = {
-    "broker_url": Settings.REDIS_URL,
-    "result_backend": Settings.REDIS_URL,
-    "timezone": Settings.TIME_ZONE,
+    "broker_url": settings.REDIS_URL,
+    "result_backend": settings.REDIS_URL,
+    "timezone": settings.TIME_ZONE,
     "task_serializer": "json",
     "accept_content": ["json"],
     "task_acks_late": True,

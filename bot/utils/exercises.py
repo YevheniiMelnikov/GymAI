@@ -10,7 +10,7 @@ from bot.utils.other import delete_messages, answer_msg, del_msg
 from bot.keyboards import program_edit_kb, program_manage_kb
 from bot.states import States
 from bot.texts.text_manager import msg_text
-from config.env_settings import Settings
+from config.env_settings import settings
 from core.cache import Cache
 from core.schemas import Exercise, DayExercises, Subscription, Profile
 from core.exceptions import ProgramNotFoundError, SubscriptionNotFoundError, ProfileNotFoundError
@@ -138,7 +138,7 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
         profile = await Cache.profile.get_profile(callback_query.from_user.id)
     except ProfileNotFoundError:
         logger.warning(f"Profile not found for user {callback_query.from_user.id} in edit_subscription_exercises")
-        await callback_query.answer(msg_text("error_generic", Settings.DEFAULT_LANG), show_alert=True)
+        await callback_query.answer(msg_text("error_generic", settings.DEFAULT_LANG), show_alert=True)
         return
 
     parts = cast(str, callback_query.data).split("_")
@@ -153,7 +153,7 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
         await callback_query.answer(msg_text("subscription_not_found_error", profile.language), show_alert=True)
         return
 
-    language = cast(str, profile.language or Settings.DEFAULT_LANG)
+    language = cast(str, profile.language or settings.DEFAULT_LANG)
     week_day = get_translated_week_day(language, day).lower()
     day_index = subscription.workout_days.index(day)
     program_text = await format_program(subscription.exercises, day_index)

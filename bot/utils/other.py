@@ -5,9 +5,10 @@ import secrets
 import string
 from contextlib import suppress
 from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
-from typing import Optional, cast
+from typing import Optional
 
 import aiohttp
+from dependency_injector.wiring import inject, Provide
 from pydantic_core import ValidationError
 
 from loguru import logger
@@ -16,13 +17,9 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BotCommand, CallbackQuery, Message
 
-from bot.singleton import bot as bot_instance
-from config.env_settings import Settings
+from config.env_settings import settings
 from bot.texts.text_manager import TextManager
-
-
-def get_bot() -> Bot:
-    return cast(Bot, bot_instance)
+from core.containers import App
 
 
 async def short_url(url: str) -> str:
@@ -40,21 +37,23 @@ async def short_url(url: str) -> str:
                 return url
 
 
-async def set_bot_commands(lang: Optional[str] = None) -> None:
-    lang = lang or Settings.DEFAULT_LANG
+async def set_bot_commands(bot: Bot, lang: Optional[str] = None) -> None:
+    lang = lang or settings.DEFAULT_LANG
     command_texts = TextManager.commands
     commands = [BotCommand(command=cmd, description=desc[lang]) for cmd, desc in command_texts.items()]
-    bot = get_bot()
     await bot.set_my_commands(commands)
 
 
-async def delete_messages(state: FSMContext) -> None:
+@inject
+async def delete_messages(
+    state: FSMContext,
+    bot: Bot = Provide[App.bot],
+) -> None:
     data = await state.get_data()
     message_ids = data.get("message_ids", [])
     chat_id = data.get("chat_id")
     if chat_id is None:
         return
-    bot = get_bot()
     for message_id in message_ids:
         with suppress(TelegramBadRequest, ValidationError):
             await bot.delete_message(chat_id=chat_id, message_id=message_id)

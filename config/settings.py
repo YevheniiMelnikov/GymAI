@@ -1,11 +1,11 @@
 import os
 from pathlib import Path
 
-from config.env_settings import Settings
+from config.env_settings import settings
 from config.logger import *
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = Settings.API_KEY
+SECRET_KEY = settings.API_KEY
 DEBUG = os.environ.get("DEBUG_STATUS", "False").lower() == "true"
 ALLOWED_HOSTS = [
     "localhost",
@@ -54,11 +54,11 @@ TEMPLATES = [
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql_psycopg2",
-        "NAME": Settings.DB_NAME,
-        "USER": Settings.DB_USER,
-        "PASSWORD": Settings.DB_PASSWORD,
-        "HOST": Settings.DB_HOST,
-        "PORT": Settings.DB_PORT,
+        "NAME": settings.DB_NAME,
+        "USER": settings.DB_USER,
+        "PASSWORD": settings.DB_PASSWORD,
+        "HOST": settings.DB_HOST,
+        "PORT": settings.DB_PORT,
         "TEST": {
             "NAME": "test_db",
         },
@@ -66,7 +66,7 @@ DATABASES = {
 }
 
 LANGUAGE_CODE = "EN"
-TIME_ZONE = Settings.TIME_ZONE
+TIME_ZONE = settings.TIME_ZONE
 USE_I18N = True
 USE_TZ = False
 STATIC_URL = "/static/"
@@ -84,11 +84,11 @@ REST_FRAMEWORK = {
     ],
 }
 
-DOMAIN = Settings.API_URL
-SITE_NAME = Settings.SITE_NAME
+DOMAIN = settings.API_URL
+SITE_NAME = settings.SITE_NAME
 CORS_ALLOWED_ORIGINS = ["*"]  # move to settings
 
-REDIS_URL = Settings.REDIS_URL
+REDIS_URL = settings.REDIS_URL
 
 CACHES = {
     "default": {

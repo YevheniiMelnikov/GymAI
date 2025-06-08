@@ -7,12 +7,12 @@ from loguru import logger
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from config.env_settings import Settings
+from config.env_settings import settings
 
 
 class BaseCacheManager:
     redis: ClassVar[Redis] = Redis.from_url(
-        Settings.REDIS_URL,
+        settings.REDIS_URL,
         encoding="utf-8",
         decode_responses=True,
     )

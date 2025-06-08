@@ -7,7 +7,7 @@ from django.db.models import QuerySet
 from rest_framework.exceptions import NotFound
 
 from apps.payments.models import Payment
-from config.env_settings import Settings
+from config.env_settings import settings
 
 
 class PaymentRepository:
@@ -31,7 +31,7 @@ class PaymentRepository:
         result = cache.get_or_set(
             PaymentRepository._key(pk),
             get_payment,
-            Settings.CACHE_TTL,
+            settings.CACHE_TTL,
         )
         return cast(Payment, result)
 

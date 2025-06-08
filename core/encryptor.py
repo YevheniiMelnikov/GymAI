@@ -5,7 +5,7 @@ from typing import Optional
 from cryptography.fernet import Fernet
 
 from loguru import logger
-from config.env_settings import Settings
+from config.env_settings import settings
 
 
 class Encryptor:
@@ -14,7 +14,7 @@ class Encryptor:
     @classmethod
     def _get_fernet(cls):
         if cls._fernet is None:
-            key = hashlib.sha256(Settings.API_KEY.encode()).digest()
+            key = hashlib.sha256(settings.API_KEY.encode()).digest()
             fernet_key = base64.urlsafe_b64encode(key)
             cls._fernet = Fernet(fernet_key)
         return cls._fernet

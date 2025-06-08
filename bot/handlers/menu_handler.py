@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import aiohttp
 from aiogram import Bot, Router
-from aiogram.client.session import aiohttp
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from dateutil.relativedelta import relativedelta
@@ -18,7 +18,7 @@ from bot.keyboards import (
 )
 from bot.states import States
 from bot.texts.text_manager import msg_text
-from config.env_settings import Settings
+from config.env_settings import settings
 from core.cache import Cache
 from core.schemas import Coach, Profile
 from core.services import APIService
@@ -312,8 +312,8 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
 
         async with aiohttp.ClientSession():
             await bot.send_message(
-                Settings.ADMIN_ID,
-                msg_text("subscription_cancel_request", Settings.ADMIN_LANG).format(
+                settings.ADMIN_ID,
+                msg_text("subscription_cancel_request", settings.ADMIN_LANG).format(
                     profile_id=profile.id,
                     contact=contact,
                     next_payment_date=next_payment_date.strftime("%Y-%m-%d"),

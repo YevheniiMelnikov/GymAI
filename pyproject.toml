@@ -30,6 +30,8 @@ dependencies = [
     "django>=5.2",
     "celery>=5.5.2",
     "django-redis>=5.4.0",
+    "dependency-injector>=4.47.1",
+    "pydantic-settings>=2.9.1",
 ]
 
 [project.optional-dependencies]

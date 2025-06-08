@@ -7,19 +7,22 @@ from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from dependency_injector.wiring import inject, Provide
 
 from bot.texts import msg_text
-from bot.utils.other import get_bot, answer_msg
+from bot.utils.other import answer_msg
 from bot.keyboards import new_coach_kb, incoming_request_kb, client_msg_bk, program_view_kb
 from bot.states import States
-from config.env_settings import Settings
+from config.env_settings import settings
 from core.cache import Cache
+from core.containers import App
 from core.schemas import Coach, Profile, Client
 from core.services import APIService
 from bot.utils.text import format_new_client_message, get_client_page, get_workout_types
 from core.services.outer import avatar_manager
 
 
+@inject
 async def send_message(
     recipient: Client | Coach,
     text: str,
@@ -28,13 +31,14 @@ async def send_message(
     include_incoming_message: bool = True,
     photo=None,
     video=None,
+    bot: Bot = Provide[App.bot],
 ) -> None:
     if state:
         data = await state.get_data()
-        language = cast(str, data.get("recipient_language", Settings.DEFAULT_LANG))
+        language = cast(str, data.get("recipient_language", settings.DEFAULT_LANG))
         sender_name = cast(str, data.get("sender_name", ""))
     else:
-        language = Settings.DEFAULT_LANG
+        language = settings.DEFAULT_LANG
         sender_name = ""
 
     recipient_profile = await APIService.profile.get_profile(recipient.profile)
@@ -49,7 +53,6 @@ async def send_message(
         if include_incoming_message
         else text
     )
-    bot: Bot = get_bot()
 
     async with aiohttp.ClientSession():
         if video:
@@ -78,7 +81,13 @@ async def send_message(
             )
 
 
-async def send_coach_request(tg_id: int, profile: Profile, data: dict[str, Any]) -> None:
+@inject
+async def send_coach_request(
+    tg_id: int,
+    profile: Profile,
+    data: dict[str, Any],
+    bot: Bot = Provide[App.bot],
+) -> None:
     name = data.get("name")
     surname = data.get("surname")
     experience = data.get("work_experience")
@@ -86,7 +95,6 @@ async def send_coach_request(tg_id: int, profile: Profile, data: dict[str, Any])
     card = data.get("payment_details")
     subscription_price = data.get("subscription_price")
     program_price = data.get("program_price")
-    bot: Bot = get_bot()
     user = await bot.get_chat(tg_id)
     contact = f"@{user.username}" if user.username else tg_id
 
@@ -95,9 +103,9 @@ async def send_coach_request(tg_id: int, profile: Profile, data: dict[str, Any])
 
     async with aiohttp.ClientSession():
         await bot.send_photo(
-            chat_id=Settings.ADMIN_ID,
+            chat_id=settings.ADMIN_ID,
             photo=photo,
-            caption=msg_text("new_coach_request", Settings.ADMIN_LANG).format(
+            caption=msg_text("new_coach_request", settings.ADMIN_LANG).format(
                 name=name,
                 surname=surname,
                 experience=experience,
@@ -172,16 +180,20 @@ async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> 
     )
 
 
-async def process_feedback_content(message: Message, profile: Profile) -> bool:
-    text = msg_text("new_feedback", Settings.ADMIN_LANG).format(
+@inject
+async def process_feedback_content(
+    message: Message,
+    profile: Profile,
+    bot: Bot = Provide[App.bot],
+) -> bool:
+    text = msg_text("new_feedback", settings.ADMIN_LANG).format(
         profile_id=profile.id,
         feedback=message.text or message.caption or "",
     )
-    bot: Bot = get_bot()
 
     if message.text:
         await bot.send_message(
-            chat_id=Settings.ADMIN_ID,
+            chat_id=settings.ADMIN_ID,
             text=text,
             parse_mode=ParseMode.HTML,
         )
@@ -189,13 +201,13 @@ async def process_feedback_content(message: Message, profile: Profile) -> bool:
 
     elif message.photo:
         photo_id = message.photo[-1].file_id
-        await bot.send_message(chat_id=Settings.ADMIN_ID, text=text, parse_mode=ParseMode.HTML)
-        await bot.send_photo(chat_id=Settings.ADMIN_ID, photo=photo_id)
+        await bot.send_message(chat_id=settings.ADMIN_ID, text=text, parse_mode=ParseMode.HTML)
+        await bot.send_photo(chat_id=settings.ADMIN_ID, photo=photo_id)
         return True
 
     elif message.video:
-        await bot.send_message(chat_id=Settings.ADMIN_ID, text=text, parse_mode=ParseMode.HTML)
-        await bot.send_video(chat_id=Settings.ADMIN_ID, video=message.video.file_id)
+        await bot.send_message(chat_id=settings.ADMIN_ID, text=text, parse_mode=ParseMode.HTML)
+        await bot.send_video(chat_id=settings.ADMIN_ID, video=message.video.file_id)
         return True
 
     await answer_msg(message, msg_text("invalid_content", profile.language))

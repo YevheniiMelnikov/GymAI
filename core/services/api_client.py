@@ -6,18 +6,18 @@ import httpx
 from loguru import logger
 
 from core.exceptions import UserServiceError
-from config.env_settings import Settings
+from config.env_settings import settings
 
 
 class APIClient:
-    api_url = Settings.API_URL
-    api_key = Settings.API_KEY
-    client = httpx.AsyncClient(timeout=Settings.API_TIMEOUT)
+    api_url = settings.API_URL
+    api_key = settings.API_KEY
+    client = httpx.AsyncClient(timeout=settings.API_TIMEOUT)
 
-    max_retries = Settings.API_MAX_RETRIES
-    initial_delay = Settings.API_RETRY_INITIAL_DELAY
-    backoff_factor = Settings.API_RETRY_BACKOFF_FACTOR
-    max_delay = Settings.API_RETRY_MAX_DELAY
+    max_retries = settings.API_MAX_RETRIES
+    initial_delay = settings.API_RETRY_INITIAL_DELAY
+    backoff_factor = settings.API_RETRY_BACKOFF_FACTOR
+    max_delay = settings.API_RETRY_MAX_DELAY
 
     @classmethod
     async def _api_request(

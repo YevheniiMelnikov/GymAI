@@ -7,7 +7,7 @@ from loguru import logger
 from bot.texts import msg_text
 from bot.utils.chat import send_message
 from bot.utils.other import del_msg
-from config.env_settings import Settings
+from config.env_settings import settings
 from core.cache import Cache
 from core.exceptions import CoachNotFoundError
 from core.services import APIService
@@ -38,7 +38,7 @@ async def approve_coach(callback_query: CallbackQuery, state: FSMContext) -> Non
     await callback_query.answer("👍")
     coach = await Cache.coach.get_coach(profile_id)
     coach_profile = await Cache.profile.get_profile(profile_id)
-    lang = coach_profile.language or Settings.DEFAULT_LANG
+    lang = coach_profile.language or settings.DEFAULT_LANG
     if coach:
         await send_message(coach, msg_text("coach_verified", lang), state, include_incoming_message=False)
     if callback_query.message and isinstance(callback_query.message, Message):
@@ -61,7 +61,7 @@ async def decline_coach(callback_query: CallbackQuery, state: FSMContext) -> Non
     await callback_query.answer("👎")
     coach = await Cache.coach.get_coach(profile_id)
     coach_profile = await Cache.profile.get_profile(profile_id)
-    lang = coach_profile.language or Settings.DEFAULT_LANG
+    lang = coach_profile.language or settings.DEFAULT_LANG
     if coach:
         await send_message(coach, msg_text("coach_declined", lang), state, include_incoming_message=False)
     if callback_query.message and isinstance(callback_query.message, Message):
