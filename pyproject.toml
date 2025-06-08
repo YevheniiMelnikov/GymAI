@@ -70,10 +70,8 @@ project_excludes = [
     "**/templates/**",
     "**/migrations/**",
     "**/tests/**",
-    "**/venv/**",
-    "**/.venv/**",
-    "**/venv-win/**",
-    "**/.venv-win/**",
+    "**/.venv*/**",
+    "**/venv*/**",
 ]
 python_interpreter = ".venv/bin/python3"
 ignore_errors_in_generated_code = true
