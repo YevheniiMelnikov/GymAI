@@ -29,7 +29,7 @@ tasks:
   test:
     desc: Run tests
     cmds:
-      - uv run pytest
+      - uv run --env-file .env pytest -q
 
   update:
     desc: Update dependencies (main + dev)
