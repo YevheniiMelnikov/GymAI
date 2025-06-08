@@ -5,14 +5,14 @@ import gspread
 from google.oauth2.service_account import Credentials
 from gspread.utils import ValueInputOption
 
-from config.env_settings import Settings
+from config.env_settings import settings
 
 
 class GSheetsService:
     SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets"
     DRIVE_SCOPE = "https://www.googleapis.com/auth/drive"
-    creds_path = Settings.GOOGLE_APPLICATION_CREDENTIALS
-    sheet_id = Settings.SPREADSHEET_ID
+    creds_path = settings.GOOGLE_APPLICATION_CREDENTIALS
+    sheet_id = settings.SPREADSHEET_ID
 
     @classmethod
     def _connect(cls) -> gspread.Client:

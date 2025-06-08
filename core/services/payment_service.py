@@ -8,7 +8,7 @@ from liqpay import LiqPay
 from loguru import logger
 from pydantic_core._pydantic_core import ValidationError
 
-from config.env_settings import Settings
+from config.env_settings import settings
 from core.enums import PaymentStatus
 from core.schemas import Payment, Subscription
 from core.services.api_client import APIClient
@@ -17,7 +17,7 @@ from core.services.api_client import APIClient
 class PaymentService(APIClient):
     API_BASE_PATH = "api/v1/payments/"
     SUBSCRIPTIONS_PATH = "api/v1/subscriptions/"
-    payment_client = LiqPay(Settings.PAYMENT_PUB_KEY, Settings.PAYMENT_PRIVATE_KEY)
+    payment_client = LiqPay(settings.PAYMENT_PUB_KEY, settings.PAYMENT_PRIVATE_KEY)
 
     @classmethod
     def _build_payment_params(
@@ -36,8 +36,8 @@ class PaymentService(APIClient):
             "description": f"{payment_type} payment from client {client_id}",
             "order_id": order_id,
             "version": "3",
-            "server_url": Settings.PAYMENT_CALLBACK_URL,
-            "result_url": Settings.BOT_LINK,
+            "server_url": settings.PAYMENT_CALLBACK_URL,
+            "result_url": settings.BOT_LINK,
             "rro_info": {"delivery_emails": emails},
         }
 
@@ -65,13 +65,13 @@ class PaymentService(APIClient):
             order_id=order_id,
             payment_type=payment_type,
             client_id=client_id,
-            emails=[Settings.EMAIL],
+            emails=[settings.EMAIL],
         )
 
         data = cls.payment_client.cnb_data(params)
         signature = cls.payment_client.cnb_signature(params)
         query_string = urlencode({"data": data, "signature": signature})
-        return urljoin(Settings.CHECKOUT_URL, f"?{query_string}")
+        return urljoin(settings.CHECKOUT_URL, f"?{query_string}")
 
     @classmethod
     async def unsubscribe(cls, order_id: str) -> bool:
@@ -143,9 +143,7 @@ class PaymentService(APIClient):
     async def get_unclosed_payments(cls) -> list[Payment]:
         return await cls._get_filtered_payments(
             lambda p: (
-                p.get("status") == Settings.SUCCESS_PAYMENT_STATUS
-                and p.get("processed") is True
-                and not p.get("payout_handled")
+                p.get("status") == PaymentStatus.SUCCESS and p.get("processed") is True and not p.get("payout_handled")
             )
         )
 

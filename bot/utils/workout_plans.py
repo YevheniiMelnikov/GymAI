@@ -10,7 +10,7 @@ from loguru import logger
 
 from bot.keyboards import program_edit_kb, program_manage_kb, subscription_view_kb, payment_kb
 from bot.states import States
-from config.env_settings import Settings
+from config.env_settings import settings
 from core.cache import Cache
 from core.enums import ClientStatus, PaymentStatus
 from core.schemas import Profile, DayExercises, Subscription, Program
@@ -71,7 +71,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
         return
 
     client_profile = await APIService.profile.get_profile(client.profile)
-    client_lang = client_profile.language if client_profile else Settings.DEFAULT_LANG
+    client_lang = client_profile.language if client_profile else settings.DEFAULT_LANG
 
     if data.get("subscription"):
         try:
@@ -341,7 +341,7 @@ async def cancel_subscription(next_payment_date: datetime, client_id: int, subsc
 
 
 async def process_new_subscription(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    language = cast(str, profile.language or Settings.DEFAULT_LANG)
+    language = cast(str, profile.language or settings.DEFAULT_LANG)
 
     await callback_query.answer(msg_text("checkbox_reminding", language), show_alert=True)
 

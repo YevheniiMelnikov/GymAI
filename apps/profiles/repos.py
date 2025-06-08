@@ -5,7 +5,7 @@ from django.core.cache import cache
 from rest_framework.exceptions import ValidationError, NotFound
 
 from apps.profiles.models import Profile, CoachProfile, ClientProfile
-from config.env_settings import Settings
+from config.env_settings import settings
 
 
 class ProfileRepository:
@@ -21,7 +21,7 @@ class ProfileRepository:
         result = cache.get_or_set(
             f"profile:{profile_id}",
             get_profile,
-            Settings.CACHE_TTL,
+            settings.CACHE_TTL,
         )
         return cast(Profile, result)
 
@@ -37,7 +37,7 @@ class ProfileRepository:
         result = cache.get_or_set(
             f"profile:tg:{tg_id}",
             get_profile,
-            Settings.CACHE_TTL,
+            settings.CACHE_TTL,
         )
         return cast(Profile, result)
 

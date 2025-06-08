@@ -13,7 +13,7 @@ from bot.texts import msg_text
 from bot.utils.other import answer_msg
 from bot.keyboards import new_coach_kb, incoming_request_kb, client_msg_bk, program_view_kb
 from bot.states import States
-from config.env_settings import Settings
+from config.env_settings import settings
 from core.cache import Cache
 from core.containers import App
 from core.schemas import Coach, Profile, Client
@@ -35,10 +35,10 @@ async def send_message(
 ) -> None:
     if state:
         data = await state.get_data()
-        language = cast(str, data.get("recipient_language", Settings.DEFAULT_LANG))
+        language = cast(str, data.get("recipient_language", settings.DEFAULT_LANG))
         sender_name = cast(str, data.get("sender_name", ""))
     else:
-        language = Settings.DEFAULT_LANG
+        language = settings.DEFAULT_LANG
         sender_name = ""
 
     recipient_profile = await APIService.profile.get_profile(recipient.profile)
@@ -103,9 +103,9 @@ async def send_coach_request(
 
     async with aiohttp.ClientSession():
         await bot.send_photo(
-            chat_id=Settings.ADMIN_ID,
+            chat_id=settings.ADMIN_ID,
             photo=photo,
-            caption=msg_text("new_coach_request", Settings.ADMIN_LANG).format(
+            caption=msg_text("new_coach_request", settings.ADMIN_LANG).format(
                 name=name,
                 surname=surname,
                 experience=experience,
@@ -186,14 +186,14 @@ async def process_feedback_content(
     profile: Profile,
     bot: Bot = Provide[App.bot],
 ) -> bool:
-    text = msg_text("new_feedback", Settings.ADMIN_LANG).format(
+    text = msg_text("new_feedback", settings.ADMIN_LANG).format(
         profile_id=profile.id,
         feedback=message.text or message.caption or "",
     )
 
     if message.text:
         await bot.send_message(
-            chat_id=Settings.ADMIN_ID,
+            chat_id=settings.ADMIN_ID,
             text=text,
             parse_mode=ParseMode.HTML,
         )
@@ -201,13 +201,13 @@ async def process_feedback_content(
 
     elif message.photo:
         photo_id = message.photo[-1].file_id
-        await bot.send_message(chat_id=Settings.ADMIN_ID, text=text, parse_mode=ParseMode.HTML)
-        await bot.send_photo(chat_id=Settings.ADMIN_ID, photo=photo_id)
+        await bot.send_message(chat_id=settings.ADMIN_ID, text=text, parse_mode=ParseMode.HTML)
+        await bot.send_photo(chat_id=settings.ADMIN_ID, photo=photo_id)
         return True
 
     elif message.video:
-        await bot.send_message(chat_id=Settings.ADMIN_ID, text=text, parse_mode=ParseMode.HTML)
-        await bot.send_video(chat_id=Settings.ADMIN_ID, video=message.video.file_id)
+        await bot.send_message(chat_id=settings.ADMIN_ID, text=text, parse_mode=ParseMode.HTML)
+        await bot.send_video(chat_id=settings.ADMIN_ID, video=message.video.file_id)
         return True
 
     await answer_msg(message, msg_text("invalid_content", profile.language))

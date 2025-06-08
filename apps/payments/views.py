@@ -19,7 +19,7 @@ from apps.payments.models import Payment
 from apps.payments.repos import PaymentRepository
 from apps.payments.serializers import PaymentSerializer
 from apps.payments.tasks import process_payment_webhook
-from config.env_settings import Settings
+from config.env_settings import settings
 
 
 class PaymentWebhookView(APIView):
@@ -27,8 +27,8 @@ class PaymentWebhookView(APIView):
 
     @staticmethod
     def _verify_signature(raw_data: str, signature: str) -> bool:
-        lp = LiqPay(Settings.PAYMENT_PUB_KEY, Settings.PAYMENT_PRIVATE_KEY)
-        expected = lp.str_to_sign(f"{Settings.PAYMENT_PRIVATE_KEY}{raw_data}{Settings.PAYMENT_PRIVATE_KEY}")
+        lp = LiqPay(settings.PAYMENT_PUB_KEY, settings.PAYMENT_PRIVATE_KEY)
+        expected = lp.str_to_sign(f"{settings.PAYMENT_PRIVATE_KEY}{raw_data}{settings.PAYMENT_PRIVATE_KEY}")
         return signature == expected
 
     @staticmethod

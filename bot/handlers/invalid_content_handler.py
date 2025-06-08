@@ -4,7 +4,7 @@ from aiogram.types import Message
 
 from bot.states import States
 from bot.texts.text_manager import msg_text
-from config.env_settings import Settings
+from config.env_settings import settings
 
 invalid_content_router = Router()
 
@@ -42,7 +42,7 @@ HANDLED_STATES = [
 
 async def invalid_data_handler(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
-    await handle_invalid_content(message, data.get("lang", Settings.DEFAULT_LANG))
+    await handle_invalid_content(message, data.get("lang", settings.DEFAULT_LANG))
 
 
 for state_ in HANDLED_STATES:

@@ -2,11 +2,11 @@ from aiohttp import web
 from loguru import logger
 
 from core.payment_processor import PaymentProcessor
-from config.env_settings import Settings
+from config.env_settings import settings
 
 
 async def internal_payment_handler(request: web.Request) -> web.Response:
-    if request.headers.get("Authorization") != f"Api-Key {Settings.API_KEY}":
+    if request.headers.get("Authorization") != f"Api-Key {settings.API_KEY}":
         return web.json_response({"detail": "Forbidden"}, status=403)
 
     try:

@@ -26,7 +26,7 @@ from bot.utils.text import (
     get_translated_week_day,
 )
 from bot.utils.exercises import format_program
-from config.env_settings import Settings
+from config.env_settings import settings
 from bot.utils.other import answer_msg, del_msg
 from core.services.outer import avatar_manager
 from core.validators import validate_or_raise
@@ -265,7 +265,7 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
 
     subscription = await Cache.workout.get_latest_subscription(profile.id)
     if not subscription or not subscription.enabled:
-        subscription_img = Settings.BOT_PAYMENT_OPTIONS + f"subscription_{language}.jpeg"
+        subscription_img = settings.BOT_PAYMENT_OPTIONS + f"subscription_{language}.jpeg"
         client_profile = await Cache.client.get_client(profile.id)
         coach = await Cache.coach.get_coach(client_profile.assigned_to.pop())
 
@@ -320,7 +320,7 @@ async def show_program_promo_page(callback_query: CallbackQuery, profile: Profil
     message = cast(Message, callback_query.message)
     assert message
 
-    program_img = Settings.BOT_PAYMENT_OPTIONS + f"program_{language}.jpeg"
+    program_img = settings.BOT_PAYMENT_OPTIONS + f"program_{language}.jpeg"
     client_profile = await Cache.client.get_client(profile.id)
     coach = await Cache.coach.get_coach(client_profile.assigned_to.pop())
 

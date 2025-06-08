@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Annotated
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
@@ -21,20 +22,20 @@ class Settings(BaseSettings):
 
     CACHE_TTL: int = 60 * 5
 
-    TIME_ZONE: str = Field("Europe/Kyiv", env="TIME_ZONE")
-    DEFAULT_LANG: str = Field("ua", env="DEFAULT_LANG")
-    ADMIN_LANG: str = Field("ru", env="ADMIN_LANG")
-    LOG_LEVEL: str = Field("INFO", env="LOG_LEVEL")
-    REDIS_URL: str = Field("redis://redis:6379", env="REDIS_URL")
+    TIME_ZONE: Annotated[str, Field(default="Europe/Kyiv")]
+    DEFAULT_LANG: Annotated[str, Field(default="ua")]
+    ADMIN_LANG: Annotated[str, Field(default="ru")]
+    LOG_LEVEL: Annotated[str, Field(default="INFO")]
+    REDIS_URL: Annotated[str, Field(default="redis://redis:6379")]
 
-    BOT_INTERNAL_URL: str = Field("http://localhost:8000/", env="BOT_INTERNAL_URL")
-    WEB_SERVER_HOST: str = Field("0.0.0.0", env="WEB_SERVER_HOST")
+    BOT_INTERNAL_URL: Annotated[str, Field(default="http://localhost:8000/")]
+    WEB_SERVER_HOST: Annotated[str, Field(default="0.0.0.0")]
 
-    DB_PORT: str = Field("5432", env="DB_PORT")
-    DB_NAME: str = Field("postgres", env="DB_NAME")
-    DB_USER: str = Field("postgres", env="DB_USER")
-    DB_PASSWORD: str = Field("password", env="POSTGRES_PASSWORD")
-    DB_HOST: str = Field("db", env="DB_HOST")
+    DB_PORT: Annotated[str, Field(default="5432")]
+    DB_NAME: Annotated[str, Field(default="postgres")]
+    DB_USER: Annotated[str, Field(default="postgres")]
+    DB_PASSWORD: Annotated[str, Field(alias="POSTGRES_PASSWORD")]
+    DB_HOST: Annotated[str, Field(default="db")]
 
     API_KEY: str
     API_URL: str

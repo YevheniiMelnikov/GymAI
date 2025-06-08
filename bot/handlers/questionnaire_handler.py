@@ -17,7 +17,7 @@ from bot.keyboards import (
     select_status_kb,
 )
 from bot.states import States
-from config.env_settings import Settings
+from config.env_settings import settings
 from core.cache import Cache
 from core.containers import App
 from core.exceptions import ProfileNotFoundError, ClientNotFoundError
@@ -44,7 +44,7 @@ async def select_language(
 ) -> None:
     await callback_query.answer()
     await delete_messages(state)
-    lang = callback_query.data or Settings.DEFAULT_LANG
+    lang = callback_query.data or settings.DEFAULT_LANG
     await set_bot_commands(bot, lang)
     try:
         profile = await APIService.profile.get_profile_by_tg_id(callback_query.from_user.id)
@@ -80,7 +80,7 @@ async def profile_status_choice(callback_query: CallbackQuery, state: FSMContext
     await callback_query.answer()
     data = await state.get_data()
     await delete_messages(state)
-    lang = data.get("lang", Settings.DEFAULT_LANG)
+    lang = data.get("lang", settings.DEFAULT_LANG)
     status = callback_query.data if callback_query.data in ("coach", "client") else "client"
     profile = await APIService.profile.create_profile(tg_id=callback_query.from_user.id, status=status, language=lang)
     if profile is None:
@@ -103,7 +103,7 @@ async def name(message: Message, state: FSMContext) -> None:
 
     await delete_messages(state)
     data = await state.get_data()
-    lang = data.get("lang", Settings.DEFAULT_LANG)
+    lang = data.get("lang", settings.DEFAULT_LANG)
     text = msg_text("surname", lang) if data.get("status") == "coach" else msg_text("choose_gender", lang)
     reply_markup = select_gender_kb(lang) if data.get("status") == "client" else None
     msg = await answer_msg(message, text=text, reply_markup=reply_markup)
@@ -116,7 +116,7 @@ async def name(message: Message, state: FSMContext) -> None:
 @questionnaire_router.callback_query(States.gender)
 async def gender(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
-    lang = data.get("lang", Settings.DEFAULT_LANG)
+    lang = data.get("lang", settings.DEFAULT_LANG)
     await callback_query.answer(msg_text("saved", lang))
     msg = None
     if callback_query.message is not None:
@@ -137,7 +137,7 @@ async def born_in(message: Message, state: FSMContext) -> None:
 
     await delete_messages(state)
     data = await state.get_data()
-    lang = data.get("lang", Settings.DEFAULT_LANG)
+    lang = data.get("lang", settings.DEFAULT_LANG)
     msg = await answer_msg(message, msg_text("workout_goals", lang))
     await state.update_data(born_in=message.text, chat_id=message.chat.id, message_ids=[msg.message_id] if msg else [])
     await state.set_state(States.workout_goals)
@@ -156,7 +156,7 @@ async def workout_goals(message: Message, state: FSMContext) -> None:
         await update_profile_data(cast(Message, message), state, "client")
         return
 
-    lang = data.get("lang", Settings.DEFAULT_LANG)
+    lang = data.get("lang", settings.DEFAULT_LANG)
     msg = await answer_msg(
         message,
         msg_text("workout_experience", lang),
@@ -171,7 +171,7 @@ async def workout_goals(message: Message, state: FSMContext) -> None:
 async def workout_experience(callback_query: CallbackQuery, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
-    lang = data.get("lang", Settings.DEFAULT_LANG)
+    lang = data.get("lang", settings.DEFAULT_LANG)
     await callback_query.answer(msg_text("saved", lang))
     await state.update_data(workout_experience=callback_query.data)
     if data.get("edit_mode"):
@@ -189,7 +189,7 @@ async def workout_experience(callback_query: CallbackQuery, state: FSMContext) -
 @questionnaire_router.message(States.weight)
 async def weight(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
-    lang = data.get("lang", Settings.DEFAULT_LANG)
+    lang = data.get("lang", settings.DEFAULT_LANG)
     await delete_messages(state)
 
     if not message.text or not all(x.isdigit() for x in message.text.split()):
@@ -225,7 +225,7 @@ async def surname(message: Message, state: FSMContext) -> None:
 
     await delete_messages(state)
     data = await state.get_data()
-    lang = data.get("lang", Settings.DEFAULT_LANG)
+    lang = data.get("lang", settings.DEFAULT_LANG)
     await state.update_data(surname=message.text)
     if data.get("edit_mode"):
         await update_profile_data(cast(Message, message), state, "coach")
@@ -240,7 +240,7 @@ async def surname(message: Message, state: FSMContext) -> None:
 @questionnaire_router.message(States.work_experience)
 async def work_experience(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
-    lang = data.get("lang", Settings.DEFAULT_LANG)
+    lang = data.get("lang", settings.DEFAULT_LANG)
     await delete_messages(state)
 
     if not message.text or not all(x.isdigit() for x in message.text.split()):
@@ -266,7 +266,7 @@ async def additional_info(message: Message, state: FSMContext) -> None:
         return
 
     data = await state.get_data()
-    lang = data.get("lang", Settings.DEFAULT_LANG)
+    lang = data.get("lang", settings.DEFAULT_LANG)
     await delete_messages(state)
     await state.update_data(additional_info=message.text)
     if data.get("edit_mode"):
@@ -287,7 +287,7 @@ async def payment_details(message: Message, state: FSMContext) -> None:
     await state.update_data(payment_details=message.text.replace(" ", ""))
 
     data = await state.get_data()
-    lang = data.get("lang", Settings.DEFAULT_LANG)
+    lang = data.get("lang", settings.DEFAULT_LANG)
     await delete_messages(state)
     card_number = message.text.replace(" ", "")
     if not all(x.isdigit() for x in card_number) or len(card_number) != 16:
@@ -309,7 +309,7 @@ async def payment_details(message: Message, state: FSMContext) -> None:
 async def enter_program_price(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
-    lang = data.get("lang", Settings.DEFAULT_LANG)
+    lang = data.get("lang", settings.DEFAULT_LANG)
     if not message.text:
         await answer_msg(message, msg_text("invalid_content", lang))
         await del_msg(message)
@@ -341,7 +341,7 @@ async def enter_program_price(message: Message, state: FSMContext) -> None:
 async def enter_subscription_price(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
-    lang = data.get("lang", Settings.DEFAULT_LANG)
+    lang = data.get("lang", settings.DEFAULT_LANG)
     if not message.text:
         await answer_msg(message, msg_text("invalid_content", lang))
         await del_msg(message)
@@ -372,12 +372,12 @@ async def enter_subscription_price(message: Message, state: FSMContext) -> None:
 @questionnaire_router.message(States.profile_photo)
 async def profile_photo(message: Message, state: FSMContext) -> None:
     if not message.photo:
-        await answer_msg(message, msg_text("invalid_content", Settings.DEFAULT_LANG))
+        await answer_msg(message, msg_text("invalid_content", settings.DEFAULT_LANG))
         return
 
     await delete_messages(state)
     data = await state.get_data()
-    lang = data.get("lang", Settings.DEFAULT_LANG)
+    lang = data.get("lang", settings.DEFAULT_LANG)
     local_file = await avatar_manager.save_image(message)
 
     if local_file and avatar_manager.check_file_size(local_file, 20):
@@ -400,7 +400,7 @@ async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> No
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     await delete_messages(state)
-    await state.update_data(lang=profile.language or Settings.DEFAULT_LANG)
+    await state.update_data(lang=profile.language or settings.DEFAULT_LANG)
     if callback_query.data == "back":
         message = callback_query.message
         if message is not None:
@@ -408,20 +408,20 @@ async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> No
         return
 
     state_to_set, message_text = get_state_and_message(
-        callback_query.data or "", profile.language or Settings.DEFAULT_LANG
+        callback_query.data or "", profile.language or settings.DEFAULT_LANG
     )
     if state_to_set == States.subscription_price:
         msg = None
         if callback_query.message is not None:
             msg = await answer_msg(
                 cast(Message, callback_query.message),
-                msg_text("price_warning", profile.language or Settings.DEFAULT_LANG),
+                msg_text("price_warning", profile.language or settings.DEFAULT_LANG),
             )
         if msg and callback_query.message:
             await state.update_data(price_warning_msg_ids=[msg.message_id], chat_id=callback_query.message.chat.id)
     await state.update_data(edit_mode=True)
     reply_markup = (
-        workout_experience_kb(profile.language or Settings.DEFAULT_LANG)
+        workout_experience_kb(profile.language or settings.DEFAULT_LANG)
         if state_to_set == States.workout_experience
         else None
     )
@@ -439,7 +439,7 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
     await state.set_state(States.enter_wishes)
     if callback_query.message is not None:
         await answer_msg(
-            cast(Message, callback_query.message), msg_text("enter_wishes", profile.language or Settings.DEFAULT_LANG)
+            cast(Message, callback_query.message), msg_text("enter_wishes", profile.language or settings.DEFAULT_LANG)
         )
     await del_msg(cast(Message | CallbackQuery | None, callback_query))
 
@@ -463,7 +463,7 @@ async def enter_wishes(message: Message, state: FSMContext):
     if data.get("new_client"):
         if message is not None:
             await answer_msg(
-                message, msg_text("coach_selected", profile.language or Settings.DEFAULT_LANG).format(name=coach.name)
+                message, msg_text("coach_selected", profile.language or settings.DEFAULT_LANG).format(name=coach.name)
             )
         await client_request(coach, client, data)
         if message is not None:
@@ -475,8 +475,8 @@ async def enter_wishes(message: Message, state: FSMContext):
             if message is not None:
                 await answer_msg(
                     message,
-                    text=msg_text("select_days", profile.language or Settings.DEFAULT_LANG),
-                    reply_markup=select_days_kb(profile.language or Settings.DEFAULT_LANG, []),
+                    text=msg_text("select_days", profile.language or settings.DEFAULT_LANG),
+                    reply_markup=select_days_kb(profile.language or settings.DEFAULT_LANG, []),
                 )
         elif data.get("service_type") == "program":
             order_id = generate_order_id()
@@ -493,12 +493,12 @@ async def enter_wishes(message: Message, state: FSMContext):
                 if message is not None:
                     await answer_msg(
                         message,
-                        msg_text("follow_link", profile.language or Settings.DEFAULT_LANG),
-                        reply_markup=payment_kb(profile.language or Settings.DEFAULT_LANG, payment_link, "program"),
+                        msg_text("follow_link", profile.language or settings.DEFAULT_LANG),
+                        reply_markup=payment_kb(profile.language or settings.DEFAULT_LANG, payment_link, "program"),
                     )
             else:
                 if message is not None:
-                    await answer_msg(message, msg_text("unexpected_error", profile.language or Settings.DEFAULT_LANG))
+                    await answer_msg(message, msg_text("unexpected_error", profile.language or settings.DEFAULT_LANG))
         if message is not None:
             await del_msg(cast(Message | CallbackQuery | None, message))
 
@@ -511,7 +511,7 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
         client = await Cache.client.get_client(profile.id)
     except ClientNotFoundError:
         logger.error(f"Client profile not found for profile {profile.id}")
-        await callback_query.answer(msg_text("unexpected_error", profile.language or Settings.DEFAULT_LANG))
+        await callback_query.answer(msg_text("unexpected_error", profile.language or settings.DEFAULT_LANG))
         return
 
     days = data.get("workout_days", [])
@@ -526,12 +526,12 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
                     if callback_query.message is not None:
                         await answer_msg(
                             cast(Message, callback_query.message),
-                            msg_text("workout_plan_delete_warning", profile.language or Settings.DEFAULT_LANG),
-                            reply_markup=yes_no_kb(profile.language or Settings.DEFAULT_LANG),
+                            msg_text("workout_plan_delete_warning", profile.language or settings.DEFAULT_LANG),
+                            reply_markup=yes_no_kb(profile.language or settings.DEFAULT_LANG),
                         )
                     await state.set_state(States.confirm_subscription_reset)
             else:
-                await callback_query.answer(msg_text("saved", profile.language or Settings.DEFAULT_LANG))
+                await callback_query.answer(msg_text("saved", profile.language or settings.DEFAULT_LANG))
                 await process_new_subscription(callback_query, profile, state)
         else:
             await callback_query.answer("❌")
@@ -547,7 +547,7 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
             with suppress(TelegramBadRequest, AttributeError):
                 if isinstance(callback_query.message, Message):
                     await callback_query.message.edit_reply_markup(
-                        reply_markup=select_days_kb(profile.language or Settings.DEFAULT_LANG, days)
+                        reply_markup=select_days_kb(profile.language or settings.DEFAULT_LANG, days)
                     )
 
         await state.set_state(States.workout_days)
@@ -563,7 +563,7 @@ async def delete_profile_confirmation(callback_query: CallbackQuery, state: FSMC
             if await check_assigned_clients(profile.id):
                 await answer_msg(
                     cast(Message | CallbackQuery, callback_query),
-                    msg_text("unable_to_delete_profile", profile.language or Settings.DEFAULT_LANG),
+                    msg_text("unable_to_delete_profile", profile.language or settings.DEFAULT_LANG),
                 )
                 return
 
@@ -571,18 +571,18 @@ async def delete_profile_confirmation(callback_query: CallbackQuery, state: FSMC
             await Cache.profile.delete_profile(callback_query.from_user.id)
             await answer_msg(
                 cast(Message | CallbackQuery, callback_query),
-                msg_text("profile_deleted", profile.language or Settings.DEFAULT_LANG),
+                msg_text("profile_deleted", profile.language or settings.DEFAULT_LANG),
             )
             await answer_msg(
                 cast(Message | CallbackQuery, callback_query),
-                msg_text("select_action", profile.language or Settings.DEFAULT_LANG),
+                msg_text("select_action", profile.language or settings.DEFAULT_LANG),
             )
             await del_msg(cast(Message | CallbackQuery | None, callback_query))
             await state.clear()
         else:
             await answer_msg(
                 cast(Message | CallbackQuery, callback_query),
-                msg_text("unexpected_error", profile.language or Settings.DEFAULT_LANG),
+                msg_text("unexpected_error", profile.language or settings.DEFAULT_LANG),
             )
     else:
         if callback_query.message is not None:

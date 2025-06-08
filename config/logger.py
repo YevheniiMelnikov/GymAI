@@ -4,7 +4,7 @@ import types
 
 from loguru import logger
 
-from config.env_settings import Settings
+from config.env_settings import settings
 
 
 def configure_loguru():
@@ -19,7 +19,7 @@ def configure_loguru():
             },
             {
                 "sink": "gym_bot.log",
-                "level": Settings.LOG_LEVEL,
+                "level": settings.LOG_LEVEL,
                 "serialize": False,
                 "format": "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} - {message}",
                 "rotation": "100 MB",

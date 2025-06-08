@@ -7,7 +7,7 @@ from aiogram.types import Message, CallbackQuery
 from aiogram.exceptions import TelegramBadRequest
 
 from bot.keyboards import profile_menu_kb
-from config.env_settings import Settings
+from config.env_settings import settings
 from core.cache import Cache
 from core.exceptions import (
     CoachNotFoundError,
@@ -44,7 +44,7 @@ async def update_profile_data(message: Message, state: FSMContext, status: str) 
             if not data.get("edit_mode"):
                 if message.from_user:
                     await answer_msg(
-                        message, msg_text("wait_for_verification", data.get("lang", Settings.DEFAULT_LANG))
+                        message, msg_text("wait_for_verification", data.get("lang", settings.DEFAULT_LANG))
                     )
                     await send_coach_request(message.from_user.id, profile, data)
                     await Cache.coach.save_coach(profile.id, user_data)
@@ -52,12 +52,12 @@ async def update_profile_data(message: Message, state: FSMContext, status: str) 
                 await Cache.coach.update_coach(coach.id, user_data)
             await APIService.profile.update_coach_profile(coach.id, user_data)
 
-        await answer_msg(message, msg_text("your_data_updated", data.get("lang", Settings.DEFAULT_LANG)))
+        await answer_msg(message, msg_text("your_data_updated", data.get("lang", settings.DEFAULT_LANG)))
         await menus.show_main_menu(message, profile, state)
 
     except Exception as e:
         logger.error(f"Unexpected error updating profile: {e}")
-        await answer_msg(message, msg_text("unexpected_error", data.get("lang", Settings.DEFAULT_LANG)))
+        await answer_msg(message, msg_text("unexpected_error", data.get("lang", settings.DEFAULT_LANG)))
 
     finally:
         await del_msg(cast(Message | CallbackQuery | None, message))

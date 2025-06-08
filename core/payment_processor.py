@@ -11,7 +11,7 @@ from core.services.workout_service import WorkoutService
 from bot.utils.chat import send_message, client_request
 from bot.utils.workout_plans import cancel_subscription
 from core.schemas import Payment, Client
-from config.env_settings import Settings
+from config.env_settings import settings
 from core.services.outer.gsheets_service import GSheetsService
 from core.services.payment_service import PaymentService
 from core.services.profile_service import ProfileService
@@ -66,8 +66,8 @@ class PaymentProcessor:
                         text=msg_text("subscription_cancel_warning", profile.language).format(
                             # type: ignore[attr-defined]
                             date=next_payment_date.strftime("%Y-%m-%d"),
-                            mail=Settings.EMAIL,
-                            tg=Settings.TG_SUPPORT_CONTACT,
+                            mail=settings.EMAIL,
+                            tg=settings.TG_SUPPORT_CONTACT,
                         ),
                         state=None,
                         include_incoming_message=False,
@@ -85,7 +85,7 @@ class PaymentProcessor:
         await send_message(
             recipient=client,
             text=msg_text("payment_failure", profile.language).format(  # type: ignore[attr-defined]
-                mail=Settings.EMAIL, tg=Settings.TG_SUPPORT_CONTACT
+                mail=settings.EMAIL, tg=settings.TG_SUPPORT_CONTACT
             ),
             state=None,
             include_incoming_message=False,
@@ -196,7 +196,7 @@ class PaymentProcessor:
                         logger.error(f"Coach {coach_id} not found for payment {payment.order_id}")
                         continue
 
-                    amount = (payment.amount * Decimal(str(Settings.COACH_PAYOUT_RATE))).quantize(
+                    amount = (payment.amount * Decimal(str(settings.COACH_PAYOUT_RATE))).quantize(
                         Decimal("0.01"), ROUND_HALF_UP
                     )
 
