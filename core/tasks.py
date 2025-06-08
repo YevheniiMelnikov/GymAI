@@ -19,7 +19,7 @@ os.makedirs(_redis_dir, exist_ok=True)
 os.environ["PGPASSWORD"] = settings.DB_PASSWORD
 
 
-@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
 def pg_backup(self):
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
     path = os.path.join(_pg_dir, f"{settings.DB_NAME}_backup_{ts}.dump")
@@ -45,7 +45,7 @@ def pg_backup(self):
         raise
 
 
-@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
 def redis_backup(self):
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
     src = "/app/redis/data/dump.rdb"
@@ -57,7 +57,7 @@ def redis_backup(self):
     logger.info(f"Redis backup saved {dest}")
 
 
-@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
 def cleanup_backups(self):
     cutoff = datetime.now() - timedelta(days=30)
     for root in (_pg_dir, _redis_dir):
@@ -67,7 +67,7 @@ def cleanup_backups(self):
                 logger.info(f"Deleted old backup {f.path}")
 
 
-@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
 async def deactivate_expired_subscriptions(self):
     since = (datetime.now() - timedelta(days=1)).date().isoformat()
     subs = await APIService.payment.get_expired_subscriptions(since)
@@ -81,7 +81,7 @@ async def deactivate_expired_subscriptions(self):
         logger.info(f"Subscription {sub.id} deactivated for user {sub.client_profile}")
 
 
-@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
 def process_unclosed_payments(self):
     async def _call_bot() -> None:
         url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/process_unclosed_payments/"
@@ -101,7 +101,7 @@ def process_unclosed_payments(self):
         raise self.retry(exc=exc)
 
 
-@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
 def send_daily_survey(self):
     async def _call_bot() -> None:
         url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/send_daily_survey/"

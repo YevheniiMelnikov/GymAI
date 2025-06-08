@@ -41,7 +41,10 @@ def test_api_request_success(monkeypatch):
     async def fake_request(*a, **kw):
         return DummyResponse(200, {"ok": True})
 
-    monkeypatch.setattr(APIClient, "client", type("C", (), {"request": fake_request})())
+    class _Client:
+        request = staticmethod(fake_request)
+
+    monkeypatch.setattr(APIClient, "client", _Client())
     code, data = asyncio.run(APIClient._api_request("get", "http://x"))
     assert code == 200
     assert data == {"ok": True}
@@ -60,7 +63,10 @@ def test_api_request_retries(monkeypatch):
             raise httpx.HTTPStatusError("boom", request=mock_request, response=mock_response)
         return DummyResponse(200, {"ok": True})
 
-    monkeypatch.setattr(APIClient, "client", type("C", (), {"request": fake_request})())
+    class _Client2:
+        request = staticmethod(fake_request)
+
+    monkeypatch.setattr(APIClient, "client", _Client2())
     code, _ = asyncio.run(APIClient._api_request("get", "http://x"))
     assert len(calls) == 2
     assert code == 200
@@ -74,7 +80,10 @@ def test_api_request_gives_up(monkeypatch):
         mock_response = Mock(spec=httpx.Response)
         raise httpx.HTTPStatusError("boom", request=mock_request, response=mock_response)
 
-    monkeypatch.setattr(APIClient, "client", type("C", (), {"request": fake_request})())
+    class _Client3:
+        request = staticmethod(fake_request)
+
+    monkeypatch.setattr(APIClient, "client", _Client3())
     APIClient.max_retries = 2
     with pytest.raises(UserServiceError):
         asyncio.run(APIClient._api_request("get", "http://x"))

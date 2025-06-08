@@ -10,7 +10,7 @@ from django.views.decorators.cache import cache_page
 from django.http import JsonResponse
 from liqpay import LiqPay
 from loguru import logger
-from rest_framework import generics, status
+from rest_framework import generics, status, serializers
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from rest_framework_api_key.permissions import HasAPIKey
@@ -76,7 +76,7 @@ class PaymentDetailView(generics.RetrieveUpdateAPIView):
     def get_queryset(self):
         return PaymentRepository.base_qs()
 
-    def perform_update(self, serializer):
+    def perform_update(self, serializer: serializers.BaseSerializer) -> None:  # pyre-ignore[bad-override]
         instance: Payment = serializer.save()
         cache.delete(f"payment:{instance.id}")  # type: ignore[attr-defined]
         cache.delete_many(["payments:list"])
@@ -89,7 +89,7 @@ class PaymentCreateView(generics.CreateAPIView):
     def get_queryset(self):
         return PaymentRepository.base_qs()
 
-    def perform_create(self, serializer):
+    def perform_create(self, serializer: serializers.BaseSerializer) -> None:  # pyre-ignore[bad-override]
         payment: Payment = serializer.save()
         cache.delete_many(["payments:list"])
         logger.debug(f"Payment id={payment.id} created → list cache flushed")  # type: ignore[attr-defined]

@@ -4,7 +4,7 @@ from apps.payments.models import Payment
 
 
 class PaymentSerializer(serializers.ModelSerializer):
-    class Meta:
+    class Meta:  # pyre-ignore[bad-override]
         model = Payment
         fields = "__all__"
 

@@ -14,7 +14,7 @@ workout_cache.cache_gif_filename = None
 
 cache_obj = Mock()
 cache_obj.workout = workout_cache
-dummy_cache.Cache = cache_obj
+setattr(dummy_cache, "Cache", cache_obj)
 
 sys.modules["core.cache"] = dummy_cache
 

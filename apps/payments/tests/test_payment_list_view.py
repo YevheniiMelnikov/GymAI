@@ -11,7 +11,7 @@ from apps.profiles.models import Profile, ClientProfile
 @pytest.mark.django_db
 def test_payment_list_filters():
     factory = APIRequestFactory()
-    api_key, key = APIKey.objects.create_key(name="test")
+    api_key, key = APIKey.objects.create_key(name="test")  # pyre-ignore[missing-attribute]
 
     profile = Profile.objects.create(tg_id=1, status="client")
     client = ClientProfile.objects.create(profile=profile)
