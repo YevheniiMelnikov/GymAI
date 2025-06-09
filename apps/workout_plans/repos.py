@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Optional, cast
+from typing import Any, Optional, cast, List
 from django.db.models import QuerySet
 from django.core.cache import cache
 from rest_framework.exceptions import NotFound
@@ -17,7 +17,7 @@ class ProgramRepository:
 
     @staticmethod
     def _list_key(client_id: Optional[int] = None) -> str:
-        return f"programs:list:{client_id or 'all'}"
+        return f"program:list:{client_id or 'all'}"
 
     @staticmethod
     def base_qs() -> QuerySet[Program]:
@@ -27,11 +27,20 @@ class ProgramRepository:
     def filter_by_client(qs: QuerySet[Program], client_id: Optional[int]) -> QuerySet[Program]:
         if client_id:
             key = ProgramRepository._list_key(client_id)
-            result = cache.get_or_set(key, lambda: qs.filter(client_profile_id=client_id), settings.CACHE_TTL)
-            return cast(QuerySet[Program], result)
+            ids: List[int] = cache.get_or_set(
+                key,
+                lambda: list(qs.filter(client_profile_id=client_id).values_list("id", flat=True)),
+                settings.CACHE_TTL,
+            )
+            return Program.objects.filter(id__in=ids)
+
         key = ProgramRepository._list_key()
-        result = cache.get_or_set(key, lambda: qs, settings.CACHE_TTL)
-        return cast(QuerySet[Program], result)
+        ids: List[int] = cache.get_or_set(
+            key,
+            lambda: list(qs.values_list("id", flat=True)),
+            settings.CACHE_TTL,
+        )
+        return Program.objects.filter(id__in=ids)
 
     @staticmethod
     def get_client(client_id: int) -> ClientProfile:

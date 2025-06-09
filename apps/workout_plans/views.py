@@ -48,8 +48,8 @@ class ProgramViewSet(ModelViewSet):
 
         cache.delete_many(
             [
-                "programs:list",
-                f"programs:list:client:{client.id}",  # type: ignore[attr-defined]
+                "program:list",
+                f"program:list:{client.id}",  # type: ignore[attr-defined]
                 f"program:{program.id}",  # type: ignore[attr-defined]
             ]
         )
@@ -74,8 +74,8 @@ class ProgramViewSet(ModelViewSet):
 
         cache.delete_many(
             [
-                "programs:list",
-                f"programs:list:client:{client.id}",  # type: ignore[attr-defined]
+                "program:list",
+                f"program:list:{client.id}",  # type: ignore[attr-defined]
                 f"program:{program.id}",  # type: ignore[attr-defined]
             ]
         )

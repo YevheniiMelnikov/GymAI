@@ -1,45 +1,66 @@
 from __future__ import annotations
 
-from typing import cast
+from typing import cast, Dict, Any
 from django.core.cache import cache
 from rest_framework.exceptions import ValidationError, NotFound
 
 from apps.profiles.models import Profile, CoachProfile, ClientProfile
+from apps.profiles.serializers import ProfileSerializer
 from config.env_settings import settings
 
 
 class ProfileRepository:
     @staticmethod
-    def get_by_id(profile_id: int) -> Profile:
-        def get_profile() -> Profile:
-            try:
-                profile = Profile.objects.get(pk=profile_id)
-                return cast(Profile, profile)
-            except Profile.DoesNotExist:
-                raise NotFound(f"Profile pk={profile_id} not found")
+    def get_model_by_id(profile_id: int) -> Profile:
+        try:
+            profile = Profile.objects.get(pk=profile_id)
+            return cast(Profile, profile)
+        except Profile.DoesNotExist:
+            raise NotFound(f"Profile pk={profile_id} not found")
 
-        result = cache.get_or_set(
+    @staticmethod
+    def get_by_id(profile_id: int) -> Profile:
+        def fetch_profile() -> Dict[str, Any]:
+            instance = ProfileRepository.get_model_by_id(profile_id)
+            return ProfileSerializer(instance).data
+
+        cached = cache.get_or_set(
             f"profile:{profile_id}",
-            get_profile,
+            fetch_profile,
             settings.CACHE_TTL,
         )
-        return cast(Profile, result)
+
+        if isinstance(cached, dict):
+            profile = Profile(**cached)
+            profile.pk = cached.get("id")
+            profile._state.adding = False
+            return profile
+
+        return cast(Profile, cached)
 
     @staticmethod
     def get_by_telegram_id(tg_id: int) -> Profile:
-        def get_profile() -> Profile:
+        def fetch_profile() -> Dict[str, Any]:
             try:
-                profile = Profile.objects.get(tg_id=tg_id)
-                return cast(Profile, profile)
+                instance = Profile.objects.get(tg_id=tg_id)
+                instance = cast(Profile, instance)
             except Profile.DoesNotExist:
                 raise NotFound(f"Profile with tg_id={tg_id} not found")
+            return ProfileSerializer(instance).data
 
-        result = cache.get_or_set(
+        cached = cache.get_or_set(
             f"profile:tg:{tg_id}",
-            get_profile,
+            fetch_profile,
             settings.CACHE_TTL,
         )
-        return cast(Profile, result)
+
+        if isinstance(cached, dict):
+            profile = Profile(**cached)
+            profile.pk = cached.get("id")
+            profile._state.adding = False
+            return profile
+
+        return cast(Profile, cached)
 
 
 class CoachProfileRepository:
