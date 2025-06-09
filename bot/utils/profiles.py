@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 from typing import cast
 
 from loguru import logger
+from aiogram import Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery
 from aiogram.exceptions import TelegramBadRequest
@@ -23,7 +24,7 @@ from bot.texts.text_manager import msg_text
 from core.services.outer import avatar_manager
 
 
-async def update_profile_data(message: Message, state: FSMContext, status: str) -> None:
+async def update_profile_data(message: Message, state: FSMContext, status: str, bot: Bot) -> None:
     data = await state.get_data()
     await delete_messages(state)
 
@@ -46,7 +47,7 @@ async def update_profile_data(message: Message, state: FSMContext, status: str) 
                     await answer_msg(
                         message, msg_text("wait_for_verification", data.get("lang", settings.DEFAULT_LANG))
                     )
-                    await send_coach_request(message.from_user.id, profile, data)
+                    await send_coach_request(message.from_user.id, profile, data, bot)
                     await Cache.coach.save_coach(profile.id, user_data)
             else:
                 await Cache.coach.update_coach(coach.id, user_data)

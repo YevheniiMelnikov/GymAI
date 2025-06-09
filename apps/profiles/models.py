@@ -1,6 +1,7 @@
-from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.db.models import Model
+
+from django.contrib.postgres.fields import ArrayField
 
 from apps.profiles.fields import EncryptedField
 
@@ -13,7 +14,6 @@ class Profile(Model):
     class Meta:
         verbose_name = "profile"
         verbose_name_plural = "profiles"
-        app_label = "apps.profiles"
 
 
 class ClientProfile(Model):
@@ -30,7 +30,6 @@ class ClientProfile(Model):
     class Meta:
         verbose_name = "ClientProfile"
         verbose_name_plural = "ClientProfiles"
-        app_label = "apps.profiles"
 
 
 class CoachProfile(Model):
@@ -48,4 +47,3 @@ class CoachProfile(Model):
     class Meta:
         verbose_name = "CoachProfile"
         verbose_name_plural = "CoachProfiles"
-        app_label = "apps.profiles"

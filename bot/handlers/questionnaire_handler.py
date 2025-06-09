@@ -5,7 +5,6 @@ from aiogram import Router, Bot
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
-from dependency_injector.wiring import inject, Provide
 from loguru import logger
 
 from bot.keyboards import (
@@ -19,7 +18,6 @@ from bot.keyboards import (
 from bot.states import States
 from config.env_settings import settings
 from core.cache import Cache
-from core.containers import App
 from core.exceptions import ProfileNotFoundError, ClientNotFoundError
 from core.schemas import Profile
 from core.services import APIService
@@ -36,12 +34,7 @@ questionnaire_router = Router()
 
 
 @questionnaire_router.callback_query(States.select_language)
-@inject
-async def select_language(
-    callback_query: CallbackQuery,
-    state: FSMContext,
-    bot: Bot = Provide[App.bot],
-) -> None:
+async def select_language(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     await callback_query.answer()
     await delete_messages(state)
     lang = callback_query.data or settings.DEFAULT_LANG
@@ -145,7 +138,7 @@ async def born_in(message: Message, state: FSMContext) -> None:
 
 
 @questionnaire_router.message(States.workout_goals)
-async def workout_goals(message: Message, state: FSMContext) -> None:
+async def workout_goals(message: Message, state: FSMContext, bot: Bot) -> None:
     if not message.text:
         return
 
@@ -153,7 +146,7 @@ async def workout_goals(message: Message, state: FSMContext) -> None:
     await state.update_data(workout_goals=message.text)
     data = await state.get_data()
     if data.get("edit_mode"):
-        await update_profile_data(cast(Message, message), state, "client")
+        await update_profile_data(cast(Message, message), state, "client", bot)
         return
 
     lang = data.get("lang", settings.DEFAULT_LANG)
@@ -168,7 +161,7 @@ async def workout_goals(message: Message, state: FSMContext) -> None:
 
 
 @questionnaire_router.callback_query(States.workout_experience)
-async def workout_experience(callback_query: CallbackQuery, state: FSMContext) -> None:
+async def workout_experience(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     await delete_messages(state)
     data = await state.get_data()
     lang = data.get("lang", settings.DEFAULT_LANG)
@@ -176,7 +169,7 @@ async def workout_experience(callback_query: CallbackQuery, state: FSMContext) -
     await state.update_data(workout_experience=callback_query.data)
     if data.get("edit_mode"):
         if callback_query.message is not None:
-            await update_profile_data(cast(Message, callback_query.message), state, "client")
+            await update_profile_data(cast(Message, callback_query.message), state, "client", bot)
         return
 
     if callback_query.message is not None:
@@ -187,7 +180,7 @@ async def workout_experience(callback_query: CallbackQuery, state: FSMContext) -
 
 
 @questionnaire_router.message(States.weight)
-async def weight(message: Message, state: FSMContext) -> None:
+async def weight(message: Message, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()
     lang = data.get("lang", settings.DEFAULT_LANG)
     await delete_messages(state)
@@ -199,7 +192,7 @@ async def weight(message: Message, state: FSMContext) -> None:
 
     await state.update_data(weight=message.text)
     if data.get("edit_mode"):
-        await update_profile_data(cast(Message, message), state, "client")
+        await update_profile_data(cast(Message, message), state, "client", bot)
         return
 
     msg = await answer_msg(message, msg_text("health_notes", lang))
@@ -209,17 +202,17 @@ async def weight(message: Message, state: FSMContext) -> None:
 
 
 @questionnaire_router.message(States.health_notes)
-async def health_notes(message: Message, state: FSMContext) -> None:
+async def health_notes(message: Message, state: FSMContext, bot: Bot) -> None:
     if not message.text:
         return
 
     await delete_messages(state)
     await state.update_data(health_notes=message.text)
-    await update_profile_data(cast(Message, message), state, "client")
+    await update_profile_data(cast(Message, message), state, "client", bot)
 
 
 @questionnaire_router.message(States.surname)
-async def surname(message: Message, state: FSMContext) -> None:
+async def surname(message: Message, state: FSMContext, bot: Bot) -> None:
     if not message.text:
         return
 
@@ -228,7 +221,7 @@ async def surname(message: Message, state: FSMContext) -> None:
     lang = data.get("lang", settings.DEFAULT_LANG)
     await state.update_data(surname=message.text)
     if data.get("edit_mode"):
-        await update_profile_data(cast(Message, message), state, "coach")
+        await update_profile_data(cast(Message, message), state, "coach", bot)
         return
 
     msg = await answer_msg(message, msg_text("work_experience", lang))
@@ -238,7 +231,7 @@ async def surname(message: Message, state: FSMContext) -> None:
 
 
 @questionnaire_router.message(States.work_experience)
-async def work_experience(message: Message, state: FSMContext) -> None:
+async def work_experience(message: Message, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()
     lang = data.get("lang", settings.DEFAULT_LANG)
     await delete_messages(state)
@@ -251,7 +244,7 @@ async def work_experience(message: Message, state: FSMContext) -> None:
 
     await state.update_data(work_experience=message.text)
     if data.get("edit_mode"):
-        await update_profile_data(cast(Message, message), state, "coach")
+        await update_profile_data(cast(Message, message), state, "coach", bot)
         return
 
     msg = await answer_msg(message, msg_text("additional_info", lang))
@@ -261,7 +254,7 @@ async def work_experience(message: Message, state: FSMContext) -> None:
 
 
 @questionnaire_router.message(States.additional_info)
-async def additional_info(message: Message, state: FSMContext) -> None:
+async def additional_info(message: Message, state: FSMContext, bot: Bot) -> None:
     if not message.text:
         return
 
@@ -270,7 +263,7 @@ async def additional_info(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     await state.update_data(additional_info=message.text)
     if data.get("edit_mode"):
-        await update_profile_data(cast(Message, message), state, "coach")
+        await update_profile_data(cast(Message, message), state, "coach", bot)
         return
 
     msg = await answer_msg(message, msg_text("payment_details", lang))
@@ -280,7 +273,7 @@ async def additional_info(message: Message, state: FSMContext) -> None:
 
 
 @questionnaire_router.message(States.payment_details)
-async def payment_details(message: Message, state: FSMContext) -> None:
+async def payment_details(message: Message, state: FSMContext, bot: Bot) -> None:
     if not message.text:
         return
 
@@ -296,7 +289,7 @@ async def payment_details(message: Message, state: FSMContext) -> None:
         return
 
     if data.get("edit_mode"):
-        await update_profile_data(cast(Message, message), state, "coach")
+        await update_profile_data(cast(Message, message), state, "coach", bot)
         return
 
     msg = await answer_msg(message, msg_text("enter_program_price", lang))
@@ -306,7 +299,7 @@ async def payment_details(message: Message, state: FSMContext) -> None:
 
 
 @questionnaire_router.message(States.program_price)
-async def enter_program_price(message: Message, state: FSMContext) -> None:
+async def enter_program_price(message: Message, state: FSMContext, bot: Bot) -> None:
     await delete_messages(state)
     data = await state.get_data()
     lang = data.get("lang", settings.DEFAULT_LANG)
@@ -324,7 +317,7 @@ async def enter_program_price(message: Message, state: FSMContext) -> None:
 
     if data.get("edit_mode"):
         await state.update_data(program_price=str(price))
-        await update_profile_data(cast(Message, message), state, "coach")
+        await update_profile_data(cast(Message, message), state, "coach", bot)
         return
 
     msg = await answer_msg(message, msg_text("enter_subscription_price", lang))
@@ -338,7 +331,7 @@ async def enter_program_price(message: Message, state: FSMContext) -> None:
 
 
 @questionnaire_router.message(States.subscription_price)
-async def enter_subscription_price(message: Message, state: FSMContext) -> None:
+async def enter_subscription_price(message: Message, state: FSMContext, bot: Bot) -> None:
     await delete_messages(state)
     data = await state.get_data()
     lang = data.get("lang", settings.DEFAULT_LANG)
@@ -356,7 +349,7 @@ async def enter_subscription_price(message: Message, state: FSMContext) -> None:
 
     if data.get("edit_mode"):
         await state.update_data(subscription_price=str(price))
-        await update_profile_data(cast(Message, message), state, "coach")
+        await update_profile_data(cast(Message, message), state, "coach", bot)
         return
 
     msg = await answer_msg(message, msg_text("upload_photo", lang))
@@ -370,7 +363,7 @@ async def enter_subscription_price(message: Message, state: FSMContext) -> None:
 
 
 @questionnaire_router.message(States.profile_photo)
-async def profile_photo(message: Message, state: FSMContext) -> None:
+async def profile_photo(message: Message, state: FSMContext, bot: Bot) -> None:
     if not message.photo:
         await answer_msg(message, msg_text("invalid_content", settings.DEFAULT_LANG))
         return
@@ -386,7 +379,7 @@ async def profile_photo(message: Message, state: FSMContext) -> None:
             if msg:
                 await state.update_data(profile_photo=local_file, chat_id=message.chat.id, message_ids=[msg.message_id])
             avatar_manager.clean_up_file(local_file)
-            await update_profile_data(cast(Message, message), state, "coach")
+            await update_profile_data(cast(Message, message), state, "coach", bot)
         else:
             await answer_msg(message, msg_text("photo_upload_fail", lang))
             await state.set_state(States.profile_photo)
@@ -445,7 +438,7 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
 
 
 @questionnaire_router.message(States.enter_wishes)
-async def enter_wishes(message: Message, state: FSMContext):
+async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
     if not message.text:
         return
 
@@ -465,7 +458,7 @@ async def enter_wishes(message: Message, state: FSMContext):
             await answer_msg(
                 message, msg_text("coach_selected", profile.language or settings.DEFAULT_LANG).format(name=coach.name)
             )
-        await client_request(coach, client, data)
+        await client_request(coach, client, data, bot)
         if message is not None:
             await show_main_menu(cast(Message, message), profile, state)
             await del_msg(cast(Message | CallbackQuery | None, message))

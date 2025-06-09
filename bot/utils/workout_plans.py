@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime
 from typing import cast
 
+from aiogram import Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from loguru import logger
@@ -29,7 +30,7 @@ from bot.utils.other import delete_messages, del_msg, answer_msg, generate_order
 from bot.texts import msg_text, btn_text
 
 
-async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) -> None:
+async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     if not callback_query.from_user:
         return
 
@@ -97,6 +98,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
             await send_message(
                 recipient=client,
                 text=msg_text("new_program", client_lang),
+                bot=bot,
                 state=state,
                 reply_markup=subscription_view_kb(client_lang),
                 include_incoming_message=False,
@@ -132,7 +134,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext) ->
             await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
             return
 
-        await send_program(client, client_lang, program_text, state)
+        await send_program(client, client_lang, program_text, state, bot)
 
     await Cache.client.update_client(client_id, {"status": ClientStatus.default})
 

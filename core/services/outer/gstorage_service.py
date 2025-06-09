@@ -3,6 +3,7 @@ import os
 from loguru import logger
 from aiogram.types import Message
 from google.cloud import storage
+from google.auth.exceptions import DefaultCredentialsError
 
 from core.cache import Cache
 
@@ -10,16 +11,24 @@ from core.cache import Cache
 class GCStorageService:
     def __init__(self, bucket_name: str):
         self.bucket_name = bucket_name
-        self.storage_client = storage.Client()
-        self.bucket = self.storage_client.bucket(bucket_name)
+        try:
+            self.storage_client = storage.Client()
+            self.bucket = self.storage_client.bucket(bucket_name)
+        except DefaultCredentialsError as exc:  # noqa: BLE001
+            logger.error(f"GCS credentials error: {exc}")
+            self.storage_client = None  # pyre-ignore[bad-assignment]
+            self.bucket = None  # pyre-ignore[bad-assignment]
 
     def load_file_to_bucket(self, source_file_name: str) -> bool:
+        if not self.bucket:
+            logger.warning("GCS bucket is not configured")
+            return False
         try:
             blob = self.bucket.blob(os.path.basename(source_file_name))
             blob.upload_from_filename(source_file_name)
             logger.debug(f"File {source_file_name[:10]}...jpg successfully uploaded to storage")
             return True
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.error(f"Failed to upload {source_file_name[:10]}...jpg to storage: {e}")
             return False
 
@@ -66,6 +75,9 @@ class GCStorageService:
 
 class ExerciseGIFStorage(GCStorageService):
     async def find_gif(self, exercise: str, exercise_dict: dict[str, list[str]]) -> str | None:
+        if not self.bucket:
+            logger.warning("GCS bucket is not configured")
+            return None
         try:
             exercise_lc = exercise.lower()
             for filename, synonyms in exercise_dict.items():

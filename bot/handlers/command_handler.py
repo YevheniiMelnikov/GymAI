@@ -64,13 +64,13 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         language_msg = await message.answer(
             msg_text("select_language", settings.DEFAULT_LANG), reply_markup=select_language_kb()
         )
-        await state.set_state(States.select_language)
         message_ids = []
         if start_msg:
             message_ids.append(start_msg.message_id)
         if language_msg:
             message_ids.append(language_msg.message_id)
-        await state.update_data(message_ids=message_ids)
+        await state.update_data(message_ids=message_ids, chat_id=message.from_user.id)
+        await state.set_state(States.select_language)
         with suppress(TelegramBadRequest):
             await message.delete()
 

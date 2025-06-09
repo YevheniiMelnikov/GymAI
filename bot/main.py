@@ -8,6 +8,8 @@ from loguru import logger
 
 from bot.handlers.internal import (
     internal_payment_handler,
+    internal_send_payment_message,
+    internal_client_request,
     internal_process_unclosed_payments,
     internal_send_daily_survey,
 )
@@ -38,12 +40,13 @@ async def main() -> None:
     container = App()
     container.config.bot_token.from_value(settings.BOT_TOKEN)  # type: ignore[attr-defined]
     container.config.parse_mode.from_value("HTML")  # type: ignore[attr-defined]
-    container.wire(modules=["bot.handlers", "bot.utils", "core.tasks"])
+    container.wire(modules=["bot.utils.other", "core.tasks"])
     bot = container.bot()
     await bot.delete_webhook(drop_pending_updates=True)
 
     if settings.WEBHOOK_URL is None:
         raise ValueError("WEBHOOK_URL is not set in environment variables")
+
     await bot.set_webhook(url=settings.WEBHOOK_URL)
     await set_bot_commands(bot)
 
@@ -59,6 +62,8 @@ async def main() -> None:
         raise ValueError("WEBHOOK_PATH is not set in environment variables")
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=settings.WEBHOOK_PATH)
     app.router.add_post("/internal/payment/process/", internal_payment_handler)
+    app.router.add_post("/internal/payment/send_message/", internal_send_payment_message)
+    app.router.add_post("/internal/payment/client_request/", internal_client_request)
     app.router.add_post("/internal/tasks/send_daily_survey/", internal_send_daily_survey)
     app.router.add_post(
         "/internal/tasks/process_unclosed_payments/",

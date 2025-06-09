@@ -1,4 +1,4 @@
-from aiogram import Router
+from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from typing import cast
@@ -16,7 +16,7 @@ admin_router = Router()
 
 
 @admin_router.callback_query()
-async def approve_coach(callback_query: CallbackQuery, state: FSMContext) -> None:
+async def approve_coach(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     if not callback_query.data or not callback_query.data.startswith("approve"):
         return
 
@@ -40,14 +40,16 @@ async def approve_coach(callback_query: CallbackQuery, state: FSMContext) -> Non
     coach_profile = await Cache.profile.get_profile(profile_id)
     lang = coach_profile.language or settings.DEFAULT_LANG
     if coach:
-        await send_message(coach, msg_text("coach_verified", lang), state, include_incoming_message=False)
+        await send_message(
+            recipient=coach, text=msg_text("coach_verified", lang), bot=bot, state=state, include_incoming_message=False
+        )
     if callback_query.message and isinstance(callback_query.message, Message):
         await del_msg(callback_query.message)
     logger.info(f"Coach verification for profile_id {profile_id} approved")
 
 
 @admin_router.callback_query()
-async def decline_coach(callback_query: CallbackQuery, state: FSMContext) -> None:
+async def decline_coach(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     if not callback_query.data or not callback_query.data.startswith("decline"):
         return
 
@@ -63,7 +65,9 @@ async def decline_coach(callback_query: CallbackQuery, state: FSMContext) -> Non
     coach_profile = await Cache.profile.get_profile(profile_id)
     lang = coach_profile.language or settings.DEFAULT_LANG
     if coach:
-        await send_message(coach, msg_text("coach_declined", lang), state, include_incoming_message=False)
+        await send_message(
+            recipient=coach, text=msg_text("coach_declined", lang), bot=bot, state=state, include_incoming_message=False
+        )
     if callback_query.message and isinstance(callback_query.message, Message):
         await del_msg(callback_query.message)
     logger.info(f"Coach verification for profile_id {profile_id} declined")
