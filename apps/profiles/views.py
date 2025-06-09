@@ -40,7 +40,7 @@ class ProfileAPIUpdate(APIView):
 
     def put(self, request: Request, profile_id: int) -> Response:
         logger.debug(f"PUT Profile id={profile_id}")
-        profile = ProfileRepository.get_by_id(profile_id)
+        profile = ProfileRepository.get_model_by_id(profile_id)
         serializer = self.serializer_class(profile, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -84,7 +84,7 @@ class CoachProfileUpdate(generics.RetrieveUpdateAPIView):
     def get_object(self):
         if "pk" in self.kwargs:
             return CoachProfileRepository.get(self.kwargs["pk"])
-        profile = ProfileRepository.get_by_id(self.kwargs["profile_id"])
+        profile = ProfileRepository.get_model_by_id(self.kwargs["profile_id"])
         return CoachProfileRepository.get_or_create_by_profile(profile)
 
 
@@ -95,7 +95,7 @@ class ClientProfileUpdate(generics.RetrieveUpdateAPIView):
     def get_object(self):
         if "pk" in self.kwargs:
             return ClientProfileRepository.get(self.kwargs["pk"])
-        profile = ProfileRepository.get_by_id(self.kwargs["profile_id"])
+        profile = ProfileRepository.get_model_by_id(self.kwargs["profile_id"])
         return ClientProfileRepository.get_or_create_by_profile(profile)
 
 
@@ -104,7 +104,7 @@ class CoachProfileByProfile(APIView):
     serializer_class = CoachProfileSerializer
 
     def get(self, request: Request, profile_id: int) -> Response:
-        coach_profile = CoachProfileRepository.get_or_create_by_profile(ProfileRepository.get_by_id(profile_id))
+        coach_profile = CoachProfileRepository.get_or_create_by_profile(ProfileRepository.get_model_by_id(profile_id))
         return Response(self.serializer_class(coach_profile).data, status=status.HTTP_200_OK)
 
 
@@ -113,5 +113,5 @@ class ClientProfileByProfile(APIView):
     serializer_class = ClientProfileSerializer
 
     def get(self, request: Request, profile_id: int) -> Response:
-        client_profile = ClientProfileRepository.get_or_create_by_profile(ProfileRepository.get_by_id(profile_id))
+        client_profile = ClientProfileRepository.get_or_create_by_profile(ProfileRepository.get_model_by_id(profile_id))
         return Response(self.serializer_class(client_profile).data, status=status.HTTP_200_OK)
