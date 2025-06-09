@@ -27,20 +27,26 @@ class ProgramRepository:
     def filter_by_client(qs: QuerySet[Program], client_id: Optional[int]) -> QuerySet[Program]:
         if client_id:
             key = ProgramRepository._list_key(client_id)
-            ids: List[int] = cache.get_or_set(
-                key,
-                lambda: list(qs.filter(client_profile_id=client_id).values_list("id", flat=True)),
-                settings.CACHE_TTL,
+            ids = cast(
+                List[int],
+                cache.get_or_set(
+                    key,
+                    lambda: list(qs.filter(client_profile_id=client_id).values_list("id", flat=True)),
+                    settings.CACHE_TTL,
+                ),
             )
-            return Program.objects.filter(id__in=ids)
+            return cast(QuerySet[Program], Program.objects.filter(id__in=ids))
 
         key = ProgramRepository._list_key()
-        ids: List[int] = cache.get_or_set(
-            key,
-            lambda: list(qs.values_list("id", flat=True)),
-            settings.CACHE_TTL,
+        ids = cast(
+            List[int],
+            cache.get_or_set(
+                key,
+                lambda: list(qs.values_list("id", flat=True)),
+                settings.CACHE_TTL,
+            ),
         )
-        return Program.objects.filter(id__in=ids)
+        return cast(QuerySet[Program], Program.objects.filter(id__in=ids))
 
     @staticmethod
     def get_client(client_id: int) -> ClientProfile:
