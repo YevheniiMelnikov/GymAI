@@ -23,13 +23,13 @@ class Profile(BaseModel):
 class Client(BaseModel):
     id: int
     profile: int
-    name: str
-    gender: Gender
-    born_in: str
-    workout_experience: str
-    workout_goals: str
-    health_notes: str
-    weight: int
+    name: str | None = None
+    gender: Gender | None = None
+    born_in: str | None = None
+    workout_experience: str | None = None
+    workout_goals: str | None = None
+    health_notes: str | None = None
+    weight: int | None = None
     status: ClientStatus = ClientStatus.default
     assigned_to: list[int] = Field(default_factory=list)
 

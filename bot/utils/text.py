@@ -116,7 +116,7 @@ async def get_client_page(client: Client, lang_code: str, subscription: bool, da
     client_profile = await ProfileService.get_profile(client.profile)
     page = {
         "name": client.name,
-        "gender": params.get(client.gender, ""),
+        "gender": params.get(client.gender or "", ""),
         "born_in": client.born_in,
         "workout_experience": client.workout_experience,
         "workout_goals": client.workout_goals,

@@ -14,8 +14,8 @@ def configure_routers(dp: Dispatcher) -> None:
     routers = [
         cmd_router,
         questionnaire_router,
-        chat_router,
         menu_router,
+        chat_router,
         workout_router,
         payment_router,
         admin_router,
