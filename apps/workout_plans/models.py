@@ -15,7 +15,6 @@ class Program(models.Model):
     class Meta:
         verbose_name = "Program"
         verbose_name_plural = "Programs"
-        app_label = "apps.workout_plans"
 
 
 class Subscription(models.Model):
@@ -31,4 +30,3 @@ class Subscription(models.Model):
     class Meta:
         verbose_name = "Subscription"
         verbose_name_plural = "Subscriptions"
-        app_label = "apps.workout_plans"

@@ -78,7 +78,9 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: celery_worker
-    env_file: .env
+#    env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379
     command: >
       celery -A config.celery:celery_app worker
              -l info
@@ -99,7 +101,9 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: celery_beat
-    env_file: .env
+#    env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379
     command: celery -A config.celery:celery_app beat -l info
     volumes:
       - ./config:/app/config

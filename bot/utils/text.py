@@ -112,6 +112,7 @@ def get_state_and_message(callback: str, lang: str) -> tuple[State, str]:
 async def get_client_page(client: Client, lang_code: str, subscription: bool, data: dict[str, Any]) -> dict[str, Any]:
     params = client_params(lang_code)
     from core.services.profile_service import ProfileService
+
     client_profile = await ProfileService.get_profile(client.profile)
     page = {
         "name": client.name,

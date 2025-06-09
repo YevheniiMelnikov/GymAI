@@ -18,4 +18,3 @@ class Payment(models.Model):
     class Meta:
         verbose_name = "Payment"
         verbose_name_plural = "Payments"
-        app_label = "apps.payments"
