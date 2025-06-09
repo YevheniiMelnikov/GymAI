@@ -1,24 +1,22 @@
 import asyncio
-from aiogram import Bot
 from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime, timezone
 from loguru import logger
 from dateutil.relativedelta import relativedelta
-from dependency_injector.wiring import inject, Provide
 
 from core.cache import Cache
 from core.enums import PaymentStatus, ClientStatus
 from core.exceptions import ClientNotFoundError, CoachNotFoundError
 from core.services.workout_service import WorkoutService
-from bot.utils.chat import send_message, client_request
+
 from bot.utils.workout_plans import cancel_subscription
 from core.schemas import Payment, Client
 from config.env_settings import settings
-from core.containers import App
 from core.services.outer.gsheets_service import GSheetsService
 from core.services.payment_service import PaymentService
 from core.services.profile_service import ProfileService
 from bot.texts.text_manager import msg_text
+from apps.payments.tasks import send_payment_message, send_client_request
 
 
 class PaymentProcessor:
@@ -28,8 +26,7 @@ class PaymentProcessor:
     workout_service = WorkoutService
 
     @classmethod
-    @inject
-    async def _process_payment(cls, payment: Payment, bot: Bot = Provide[App.bot]) -> None:
+    async def _process_payment(cls, payment: Payment) -> None:
         if payment.processed:
             logger.info(f"Payment {payment.id} already processed")
             return
@@ -38,10 +35,10 @@ class PaymentProcessor:
             client = await cls.cache.client.get_client(payment.client_profile)
             if payment.status == PaymentStatus.SUCCESS:
                 await cls.cache.payment.set_status(client.id, payment.payment_type, PaymentStatus.SUCCESS)
-                await cls._handle_successful_payment(payment, client, bot)
+                await cls._handle_successful_payment(payment, client)
             elif payment.status == PaymentStatus.FAILURE:
                 await cls.cache.payment.set_status(client.id, payment.payment_type, PaymentStatus.FAILURE)
-                await cls._handle_failed_payment(payment, client, bot)
+                await cls._handle_failed_payment(payment, client)
 
         except ClientNotFoundError:
             logger.error(f"Client profile not found for payment {payment.id}")
@@ -53,8 +50,7 @@ class PaymentProcessor:
             await cls.payment_service.update_payment(payment.id, {"processed": True})
 
     @classmethod
-    @inject
-    async def _handle_failed_payment(cls, payment: Payment, client: Client, bot: Bot = Provide[App.bot]) -> None:
+    async def _handle_failed_payment(cls, payment: Payment, client: Client) -> None:
         profile = await cls.profile_service.get_profile(client.profile)
         if not profile:
             logger.error(f"Profile not found for client {client.id}")
@@ -66,17 +62,14 @@ class PaymentProcessor:
                 try:
                     payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
                     next_payment_date = payment_date + relativedelta(months=1)
-                    await send_message(
-                        recipient=client,
-                        text=msg_text("subscription_cancel_warning", profile.language).format(
+                    send_payment_message.delay(
+                        client.id,
+                        msg_text("subscription_cancel_warning", profile.language).format(
                             # type: ignore[attr-defined]
                             date=next_payment_date.strftime("%Y-%m-%d"),
                             mail=settings.EMAIL,
                             tg=settings.TG_SUPPORT_CONTACT,
                         ),
-                        bot=bot,
-                        state=None,
-                        include_incoming_message=False,
                     )
                     await cancel_subscription(next_payment_date, client.id, subscription.id)
                     logger.info(f"Subscription for client_id {client.id} deactivated due to failed payment")
@@ -88,41 +81,34 @@ class PaymentProcessor:
                 except Exception as e:
                     logger.exception(f"Error processing failed subscription payment for profile {client.id}: {e}")
 
-        await send_message(
-            recipient=client,
-            text=msg_text("payment_failure", profile.language).format(  # type: ignore[attr-defined]
-                mail=settings.EMAIL, tg=settings.TG_SUPPORT_CONTACT
+        send_payment_message.delay(
+            client.id,
+            msg_text("payment_failure", profile.language).format(  # type: ignore[attr-defined]
+                mail=settings.EMAIL,
+                tg=settings.TG_SUPPORT_CONTACT,
             ),
-            bot=bot,
-            state=None,
-            include_incoming_message=False,
         )
 
     @classmethod
-    @inject
-    async def _handle_successful_payment(cls, payment: Payment, client: Client, bot: Bot = Provide[App.bot]) -> None:
+    async def _handle_successful_payment(cls, payment: Payment, client: Client) -> None:
         profile = await cls.profile_service.get_profile(client.profile)
         if not profile:
             logger.error(f"Profile not found for client {client.id}")
             return
 
-        await send_message(
-            recipient=client,
-            text=msg_text("payment_success", profile.language),  # type: ignore[attr-defined]
-            bot=bot,
-            state=None,
-            include_incoming_message=False,
+        send_payment_message.delay(
+            client.id,
+            msg_text("payment_success", profile.language),  # type: ignore[attr-defined]
         )
         logger.info(f"Client {client.id} successfully paid {payment.amount} UAH for {payment.payment_type}")
 
         if payment.payment_type == "subscription":
-            await cls._process_subscription_payment(client, bot)
+            await cls._process_subscription_payment(client)
         elif payment.payment_type == "program":
-            await cls._process_program_payment(client, bot)
+            await cls._process_program_payment(client)
 
     @classmethod
-    @inject
-    async def _process_subscription_payment(cls, client: Client, bot: Bot = Provide[App.bot]) -> None:
+    async def _process_subscription_payment(cls, client: Client) -> None:
         await cls.cache.client.update_client(client.id, {"status": ClientStatus.waiting_for_subscription})
         subscription = await cls.cache.workout.get_latest_subscription(client.id)
         if not subscription:
@@ -140,25 +126,23 @@ class PaymentProcessor:
         if not subscription.enabled:
             coach_id = client.assigned_to[0]
             try:
-                coach = await cls.cache.coach.get_coach(coach_id)
+                await cls.cache.coach.get_coach(coach_id)
             except CoachNotFoundError:
                 logger.error(f"Coach {coach_id} not found for client {client.id}")
                 return
 
-            await client_request(
-                coach,
-                client,
+            send_client_request.delay(
+                coach_id,
+                client.id,
                 {
                     "service_type": "subscription",
                     "workout_type": subscription.workout_type,
                     "wishes": subscription.wishes,
                 },
-                bot=bot,
             )
 
     @classmethod
-    @inject
-    async def _process_program_payment(cls, client: Client, bot: Bot = Provide[App.bot]) -> None:
+    async def _process_program_payment(cls, client: Client) -> None:
         await cls.cache.client.update_client(client.id, {"status": ClientStatus.waiting_for_program})
         program = await cls.cache.workout.get_program(client.id)
         if not program:
@@ -166,16 +150,14 @@ class PaymentProcessor:
             return
 
         coach_id = client.assigned_to[0]
-        coach = await cls.cache.coach.get_coach(coach_id)
-        if not coach:
+        if not await cls.cache.coach.get_coach(coach_id):
             logger.error(f"Coach {coach_id} not found for client {client.id}")
             return
 
-        await client_request(
-            coach=coach,
-            client=client,
-            data={"service_type": "program", "workout_type": program.workout_type, "wishes": program.wishes},
-            bot=bot,
+        send_client_request.delay(
+            coach_id,
+            client.id,
+            {"service_type": "program", "workout_type": program.workout_type, "wishes": program.wishes},
         )
 
     @classmethod
