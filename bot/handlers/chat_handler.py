@@ -4,7 +4,7 @@ from contextlib import suppress
 from typing import cast
 
 from loguru import logger
-from aiogram import Router
+from aiogram import Bot, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery
@@ -25,7 +25,7 @@ chat_router = Router()
 
 
 @chat_router.message(States.contact_client)
-async def contact_client(message: Message, state: FSMContext) -> None:
+async def contact_client(message: Message, state: FSMContext, bot: Bot) -> None:
     if not (message.text or message.photo or message.video):
         return
 
@@ -53,25 +53,28 @@ async def contact_client(message: Message, state: FSMContext) -> None:
     caption = message.caption or ""
     if message.photo:
         await send_message(
-            client,
-            caption,
-            state,
+            recipient=client,
+            text=caption,
+            bot=bot,
+            state=state,
             reply_markup=new_message_kb(client_profile.language, profile.id),
             photo=message.photo[-1],
         )
     elif message.video:
         await send_message(
-            client,
-            caption,
-            state,
+            recipient=client,
+            text=caption,
+            bot=bot,
+            state=state,
             reply_markup=new_message_kb(client_profile.language, profile.id),
             video=message.video,
         )
     else:
         await send_message(
-            client,
-            message.text or "",
-            state,
+            recipient=client,
+            text=message.text or "",
+            bot=bot,
+            state=state,
             reply_markup=new_message_kb(client_profile.language, profile.id),
         )
 
@@ -81,7 +84,7 @@ async def contact_client(message: Message, state: FSMContext) -> None:
 
 
 @chat_router.message(States.contact_coach)
-async def contact_coach(message: Message, state: FSMContext) -> None:
+async def contact_coach(message: Message, state: FSMContext, bot: Bot) -> None:
     if not (message.text or message.photo or message.video):
         return
 
@@ -106,25 +109,28 @@ async def contact_coach(message: Message, state: FSMContext) -> None:
     caption = message.caption or ""
     if message.photo:
         await send_message(
-            coach,
-            caption,
-            state,
+            recipient=coach,
+            text=caption,
+            bot=bot,
+            state=state,
             reply_markup=new_message_kb(coach_profile.language, profile.id),
             photo=message.photo[-1],
         )
     elif message.video:
         await send_message(
-            coach,
-            caption,
-            state,
+            recipient=coach,
+            text=caption,
+            bot=bot,
+            state=state,
             reply_markup=new_message_kb(coach_profile.language, profile.id),
             video=message.video,
         )
     else:
         await send_message(
-            coach,
-            message.text or "",
-            state,
+            recipient=coach,
+            text=message.text or "",
+            bot=bot,
+            state=state,
             reply_markup=new_message_kb(coach_profile.language, profile.id),
         )
 

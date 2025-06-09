@@ -158,7 +158,7 @@ google_creds.json
 /redis_data/
 *~
 /dumps/
-docker-compose-local.yml
 gym_bot.log
 .venv-win/
 staticfiles/
+**/celerybeat-schedule*

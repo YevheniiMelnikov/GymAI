@@ -45,10 +45,7 @@ async def set_bot_commands(bot: Bot, lang: Optional[str] = None) -> None:
 
 
 @inject
-async def delete_messages(
-    state: FSMContext,
-    bot: Bot = Provide[App.bot],
-) -> None:
+async def delete_messages(state: FSMContext, bot: Bot = Provide[App.bot]) -> None:
     data = await state.get_data()
     message_ids = data.get("message_ids", [])
     chat_id = data.get("chat_id")

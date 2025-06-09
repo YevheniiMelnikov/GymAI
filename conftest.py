@@ -30,5 +30,3 @@ for key, value in env_defaults.items():
 
 
 django.setup()
-
-
