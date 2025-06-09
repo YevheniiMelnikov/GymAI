@@ -3,7 +3,6 @@ import os
 os.environ["TIME_ZONE"] = "Europe/Kyiv"
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.test_settings")
 
-import pytest
 import django
 
 
@@ -33,21 +32,3 @@ for key, value in env_defaults.items():
 django.setup()
 
 
-@pytest.fixture(autouse=True, scope="session")
-def apply_migrations(django_db_setup, django_db_blocker):
-    from django.core.management import call_command
-
-    with django_db_blocker.unblock():
-        call_command("migrate", run_syncdb=True, verbosity=0)
-
-
-@pytest.fixture(autouse=True, scope="session")
-def create_tables(django_db_setup, django_db_blocker):
-    from django.db import connection
-    from apps.profiles.models import Profile, ClientProfile, CoachProfile
-    from apps.payments.models import Payment
-
-    with django_db_blocker.unblock():
-        with connection.schema_editor() as editor:
-            for model in (Profile, ClientProfile, CoachProfile, Payment):
-                editor.create_model(model)

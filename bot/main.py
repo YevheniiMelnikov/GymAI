@@ -28,6 +28,9 @@ async def start_web_app(app: web.Application) -> web.AppRunner:
     await runner.setup()
     site = web.TCPSite(runner, host=settings.WEB_SERVER_HOST, port=settings.WEBHOOK_PORT)
     await site.start()
+    logger.debug(
+        f"Webhook server started on {settings.WEB_SERVER_HOST}:{settings.WEBHOOK_PORT}"
+    )
     return runner
 
 
@@ -44,6 +47,7 @@ async def main() -> None:
 
     if settings.WEBHOOK_URL is None:
         raise ValueError("WEBHOOK_URL is not set in environment variables")
+    logger.debug(f"Setting webhook to {settings.WEBHOOK_URL}")
     await bot.set_webhook(url=settings.WEBHOOK_URL)
     await set_bot_commands(bot)
 
