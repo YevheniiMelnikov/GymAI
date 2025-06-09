@@ -68,7 +68,5 @@ def send_client_request(self, coach_id: int, client_id: int, data: dict) -> None
         asyncio.run(_call_bot())
 
     except Exception as exc:
-        logger.warning(
-            f"Bot call failed for client_id={client_id}, coach_id={coach_id}: {exc}"
-        )
+        logger.warning(f"Bot call failed for client_id={client_id}, coach_id={coach_id}: {exc}")
         raise self.retry(exc=exc)
