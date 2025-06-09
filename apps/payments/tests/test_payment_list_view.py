@@ -7,7 +7,6 @@ from apps.payments.views import PaymentListView
 from apps.profiles.models import Profile, ClientProfile
 
 
-@pytest.mark.skip(reason="SQLite test DB lacks postgres features")
 @pytest.mark.django_db
 def test_payment_list_filters():
     factory = APIRequestFactory()

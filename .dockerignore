@@ -35,5 +35,5 @@ docker-compose*.yml
 
 # Sensitive / local only
 .env
-.env.*
 google_creds.json
+**/celerybeat-schedule*

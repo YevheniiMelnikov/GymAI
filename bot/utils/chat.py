@@ -7,7 +7,6 @@ from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
-from dependency_injector.wiring import inject, Provide
 
 from bot.texts import msg_text
 from bot.utils.other import answer_msg
@@ -15,23 +14,21 @@ from bot.keyboards import new_coach_kb, incoming_request_kb, client_msg_bk, prog
 from bot.states import States
 from config.env_settings import settings
 from core.cache import Cache
-from core.containers import App
 from core.schemas import Coach, Profile, Client
 from core.services import APIService
 from bot.utils.text import format_new_client_message, get_client_page, get_workout_types
 from core.services.outer import avatar_manager
 
 
-@inject
 async def send_message(
     recipient: Client | Coach,
     text: str,
+    bot: Bot,
     state: FSMContext | None = None,
     reply_markup=None,
     include_incoming_message: bool = True,
     photo=None,
     video=None,
-    bot: Bot = Provide[App.bot],
 ) -> None:
     if state:
         data = await state.get_data()
@@ -81,12 +78,11 @@ async def send_message(
             )
 
 
-@inject
 async def send_coach_request(
     tg_id: int,
     profile: Profile,
     data: dict[str, Any],
-    bot: Bot = Provide[App.bot],
+    bot: Bot,
 ) -> None:
     name = data.get("name")
     surname = data.get("surname")
@@ -132,7 +128,7 @@ async def contact_client(callback_query: CallbackQuery, profile: Profile, client
     await state.set_state(States.contact_client)
 
 
-async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> None:
+async def client_request(coach: Coach, client: Client, data: dict[str, Any], bot: Bot) -> None:
     coach_profile = await APIService.profile.get_profile(coach.profile)
     if coach_profile is None:
         from loguru import logger
@@ -166,26 +162,22 @@ async def client_request(coach: Coach, client: Client, data: dict[str, Any]) -> 
         else incoming_request_kb(coach_lang, service, client.id)
     )
 
-    await send_message(recipient=coach, text=text, state=None, include_incoming_message=False)
+    await send_message(recipient=coach, text=text, bot=bot, state=None, include_incoming_message=False)
 
     if wishes:
-        await send_message(recipient=coach, text=cast(str, wishes), state=None, include_incoming_message=False)
+        await send_message(recipient=coach, text=cast(str, wishes), bot=bot, state=None, include_incoming_message=False)
 
     await send_message(
         recipient=coach,
         text=msg_text("client_page", coach_lang).format(**client_page),
+        bot=bot,
         state=None,
         reply_markup=reply_markup,
         include_incoming_message=False,
     )
 
 
-@inject
-async def process_feedback_content(
-    message: Message,
-    profile: Profile,
-    bot: Bot = Provide[App.bot],
-) -> bool:
+async def process_feedback_content(message: Message, profile: Profile, bot: Bot) -> bool:
     text = msg_text("new_feedback", settings.ADMIN_LANG).format(
         profile_id=profile.id,
         feedback=message.text or message.caption or "",
@@ -214,16 +206,18 @@ async def process_feedback_content(
     return False
 
 
-async def send_program(client: Client, client_lang: str, program_text: str, state: FSMContext) -> None:
+async def send_program(client: Client, client_lang: str, program_text: str, state: FSMContext, bot: Bot) -> None:
     await send_message(
         recipient=client,
         text=msg_text("new_program", client_lang),
+        bot=bot,
         state=state,
         include_incoming_message=False,
     )
     await send_message(
         recipient=client,
         text=msg_text("program_page", client_lang).format(program=program_text, day=1),
+        bot=bot,
         state=state,
         reply_markup=program_view_kb(client_lang),
         include_incoming_message=False,

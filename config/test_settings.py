@@ -18,10 +18,14 @@ env_defaults = {
     "PAYMENT_PUB_KEY": "pub",
     "CHECKOUT_URL": "http://checkout",
     "POSTGRES_PASSWORD": "password",
+    "DB_NAME": "postgres",
+    "DB_USER": "postgres",
+    "DB_HOST": "localhost",
+    "DB_PORT": "5432",
 }
 
 for key, value in env_defaults.items():
-    os.environ.setdefault(key, value)
+    os.environ[key] = value
 
 os.environ["TIME_ZONE"] = "Europe/Kyiv"
 
@@ -31,8 +35,13 @@ TIME_ZONE = "Europe/Kyiv"
 
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": ":memory:",
+        "ENGINE": "django.db.backends.postgresql_psycopg2",
+        "NAME": os.getenv("DB_NAME", "postgres"),
+        "USER": os.getenv("DB_USER", "postgres"),
+        "PASSWORD": os.getenv("POSTGRES_PASSWORD", "password"),
+        "HOST": os.getenv("DB_HOST", "localhost"),
+        "PORT": os.getenv("DB_PORT", "5432"),
+        "TEST": {"NAME": "test_db"},
     }
 }
 

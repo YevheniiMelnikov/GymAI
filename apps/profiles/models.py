@@ -1,6 +1,7 @@
-from django.contrib.postgres.fields import ArrayField
 from django.db import models
 from django.db.models import Model
+
+from django.contrib.postgres.fields import ArrayField
 
 from apps.profiles.fields import EncryptedField
 

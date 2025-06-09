@@ -97,14 +97,14 @@ async def profile_menu(callback_query: CallbackQuery, state: FSMContext) -> None
 
 
 @menu_router.message(States.feedback)
-async def handle_feedback(message: Message, state: FSMContext) -> None:
+async def handle_feedback(message: Message, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()
     profile_data = data.get("profile")
     if not profile_data:
         return
     profile = Profile.model_validate(profile_data)
 
-    if await process_feedback_content(message, profile):
+    if await process_feedback_content(message, profile, bot):
         logger.info(f"Profile_id {profile.id} sent feedback")
         await message.answer(msg_text("feedback_sent", profile.language))
         await show_main_menu(message, profile, state)

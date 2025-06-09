@@ -1,6 +1,6 @@
 from typing import cast
 
-from aiogram import Router
+from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -90,7 +90,7 @@ async def workouts_number_choice(message: Message, state: FSMContext):
 
 
 @workout_router.callback_query(States.program_manage)
-async def program_manage(callback_query: CallbackQuery, state: FSMContext) -> None:
+async def program_manage(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     await delete_messages(state)
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
@@ -105,7 +105,7 @@ async def program_manage(callback_query: CallbackQuery, state: FSMContext) -> No
     elif callback_query.data == "reset":
         await reset_workout_plan(callback_query, state)
     elif callback_query.data == "save":
-        await save_workout_plan(callback_query, state)
+        await save_workout_plan(callback_query, state, bot)
 
 
 @workout_router.message(States.program_manage)
@@ -233,7 +233,7 @@ async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMCon
 
 
 @workout_router.callback_query(States.workout_survey)
-async def send_workout_results(callback_query: CallbackQuery, state: FSMContext):
+async def send_workout_results(callback_query: CallbackQuery, state: FSMContext, bot: Bot):
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     day = cast(str, data.get("day", ""))
@@ -253,6 +253,7 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext)
         await send_message(
             recipient=coach,
             text=msg_text("workout_completed", coach_lang).format(name=client.name, program=program),
+            bot=bot,
             state=state,
             reply_markup=workout_feedback_kb(coach_lang, client.id, day),
             include_incoming_message=False,
@@ -268,7 +269,7 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext)
 
 
 @workout_router.message(States.workout_description)
-async def workout_description(message: Message, state: FSMContext):
+async def workout_description(message: Message, state: FSMContext, bot: Bot):
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     client = await Cache.client.get_client(profile.id)
@@ -288,6 +289,7 @@ async def workout_description(message: Message, state: FSMContext):
             feedback=message.text,
             program=program,
         ),
+        bot=bot,
         state=state,
         reply_markup=workout_feedback_kb(coach_lang, client.id, cast(str, data.get("day", ""))),
         include_incoming_message=False,
@@ -299,7 +301,7 @@ async def workout_description(message: Message, state: FSMContext):
 
 
 @workout_router.callback_query(States.program_edit)
-async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
+async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot: Bot):
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     exercises = [DayExercises.model_validate(e) for e in data.get("exercises", [])]
@@ -378,6 +380,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
                 await send_message(
                     recipient=client,
                     text=msg_text("new_program", client_lang),
+                    bot=bot,
                     state=state,
                     reply_markup=subscription_view_kb(client_lang),
                     include_incoming_message=False,
@@ -396,12 +399,14 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext):
             await send_message(
                 recipient=client,
                 text=msg_text("new_program", client_lang),
+                bot=bot,
                 state=state,
                 include_incoming_message=False,
             )
             await send_message(
                 recipient=client,
                 text=msg_text("program_page", client_lang).format(program=program_text, day=1),
+                bot=bot,
                 state=state,
                 reply_markup=program_view_kb(client_lang),
                 include_incoming_message=False,

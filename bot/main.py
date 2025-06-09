@@ -38,12 +38,13 @@ async def main() -> None:
     container = App()
     container.config.bot_token.from_value(settings.BOT_TOKEN)  # type: ignore[attr-defined]
     container.config.parse_mode.from_value("HTML")  # type: ignore[attr-defined]
-    container.wire(modules=["bot.handlers", "bot.utils", "core.tasks"])
+    container.wire(modules=["bot.utils.other", "core.tasks"])
     bot = container.bot()
     await bot.delete_webhook(drop_pending_updates=True)
 
     if settings.WEBHOOK_URL is None:
         raise ValueError("WEBHOOK_URL is not set in environment variables")
+
     await bot.set_webhook(url=settings.WEBHOOK_URL)
     await set_bot_commands(bot)
 
