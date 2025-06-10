@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-import aiohttp
 from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
@@ -51,31 +50,30 @@ async def send_message(
         else text
     )
 
-    async with aiohttp.ClientSession():
-        if video:
-            await bot.send_video(
-                chat_id=recipient_profile.tg_id,
-                video=video.file_id,
-                caption=formatted_text,
-                reply_markup=reply_markup,
-                parse_mode=ParseMode.HTML,
-            )
-        elif photo:
-            await bot.send_photo(
-                chat_id=recipient_profile.tg_id,
-                photo=photo.file_id,
-                caption=formatted_text,
-                reply_markup=reply_markup,
-                parse_mode=ParseMode.HTML,
-            )
-        else:
-            await bot.send_message(
-                chat_id=recipient_profile.tg_id,
-                text=formatted_text,
-                reply_markup=reply_markup,
-                disable_web_page_preview=True,
-                parse_mode=ParseMode.HTML,
-            )
+    if video:
+        await bot.send_video(
+            chat_id=recipient_profile.tg_id,
+            video=video.file_id,
+            caption=formatted_text,
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.HTML,
+        )
+    elif photo:
+        await bot.send_photo(
+            chat_id=recipient_profile.tg_id,
+            photo=photo.file_id,
+            caption=formatted_text,
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.HTML,
+        )
+    else:
+        await bot.send_message(
+            chat_id=recipient_profile.tg_id,
+            text=formatted_text,
+            reply_markup=reply_markup,
+            disable_web_page_preview=True,
+            parse_mode=ParseMode.HTML,
+        )
 
 
 async def send_coach_request(
@@ -97,23 +95,22 @@ async def send_coach_request(
     file_name = data.get("profile_photo")
     photo = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{file_name}"
 
-    async with aiohttp.ClientSession():
-        await bot.send_photo(
-            chat_id=settings.ADMIN_ID,
-            photo=photo,
-            caption=msg_text("new_coach_request", settings.ADMIN_LANG).format(
-                name=name,
-                surname=surname,
-                experience=experience,
-                info=info,
-                card=card,
-                subscription_price=subscription_price,
-                program_price=program_price,
-                contact=contact,
-                profile_id=profile.id,
-            ),
-            reply_markup=new_coach_kb(profile.id),
-        )
+    await bot.send_photo(
+        chat_id=settings.ADMIN_ID,
+        photo=photo,
+        caption=msg_text("new_coach_request", settings.ADMIN_LANG).format(
+            name=name,
+            surname=surname,
+            experience=experience,
+            info=info,
+            card=card,
+            subscription_price=subscription_price,
+            program_price=program_price,
+            contact=contact,
+            profile_id=profile.id,
+        ),
+        reply_markup=new_coach_kb(profile.id),
+    )
 
 
 async def contact_client(callback_query: CallbackQuery, profile: Profile, client_id: str, state: FSMContext) -> None:

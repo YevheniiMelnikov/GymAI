@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import datetime
 
-import aiohttp
 from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -310,16 +309,15 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
         next_payment_date = payment_date + relativedelta(months=1)
 
-        async with aiohttp.ClientSession():
-            await bot.send_message(
-                settings.ADMIN_ID,
-                msg_text("subscription_cancel_request", settings.ADMIN_LANG).format(
-                    profile_id=profile.id,
-                    contact=contact,
-                    next_payment_date=next_payment_date.strftime("%Y-%m-%d"),
-                    order_id=order_id,
-                ),
-            )
+        await bot.send_message(
+            settings.ADMIN_ID,
+            msg_text("subscription_cancel_request", settings.ADMIN_LANG).format(
+                profile_id=profile.id,
+                contact=contact,
+                next_payment_date=next_payment_date.strftime("%Y-%m-%d"),
+                order_id=order_id,
+            ),
+        )
 
         await APIService.payment.unsubscribe(order_id)
         await cancel_subscription(next_payment_date, client.id, subscription.id)
