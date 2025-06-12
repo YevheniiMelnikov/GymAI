@@ -8,6 +8,9 @@ if [ "${RUN_MIGRATIONS}" = "true" ]; then
   echo "▶ Applying database migrations..."
   python manage.py migrate --noinput
 
+  echo "▶ Ensuring superuser..."
+  python manage.py ensure_admin
+
   echo "▶ Collecting static files..."
   python manage.py collectstatic --noinput || echo "Skipping collectstatic"
 fi
