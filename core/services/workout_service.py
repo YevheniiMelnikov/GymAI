@@ -144,3 +144,21 @@ class WorkoutService(APIClient):
 
         logger.error(f"Failed to retrieve subscriptions for client_id={client_id}. HTTP={status}, Response: {data}")
         return []
+
+    @classmethod
+    async def get_all_programs(cls, client_id: int) -> list[Program]:
+        url = urljoin(cls.api_url, f"api/v1/programs/?client_profile={client_id}")
+        status, data = await cls._api_request("get", url, headers={"Authorization": f"Api-Key {cls.api_key}"})
+
+        if status == 200 and isinstance(data, list):
+            programs: list[Program] = []
+            for item in data:
+                try:
+                    programs.append(Program.model_validate(item))
+                except Exception as e:
+                    logger.warning(f"Skipping invalid program for client_id={client_id}: {e}")
+            programs.sort(key=lambda p: p.created_at, reverse=True)
+            return programs
+
+        logger.error(f"Failed to retrieve programs for client_id={client_id}. HTTP={status}, Response: {data}")
+        return []

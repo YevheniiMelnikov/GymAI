@@ -19,13 +19,13 @@ from bot.states import States
 from bot.texts import msg_text
 from core.cache import Cache
 from core.exceptions import ClientNotFoundError, CoachNotFoundError
-from core.schemas import Client, Coach, Profile, Subscription, DayExercises, Exercise
+from core.schemas import Client, Coach, Profile, Subscription, Program, DayExercises, Exercise
 from bot.utils.text import (
     get_client_page,
     get_profile_attributes,
     get_translated_week_day,
 )
-from bot.utils.exercises import format_program
+from bot.utils.exercises import format_program, format_full_program
 from config.env_settings import settings
 from bot.utils.other import answer_msg, del_msg
 from core.services.outer import avatar_manager
@@ -502,4 +502,127 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
                 disable_web_page_preview=True,
             )
 
+    await callback_query.answer()
+
+
+async def show_program_history(
+    callback_query: CallbackQuery,
+    profile: Profile,
+    state: FSMContext,
+    index: int = 0,
+) -> None:
+    programs = await Cache.workout.get_all_programs(profile.id)
+    if not programs:
+        await callback_query.answer(msg_text("no_program", profile.language), show_alert=True)
+        return
+
+    index %= len(programs)
+    program = programs[index]
+    program_text = await format_full_program(program.exercises_by_day)
+    date = datetime.fromtimestamp(program.created_at).strftime("%Y-%m-%d")
+
+    await state.update_data(programs_history=[p.model_dump() for p in programs])
+    await state.set_state(States.program_history)
+
+    message = callback_query.message
+    if message and isinstance(message, Message):
+        await message.edit_text(
+            msg_text("program_history_page", profile.language).format(program=program_text, date=date),
+            reply_markup=kb.history_nav_kb(profile.language, "ph", index),
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+
+
+async def program_history_pagination(
+    callback_query: CallbackQuery,
+    profile: Profile,
+    index: int,
+    state: FSMContext,
+) -> None:
+    data = await state.get_data()
+    programs_data = data.get("programs_history", [])
+    programs = [Program.model_validate(p) for p in programs_data]
+
+    if not programs:
+        await callback_query.answer(msg_text("no_program", profile.language))
+        return
+
+    if index < 0 or index >= len(programs):
+        await callback_query.answer(msg_text("out_of_range", profile.language))
+        return
+
+    program = programs[index]
+    program_text = await format_full_program(program.exercises_by_day)
+    date = datetime.fromtimestamp(program.created_at).strftime("%Y-%m-%d")
+
+    message = callback_query.message
+    if message and isinstance(message, Message):
+        await message.edit_text(
+            msg_text("program_history_page", profile.language).format(program=program_text, date=date),
+            reply_markup=kb.history_nav_kb(profile.language, "ph", index),
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+    await callback_query.answer()
+
+
+async def show_subscription_history(
+    callback_query: CallbackQuery,
+    profile: Profile,
+    state: FSMContext,
+    index: int = 0,
+) -> None:
+    subscriptions = await Cache.workout.get_all_subscriptions(profile.id)
+    if not subscriptions:
+        await callback_query.answer(msg_text("subscription_canceled", profile.language), show_alert=True)
+        return
+
+    index %= len(subscriptions)
+    sub = subscriptions[index]
+    program_text = await format_full_program(sub.exercises)
+    date = sub.payment_date
+
+    await state.update_data(subscriptions_history=[s.model_dump() for s in subscriptions])
+    await state.set_state(States.subscription_history)
+
+    message = callback_query.message
+    if message and isinstance(message, Message):
+        await message.edit_text(
+            msg_text("subscription_history_page", profile.language).format(program=program_text, date=date),
+            reply_markup=kb.history_nav_kb(profile.language, "sh", index),
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
+
+
+async def subscription_history_pagination(
+    callback_query: CallbackQuery,
+    profile: Profile,
+    index: int,
+    state: FSMContext,
+) -> None:
+    data = await state.get_data()
+    subs_data = data.get("subscriptions_history", [])
+    subscriptions = [Subscription.model_validate(s) for s in subs_data]
+
+    if not subscriptions:
+        await callback_query.answer(msg_text("subscription_canceled", profile.language))
+        return
+
+    if index < 0 or index >= len(subscriptions):
+        await callback_query.answer(msg_text("out_of_range", profile.language))
+        return
+
+    sub = subscriptions[index]
+    program_text = await format_full_program(sub.exercises)
+    date = sub.payment_date
+    message = callback_query.message
+    if message and isinstance(message, Message):
+        await message.edit_text(
+            msg_text("subscription_history_page", profile.language).format(program=program_text, date=date),
+            reply_markup=kb.history_nav_kb(profile.language, "sh", index),
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
+        )
     await callback_query.answer()

@@ -243,6 +243,7 @@ def program_view_kb(lang: str) -> KbMarkup:
             builder.add("back", "previous"),
             builder.add("forward", "next"),
         ],
+        [builder.add("history", "history")],
         [
             builder.add("quit", "quit"),
         ],
@@ -330,6 +331,7 @@ def show_subscriptions_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
         [builder.add("exercises", "exercises")],
+        [builder.add("history", "history")],
         [builder.add("contact_coach", "contact")],
         [builder.add("edit_days", "change_days")],
         [builder.add("cancel_subscription", "cancel")],
@@ -399,3 +401,15 @@ def program_action_kb(lang: str) -> KbMarkup:
         [builder.add("view", "show_old"), builder.add("new_program", "new_program")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
+def history_nav_kb(lang: str, prefix: str, index: int) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [
+        [
+            builder.add("back", f"{prefix}_prev_{index - 1}"),
+            builder.add("forward", f"{prefix}_next_{index + 1}"),
+        ],
+        [builder.add("prev_menu", "back")],
+    ]
+    return KbMarkup(inline_keyboard=buttons)

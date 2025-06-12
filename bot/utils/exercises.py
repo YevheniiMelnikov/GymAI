@@ -205,6 +205,19 @@ async def format_program(exercises: list[DayExercises], day: int) -> str:
     return "\n".join(program_lines)
 
 
+async def format_full_program(exercises: list[DayExercises]) -> str:
+    lines: list[str] = []
+    for day_entry in sorted(exercises, key=lambda d: int(d.day)):
+        lines.append(f"<b>Day {day_entry.day}</b>")
+        for idx, exercise in enumerate(day_entry.exercises):
+            line = f"{idx + 1}. {exercise.name} | {exercise.sets} x {exercise.reps}"
+            if exercise.weight:
+                line += f" | {exercise.weight} kg"
+            lines.append(line)
+        lines.append("")
+    return "\n".join(lines).strip()
+
+
 async def create_exercise(
     data: dict,
     exercises_to_modify: list[DayExercises],
