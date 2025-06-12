@@ -272,6 +272,11 @@ new_program:
   ru: "<b>Для вас была составлена новая тренировочная программа</b> 🥳"
   ua: "<b>Для вас було складено нову тренувальну програму</b> 🥳"
 
+program_history_page:
+  eng: "<b>Program from {date}</b>\n<em>{program}</em>"
+  ru: "<b>Программа от {date}</b>\n<em>{program}</em>"
+  ua: "<b>Програма від {date}</b>\n<em>{program}</em>"
+
 program_guide:
   eng: "Start sending exercise titles one at a time in a message. When finished, click Save ✅\nIn case of an error, use Reset 🔄"
   ru: "Начните отправлять названия упражнений по одному в сообщении. После завершения нажмите Сохранить ✅\nВ случае ошибки воспользуйтесь Сбросить 🔄"
@@ -316,6 +321,11 @@ subscription_page:
   eng: "<b>Subscription Information:</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Status:</b> {enabled}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Price:</b> {price} UAH\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Date of charge-off:</b> {next_payment_date}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Workout days:</b> {days}"
   ru: "<b>Информация о подписке:</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Статус:</b> {enabled}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Цена:</b> {price} грн\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Дата следующего списання:</b> {next_payment_date}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Дни тренировок:</b> {days}"
   ua: "<b>Інформація про підписку:</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Статус:</b> {enabled}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Ціна:</b> {price} грн\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Дата наступного списання:</b> {next_payment_date}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Дні тренувань:</b> {days}"
+
+subscription_history_page:
+  eng: "<b>Subscription from {date}</b>\n<em>{program}</em>"
+  ru: "<b>Подписка от {date}</b>\n<em>{program}</em>"
+  ua: "<b>Підписка від {date}</b>\n<em>{program}</em>"
 
 program_not_ready:
   eng: "Your program has not yet been written. Please wait for a notification when it is ready 🙂"

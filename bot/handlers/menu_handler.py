@@ -31,6 +31,7 @@ from bot.utils.menus import (
     show_my_workouts_menu,
     show_my_clients_menu,
     show_my_profile_menu,
+    show_subscription_history,
     clients_menu_pagination,
 )
 from bot.utils.profiles import assign_coach
@@ -278,6 +279,9 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
             msg_text("select_days", profile.language),
             reply_markup=select_days_kb(profile.language, []),
         )
+
+    elif cb_data == "history":
+        await show_subscription_history(callback_query, profile, state)
 
     elif cb_data == "contact":
         await callback_query.answer()

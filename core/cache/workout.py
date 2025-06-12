@@ -1,5 +1,5 @@
 import json
-from typing import Any
+from typing import Any, cast
 from loguru import logger
 
 from core.schemas import Subscription, Program
@@ -102,6 +102,42 @@ class WorkoutCacheManager(BaseCacheManager):
         await cls.set_json("workout_plans:programs", str(client_id), program.model_dump())
         logger.debug(f"Program for client_id={client_id} pulled from service and cached")
         return program
+
+    @classmethod
+    async def get_all_subscriptions(cls, client_id: int) -> list[Subscription]:
+        raw = await cls.get_json("workout_plans:subscriptions_history", str(client_id))
+        if raw:
+            try:
+                return [validate_or_raise(cast(dict, item), Subscription, context=str(client_id)) for item in raw]
+            except Exception as e:
+                logger.debug(f"Corrupt subscriptions history for client_id={client_id}: {e}")
+                await cls.delete("workout_plans:subscriptions_history", str(client_id))
+
+        subscriptions = await cls.service.get_all_subscriptions(client_id)
+        await cls.set(
+            "workout_plans:subscriptions_history",
+            str(client_id),
+            json.dumps([s.model_dump() for s in subscriptions]),
+        )
+        return subscriptions
+
+    @classmethod
+    async def get_all_programs(cls, client_id: int) -> list[Program]:
+        raw = await cls.get_json("workout_plans:programs_history", str(client_id))
+        if raw:
+            try:
+                return [validate_or_raise(cast(dict, item), Program, context=str(client_id)) for item in raw]
+            except Exception as e:
+                logger.debug(f"Corrupt programs history for client_id={client_id}: {e}")
+                await cls.delete("workout_plans:programs_history", str(client_id))
+
+        programs = await cls.service.get_all_programs(client_id)
+        await cls.set(
+            "workout_plans:programs_history",
+            str(client_id),
+            json.dumps([p.model_dump() for p in programs]),
+        )
+        return programs
 
     @classmethod
     async def cache_gif_filename(cls, exercise_name: str, filename: str) -> None:

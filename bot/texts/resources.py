@@ -29,6 +29,7 @@ class ButtonText(AutoName):
     cancel_subscription = auto()
     pay = auto()
     new_program = auto()
+    history = auto()
 
     my_clients = auto()
     my_profile = auto()
@@ -189,6 +190,9 @@ class MessageText(AutoName):
     subscription_cancel_warning = auto()
     payment_link = auto()
     contract_info_message = auto()
+
+    program_history_page = auto()
+    subscription_history_page = auto()
 
     select_action = auto()
     follow_link = auto()

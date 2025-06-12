@@ -29,6 +29,12 @@ from bot.utils.menus import (
     show_my_subscription_menu,
     show_my_program_menu,
     program_menu_pagination,
+    show_exercises_menu,
+    show_program_history,
+    program_history_pagination,
+    show_subscription_history,
+    subscription_history_pagination,
+    show_subscription_page,
 )
 from bot.utils.other import (
     short_url,
@@ -429,3 +435,63 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
         await program_menu_pagination(state, callback_query)
 
     await del_msg(cast(Message | CallbackQuery | None, callback_query))
+
+
+@workout_router.callback_query()
+async def show_history(callback_query: CallbackQuery, state: FSMContext) -> None:
+    if callback_query.data != "history":
+        return
+    data = await state.get_data()
+    profile = Profile.model_validate(data["profile"])
+    current_state = await state.get_state()
+    if current_state == States.program_view.state:
+        await show_program_history(callback_query, profile, state)
+    elif current_state == States.show_subscription.state:
+        await show_subscription_history(callback_query, profile, state)
+
+
+@workout_router.callback_query(States.program_history)
+async def program_history_nav(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data_str = callback_query.data or ""
+    if data_str == "back":
+        data = await state.get_data()
+        await show_exercises_menu(callback_query, state, Profile.model_validate(data["profile"]))
+        return
+    if "_" not in data_str:
+        lang = (await Cache.profile.get_profile(callback_query.from_user.id)).language
+        await callback_query.answer(msg_text("out_of_range", lang))
+        return
+    _, index_str = data_str.rsplit("_", 1)
+    try:
+        index = int(index_str)
+    except ValueError:
+        lang = (await Cache.profile.get_profile(callback_query.from_user.id)).language
+        await callback_query.answer(msg_text("out_of_range", lang))
+        return
+    profile = await Cache.profile.get_profile(callback_query.from_user.id)
+    assert profile is not None
+    await program_history_pagination(callback_query, profile, index, state)
+
+
+@workout_router.callback_query(States.subscription_history)
+async def subscription_history_nav(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data_str = callback_query.data or ""
+    if data_str == "back":
+        subscription = await Cache.workout.get_latest_subscription(callback_query.from_user.id)
+        await show_subscription_page(callback_query, state, subscription)
+        return
+    if "_" not in data_str:
+        lang = (await Cache.profile.get_profile(callback_query.from_user.id)).language
+        await callback_query.answer(msg_text("out_of_range", lang))
+        return
+    _, index_str = data_str.rsplit("_", 1)
+    try:
+        index = int(index_str)
+    except ValueError:
+        lang = (await Cache.profile.get_profile(callback_query.from_user.id)).language
+        await callback_query.answer(msg_text("out_of_range", lang))
+        return
+    profile = await Cache.profile.get_profile(callback_query.from_user.id)
+    assert profile is not None
+    await subscription_history_pagination(callback_query, profile, index, state)
+
