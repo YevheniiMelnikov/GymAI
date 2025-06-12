@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     EMAIL: str
     ADMIN_ID: str
 
+    DJANGO_ADMIN: Annotated[str, Field(default="admin")]
+    DJANGO_PASSWORD: Annotated[str, Field(default="admin")]
+
     PAYMENT_PRIVATE_KEY: str
     PAYMENT_PUB_KEY: str
     CHECKOUT_URL: str
