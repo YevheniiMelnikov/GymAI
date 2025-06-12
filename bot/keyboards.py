@@ -73,6 +73,7 @@ def edit_client_profile_kb(lang: str) -> KbMarkup:
         [builder.add("workout_goals", "workout_goals")],
         [builder.add("health_notes", "health_notes")],
         [builder.add("weight", "weight")],
+        [builder.add("photo", "photo")],
         [builder.add("prev_menu", "back")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)

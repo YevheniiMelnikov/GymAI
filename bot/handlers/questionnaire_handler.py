@@ -1,5 +1,6 @@
 from contextlib import suppress
 from typing import cast
+import os
 
 from aiogram import Router, Bot
 from aiogram.exceptions import TelegramBadRequest
@@ -377,9 +378,14 @@ async def profile_photo(message: Message, state: FSMContext, bot: Bot) -> None:
         if avatar_manager.load_file_to_bucket(local_file):
             msg = await answer_msg(message, msg_text("photo_uploaded", lang))
             if msg:
-                await state.update_data(profile_photo=local_file, chat_id=message.chat.id, message_ids=[msg.message_id])
+                await state.update_data(
+                    profile_photo=os.path.basename(local_file),
+                    chat_id=message.chat.id,
+                    message_ids=[msg.message_id],
+                )
             avatar_manager.clean_up_file(local_file)
-            await update_profile_data(cast(Message, message), state, "coach", bot)
+            status = data.get("status", "coach")
+            await update_profile_data(cast(Message, message), state, status, bot)
         else:
             await answer_msg(message, msg_text("photo_upload_fail", lang))
             await state.set_state(States.profile_photo)
