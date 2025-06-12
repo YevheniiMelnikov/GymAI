@@ -17,9 +17,11 @@ ALLOWED_HOSTS = [
 ASGI_APPLICATION = "config.asgi.application"
 
 INSTALLED_APPS = [
+    "django.contrib.admin",
     "django.contrib.contenttypes",
     "django.contrib.auth",
     "django.contrib.staticfiles",
+    "unfold",
     "apps.profiles.apps.ProfilesConfig",
     "apps.payments.apps.PaymentsConfig",
     "apps.home.apps.HomeConfig",

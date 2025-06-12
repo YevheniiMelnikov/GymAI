@@ -15,7 +15,12 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock ./
 
-RUN uv pip install --system .
+ARG EXTRAS=""
+RUN if [ -n "$EXTRAS" ]; then \
+      uv pip install --system ".[${EXTRAS}]"; \
+    else \
+      uv pip install --system .; \
+    fi
 
 COPY . .
 

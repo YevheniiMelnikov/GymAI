@@ -1,18 +1,18 @@
 # GymBot
 
-GymBot — платформа для взаимодействия между Telegram-ботом и Django API. Проект использует Docker, Uvicorn, Redis и PostgreSQL. Вся инфраструктура собрана по лучшим практикам: с `uv`, `Taskfile`, pre-commit-хуками и строгой типизацией.
+GymBot is a platform that connects a Telegram bot with a Django API. The project uses Docker, Uvicorn, Redis and PostgreSQL. The whole setup follows best practices with `uv`, a Taskfile for handy commands, pre-commit hooks and strict typing.
 
 ---
 
 ## 🚀 Features
 
-- Django API с документацией и административной панелью
-- Telegram-бот на `aiogram` с доступом к API
-- Обмен данными через Redis и PostgreSQL
-- ASGI-сервер на `uvicorn` (Django)
-- Прокси через Nginx + HTTPS
-- Полностью dockerized окружение
-- AOF + LRU конфиг Redis
+- Django API with documentation and admin panel
+- Telegram bot powered by `aiogram`
+- Communication through Redis and PostgreSQL
+- ASGI server via `uvicorn`
+- Reverse proxy with Nginx (HTTPS)
+- Fully dockerized environment
+- Redis tuned with AOF and LRU
 
 ---
 
@@ -20,126 +20,155 @@ GymBot — платформа для взаимодействия между Tel
 
 - Docker
 - Docker Compose
-- Python 3.13+ (для запуска без контейнеров)
+- Python 3.13+ (for running without containers)
 
 ---
 
-## 🛠 Установка и запуск
+## 🛠 Installation & Run
 
-### 1. Настрой окружение
+1. Create an environment file:
 
-Создай `.env` файл:
+   ```bash
+   cp .env.example .env
+   ```
 
-    cp .env.example .env
+2. Build and start the services:
 
-### 2. Собери и запусти сервисы
+   ```bash
+   task run
+   ```
 
-    task run
+   or manually:
 
-Либо вручную:
-
-    docker compose up --build
+   ```bash
+   docker compose up --build
+   ```
 
 ---
 
-## 🤖 Бот
+## 🤖 Bot
 
-Бот запускается в отдельном контейнере:
+The bot runs in a dedicated container.
 
-- Исходники: `bot/`
-- Точка входа: `bot/main.py`
-- Бэкапы монтируются из `dumps`
+- Sources: `bot/`
+- Entry point: `bot/main.py`
+- Backups mounted from `dumps/`
 
 ---
 
 ## 🌐 API
 
-ASGI-приложение (Django) запускается через `uvicorn`.
+The Django ASGI app runs under `uvicorn`.
 
-- Админка: http://localhost:8080/admin/
-- Документация: http://localhost:8080/api/schema/swagger-ui/
-- Healthcheck: http://localhost:8000/health/
+- Admin: <http://localhost:8080/admin/>
+- Default credentials are read from `.env` (`DJANGO_USER` and `DJANGO_PASSWORD`)
+- Docs: <http://localhost:8080/api/schema/swagger-ui/>
+- Healthcheck: <http://localhost:8000/health/>
 
 ---
 
 ## 🔁 Redis
 
-Redis настроен с `appendonly.aof`, `maxmemory 256mb`, `allkeys-lru`:
+Redis is configured with `appendonly.aof`, `maxmemory 256mb`, `allkeys-lru`.
 
-- Конфигурация: `redis.conf`
-- Хранилище: `redisdata` том
-
----
-
-## 🧪 Тесты
-
-    task test
-
-Или вручную:
-
-    uv run pytest
+- Config: `redis.conf`
+- Storage: `redisdata` volume
 
 ---
 
-## 🧱 Taskfile команды
+## 🧪 Tests
 
-Проект использует [Taskfile](https://taskfile.dev/) для удобного запуска:
+```bash
+task test
+```
 
-| Команда     | Описание                                |
-|-------------|------------------------------------------|
-| run         | Запустить все сервисы через docker      |
-| localrun    | Локальная разработка с `docker-compose-local.yml` |
-| test        | Запустить тесты                         |
-| lint        | Проверка линтером (ruff + mypy)         |
-| format      | Отформатировать код                     |
-| update      | Обновить зависимости                    |
-| pre-commit  | Прогнать все хуки                       |
+Or manually:
 
-Пример:
+```bash
+uv run pytest
+```
 
-    task lint
+---
+
+## 🧱 Taskfile commands
+
+This project uses [Taskfile](https://taskfile.dev/) for convenience.
+
+| Command    | Description                                    |
+|------------|------------------------------------------------|
+| run        | Run all services via Docker                    |
+| localrun   | Local development with `docker-compose-local.yml` |
+| test       | Run tests                                      |
+| lint       | Run linter (ruff + pyrefly)                    |
+| format     | Format code                                    |
+| update     | Update dependencies                            |
+| pre-commit | Run all hooks                                  |
+
+Example:
+
+```bash
+task lint
+```
 
 ---
 
 ## 🧹 Pre-Commit
 
-Установленные хуки:
+Installed hooks:
 
-- `ruff` — автоформат и lint
-- `mypy` — статическая проверка типов
-- `pytest` — автотесты
-- `uv-lock` — контроль lock-файла
-- базовые хуки: `check-yaml`, `trailing-whitespace`, `end-of-file-fixer`
+- `ruff` — autoformat and lint
+- `mypy` — static type check
+- `pytest` — run tests
+- `uv-lock` — lock file control
+- basic hooks: `check-yaml`, `trailing-whitespace`, `end-of-file-fixer`
 
-Установка:
+Install hooks:
 
-    uv run pre-commit install
+```bash
+uv run pre-commit install
+```
 
-Запуск вручную:
+Run manually:
 
-    task pre-commit
+```bash
+task pre-commit
+```
 
 ---
 
-## 🚀 Продакшн-деплой
+## 🚀 Production deploy
 
-    docker compose -f docker-compose.yml up -d --build
+```bash
+docker compose -f docker-compose.yml up -d --build
+```
 
-Проверь доступность:
+Check availability:
 
-    curl http://localhost:8000/health/
+```bash
+curl http://localhost:8000/health/
+```
 
 ---
 
 ## 🔐 Nginx
 
-Реверс-прокси работает с HTTPS (Let's Encrypt), и перенаправляет:
+The reverse proxy works with HTTPS (Let's Encrypt) and routes:
 
-- `/static/` → статика Django
-- `/api/` → API-сервер
-- `/` → Telegram-бот
+- `/static/` → Django static
+- `/api/` → API server
+- `/` → Telegram bot
 
-Файл: `nginx.conf`
-После правки конфигурации пересобери образ и перезапусти контейнер:
+Config file: `nginx.conf`
 
-    docker compose up -d --build nginx
+After editing the config, rebuild the image and restart:
+
+```bash
+docker compose up -d --build nginx
+```
+
+---
+
+## 📦 Versioning
+
+The project uses `bumpversion` for releases. The current version is stored in `bot/VERSION` and `pyproject.toml`.
+

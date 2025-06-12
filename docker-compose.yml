@@ -58,6 +58,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        EXTRAS: "bot"
     container_name: bot
     env_file: .env
     command: ["python", "-u", "/app/bot/main.py"]
@@ -77,6 +79,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        EXTRAS: "web"
     container_name: celery_worker
     env_file: .env
     command: >
@@ -98,6 +102,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        EXTRAS: "web"
     container_name: celery_beat
     env_file: .env
     command: celery -A config.celery:celery_app beat -l info

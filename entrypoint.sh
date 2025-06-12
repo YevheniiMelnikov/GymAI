@@ -10,6 +10,9 @@ if [ "${RUN_MIGRATIONS}" = "true" ]; then
 
   echo "▶ Collecting static files..."
   python manage.py collectstatic --noinput || echo "Skipping collectstatic"
+
+  echo "▶ Creating superuser if missing..."
+  python manage.py create_default_superuser
 fi
 
 echo "▶ Starting: $@"

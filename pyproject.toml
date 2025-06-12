@@ -1,6 +1,6 @@
 [project]
 name = "GymBot"
-version = "0.1.0"
+version = "1.1.0"
 description = ""
 authors = [{ name = "Yevhenii Melnykov", email = "evgeniy@workmail.com" }]
 readme = "README.md"
@@ -20,16 +20,10 @@ dependencies = [
     "google-cloud-storage>=3.1.0",
     "apscheduler>=3.11.0",
     "python-dateutil>=2.9.0.post0",
-    "aiogram>=3.17.0",
-    "djangorestframework>=3.15.2",
-    "djangorestframework-api-key>=3.0.0",
     "cryptography>=44.0.0",
-    "django-filter==25.1",
     "gspread>=6.2.0",
     "google-auth>=2.37.0",
-    "django>=5.2",
     "celery>=5.5.2",
-    "django-redis>=5.4.0",
     "dependency-injector>=4.47.1",
     "pydantic-settings>=2.9.1",
 ]
@@ -49,6 +43,17 @@ dev = [
     "factory-boy==3.3.0",
     "pytest-django==4.8.0",
     "pytest-asyncio>=0.23",
+]
+bot = [
+    "aiogram>=3.20.0.post0",
+]
+web = [
+    "django>=5.2",
+    "djangorestframework>=3.15.2",
+    "djangorestframework-api-key>=3.0.0",
+    "django-filter==25.1",
+    "django-redis>=5.4.0",
+    "django-unfold>=0.59.0",
 ]
 
 [tool.ruff]
@@ -84,3 +89,32 @@ bad-return = true
 bad-argument-type = true
 missing-attribute = true
 annotation-mismatch = true
+
+[[tool.bumpversion.files]]
+filename = "bot/VERSION"
+
+[[tool.bumpversion.files]]
+filename = "pyproject.toml"
+search = "version = \"{current_version}\""
+replace = "version = \"{new_version}\""
+
+[tool.bumpversion]
+current_version = "1.1.0"
+parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
+serialize = ["{major}.{minor}.{patch}"]
+search = "{current_version}"
+replace = "{new_version}"
+regex = false
+ignore_missing_version = false
+ignore_missing_files = false
+tag = true
+sign_tags = false
+tag_name = "v{new_version}"
+tag_message = "Bump version: {current_version} → {new_version}"
+allow_dirty = false
+commit = true
+message = "Bump version: {current_version} → {new_version}"
+commit_args = ""
+setup_hooks = []
+pre_commit_hooks = []
+post_commit_hooks = []

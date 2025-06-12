@@ -53,6 +53,8 @@ class Settings(BaseSettings):
     PRIVACY_POLICY: str
     EMAIL: str
     ADMIN_ID: str
+    DJANGO_USER: Annotated[str, Field(default="admin")]
+    DJANGO_PASSWORD: Annotated[str, Field(default="admin")]
 
     PAYMENT_PRIVATE_KEY: str
     PAYMENT_PUB_KEY: str
