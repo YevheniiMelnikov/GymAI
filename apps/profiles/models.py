@@ -25,6 +25,7 @@ class ClientProfile(Model):
     health_notes = models.CharField(max_length=250, null=True, blank=True)
     workout_experience = models.CharField(max_length=50, null=True, blank=True)
     workout_goals = models.CharField(max_length=250, null=True, blank=True)
+    profile_photo = models.CharField(max_length=250, null=True, blank=True)
     assigned_to = ArrayField(models.IntegerField(), default=list, blank=True)
 
     class Meta:

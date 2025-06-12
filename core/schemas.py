@@ -28,6 +28,7 @@ class Client(BaseModel):
     born_in: str | None = None
     workout_experience: str | None = None
     workout_goals: str | None = None
+    profile_photo: str | None = None
     health_notes: str | None = None
     weight: int | None = None
     status: ClientStatus = ClientStatus.default

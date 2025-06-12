@@ -17,6 +17,7 @@ from core.exceptions import (
 )
 from core.services import APIService
 from bot.utils import menus
+from pathlib import Path
 from bot.utils.chat import send_coach_request
 from bot.utils.other import delete_messages, del_msg, answer_msg
 from core.schemas import Client, Coach, Profile
@@ -125,18 +126,26 @@ async def answer_profile(cbq: CallbackQuery, profile: Profile, user: Coach | Cli
     if not message or not isinstance(message, Message):
         return
 
-    if (
-        profile.status == "coach"
-        and isinstance(user, Coach)
-        and hasattr(user, "profile_photo")
-        and getattr(user, "profile_photo", None)
-    ):
+    if profile.status == "coach" and isinstance(user, Coach) and user.profile_photo:
         photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{user.profile_photo}"
         try:
             await message.answer_photo(photo_url, text, reply_markup=profile_menu_kb(profile.language))
             return
         except TelegramBadRequest:
             logger.warning("Photo not found for coach %s", profile.id)
+
+    elif profile.status == "client" and isinstance(user, Client):
+        if user.profile_photo:
+            photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{user.profile_photo}"
+        else:
+            avatar = "male.png" if user.gender != "female" else "female.png"
+            photo_url = str(Path(__file__).resolve().parent.parent / "images" / avatar)
+
+        try:
+            await message.answer_photo(photo_url, text, reply_markup=profile_menu_kb(profile.language))
+            return
+        except TelegramBadRequest:
+            logger.warning("Photo not found for client %s", profile.id)
 
     await message.answer(text, reply_markup=profile_menu_kb(profile.language))
 
