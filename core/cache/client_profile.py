@@ -13,6 +13,25 @@ class ClientCacheManager(BaseCacheManager):
     service = ProfileService
 
     @classmethod
+    async def _fetch_from_service(
+        cls, cache_key: str, field: str, *, use_fallback: bool
+    ) -> Client:
+        client = await cls.service.get_client_by_profile_id(int(field))
+        if client is None:
+            raise ClientNotFoundError(int(field))
+        return client
+
+    @classmethod
+    def _validate_data(cls, raw: str, cache_key: str, field: str) -> Client:
+        try:
+            data = json.loads(raw)
+            data["id"] = int(field)
+            return validate_or_raise(data, Client, context=f"profile_id={field}")
+        except Exception as e:
+            logger.debug(f"Corrupt client data in cache for profile_id={field}: {e}")
+            raise ClientNotFoundError(int(field))
+
+    @classmethod
     async def update_client(cls, client_id: int, client_data: dict[str, Any]) -> None:
         await cls.update_json("clients", str(client_id), client_data)
 
@@ -26,25 +45,4 @@ class ClientCacheManager(BaseCacheManager):
 
     @classmethod
     async def get_client(cls, profile_id: int, *, use_fallback: bool = True) -> Client:
-        if raw := await cls.get("clients", str(profile_id)):
-            try:
-                data = json.loads(raw)
-                data["id"] = profile_id
-                return validate_or_raise(data, Client, context=f"profile_id={profile_id}")
-            except (json.JSONDecodeError, TypeError, ValueError) as e:
-                logger.debug(f"Corrupt client data in cache for profile_id={profile_id}: {e}")
-                await cls.delete("clients", str(profile_id))
-            except Exception as e:
-                logger.error(f"Failed to parse/validate client data from cache for profile_id={profile_id}: {e}")
-                await cls.delete("clients", str(profile_id))
-
-        if not use_fallback:
-            raise ClientNotFoundError(profile_id)
-
-        client = await cls.service.get_client_by_profile_id(profile_id)
-        if client is None:
-            raise ClientNotFoundError(profile_id)
-
-        await cls.set_json("clients", str(profile_id), client.model_dump())
-        logger.debug(f"Client data for profile_id={profile_id} pulled from service and cached")
-        return client
+        return await cls.get_or_fetch("clients", str(profile_id), use_fallback=use_fallback)

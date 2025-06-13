@@ -12,34 +12,28 @@ class ProfileCacheManager(BaseCacheManager):
     service = ProfileService
 
     @classmethod
-    async def _deserialize(cls, raw: str, tg_id: int) -> Profile:
+    async def _fetch_from_service(
+        cls, cache_key: str, field: str, *, use_fallback: bool
+    ) -> Profile:
+        profile = await cls.service.get_profile_by_tg_id(int(field))
+        if profile is None:
+            raise ProfileNotFoundError(int(field))
+        return profile
+
+    @classmethod
+    def _validate_data(cls, raw: str, cache_key: str, field: str) -> Profile:
         try:
             data = json.loads(raw)
             if "id" not in data:
                 raise ValueError("missing id")
             return Profile.model_validate(data)
         except (JSONDecodeError, TypeError, ValueError) as e:
-            logger.debug(f"Corrupt profile in cache for tg={tg_id}: {e}")
-            raise ProfileNotFoundError(tg_id)
+            logger.debug(f"Corrupt profile in cache for tg={field}: {e}")
+            raise ProfileNotFoundError(int(field))
 
     @classmethod
     async def get_profile(cls, tg_id: int, *, use_fallback: bool = True) -> Profile:
-        if raw := await cls.get("profiles", str(tg_id)):
-            try:
-                return await cls._deserialize(raw, tg_id)
-            except ProfileNotFoundError:
-                await cls.delete("profiles", str(tg_id))
-
-        if not use_fallback:
-            raise ProfileNotFoundError(tg_id)
-
-        profile = await cls.service.get_profile_by_tg_id(tg_id)
-        if profile is None:
-            raise ProfileNotFoundError(tg_id)
-
-        await cls.set_json("profiles", str(tg_id), profile.model_dump())
-        logger.debug(f"Profile pulled from API and cached for tg={tg_id}")
-        return profile
+        return await cls.get_or_fetch("profiles", str(tg_id), use_fallback=use_fallback)
 
     @classmethod
     async def save_profile(cls, tg_id: int, profile_data: dict) -> None:
