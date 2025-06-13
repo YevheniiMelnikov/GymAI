@@ -1,10 +1,8 @@
-import datetime
 from collections.abc import Sequence
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
-from urllib.parse import urlencode, urljoin
+from urllib.parse import urljoin
 
-from liqpay import LiqPay
 from loguru import logger
 from pydantic_core._pydantic_core import ValidationError
 
@@ -12,43 +10,16 @@ from config.env_settings import settings
 from core.enums import PaymentStatus
 from core.schemas import Payment, Subscription
 from core.services.api_client import APIClient
+from core.services.gateways.payment_gateway import PaymentGateway, LiqPayGateway
 
 
 class PaymentService(APIClient):
     API_BASE_PATH = "api/v1/payments/"
     SUBSCRIPTIONS_PATH = "api/v1/subscriptions/"
-    payment_client = LiqPay(settings.PAYMENT_PUB_KEY, settings.PAYMENT_PRIVATE_KEY)
 
-    @classmethod
-    def _build_payment_params(
-        cls,
-        action: str,
-        amount: Decimal,
-        order_id: str,
-        payment_type: str,
-        client_id: int,
-        emails: list[str],
-    ) -> dict:
-        params = {
-            "action": action,
-            "amount": str(amount.quantize(Decimal("0.01"), ROUND_HALF_UP)),
-            "currency": "UAH",
-            "description": f"{payment_type} payment from client {client_id}",
-            "order_id": order_id,
-            "version": "3",
-            "server_url": settings.PAYMENT_CALLBACK_URL,
-            "result_url": settings.BOT_LINK,
-            "rro_info": {"delivery_emails": emails},
-        }
-
-        if action == "subscribe":
-            params.update(
-                {
-                    "subscribe_date_start": datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S"),
-                    "subscribe_periodicity": "month",
-                }
-            )
-        return params
+    gateway: PaymentGateway = LiqPayGateway(
+        settings.PAYMENT_PUB_KEY, settings.PAYMENT_PRIVATE_KEY
+    )
 
     @classmethod
     async def get_payment_link(
@@ -59,35 +30,17 @@ class PaymentService(APIClient):
         payment_type: str,
         client_id: int,
     ) -> str:
-        params = cls._build_payment_params(
+        return await cls.gateway.get_payment_link(
             action=action,
             amount=amount,
             order_id=order_id,
             payment_type=payment_type,
             client_id=client_id,
-            emails=[settings.EMAIL],
         )
-
-        data = cls.payment_client.cnb_data(params)
-        signature = cls.payment_client.cnb_signature(params)
-        query_string = urlencode({"data": data, "signature": signature})
-        return urljoin(settings.CHECKOUT_URL, f"?{query_string}")
 
     @classmethod
     async def unsubscribe(cls, order_id: str) -> bool:
-        try:
-            response = cls.payment_client.api(
-                "request",
-                {"action": "unsubscribe", "version": "3", "order_id": order_id},
-            )
-            if response.get("status") == "unsubscribed":
-                logger.info(f"Successfully unsubscribed order {order_id}")
-                return True
-            logger.error(f"Unsubscribe failed for order {order_id}: {response}")
-            return False
-        except Exception as e:
-            logger.error(f"Unsubscribe error for {order_id}: {e}")
-            return False
+        return await cls.gateway.unsubscribe(order_id)
 
     @classmethod
     async def _handle_payment_api_request(
