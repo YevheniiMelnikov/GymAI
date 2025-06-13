@@ -1,6 +1,6 @@
 import json
 import random
-from typing import Any
+from typing import Any, cast
 
 from loguru import logger
 
@@ -15,6 +15,35 @@ from core.services.profile_service import ProfileService
 class CoachCacheManager(BaseCacheManager):
     encryptor = Encryptor
     service = ProfileService
+
+    @classmethod
+    async def _fetch_from_service(
+        cls, cache_key: str, field: str, *, use_fallback: bool
+    ) -> Coach:
+        coach = await cls.service.get_coach_by_profile_id(int(field))
+        if coach is None:
+            raise CoachNotFoundError(int(field))
+        return coach
+
+    @classmethod
+    def _prepare_for_cache(cls, data: Any, cache_key: str, field: str) -> Any:
+        coach = cast(Coach, data)
+        data = coach.model_dump()
+        if "payment_details" in data and data["payment_details"]:
+            data["payment_details"] = cls.encryptor.encrypt(data["payment_details"])
+        return data
+
+    @classmethod
+    def _validate_data(cls, raw: str, cache_key: str, field: str) -> Coach:
+        try:
+            data = json.loads(raw)
+            data["id"] = int(field)
+            if "payment_details" in data and data["payment_details"]:
+                data["payment_details"] = cls.encryptor.decrypt(data["payment_details"])
+            return validate_or_raise(data, Coach, context=f"profile_id={field}")
+        except Exception as e:
+            logger.debug(f"Corrupt coach data in cache for profile_id={field}: {e}")
+            raise CoachNotFoundError(int(field))
 
     @classmethod
     async def get_coaches(cls) -> list[Coach]:
@@ -54,31 +83,4 @@ class CoachCacheManager(BaseCacheManager):
 
     @classmethod
     async def get_coach(cls, profile_id: int, *, use_fallback: bool = True) -> Coach:
-        if raw := await cls.get("coaches", str(profile_id)):
-            try:
-                data = json.loads(raw)
-                data["id"] = profile_id
-                if "payment_details" in data and data["payment_details"]:
-                    data["payment_details"] = cls.encryptor.decrypt(data["payment_details"])
-                return validate_or_raise(data, Coach, context=f"profile_id={profile_id}")
-            except (json.JSONDecodeError, TypeError, ValueError) as e:
-                logger.debug(f"Corrupt coach data in cache for profile_id={profile_id}: {e}")
-                await cls.delete("coaches", str(profile_id))
-            except Exception as e:
-                logger.error(f"Failed to parse/validate coach data from cache for profile_id={profile_id}: {e}")
-                await cls.delete("coaches", str(profile_id))
-
-        if not use_fallback:
-            raise CoachNotFoundError(profile_id)
-
-        coach = await cls.service.get_coach_by_profile_id(profile_id)
-        if coach is None:
-            raise CoachNotFoundError(profile_id)
-
-        coach_data_to_cache = coach.model_dump()
-        if "payment_details" in coach_data_to_cache and coach_data_to_cache["payment_details"]:
-            coach_data_to_cache["payment_details"] = cls.encryptor.encrypt(coach_data_to_cache["payment_details"])
-
-        await cls.set_json("coaches", str(profile_id), coach_data_to_cache)
-        logger.debug(f"Coach data for profile_id={profile_id} pulled from service and cached")
-        return coach
+        return await cls.get_or_fetch("coaches", str(profile_id), use_fallback=use_fallback)

@@ -107,3 +107,55 @@ class BaseCacheManager:
             await cls.set_json(key, field, safe)
         except RedisError as e:
             logger.error(f"Redis UPDATE JSON error [{key}:{field}]: {e}")
+
+    @classmethod
+    async def _fetch_from_service(
+        cls, cache_key: str, field: str, *, use_fallback: bool
+    ) -> Any:
+        """Retrieve data from the backing service.
+
+        Subclasses must override this to fetch the required object and raise the
+        appropriate `*NotFoundError` when the object does not exist or
+        ``use_fallback`` is ``False``.
+        """
+        raise NotImplementedError
+
+    @classmethod
+    def _validate_data(cls, raw: str, cache_key: str, field: str) -> Any:
+        """Validate and deserialize cached data.
+
+        Subclasses must override this to convert ``raw`` to the desired object
+        type or raise an exception if the cached data is corrupted.
+        """
+        raise NotImplementedError
+
+    @classmethod
+    def _prepare_for_cache(cls, data: Any, cache_key: str, field: str) -> Any:
+        """Convert ``data`` into a JSON serialisable form for caching."""
+        if hasattr(data, "model_dump"):
+            return data.model_dump()
+        return data
+
+    @classmethod
+    async def get_or_fetch(
+        cls, cache_key: str, field: str, *, use_fallback: bool = True
+    ) -> Any:
+        """Retrieve an item from cache or fallback to the backing service."""
+
+        raw = await cls.get(cache_key, field)
+        if raw:
+            try:
+                return cls._validate_data(raw, cache_key, field)
+            except Exception as e:  # pragma: no cover - best effort cleanup
+                logger.debug(
+                    f"Corrupt cache entry for {cache_key}:{field}: {e}"
+                )
+                await cls.delete(cache_key, field)
+
+        data = await cls._fetch_from_service(cache_key, field, use_fallback=use_fallback)
+        try:
+            prepared = cls._prepare_for_cache(data, cache_key, field)
+            await cls.set(cache_key, field, json.dumps(prepared))
+        except Exception as e:  # pragma: no cover - caching failure shouldn't crash
+            logger.error(f"Failed to cache {cache_key}:{field}: {e}")
+        return data

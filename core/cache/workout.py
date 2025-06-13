@@ -13,6 +13,34 @@ class WorkoutCacheManager(BaseCacheManager):
     service = WorkoutService
 
     @classmethod
+    async def _fetch_from_service(
+        cls, cache_key: str, field: str, *, use_fallback: bool
+    ) -> Subscription | Program:
+        client_id = int(field)
+        if cache_key.endswith("subscriptions"):
+            subscription = await cls.service.get_latest_subscription(client_id)
+            if subscription is None:
+                raise SubscriptionNotFoundError(client_id)
+            return subscription
+        program = await cls.service.get_latest_program(client_id)
+        if program is None:
+            raise ProgramNotFoundError(client_id)
+        return program
+
+    @classmethod
+    def _validate_data(
+        cls, raw: str, cache_key: str, field: str
+    ) -> Subscription | Program:
+        data = json.loads(raw)
+        if cache_key.endswith("subscriptions"):
+            if "client_profile" not in data:
+                data["client_profile"] = int(field)
+            return validate_or_raise(data, Subscription, context=f"client_id={field}")
+        if "client_id" not in data:
+            data["client_id"] = int(field)
+        return validate_or_raise(data, Program, context=f"client_id={field}")
+
+    @classmethod
     async def save_subscription(cls, client_id: int, subscription_data: dict) -> None:
         try:
             from core.cache import Cache
@@ -35,29 +63,11 @@ class WorkoutCacheManager(BaseCacheManager):
 
     @classmethod
     async def get_latest_subscription(cls, client_id: int, *, use_fallback: bool = True) -> Subscription:
-        if raw := await cls.get("workout_plans:subscriptions", str(client_id)):
-            try:
-                data = json.loads(raw)
-                if "client_profile" not in data:
-                    data["client_profile"] = client_id
-                return validate_or_raise(data, Subscription, context=f"client_id={client_id}")
-            except (json.JSONDecodeError, TypeError, ValueError) as e:
-                logger.debug(f"Corrupt subscription data in cache for client_id={client_id}: {e}")
-                await cls.delete("workout_plans:subscriptions", str(client_id))
-            except Exception as e:
-                logger.error(f"Failed to parse/validate subscription from cache for profile_id={client_id}: {e}")
-                await cls.delete("workout_plans:subscriptions", str(client_id))
-
-        if not use_fallback:
-            raise SubscriptionNotFoundError(client_id)
-
-        subscription = await cls.service.get_latest_subscription(client_id)
-        if subscription is None:
-            raise SubscriptionNotFoundError(client_id)
-
-        await cls.set_json("workout_plans:subscriptions", str(client_id), subscription.model_dump())
-        logger.debug(f"Subscription for profile_id={client_id} pulled from service and cached")
-        return subscription
+        return await cls.get_or_fetch(
+            "workout_plans:subscriptions",
+            str(client_id),
+            use_fallback=use_fallback,
+        )
 
     @classmethod
     async def save_program(cls, client_id: int, program_data: dict) -> None:
@@ -79,29 +89,11 @@ class WorkoutCacheManager(BaseCacheManager):
 
     @classmethod
     async def get_program(cls, client_id: int, *, use_fallback: bool = True) -> Program:
-        if raw := await cls.get("workout_plans:programs", str(client_id)):
-            try:
-                data = json.loads(raw)
-                if "client_id" not in data:
-                    data["client_id"] = client_id
-                return validate_or_raise(data, Program, context=f"client_id={client_id}")
-            except (json.JSONDecodeError, TypeError, ValueError) as e:
-                logger.debug(f"Corrupt program data in cache for client_id={client_id}: {e}")
-                await cls.delete("workout_plans:programs", str(client_id))
-            except Exception as e:
-                logger.error(f"Failed to parse/validate program from cache for client_id={client_id}: {e}")
-                await cls.delete("workout_plans:programs", str(client_id))
-
-        if not use_fallback:
-            raise ProgramNotFoundError(client_id)
-
-        program = await cls.service.get_latest_program(client_id)
-        if program is None:
-            raise ProgramNotFoundError(client_id)
-
-        await cls.set_json("workout_plans:programs", str(client_id), program.model_dump())
-        logger.debug(f"Program for client_id={client_id} pulled from service and cached")
-        return program
+        return await cls.get_or_fetch(
+            "workout_plans:programs",
+            str(client_id),
+            use_fallback=use_fallback,
+        )
 
     @classmethod
     async def get_all_subscriptions(cls, client_id: int) -> list[Subscription]:
