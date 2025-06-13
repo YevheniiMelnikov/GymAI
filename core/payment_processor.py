@@ -60,7 +60,7 @@ class PaymentProcessor:
         await SuccessState(cls).handle(payment, client)
 
     @classmethod
-    async def _process_subscription_payment(cls, client: Client) -> None:
+    async def process_subscription_payment(cls, client: Client) -> None:
         await cls.cache.client.update_client(client.id, {"status": ClientStatus.waiting_for_subscription})
         subscription = await cls.cache.workout.get_latest_subscription(client.id)
         if not subscription:
@@ -94,7 +94,7 @@ class PaymentProcessor:
             )
 
     @classmethod
-    async def _process_program_payment(cls, client: Client) -> None:
+    async def process_program_payment(cls, client: Client) -> None:
         await cls.cache.client.update_client(client.id, {"status": ClientStatus.waiting_for_program})
         program = await cls.cache.workout.get_program(client.id)
         if not program:

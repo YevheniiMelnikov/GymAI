@@ -11,6 +11,7 @@ from bot.utils.workout_plans import cancel_subscription
 from config.env_settings import settings
 from typing import TYPE_CHECKING
 
+from core.enums import PaymentType
 from core.schemas import Payment, Client
 
 if TYPE_CHECKING:  # pragma: no cover - used only for type checking
@@ -39,14 +40,12 @@ class SuccessState(PaymentState):
             client.id,
             msg_text("payment_success", profile.language),  # type: ignore[attr-defined]
         )
-        logger.info(
-            f"Client {client.id} successfully paid {payment.amount} UAH for {payment.payment_type}"
-        )
+        logger.info(f"Client {client.id} successfully paid {payment.amount} UAH for {payment.payment_type}")
 
-        if payment.payment_type == "subscription":
-            await self.processor._process_subscription_payment(client)
-        elif payment.payment_type == "program":
-            await self.processor._process_program_payment(client)
+        if payment.payment_type == PaymentType.subscription:
+            await self.processor.process_subscription_payment(client)
+        elif payment.payment_type == PaymentType.program:
+            await self.processor.process_program_payment(client)
 
 
 class FailureState(PaymentState):
@@ -56,7 +55,7 @@ class FailureState(PaymentState):
             logger.error(f"Profile not found for client {client.id}")
             return
 
-        if payment.payment_type == "subscription":
+        if payment.payment_type == PaymentType.subscription:
             subscription = await self.processor.cache.workout.get_latest_subscription(client.id)
             if subscription and subscription.enabled:
                 try:
@@ -71,18 +70,14 @@ class FailureState(PaymentState):
                         ),
                     )
                     await cancel_subscription(next_payment_date, client.id, subscription.id)
-                    logger.info(
-                        f"Subscription for client_id {client.id} deactivated due to failed payment"
-                    )
+                    logger.info(f"Subscription for client_id {client.id} deactivated due to failed payment")
                     return
                 except ValueError as e:
                     logger.error(
                         f"Invalid date format for subscription payment_date: {subscription.payment_date} — {e}"
                     )
                 except Exception as e:
-                    logger.exception(
-                        f"Error processing failed subscription payment for profile {client.id}: {e}"
-                    )
+                    logger.exception(f"Error processing failed subscription payment for profile {client.id}: {e}")
 
         send_payment_message.delay(
             client.id,

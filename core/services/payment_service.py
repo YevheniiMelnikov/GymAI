@@ -17,9 +17,7 @@ class PaymentService(APIClient):
     API_BASE_PATH = "api/v1/payments/"
     SUBSCRIPTIONS_PATH = "api/v1/subscriptions/"
 
-    gateway: PaymentGateway = LiqPayGateway(
-        settings.PAYMENT_PUB_KEY, settings.PAYMENT_PRIVATE_KEY
-    )
+    gateway: PaymentGateway = LiqPayGateway(settings.PAYMENT_PUB_KEY, settings.PAYMENT_PRIVATE_KEY)
 
     @classmethod
     async def get_payment_link(

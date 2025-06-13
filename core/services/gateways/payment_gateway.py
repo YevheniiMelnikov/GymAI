@@ -72,9 +72,7 @@ class LiqPayGateway(PaymentGateway):
         if action == "subscribe":
             params.update(
                 {
-                    "subscribe_date_start": datetime.datetime.now(datetime.UTC).strftime(
-                        "%Y-%m-%d %H:%M:%S"
-                    ),
+                    "subscribe_date_start": datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S"),
                     "subscribe_periodicity": "month",
                 }
             )

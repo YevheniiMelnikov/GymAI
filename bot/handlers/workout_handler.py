@@ -494,4 +494,3 @@ async def subscription_history_nav(callback_query: CallbackQuery, state: FSMCont
     profile = await Cache.profile.get_profile(callback_query.from_user.id)
     assert profile is not None
     await subscription_history_pagination(callback_query, profile, index, state)
-
