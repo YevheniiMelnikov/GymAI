@@ -71,7 +71,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bo
         await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
         return
 
-    client_profile = await APIService.profile.get_profile(client.profile)
+    client_profile: Profile = await APIService.profile.get_profile(client.profile)  # pyre-ignore[bad-assignment]
     client_lang = client_profile.language if client_profile else settings.DEFAULT_LANG
 
     if data.get("subscription"):
@@ -344,9 +344,7 @@ async def cancel_subscription(next_payment_date: datetime, client_id: int, subsc
 
 async def process_new_subscription(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     language = cast(str, profile.language or settings.DEFAULT_LANG)
-
     await callback_query.answer(msg_text("checkbox_reminding", language), show_alert=True)
-
     order_id = generate_order_id()
     client = await Cache.client.get_client(profile.id)
     if not client or not client.assigned_to:
@@ -356,7 +354,6 @@ async def process_new_subscription(callback_query: CallbackQuery, profile: Profi
         return
 
     await state.update_data(order_id=order_id, amount=coach.subscription_price)
-
     payment_link = await APIService.payment.get_payment_link(
         action="subscribe",
         amount=coach.subscription_price,
@@ -393,13 +390,11 @@ async def edit_subscription_days(
     exercises_data = subscription_data.get("exercises", [])
     exercises = [DayExercises.model_validate(e) for e in exercises_data]
     updated_exercises = {days[i]: [e.model_dump() for e in day.exercises] for i, day in enumerate(exercises)}
-
     payload = {"workout_days": days, "exercises": updated_exercises, "client_profile": client_id}
     subscription_data.update(payload)
 
     await Cache.workout.update_subscription(client_id, payload)
     await APIService.workout.update_subscription(cast(int, subscription_data["id"]), subscription_data)
-
     await state.set_state(States.show_subscription)
     await show_subscription_page(callback_query, state, subscription)
     if isinstance(callback_query, CallbackQuery) and isinstance(callback_query.message, Message):
