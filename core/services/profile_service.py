@@ -64,6 +64,19 @@ class ProfileService(APIClient):
         return False
 
     @classmethod
+    async def create_client_profile(cls, profile_id: int, data: dict[str, Any] | None = None) -> Client | None:
+        url = urljoin(cls.api_url, "api/v1/client-profiles/")
+        payload: dict[str, Any] = {"profile": profile_id}
+        if data:
+            payload.update(data)
+        status, resp = await cls._api_request("post", url, payload, headers={"Authorization": f"Api-Key {cls.api_key}"})
+        if status == 201 and resp:
+            logger.info(f"ClientProfile created profile_id={profile_id}")
+            return Client.model_validate(resp)
+        logger.error(f"Failed to create ClientProfile profile_id={profile_id}. HTTP={status}")
+        return None
+
+    @classmethod
     async def update_client_profile(cls, client_id: int, data: dict[str, Any]) -> bool:
         url = urljoin(cls.api_url, f"api/v1/client-profiles/pk/{client_id}/")
         status, _ = await cls._api_request("put", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"})
@@ -72,6 +85,26 @@ class ProfileService(APIClient):
             return True
         logger.error(f"Failed to update ClientProfile pk={client_id}. HTTP={status}")
         return False
+
+    @classmethod
+    async def create_coach_profile(cls, profile_id: int, data: dict[str, Any] | None = None) -> Coach | None:
+        url = urljoin(cls.api_url, "api/v1/coach-profiles/")
+        payload: dict[str, Any] = {"profile": profile_id}
+        if data:
+            data.pop("profile", None)
+            for k, v in data.items():
+                payload[k] = str(v) if isinstance(v, Decimal) else v
+
+        if payload.get("payment_details"):
+            payload["payment_details"] = cls.encrypter.encrypt(payload["payment_details"])
+
+        status, resp = await cls._api_request("post", url, payload, headers={"Authorization": f"Api-Key {cls.api_key}"})
+        if status == 201 and resp:
+            logger.info(f"Created coach profile for profile_id={profile_id}")
+            return Coach.model_validate(resp)
+
+        logger.error(f"Failed to create CoachProfile profile_id={profile_id}. HTTP={status}")
+        return None
 
     @classmethod
     async def update_coach_profile(cls, coach_id: int, data: dict[str, Any]) -> bool:

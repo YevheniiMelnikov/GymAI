@@ -8,7 +8,7 @@ class EncryptedField(CharField):
     description = str(_("Encrypted string"))
 
     def __init__(self, *args, **kwargs):
-        kwargs.setdefault("max_length", 256)
+        kwargs.setdefault("max_length", 2048)
         super().__init__(*args, **kwargs)
 
     @staticmethod
@@ -30,6 +30,6 @@ class EncryptedField(CharField):
 
     def deconstruct(self):
         name, path, args, kwargs = super().deconstruct()
-        if kwargs.get("max_length", None) == 256:
+        if kwargs.get("max_length", None) == 2048:
             kwargs.pop("max_length")
         return name, path, args, kwargs

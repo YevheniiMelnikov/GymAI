@@ -32,17 +32,19 @@ async def update_profile_data(message: Message, state: FSMContext, status: str, 
     try:
         profile = await Cache.profile.get_profile(message.chat.id)
         assert profile is not None
+
         user_data = {**data, "id": profile.id}
+        user_data.pop("profile", None)
+
         if status == "client":
-            client = await Cache.client.get_client(profile.id)
             if data.get("edit_mode"):
+                client = await Cache.client.get_client(profile.id)
                 await Cache.client.update_client(client.id, user_data)
+                await APIService.profile.update_client_profile(client.id, user_data)
             else:
                 await Cache.client.save_client(profile.id, user_data)
-            await APIService.profile.update_client_profile(client.id, user_data)
-
+                await APIService.profile.create_client_profile(profile.id, user_data)
         else:
-            coach = await Cache.coach.get_coach(profile.id)
             if not data.get("edit_mode"):
                 if message.from_user:
                     await answer_msg(
@@ -50,9 +52,11 @@ async def update_profile_data(message: Message, state: FSMContext, status: str, 
                     )
                     await send_coach_request(message.from_user.id, profile, data, bot)
                     await Cache.coach.save_coach(profile.id, user_data)
+                    await APIService.profile.create_coach_profile(profile.id, user_data)
             else:
+                coach = await Cache.coach.get_coach(profile.id)
                 await Cache.coach.update_coach(coach.id, user_data)
-            await APIService.profile.update_coach_profile(coach.id, user_data)
+                await APIService.profile.update_coach_profile(coach.id, user_data)
 
         await answer_msg(message, msg_text("your_data_updated", data.get("lang", settings.DEFAULT_LANG)))
         await menus.show_main_menu(message, profile, state)

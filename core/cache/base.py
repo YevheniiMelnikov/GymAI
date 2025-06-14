@@ -12,7 +12,7 @@ from config.env_settings import settings
 
 class BaseCacheManager:
     redis: ClassVar[Redis] = Redis.from_url(
-        settings.REDIS_URL,
+        f"{settings.REDIS_URL}/1",
         encoding="utf-8",
         decode_responses=True,
     )
@@ -142,8 +142,7 @@ class BaseCacheManager:
         if raw:
             try:
                 return cls._validate_data(raw, cache_key, field)
-            except Exception as e:  # pragma: no cover - best effort cleanup
-                logger.debug(f"Corrupt cache entry for {cache_key}:{field}: {e}")
+            except Exception:  # pragma: no cover - best effort cleanup
                 await cls.delete(cache_key, field)
 
         data = await cls._fetch_from_service(cache_key, field, use_fallback=use_fallback)

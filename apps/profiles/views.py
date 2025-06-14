@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any, cast
+
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from loguru import logger
@@ -9,6 +11,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_api_key.permissions import HasAPIKey
 
+from apps.profiles.models import ClientProfile, CoachProfile
 from apps.profiles.serializers import (
     ProfileSerializer,
     CoachProfileSerializer,
@@ -64,17 +67,37 @@ class ProfileAPIList(generics.ListCreateAPIView):
 
 
 @method_decorator(cache_page(60), name="dispatch")
-class CoachProfileList(generics.ListAPIView):
-    queryset = CoachProfileRepository.get  # type: ignore[assignment]
+class CoachProfileList(generics.ListCreateAPIView):
     serializer_class = CoachProfileSerializer
     permission_classes = [HasAPIKey]
 
+    def get_queryset(self):
+        return CoachProfile.objects.all()
+
+    def perform_create(self, serializer: CoachProfileSerializer) -> None:  # type: ignore[override]
+        raw_id: Any = self.request.data.get("profile")
+        profile_id: int = cast(int, raw_id)
+        profile = ProfileRepository.get_model_by_id(profile_id)
+        if profile.status != "coach":
+            raise ValueError("Profile status must be 'coach'")
+        serializer.save(profile=profile)
+
 
 @method_decorator(cache_page(60), name="dispatch")
-class ClientProfileList(generics.ListAPIView):
-    queryset = ClientProfileRepository.get  # type: ignore[assignment]
+class ClientProfileList(generics.ListCreateAPIView):
     serializer_class = ClientProfileSerializer
     permission_classes = [HasAPIKey]
+
+    def get_queryset(self):
+        return ClientProfile.objects.all()
+
+    def perform_create(self, serializer: ClientProfileSerializer) -> None:  # type: ignore[override]
+        raw_id: Any = self.request.data.get("profile")
+        profile_id: int = cast(int, raw_id)
+        profile = ProfileRepository.get_model_by_id(profile_id)
+        if profile.status != "client":
+            raise ValueError("Profile status must be 'client'")
+        serializer.save(profile=profile)
 
 
 class CoachProfileUpdate(generics.RetrieveUpdateAPIView):
@@ -104,7 +127,9 @@ class CoachProfileByProfile(APIView):
     serializer_class = CoachProfileSerializer
 
     def get(self, request: Request, profile_id: int) -> Response:
-        coach_profile = CoachProfileRepository.get_or_create_by_profile(ProfileRepository.get_model_by_id(profile_id))
+        coach_profile = CoachProfileRepository.get_or_create_by_profile(
+            ProfileRepository.get_model_by_id(profile_id)
+        )
         return Response(self.serializer_class(coach_profile).data, status=status.HTTP_200_OK)
 
 
@@ -113,5 +138,7 @@ class ClientProfileByProfile(APIView):
     serializer_class = ClientProfileSerializer
 
     def get(self, request: Request, profile_id: int) -> Response:
-        client_profile = ClientProfileRepository.get_or_create_by_profile(ProfileRepository.get_model_by_id(profile_id))
+        client_profile = ClientProfileRepository.get_or_create_by_profile(
+            ProfileRepository.get_model_by_id(profile_id)
+        )
         return Response(self.serializer_class(client_profile).data, status=status.HTTP_200_OK)

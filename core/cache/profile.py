@@ -1,6 +1,7 @@
 import json
 from json import JSONDecodeError
 from loguru import logger
+from pydantic_core._pydantic_core import ValidationError
 
 from .base import BaseCacheManager
 from core.exceptions import ProfileNotFoundError
@@ -22,10 +23,9 @@ class ProfileCacheManager(BaseCacheManager):
     def _validate_data(cls, raw: str, cache_key: str, field: str) -> Profile:
         try:
             data = json.loads(raw)
-            if "id" not in data:
-                raise ValueError("missing id")
-            return Profile.model_validate(data)
-        except (JSONDecodeError, TypeError, ValueError) as e:
+            profile = Profile.model_validate(data)
+            return profile
+        except (JSONDecodeError, TypeError, ValueError, ValidationError) as e:
             logger.debug(f"Corrupt profile in cache for tg={field}: {e}")
             raise ProfileNotFoundError(int(field))
 
@@ -36,7 +36,9 @@ class ProfileCacheManager(BaseCacheManager):
     @classmethod
     async def save_profile(cls, tg_id: int, profile_data: dict) -> None:
         try:
-            await cls.set("profiles", str(tg_id), json.dumps(profile_data))
+            data = dict(profile_data)
+            data["tg_id"] = tg_id
+            await cls.set("profiles", str(tg_id), json.dumps(data))
             logger.debug(f"Profile saved for tg_id={tg_id}")
         except Exception as e:
             logger.error(f"Failed to save profile for tg_id={tg_id}: {e}")
