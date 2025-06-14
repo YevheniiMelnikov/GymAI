@@ -37,7 +37,7 @@ async def approve_coach(callback_query: CallbackQuery, state: FSMContext, bot: B
     await Cache.coach.update_coach(coach.id, {"verified": True})
     await callback_query.answer("👍")
     coach = await Cache.coach.get_coach(profile_id)
-    coach_profile = await Cache.profile.get_profile(profile_id)
+    coach_profile = await APIService.profile.get_profile(profile_id)
     lang = coach_profile.language or settings.DEFAULT_LANG
     if coach:
         await send_message(
@@ -60,7 +60,7 @@ async def decline_coach(callback_query: CallbackQuery, state: FSMContext, bot: B
 
     await callback_query.answer("👎")
     coach = await Cache.coach.get_coach(profile_id)
-    coach_profile = await Cache.profile.get_profile(profile_id)
+    coach_profile = await APIService.profile.get_profile(profile_id)
     lang = coach_profile.language or settings.DEFAULT_LANG
     if coach:
         await send_message(

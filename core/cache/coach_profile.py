@@ -29,7 +29,7 @@ class CoachCacheManager(BaseCacheManager):
         data = coach.model_dump()
         if "payment_details" in data and data["payment_details"]:
             data["payment_details"] = cls.encryptor.encrypt(data["payment_details"])
-        return data
+        return cls._json_safe(data)
 
     @classmethod
     def _validate_data(cls, raw: str, cache_key: str, field: str) -> Coach:
