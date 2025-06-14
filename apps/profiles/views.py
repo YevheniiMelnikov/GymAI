@@ -127,9 +127,7 @@ class CoachProfileByProfile(APIView):
     serializer_class = CoachProfileSerializer
 
     def get(self, request: Request, profile_id: int) -> Response:
-        coach_profile = CoachProfileRepository.get_or_create_by_profile(
-            ProfileRepository.get_model_by_id(profile_id)
-        )
+        coach_profile = CoachProfileRepository.get_or_create_by_profile(ProfileRepository.get_model_by_id(profile_id))
         return Response(self.serializer_class(coach_profile).data, status=status.HTTP_200_OK)
 
 
@@ -138,7 +136,5 @@ class ClientProfileByProfile(APIView):
     serializer_class = ClientProfileSerializer
 
     def get(self, request: Request, profile_id: int) -> Response:
-        client_profile = ClientProfileRepository.get_or_create_by_profile(
-            ProfileRepository.get_model_by_id(profile_id)
-        )
+        client_profile = ClientProfileRepository.get_or_create_by_profile(ProfileRepository.get_model_by_id(profile_id))
         return Response(self.serializer_class(client_profile).data, status=status.HTTP_200_OK)

@@ -81,9 +81,9 @@ class ProfileService(APIClient):
         url = urljoin(cls.api_url, f"api/v1/client-profiles/pk/{client_id}/")
         status, _ = await cls._api_request("patch", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"})
         if status in (200, 204):
-            logger.info(f"ClientProfile pk={client_id} updated")
+            logger.info(f"ClientProfile {client_id} updated")
             return True
-        logger.error(f"Failed to update ClientProfile pk={client_id}. HTTP={status}")
+        logger.error(f"Failed to update ClientProfile {client_id}. HTTP={status}")
         return False
 
     @classmethod
@@ -118,9 +118,9 @@ class ProfileService(APIClient):
             data["payment_details"] = cls.encrypter.encrypt(data["payment_details"])
         status, _ = await cls._api_request("patch", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"})
         if status in (200, 204):
-            logger.info(f"CoachProfile pk={coach_id} updated")
+            logger.info(f"CoachProfile {coach_id} updated")
             return True
-        logger.error(f"Failed to update CoachProfile pk={coach_id}. HTTP={status}")
+        logger.error(f"Failed to update CoachProfile {coach_id}. HTTP={status}")
         return False
 
     @classmethod
