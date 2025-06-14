@@ -88,6 +88,7 @@ services:
       - ./google_creds.json:/app/google_creds.json:ro
       - ./dumps:/app/dumps
       - ./config:/app/config
+      - redisdata:/app/redis/data:ro
     depends_on:
       db:    { condition: service_healthy }
       redis: { condition: service_healthy }

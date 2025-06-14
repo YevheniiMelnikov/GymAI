@@ -26,7 +26,6 @@ class ProfileService(APIClient):
         status, data = await cls._api_request("get", url, headers={"Authorization": f"Api-Key {cls.api_key}"})
         if status == 200 and data:
             return Profile.model_validate(data)
-        logger.info(f"Profile tg_id={tg_id} not found. HTTP={status}")
         return None
 
     @classmethod
