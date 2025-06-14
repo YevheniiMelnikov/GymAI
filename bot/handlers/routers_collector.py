@@ -12,13 +12,13 @@ from bot.handlers.workout_handler import workout_router
 
 def configure_routers(dp: Dispatcher) -> None:
     routers = [
+        admin_router,
         cmd_router,
         questionnaire_router,
         menu_router,
         chat_router,
         workout_router,
         payment_router,
-        admin_router,
         invalid_content_router,
     ]
     for router in routers:
