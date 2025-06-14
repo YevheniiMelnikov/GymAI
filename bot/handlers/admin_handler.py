@@ -14,11 +14,11 @@ from core.services import APIService
 
 admin_router = Router()
 
+ADMIN_ID = int(settings.ADMIN_ID)
 
-@admin_router.callback_query()
+
+@admin_router.callback_query(lambda cb: cb.from_user.id == ADMIN_ID and (cb.data or "").startswith("approve_"))
 async def approve_coach(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
-    if not callback_query.data or not callback_query.data.startswith("approve"):
-        return
 
     data_str = cast(str, callback_query.data)
     try:
@@ -48,10 +48,8 @@ async def approve_coach(callback_query: CallbackQuery, state: FSMContext, bot: B
     logger.info(f"Coach verification for profile_id {profile_id} approved")
 
 
-@admin_router.callback_query()
+@admin_router.callback_query(lambda cb: cb.from_user.id == ADMIN_ID and (cb.data or "").startswith("decline_"))
 async def decline_coach(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
-    if not callback_query.data or not callback_query.data.startswith("decline"):
-        return
 
     data_str = cast(str, callback_query.data)
     try:
