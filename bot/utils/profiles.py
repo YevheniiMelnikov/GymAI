@@ -55,7 +55,7 @@ async def update_profile_data(message: Message, state: FSMContext, status: str, 
                     await APIService.profile.create_coach_profile(profile.id, user_data)
             else:
                 coach = await Cache.coach.get_coach(profile.id)
-                await Cache.coach.update_coach(coach.id, user_data)
+                await Cache.coach.update_coach(profile.id, user_data)
                 await APIService.profile.update_coach_profile(coach.id, user_data)
 
         await answer_msg(message, msg_text("your_data_updated", data.get("lang", settings.DEFAULT_LANG)))
@@ -74,7 +74,7 @@ async def assign_coach(coach: Coach, client: Client) -> None:
     if client.id not in coach_clients:
         coach_clients.append(client.id)
         await APIService.profile.update_coach_profile(coach.id, {"assigned_to": coach_clients})
-        await Cache.coach.update_coach(coach.id, {"assigned_to": coach_clients})
+        await Cache.coach.update_coach(coach.profile, {"assigned_to": coach_clients})
 
     await APIService.profile.update_client_profile(client.id, {"assigned_to": [coach.id]})
     await Cache.client.update_client(client.id, {"assigned_to": [coach.id]})

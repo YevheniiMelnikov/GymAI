@@ -34,7 +34,7 @@ async def approve_coach(callback_query: CallbackQuery, state: FSMContext, bot: B
         return
 
     await APIService.profile.update_coach_profile(coach.id, {"verified": True})
-    await Cache.coach.update_coach(coach.id, {"verified": True})
+    await Cache.coach.update_coach(profile_id, {"verified": True})
     await callback_query.answer("👍")
     coach = await Cache.coach.get_coach(profile_id)
     coach_profile = await APIService.profile.get_profile(profile_id)

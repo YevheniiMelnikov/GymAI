@@ -61,13 +61,13 @@ class CoachCacheManager(BaseCacheManager):
             return []
 
     @classmethod
-    async def update_coach(cls, coach_id: int, profile_data: dict[str, Any]) -> None:
+    async def update_coach(cls, profile_id: int, profile_data: dict[str, Any]) -> None:
         try:
             if profile_data.get("payment_details"):
                 profile_data["payment_details"] = cls.encryptor.encrypt(profile_data["payment_details"])
-            await cls.update_json("coaches", str(coach_id), profile_data)
+            await cls.update_json("coaches", str(profile_id), profile_data)
         except Exception as e:
-            logger.error(f"Failed to update coach {coach_id}: {e}")
+            logger.error(f"Failed to update coach profile_id={profile_id}: {e}")
 
     @classmethod
     async def save_coach(cls, profile_id: int, profile_data: dict[str, Any]) -> None:
