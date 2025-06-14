@@ -13,9 +13,7 @@ class WorkoutCacheManager(BaseCacheManager):
     service = WorkoutService
 
     @classmethod
-    async def _fetch_from_service(
-        cls, cache_key: str, field: str, *, use_fallback: bool
-    ) -> Subscription | Program:
+    async def _fetch_from_service(cls, cache_key: str, field: str, *, use_fallback: bool) -> Subscription | Program:
         client_id = int(field)
         if cache_key.endswith("subscriptions"):
             subscription = await cls.service.get_latest_subscription(client_id)
@@ -28,9 +26,7 @@ class WorkoutCacheManager(BaseCacheManager):
         return program
 
     @classmethod
-    def _validate_data(
-        cls, raw: str, cache_key: str, field: str
-    ) -> Subscription | Program:
+    def _validate_data(cls, raw: str, cache_key: str, field: str) -> Subscription | Program:
         data = json.loads(raw)
         if cache_key.endswith("subscriptions"):
             if "client_profile" not in data:

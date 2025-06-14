@@ -13,9 +13,7 @@ class PaymentCacheManager(BaseCacheManager):
     _PREFIX = "workout_plans:payments"
 
     @classmethod
-    async def _fetch_from_service(
-        cls, cache_key: str, field: str, *, use_fallback: bool
-    ) -> PaymentStatus:
+    async def _fetch_from_service(cls, cache_key: str, field: str, *, use_fallback: bool) -> PaymentStatus:
         service_type = cache_key.split(":")[-1]
         payment = await cls.service.get_latest_payment(int(field), service_type)
         if payment is None:
@@ -23,15 +21,11 @@ class PaymentCacheManager(BaseCacheManager):
         try:
             return cast(PaymentStatus, PaymentStatus(payment.status))
         except (ValueError, KeyError):
-            logger.error(
-                f"Invalid payment status '{payment.status}' for client_id={field}"
-            )
+            logger.error(f"Invalid payment status '{payment.status}' for client_id={field}")
             return PaymentStatus.PENDING
 
     @classmethod
-    def _prepare_for_cache(
-        cls, data: Any, cache_key: str, field: str
-    ) -> dict:
+    def _prepare_for_cache(cls, data: Any, cache_key: str, field: str) -> dict:
         status = cast(PaymentStatus, data)
         return {"status": status.value}
 

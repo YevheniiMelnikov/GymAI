@@ -13,9 +13,7 @@ class ClientCacheManager(BaseCacheManager):
     service = ProfileService
 
     @classmethod
-    async def _fetch_from_service(
-        cls, cache_key: str, field: str, *, use_fallback: bool
-    ) -> Client:
+    async def _fetch_from_service(cls, cache_key: str, field: str, *, use_fallback: bool) -> Client:
         client = await cls.service.get_client_by_profile_id(int(field))
         if client is None:
             raise ClientNotFoundError(int(field))

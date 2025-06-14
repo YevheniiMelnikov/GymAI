@@ -17,9 +17,7 @@ class CoachCacheManager(BaseCacheManager):
     service = ProfileService
 
     @classmethod
-    async def _fetch_from_service(
-        cls, cache_key: str, field: str, *, use_fallback: bool
-    ) -> Coach:
+    async def _fetch_from_service(cls, cache_key: str, field: str, *, use_fallback: bool) -> Coach:
         coach = await cls.service.get_coach_by_profile_id(int(field))
         if coach is None:
             raise CoachNotFoundError(int(field))

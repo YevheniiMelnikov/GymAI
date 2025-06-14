@@ -109,9 +109,7 @@ class BaseCacheManager:
             logger.error(f"Redis UPDATE JSON error [{key}:{field}]: {e}")
 
     @classmethod
-    async def _fetch_from_service(
-        cls, cache_key: str, field: str, *, use_fallback: bool
-    ) -> Any:
+    async def _fetch_from_service(cls, cache_key: str, field: str, *, use_fallback: bool) -> Any:
         """Retrieve data from the backing service.
 
         Subclasses must override this to fetch the required object and raise the
@@ -137,9 +135,7 @@ class BaseCacheManager:
         return data
 
     @classmethod
-    async def get_or_fetch(
-        cls, cache_key: str, field: str, *, use_fallback: bool = True
-    ) -> Any:
+    async def get_or_fetch(cls, cache_key: str, field: str, *, use_fallback: bool = True) -> Any:
         """Retrieve an item from cache or fallback to the backing service."""
 
         raw = await cls.get(cache_key, field)
@@ -147,9 +143,7 @@ class BaseCacheManager:
             try:
                 return cls._validate_data(raw, cache_key, field)
             except Exception as e:  # pragma: no cover - best effort cleanup
-                logger.debug(
-                    f"Corrupt cache entry for {cache_key}:{field}: {e}"
-                )
+                logger.debug(f"Corrupt cache entry for {cache_key}:{field}: {e}")
                 await cls.delete(cache_key, field)
 
         data = await cls._fetch_from_service(cache_key, field, use_fallback=use_fallback)

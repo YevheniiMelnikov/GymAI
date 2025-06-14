@@ -12,9 +12,7 @@ class ProfileCacheManager(BaseCacheManager):
     service = ProfileService
 
     @classmethod
-    async def _fetch_from_service(
-        cls, cache_key: str, field: str, *, use_fallback: bool
-    ) -> Profile:
+    async def _fetch_from_service(cls, cache_key: str, field: str, *, use_fallback: bool) -> Profile:
         profile = await cls.service.get_profile_by_tg_id(int(field))
         if profile is None:
             raise ProfileNotFoundError(int(field))
