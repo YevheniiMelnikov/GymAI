@@ -77,9 +77,11 @@ class CoachCacheManager(BaseCacheManager):
     @classmethod
     async def save_coach(cls, profile_id: int, profile_data: dict[str, Any]) -> None:
         try:
+            profile_data = profile_data.copy()
+            profile_data.setdefault("profile", profile_id)
             if profile_data.get("payment_details"):
                 profile_data["payment_details"] = cls.encryptor.encrypt(profile_data["payment_details"])
-            await cls.set("coaches", str(profile_id), json.dumps(profile_data))
+            await cls.set_json("coaches", str(profile_id), profile_data)
             logger.debug(f"Saved coach data to cache for profile_id={profile_id}")
         except Exception as e:
             logger.error(f"Failed to save coach data for profile_id={profile_id}: {e}")
