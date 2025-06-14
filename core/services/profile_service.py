@@ -79,7 +79,7 @@ class ProfileService(APIClient):
     @classmethod
     async def update_client_profile(cls, client_id: int, data: dict[str, Any]) -> bool:
         url = urljoin(cls.api_url, f"api/v1/client-profiles/pk/{client_id}/")
-        status, _ = await cls._api_request("put", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"})
+        status, _ = await cls._api_request("patch", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"})
         if status in (200, 204):
             logger.info(f"ClientProfile pk={client_id} updated")
             return True
@@ -116,7 +116,7 @@ class ProfileService(APIClient):
 
         if "payment_details" in data and data["payment_details"]:
             data["payment_details"] = cls.encrypter.encrypt(data["payment_details"])
-        status, _ = await cls._api_request("put", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"})
+        status, _ = await cls._api_request("patch", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"})
         if status in (200, 204):
             logger.info(f"CoachProfile pk={coach_id} updated")
             return True

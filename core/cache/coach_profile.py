@@ -35,7 +35,6 @@ class CoachCacheManager(BaseCacheManager):
     def _validate_data(cls, raw: str, cache_key: str, field: str) -> Coach:
         try:
             data = json.loads(raw)
-            data["id"] = int(field)
             if "payment_details" in data and data["payment_details"]:
                 data["payment_details"] = cls.encryptor.decrypt(data["payment_details"])
             return validate_or_raise(data, Coach, context=f"profile_id={field}")
@@ -48,10 +47,9 @@ class CoachCacheManager(BaseCacheManager):
         try:
             all_coaches = await cls.get_all("coaches")
             coaches_data = []
-            for k, v in all_coaches.items():
+            for v in all_coaches.values():
                 coach_dict = json.loads(v)
-                coach_dict["id"] = int(k)
-                coach = validate_or_raise(coach_dict, Coach, context=f"id={k}")
+                coach = validate_or_raise(coach_dict, Coach, context=f"id={coach_dict.get('id')}")
                 if coach.verified:
                     coaches_data.append(coach)
             random.shuffle(coaches_data)
@@ -63,9 +61,16 @@ class CoachCacheManager(BaseCacheManager):
     @classmethod
     async def update_coach(cls, profile_id: int, profile_data: dict[str, Any]) -> None:
         try:
+            existing = await cls.get_json("coaches", str(profile_id))
+            if not existing:
+                coach = await cls.service.get_coach_by_profile_id(profile_id)
+                if coach is None:
+                    raise CoachNotFoundError(profile_id)
+                existing = coach.model_dump()
             if profile_data.get("payment_details"):
                 profile_data["payment_details"] = cls.encryptor.encrypt(profile_data["payment_details"])
-            await cls.update_json("coaches", str(profile_id), profile_data)
+            existing.update(profile_data)
+            await cls.set_json("coaches", str(profile_id), existing)
         except Exception as e:
             logger.error(f"Failed to update coach profile_id={profile_id}: {e}")
 
