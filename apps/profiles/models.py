@@ -7,7 +7,7 @@ from apps.profiles.fields import EncryptedField
 
 
 class Profile(Model):
-    status = models.CharField(max_length=50, default="client")
+    role = models.CharField(max_length=50, default="client")
     language = models.CharField(max_length=50, null=True, blank=True)
     tg_id = models.BigIntegerField(blank=True, null=True, unique=True)
 

@@ -68,20 +68,20 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
     user_profile: Client | Coach | None = None
     reply_markup = None
 
-    if profile.status == "client":
+    if profile.role == "client":
         try:
             user_profile = await Cache.client.get_client(profile.id)
             reply_markup = kb.edit_client_profile_kb(profile.language)
         except ClientNotFoundError:
             logger.info(f"Client data not found for profile {profile.id} during profile editing setup.")
-        await state.update_data(status="client")
+        await state.update_data(role="client")
     else:
         try:
             user_profile = await Cache.coach.get_coach(profile.id)
             reply_markup = kb.edit_coach_profile_kb(profile.language)
         except CoachNotFoundError:
             logger.info(f"Coach data not found for profile {profile.id} during profile editing setup.")
-        await state.update_data(status="coach")
+        await state.update_data(role="coach")
 
     state_to_set = States.edit_profile if user_profile else States.name
     response_message = "choose_profile_parameter" if user_profile else "edit_profile"
@@ -104,7 +104,7 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
 
 
 async def show_main_menu(message: Message, profile: Profile, state: FSMContext) -> None:
-    menu = kb.client_menu_kb if profile.status == "client" else kb.coach_menu_kb
+    menu = kb.client_menu_kb if profile.role == "client" else kb.coach_menu_kb
     await state.clear()
     await state.update_data(profile=profile.model_dump())
     await state.set_state(States.main_menu)
@@ -179,9 +179,9 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
     language = cast(str, profile.language)
 
     text = msg_text(
-        "client_profile" if profile.status == "client" else "coach_profile",
+        "client_profile" if profile.role == "client" else "coach_profile",
         language,
-    ).format(**get_profile_attributes(status=profile.status, user=user, lang=language))
+    ).format(**get_profile_attributes(role=profile.role, user=user, lang=language))
 
     await answer_profile(callback_query, profile, user, text)
     await state.set_state(States.profile)

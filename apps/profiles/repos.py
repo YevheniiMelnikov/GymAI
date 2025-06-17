@@ -71,14 +71,14 @@ class CoachProfileRepository:
             coach_profile = cast(CoachProfile, coach_profile)
         except CoachProfile.DoesNotExist:
             raise NotFound(f"CoachProfile pk={pk} not found")
-        if coach_profile.profile.status != "coach":  # type: ignore[attr-defined]
-            raise ValidationError("Underlying profile status is not 'coach'")
+        if coach_profile.profile.role != "coach":  # type: ignore[attr-defined]
+            raise ValidationError("Underlying profile role is not 'coach'")
         return coach_profile
 
     @staticmethod
     def get_or_create_by_profile(profile: Profile) -> CoachProfile:
-        if profile.status != "coach":
-            raise ValidationError("Profile status is not 'coach'")
+        if profile.role != "coach":
+            raise ValidationError("Profile role is not 'coach'")
         coach_profile, _ = CoachProfile.objects.get_or_create(profile=profile)
         return cast(CoachProfile, coach_profile)
 
@@ -91,13 +91,13 @@ class ClientProfileRepository:
             client_profile = cast(ClientProfile, client_profile)
         except ClientProfile.DoesNotExist:
             raise NotFound(f"ClientProfile pk={pk} not found")
-        if client_profile.profile.status != "client":  # type: ignore[attr-defined]
-            raise ValidationError("Underlying profile status is not 'client'")
+        if client_profile.profile.role != "client":  # type: ignore[attr-defined]
+            raise ValidationError("Underlying profile role is not 'client'")
         return client_profile
 
     @staticmethod
     def get_or_create_by_profile(profile: Profile) -> ClientProfile:
-        if profile.status != "client":
-            raise ValidationError("Profile status is not 'client'")
+        if profile.role != "client":
+            raise ValidationError("Profile role is not 'client'")
         client_profile, _ = ClientProfile.objects.get_or_create(profile=profile)
         return cast(ClientProfile, client_profile)

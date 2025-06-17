@@ -45,7 +45,7 @@ def select_gender_kb(lang: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons)
 
 
-def select_status_kb(lang: str) -> KbMarkup:
+def select_role_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
         [builder.add("client", "client")],

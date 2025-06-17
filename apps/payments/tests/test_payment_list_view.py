@@ -12,7 +12,7 @@ def test_payment_list_filters():
     factory = APIRequestFactory()
     api_key, key = APIKey.objects.create_key(name="test")  # pyre-ignore[missing-attribute]
 
-    profile = Profile.objects.create(tg_id=1, status="client")
+    profile = Profile.objects.create(tg_id=1, role="client")
     client = ClientProfile.objects.create(profile=profile)
     Payment.objects.create(payment_type="sub", client_profile=client, order_id="1", amount=10, status="success")
     Payment.objects.create(payment_type="sub", client_profile=client, order_id="2", amount=20, status="pending")
