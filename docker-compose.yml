@@ -92,6 +92,7 @@ services:
     depends_on:
       db:    { condition: service_healthy }
       redis: { condition: service_healthy }
+      bot: { condition: service_healthy }
     restart: unless-stopped
     networks: [monitoring]
 
@@ -107,6 +108,7 @@ services:
     depends_on:
       db:    { condition: service_healthy }
       redis: { condition: service_healthy }
+      bot: { condition: service_healthy }
     restart: unless-stopped
     networks: [monitoring]
 
