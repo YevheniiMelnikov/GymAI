@@ -14,7 +14,7 @@ from bot.keyboards import (
     select_days_kb,
     workout_experience_kb,
     yes_no_kb,
-    select_status_kb,
+    select_role_kb,
 )
 from bot.states import States
 from config.env_settings import settings
@@ -57,7 +57,7 @@ async def select_language(callback_query: CallbackQuery, state: FSMContext, bot:
             account_msg = await answer_msg(
                 cast(Message, callback_query.message),
                 msg_text("choose_account_type", lang),
-                reply_markup=select_status_kb(lang),
+                reply_markup=select_role_kb(lang),
             )
         if account_msg is not None and callback_query.message is not None:
             await state.update_data(
@@ -71,23 +71,23 @@ async def select_language(callback_query: CallbackQuery, state: FSMContext, bot:
 
 
 @questionnaire_router.callback_query(States.account_type)
-async def profile_status_choice(callback_query: CallbackQuery, state: FSMContext):
+async def profile_role_choice(callback_query: CallbackQuery, state: FSMContext):
     await callback_query.answer()
     data = await state.get_data()
     await delete_messages(state)
     lang = data.get("lang", settings.DEFAULT_LANG)
-    status = callback_query.data if callback_query.data in ("coach", "client") else "client"
-    profile = await APIService.profile.create_profile(tg_id=callback_query.from_user.id, status=status, language=lang)
+    role = callback_query.data if callback_query.data in ("coach", "client") else "client"
+    profile = await APIService.profile.create_profile(tg_id=callback_query.from_user.id, role=role, language=lang)
     if profile is None:
         await callback_query.answer(msg_text("unexpected_error", lang), show_alert=True)
         return
 
-    await Cache.profile.save_profile(callback_query.from_user.id, dict(id=profile.id, status=status, language=lang))
+    await Cache.profile.save_profile(callback_query.from_user.id, dict(id=profile.id, role=role, language=lang))
     await state.update_data(profile=profile.model_dump())
     if callback_query.message is not None:
         msg = await answer_msg(cast(Message, callback_query.message), msg_text("name", lang))
         if msg is not None:
-            await state.update_data(chat_id=callback_query.message.chat.id, message_ids=[msg.message_id], status=status)
+            await state.update_data(chat_id=callback_query.message.chat.id, message_ids=[msg.message_id], role=role)
     await state.set_state(States.name)
 
 
@@ -99,11 +99,11 @@ async def name(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
     lang = data.get("lang", settings.DEFAULT_LANG)
-    text = msg_text("surname", lang) if data.get("status") == "coach" else msg_text("choose_gender", lang)
-    reply_markup = select_gender_kb(lang) if data.get("status") == "client" else None
+    text = msg_text("surname", lang) if data.get("role") == "coach" else msg_text("choose_gender", lang)
+    reply_markup = select_gender_kb(lang) if data.get("role") == "client" else None
     msg = await answer_msg(message, text=text, reply_markup=reply_markup)
     await state.update_data(chat_id=message.chat.id, message_ids=[msg.message_id] if msg else [], name=message.text)
-    state_to_set = States.surname if data.get("status") == "coach" else States.gender
+    state_to_set = States.surname if data.get("role") == "coach" else States.gender
     await state.set_state(state_to_set)
     await del_msg(cast(Message | CallbackQuery | None, message))
 
@@ -394,8 +394,8 @@ async def profile_photo(message: Message, state: FSMContext, bot: Bot) -> None:
                     message_ids=[msg.message_id],
                 )
             avatar_manager.clean_up_file(local_file)
-            status = data.get("status", "coach")
-            await update_profile_data(cast(Message, message), state, status, bot)
+            role = data.get("role", "coach")
+            await update_profile_data(cast(Message, message), state, role, bot)
         else:
             await answer_msg(message, msg_text("photo_upload_fail", lang))
             await state.set_state(States.profile_photo)
@@ -568,7 +568,7 @@ async def delete_profile_confirmation(callback_query: CallbackQuery, state: FSMC
     profile = Profile.model_validate(data["profile"])
 
     if callback_query.data == "yes":
-        if profile and profile.status == "coach":
+        if profile and profile.role == "coach":
             if await check_assigned_clients(profile.id):
                 await answer_msg(
                     cast(Message | CallbackQuery, callback_query),

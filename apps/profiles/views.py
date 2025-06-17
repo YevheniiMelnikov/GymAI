@@ -78,8 +78,8 @@ class CoachProfileList(generics.ListCreateAPIView):
         raw_id: Any = self.request.data.get("profile")
         profile_id: int = cast(int, raw_id)
         profile = ProfileRepository.get_model_by_id(profile_id)
-        if profile.status != "coach":
-            raise ValueError("Profile status must be 'coach'")
+        if profile.role != "coach":
+            raise ValueError("Profile role must be 'coach'")
         serializer.save(profile=profile)
 
 
@@ -95,8 +95,8 @@ class ClientProfileList(generics.ListCreateAPIView):
         raw_id: Any = self.request.data.get("profile")
         profile_id: int = cast(int, raw_id)
         profile = ProfileRepository.get_model_by_id(profile_id)
-        if profile.status != "client":
-            raise ValueError("Profile status must be 'client'")
+        if profile.role != "client":
+            raise ValueError("Profile role must be 'client'")
         serializer.save(profile=profile)
 
 

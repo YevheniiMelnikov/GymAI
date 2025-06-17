@@ -25,7 +25,7 @@ from bot.texts.text_manager import msg_text
 from core.services.outer import avatar_manager
 
 
-async def update_profile_data(message: Message, state: FSMContext, status: str, bot: Bot) -> None:
+async def update_profile_data(message: Message, state: FSMContext, role: str, bot: Bot) -> None:
     data = await state.get_data()
     await delete_messages(state)
 
@@ -36,7 +36,7 @@ async def update_profile_data(message: Message, state: FSMContext, status: str, 
         user_data = {**data}
         user_data.pop("profile", None)
 
-        if status == "client":
+        if role == "client":
             if data.get("edit_mode"):
                 client = await Cache.client.get_client(profile.id)
                 await Cache.client.update_client(client.id, user_data)
@@ -107,7 +107,7 @@ async def check_assigned_clients(profile_id: int) -> bool:
 
 
 async def fetch_user(profile: Profile) -> Client | Coach:
-    if profile.status == "client":
+    if profile.role == "client":
         try:
             return await Cache.client.get_client(profile.id)
         except ClientNotFoundError:
@@ -116,7 +116,7 @@ async def fetch_user(profile: Profile) -> Client | Coach:
             )
             raise ValueError(f"Client data not found for existing profile id {profile.id}")
 
-    elif profile.status == "coach":
+    elif profile.role == "coach":
         try:
             return await Cache.coach.get_coach(profile.id)
         except CoachNotFoundError:
@@ -125,7 +125,7 @@ async def fetch_user(profile: Profile) -> Client | Coach:
             )
             raise ValueError(f"Coach data not found for existing profile id {profile.id}")
     else:
-        raise ValueError(f"Unknown profile status: {profile.status}")
+        raise ValueError(f"Unknown profile role: {profile.role}")
 
 
 async def answer_profile(cbq: CallbackQuery, profile: Profile, user: Coach | Client, text: str) -> None:
@@ -133,7 +133,7 @@ async def answer_profile(cbq: CallbackQuery, profile: Profile, user: Coach | Cli
     if not isinstance(message, Message):
         return
 
-    if profile.status == "coach" and isinstance(user, Coach) and user.profile_photo:
+    if profile.role == "coach" and isinstance(user, Coach) and user.profile_photo:
         photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{user.profile_photo}"
         try:
             await message.answer_photo(photo_url, text, reply_markup=profile_menu_kb(profile.language))
@@ -141,7 +141,7 @@ async def answer_profile(cbq: CallbackQuery, profile: Profile, user: Coach | Cli
         except TelegramBadRequest:
             logger.warning("Photo not found for coach %s", profile.id)
 
-    if profile.status == "client" and isinstance(user, Client):
+    if profile.role == "client" and isinstance(user, Client):
         if user.profile_photo:
             photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{user.profile_photo}"
             try:

@@ -16,7 +16,7 @@ class Migration(migrations.Migration):
             name="Profile",
             fields=[
                 ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
-                ("status", models.CharField(default="client", max_length=50)),
+                ("role", models.CharField(default="client", max_length=50)),
                 ("language", models.CharField(blank=True, max_length=50, null=True)),
                 ("tg_id", models.BigIntegerField(blank=True, null=True, unique=True)),
             ],

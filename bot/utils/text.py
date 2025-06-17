@@ -72,12 +72,12 @@ def state_msgs(callback: str, lang: str) -> tuple[State | None, str | None]:
     return mapping.get(callback, (None, None))
 
 
-def get_profile_attributes(status: str, user: Optional[Client | Coach], lang: str) -> dict[str, str]:
+def get_profile_attributes(role: str, user: Optional[Client | Coach], lang: str) -> dict[str, str]:
     def get(attr: str) -> str:
         val = getattr(user, attr, "") if user else ""
         return str(val) if val is not None else ""
 
-    if status == "client":
+    if role == "client":
         return {
             "name": get("name"),
             "gender": genders(lang).get(get("gender"), ""),

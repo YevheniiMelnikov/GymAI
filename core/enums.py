@@ -6,7 +6,7 @@ class PaymentType(str, Enum):
     program = "program"
 
 
-class ProfileStatus(str, Enum):
+class ProfileRole(str, Enum):
     client = "client"
     coach = "coach"
 

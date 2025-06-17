@@ -29,9 +29,9 @@ class ProfileService(APIClient):
         return None
 
     @classmethod
-    async def create_profile(cls, tg_id: int, status: str, language: str) -> Profile | None:
+    async def create_profile(cls, tg_id: int, role: str, language: str) -> Profile | None:
         url = urljoin(cls.api_url, "api/v1/profiles/")
-        payload = {"tg_id": tg_id, "status": status, "language": language}
+        payload = {"tg_id": tg_id, "role": role, "language": language}
         status_code, data = await cls._api_request(
             "post", url, payload, headers={"Authorization": f"Api-Key {cls.api_key}"}
         )

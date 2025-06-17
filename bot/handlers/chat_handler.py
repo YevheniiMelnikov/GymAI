@@ -238,7 +238,7 @@ async def answer_message(callback_query: CallbackQuery, state: FSMContext) -> No
         await callback_query.answer("Invalid recipient id")
         return
 
-    if profile.status == "client":
+    if profile.role == "client":
         sender = await Cache.client.get_client(profile.id)
         state_to_set = States.contact_coach
     else:

@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, field_validator, condecimal
 from core.encryptor import Encryptor
 from core.enums import (
     PaymentType,
-    ProfileStatus,
+    ProfileRole,
     ClientStatus,
     Language,
     Gender,
@@ -17,7 +17,7 @@ Price = condecimal(max_digits=10, decimal_places=2, gt=0)
 
 class Profile(BaseModel):
     id: int
-    status: Annotated[ProfileStatus, Field()]
+    role: Annotated[ProfileRole, Field()]
     tg_id: int
     language: Annotated[Language, Field()]
 
