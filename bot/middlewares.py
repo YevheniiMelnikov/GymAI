@@ -1,7 +1,5 @@
 from aiogram import BaseMiddleware
-from aiogram.types import Message
 from aiogram.fsm.context import FSMContext
-from typing import Callable, Awaitable
 from loguru import logger
 
 from core.cache import Cache
@@ -9,16 +7,19 @@ from core.exceptions import ProfileNotFoundError
 
 
 class ProfileMiddleware(BaseMiddleware):
-    async def __call__(self, handler: Callable[..., Awaitable], message: Message, state: FSMContext) -> Awaitable:
-        user_id = getattr(message.from_user, "id", None)
-        profile = None
-        if user_id is not None:
+    async def __call__(self, handler, event, data):
+        state: FSMContext | None = data.get("state")
+        tg_user = getattr(event, "from_user", None)
+
+        if tg_user and state:
             try:
-                profile = await Cache.profile.get_profile(user_id)
+                profile = await Cache.profile.get_profile(tg_user.id)
             except ProfileNotFoundError:
-                pass
+                profile = None
             except Exception as e:
-                logger.error(f"Error fetching profile for user {user_id}: {e}")
-        if isinstance(state, FSMContext):
+                logger.error(f"Error fetching profile for user {tg_user.id}: {e}")
+                profile = None
+
             await state.update_data(profile=profile.model_dump() if profile else None)
-        return await handler(message, state)
+
+        return await handler(event, data)

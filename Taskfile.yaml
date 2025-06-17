@@ -38,6 +38,7 @@ tasks:
     cmds:
       - uv lock --upgrade
       - uv sync --extra dev
+      - echo "✅ Dependencies updated"
 
   pre-commit:
     desc: Run pre-commit hooks
@@ -49,3 +50,37 @@ tasks:
     cmds:
       - docker compose exec api python manage.py makemigrations
       - docker compose exec api python manage.py migrate
+      - echo "✅ Migrations applied"
+
+  clean:
+    desc: "Clean Redis and PostgreSQL. DO NOT USE IN PRODUCTION!"
+    dotenv: ['.env']
+    cmds:
+      - |
+        echo "Flushing Redis..."
+        for i in $(seq 0 15); do
+          docker exec redis redis-cli -n $i FLUSHDB 1>/dev/null
+        done
+        echo "Redis ✅"
+      - |
+        echo "Truncating PostgreSQL tables..."
+        docker exec db psql -U $DB_USER -d $DB_NAME -t -q -c "
+        DO \$\$
+        DECLARE
+          r RECORD;
+        BEGIN
+          FOR r IN (
+            SELECT tablename
+            FROM pg_tables
+            WHERE schemaname = 'public'
+              AND tablename NOT ILIKE 'django%%'
+              AND tablename NOT ILIKE 'auth%%'
+              AND tablename NOT ILIKE 'sessions'
+              AND tablename NOT ILIKE 'rest_framework_api_key%%'
+          ) LOOP
+            EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' CASCADE';
+          END LOOP;
+        END
+        \$\$;
+        " 1>/dev/null
+        echo "PostgreSQL ✅"

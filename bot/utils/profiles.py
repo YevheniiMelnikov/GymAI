@@ -4,7 +4,7 @@ from typing import cast
 from loguru import logger
 from aiogram import Bot
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, FSInputFile
 from aiogram.exceptions import TelegramBadRequest
 
 from bot.keyboards import profile_menu_kb
@@ -130,7 +130,7 @@ async def fetch_user(profile: Profile) -> Client | Coach:
 
 async def answer_profile(cbq: CallbackQuery, profile: Profile, user: Coach | Client, text: str) -> None:
     message = cbq.message
-    if not message or not isinstance(message, Message):
+    if not isinstance(message, Message):
         return
 
     if profile.status == "coach" and isinstance(user, Coach) and user.profile_photo:
@@ -141,18 +141,27 @@ async def answer_profile(cbq: CallbackQuery, profile: Profile, user: Coach | Cli
         except TelegramBadRequest:
             logger.warning("Photo not found for coach %s", profile.id)
 
-    elif profile.status == "client" and isinstance(user, Client):
+    if profile.status == "client" and isinstance(user, Client):
         if user.profile_photo:
             photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{user.profile_photo}"
-        else:
-            avatar = "male.png" if user.gender != "female" else "female.png"
-            photo_url = str(Path(__file__).resolve().parent.parent / "images" / avatar)
+            try:
+                await message.answer_photo(photo_url, text, reply_markup=profile_menu_kb(profile.language))
+                return
+            except TelegramBadRequest:
+                logger.warning("Photo not found for client %s", profile.id)
 
-        try:
-            await message.answer_photo(photo_url, text, reply_markup=profile_menu_kb(profile.language))
-            return
-        except TelegramBadRequest:
-            logger.warning("Photo not found for client %s", profile.id)
+        avatar_name = "male.png" if user.gender != "female" else "female.png"
+        file_path = Path(__file__).resolve().parent.parent / "images" / avatar_name
+
+        if file_path.exists():
+            avatar_file = FSInputFile(file_path)
+            try:
+                await message.answer_photo(avatar_file, text, reply_markup=profile_menu_kb(profile.language))
+                return
+            except TelegramBadRequest as e:
+                logger.warning("Failed to send default avatar for client %s: %s", profile.id, e)
+        else:
+            logger.error("Default avatar file not found: %s", file_path)
 
     await message.answer(text, reply_markup=profile_menu_kb(profile.language))
 

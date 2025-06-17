@@ -95,7 +95,7 @@ def get_profile_attributes(status: str, user: Optional[Client | Coach], lang: st
             "name": get("name"),
             "experience": get("work_experience"),
             "notes": get("additional_info"),
-            "payment_details": get("payment_details"),
+            "payment_details": get("payment_details_plain"),
             "subscription_price": get("subscription_price"),
             "program_price": get("program_price"),
             "verif_status": verification_status(lang).get(verified_value, msg_text("not_verified", lang)),

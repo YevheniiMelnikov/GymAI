@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     BOT_PAYMENT_OPTIONS: str = "https://storage.googleapis.com/services_promo/"
     PAYMENT_CHECK_INTERVAL: int = 60
     COACH_PAYOUT_RATE: Decimal = Decimal("0.7")
+    MIN_BIRTH_YEAR: int = 1940
+    MAX_BIRTH_YEAR: int = 2020
 
     SITE_NAME: str = "AchieveTogether"
 

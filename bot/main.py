@@ -52,6 +52,7 @@ async def main() -> None:
 
     dp = Dispatcher(storage=RedisStorage.from_url(settings.REDIS_URL))
     dp.message.middleware.register(ProfileMiddleware())
+    dp.callback_query.middleware.register(ProfileMiddleware())
     dp.shutdown.register(on_shutdown)
     configure_routers(dp)
 

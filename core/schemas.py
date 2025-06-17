@@ -1,6 +1,8 @@
 from datetime import datetime
 from typing import Annotated
 from pydantic import BaseModel, Field, field_validator, condecimal
+
+from core.encryptor import Encryptor
 from core.enums import (
     PaymentType,
     ProfileStatus,
@@ -34,6 +36,12 @@ class Client(BaseModel):
     status: ClientStatus = ClientStatus.default
     assigned_to: list[int] = Field(default_factory=list)
 
+    @field_validator("born_in", mode="before")
+    def born_in_to_str(cls, v):
+        if v is None:
+            return v
+        return str(v)
+
 
 class Coach(BaseModel):
     id: int
@@ -48,6 +56,10 @@ class Coach(BaseModel):
     program_price: Price
     assigned_to: list[int] = Field(default_factory=list)
     verified: bool = False
+
+    @property
+    def payment_details_plain(self) -> str:
+        return Encryptor.decrypt(self.payment_details) or ""
 
 
 class Exercise(BaseModel):

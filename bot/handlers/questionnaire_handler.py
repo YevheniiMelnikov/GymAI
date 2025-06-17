@@ -30,6 +30,7 @@ from bot.utils.text import get_state_and_message
 from bot.utils.other import delete_messages, generate_order_id, set_bot_commands, answer_msg, del_msg, parse_price
 from bot.texts.text_manager import msg_text
 from core.services.outer import avatar_manager
+from core.validators import is_valid_year
 
 questionnaire_router = Router()
 
@@ -132,8 +133,17 @@ async def born_in(message: Message, state: FSMContext) -> None:
     await delete_messages(state)
     data = await state.get_data()
     lang = data.get("lang", settings.DEFAULT_LANG)
+
+    if not is_valid_year(message.text):
+        await answer_msg(message, msg_text("invalid_content", lang))
+        return
+
     msg = await answer_msg(message, msg_text("workout_goals", lang))
-    await state.update_data(born_in=message.text, chat_id=message.chat.id, message_ids=[msg.message_id] if msg else [])
+    await state.update_data(
+        born_in=message.text,
+        chat_id=message.chat.id,
+        message_ids=[msg.message_id] if msg else [],
+    )
     await state.set_state(States.workout_goals)
     await del_msg(cast(Message | CallbackQuery | None, message))
 
