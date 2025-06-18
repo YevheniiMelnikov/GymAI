@@ -6,8 +6,13 @@ from django.contrib.postgres.fields import ArrayField
 from apps.profiles.fields import EncryptedField
 
 
+class Role(models.TextChoices):
+    CLIENT = "client"
+    COACH = "coach"
+
+
 class Profile(Model):
-    role = models.CharField(max_length=50, default="client")
+    role = models.CharField(max_length=10, choices=Role.choices, default=Role.CLIENT, db_column="role")
     language = models.CharField(max_length=50, null=True, blank=True)
     tg_id = models.BigIntegerField(blank=True, null=True, unique=True)
 
