@@ -65,6 +65,7 @@ class ButtonText(AutoName):
     add_exercise = auto()
     next_day = auto()
     sets = auto()
+    set_mode = auto()
     reps = auto()
     exercises = auto()
     view = auto()
@@ -216,6 +217,8 @@ class MessageText(AutoName):
     not_verified = auto()
     gift = auto()
     select_service = auto()
+    set_mode_on = auto()
+    set_mode_off = auto()
 
     def __str__(self) -> str:
         return f"messages.{self.name}"

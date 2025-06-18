@@ -13,6 +13,7 @@ class ExerciseSerializer(serializers.Serializer):
     reps = serializers.CharField()
     gif_link = serializers.CharField(required=False, allow_null=True)
     weight = serializers.CharField(required=False, allow_null=True)
+    set_id = serializers.IntegerField(required=False, allow_null=True)
 
 
 class DayExercisesSerializer(serializers.Serializer):
