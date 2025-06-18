@@ -7,7 +7,8 @@ from loguru import logger
 from aiogram import Bot, Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, FSInputFile
+from pathlib import Path
 
 from bot.keyboards import new_message_kb, workout_results_kb
 from bot.states import States
@@ -16,6 +17,7 @@ from core.enums import ClientStatus
 from core.schemas import Profile
 from core.services import APIService
 from bot.utils.chat import send_message
+from core.services.outer import avatar_manager
 from bot.utils.exercises import edit_subscription_exercises
 from bot.utils.menus import show_main_menu, manage_subscription, show_exercises_menu, program_menu_pagination
 from bot.texts.text_manager import msg_text
@@ -126,12 +128,21 @@ async def contact_coach(message: Message, state: FSMContext, bot: Bot) -> None:
             video=message.video,
         )
     else:
+        avatar = None
+        if client.profile_photo:
+            avatar = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{client.profile_photo}"
+        else:
+            avatar_name = "male.png" if client.gender != "female" else "female.png"
+            file_path = Path(__file__).resolve().parent.parent / "images" / avatar_name
+            if file_path.exists():
+                avatar = FSInputFile(file_path)
         await send_message(
             recipient=coach,
             text=message.text or "",
             bot=bot,
             state=state,
             reply_markup=new_message_kb(coach_profile.language, profile.id),
+            avatar_url=avatar,
         )
 
     await answer_msg(message, msg_text("message_sent", profile.language))

@@ -31,11 +31,15 @@ class ClientCacheManager(BaseCacheManager):
 
     @classmethod
     async def update_client(cls, client_id: int, client_data: dict[str, Any]) -> None:
+        if "profile" not in client_data:
+            client_data["profile"] = client_id
         await cls.update_json("clients", str(client_id), client_data)
 
     @classmethod
     async def save_client(cls, profile_id: int, client_data: dict[str, Any]) -> None:
         try:
+            if "profile" not in client_data:
+                client_data["profile"] = profile_id
             await cls.set("clients", str(profile_id), json.dumps(client_data))
             logger.debug(f"Saved client data to cache for profile_id={profile_id}")
         except Exception as e:

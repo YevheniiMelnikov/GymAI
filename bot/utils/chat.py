@@ -5,7 +5,8 @@ from typing import Any, cast
 from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, FSInputFile
+from pathlib import Path
 
 from bot.texts import msg_text
 from bot.utils.other import answer_msg
@@ -28,6 +29,7 @@ async def send_message(
     include_incoming_message: bool = True,
     photo=None,
     video=None,
+    avatar_url: str | FSInputFile | None = None,
 ) -> None:
     if state:
         data = await state.get_data()
@@ -61,7 +63,15 @@ async def send_message(
     elif photo:
         await bot.send_photo(
             chat_id=recipient_profile.tg_id,
-            photo=photo.file_id,
+            photo=getattr(photo, "file_id", photo),
+            caption=formatted_text,
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.HTML,
+        )
+    elif avatar_url:
+        await bot.send_photo(
+            chat_id=recipient_profile.tg_id,
+            photo=avatar_url,
             caption=formatted_text,
             reply_markup=reply_markup,
             parse_mode=ParseMode.HTML,
@@ -159,7 +169,22 @@ async def client_request(coach: Coach, client: Client, data: dict[str, Any], bot
         else incoming_request_kb(coach_lang, service, client.id)
     )
 
-    await send_message(recipient=coach, text=text, bot=bot, state=None, include_incoming_message=False)
+    avatar = None
+    if client.profile_photo:
+        avatar = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{client.profile_photo}"
+    else:
+        avatar_name = "male.png" if client.gender != "female" else "female.png"
+        file_path = Path(__file__).resolve().parent.parent / "images" / avatar_name
+        if file_path.exists():
+            avatar = FSInputFile(file_path)
+    await send_message(
+        recipient=coach,
+        text=text,
+        bot=bot,
+        state=None,
+        include_incoming_message=False,
+        avatar_url=avatar,
+    )
 
     if wishes:
         await send_message(recipient=coach, text=cast(str, wishes), bot=bot, state=None, include_incoming_message=False)
