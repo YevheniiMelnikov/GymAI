@@ -145,7 +145,7 @@ async def show_coaches_menu(message: Message, coaches: list[Coach], bot: Bot, cu
     current_index %= len(coaches)
     current_coach = coaches[current_index]
     coach_photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{current_coach.profile_photo}"
-    formatted_text = msg_text("coach_page", language).format(**current_coach.model_dump())
+    formatted_text = msg_text("coach_page", language).format(**current_coach.model_dump(mode="json"))
 
     try:
         media = InputMediaPhoto(media=coach_photo_url)

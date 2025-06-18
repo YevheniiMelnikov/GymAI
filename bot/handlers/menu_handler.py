@@ -37,7 +37,7 @@ from bot.utils.menus import (
 from bot.utils.profiles import assign_coach
 from bot.utils.workout_plans import manage_program, cancel_subscription
 from bot.utils.other import del_msg
-from core.exceptions import ClientNotFoundError, CoachNotFoundError, SubscriptionNotFoundError
+from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
 
 menu_router = Router()
 
@@ -131,25 +131,23 @@ async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext, bo
             return
 
         await state.set_state(States.coach_selection)
-        await state.update_data(coaches=[Coach.model_dump(coach) for coach in coaches])
+        await state.update_data(coaches=[coach.model_dump(mode="json") for coach in coaches])
         await show_coaches_menu(message, coaches, bot)
 
     await del_msg(message)
 
 
 @menu_router.callback_query(States.coach_selection)
-async def coach_paginator(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+async def paginate_coaches(cbq: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()
-    profile_data = data.get("profile")
-    if not profile_data:
+    profile = Profile.model_validate(data.get("profile"))
+    message: Message = cbq.message  # type: ignore
+    if message is None:
         return
-    profile = Profile.model_validate(profile_data)
-    message = callback_query.message
-    if message is None or not isinstance(message, Message):
-        return
-    data_str = callback_query.data or ""
 
-    if data_str == "quit":
+    cb_data = cbq.data or ""
+
+    if cb_data == "quit":
         await message.answer(
             msg_text("no_program", profile.language),
             reply_markup=choose_coach_kb(profile.language),
@@ -158,48 +156,62 @@ async def coach_paginator(callback_query: CallbackQuery, state: FSMContext, bot:
         await del_msg(message)
         return
 
-    parts = data_str.split("_")
-    if len(parts) != 2:
-        await callback_query.answer(msg_text("out_of_range", profile.language))
+    if "_" not in cb_data:
+        await message.answer(msg_text("out_of_range", profile.language))
         return
 
-    action, index_str = parts
-    try:
-        index = int(index_str)
-    except ValueError:
-        await callback_query.answer(msg_text("out_of_range", profile.language))
+    action, param = cb_data.split("_", maxsplit=1)
+
+    coaches = [Coach.model_validate(d) for d in data.get("coaches", [])]
+    if not coaches:
+        await message.answer(msg_text("no_coaches", profile.language))
         return
 
-    data = await state.get_data()
-    coaches_data = data.get("coaches", [])
-    coaches = [Coach.model_validate(d) for d in coaches_data]
+    if action in {"prev", "next"}:
+        try:
+            page = int(param)
+        except ValueError:
+            await message.answer(msg_text("out_of_range", profile.language))
+            return
 
-    if index < 0 or (index >= len(coaches) and action != "selected"):
-        await callback_query.answer(msg_text("out_of_range", profile.language))
+        if page < 0 or page >= len(coaches):
+            await message.answer(msg_text("out_of_range", profile.language))
+            return
+
+        await show_coaches_menu(message, coaches, bot, current_index=page)
         return
 
     if action == "selected":
-        await callback_query.answer(msg_text("saved", profile.language))
         try:
-            coach = await Cache.coach.get_coach(index)
+            coach_id = int(param)
+        except ValueError:
+            await message.answer(msg_text("unexpected_error", profile.language))
+            return
+
+        selected_coach = next((c for c in coaches if c.id == coach_id), None)
+        if selected_coach is None:
+            logger.warning("Coach not found for id %s", coach_id)
+            await message.answer(msg_text("unexpected_error", profile.language))
+            return
+
+        try:
             client = await Cache.client.get_client(profile.id)
-
-        except CoachNotFoundError:
-            logger.warning(f"Coach not found for index {index}")
-            await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
-            return
-
         except ClientNotFoundError:
-            logger.warning(f"Client not found for profile_id {profile.id}")
-            await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
+            logger.warning("Client not found for profile_id %s", profile.id)
+            await message.answer(msg_text("unexpected_error", profile.language))
             return
 
-        await assign_coach(coach, client)
+        await assign_coach(selected_coach, client)
+        await cbq.answer(msg_text("saved", profile.language))
         await state.set_state(States.gift)
-        await message.answer(msg_text("gift", profile.language), reply_markup=gift_kb(profile.language))
+        await message.answer(
+            msg_text("gift", profile.language),
+            reply_markup=gift_kb(profile.language),
+        )
         await del_msg(message)
-    else:
-        await show_coaches_menu(message, coaches, bot, current_index=index)
+        return
+
+    await message.answer(msg_text("unexpected_error", profile.language))
 
 
 @menu_router.callback_query(States.show_clients)

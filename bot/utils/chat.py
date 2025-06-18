@@ -5,7 +5,7 @@ from typing import Any, cast
 from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message, FSInputFile
+from aiogram.types import CallbackQuery, Message, FSInputFile, InputFile
 from pathlib import Path
 
 from bot.texts import msg_text
@@ -27,7 +27,7 @@ async def send_message(
     state: FSMContext | None = None,
     reply_markup=None,
     include_incoming_message: bool = True,
-    photo=None,
+    photo: str | InputFile | None = None,
     video=None,
     avatar_url: str | FSInputFile | None = None,
 ) -> None:

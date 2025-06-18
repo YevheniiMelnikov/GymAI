@@ -60,7 +60,7 @@ async def contact_client(message: Message, state: FSMContext, bot: Bot) -> None:
             bot=bot,
             state=state,
             reply_markup=new_message_kb(client_profile.language, profile.id),
-            photo=message.photo[-1],
+            photo=message.photo[-1].file_id,
         )
     elif message.video:
         await send_message(
@@ -116,7 +116,7 @@ async def contact_coach(message: Message, state: FSMContext, bot: Bot) -> None:
             bot=bot,
             state=state,
             reply_markup=new_message_kb(coach_profile.language, profile.id),
-            photo=message.photo[-1],
+            photo=message.photo[-1].file_id,
         )
     elif message.video:
         await send_message(
