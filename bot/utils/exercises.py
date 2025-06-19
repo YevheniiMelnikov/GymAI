@@ -196,6 +196,8 @@ async def format_program(exercises: list[DayExercises], day: int) -> str:
     program_lines = []
     for idx, exercise in enumerate(day_entry.exercises):
         line = f"{idx + 1}. {exercise.name} | {exercise.sets} x {exercise.reps}"
+        if exercise.set_id is not None:
+            line += f" | Set {exercise.set_id}"
         if exercise.weight:
             line += f" | {exercise.weight} kg"
         if exercise.gif_link:
@@ -211,6 +213,8 @@ async def format_full_program(exercises: list[DayExercises]) -> str:
         lines.append(f"<b>Day {day_entry.day}</b>")
         for idx, exercise in enumerate(day_entry.exercises):
             line = f"{idx + 1}. {exercise.name} | {exercise.sets} x {exercise.reps}"
+            if exercise.set_id is not None:
+                line += f" | Set {exercise.set_id}"
             if exercise.weight:
                 line += f" | {exercise.weight} kg"
             lines.append(line)
@@ -233,6 +237,7 @@ async def create_exercise(
         reps=data.get("reps", ""),
         gif_link=data.get("gif_link"),
         weight=str(weight) if weight is not None else None,
+        set_id=data.get("set_id"),
     )
 
     if day_entry:

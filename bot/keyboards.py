@@ -177,6 +177,7 @@ def program_manage_kb(lang: str, workouts_per_week: int) -> KbMarkup:
     ]
     if workouts_per_week > 1:
         buttons.append([builder.add("next_day", "add_next_day")])
+    buttons.append([builder.add("set_mode", "toggle_set")])
     buttons.append([builder.add("quit", "quit")])
     return KbMarkup(inline_keyboard=buttons)
 
@@ -319,6 +320,7 @@ def program_edit_kb(lang: str) -> KbMarkup:
     buttons = [
         [builder.add("back", "prev_day"), builder.add("forward", "next_day")],
         [builder.add("add_exercise", "exercise_add")],
+        [builder.add("set_mode", "toggle_set")],
         [builder.add("edit_exercise", "exercise_edit")],
         [builder.add("delete_exercise", "exercise_delete")],
         [builder.add("save", "finish_editing"), builder.add("reset_program", "reset")],

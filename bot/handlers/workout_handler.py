@@ -108,6 +108,14 @@ async def program_manage(callback_query: CallbackQuery, state: FSMContext, bot: 
         await del_msg(cast(Message | CallbackQuery | None, callback_query))
     elif callback_query.data == "add_next_day":
         await next_day_workout_plan(callback_query, state)
+    elif callback_query.data == "toggle_set":
+        if data.get("set_mode"):
+            await state.update_data(set_mode=False, set_id=None)
+            await callback_query.answer(msg_text("set_mode_off", profile.language))
+        else:
+            current_id = int(data.get("current_set_id", 0)) + 1
+            await state.update_data(set_mode=True, set_id=current_id, current_set_id=current_id)
+            await callback_query.answer(msg_text("set_mode_on", profile.language))
     elif callback_query.data == "reset":
         await reset_workout_plan(callback_query, state)
     elif callback_query.data == "save":
@@ -331,6 +339,15 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
             edit_mode=False,
         )
         await state.set_state(States.add_exercise_name)
+
+    elif callback_query.data == "toggle_set":
+        if data.get("set_mode"):
+            await state.update_data(set_mode=False, set_id=None)
+            await callback_query.answer(msg_text("set_mode_off", profile.language))
+        else:
+            current_id = int(data.get("current_set_id", 0)) + 1
+            await state.update_data(set_mode=True, set_id=current_id, current_set_id=current_id)
+            await callback_query.answer(msg_text("set_mode_on", profile.language))
 
     elif callback_query.data == "quit":
         await callback_query.answer()
