@@ -16,7 +16,7 @@ from apps.workout_plans.repos import ProgramRepository, SubscriptionRepository
 from apps.workout_plans.models import Subscription
 
 
-def _parse_client_id(client_id_str: Optional[str]) -> Optional[int]:
+def _parse_client_profile_id(client_id_str: Optional[str]) -> Optional[int]:
     if client_id_str is None:
         return None
     try:
@@ -34,16 +34,16 @@ class ProgramViewSet(ModelViewSet):
     def get_queryset(self):
         qs = ProgramRepository.base_qs()
         client_id_str = self.request.query_params.get("client_profile")
-        client_id = _parse_client_id(client_id_str)
-        return ProgramRepository.filter_by_client(qs, client_id)
+        client_profile_id = _parse_client_profile_id(client_id_str)
+        return ProgramRepository.filter_by_client(qs, client_profile_id)
 
     def create(self, request: Any, *args: Any, **kwargs: Any) -> Response:
-        client_id_raw = request.data.get("client_profile")
+        client_profile_raw = request.data.get("client_profile")
         exercises = request.data.get("exercises_by_day")
-        if not client_id_raw:
+        if not client_profile_raw:
             return Response({"error": "client_profile is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        client = ProgramRepository.get_client(int(client_id_raw))
+        client = ProgramRepository.get_client(int(client_profile_raw))
         program = ProgramRepository.create_or_update(client, exercises)
 
         cache.delete_many(
@@ -67,8 +67,8 @@ class ProgramViewSet(ModelViewSet):
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
 
-        client_id_raw = request.data.get("client_profile") or instance.client_profile_id
-        client = ProgramRepository.get_client(int(client_id_raw))
+        client_profile_raw = request.data.get("client_profile") or instance.client_profile_id
+        client = ProgramRepository.get_client(int(client_profile_raw))
         exercises = serializer.validated_data.get("exercises_by_day", instance.exercises_by_day)
         program = ProgramRepository.create_or_update(client, exercises, instance=instance)
 
@@ -93,8 +93,8 @@ class SubscriptionViewSet(ModelViewSet):
     def get_queryset(self):
         qs = SubscriptionRepository.base_qs()
         client_id_str = self.request.query_params.get("client_profile")
-        client_id = _parse_client_id(client_id_str)
-        return SubscriptionRepository.filter_by_client(qs, client_id)
+        client_profile_id = _parse_client_profile_id(client_id_str)
+        return SubscriptionRepository.filter_by_client(qs, client_profile_id)
 
     def perform_create(self, serializer: serializers.BaseSerializer) -> None:  # pyre-ignore[bad-override]
         sub = serializer.save()
@@ -115,11 +115,11 @@ class SubscriptionViewSet(ModelViewSet):
         )
 
     def perform_destroy(self, instance: Subscription) -> None:  # pyre-ignore[bad-override]
-        client_id = instance.client_profile_id  # pyre-ignore[missing-attribute]
+        client_profile_id = instance.client_profile_id  # pyre-ignore[missing-attribute]
         super().perform_destroy(instance)
         cache.delete_many(
             [
                 "subscriptions:list",
-                f"subscriptions:list:client:{client_id}",
+                f"subscriptions:list:client:{client_profile_id}",
             ]
         )

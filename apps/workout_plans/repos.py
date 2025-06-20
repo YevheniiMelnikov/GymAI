@@ -16,22 +16,22 @@ class ProgramRepository:
         return f"program:{pk}"
 
     @staticmethod
-    def _list_key(client_id: Optional[int] = None) -> str:
-        return f"program:list:{client_id or 'all'}"
+    def _list_key(client_profile_id: Optional[int] = None) -> str:
+        return f"program:list:{client_profile_id or 'all'}"
 
     @staticmethod
     def base_qs() -> QuerySet[Program]:
         return Program.objects.all().select_related("client_profile")  # type: ignore[return-value]
 
     @staticmethod
-    def filter_by_client(qs: QuerySet[Program], client_id: Optional[int]) -> QuerySet[Program]:
-        if client_id:
-            key = ProgramRepository._list_key(client_id)
+    def filter_by_client(qs: QuerySet[Program], client_profile_id: Optional[int]) -> QuerySet[Program]:
+        if client_profile_id:
+            key = ProgramRepository._list_key(client_profile_id)
             ids = cast(
                 List[int],
                 cache.get_or_set(
                     key,
-                    lambda: list(qs.filter(client_profile_id=client_id).values_list("id", flat=True)),
+                    lambda: list(qs.filter(client_profile_id=client_profile_id).values_list("id", flat=True)),
                     settings.CACHE_TTL,
                 ),
             )
@@ -49,12 +49,12 @@ class ProgramRepository:
         return cast(QuerySet[Program], Program.objects.filter(id__in=ids))
 
     @staticmethod
-    def get_client(client_id: int) -> ClientProfile:
+    def get_client(client_profile_id: int) -> ClientProfile:
         try:
-            client = ClientProfile.objects.get(pk=client_id)
+            client = ClientProfile.objects.get(pk=client_profile_id)
             return cast(ClientProfile, client)
         except ClientProfile.DoesNotExist:
-            raise NotFound(f"ClientProfile pk={client_id} not found")
+            raise NotFound(f"ClientProfile pk={client_profile_id} not found")
 
     @classmethod
     def create_or_update(
@@ -93,7 +93,7 @@ class SubscriptionRepository:
         return Subscription.objects.all().select_related("client_profile")  # type: ignore[return-value]
 
     @staticmethod
-    def filter_by_client(qs: QuerySet[Subscription], client_id: Optional[int]) -> QuerySet[Subscription]:
-        if client_id:
-            return qs.filter(client_profile_id=client_id)
+    def filter_by_client(qs: QuerySet[Subscription], client_profile_id: Optional[int]) -> QuerySet[Subscription]:
+        if client_profile_id:
+            return qs.filter(client_profile_id=client_profile_id)
         return qs

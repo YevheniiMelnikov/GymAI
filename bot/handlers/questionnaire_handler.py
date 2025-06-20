@@ -493,7 +493,7 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
                 amount=coach.program_price,
                 order_id=order_id,
                 payment_type="program",
-                client_id=client.id,
+                client_profile_id=client.id,
             )
             if payment_link:
                 await state.set_state(States.handle_payment)

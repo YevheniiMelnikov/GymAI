@@ -359,7 +359,7 @@ async def process_new_subscription(callback_query: CallbackQuery, profile: Profi
         amount=coach.subscription_price,
         order_id=order_id,
         payment_type="subscription",
-        client_id=client.id,
+        client_profile_id=client.id,
     )
 
     if not isinstance(callback_query.message, Message):

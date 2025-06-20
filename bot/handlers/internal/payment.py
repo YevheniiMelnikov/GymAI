@@ -41,16 +41,16 @@ async def internal_send_payment_message(request: web.Request) -> web.Response:
     except Exception:
         return web.json_response({"detail": "Invalid JSON"}, status=400)
 
-    client_id = payload.get("client_id")
+    client_profile_id = payload.get("client_id")
     text = payload.get("text")
 
-    if not client_id or not text:
+    if not client_profile_id or not text:
         return web.json_response({"detail": "Missing client_id or text"}, status=400)
 
     bot: Bot = request.app["bot"]
 
     try:
-        client = await Cache.client.get_client(int(client_id))
+        client = await Cache.client.get_client(int(client_profile_id))
         if not client:
             return web.json_response({"detail": "Client not found"}, status=404)
         await send_message(
@@ -75,18 +75,18 @@ async def internal_client_request(request: web.Request) -> web.Response:
     except Exception:
         return web.json_response({"detail": "Invalid JSON"}, status=400)
 
-    coach_id = payload.get("coach_id")
-    client_id = payload.get("client_id")
+    coach_profile_id = payload.get("coach_id")
+    client_profile_id = payload.get("client_id")
     data = payload.get("data", {})
 
-    if not coach_id or not client_id:
+    if not coach_profile_id or not client_profile_id:
         return web.json_response({"detail": "Missing coach_id or client_id"}, status=400)
 
     bot: Bot = request.app["bot"]
 
     try:
-        coach = await Cache.coach.get_coach(int(coach_id))
-        client = await Cache.client.get_client(int(client_id))
+        coach = await Cache.coach.get_coach(int(coach_profile_id))
+        client = await Cache.client.get_client(int(client_profile_id))
         if not coach or not client:
             return web.json_response({"detail": "Coach or client not found"}, status=404)
         await client_request(coach=coach, client=client, data=data, bot=bot)

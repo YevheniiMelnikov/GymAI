@@ -76,8 +76,8 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
         if not client.assigned_to:
             await callback_query.answer(msg_text("client_not_assigned_to_coach", profile.language), show_alert=True)
             return
-        coach_id = client.assigned_to[0]
-        coach = await Cache.coach.get_coach(coach_id)
+        coach_profile_id = client.assigned_to[0]
+        coach = await Cache.coach.get_coach(coach_profile_id)
 
     except ClientNotFoundError:
         logger.warning(f"Client not found for profile {profile.id} in payment_choice.")
@@ -130,8 +130,8 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
                 show_alert=True,
             )
             return
-        coach_id = client.assigned_to[0]
-        coach = await Cache.coach.get_coach(coach_id)
+        coach_profile_id = client.assigned_to[0]
+        coach = await Cache.coach.get_coach(coach_profile_id)
     except ClientNotFoundError:
         logger.warning(f"Client not found for profile {profile.id}")
         await callback_query.answer(
@@ -151,7 +151,7 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
         await cache_program_data(data, client.id)
     else:
         subscription_id = await APIService.workout.create_subscription(
-            client_id=client.id,
+            client_profile_id=client.id,
             workout_days=data.get("workout_days", []),
             wishes=wishes,
             amount=coach.subscription_price,

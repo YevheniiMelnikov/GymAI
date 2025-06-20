@@ -23,17 +23,16 @@ class ClientCacheManager(BaseCacheManager):
     def _validate_data(cls, raw: str, cache_key: str, field: str) -> Client:
         try:
             data = json.loads(raw)
-            data["id"] = int(field)
             return validate_or_raise(data, Client, context=f"profile_id={field}")
         except Exception as e:
             logger.debug(f"Corrupt client data in cache for profile_id={field}: {e}")
             raise ClientNotFoundError(int(field))
 
     @classmethod
-    async def update_client(cls, client_id: int, client_data: dict[str, Any]) -> None:
+    async def update_client(cls, profile_id: int, client_data: dict[str, Any]) -> None:
         if "profile" not in client_data:
-            client_data["profile"] = client_id
-        await cls.update_json("clients", str(client_id), client_data)
+            client_data["profile"] = profile_id
+        await cls.update_json("clients", str(profile_id), client_data)
 
     @classmethod
     async def save_client(cls, profile_id: int, client_data: dict[str, Any]) -> None:
