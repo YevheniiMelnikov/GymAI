@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import cast
 
 from aiogram import Bot
@@ -9,7 +9,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from loguru import logger
 
-from bot.keyboards import program_edit_kb, program_manage_kb, subscription_view_kb, payment_kb
+from bot.keyboards import program_edit_kb, program_manage_kb, subscription_view_kb
 from bot.states import States
 from config.env_settings import settings
 from core.cache import Cache
@@ -26,7 +26,9 @@ from bot.utils.chat import send_message, send_program
 from bot.utils.menus import show_main_menu, show_subscription_page
 from bot.utils.text import get_translated_week_day
 from bot.utils.exercises import format_program
-from bot.utils.other import delete_messages, del_msg, answer_msg, generate_order_id
+from bot.utils.other import delete_messages, del_msg, answer_msg
+from core.credits import required_credits
+from core.services.profile_service import ProfileService
 from bot.texts import msg_text, btn_text
 
 
@@ -345,7 +347,7 @@ async def cancel_subscription(next_payment_date: datetime, client_id: int, subsc
 async def process_new_subscription(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     language = cast(str, profile.language or settings.DEFAULT_LANG)
     await callback_query.answer(msg_text("checkbox_reminding", language), show_alert=True)
-    order_id = generate_order_id()
+    data = await state.get_data()
     client = await Cache.client.get_client(profile.id)
     if not client or not client.assigned_to:
         return
@@ -353,30 +355,27 @@ async def process_new_subscription(callback_query: CallbackQuery, profile: Profi
     if not coach:
         return
 
-    await state.update_data(order_id=order_id, amount=coach.subscription_price)
-    payment_link = await APIService.payment.get_payment_link(
-        action="subscribe",
-        amount=coach.subscription_price,
-        order_id=order_id,
-        payment_type="subscription",
-        client_profile_id=client.id,
-    )
-
-    if not isinstance(callback_query.message, Message):
+    required = required_credits(coach.subscription_price, settings.CREDIT_RATE)
+    if client.credits < required:
+        await callback_query.answer(msg_text("not_enough_credits", language), show_alert=True)
         return
 
-    message = callback_query.message
-    if payment_link:
-        await state.set_state(States.handle_payment)
-        await answer_msg(
-            message,
-            msg_text("follow_link", language),
-            reply_markup=payment_kb(language, payment_link, "subscription"),
-        )
-    else:
-        await answer_msg(message, msg_text("unexpected_error", language))
+    sub_id = await APIService.workout.create_subscription(
+        client_profile_id=client.id,
+        workout_days=data.get("workout_days", []),
+        wishes=data.get("wishes", ""),
+        amount=coach.subscription_price,
+    )
+    if sub_id is None:
+        await callback_query.answer(msg_text("unexpected_error", language), show_alert=True)
+        return
 
-    await del_msg(message)
+    await ProfileService.adjust_client_credits(profile.id, -required)
+    await Cache.client.update_client(client.id, {"credits": client.credits - required})
+    next_payment = (datetime.today() + timedelta(days=int(settings.SUBSCRIPTION_PERIOD_DAYS))).strftime("%Y-%m-%d")
+    await APIService.workout.update_subscription(sub_id, {"enabled": True, "payment_date": next_payment})
+    await Cache.workout.update_subscription(client.id, {"id": sub_id, "enabled": True, "payment_date": next_payment})
+    await callback_query.answer(msg_text("payment_success", language), show_alert=True)
 
 
 async def edit_subscription_days(

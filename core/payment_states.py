@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from dateutil.relativedelta import relativedelta
 from loguru import logger
 
 from apps.payments.tasks import send_payment_message
@@ -46,6 +45,8 @@ class SuccessState(PaymentState):
             await self.processor.process_subscription_payment(client)
         elif payment.payment_type == PaymentType.program:
             await self.processor.process_program_payment(client)
+        elif payment.payment_type == PaymentType.credits:
+            await self.processor.process_credit_topup(client, payment.amount)
 
 
 class FailureState(PaymentState):
@@ -59,8 +60,7 @@ class FailureState(PaymentState):
             subscription = await self.processor.cache.workout.get_latest_subscription(client.id)
             if subscription and subscription.enabled:
                 try:
-                    payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
-                    next_payment_date = payment_date + relativedelta(months=1)
+                    next_payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
                     send_payment_message.delay(
                         client.id,
                         msg_text("subscription_cancel_warning", profile.language).format(

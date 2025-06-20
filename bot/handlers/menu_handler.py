@@ -5,7 +5,6 @@ from datetime import datetime
 from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
-from dateutil.relativedelta import relativedelta
 from loguru import logger
 
 from bot.keyboards import (
@@ -322,8 +321,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
             await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
             return
 
-        payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
-        next_payment_date = payment_date + relativedelta(months=1)
+        next_payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
 
         await bot.send_message(
             settings.ADMIN_ID,
@@ -335,7 +333,6 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
             ),
         )
 
-        await APIService.payment.unsubscribe(order_id)
         await cancel_subscription(next_payment_date, client.id, subscription.id)
         logger.info(f"Subscription for client_id {client.id} deactivated")
         await show_main_menu(message, profile, state)

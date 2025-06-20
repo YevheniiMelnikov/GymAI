@@ -15,6 +15,7 @@ from core.services.payment_service import PaymentService
 from core.services.profile_service import ProfileService
 from apps.payments.tasks import send_client_request
 from core.payment_states import FailureState, SuccessState
+from core.credits import uah_to_credits
 
 
 class PaymentProcessor:
@@ -111,6 +112,12 @@ class PaymentProcessor:
             client.id,
             {"service_type": "program", "workout_type": program.workout_type, "wishes": program.wishes},
         )
+
+    @classmethod
+    async def process_credit_topup(cls, client: Client, amount: Decimal) -> None:
+        credits = uah_to_credits(amount, settings.CREDIT_RATE)
+        await cls.profile_service.adjust_client_credits(client.profile, credits)
+        await cls.cache.client.update_client(client.id, {"credits": client.credits + credits})
 
     @classmethod
     async def handle_webhook_event(cls, order_id: str, status_: str, error: str = "") -> None:

@@ -2,6 +2,7 @@ import os
 import shutil
 import subprocess
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 from celery import shared_task
 from loguru import logger
@@ -10,6 +11,10 @@ import httpx
 from config.env_settings import settings
 from core.cache import Cache
 from core.services import APIService
+from bot.texts.text_manager import msg_text
+from apps.payments.tasks import send_payment_message
+from core.credits import required_credits
+from core.services.profile_service import ProfileService
 
 _dumps_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dumps")
 _pg_dir = os.path.join(_dumps_dir, "postgres")
@@ -73,8 +78,8 @@ def cleanup_backups(self):
 
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
 async def deactivate_expired_subscriptions(self):  # pyre-ignore[valid-type]
-    since = (datetime.now() - timedelta(days=1)).date().isoformat()
-    subscriptions = await APIService.payment.get_expired_subscriptions(since)
+    today = datetime.now().date().isoformat()
+    subscriptions = await APIService.payment.get_expired_subscriptions(today)
 
     for sub in subscriptions:
         if not sub.id or not sub.client_profile:
@@ -84,6 +89,24 @@ async def deactivate_expired_subscriptions(self):  # pyre-ignore[valid-type]
         await Cache.workout.update_subscription(sub.client_profile, {"enabled": False})
         await Cache.payment.reset_status(sub.client_profile, "subscription")
         logger.info(f"Subscription {sub.id} deactivated for user {sub.client_profile}")
+
+
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
+async def warn_low_credits(self):  # pyre-ignore[valid-type]
+    tomorrow = (datetime.now() + timedelta(days=1)).date().isoformat()
+    subs = await APIService.payment.get_expired_subscriptions(tomorrow)
+    for sub in subs:
+        if not sub.client_profile:
+            continue
+        client = await Cache.client.get_client(sub.client_profile)
+        profile = await ProfileService.get_profile(client.profile)
+        required = required_credits(Decimal(str(sub.price)), settings.CREDIT_RATE)
+        if client.credits < required:
+            lang = profile.language if profile else settings.DEFAULT_LANG
+            send_payment_message.delay(
+                sub.client_profile,
+                msg_text("not_enough_credits", lang),
+            )
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]

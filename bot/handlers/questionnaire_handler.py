@@ -10,7 +10,6 @@ from loguru import logger
 
 from bot.keyboards import (
     select_gender_kb,
-    payment_kb,
     select_days_kb,
     workout_experience_kb,
     yes_no_kb,
@@ -24,11 +23,14 @@ from core.exceptions import ProfileNotFoundError, ClientNotFoundError
 from core.schemas import Profile
 from core.services import APIService
 from bot.utils.chat import client_request
+from apps.payments.tasks import send_client_request
+from core.credits import required_credits
+from core.services.profile_service import ProfileService
 from bot.utils.workout_plans import process_new_subscription, edit_subscription_days
 from bot.utils.menus import show_main_menu, show_my_profile_menu
 from bot.utils.profiles import update_profile_data, check_assigned_clients
 from bot.utils.text import get_state_and_message
-from bot.utils.other import delete_messages, generate_order_id, set_bot_commands, answer_msg, del_msg, parse_price
+from bot.utils.other import delete_messages, set_bot_commands, answer_msg, del_msg, parse_price
 from bot.texts.text_manager import msg_text
 from core.services.outer import avatar_manager
 from core.validators import is_valid_year
@@ -486,26 +488,26 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
                     reply_markup=select_days_kb(profile.language or settings.DEFAULT_LANG, []),
                 )
         elif data.get("service_type") == "program":
-            order_id = generate_order_id()
-            await state.update_data(order_id=order_id, amount=coach.program_price)
-            payment_link = await APIService.payment.get_payment_link(
-                action="pay",
-                amount=coach.program_price,
-                order_id=order_id,
-                payment_type="program",
-                client_profile_id=client.id,
+            required = required_credits(coach.program_price, settings.CREDIT_RATE)
+            if client.credits < required:
+                if message is not None:
+                    await answer_msg(message, msg_text("not_enough_credits", profile.language or settings.DEFAULT_LANG))
+                return
+
+            await ProfileService.adjust_client_credits(profile.id, -required)
+            await Cache.client.update_client(client.id, {"credits": client.credits - required})
+            await state.set_state(States.main_menu)
+            if message is not None:
+                await answer_msg(message, msg_text("payment_success", profile.language or settings.DEFAULT_LANG))
+            send_client_request.delay(
+                coach.id,
+                client.id,
+                {
+                    "service_type": "program",
+                    "workout_type": data.get("workout_type"),
+                    "wishes": data.get("wishes", ""),
+                },
             )
-            if payment_link:
-                await state.set_state(States.handle_payment)
-                if message is not None:
-                    await answer_msg(
-                        message,
-                        msg_text("follow_link", profile.language or settings.DEFAULT_LANG),
-                        reply_markup=payment_kb(profile.language or settings.DEFAULT_LANG, payment_link, "program"),
-                    )
-            else:
-                if message is not None:
-                    await answer_msg(message, msg_text("unexpected_error", profile.language or settings.DEFAULT_LANG))
         if message is not None:
             await del_msg(cast(Message | CallbackQuery | None, message))
 

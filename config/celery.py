@@ -32,6 +32,10 @@ celery_config = {
             "task": "core.tasks.deactivate_expired_subscriptions",
             "schedule": crontab(hour=1, minute=0),
         },
+        "warn_low_credits": {
+            "task": "core.tasks.warn_low_credits",
+            "schedule": crontab(hour=0, minute=0),
+        },
         "unclosed-payments-monthly": {
             "task": "core.tasks.process_unclosed_payments",
             "schedule": crontab(day_of_month=1, hour=8, minute=0),

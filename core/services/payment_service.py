@@ -59,9 +59,7 @@ class PaymentService(APIClient):
             return 500, {}
 
     @classmethod
-    async def create_payment(
-        cls, client_profile_id: int, service_type: str, order_id: str, amount: Decimal
-    ) -> bool:
+    async def create_payment(cls, client_profile_id: int, service_type: str, order_id: str, amount: Decimal) -> bool:
         status_code, _ = await cls._handle_payment_api_request(
             method="post",
             endpoint=urljoin(cls.API_BASE_PATH, "create/"),

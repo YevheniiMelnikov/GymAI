@@ -10,11 +10,12 @@ from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InputMediaPhoto, Message
-from dateutil.relativedelta import relativedelta
 
 from bot import keyboards as kb
 from bot.utils.profiles import fetch_user, answer_profile
 from bot.keyboards import program_view_kb, subscription_manage_kb, program_edit_kb
+from core.credits import uah_to_credits
+from decimal import Decimal
 from bot.states import States
 from bot.texts import msg_text
 from core.cache import Cache
@@ -39,9 +40,7 @@ async def show_subscription_page(callback_query: CallbackQuery, state: FSMContex
     assert profile is not None
     language = cast(str, profile.language)
 
-    payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
-    next_payment_date = payment_date + relativedelta(months=1)
-    next_payment_date_str = next_payment_date.strftime("%Y-%m-%d")
+    next_payment_date_str = subscription.payment_date
     enabled_status = "✅" if subscription.enabled else "❌"
     translated_week_days = ", ".join(get_translated_week_day(language, x) for x in subscription.workout_days)
 
@@ -291,9 +290,11 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
         coach = await Cache.coach.get_coach(client_profile.assigned_to.pop())
 
         try:
+            price_uah = coach.subscription_price * Decimal("1.3")
+            credits = uah_to_credits(price_uah, settings.CREDIT_RATE)
             await answer_msg(
                 message,
-                caption=msg_text("subscription_price", language).format(price=coach.subscription_price),
+                caption=msg_text("subscription_price", language).format(price=credits),
                 photo=subscription_img,
                 reply_markup=kb.choose_payment_options_kb(language, "subscription"),
             )
@@ -346,9 +347,11 @@ async def show_program_promo_page(callback_query: CallbackQuery, profile: Profil
     coach = await Cache.coach.get_coach(client_profile.assigned_to.pop())
 
     try:
+        price_uah = coach.program_price * Decimal("1.3")
+        credits = uah_to_credits(price_uah, settings.CREDIT_RATE)
         await answer_msg(
             message,
-            caption=msg_text("program_price", language).format(price=coach.program_price),
+            caption=msg_text("program_price", language).format(price=credits),
             photo=program_img,
             reply_markup=kb.choose_payment_options_kb(language, "program"),
         )

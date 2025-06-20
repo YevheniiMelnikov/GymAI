@@ -45,6 +45,9 @@ async def update_profile_data(message: Message, state: FSMContext, role: str, bo
             else:
                 if client := await APIService.profile.create_client_profile(profile.id, user_data):
                     await Cache.client.save_client(profile.id, client.model_dump())
+                    await answer_msg(
+                        message, msg_text("initial_credits_granted", data.get("lang", settings.DEFAULT_LANG))
+                    )
                 else:
                     await Cache.client.save_client(profile.id, {"profile": profile.id, **user_data})
         else:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import datetime
 from abc import ABC, abstractmethod
 from decimal import Decimal, ROUND_HALF_UP
 from urllib.parse import urlencode, urljoin
@@ -69,13 +68,6 @@ class LiqPayGateway(PaymentGateway):
             "rro_info": {"delivery_emails": emails},
         }
 
-        if action == "subscribe":
-            params.update(
-                {
-                    "subscribe_date_start": datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d %H:%M:%S"),
-                    "subscribe_periodicity": "month",
-                }
-            )
         return params
 
     async def get_payment_link(
@@ -100,16 +92,5 @@ class LiqPayGateway(PaymentGateway):
         return urljoin(settings.CHECKOUT_URL, f"?{query_string}")
 
     async def unsubscribe(self, order_id: str) -> bool:
-        try:
-            response = self.client.api(
-                "request",
-                {"action": "unsubscribe", "version": "3", "order_id": order_id},
-            )
-            if response.get("status") == "unsubscribed":
-                logger.info(f"Successfully unsubscribed order {order_id}")
-                return True
-            logger.error(f"Unsubscribe failed for order {order_id}: {response}")
-            return False
-        except Exception as e:  # pragma: no cover - third-party raise
-            logger.error(f"Unsubscribe error for {order_id}: {e}")
-            return False
+        logger.info("Unsubscribe is not supported in credits mode")
+        return True

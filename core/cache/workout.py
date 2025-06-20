@@ -53,9 +53,7 @@ class WorkoutCacheManager(BaseCacheManager):
             current = await cls.get_json("workout_plans:subscriptions", str(client_profile_id)) or {}
             current.update(updates)
             await cls.set_json("workout_plans:subscriptions", str(client_profile_id), current)
-            logger.debug(
-                f"Subscription updated for client_profile_id={client_profile_id} with {updates}"
-            )
+            logger.debug(f"Subscription updated for client_profile_id={client_profile_id} with {updates}")
         except Exception as e:
             logger.error(f"Failed to update subscription for client_profile_id={client_profile_id}: {e}")
 
@@ -99,8 +97,7 @@ class WorkoutCacheManager(BaseCacheManager):
         if raw:
             try:
                 return [
-                    validate_or_raise(cast(dict, item), Subscription, context=str(client_profile_id))
-                    for item in raw
+                    validate_or_raise(cast(dict, item), Subscription, context=str(client_profile_id)) for item in raw
                 ]
             except Exception as e:
                 logger.debug(
@@ -125,9 +122,7 @@ class WorkoutCacheManager(BaseCacheManager):
             try:
                 return [validate_or_raise(cast(dict, item), Program, context=str(client_profile_id)) for item in raw]
             except Exception as e:
-                logger.debug(
-                    f"Corrupt programs history for client_profile_id={client_profile_id}: {e}"
-                )
+                logger.debug(f"Corrupt programs history for client_profile_id={client_profile_id}: {e}")
                 await cls.delete("workout_plans:programs_history", str(client_profile_id))
 
         programs = await cls.service.get_all_programs(client_profile_id)

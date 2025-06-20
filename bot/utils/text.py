@@ -70,6 +70,7 @@ def get_profile_attributes(role: str, user: Optional[Client | Coach], lang: str)
             "goals": attr("workout_goals"),
             "weight": attr("weight"),
             "notes": attr("health_notes"),
+            "credits": attr("credits"),
         }
 
     verified_value = bool(getattr(user, "verified", False) if user else False)

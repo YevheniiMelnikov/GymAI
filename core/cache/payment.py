@@ -57,9 +57,7 @@ class PaymentCacheManager(BaseCacheManager):
     async def reset_status(cls, client_profile_id: int, service_type: str) -> None:
         try:
             await cls.delete(cls._key(service_type), str(client_profile_id))
-            logger.debug(
-                f"Payment status reset for client_profile_id={client_profile_id}, type={service_type}"
-            )
+            logger.debug(f"Payment status reset for client_profile_id={client_profile_id}, type={service_type}")
         except Exception as e:
             logger.error(f"Failed to reset payment status for client_profile_id={client_profile_id}: {e}")
 
