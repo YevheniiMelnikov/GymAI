@@ -408,7 +408,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
                     cast(int, subscription_data.get("id", 0)), subscription_data
                 )
                 await Cache.workout.update_subscription(
-                    client_id=client_id,
+                    client_profile_id=client_id,
                     updates=dict(exercises=exercises, client_profile=client_id),
                 )
                 await Cache.payment.reset_status(client_id, "subscription")

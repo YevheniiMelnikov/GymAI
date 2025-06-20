@@ -26,14 +26,14 @@ class PaymentService(APIClient):
         amount: Decimal,
         order_id: str,
         payment_type: str,
-        client_id: int,
+        client_profile_id: int,
     ) -> str:
         return await cls.gateway.get_payment_link(
             action=action,
             amount=amount,
             order_id=order_id,
             payment_type=payment_type,
-            client_id=client_id,
+            client_id=client_profile_id,
         )
 
     @classmethod
@@ -59,12 +59,14 @@ class PaymentService(APIClient):
             return 500, {}
 
     @classmethod
-    async def create_payment(cls, client_id: int, service_type: str, order_id: str, amount: Decimal) -> bool:
+    async def create_payment(
+        cls, client_profile_id: int, service_type: str, order_id: str, amount: Decimal
+    ) -> bool:
         status_code, _ = await cls._handle_payment_api_request(
             method="post",
             endpoint=urljoin(cls.API_BASE_PATH, "create/"),
             data={
-                "client_profile": client_id,
+                "client_profile": client_profile_id,
                 "order_id": order_id,
                 "payment_type": service_type,
                 "amount": str(amount.quantize(Decimal("0.01"), ROUND_HALF_UP)),
@@ -112,11 +114,11 @@ class PaymentService(APIClient):
         return [Subscription.model_validate(item) for item in results]
 
     @classmethod
-    async def get_last_subscription_payment(cls, client_id: int) -> str | None:
+    async def get_last_subscription_payment(cls, client_profile_id: int) -> str | None:
         status_code, response = await cls._handle_payment_api_request(
             method="get",
             endpoint=cls.API_BASE_PATH,
-            data={"client_profile": client_id, "payment_type": "subscription"},
+            data={"client_profile": client_profile_id, "payment_type": "subscription"},
         )
         if status_code != 200 or not response.get("results"):
             logger.error(f"Failed to get last subscription payment: HTTP {status_code}")
@@ -167,12 +169,12 @@ class PaymentService(APIClient):
         return None, None
 
     @classmethod
-    async def get_latest_payment(cls, client_id: int, payment_type: str) -> Payment | None:
+    async def get_latest_payment(cls, client_profile_id: int, payment_type: str) -> Payment | None:
         status_code, response = await cls._handle_payment_api_request(
             method="get",
             endpoint=cls.API_BASE_PATH,
             data={
-                "client_profile": client_id,
+                "client_profile": client_profile_id,
                 "payment_type": payment_type,
                 "ordering": "-created_at",
                 "limit": 1,
@@ -183,5 +185,5 @@ class PaymentService(APIClient):
         try:
             return Payment.model_validate(response["results"][0])
         except ValidationError as e:
-            logger.error(f"Invalid payment data for client_id={client_id}: {e}")
+            logger.error(f"Invalid payment data for client_profile_id={client_profile_id}: {e}")
             return None
