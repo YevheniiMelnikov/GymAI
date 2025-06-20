@@ -30,6 +30,7 @@ async def test_create_exercise_with_set():
         exercises,
         state,
         None,
+        False,
     )
     assert exercise.set_id == 1
     assert exercises[0].exercises[0].set_id == 1
@@ -48,3 +49,25 @@ async def test_format_program_with_set():
     ]
     formatted = await format_program(exercises, 0)
     assert "Set 1" in formatted
+
+
+@pytest.mark.asyncio
+async def test_create_exercise_with_dropset():
+    state = DummyState()
+    await state.update_data(day_index=0)
+    exercises: list[DayExercises] = []
+    exercise = await create_exercise(
+        {
+            "exercise_name": "Push",
+            "sets": "3",
+            "reps": "10",
+        },
+        exercises,
+        state,
+        None,
+        True,
+    )
+    assert exercise.drop_set is True
+    assert exercises[0].exercises[0].drop_set is True
+    formatted = await format_program(exercises, 0)
+    assert "Drop set" in formatted

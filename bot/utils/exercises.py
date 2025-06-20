@@ -200,6 +200,8 @@ async def format_program(exercises: list[DayExercises], day: int) -> str:
             line += f" | Set {exercise.set_id}"
         if exercise.weight:
             line += f" | {exercise.weight} kg"
+        if exercise.drop_set:
+            line += " | Drop set"
         if exercise.gif_link:
             line += f" | <a href='{exercise.gif_link}'>GIF</a>"
         program_lines.append(line)
@@ -217,6 +219,8 @@ async def format_full_program(exercises: list[DayExercises]) -> str:
                 line += f" | Set {exercise.set_id}"
             if exercise.weight:
                 line += f" | {exercise.weight} kg"
+            if exercise.drop_set:
+                line += " | Drop set"
             lines.append(line)
         lines.append("")
     return "\n".join(lines).strip()
@@ -227,6 +231,7 @@ async def create_exercise(
     exercises_to_modify: list[DayExercises],
     state: FSMContext,
     weight: int | None,
+    drop_set: bool = False,
 ) -> Exercise:
     day_index = str(data.get("day_index", 0))
     day_entry = next((d for d in exercises_to_modify if d.day == day_index), None)
@@ -238,6 +243,7 @@ async def create_exercise(
         gif_link=data.get("gif_link"),
         weight=str(weight) if weight is not None else None,
         set_id=data.get("set_id"),
+        drop_set=drop_set,
     )
 
     if day_entry:

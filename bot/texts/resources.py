@@ -47,6 +47,7 @@ class ButtonText(AutoName):
     photo = auto()
     edit_exercise = auto()
     delete_exercise = auto()
+    toggle_drop_set = auto()
     health_notes = auto()
     weight = auto()
 
