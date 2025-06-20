@@ -221,6 +221,7 @@ async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMCon
             return
 
     await del_msg(message)
+
     if data.get("edit_mode"):
         await update_exercise_data(message, state, profile.language, {"weight": weight})
         return
@@ -232,8 +233,9 @@ async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMCon
             exercises_to_modify: list[DayExercises] = subscription.exercises
         except SubscriptionNotFoundError:
             logger.info(
-                f"Subscription not found for client_id={client_id} in set_exercise_weight – "
-                "starting with empty exercises list."
+                "Subscription not found for client_id=%s in set_exercise_weight – "
+                "starting with empty exercises list.",
+                client_id,
             )
             exercises_to_modify = []
     else:
@@ -369,6 +371,18 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
             await answer_msg(cast(Message, callback_query.message), msg_text("no_exercises_found", profile.language))
         await state.set_state(States.delete_exercise)
 
+    elif callback_query.data == "toggle_drop_set":
+        await callback_query.answer()
+        if day_data:
+            await answer_msg(
+                cast(Message, callback_query.message),
+                msg_text("select_exercise", profile.language),
+                reply_markup=select_exercise_kb(day_data.exercises),
+            )
+        else:
+            await answer_msg(cast(Message, callback_query.message), msg_text("no_exercises_found", profile.language))
+        await state.set_state(States.toggle_drop_set)
+
     elif callback_query.data == "exercise_edit":
         await state.update_data(edit_mode=True)
         if day_data:
@@ -451,6 +465,38 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
         await program_menu_pagination(state, callback_query)
 
     await del_msg(cast(Message | CallbackQuery | None, callback_query))
+
+
+@workout_router.callback_query(States.toggle_drop_set)
+async def toggle_drop_set_callback(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    profile = Profile.model_validate(data["profile"])
+    exercises = [DayExercises.model_validate(e) for e in data.get("exercises", [])]
+    day_index = str(data.get("day_index", 0))
+    day_data = next((d for d in exercises if d.day == day_index), None)
+    if not day_data:
+        await callback_query.answer(msg_text("no_exercises_found", profile.language))
+        await state.set_state(States.program_edit)
+        return
+
+    try:
+        ex_index = int(callback_query.data or 0)
+    except ValueError:
+        await callback_query.answer(msg_text("out_of_range", profile.language))
+        return
+
+    if ex_index < 0 or ex_index >= len(day_data.exercises):
+        await callback_query.answer(msg_text("out_of_range", profile.language))
+        return
+
+    exercise = day_data.exercises[ex_index]
+    await state.update_data(selected_day_index=int(day_index), selected_ex_index=ex_index)
+    await update_exercise_data(
+        cast(Message, callback_query.message),
+        state,
+        profile.language,
+        {"drop_set": not exercise.drop_set},
+    )
 
 
 @workout_router.callback_query()

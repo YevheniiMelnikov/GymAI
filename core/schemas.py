@@ -69,6 +69,7 @@ class Exercise(BaseModel):
     gif_link: str | None = None
     weight: str | None = None
     set_id: int | None = None
+    drop_set: bool = False
 
 
 class DayExercises(BaseModel):

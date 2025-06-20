@@ -323,6 +323,7 @@ def program_edit_kb(lang: str) -> KbMarkup:
         [builder.add("set_mode", "toggle_set")],
         [builder.add("edit_exercise", "exercise_edit")],
         [builder.add("delete_exercise", "exercise_delete")],
+        [builder.add("toggle_drop_set", "toggle_drop_set")],
         [builder.add("save", "finish_editing"), builder.add("reset_program", "reset")],
         [builder.add("prev_menu", "quit")],
     ]

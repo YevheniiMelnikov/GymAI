@@ -258,6 +258,11 @@ delete_exercise:
   ru: "Удалить упражнение 🗑"
   ua: "Видалити вправу 🗑"
 
+toggle_drop_set:
+  eng: "Drop set 🔻"
+  ru: "Дропсет 🔻"
+  ua: "Дропсет 🔻"
+
 contact_coach:
   eng: "Contact coach ✍️"
   ru: "Связаться с тренером ✍️"

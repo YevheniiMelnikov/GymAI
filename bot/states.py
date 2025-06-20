@@ -43,6 +43,7 @@ class States(StatesGroup):
     program_view = State()
     confirm_subscription_reset = State()
     exercise_weight = State()
+    toggle_drop_set = State()
     enter_sets = State()
     enter_reps = State()
     add_exercise_name = State()
