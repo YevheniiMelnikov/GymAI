@@ -29,6 +29,7 @@ class ClientProfile(Model):
     workout_goals = models.CharField(max_length=250, null=True, blank=True)
     profile_photo = models.CharField(max_length=250, null=True, blank=True)
     assigned_to = ArrayField(models.IntegerField(), default=list, blank=True)
+    credits = models.PositiveIntegerField(default=1000)
 
     class Meta:
         verbose_name = "ClientProfile"

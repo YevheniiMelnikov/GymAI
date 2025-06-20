@@ -233,8 +233,7 @@ async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMCon
             exercises_to_modify: list[DayExercises] = subscription.exercises
         except SubscriptionNotFoundError:
             logger.info(
-                "Subscription not found for client_id=%s in set_exercise_weight – "
-                "starting with empty exercises list.",
+                "Subscription not found for client_id=%s in set_exercise_weight – starting with empty exercises list.",
                 client_id,
             )
             exercises_to_modify = []

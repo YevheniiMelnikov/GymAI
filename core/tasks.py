@@ -60,6 +60,7 @@ def redis_backup(self):
         if os.path.exists(tmp_path):
             os.remove(tmp_path)
 
+
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
 def cleanup_backups(self):
     cutoff = datetime.now() - timedelta(days=30)
