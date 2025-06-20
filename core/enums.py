@@ -16,6 +16,7 @@ class ClientStatus(str, Enum):
     default = "default"
     waiting_for_subscription = "waiting_for_subscription"
     waiting_for_program = "waiting_for_program"
+    initial = "initial"
 
 
 class Language(str, Enum):

@@ -18,6 +18,7 @@ from bot.keyboards import program_view_kb, subscription_manage_kb, program_edit_
 from bot.states import States
 from bot.texts import msg_text
 from core.cache import Cache
+from core.enums import ClientStatus
 from core.exceptions import ClientNotFoundError, CoachNotFoundError
 from core.schemas import Client, Coach, Profile, Subscription, Program, DayExercises, Exercise
 from bot.utils.text import (
@@ -84,13 +85,17 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
         await state.update_data(role="coach")
 
     state_to_set = States.edit_profile if user_profile else States.name
-    response_message = "choose_profile_parameter" if user_profile else "edit_profile"
+    response_text = "choose_profile_parameter" if user_profile else "edit_profile"
+
     profile_msg = await answer_msg(
         message,
-        msg_text(response_message, profile.language),
+        msg_text(response_text, profile.language),
         reply_markup=reply_markup,
     )
-    assert profile_msg
+    if profile_msg is None:
+        logger.error("Failed to send profile editing menu message")
+        return
+
     with suppress(TelegramBadRequest):
         await del_msg(cast(Message | CallbackQuery | None, message))
 
@@ -99,8 +104,8 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
 
     if not user_profile:
         name_msg = await answer_msg(message, msg_text("name", profile.language))
-        assert name_msg
-        await state.update_data(message_ids=[profile_msg.message_id, name_msg.message_id])
+        if name_msg is not None:
+            await state.update_data(message_ids=[profile_msg.message_id, name_msg.message_id])
 
 
 async def show_main_menu(message: Message, profile: Profile, state: FSMContext) -> None:
@@ -119,14 +124,13 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
 
     current_index %= len(clients)
     current_client = clients[current_index]
-
     subscription_active = await Cache.workout.get_latest_subscription(current_client.id) is not None
     data = await state.get_data()
-    client_info = await get_client_page(current_client, language, subscription_active, data)
+    client_page = await get_client_page(current_client, language, subscription_active, data)
 
     await state.update_data(clients=[Client.model_dump(c) for c in clients])
     await message.edit_text(
-        msg_text("client_page", language).format(**client_info),
+        msg_text("client_page", language).format(**client_page),
         reply_markup=kb.client_select_kb(language, current_client.id, current_index),
         parse_mode=ParseMode.HTML,
     )
@@ -177,6 +181,15 @@ async def show_coaches_menu(message: Message, coaches: list[Coach], bot: Bot, cu
 async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     user = await fetch_user(profile)
     language = cast(str, profile.language)
+
+    if profile.role == "client" and isinstance(user, Client):
+        if user.status == ClientStatus.initial:
+            await callback_query.answer(msg_text("finish_registration_to_get_credits", language), show_alert=True)
+            await state.set_state(States.workout_goals)
+            msg = await answer_msg(callback_query, msg_text("workout_goals", language))
+            if msg is not None:
+                await state.update_data(chat_id=callback_query.from_user.id, message_ids=[msg.message_id])
+            return
 
     text = msg_text(
         "client_profile" if profile.role == "client" else "coach_profile",
@@ -234,6 +247,14 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
 
     message = cast(Message, callback_query.message)
     assert message
+
+    if client.status == ClientStatus.initial:
+        await callback_query.answer(msg_text("finish_registration_to_get_credits", language), show_alert=True)
+        await state.set_state(States.workout_goals)
+        msg = await answer_msg(callback_query, msg_text("workout_goals", language))
+        if msg is not None:
+            await state.update_data(chat_id=callback_query.from_user.id, message_ids=[msg.message_id])
+        return
 
     if not client.assigned_to:
         await answer_msg(

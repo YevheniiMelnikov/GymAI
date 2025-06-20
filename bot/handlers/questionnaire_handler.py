@@ -19,6 +19,7 @@ from bot.keyboards import (
 from bot.states import States
 from config.env_settings import settings
 from core.cache import Cache
+from core.enums import ClientStatus
 from core.exceptions import ProfileNotFoundError, ClientNotFoundError
 from core.schemas import Profile
 from core.services import APIService
@@ -126,26 +127,23 @@ async def gender(callback_query: CallbackQuery, state: FSMContext) -> None:
 
 
 @questionnaire_router.message(States.born_in)
-async def born_in(message: Message, state: FSMContext) -> None:
+async def born_in(message: Message, state: FSMContext, bot: Bot) -> None:
     if not message.text:
         return
 
     await delete_messages(state)
     data = await state.get_data()
     lang = data.get("lang", settings.DEFAULT_LANG)
-
     if not is_valid_year(message.text):
         await answer_msg(message, msg_text("invalid_content", lang))
         return
 
-    msg = await answer_msg(message, msg_text("workout_goals", lang))
     await state.update_data(
         born_in=message.text,
         chat_id=message.chat.id,
-        message_ids=[msg.message_id] if msg else [],
+        status=ClientStatus.initial,
     )
-    await state.set_state(States.workout_goals)
-    await del_msg(cast(Message | CallbackQuery | None, message))
+    await update_profile_data(message, state, "client", bot)
 
 
 @questionnaire_router.message(States.workout_goals)
@@ -218,7 +216,7 @@ async def health_notes(message: Message, state: FSMContext, bot: Bot) -> None:
         return
 
     await delete_messages(state)
-    await state.update_data(health_notes=message.text)
+    await state.update_data(health_notes=message.text, status=ClientStatus.default)
     await update_profile_data(cast(Message, message), state, "client", bot)
 
 

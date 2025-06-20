@@ -3,12 +3,8 @@ from django.db.models import Model
 
 from django.contrib.postgres.fields import ArrayField
 
+from apps.profiles.choices import Role, ClientStatus
 from apps.profiles.fields import EncryptedField
-
-
-class Role(models.TextChoices):
-    CLIENT = "client"
-    COACH = "coach"
 
 
 class Profile(Model):
@@ -24,6 +20,7 @@ class Profile(Model):
 class ClientProfile(Model):
     profile = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name="client_profile")
     name = models.CharField(max_length=50, null=True, blank=True)
+    status = models.CharField(max_length=50, choices=ClientStatus.choices, default=ClientStatus.initial)
     gender = models.CharField(max_length=50, null=True, blank=True)
     born_in = models.IntegerField(null=True, blank=True)
     weight = models.IntegerField(null=True, blank=True)

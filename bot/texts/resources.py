@@ -118,6 +118,7 @@ class MessageText(AutoName):
     payment_details = auto()
     additional_info = auto()
     verified = auto()
+    finish_registration_to_get_credits = auto()
 
     upload_photo = auto()
     photo_uploaded = auto()

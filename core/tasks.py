@@ -14,6 +14,7 @@ from core.services import APIService
 _dumps_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dumps")
 _pg_dir = os.path.join(_dumps_dir, "postgres")
 _redis_dir = os.path.join(_dumps_dir, "redis")
+
 os.makedirs(_pg_dir, exist_ok=True)
 os.makedirs(_redis_dir, exist_ok=True)
 os.environ["PGPASSWORD"] = settings.DB_PASSWORD
@@ -48,14 +49,16 @@ def pg_backup(self):
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
 def redis_backup(self):
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
-    src = "/app/redis/data/dump.rdb"
-    dest = os.path.join(_redis_dir, f"redis_backup_{ts}.rdb")
-    subprocess.run(["redis-cli", "-h", "redis", "SAVE"], check=True)
-    if not os.path.exists(src):
-        raise FileNotFoundError(src)
-    shutil.copy(src, dest)
-    logger.info(f"Redis backup saved {dest}")
+    tmp_path = f"/tmp/redis_backup_{ts}.rdb"
+    final_dst = os.path.join(_redis_dir, f"redis_backup_{ts}.rdb")
 
+    try:
+        subprocess.run(["redis-cli", "-h", "redis", "--rdb", tmp_path], check=True)
+        shutil.move(tmp_path, final_dst)
+        logger.info(f"Redis backup saved {final_dst}")
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
 
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
 def cleanup_backups(self):
@@ -68,10 +71,11 @@ def cleanup_backups(self):
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
-async def deactivate_expired_subscriptions(self):
+async def deactivate_expired_subscriptions(self):  # pyre-ignore[valid-type]
     since = (datetime.now() - timedelta(days=1)).date().isoformat()
-    subs = await APIService.payment.get_expired_subscriptions(since)
-    for sub in subs:
+    subscriptions = await APIService.payment.get_expired_subscriptions(since)
+
+    for sub in subscriptions:
         if not sub.id or not sub.client_profile:
             logger.warning(f"Invalid subscription: {sub}")
             continue
@@ -86,36 +90,37 @@ def process_unclosed_payments(self):
     async def _call_bot() -> None:
         url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/process_unclosed_payments/"
         headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
-
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.post(url, headers=headers)
             resp.raise_for_status()
 
+    import asyncio
+
     try:
-        import asyncio
-
         asyncio.run(_call_bot())
-
     except Exception as exc:
         logger.warning(f"Bot call failed for unclosed payments: {exc}")
         raise self.retry(exc=exc)
 
 
-@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
+@shared_task(
+    bind=True,
+    autoretry_for=(httpx.HTTPError,),
+    retry_backoff=180,
+    retry_jitter=True,
+    max_retries=3,
+)  # pyre-ignore[not-callable]
 def send_daily_survey(self):
-    async def _call_bot() -> None:
-        url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/send_daily_survey/"
-        headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
+    _CONNECT_TIMEOUT = 10.0
+    _READ_TIMEOUT = 30.0
 
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.post(url, headers=headers)
-            resp.raise_for_status()
+    url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/send_daily_survey/"
+    headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
 
     try:
-        import asyncio
-
-        asyncio.run(_call_bot())
-
-    except Exception as exc:
-        logger.warning(f"Bot call failed for daily survey: {exc}")
+        timeout = httpx.Timeout(_READ_TIMEOUT, connect=_CONNECT_TIMEOUT)
+        resp = httpx.post(url, headers=headers, timeout=timeout)
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        logger.warning(f"Bot call failed for daily survey: {exc!s}")
         raise self.retry(exc=exc)

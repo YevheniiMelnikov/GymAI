@@ -73,10 +73,9 @@ tasks:
             SELECT tablename
             FROM pg_tables
             WHERE schemaname = 'public'
-              AND tablename NOT ILIKE 'django%%'
-              AND tablename NOT ILIKE 'auth%%'
-              AND tablename NOT ILIKE 'sessions'
-              AND tablename NOT ILIKE 'rest_framework_api_key%%'
+              AND tablename NOT ILIKE 'django\_%'
+              AND tablename NOT ILIKE 'auth\_%'
+              AND tablename NOT ILIKE 'rest_framework_api_key%'
           ) LOOP
             EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' CASCADE';
           END LOOP;

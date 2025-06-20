@@ -10,6 +10,7 @@ from aiogram.exceptions import TelegramBadRequest
 from bot.keyboards import profile_menu_kb
 from config.env_settings import settings
 from core.cache import Cache
+from core.enums import ClientStatus
 from core.exceptions import (
     CoachNotFoundError,
     SubscriptionNotFoundError,
@@ -37,29 +38,30 @@ async def update_profile_data(message: Message, state: FSMContext, role: str, bo
         user_data.pop("profile", None)
 
         if role == "client":
-            if data.get("edit_mode"):
+            if data.get("status") != ClientStatus.initial:
                 client = await Cache.client.get_client(profile.id)
                 await Cache.client.update_client(client.id, user_data)
                 await APIService.profile.update_client_profile(client.id, user_data)
             else:
-                await Cache.client.save_client(profile.id, user_data)
-                await APIService.profile.create_client_profile(profile.id, user_data)
+                if client := await APIService.profile.create_client_profile(profile.id, user_data):
+                    await Cache.client.save_client(profile.id, client.model_dump())
+                else:
+                    await Cache.client.save_client(profile.id, {"profile": profile.id, **user_data})
         else:
-            if not data.get("edit_mode"):
+            if data.get("edit_mode"):
+                coach = await Cache.coach.get_coach(profile.id)
+                await Cache.coach.update_coach(profile.id, user_data)
+                await APIService.profile.update_coach_profile(coach.id, user_data)
+            else:
                 if message.from_user:
                     await answer_msg(
                         message, msg_text("wait_for_verification", data.get("lang", settings.DEFAULT_LANG))
                     )
                     await send_coach_request(message.from_user.id, profile, data, bot)
-                    coach = await APIService.profile.create_coach_profile(profile.id, user_data)
-                    if coach:
+                    if coach := await APIService.profile.create_coach_profile(profile.id, user_data):
                         await Cache.coach.save_coach(profile.id, coach.model_dump())
                     else:
                         await Cache.coach.save_coach(profile.id, {"profile": profile.id, **user_data})
-            else:
-                coach = await Cache.coach.get_coach(profile.id)
-                await Cache.coach.update_coach(profile.id, user_data)
-                await APIService.profile.update_coach_profile(coach.id, user_data)
 
         await answer_msg(message, msg_text("your_data_updated", data.get("lang", settings.DEFAULT_LANG)))
         await menus.show_main_menu(message, profile, state)

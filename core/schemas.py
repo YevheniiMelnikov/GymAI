@@ -33,7 +33,7 @@ class Client(BaseModel):
     profile_photo: str | None = None
     health_notes: str | None = None
     weight: int | None = None
-    status: ClientStatus = ClientStatus.default
+    status: ClientStatus = ClientStatus.initial
     assigned_to: list[int] = Field(default_factory=list)
 
     @field_validator("born_in", mode="before")
