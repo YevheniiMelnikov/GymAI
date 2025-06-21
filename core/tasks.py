@@ -134,9 +134,9 @@ async def charge_due_subscriptions(self):  # pyre-ignore[valid-type]
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
-def process_unclosed_payments(self):
+def export_coach_payouts(self):
     async def _call_bot() -> None:
-        url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/process_unclosed_payments/"
+        url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/export_coach_payouts/"
         headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.post(url, headers=headers)
@@ -147,7 +147,7 @@ def process_unclosed_payments(self):
     try:
         asyncio.run(_call_bot())
     except Exception as exc:
-        logger.warning(f"Bot call failed for unclosed payments: {exc}")
+        logger.warning(f"Bot call failed for coach payouts: {exc}")
         raise self.retry(exc=exc)
 
 

@@ -12,3 +12,8 @@ class ClientStatus(models.TextChoices):
     waiting_for_subscription = "waiting_for_subscription"
     waiting_for_program = "waiting_for_program"
     initial = "initial"
+
+
+class CoachType(models.TextChoices):
+    HUMAN = "human"
+    AI = "ai"

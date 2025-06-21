@@ -30,3 +30,8 @@ class PaymentStatus(str, Enum):
     SUCCESS = "SUCCESS"
     FAILURE = "FAILURE"
     CLOSED = "CLOSED"
+
+
+class CoachType(str, Enum):
+    human = "human"
+    ai = "ai"

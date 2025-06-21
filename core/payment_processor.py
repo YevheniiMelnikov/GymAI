@@ -3,7 +3,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from loguru import logger
 
 from core.cache import Cache
-from core.enums import PaymentStatus
+from core.enums import PaymentStatus, CoachType
 from core.exceptions import ClientNotFoundError
 from core.services.workout_service import WorkoutService
 
@@ -77,7 +77,7 @@ class PaymentProcessor:
         await cls._process_payment(payment)
 
     @classmethod
-    async def process_unclosed_payments(cls) -> None:
+    async def export_coach_payouts(cls) -> None:
         try:
             payments = await cls.payment_service.get_unclosed_payments()
             if not payments:
@@ -98,10 +98,11 @@ class PaymentProcessor:
                     if not coach:
                         logger.error(f"Coach {coach_id} not found for payment {payment.order_id}")
                         continue
+                    if coach.coach_type == CoachType.ai:
+                        logger.info(f"Skip AI coach {coach_id} for payment {payment.order_id}")
+                        continue
 
-                    amount = (payment.amount * Decimal(str(settings.COACH_PAYOUT_RATE))).quantize(
-                        Decimal("0.01"), ROUND_HALF_UP
-                    )
+                    amount = (payment.amount / Decimal("1.3")).quantize(Decimal("0.01"), ROUND_HALF_UP)
 
                     ok = await cls.payment_service.update_payment(
                         payment.id, {"status": PaymentStatus.CLOSED, "payout_handled": True}

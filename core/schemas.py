@@ -9,6 +9,7 @@ from core.enums import (
     Language,
     Gender,
     PaymentStatus,
+    CoachType,
 )
 
 Price = condecimal(max_digits=10, decimal_places=2, gt=0)
@@ -56,6 +57,7 @@ class Coach(BaseModel):
     program_price: Price
     assigned_to: list[int] = Field(default_factory=list)
     verified: bool = False
+    coach_type: CoachType = CoachType.human
 
     @property
     def payment_details_plain(self) -> str:
