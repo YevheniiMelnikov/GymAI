@@ -37,10 +37,6 @@ class PaymentService(APIClient):
         )
 
     @classmethod
-    async def unsubscribe(cls, order_id: str) -> bool:
-        return await cls.gateway.unsubscribe(order_id)
-
-    @classmethod
     async def _handle_payment_api_request(
         cls, method: str, endpoint: str, data: dict | None = None
     ) -> tuple[int, dict[str, Any]]:

@@ -14,7 +14,7 @@ from aiogram.types import CallbackQuery, InputMediaPhoto, Message
 from bot import keyboards as kb
 from bot.utils.profiles import fetch_user, answer_profile
 from bot.keyboards import program_view_kb, subscription_manage_kb, program_edit_kb
-from core.credits import uah_to_credits
+from core.credits import uah_to_credits, available_packages
 from decimal import Decimal
 from bot.states import States
 from bot.texts import msg_text
@@ -114,6 +114,32 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext) 
     await state.set_state(States.main_menu)
     await answer_msg(message, msg_text("main_menu", profile.language), reply_markup=menu(profile.language))
     await del_msg(cast(Message | CallbackQuery | None, message))
+
+
+async def show_balance_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    language = cast(str, profile.language)
+    client = await Cache.client.get_client(profile.id)
+    await callback_query.answer()
+    await state.set_state(States.balance)
+    await answer_msg(
+        callback_query,
+        msg_text("credit_balance", language).format(credits=client.credits),
+        reply_markup=kb.balance_menu_kb(language),
+    )
+    await del_msg(callback_query)
+
+
+async def show_tariff_plans(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    language = cast(str, profile.language)
+    plans = [p.name for p in available_packages()]
+    await callback_query.answer()
+    await state.set_state(States.choose_plan)
+    await answer_msg(
+        callback_query,
+        msg_text("tariff_plans", language),
+        reply_markup=kb.tariff_plans_kb(language, plans),
+    )
+    await del_msg(callback_query)
 
 
 async def show_clients(message: Message, clients: list[Client], state: FSMContext, current_index: int = 0) -> None:

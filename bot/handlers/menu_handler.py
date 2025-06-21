@@ -29,11 +29,16 @@ from bot.utils.menus import (
     show_my_profile_menu,
     show_subscription_history,
     clients_menu_pagination,
+    show_balance_menu,
+    show_tariff_plans,
 )
 from bot.utils.profiles import assign_coach
 from bot.utils.workout_plans import manage_program, cancel_subscription
-from bot.utils.other import del_msg
+from bot.utils.other import del_msg, generate_order_id, answer_msg
 from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
+from core.services import APIService
+from bot.keyboards import payment_kb
+from core.credits import available_packages
 
 menu_router = Router()
 
@@ -64,6 +69,55 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
 
     elif cb_data == "my_workouts":
         await show_my_workouts_menu(callback_query, profile, state)
+
+    elif cb_data == "balance":
+        await show_balance_menu(callback_query, profile, state)
+
+
+@menu_router.callback_query(States.balance)
+async def balance_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    profile = Profile.model_validate(data.get("profile"))
+    cb_data = callback_query.data or ""
+
+    if cb_data == "back" and isinstance(callback_query.message, Message):
+        await show_main_menu(callback_query.message, profile, state)
+    elif cb_data == "plans":
+        await show_tariff_plans(callback_query, profile, state)
+
+
+@menu_router.callback_query(States.choose_plan)
+async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    profile = Profile.model_validate(data.get("profile"))
+    cb_data = callback_query.data or ""
+
+    if cb_data == "back":
+        await show_balance_menu(callback_query, profile, state)
+        return
+
+    if cb_data.startswith("plan_"):
+        plan_name = cb_data.split("_", 1)[1]
+        packages = {p.name: p for p in available_packages()}
+        pkg = packages.get(plan_name)
+        if not pkg:
+            await callback_query.answer()
+            return
+        order_id = generate_order_id()
+        await APIService.payment.create_payment(profile.id, "credits", order_id, pkg.price)
+        link = await APIService.payment.get_payment_link(
+            "pay",
+            pkg.price,
+            order_id,
+            "credits",
+            profile.id,
+        )
+        await state.set_state(States.handle_payment)
+        await answer_msg(
+            callback_query,
+            msg_text("follow_link", profile.language),
+            reply_markup=payment_kb(profile.language, link, "credits"),
+        )
 
 
 @menu_router.callback_query(States.profile)

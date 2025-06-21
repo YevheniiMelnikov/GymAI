@@ -21,8 +21,25 @@ def client_menu_kb(lang: str) -> KbMarkup:
     buttons = [
         [builder.add("my_profile", "my_profile")],
         [builder.add("my_program", "my_workouts")],
+        [builder.add("balance", "balance")],
         [builder.add("feedback", "feedback")],
     ]
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
+def balance_menu_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [
+        [builder.add("tariff_plans", "plans")],
+        [builder.add("prev_menu", "back")],
+    ]
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
+def tariff_plans_kb(lang: str, plans: list[str]) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [[builder.add(f"{plan}_plan", f"plan_{plan}")] for plan in plans]
+    buttons.append([builder.add("prev_menu", "back")])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 

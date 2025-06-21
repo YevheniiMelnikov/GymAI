@@ -71,3 +71,5 @@ class States(StatesGroup):
     handle_payment = State()
     gift = State()
     select_service = State()
+    balance = State()
+    choose_plan = State()

@@ -110,6 +110,30 @@ async def warn_low_credits(self):  # pyre-ignore[valid-type]
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
+async def charge_due_subscriptions(self):  # pyre-ignore[valid-type]
+    today = datetime.now().date().isoformat()
+    subs = await APIService.payment.get_expired_subscriptions(today)
+    for sub in subs:
+        if not sub.id or not sub.client_profile:
+            continue
+        client = await Cache.client.get_client(sub.client_profile)
+        required = required_credits(Decimal(str(sub.price)), settings.CREDIT_RATE)
+        if client.credits < required:
+            await APIService.workout.update_subscription(
+                sub.id, {"enabled": False, "client_profile": sub.client_profile}
+            )
+            await Cache.workout.update_subscription(sub.client_profile, {"enabled": False})
+            await Cache.payment.reset_status(sub.client_profile, "subscription")
+            continue
+
+        await ProfileService.adjust_client_credits(client.profile, -required)
+        await Cache.client.update_client(client.id, {"credits": client.credits - required})
+        next_date = (datetime.now() + timedelta(days=int(settings.SUBSCRIPTION_PERIOD_DAYS))).date().isoformat()
+        await APIService.workout.update_subscription(sub.id, {"payment_date": next_date})
+        await Cache.workout.update_subscription(sub.client_profile, {"payment_date": next_date})
+
+
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
 def process_unclosed_payments(self):
     async def _call_bot() -> None:
         url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/process_unclosed_payments/"

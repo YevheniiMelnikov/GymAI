@@ -1,7 +1,14 @@
+from dataclasses import dataclass
 from decimal import Decimal, ROUND_HALF_UP
-import json
 
 from config.env_settings import settings
+
+
+@dataclass(frozen=True)
+class CreditPackage:
+    name: str
+    credits: int
+    price: Decimal
 
 
 def uah_to_credits(amount: Decimal, rate: Decimal) -> int:
@@ -16,8 +23,9 @@ def required_credits(amount: Decimal, rate: Decimal) -> int:
     return uah_to_credits(amount * Decimal("1.3"), rate)
 
 
-def get_credit_packages() -> dict:
-    try:
-        return json.loads(settings.CREDIT_PACKAGES)
-    except Exception:
-        return {}
+def available_packages() -> list[CreditPackage]:
+    return [
+        CreditPackage("start", settings.PACKAGE_START_CREDITS, settings.PACKAGE_START_PRICE),
+        CreditPackage("optimum", settings.PACKAGE_OPTIMUM_CREDITS, settings.PACKAGE_OPTIMUM_PRICE),
+        CreditPackage("max", settings.PACKAGE_MAX_CREDITS, settings.PACKAGE_MAX_PRICE),
+    ]

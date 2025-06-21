@@ -1,10 +1,6 @@
 from enum import Enum
 
 
-class PaymentType(str, Enum):
-    credits = "credits"
-
-
 class ProfileRole(str, Enum):
     client = "client"
     coach = "coach"

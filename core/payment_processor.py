@@ -12,7 +12,8 @@ from config.env_settings import settings
 from core.services.outer.gsheets_service import GSheetsService
 from core.services.payment_service import PaymentService
 from core.services.profile_service import ProfileService
-from core.payment_states import FailureState, SuccessState
+from apps.payments.tasks import send_payment_message
+from bot.texts.text_manager import msg_text
 from core.credits import uah_to_credits
 
 
@@ -30,16 +31,27 @@ class PaymentProcessor:
 
         try:
             client = await cls.cache.client.get_client(payment.client_profile)
-            state = None
+
             if payment.status == PaymentStatus.SUCCESS:
                 await cls.cache.payment.set_status(client.id, payment.payment_type, PaymentStatus.SUCCESS)
-                state = SuccessState(cls)
+                profile = await cls.profile_service.get_profile(client.profile)
+                if profile:
+                    send_payment_message.delay(
+                        client.id,
+                        msg_text("payment_success", profile.language),
+                    )
+                await cls.process_credit_topup(client, payment.amount)
             elif payment.status == PaymentStatus.FAILURE:
                 await cls.cache.payment.set_status(client.id, payment.payment_type, PaymentStatus.FAILURE)
-                state = FailureState(cls)
-
-            if state:
-                await state.handle(payment, client)
+                profile = await cls.profile_service.get_profile(client.profile)
+                if profile:
+                    send_payment_message.delay(
+                        client.id,
+                        msg_text("payment_failure", profile.language).format(
+                            mail=settings.EMAIL,
+                            tg=settings.TG_SUPPORT_CONTACT,
+                        ),
+                    )
 
         except ClientNotFoundError:
             logger.error(f"Client profile not found for payment {payment.id}")

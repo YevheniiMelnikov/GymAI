@@ -4,7 +4,6 @@ from pydantic import BaseModel, Field, field_validator, condecimal
 
 from core.encryptor import Encryptor
 from core.enums import (
-    PaymentType,
     ProfileRole,
     ClientStatus,
     Language,
@@ -110,7 +109,7 @@ class Subscription(BaseModel):
 class Payment(BaseModel):
     id: int
     client_profile: int
-    payment_type: PaymentType
+    payment_type: str
     order_id: str
     amount: Price
     status: PaymentStatus
