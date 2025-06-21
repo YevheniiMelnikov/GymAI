@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 
 from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
@@ -16,7 +15,6 @@ from bot.keyboards import (
 )
 from bot.states import States
 from bot.texts.text_manager import msg_text
-from config.env_settings import settings
 from core.cache import Cache
 from core.schemas import Coach, Profile
 from bot.utils.chat import contact_client, process_feedback_content
@@ -306,28 +304,11 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
 
         if not callback_query.from_user:
             return
-        user_chat = await bot.get_chat(callback_query.from_user.id)
-        if user_chat is None:
-            return
-        contact = f"@{user_chat.username}" if user_chat.username else callback_query.from_user.id
-
         subscription = await Cache.workout.get_latest_subscription(profile.id)
         if subscription is None:
             return
 
-        next_payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
-
-        await bot.send_message(
-            settings.ADMIN_ID,
-            msg_text("subscription_cancel_request", settings.ADMIN_LANG).format(
-                profile_id=profile.id,
-                contact=contact,
-                next_payment_date=next_payment_date.strftime("%Y-%m-%d"),
-                order_id="-",
-            ),
-        )
-
-        await cancel_subscription(next_payment_date, client.id, subscription.id)
+        await cancel_subscription(client.id, subscription.id)
         logger.info(f"Subscription for client_id {client.id} deactivated")
         await show_main_menu(message, profile, state)
 

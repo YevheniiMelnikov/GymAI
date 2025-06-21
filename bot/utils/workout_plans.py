@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from datetime import datetime, timedelta
 from typing import cast
 
@@ -334,13 +333,9 @@ async def cache_program_data(data: dict, client_id: int) -> None:
     await Cache.workout.save_program(client_id, program_data)
 
 
-async def cancel_subscription(next_payment_date: datetime, client_id: int, subscription_id: int) -> None:
-    now = datetime.now()
-    delay = (next_payment_date - now).total_seconds()
-    if delay > 0:
-        await asyncio.sleep(delay)
-    await APIService.workout.update_subscription(subscription_id, dict(client_profile=client_id, enabled=False))
-    await Cache.workout.save_subscription(client_id, dict(enabled=False))
+async def cancel_subscription(client_id: int, subscription_id: int) -> None:
+    await APIService.workout.update_subscription(subscription_id, {"client_profile": client_id, "enabled": False})
+    await Cache.workout.update_subscription(client_id, {"enabled": False})
     await Cache.payment.reset_status(client_id, "subscription")
 
 

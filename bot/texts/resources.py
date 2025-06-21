@@ -192,7 +192,6 @@ class MessageText(AutoName):
     checkbox_reminding = auto()
     subscription_page = auto()
     subscription_canceled = auto()
-    subscription_cancel_request = auto()
     subscription_cancel_warning = auto()
     payment_link = auto()
     contract_info_message = auto()

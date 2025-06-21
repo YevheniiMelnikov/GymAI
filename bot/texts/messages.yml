@@ -529,12 +529,9 @@ workout_days_changed:
   ua: "Ваш клієнт {name} змінив кількість тренувальних днів, його програму було скинуто. Бажаєте скласти нову? 🤔"
 
 subscription_canceled:
-  eng: "Your request to stop the subscription forwarded to the payment service. If you wish, you can subscribe again 🙂"
-  ru: "Ваш запрос на остановку подписки передан платежному сервису. При желании вы можете оформить ее повторно 🙂"
-  ua: "Ваш запит на зупинку підписки передано платіжному сервісу. За бажання ви можете оформити її повторно 🙂"
-
-subscription_cancel_request:  # admin message
-  ru: "Запрос на отмену подписки!\nprofile_id: {profile_id}\ncontact: {contact}\nnext_payment_date: {next_payment_date}\norder_id: {order_id}"
+  eng: "Your subscription has been cancelled. You can subscribe again at any time 🙂"
+  ru: "Ваша подписка отменена. При желании вы можете оформить её снова 🙂"
+  ua: "Вашу підписку скасовано. За бажання ви можете оформити її знову 🙂"
 
 subscription_cancel_warning:
   eng: "There was an error during the renewal of your subscription, it will be suspended {date}\nIf you want, you can subscribe again\nYou can contact support by mail: {mail} or in telegram: {tg} ✍️"
