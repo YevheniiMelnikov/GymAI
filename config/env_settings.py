@@ -11,6 +11,14 @@ class Settings(BaseSettings):
     BOT_PAYMENT_OPTIONS: str = "https://storage.googleapis.com/services_promo/"
     PAYMENT_CHECK_INTERVAL: int = 60
     COACH_PAYOUT_RATE: Decimal = Decimal("0.7")
+    CREDIT_RATE: Decimal = Decimal("1")
+    PACKAGE_START_CREDITS: int = 1000
+    PACKAGE_START_PRICE: Decimal = Decimal("100")
+    PACKAGE_OPTIMUM_CREDITS: int = 2500
+    PACKAGE_OPTIMUM_PRICE: Decimal = Decimal("200")
+    PACKAGE_MAX_CREDITS: int = 5000
+    PACKAGE_MAX_PRICE: Decimal = Decimal("350")
+    SUBSCRIPTION_PERIOD_DAYS: int = 30
     MIN_BIRTH_YEAR: int = 1940
     MAX_BIRTH_YEAR: int = 2020
 

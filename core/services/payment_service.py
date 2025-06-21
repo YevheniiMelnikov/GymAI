@@ -37,10 +37,6 @@ class PaymentService(APIClient):
         )
 
     @classmethod
-    async def unsubscribe(cls, order_id: str) -> bool:
-        return await cls.gateway.unsubscribe(order_id)
-
-    @classmethod
     async def _handle_payment_api_request(
         cls, method: str, endpoint: str, data: dict | None = None
     ) -> tuple[int, dict[str, Any]]:
@@ -59,9 +55,7 @@ class PaymentService(APIClient):
             return 500, {}
 
     @classmethod
-    async def create_payment(
-        cls, client_profile_id: int, service_type: str, order_id: str, amount: Decimal
-    ) -> bool:
+    async def create_payment(cls, client_profile_id: int, service_type: str, order_id: str, amount: Decimal) -> bool:
         status_code, _ = await cls._handle_payment_api_request(
             method="post",
             endpoint=urljoin(cls.API_BASE_PATH, "create/"),
@@ -112,20 +106,6 @@ class PaymentService(APIClient):
             return []
         results: Sequence[dict] = response.get("results", [])
         return [Subscription.model_validate(item) for item in results]
-
-    @classmethod
-    async def get_last_subscription_payment(cls, client_profile_id: int) -> str | None:
-        status_code, response = await cls._handle_payment_api_request(
-            method="get",
-            endpoint=cls.API_BASE_PATH,
-            data={"client_profile": client_profile_id, "payment_type": "subscription"},
-        )
-        if status_code != 200 or not response.get("results"):
-            logger.error(f"Failed to get last subscription payment: HTTP {status_code}")
-            return None
-        payments = response["results"]
-        last_payment = max(payments, key=lambda x: x.get("created_at") or "")
-        return last_payment.get("order_id")
 
     @classmethod
     async def update_payment_status(cls, order_id: str, status_: str, error: str = "") -> Payment | None:

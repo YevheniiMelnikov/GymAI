@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime
 
 from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
-from dateutil.relativedelta import relativedelta
 from loguru import logger
 
 from bot.keyboards import (
@@ -17,10 +15,8 @@ from bot.keyboards import (
 )
 from bot.states import States
 from bot.texts.text_manager import msg_text
-from config.env_settings import settings
 from core.cache import Cache
 from core.schemas import Coach, Profile
-from core.services import APIService
 from bot.utils.chat import contact_client, process_feedback_content
 from bot.utils.menus import (
     show_main_menu,
@@ -33,11 +29,16 @@ from bot.utils.menus import (
     show_my_profile_menu,
     show_subscription_history,
     clients_menu_pagination,
+    show_balance_menu,
+    show_tariff_plans,
 )
 from bot.utils.profiles import assign_coach
 from bot.utils.workout_plans import manage_program, cancel_subscription
-from bot.utils.other import del_msg
+from bot.utils.other import del_msg, generate_order_id, answer_msg
 from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
+from core.services import APIService
+from bot.keyboards import payment_kb
+from core.credits import available_packages
 
 menu_router = Router()
 
@@ -68,6 +69,55 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
 
     elif cb_data == "my_workouts":
         await show_my_workouts_menu(callback_query, profile, state)
+
+    elif cb_data == "balance":
+        await show_balance_menu(callback_query, profile, state)
+
+
+@menu_router.callback_query(States.balance)
+async def balance_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    profile = Profile.model_validate(data.get("profile"))
+    cb_data = callback_query.data or ""
+
+    if cb_data == "back" and isinstance(callback_query.message, Message):
+        await show_main_menu(callback_query.message, profile, state)
+    elif cb_data == "plans":
+        await show_tariff_plans(callback_query, profile, state)
+
+
+@menu_router.callback_query(States.choose_plan)
+async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    profile = Profile.model_validate(data.get("profile"))
+    cb_data = callback_query.data or ""
+
+    if cb_data == "back":
+        await show_balance_menu(callback_query, profile, state)
+        return
+
+    if cb_data.startswith("plan_"):
+        plan_name = cb_data.split("_", 1)[1]
+        packages = {p.name: p for p in available_packages()}
+        pkg = packages.get(plan_name)
+        if not pkg:
+            await callback_query.answer()
+            return
+        order_id = generate_order_id()
+        await APIService.payment.create_payment(profile.id, "credits", order_id, pkg.price)
+        link = await APIService.payment.get_payment_link(
+            "pay",
+            pkg.price,
+            order_id,
+            "credits",
+            profile.id,
+        )
+        await state.set_state(States.handle_payment)
+        await answer_msg(
+            callback_query,
+            msg_text("follow_link", profile.language),
+            reply_markup=payment_kb(profile.language, link, "credits"),
+        )
 
 
 @menu_router.callback_query(States.profile)
@@ -308,35 +358,11 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
 
         if not callback_query.from_user:
             return
-        user_chat = await bot.get_chat(callback_query.from_user.id)
-        if user_chat is None:
-            return
-        contact = f"@{user_chat.username}" if user_chat.username else callback_query.from_user.id
-
         subscription = await Cache.workout.get_latest_subscription(profile.id)
         if subscription is None:
             return
 
-        order_id = await APIService.payment.get_last_subscription_payment(client.id)
-        if order_id is None:
-            await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
-            return
-
-        payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
-        next_payment_date = payment_date + relativedelta(months=1)
-
-        await bot.send_message(
-            settings.ADMIN_ID,
-            msg_text("subscription_cancel_request", settings.ADMIN_LANG).format(
-                profile_id=profile.id,
-                contact=contact,
-                next_payment_date=next_payment_date.strftime("%Y-%m-%d"),
-                order_id=order_id,
-            ),
-        )
-
-        await APIService.payment.unsubscribe(order_id)
-        await cancel_subscription(next_payment_date, client.id, subscription.id)
+        await cancel_subscription(client.id, subscription.id)
         logger.info(f"Subscription for client_id {client.id} deactivated")
         await show_main_menu(message, profile, state)
 

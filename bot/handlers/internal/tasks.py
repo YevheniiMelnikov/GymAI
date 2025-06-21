@@ -43,13 +43,13 @@ async def internal_send_daily_survey(request: web.Request) -> web.Response:
     return web.json_response({"result": "ok"})
 
 
-async def internal_process_unclosed_payments(request: web.Request) -> web.Response:
+async def internal_export_coach_payouts(request: web.Request) -> web.Response:
     if request.headers.get("Authorization") != f"Api-Key {settings.API_KEY}":
         return web.json_response({"detail": "Forbidden"}, status=403)
 
     try:
-        await PaymentProcessor.process_unclosed_payments()
+        await PaymentProcessor.export_coach_payouts()
         return web.json_response({"result": "ok"})
     except Exception as e:
-        logger.exception(f"Failed to process unclosed payments: {e}")
+        logger.exception(f"Failed to export coach payouts: {e}")
         return web.json_response({"detail": str(e)}, status=500)

@@ -2,6 +2,7 @@ import os
 import shutil
 import subprocess
 from datetime import datetime, timedelta
+from decimal import Decimal
 
 from celery import shared_task
 from loguru import logger
@@ -10,6 +11,10 @@ import httpx
 from config.env_settings import settings
 from core.cache import Cache
 from core.services import APIService
+from bot.texts.text_manager import msg_text
+from apps.payments.tasks import send_payment_message
+from core.credits import required_credits
+from core.services.profile_service import ProfileService
 
 _dumps_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dumps")
 _pg_dir = os.path.join(_dumps_dir, "postgres")
@@ -73,8 +78,8 @@ def cleanup_backups(self):
 
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
 async def deactivate_expired_subscriptions(self):  # pyre-ignore[valid-type]
-    since = (datetime.now() - timedelta(days=1)).date().isoformat()
-    subscriptions = await APIService.payment.get_expired_subscriptions(since)
+    today = datetime.now().date().isoformat()
+    subscriptions = await APIService.payment.get_expired_subscriptions(today)
 
     for sub in subscriptions:
         if not sub.id or not sub.client_profile:
@@ -87,9 +92,51 @@ async def deactivate_expired_subscriptions(self):  # pyre-ignore[valid-type]
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
-def process_unclosed_payments(self):
+async def warn_low_credits(self):  # pyre-ignore[valid-type]
+    tomorrow = (datetime.now() + timedelta(days=1)).date().isoformat()
+    subs = await APIService.payment.get_expired_subscriptions(tomorrow)
+    for sub in subs:
+        if not sub.client_profile:
+            continue
+        client = await Cache.client.get_client(sub.client_profile)
+        profile = await ProfileService.get_profile(client.profile)
+        required = required_credits(Decimal(str(sub.price)), settings.CREDIT_RATE)
+        if client.credits < required:
+            lang = profile.language if profile else settings.DEFAULT_LANG
+            send_payment_message.delay(
+                sub.client_profile,
+                msg_text("not_enough_credits", lang),
+            )
+
+
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
+async def charge_due_subscriptions(self):  # pyre-ignore[valid-type]
+    today = datetime.now().date().isoformat()
+    subs = await APIService.payment.get_expired_subscriptions(today)
+    for sub in subs:
+        if not sub.id or not sub.client_profile:
+            continue
+        client = await Cache.client.get_client(sub.client_profile)
+        required = required_credits(Decimal(str(sub.price)), settings.CREDIT_RATE)
+        if client.credits < required:
+            await APIService.workout.update_subscription(
+                sub.id, {"enabled": False, "client_profile": sub.client_profile}
+            )
+            await Cache.workout.update_subscription(sub.client_profile, {"enabled": False})
+            await Cache.payment.reset_status(sub.client_profile, "subscription")
+            continue
+
+        await ProfileService.adjust_client_credits(client.profile, -required)
+        await Cache.client.update_client(client.id, {"credits": client.credits - required})
+        next_date = (datetime.now() + timedelta(days=int(settings.SUBSCRIPTION_PERIOD_DAYS))).date().isoformat()
+        await APIService.workout.update_subscription(sub.id, {"payment_date": next_date})
+        await Cache.workout.update_subscription(sub.client_profile, {"payment_date": next_date})
+
+
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
+def export_coach_payouts(self):
     async def _call_bot() -> None:
-        url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/process_unclosed_payments/"
+        url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/export_coach_payouts/"
         headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.post(url, headers=headers)
@@ -100,7 +147,7 @@ def process_unclosed_payments(self):
     try:
         asyncio.run(_call_bot())
     except Exception as exc:
-        logger.warning(f"Bot call failed for unclosed payments: {exc}")
+        logger.warning(f"Bot call failed for coach payouts: {exc}")
         raise self.retry(exc=exc)
 
 

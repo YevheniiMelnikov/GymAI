@@ -29,23 +29,6 @@ def patch_liqpay(monkeypatch):
     )
 
 
-def test_build_payment_params_subscribe():
-    gateway = LiqPayGateway("pub", "priv")
-    params = gateway.build_payment_params(
-        "subscribe",
-        Decimal("10"),
-        "order",
-        "subscription",
-        1,
-        ["a@example.com"],
-    )
-    assert params["action"] == "subscribe"
-    assert params["amount"] == "10.00"
-    assert params["order_id"] == "order"
-    assert params["rro_info"] == {"delivery_emails": ["a@example.com"]}
-    assert "subscribe_date_start" in params
-
-
 def test_get_payment_link(monkeypatch):
     gateway = LiqPayGateway("pub", "priv")
     url = asyncio.run(
@@ -53,7 +36,7 @@ def test_get_payment_link(monkeypatch):
             "pay",
             Decimal("5"),
             "ord",
-            "program",
+            "credits",
             2,
         )
     )

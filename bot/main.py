@@ -10,7 +10,7 @@ from bot.handlers.internal import (
     internal_payment_handler,
     internal_send_payment_message,
     internal_client_request,
-    internal_process_unclosed_payments,
+    internal_export_coach_payouts,
     internal_send_daily_survey,
 )
 from config.env_settings import settings
@@ -67,8 +67,8 @@ async def main() -> None:
     app.router.add_post("/internal/payment/client_request/", internal_client_request)
     app.router.add_post("/internal/tasks/send_daily_survey/", internal_send_daily_survey)
     app.router.add_post(
-        "/internal/tasks/process_unclosed_payments/",
-        internal_process_unclosed_payments,
+        "/internal/tasks/export_coach_payouts/",
+        internal_export_coach_payouts,
     )
     setup_application(app, dp, bot=bot)
     runner = await start_web_app(app)

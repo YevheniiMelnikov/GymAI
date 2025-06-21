@@ -3,7 +3,7 @@ from django.db.models import Model
 
 from django.contrib.postgres.fields import ArrayField
 
-from apps.profiles.choices import Role, ClientStatus
+from apps.profiles.choices import Role, ClientStatus, CoachType
 from apps.profiles.fields import EncryptedField
 
 
@@ -44,6 +44,11 @@ class CoachProfile(Model):
     profile_photo = models.CharField(max_length=250, null=True, blank=True)
     payment_details = EncryptedField(max_length=2048, null=True, blank=True)
     work_experience = models.IntegerField(null=True, blank=True)
+    coach_type = models.CharField(
+        max_length=10,
+        choices=CoachType.choices,
+        default=CoachType.HUMAN,
+    )
     subscription_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     program_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     verified = models.BooleanField(default=False)

@@ -3,12 +3,12 @@ from .payment import (
     internal_send_payment_message,
     internal_client_request,
 )
-from .tasks import internal_send_daily_survey, internal_process_unclosed_payments
+from .tasks import internal_send_daily_survey, internal_export_coach_payouts
 
 __all__ = (
     "internal_payment_handler",
     "internal_send_payment_message",
     "internal_client_request",
     "internal_send_daily_survey",
-    "internal_process_unclosed_payments",
+    "internal_export_coach_payouts",
 )

@@ -1,11 +1,6 @@
 from enum import Enum
 
 
-class PaymentType(str, Enum):
-    subscription = "subscription"
-    program = "program"
-
-
 class ProfileRole(str, Enum):
     client = "client"
     coach = "coach"
@@ -35,3 +30,8 @@ class PaymentStatus(str, Enum):
     SUCCESS = "SUCCESS"
     FAILURE = "FAILURE"
     CLOSED = "CLOSED"
+
+
+class CoachType(str, Enum):
+    human = "human"
+    ai = "ai"
