@@ -19,7 +19,6 @@ from bot.texts.text_manager import msg_text
 from config.env_settings import settings
 from core.cache import Cache
 from core.schemas import Coach, Profile
-from core.services import APIService
 from bot.utils.chat import contact_client, process_feedback_content
 from bot.utils.menus import (
     show_main_menu,
@@ -316,11 +315,6 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         if subscription is None:
             return
 
-        order_id = await APIService.payment.get_last_subscription_payment(client.id)
-        if order_id is None:
-            await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
-            return
-
         next_payment_date = datetime.strptime(subscription.payment_date, "%Y-%m-%d")
 
         await bot.send_message(
@@ -329,7 +323,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
                 profile_id=profile.id,
                 contact=contact,
                 next_payment_date=next_payment_date.strftime("%Y-%m-%d"),
-                order_id=order_id,
+                order_id="-",
             ),
         )
 

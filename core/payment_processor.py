@@ -1,11 +1,10 @@
 import asyncio
 from decimal import Decimal, ROUND_HALF_UP
-from datetime import datetime, timezone
 from loguru import logger
 
 from core.cache import Cache
-from core.enums import PaymentStatus, ClientStatus
-from core.exceptions import ClientNotFoundError, CoachNotFoundError
+from core.enums import PaymentStatus
+from core.exceptions import ClientNotFoundError
 from core.services.workout_service import WorkoutService
 
 from core.schemas import Payment, Client
@@ -13,7 +12,6 @@ from config.env_settings import settings
 from core.services.outer.gsheets_service import GSheetsService
 from core.services.payment_service import PaymentService
 from core.services.profile_service import ProfileService
-from apps.payments.tasks import send_client_request
 from core.payment_states import FailureState, SuccessState
 from core.credits import uah_to_credits
 
@@ -51,67 +49,6 @@ class PaymentProcessor:
 
         finally:
             await cls.payment_service.update_payment(payment.id, {"processed": True})
-
-    @classmethod
-    async def _handle_failed_payment(cls, payment: Payment, client: Client) -> None:
-        await FailureState(cls).handle(payment, client)
-
-    @classmethod
-    async def _handle_successful_payment(cls, payment: Payment, client: Client) -> None:
-        await SuccessState(cls).handle(payment, client)
-
-    @classmethod
-    async def process_subscription_payment(cls, client: Client) -> None:
-        await cls.cache.client.update_client(client.id, {"status": ClientStatus.waiting_for_subscription})
-        subscription = await cls.cache.workout.get_latest_subscription(client.id)
-        if not subscription:
-            logger.error(f"Subscription not found for client {client.id}")
-            return
-
-        current_date = datetime.now(timezone.utc).date().isoformat()
-
-        await cls.workout_service.update_subscription(
-            subscription.id,
-            {"enabled": True, "price": subscription.price, "payment_date": current_date},
-        )
-        await cls.cache.workout.update_subscription(client.id, {"enabled": True, "payment_date": current_date})
-
-        if not subscription.enabled:
-            coach_id = client.assigned_to[0]
-            try:
-                await cls.cache.coach.get_coach(coach_id)
-            except CoachNotFoundError:
-                logger.error(f"Coach {coach_id} not found for client {client.id}")
-                return
-
-            send_client_request.delay(
-                coach_id,
-                client.id,
-                {
-                    "service_type": "subscription",
-                    "workout_type": subscription.workout_type,
-                    "wishes": subscription.wishes,
-                },
-            )
-
-    @classmethod
-    async def process_program_payment(cls, client: Client) -> None:
-        await cls.cache.client.update_client(client.id, {"status": ClientStatus.waiting_for_program})
-        program = await cls.cache.workout.get_program(client.id)
-        if not program:
-            logger.error(f"Program not found for client {client.id}")
-            return
-
-        coach_id = client.assigned_to[0]
-        if not await cls.cache.coach.get_coach(coach_id):
-            logger.error(f"Coach {coach_id} not found for client {client.id}")
-            return
-
-        send_client_request.delay(
-            coach_id,
-            client.id,
-            {"service_type": "program", "workout_type": program.workout_type, "wishes": program.wishes},
-        )
 
     @classmethod
     async def process_credit_topup(cls, client: Client, amount: Decimal) -> None:

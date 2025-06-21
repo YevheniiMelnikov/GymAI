@@ -2,8 +2,6 @@ from enum import Enum
 
 
 class PaymentType(str, Enum):
-    subscription = "subscription"
-    program = "program"
     credits = "credits"
 
 

@@ -36,7 +36,7 @@ def test_get_payment_link(monkeypatch):
             "pay",
             Decimal("5"),
             "ord",
-            "program",
+            "credits",
             2,
         )
     )
