@@ -21,8 +21,20 @@ class ClientProfileSerializer(serializers.ModelSerializer):
 class CoachProfileSerializer(serializers.ModelSerializer):
     profile_data = ProfileSerializer(source="profile", read_only=True)
 
-    subscription_price = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0.01"))
-    program_price = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal("0.01"))
+    subscription_price = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+        required=False,
+        allow_null=True,
+    )
+    program_price = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        min_value=Decimal("0.01"),
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:  # pyre-ignore[bad-override]
         model = CoachProfile

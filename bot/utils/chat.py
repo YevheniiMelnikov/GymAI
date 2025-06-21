@@ -15,6 +15,8 @@ from bot.states import States
 from config.env_settings import settings
 from core.cache import Cache
 from core.schemas import Coach, Profile, Client
+from core.enums import CoachType
+from core.ai import ai_coach_request, ai_coach_assign
 from core.services import APIService
 from bot.utils.text import format_new_client_message, get_client_page, get_workout_types
 from core.services.outer import avatar_manager
@@ -31,6 +33,9 @@ async def send_message(
     video=None,
     avatar_url: str | FSInputFile | None = None,
 ) -> None:
+    if isinstance(recipient, Coach) and recipient.coach_type == CoachType.ai:
+        await ai_coach_request(recipient=recipient, text=text)
+        return
     if state:
         data = await state.get_data()
         language = cast(str, data.get("recipient_language", settings.DEFAULT_LANG))
@@ -136,6 +141,9 @@ async def contact_client(callback_query: CallbackQuery, profile: Profile, client
 
 
 async def client_request(coach: Coach, client: Client, data: dict[str, Any], bot: Bot) -> None:
+    if coach.coach_type == CoachType.ai:
+        await ai_coach_assign(coach=coach, client=client)
+        return
     coach_profile = await APIService.profile.get_profile(coach.profile)
     if coach_profile is None:
         from loguru import logger

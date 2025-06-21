@@ -131,6 +131,7 @@ def new_coach_kb(profile_id: int) -> KbMarkup:
 def choose_coach_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
+        [builder.add("ai_coach", "ai_coach")],
         [builder.add("choose_coach", "choose_coach")],
         [builder.add("prev_menu", "back")],
     ]

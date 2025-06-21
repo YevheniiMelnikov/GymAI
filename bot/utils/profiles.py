@@ -6,11 +6,12 @@ from aiogram import Bot
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, FSInputFile
 from aiogram.exceptions import TelegramBadRequest
+from pathlib import Path
 
 from bot.keyboards import profile_menu_kb
 from config.env_settings import settings
 from core.cache import Cache
-from core.enums import ClientStatus
+from core.enums import ClientStatus, CoachType
 from core.exceptions import (
     CoachNotFoundError,
     SubscriptionNotFoundError,
@@ -18,7 +19,6 @@ from core.exceptions import (
 )
 from core.services import APIService
 from bot.utils import menus
-from pathlib import Path
 from bot.utils.chat import send_coach_request
 from bot.utils.other import delete_messages, del_msg, answer_msg
 from core.schemas import Client, Coach, Profile
@@ -138,13 +138,23 @@ async def answer_profile(cbq: CallbackQuery, profile: Profile, user: Coach | Cli
     if not isinstance(message, Message):
         return
 
-    if profile.role == "coach" and isinstance(user, Coach) and user.profile_photo:
-        photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{user.profile_photo}"
-        try:
-            await message.answer_photo(photo_url, text, reply_markup=profile_menu_kb(profile.language))
-            return
-        except TelegramBadRequest:
-            logger.warning("Photo not found for coach %s", profile.id)
+    if profile.role == "coach" and isinstance(user, Coach):
+        if user.coach_type == CoachType.ai or not user.profile_photo:
+            file_path = Path(__file__).resolve().parent.parent / "images" / "ai_coach.png"
+            if file_path.exists():
+                avatar = FSInputFile(file_path)
+                try:
+                    await message.answer_photo(avatar, text, reply_markup=profile_menu_kb(profile.language))
+                    return
+                except TelegramBadRequest:
+                    logger.warning("Photo not found for AI coach")
+        else:
+            photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{user.profile_photo}"
+            try:
+                await message.answer_photo(photo_url, text, reply_markup=profile_menu_kb(profile.language))
+                return
+            except TelegramBadRequest:
+                logger.warning("Photo not found for coach %s", profile.id)
 
     if profile.role == "client" and isinstance(user, Client):
         if user.profile_photo:

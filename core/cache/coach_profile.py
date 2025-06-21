@@ -5,6 +5,7 @@ from typing import Any, cast
 from loguru import logger
 
 from core.schemas import Coach
+from core.enums import CoachType
 from core.encryptor import Encryptor
 from core.exceptions import CoachNotFoundError
 from core.validators import validate_or_raise
@@ -43,20 +44,28 @@ class CoachCacheManager(BaseCacheManager):
             raise CoachNotFoundError(int(field))
 
     @classmethod
-    async def get_coaches(cls) -> list[Coach]:
+    async def get_coaches(cls, *, include_ai: bool = False) -> list[Coach]:
         try:
             all_coaches = await cls.get_all("coaches")
             coaches_data = []
             for v in all_coaches.values():
                 coach_dict = json.loads(v)
                 coach = validate_or_raise(coach_dict, Coach, context=f"id={coach_dict.get('id')}")
-                if coach.verified:
+                if coach.verified and (include_ai or coach.coach_type != CoachType.ai):
                     coaches_data.append(coach)
             random.shuffle(coaches_data)
             return coaches_data
         except Exception as e:
             logger.warning(f"Failed to retrieve coach data: {e}")
             return []
+
+    @classmethod
+    async def get_ai_coach(cls) -> Coach | None:
+        coaches = await cls.get_coaches(include_ai=True)
+        for coach in coaches:
+            if coach.coach_type == CoachType.ai:
+                return coach
+        return None
 
     @classmethod
     async def update_coach(cls, profile_id: int, profile_data: dict[str, Any]) -> None:

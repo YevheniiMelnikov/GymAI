@@ -47,20 +47,22 @@ class Client(BaseModel):
 class Coach(BaseModel):
     id: int
     profile: int
-    name: str
-    surname: str
-    work_experience: int
-    additional_info: str
-    payment_details: str
-    profile_photo: str
-    subscription_price: Price
-    program_price: Price
+    name: str | None = None
+    surname: str | None = None
+    work_experience: int | None = None
+    additional_info: str | None = None
+    payment_details: str | None = None
+    profile_photo: str | None = None
+    subscription_price: Price | None = None
+    program_price: Price | None = None
     assigned_to: list[int] = Field(default_factory=list)
     verified: bool = False
     coach_type: CoachType = CoachType.human
 
     @property
     def payment_details_plain(self) -> str:
+        if not self.payment_details:
+            return ""
         return Encryptor.decrypt(self.payment_details) or ""
 
 

@@ -12,6 +12,7 @@ from bot.keyboards import (
     select_days_kb,
     gift_kb,
     yes_no_kb,
+    workout_type_kb,
 )
 from bot.states import States
 from bot.texts.text_manager import msg_text
@@ -174,6 +175,27 @@ async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext, bo
 
     if cb_data == "back":
         await show_main_menu(message, profile, state)
+    elif cb_data == "ai_coach":
+        coach = await Cache.coach.get_ai_coach()
+        if not coach:
+            await callback_query.answer(msg_text("no_coaches", profile.language), show_alert=True)
+            await del_msg(message)
+            return
+        try:
+            client = await Cache.client.get_client(profile.id)
+        except ClientNotFoundError:
+            await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
+            await del_msg(message)
+            return
+        await assign_coach(coach, client)
+        await callback_query.answer(msg_text("saved", profile.language))
+        await state.set_state(States.workout_type)
+        await message.answer(
+            msg_text("workout_type", profile.language),
+            reply_markup=workout_type_kb(profile.language),
+        )
+        await state.update_data(new_client=True)
+        await del_msg(message)
     else:
         coaches = await Cache.coach.get_coaches()
         if not coaches:
