@@ -57,6 +57,7 @@ class ButtonText(AutoName):
     weight = auto()
 
     choose_coach = auto()
+    ai_coach = auto()
     contact_client = auto()
     contact_coach = auto()
     feedback = auto()
@@ -140,6 +141,7 @@ class MessageText(AutoName):
     choose_account_type = auto()
 
     choose_coach = auto()
+    ai_coach = auto()
     enter_wishes = auto()
     coach_selected = auto()
     coach_info_message = auto()

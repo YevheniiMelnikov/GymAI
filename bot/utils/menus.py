@@ -9,7 +9,8 @@ from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InputMediaPhoto, Message
+from aiogram.types import CallbackQuery, InputMediaPhoto, Message, FSInputFile
+from pathlib import Path
 
 from bot import keyboards as kb
 from bot.utils.profiles import fetch_user, answer_profile
@@ -19,7 +20,7 @@ from decimal import Decimal
 from bot.states import States
 from bot.texts import msg_text
 from core.cache import Cache
-from core.enums import ClientStatus
+from core.enums import ClientStatus, CoachType
 from core.exceptions import ClientNotFoundError, CoachNotFoundError
 from core.schemas import Client, Coach, Profile, Subscription, Program, DayExercises, Exercise
 from bot.utils.text import (
@@ -173,7 +174,12 @@ async def show_coaches_menu(message: Message, coaches: list[Coach], bot: Bot, cu
 
     current_index %= len(coaches)
     current_coach = coaches[current_index]
-    coach_photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{current_coach.profile_photo}"
+    coach_photo_url: str | FSInputFile
+    if current_coach.coach_type == CoachType.ai or not current_coach.profile_photo:
+        file_path = Path(__file__).resolve().parent.parent / "images" / "ai_coach.png"
+        coach_photo_url = FSInputFile(file_path)
+    else:
+        coach_photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{current_coach.profile_photo}"
     formatted_text = msg_text("coach_page", language).format(**current_coach.model_dump(mode="json"))
 
     try:

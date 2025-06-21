@@ -10,6 +10,8 @@ if [ "${RUN_MIGRATIONS}" = "true" ]; then
 
   echo "▶ Ensuring superuser..."
   python manage.py ensure_admin
+  echo "▶ Ensuring AI coach..."
+  python manage.py ensure_ai_coach
 
   echo "▶ Collecting static files..."
   python manage.py collectstatic --noinput || echo "Skipping collectstatic"
