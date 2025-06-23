@@ -73,10 +73,11 @@ tasks:
             SELECT tablename
             FROM pg_tables
             WHERE schemaname = 'public'
-              AND tablename NOT ILIKE 'django\_%'
-              AND tablename NOT ILIKE 'auth\_%'
-              AND tablename NOT ILIKE 'rest_framework_api_key%'
+              AND tablename NOT ILIKE 'django_%'
+              AND tablename NOT ILIKE 'auth_%'
+              AND tablename NOT ILIKE 'rest_framework_api_key_%'
           ) LOOP
+            RAISE NOTICE '  truncating %', r.tablename;  -- опционально, для отладки
             EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' CASCADE';
           END LOOP;
         END

@@ -3,6 +3,7 @@ from typing import Type
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AbstractBaseUser
 from django.core.management.base import BaseCommand
+from django.db import transaction
 
 from config.env_settings import settings
 
@@ -10,6 +11,7 @@ from config.env_settings import settings
 class Command(BaseCommand):
     """Create default superuser if it doesn't exist."""
 
+    @transaction.atomic
     def handle(self, *args, **options):
         username = settings.DJANGO_ADMIN
         password = settings.DJANGO_PASSWORD
