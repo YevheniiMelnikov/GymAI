@@ -119,7 +119,13 @@ class PaymentProcessor:
                         continue
 
                     payout_rows.append(
-                        [coach.name, coach.surname, coach.payment_details, payment.order_id, str(amount)]
+                        [
+                            coach.name or "",
+                            coach.surname or "",
+                            coach.payment_details or "",
+                            payment.order_id,
+                            str(amount),
+                        ]
                     )
                     logger.info(f"Payment {payment.order_id} closed, payout {amount} UAH")
 

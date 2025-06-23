@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from typing import cast
+from decimal import Decimal
 
 from aiogram import Bot
 from aiogram.fsm.context import FSMContext
@@ -350,7 +351,7 @@ async def process_new_subscription(callback_query: CallbackQuery, profile: Profi
     if not coach:
         return
 
-    required = required_credits(coach.subscription_price, settings.CREDIT_RATE)
+    required = required_credits(coach.subscription_price or Decimal("0"), settings.CREDIT_RATE)
     if client.credits < required:
         await callback_query.answer(msg_text("not_enough_credits", language), show_alert=True)
         return
@@ -359,7 +360,7 @@ async def process_new_subscription(callback_query: CallbackQuery, profile: Profi
         client_profile_id=client.id,
         workout_days=data.get("workout_days", []),
         wishes=data.get("wishes", ""),
-        amount=coach.subscription_price,
+        amount=coach.subscription_price or Decimal("0"),
     )
     if sub_id is None:
         await callback_query.answer(msg_text("unexpected_error", language), show_alert=True)
