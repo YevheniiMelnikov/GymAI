@@ -322,7 +322,7 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
         coach = await Cache.coach.get_coach(client_profile.assigned_to.pop())
 
         try:
-            price_uah = coach.subscription_price * Decimal("1.3")
+            price_uah = (coach.subscription_price or Decimal("0")) * Decimal("1.3")
             credits = uah_to_credits(price_uah, settings.CREDIT_RATE)
             await answer_msg(
                 message,
@@ -379,7 +379,7 @@ async def show_program_promo_page(callback_query: CallbackQuery, profile: Profil
     coach = await Cache.coach.get_coach(client_profile.assigned_to.pop())
 
     try:
-        price_uah = coach.program_price * Decimal("1.3")
+        price_uah = (coach.program_price or Decimal("0")) * Decimal("1.3")
         credits = uah_to_credits(price_uah, settings.CREDIT_RATE)
         await answer_msg(
             message,
