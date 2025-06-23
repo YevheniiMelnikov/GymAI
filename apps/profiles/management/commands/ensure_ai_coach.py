@@ -16,5 +16,6 @@ class Command(BaseCommand):
         CoachProfile.objects.create(
             profile=profile,
             coach_type=CoachType.AI,
+            verified=True,
         )
         self.stdout.write(self.style.SUCCESS("AI coach created"))
