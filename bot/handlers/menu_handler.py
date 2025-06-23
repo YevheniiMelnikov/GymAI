@@ -178,8 +178,9 @@ async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext, bo
     elif cb_data == "ai_coach":
         coach = await Cache.coach.get_ai_coach()
         if not coach:
-            await callback_query.answer(msg_text("no_coaches", profile.language), show_alert=True)
-            await del_msg(message)
+            await callback_query.answer(
+                msg_text("no_coaches", profile.language), show_alert=True
+            )
             return
         try:
             client = await Cache.client.get_client(profile.id)
