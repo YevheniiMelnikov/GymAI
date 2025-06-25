@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from core.services.gateways.payment_gateway import LiqPayGateway
+from core.services.outer.gateways.payment_gateway import LiqPayGateway
 
 
 class DummyLiqPay:

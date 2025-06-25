@@ -77,13 +77,14 @@ class ProfileService(APIClient):
         return None
 
     @classmethod
-    async def update_client_profile(cls, client_id: int, data: dict[str, Any]) -> bool:
-        url = urljoin(cls.api_url, f"api/v1/client-profiles/pk/{client_id}/")
+    async def update_client_profile(cls, client_profile_id: int, data: dict[str, Any]) -> bool:
+        url = urljoin(cls.api_url, f"api/v1/client-profiles/pk/{client_profile_id}/")
+        data = {k: v for k, v in data.items() if k != "profile"}
         status, _ = await cls._api_request("patch", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"})
         if status in (200, 204):
-            logger.info(f"ClientProfile {client_id} updated")
+            logger.info(f"ClientProfile {client_profile_id} updated")
             return True
-        logger.error(f"Failed to update ClientProfile {client_id}. HTTP={status}")
+        logger.error(f"Failed to update ClientProfile {client_profile_id}. HTTP={status}")
         return False
 
     @classmethod
@@ -118,7 +119,7 @@ class ProfileService(APIClient):
 
     @classmethod
     async def update_coach_profile(cls, coach_id: int, data: dict[str, Any]) -> bool:
-        url = urljoin(cls.api_url, f"api/v1/coach-profiles/pk/{coach_id}/")
+        url = urljoin(cls.api_url, f"api/v1/coach-profiles/{coach_id}/")
 
         for price_field in ("program_price", "subscription_price"):
             if price_field in data and isinstance(data[price_field], Decimal):

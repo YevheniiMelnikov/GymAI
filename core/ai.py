@@ -1,6 +1,5 @@
 from typing import Any
 
-from core.schemas import Coach, Client
 
 
 async def ai_coach_request(*args: Any, **kwargs: Any) -> None:
