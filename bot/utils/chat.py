@@ -128,7 +128,7 @@ async def send_coach_request(
     )
 
 
-async def contact_client(callback_query: CallbackQuery, profile: Profile, client_id: str, state: FSMContext) -> None:
+async def contact_client(callback_query: CallbackQuery, profile: Profile, profile_id: str, state: FSMContext) -> None:
     message = cast(Message, callback_query.message)
     await callback_query.answer()
     await answer_msg(callback_query, msg_text("enter_your_message", profile.language))
@@ -136,7 +136,7 @@ async def contact_client(callback_query: CallbackQuery, profile: Profile, client
     coach = await Cache.coach.get_coach(profile.id)
     assert coach is not None
     await state.clear()
-    await state.update_data(recipient_id=client_id, sender_name=coach.name)
+    await state.update_data(recipient_id=profile_id, sender_name=coach.name)
     await state.set_state(States.contact_client)
 
 

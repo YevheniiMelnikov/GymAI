@@ -496,7 +496,7 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
                 return
 
             await ProfileService.adjust_client_credits(profile.id, -required)
-            await Cache.client.update_client(client.id, {"credits": client.credits - required})
+            await Cache.client.update_client(client.profile, {"credits": client.credits - required})
             await state.set_state(States.main_menu)
             if message is not None:
                 await answer_msg(message, msg_text("payment_success", profile.language or settings.DEFAULT_LANG))

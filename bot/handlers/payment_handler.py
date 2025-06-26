@@ -35,7 +35,7 @@ async def get_the_gift(callback_query: CallbackQuery, state: FSMContext):
     profile = Profile.model_validate(data["profile"])
     await callback_query.answer(btn_text("done", profile.language))
     client = await Cache.client.get_client(profile.id)
-    await Cache.client.update_client(client.id, dict(status=ClientStatus.waiting_for_text))
+    await Cache.client.update_client(client.profile, dict(status=ClientStatus.waiting_for_text))
     await answer_msg(
         msg_obj=callback_query,
         text=msg_text("workout_type", profile.language),

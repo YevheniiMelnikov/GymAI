@@ -127,7 +127,7 @@ async def charge_due_subscriptions(self):  # pyre-ignore[valid-type]
             continue
 
         await ProfileService.adjust_client_credits(client.profile, -required)
-        await Cache.client.update_client(client.id, {"credits": client.credits - required})
+        await Cache.client.update_client(client.profile, {"credits": client.credits - required})
         next_date = (datetime.now() + timedelta(days=int(settings.SUBSCRIPTION_PERIOD_DAYS))).date().isoformat()
         await APIService.workout.update_subscription(sub.id, {"payment_date": next_date})
         await Cache.workout.update_subscription(sub.client_profile, {"payment_date": next_date})

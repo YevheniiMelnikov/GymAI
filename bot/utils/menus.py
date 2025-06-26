@@ -422,9 +422,9 @@ async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, 
     await del_msg(cast(Message | CallbackQuery | None, message))
 
 
-async def manage_subscription(callback_query: CallbackQuery, lang: str, client_id: str, state: FSMContext) -> None:
+async def manage_subscription(callback_query: CallbackQuery, lang: str, profile_id: str, state: FSMContext) -> None:
     await state.clear()
-    subscription = await Cache.workout.get_latest_subscription(int(client_id))
+    subscription = await Cache.workout.get_latest_subscription(int(profile_id))
     assert subscription
     message = cast(Message, callback_query.message)
     assert message
@@ -456,7 +456,7 @@ async def manage_subscription(callback_query: CallbackQuery, lang: str, client_i
             days=days,
             day_index=0,
             exercises={},
-            client_id=client_id,
+            client_id=profile_id,
             subscription=True,
         )
         await state.set_state(States.program_manage)
@@ -471,7 +471,7 @@ async def manage_subscription(callback_query: CallbackQuery, lang: str, client_i
         await state.update_data(
             exercises=subscription.exercises,
             days=days,
-            client_id=client_id,
+            client_id=profile_id,
             day_index=0,
             subscription=True,
         )
