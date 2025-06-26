@@ -35,7 +35,7 @@ async def get_the_gift(callback_query: CallbackQuery, state: FSMContext):
     profile = Profile.model_validate(data["profile"])
     await callback_query.answer(btn_text("done", profile.language))
     client = await Cache.client.get_client(profile.id)
-    await Cache.client.update_client(client.id, dict(status=ClientStatus.waiting_for_text))
+    await Cache.client.update_client(client.profile, dict(status=ClientStatus.waiting_for_text))
     await answer_msg(
         msg_obj=callback_query,
         text=msg_text("workout_type", profile.language),
@@ -148,7 +148,7 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
         return
 
     if service_type == "program":
-        await cache_program_data(data, client.id)
+        await cache_program_data(data, client.profile)
     else:
         price = coach.subscription_price or Decimal("0")
         subscription_id = await APIService.workout.create_subscription(
@@ -163,15 +163,15 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
             "payment_date": datetime.today().strftime("%Y-%m-%d"),
             "enabled": False,
             "price": price,
-            "client_profile": client.id,
+            "client_profile": client.profile,
             "workout_days": data.get("workout_days", []),
             "workout_type": data.get("workout_type"),
             "wishes": wishes,
         }
-        await Cache.workout.update_program(client.id, subscription_data)
+        await Cache.workout.update_program(client.profile, subscription_data)
 
-    await PaymentCacheManager.set_status(client.id, service_type, PaymentStatus.PENDING)
-    await PaymentService.create_payment(client.id, service_type, order_id, amount)
+    await PaymentCacheManager.set_status(client.profile, service_type, PaymentStatus.PENDING)
+    await PaymentService.create_payment(client.profile, service_type, order_id, amount)
     await callback_query.answer(msg_text("payment_in_progress", profile.language), show_alert=True)
 
     msg = callback_query.message

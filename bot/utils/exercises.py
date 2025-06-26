@@ -24,12 +24,12 @@ async def save_exercise(
     if not input_data.from_user:
         return
 
-    client_id_str = data.get("client_id")
-    if client_id_str is None:
+    profile_id_str = data.get("client_id")
+    if profile_id_str is None:
         logger.error("client_id not found in state for save_exercise")
         return
 
-    client_id = int(client_id_str)
+    profile_id = int(profile_id_str)
     day_index = int(data.get("day_index", 0))
 
     raw_exercises = data.get("exercises", [])
@@ -62,11 +62,11 @@ async def save_exercise(
             try:
                 from core.cache import Cache
 
-                program = await Cache.workout.get_program(client_id)
+                program = await Cache.workout.get_program(profile_id)
                 split_number = program.split_number
             except ProgramNotFoundError:
                 logger.warning(
-                    f"Program not found for client {client_id} in save_exercise, defaulting split_number to 1."
+                    f"Program not found for client {profile_id} in save_exercise, defaulting split_number to 1."
                 )
                 split_number = 1
 
@@ -145,16 +145,16 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
         return
 
     parts = cast(str, callback_query.data).split("_")
-    client_id = int(parts[1])
+    profile_id = int(parts[1])
     day = parts[2]
 
     subscription: Subscription
     try:
         from core.cache import Cache
 
-        subscription = await Cache.workout.get_latest_subscription(client_id)
+        subscription = await Cache.workout.get_latest_subscription(profile_id)
     except SubscriptionNotFoundError:
-        logger.error(f"Subscription not found for client {client_id} in edit_subscription_exercises.")
+        logger.error(f"Subscription not found for client {profile_id} in edit_subscription_exercises.")
         await callback_query.answer(msg_text("subscription_not_found_error", profile.language), show_alert=True)
         return
 
@@ -165,7 +165,7 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
 
     await state.update_data(
         exercises=subscription.exercises,
-        client_id=client_id,
+        client_id=profile_id,
         day=day,
         subscription=True,
         day_index=day_index,

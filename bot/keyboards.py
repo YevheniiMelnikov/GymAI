@@ -151,16 +151,16 @@ def coach_select_kb(lang: str, coach_id: int, current_index: int) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons)
 
 
-def client_select_kb(lang: str, client_id: int, current_index: int) -> KbMarkup:
+def client_select_kb(lang: str, profile_id: int, current_index: int) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
         [
             builder.add("back", f"prev_{current_index - 1}"),
             builder.add("forward", f"next_{current_index + 1}"),
         ],
-        [builder.add("program", f"program_{client_id}")],
-        [builder.add("subscription", f"subscription_{client_id}")],
-        [builder.add("contact_client", f"contact_{client_id}")],
+        [builder.add("program", f"program_{profile_id}")],
+        [builder.add("subscription", f"subscription_{profile_id}")],
+        [builder.add("contact_client", f"contact_{profile_id}")],
         [builder.add("prev_menu", "back")],
     ]
     return KbMarkup(inline_keyboard=buttons)
@@ -209,19 +209,19 @@ def choose_payment_options_kb(lang: str, option: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons)
 
 
-def client_msg_bk(lang: str, client_id: int) -> KbMarkup:
+def client_msg_bk(lang: str, profile_id: int) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
-        [builder.add("answer", f"answer_{client_id}")],
+        [builder.add("answer", f"answer_{profile_id}")],
         [builder.add("later", "later")],
     ]
     return KbMarkup(inline_keyboard=buttons)
 
 
-def incoming_request_kb(lang: str, service: str, client_id: int) -> KbMarkup:
+def incoming_request_kb(lang: str, service: str, profile_id: int) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
-        [builder.add("create", f"create_{service}_{client_id}")],
+        [builder.add("create", f"create_{service}_{profile_id}")],
         [builder.add("later", "later")],
     ]
     return KbMarkup(inline_keyboard=buttons)
@@ -319,12 +319,12 @@ def reps_number_kb() -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=2)
 
 
-def workout_feedback_kb(lang: str, client_id: int, day: str) -> KbMarkup:
+def workout_feedback_kb(lang: str, profile_id: int, day: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
         [
-            builder.add("contact_client", f"answer_{client_id}"),
-            builder.add("edit", f"edit_{client_id}_{day}"),
+            builder.add("contact_client", f"answer_{profile_id}"),
+            builder.add("edit", f"edit_{profile_id}_{day}"),
         ],
         [
             builder.add("quit", "quit"),

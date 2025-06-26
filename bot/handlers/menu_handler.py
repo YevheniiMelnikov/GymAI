@@ -307,19 +307,19 @@ async def client_paginator(callback_query: CallbackQuery, state: FSMContext) -> 
         await callback_query.answer(msg_text("out_of_range", profile.language))
         return
 
-    action, client_id_str = parts
+    action, profile_id_str = parts
     if action == "contact":
-        await contact_client(callback_query, profile, client_id_str, state)
+        await contact_client(callback_query, profile, profile_id_str, state)
         return
     if action == "program":
-        await manage_program(callback_query, profile, client_id_str, state)
+        await manage_program(callback_query, profile, profile_id_str, state)
         return
     if action == "subscription":
-        await manage_subscription(callback_query, profile.language, client_id_str, state)
+        await manage_subscription(callback_query, profile.language, profile_id_str, state)
         return
 
     try:
-        index = int(client_id_str)
+        index = int(profile_id_str)
     except ValueError:
         await callback_query.answer(msg_text("out_of_range", profile.language))
         return
@@ -383,14 +383,14 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         if subscription is None:
             return
 
-        await cancel_subscription(client.id, subscription.id)
+        await cancel_subscription(profile.id, subscription.id)
         logger.info(f"Subscription for client_id {client.id} deactivated")
         await show_main_menu(message, profile, state)
 
     else:
         await callback_query.answer()
         try:
-            subscription = await Cache.workout.get_latest_subscription(client.id)
+            subscription = await Cache.workout.get_latest_subscription(profile.id)
         except SubscriptionNotFoundError:
             logger.warning(f"Subscription not found for client_id {client.id}")
             await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)

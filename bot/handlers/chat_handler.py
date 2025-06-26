@@ -48,7 +48,7 @@ async def contact_client(message: Message, state: FSMContext, bot: Bot) -> None:
     assert coach is not None
 
     if client.status == ClientStatus.waiting_for_text:
-        await Cache.client.update_client(client.id, {"status": ClientStatus.default})
+        await Cache.client.update_client(client.profile, {"status": ClientStatus.default})
 
     await state.update_data(sender_name=coach.name, recipient_language=client_profile.language)
 
@@ -257,7 +257,7 @@ async def answer_message(callback_query: CallbackQuery, state: FSMContext) -> No
         state_to_set = States.contact_client
         client = await Cache.client.get_client(recipient_id)
         if client and client.status == ClientStatus.waiting_for_text:
-            await Cache.client.update_client(client.id, {"status": ClientStatus.default})
+            await Cache.client.update_client(client.profile, {"status": ClientStatus.default})
 
     assert sender is not None
 
@@ -277,10 +277,10 @@ async def navigate_days(callback_query: CallbackQuery, state: FSMContext) -> Non
     profile = Profile.model_validate(data["profile"])
     assert profile is not None
     client = await Cache.client.get_client(profile.id)
-    program = await Cache.workout.get_program(client.id)
+    program = await Cache.workout.get_program(client.profile)
 
     if data.get("subscription"):
-        subscription = await Cache.workout.get_latest_subscription(client.id)
+        subscription = await Cache.workout.get_latest_subscription(client.profile)
         assert subscription is not None
         split_number = len(subscription.workout_days)
         exercises = subscription.exercises
@@ -311,11 +311,11 @@ async def create_workouts(callback_query: CallbackQuery, state: FSMContext) -> N
     assert profile is not None
 
     await state.clear()
-    _, service, client_id = cast(str, callback_query.data).split("_", 2)
-    await state.update_data(client_id=client_id)
+    _, service, profile_id = cast(str, callback_query.data).split("_", 2)
+    await state.update_data(profile_id=profile_id)
 
     if service == "subscription":
-        await manage_subscription(callback_query, profile.language, client_id, state)
+        await manage_subscription(callback_query, profile.language, profile_id, state)
     else:
         if callback_query.message and isinstance(callback_query.message, Message):
             await answer_msg(callback_query.message, msg_text("workouts_number", profile.language))

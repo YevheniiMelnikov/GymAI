@@ -40,7 +40,7 @@ async def update_profile_data(message: Message, state: FSMContext, role: str, bo
         if role == "client":
             if data.get("status") != ClientStatus.initial:
                 client = await Cache.client.get_client(profile.id)
-                await Cache.client.update_client(client.id, user_data)
+                await Cache.client.update_client(client.profile, user_data)
                 await APIService.profile.update_client_profile(client.id, user_data)
             else:
                 if client := await APIService.profile.create_client_profile(profile.id, user_data):
@@ -79,13 +79,17 @@ async def update_profile_data(message: Message, state: FSMContext, role: str, bo
 
 async def assign_coach(coach: Coach, client: Client) -> None:
     coach_clients = coach.assigned_to or []
-    if client.id not in coach_clients:
-        coach_clients.append(client.id)
-        await APIService.profile.update_coach_profile(coach.id, {"assigned_to": coach_clients})
+    if client.profile not in coach_clients:
+        coach_clients.append(client.profile)
+        await APIService.profile.update_coach_profile(
+            coach.id, {"assigned_to": coach_clients}
+        )
         await Cache.coach.update_coach(coach.profile, {"assigned_to": coach_clients})
 
-    await APIService.profile.update_client_profile(client.id, {"assigned_to": [coach.id]})
-    await Cache.client.update_client(client.id, {"assigned_to": [coach.id]})
+    await APIService.profile.update_client_profile(
+        client.id, {"assigned_to": [coach.profile]}
+    )
+    await Cache.client.update_client(client.profile, {"assigned_to": [coach.profile]})
 
 
 async def check_assigned_clients(profile_id: int) -> bool:
@@ -97,15 +101,15 @@ async def check_assigned_clients(profile_id: int) -> bool:
 
     assigned_clients = coach.assigned_to or []
 
-    for client_id in assigned_clients:
+    for profile_id in assigned_clients:
         try:
-            subscription = await Cache.workout.get_latest_subscription(client_id)
+            subscription = await Cache.workout.get_latest_subscription(profile_id)
             if subscription.enabled:
                 return True
         except SubscriptionNotFoundError:
             pass
 
-        if await Cache.payment.get_status(client_id, "program"):
+        if await Cache.payment.get_status(profile_id, "program"):
             return True
 
     return False
@@ -188,16 +192,16 @@ async def get_clients_to_survey() -> list[Profile]:
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
         raw_clients = await Cache.client.get_all("clients") or []
 
-        for client_id_str in raw_clients:
+        for profile_id_str in raw_clients:
             try:
-                client_id = int(client_id_str)
+                profile_id = int(profile_id_str)
 
-                subscription = await Cache.workout.get_latest_subscription(client_id)
+                subscription = await Cache.workout.get_latest_subscription(profile_id)
                 if not subscription:
                     continue
 
                 if not isinstance(subscription.workout_days, list):
-                    logger.warning(f"Invalid workout_days format for client_id={client_id}")
+                    logger.warning(f"Invalid workout_days format for client_id={profile_id}")
                     continue
 
                 if (
@@ -205,13 +209,13 @@ async def get_clients_to_survey() -> list[Profile]:
                     and subscription.exercises
                     and yesterday in [day.lower() for day in subscription.workout_days]
                 ):
-                    client = await Cache.client.get_client(client_id)
+                    client = await Cache.client.get_client(profile_id)
                     profile = await APIService.profile.get_profile(client.profile)
                     if profile is not None:
                         clients_with_workout.append(profile)
 
             except Exception as client_err:
-                logger.warning(f"Skipping client_id={client_id_str} due to error: {client_err}")
+                logger.warning(f"Skipping client_id={profile_id_str} due to error: {client_err}")
                 continue
 
     except Exception as e:
