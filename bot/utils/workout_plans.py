@@ -370,7 +370,7 @@ async def process_new_subscription(callback_query: CallbackQuery, profile: Profi
     await Cache.client.update_client(client.profile, {"credits": client.credits - required})
     next_payment = (datetime.today() + timedelta(days=int(settings.SUBSCRIPTION_PERIOD_DAYS))).strftime("%Y-%m-%d")
     await APIService.workout.update_subscription(sub_id, {"enabled": True, "payment_date": next_payment})
-    await Cache.workout.update_subscription(client.id, {"id": sub_id, "enabled": True, "payment_date": next_payment})
+    await Cache.workout.update_subscription(client.profile, {"id": sub_id, "enabled": True, "payment_date": next_payment})
     await callback_query.answer(msg_text("payment_success", language), show_alert=True)
 
 

@@ -383,14 +383,14 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         if subscription is None:
             return
 
-        await cancel_subscription(client.id, subscription.id)
+        await cancel_subscription(profile.id, subscription.id)
         logger.info(f"Subscription for client_id {client.id} deactivated")
         await show_main_menu(message, profile, state)
 
     else:
         await callback_query.answer()
         try:
-            subscription = await Cache.workout.get_latest_subscription(client.id)
+            subscription = await Cache.workout.get_latest_subscription(profile.id)
         except SubscriptionNotFoundError:
             logger.warning(f"Subscription not found for client_id {client.id}")
             await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)

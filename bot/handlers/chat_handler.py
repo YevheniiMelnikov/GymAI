@@ -277,10 +277,10 @@ async def navigate_days(callback_query: CallbackQuery, state: FSMContext) -> Non
     profile = Profile.model_validate(data["profile"])
     assert profile is not None
     client = await Cache.client.get_client(profile.id)
-    program = await Cache.workout.get_program(client.id)
+    program = await Cache.workout.get_program(client.profile)
 
     if data.get("subscription"):
-        subscription = await Cache.workout.get_latest_subscription(client.id)
+        subscription = await Cache.workout.get_latest_subscription(client.profile)
         assert subscription is not None
         split_number = len(subscription.workout_days)
         exercises = subscription.exercises

@@ -270,7 +270,7 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext,
             text=msg_text("workout_completed", coach_lang).format(name=client.name, program=program),
             bot=bot,
             state=state,
-            reply_markup=workout_feedback_kb(coach_lang, client.id, day),
+            reply_markup=workout_feedback_kb(coach_lang, client.profile, day),
             include_incoming_message=False,
         )
 
@@ -305,7 +305,7 @@ async def workout_description(message: Message, state: FSMContext, bot: Bot):
         ),
         bot=bot,
         state=state,
-        reply_markup=workout_feedback_kb(coach_lang, client.id, cast(str, data.get("day", ""))),
+        reply_markup=workout_feedback_kb(coach_lang, client.profile, cast(str, data.get("day", ""))),
         include_incoming_message=False,
     )
 

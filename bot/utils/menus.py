@@ -150,14 +150,16 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
 
     current_index %= len(clients)
     current_client = clients[current_index]
-    subscription_active = await Cache.workout.get_latest_subscription(current_client.id) is not None
+    subscription_active = (
+        await Cache.workout.get_latest_subscription(current_client.profile) is not None
+    )
     data = await state.get_data()
     client_page = await get_client_page(current_client, language, subscription_active, data)
 
     await state.update_data(clients=[Client.model_dump(c) for c in clients])
     await message.edit_text(
         msg_text("client_page", language).format(**client_page),
-        reply_markup=kb.client_select_kb(language, current_client.id, current_index),
+        reply_markup=kb.client_select_kb(language, current_client.profile, current_index),
         parse_mode=ParseMode.HTML,
     )
     await state.set_state(States.show_clients)
@@ -311,7 +313,7 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
     assert message
     client = await Cache.client.get_client(profile.id)
 
-    if await Cache.payment.get_status(client.id, "subscription"):
+    if await Cache.payment.get_status(client.profile, "subscription"):
         await callback_query.answer(msg_text("program_not_ready", language), show_alert=True)
         return
 
@@ -351,8 +353,8 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
     assert message
     client = await Cache.client.get_client(profile.id)
 
-    if program := await Cache.workout.get_program(client.id):
-        if await Cache.payment.get_status(client.id, "program"):
+    if program := await Cache.workout.get_program(client.profile):
+        if await Cache.payment.get_status(client.profile, "program"):
             await callback_query.answer(msg_text("program_not_ready", profile.language), show_alert=True)
             return
 

@@ -166,15 +166,15 @@ async def client_request(coach: Coach, client: Client, data: dict[str, Any], bot
 
     workout_types: dict[str, str] = get_workout_types(coach_lang)
     preferable_workouts_type = workout_types.get(preferable_workout_type, "unknown")
-    subscription = await Cache.workout.get_latest_subscription(client.id)
+    subscription = await Cache.workout.get_latest_subscription(client.profile)
 
     client_page = await get_client_page(client, coach_lang, subscription is not None, data)
     text = await format_new_client_message(data, coach_lang, client_profile.language, preferable_workouts_type)
 
     reply_markup = (
-        client_msg_bk(coach_lang, client.id)
+        client_msg_bk(coach_lang, client.profile)
         if data.get("new_client")
-        else incoming_request_kb(coach_lang, service, client.id)
+        else incoming_request_kb(coach_lang, service, client.profile)
     )
 
     avatar = None

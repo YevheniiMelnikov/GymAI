@@ -79,13 +79,17 @@ async def update_profile_data(message: Message, state: FSMContext, role: str, bo
 
 async def assign_coach(coach: Coach, client: Client) -> None:
     coach_clients = coach.assigned_to or []
-    if client.id not in coach_clients:
-        coach_clients.append(client.id)
-        await APIService.profile.update_coach_profile(coach.id, {"assigned_to": coach_clients})
+    if client.profile not in coach_clients:
+        coach_clients.append(client.profile)
+        await APIService.profile.update_coach_profile(
+            coach.id, {"assigned_to": coach_clients}
+        )
         await Cache.coach.update_coach(coach.profile, {"assigned_to": coach_clients})
 
-    await APIService.profile.update_client_profile(client.id, {"assigned_to": [coach.id]})
-    await Cache.client.update_client(client.profile, {"assigned_to": [coach.id]})
+    await APIService.profile.update_client_profile(
+        client.id, {"assigned_to": [coach.profile]}
+    )
+    await Cache.client.update_client(client.profile, {"assigned_to": [coach.profile]})
 
 
 async def check_assigned_clients(profile_id: int) -> bool:

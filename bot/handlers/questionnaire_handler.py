@@ -501,8 +501,8 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
             if message is not None:
                 await answer_msg(message, msg_text("payment_success", profile.language or settings.DEFAULT_LANG))
             send_client_request.delay(
-                coach.id,
-                client.id,
+                coach.profile,
+                client.profile,
                 {
                     "service_type": "program",
                     "workout_type": data.get("workout_type"),
@@ -529,9 +529,9 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
         if days:
             await state.update_data(workout_days=days)
             if data.get("edit_mode"):
-                subscription = await Cache.workout.get_latest_subscription(client.id)
+                subscription = await Cache.workout.get_latest_subscription(client.profile)
                 if subscription and len(subscription.workout_days) == len(days):
-                    await edit_subscription_days(callback_query, days, client.id, state, subscription)
+                    await edit_subscription_days(callback_query, days, client.profile, state, subscription)
                 else:
                     if callback_query.message is not None:
                         await answer_msg(
