@@ -65,11 +65,35 @@ def generate_order_id() -> str:
 async def answer_msg(msg_obj: Message | CallbackQuery | None, *args, **kwargs) -> Message | None:
     if msg_obj is None:
         return None
-    message = msg_obj.message if isinstance(msg_obj, CallbackQuery) else msg_obj
-    if message is None or not isinstance(message, Message):
+
+    message: Message | None = msg_obj.message if isinstance(msg_obj, CallbackQuery) else msg_obj
+    if not isinstance(message, Message):
         return None
+
     try:
-        return await message.answer(*args, **kwargs)
+        if "photo" in kwargs:
+            photo = kwargs.pop("photo")
+            return await message.answer_photo(photo, *args, **kwargs)
+
+        if "document" in kwargs:
+            doc = kwargs.pop("document")
+            return await message.answer_document(doc, *args, **kwargs)
+
+        if "video" in kwargs:
+            video = kwargs.pop("video")
+            return await message.answer_video(video, *args, **kwargs)
+
+        # plain text
+        if args:
+            text, *rest = args
+            return await message.answer(text, *rest, **kwargs)
+
+        if "text" in kwargs:
+            text = kwargs.pop("text")
+            return await message.answer(text, **kwargs)
+
+        raise ValueError("answer_msg: nothing to send")
+
     except TelegramBadRequest:
         return None
 
