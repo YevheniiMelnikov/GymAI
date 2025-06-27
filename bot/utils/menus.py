@@ -25,6 +25,8 @@ from core.exceptions import (
     ClientNotFoundError,
     CoachNotFoundError,
     SubscriptionNotFoundError,
+    ProgramNotFoundError,
+    PaymentNotFoundError,
 )
 from core.schemas import Client, Coach, Profile, Subscription, Program, DayExercises, Exercise
 from bot.utils.text import (
@@ -320,11 +322,19 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
     assert message
     client = await Cache.client.get_client(profile.id)
 
-    if await Cache.payment.get_status(client.profile, "subscription"):
+    status = None
+    try:
+        status = await Cache.payment.get_status(client.profile, "subscription")
+    except PaymentNotFoundError:
+        pass
+    if status:
         await callback_query.answer(msg_text("program_not_ready", language), show_alert=True)
         return
 
-    subscription = await Cache.workout.get_latest_subscription(profile.id)
+    try:
+        subscription = await Cache.workout.get_latest_subscription(profile.id)
+    except SubscriptionNotFoundError:
+        subscription = None
     if not subscription or not subscription.enabled:
         subscription_img = settings.BOT_PAYMENT_OPTIONS + f"subscription_{language}.jpeg"
         client_profile = await Cache.client.get_client(profile.id)
@@ -360,8 +370,18 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
     assert message
     client = await Cache.client.get_client(profile.id)
 
-    if program := await Cache.workout.get_program(client.profile):
-        if await Cache.payment.get_status(client.profile, "program"):
+    try:
+        program = await Cache.workout.get_program(client.profile)
+    except ProgramNotFoundError:
+        program = None
+
+    if program:
+        status = None
+        try:
+            status = await Cache.payment.get_status(client.profile, "program")
+        except PaymentNotFoundError:
+            pass
+        if status:
             await callback_query.answer(msg_text("program_not_ready", profile.language), show_alert=True)
             return
 
