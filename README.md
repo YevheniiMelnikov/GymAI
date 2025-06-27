@@ -69,6 +69,24 @@ Redis runs with `appendonly.aof` and LRU eviction. Configuration is stored in `r
 
 ---
 
+## Celery
+
+Background tasks are processed by Celery workers. Docker Compose includes two
+services (`celery` and `beat`) for this purpose. When running the worker outside
+of Docker make sure Redis is reachable and adjust `REDIS_URL` accordingly. You
+may also need to update `BOT_INTERNAL_URL` so Celery can reach the bot API:
+
+```bash
+export REDIS_URL=redis://localhost:16379  # port from docker-compose-local.yml
+export BOT_INTERNAL_URL=http://localhost:8080  # bot runs locally
+PYTHONPATH=. celery -A config.celery:celery_app worker -l info -Q default,maintenance -P threads
+```
+
+If Celery prints connection errors such as `Error -2 connecting to redis:6379`,
+verify that `REDIS_URL` points to your local Redis instance.
+
+---
+
 ## Tests
 
 Run tests with:
