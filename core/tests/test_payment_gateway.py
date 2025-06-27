@@ -24,7 +24,7 @@ class DummyLiqPay:
 @pytest.fixture(autouse=True)
 def patch_liqpay(monkeypatch):
     monkeypatch.setattr(
-        "core.services.gateways.payment_gateway.LiqPay",
+        "core.services.outer.gateways.payment_gateway.LiqPay",
         DummyLiqPay,
     )
 
