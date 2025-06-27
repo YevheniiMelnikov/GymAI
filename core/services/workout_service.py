@@ -59,15 +59,23 @@ class WorkoutService(APIClient):
         url = urljoin(cls.api_url, f"api/v1/programs/?client_profile={client_profile_id}")
         status, data = await cls._api_request("get", url, headers={"Authorization": f"Api-Key {cls.api_key}"})
 
-        if status == 200 and isinstance(data, list):
-            if not data:
-                logger.info(f"No program found for client_profile={client_profile_id}. HTTP={status}")
-                return None
+        if status == 200:
+            results = data
+            if isinstance(data, dict):
+                results = data.get("results", [])
+            if isinstance(results, list):
+                if not results:
+                    logger.info(
+                        f"No program found for client_profile={client_profile_id}. HTTP={status}"
+                    )
+                    return None
 
-            sorted_data = sorted(data, key=lambda p: p.get("created_at", 0), reverse=True)
-            return Program.model_validate(sorted_data[0])
+                sorted_data = sorted(results, key=lambda p: p.get("created_at", 0), reverse=True)
+                return Program.model_validate(sorted_data[0])
 
-        logger.warning(f"Program lookup failed for client_profile={client_profile_id}. HTTP={status}, Response: {data}")
+        logger.warning(
+            f"Program lookup failed for client_profile={client_profile_id}. HTTP={status}, Response: {data}"
+        )
         return None
 
     @classmethod
@@ -111,13 +119,19 @@ class WorkoutService(APIClient):
         url = urljoin(cls.api_url, f"api/v1/subscriptions/?client_profile={client_profile_id}")
         status, data = await cls._api_request("get", url, headers={"Authorization": f"Api-Key {cls.api_key}"})
 
-        if status == 200 and isinstance(data, list):
-            if not data:
-                logger.info(f"No subscription found for client_profile={client_profile_id}. HTTP={status}")
-                return None
+        if status == 200:
+            results = data
+            if isinstance(data, dict):
+                results = data.get("results", [])
+            if isinstance(results, list):
+                if not results:
+                    logger.info(
+                        f"No subscription found for client_profile={client_profile_id}. HTTP={status}"
+                    )
+                    return None
 
-            sorted_data = sorted(data, key=lambda s: s.get("updated_at", 0), reverse=True)
-            return Subscription.model_validate(sorted_data[0])
+                sorted_data = sorted(results, key=lambda s: s.get("updated_at", 0), reverse=True)
+                return Subscription.model_validate(sorted_data[0])
 
         logger.warning(
             f"Subscription lookup failed for client_profile={client_profile_id}. HTTP={status}, Response: {data}"
@@ -140,14 +154,20 @@ class WorkoutService(APIClient):
         url = urljoin(cls.api_url, f"api/v1/subscriptions/?client_profile={client_profile_id}")
         status, data = await cls._api_request("get", url, headers={"Authorization": f"Api-Key {cls.api_key}"})
 
-        if status == 200 and isinstance(data, list):
-            subscriptions: list[Subscription] = []
-            for item in data:
-                try:
-                    subscriptions.append(Subscription.model_validate(item))
-                except Exception as e:
-                    logger.warning(f"Skipping invalid subscription for client_profile_id={client_profile_id}: {e}")
-            return subscriptions
+        if status == 200:
+            results = data
+            if isinstance(data, dict):
+                results = data.get("results", [])
+            if isinstance(results, list):
+                subscriptions: list[Subscription] = []
+                for item in results:
+                    try:
+                        subscriptions.append(Subscription.model_validate(item))
+                    except Exception as e:
+                        logger.warning(
+                            f"Skipping invalid subscription for client_profile_id={client_profile_id}: {e}"
+                        )
+                return subscriptions
 
         logger.error(
             "Failed to retrieve subscriptions for client_profile_id=%s. HTTP=%s, Response: %s",
@@ -162,15 +182,21 @@ class WorkoutService(APIClient):
         url = urljoin(cls.api_url, f"api/v1/programs/?client_profile={client_profile_id}")
         status, data = await cls._api_request("get", url, headers={"Authorization": f"Api-Key {cls.api_key}"})
 
-        if status == 200 and isinstance(data, list):
-            programs: list[Program] = []
-            for item in data:
-                try:
-                    programs.append(Program.model_validate(item))
-                except Exception as e:
-                    logger.warning(f"Skipping invalid program for client_profile_id={client_profile_id}: {e}")
-            programs.sort(key=lambda p: p.created_at, reverse=True)
-            return programs
+        if status == 200:
+            results = data
+            if isinstance(data, dict):
+                results = data.get("results", [])
+            if isinstance(results, list):
+                programs: list[Program] = []
+                for item in results:
+                    try:
+                        programs.append(Program.model_validate(item))
+                    except Exception as e:
+                        logger.warning(
+                            f"Skipping invalid program for client_profile_id={client_profile_id}: {e}"
+                        )
+                programs.sort(key=lambda p: p.created_at, reverse=True)
+                return programs
 
         logger.error(
             "Failed to retrieve programs for client_profile_id=%s. HTTP=%s, Response: %s",
