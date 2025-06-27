@@ -338,7 +338,11 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
     if not subscription or not subscription.enabled:
         subscription_img = settings.BOT_PAYMENT_OPTIONS + f"subscription_{language}.jpeg"
         client_profile = await Cache.client.get_client(profile.id)
-        coach = await Cache.coach.get_coach(client_profile.assigned_to.pop())
+        if not client_profile.assigned_to:
+            await callback_query.answer(msg_text("client_not_assigned_to_coach", language), show_alert=True)
+            return
+        coach_id = client_profile.assigned_to[0]
+        coach = await Cache.coach.get_coach(coach_id)
 
         try:
             price_uah = (coach.subscription_price or Decimal("0")) * Decimal("1.3")
@@ -405,7 +409,11 @@ async def show_program_promo_page(callback_query: CallbackQuery, profile: Profil
 
     program_img = settings.BOT_PAYMENT_OPTIONS + f"program_{language}.jpeg"
     client_profile = await Cache.client.get_client(profile.id)
-    coach = await Cache.coach.get_coach(client_profile.assigned_to.pop())
+    if not client_profile.assigned_to:
+        await callback_query.answer(msg_text("client_not_assigned_to_coach", language), show_alert=True)
+        return
+    coach_id = client_profile.assigned_to[0]
+    coach = await Cache.coach.get_coach(coach_id)
 
     try:
         price_uah = (coach.program_price or Decimal("0")) * Decimal("1.3")
