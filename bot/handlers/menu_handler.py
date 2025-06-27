@@ -228,14 +228,14 @@ async def paginate_coaches(cbq: CallbackQuery, state: FSMContext, bot: Bot) -> N
         return
 
     if "_" not in cb_data:
-        await message.answer(msg_text("out_of_range", profile.language))
+        await cbq.answer(msg_text("out_of_range", profile.language))
         return
 
     action, param = cb_data.split("_", maxsplit=1)
 
     coaches = [Coach.model_validate(d) for d in data.get("coaches", [])]
     if not coaches:
-        await message.answer(msg_text("no_coaches", profile.language))
+        await cbq.answer(msg_text("no_coaches", profile.language))
         return
 
     if action in {"prev", "next"}:
@@ -246,7 +246,7 @@ async def paginate_coaches(cbq: CallbackQuery, state: FSMContext, bot: Bot) -> N
             return
 
         if page < 0 or page >= len(coaches):
-            await message.answer(msg_text("out_of_range", profile.language))
+            await cbq.answer(msg_text("out_of_range", profile.language))
             return
 
         await show_coaches_menu(message, coaches, bot, current_index=page)
