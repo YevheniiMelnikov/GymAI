@@ -21,7 +21,11 @@ from bot.states import States
 from bot.texts import msg_text
 from core.cache import Cache
 from core.enums import ClientStatus, CoachType
-from core.exceptions import ClientNotFoundError, CoachNotFoundError
+from core.exceptions import (
+    ClientNotFoundError,
+    CoachNotFoundError,
+    SubscriptionNotFoundError,
+)
 from core.schemas import Client, Coach, Profile, Subscription, Program, DayExercises, Exercise
 from bot.utils.text import (
     get_client_page,
@@ -150,9 +154,12 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
 
     current_index %= len(clients)
     current_client = clients[current_index]
-    subscription_active = (
-        await Cache.workout.get_latest_subscription(current_client.profile) is not None
-    )
+    try:
+        subscription = await Cache.workout.get_latest_subscription(current_client.profile)
+    except SubscriptionNotFoundError:
+        subscription = None
+
+    subscription_active = subscription is not None
     data = await state.get_data()
     client_page = await get_client_page(current_client, language, subscription_active, data)
 
