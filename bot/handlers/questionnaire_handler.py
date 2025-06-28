@@ -15,6 +15,7 @@ from bot.keyboards import (
     workout_experience_kb,
     yes_no_kb,
     select_role_kb,
+    select_language_kb,
 )
 from bot.states import States
 from config.env_settings import settings
@@ -28,7 +29,7 @@ from apps.payments.tasks import send_client_request
 from core.credits import required_credits
 from core.services.profile_service import ProfileService
 from bot.utils.workout_plans import process_new_subscription, edit_subscription_days
-from bot.utils.menus import show_main_menu, show_my_profile_menu
+from bot.utils.menus import show_main_menu, show_my_profile_menu, send_policy_confirmation
 from bot.utils.profiles import update_profile_data, check_assigned_clients
 from bot.utils.text import get_state_and_message
 from bot.utils.other import delete_messages, set_bot_commands, answer_msg, del_msg, parse_price
@@ -219,8 +220,13 @@ async def health_notes(message: Message, state: FSMContext, bot: Bot) -> None:
         return
 
     await delete_messages(state)
+    data = await state.get_data()
     await state.update_data(health_notes=message.text, status=ClientStatus.default)
-    await update_profile_data(cast(Message, message), state, "client", bot)
+    if data.get("edit_mode"):
+        await update_profile_data(cast(Message, message), state, "client", bot)
+    else:
+        await send_policy_confirmation(cast(Message, message), state)
+        await state.set_state(States.accept_policy)
 
 
 @questionnaire_router.message(States.surname)
@@ -396,7 +402,12 @@ async def profile_photo(message: Message, state: FSMContext, bot: Bot) -> None:
                 )
             avatar_manager.clean_up_file(local_file)
             role = data.get("role", "coach")
-            await update_profile_data(cast(Message, message), state, role, bot)
+            if data.get("edit_mode"):
+                await update_profile_data(cast(Message, message), state, role, bot)
+            else:
+                await state.update_data(role=role)
+                await send_policy_confirmation(cast(Message, message), state)
+                await state.set_state(States.accept_policy)
         else:
             await answer_msg(message, msg_text("photo_upload_fail", lang))
             await state.set_state(States.profile_photo)
@@ -597,3 +608,31 @@ async def delete_profile_confirmation(callback_query: CallbackQuery, state: FSMC
     else:
         if callback_query.message is not None:
             await show_my_profile_menu(cast(CallbackQuery, callback_query), profile, state)
+
+
+@questionnaire_router.callback_query(States.accept_policy)
+async def process_policy(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+    await callback_query.answer()
+    data = await state.get_data()
+    role = data.get("role", "client")
+    await delete_messages(state)
+
+    if callback_query.data == "yes":
+        if callback_query.message is not None:
+            await update_profile_data(cast(Message, callback_query.message), state, role, bot)
+    else:
+        await state.clear()
+        if callback_query.message is not None:
+            start_msg = await callback_query.message.answer(msg_text("start", settings.DEFAULT_LANG))
+            lang_msg = await callback_query.message.answer(
+                msg_text("select_language", settings.DEFAULT_LANG),
+                reply_markup=select_language_kb(),
+            )
+            msg_ids = []
+            if start_msg:
+                msg_ids.append(start_msg.message_id)
+            if lang_msg:
+                msg_ids.append(lang_msg.message_id)
+            await state.update_data(message_ids=msg_ids, chat_id=callback_query.message.chat.id)
+            await state.set_state(States.select_language)
+        await del_msg(callback_query)

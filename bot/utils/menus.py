@@ -149,6 +149,32 @@ async def show_tariff_plans(callback_query: CallbackQuery, profile: Profile, sta
     await del_msg(callback_query)
 
 
+async def send_policy_confirmation(message: Message, state: FSMContext) -> None:
+    data = await state.get_data()
+    lang = data.get("lang", settings.DEFAULT_LANG)
+
+    info_msg = await answer_msg(
+        message,
+        msg_text("contract_info_message", lang).format(
+            public_offer=settings.PUBLIC_OFFER,
+            privacy_policy=settings.PRIVACY_POLICY,
+        ),
+        disable_web_page_preview=True,
+    )
+    confirm_msg = await answer_msg(
+        message,
+        msg_text("accept_policy", lang),
+        reply_markup=kb.yes_no_kb(lang),
+    )
+    message_ids: list[int] = []
+    if info_msg:
+        message_ids.append(info_msg.message_id)
+    if confirm_msg:
+        message_ids.append(confirm_msg.message_id)
+    await state.update_data(chat_id=message.chat.id, message_ids=message_ids)
+    await del_msg(message)
+
+
 async def show_clients(message: Message, clients: list[Client], state: FSMContext, current_index: int = 0) -> None:
     profile = await Cache.profile.get_profile(message.chat.id)
     assert profile is not None
