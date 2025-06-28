@@ -46,7 +46,7 @@ async def set_bot_commands(bot: Bot, lang: Optional[str] = None) -> None:
             command=cmd,
             description=command_texts.get(f"/{cmd}", {}).get(lang, ""),
         )
-        for cmd in CommandName
+        for cmd in list(CommandName.__members__.values())
     ]
     await bot.set_my_commands(commands)
 
@@ -73,7 +73,7 @@ async def answer_msg(msg_obj: Message | CallbackQuery | None, *args, **kwargs) -
     if msg_obj is None:
         return None
 
-    message: Message | None = msg_obj.message if isinstance(msg_obj, CallbackQuery) else msg_obj
+    message = msg_obj.message if isinstance(msg_obj, CallbackQuery) else msg_obj
     if not isinstance(message, Message):
         return None
 
