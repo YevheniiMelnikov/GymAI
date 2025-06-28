@@ -361,6 +361,7 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
         subscription = await Cache.workout.get_latest_subscription(profile.id)
     except SubscriptionNotFoundError:
         subscription = None
+    sent = None
     if not subscription or not subscription.enabled:
         subscription_img = settings.BOT_PAYMENT_OPTIONS + f"subscription_{language}.jpeg"
         client_profile = await Cache.client.get_client(profile.id)
@@ -373,14 +374,14 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
         try:
             price_uah = (coach.subscription_price or Decimal("0")) * Decimal("1.3")
             credits = uah_to_credits(price_uah, settings.CREDIT_RATE)
-            await answer_msg(
+            sent = await answer_msg(
                 message,
                 caption=msg_text("subscription_price", language).format(price=credits),
                 photo=subscription_img,
                 reply_markup=kb.choose_payment_options_kb(language, "subscription"),
             )
         except TelegramBadRequest:
-            await answer_msg(
+            sent = await answer_msg(
                 message,
                 msg_text("image_error", language),
                 reply_markup=kb.choose_payment_options_kb(language, "subscription"),
@@ -390,9 +391,12 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
         if subscription.exercises:
             await state.update_data(exercises=subscription.exercises, subscription=True)
             await show_subscription_page(callback_query, state, subscription)
+            return
         else:
             await callback_query.answer(msg_text("program_not_ready", language), show_alert=True)
-    await del_msg(cast(Message | CallbackQuery | None, message))
+            return
+    if sent is not None:
+        await del_msg(cast(Message | CallbackQuery | None, message))
 
 
 async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
@@ -415,20 +419,22 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
             await callback_query.answer(msg_text("program_not_ready", profile.language), show_alert=True)
             return
 
-        await answer_msg(
+        sent = await answer_msg(
             message,
             msg_text("select_action", profile.language),
             reply_markup=kb.program_action_kb(profile.language),
         )
         await state.update_data(program=program.model_dump())
         await state.set_state(States.program_action_choice)
+        if sent is not None:
+            await del_msg(cast(Message | CallbackQuery | None, message))
     else:
-        await show_program_promo_page(callback_query, profile, state)
+        success = await show_program_promo_page(callback_query, profile, state)
+        if success:
+            await del_msg(cast(Message | CallbackQuery | None, message))
 
-    await del_msg(cast(Message | CallbackQuery | None, message))
 
-
-async def show_program_promo_page(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+async def show_program_promo_page(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> bool:
     language = cast(str, profile.language)
     message = cast(Message, callback_query.message)
     assert message
@@ -437,26 +443,27 @@ async def show_program_promo_page(callback_query: CallbackQuery, profile: Profil
     client_profile = await Cache.client.get_client(profile.id)
     if not client_profile.assigned_to:
         await callback_query.answer(msg_text("client_not_assigned_to_coach", language), show_alert=True)
-        return
+        return False
     coach_id = client_profile.assigned_to[0]
     coach = await Cache.coach.get_coach(coach_id)
 
     try:
         price_uah = (coach.program_price or Decimal("0")) * Decimal("1.3")
         credits = uah_to_credits(price_uah, settings.CREDIT_RATE)
-        await answer_msg(
+        sent = await answer_msg(
             message,
             caption=msg_text("program_price", language).format(price=credits),
             photo=program_img,
             reply_markup=kb.choose_payment_options_kb(language, "program"),
         )
     except TelegramBadRequest:
-        await answer_msg(
+        sent = await answer_msg(
             message,
             msg_text("image_error", language),
             reply_markup=kb.choose_payment_options_kb(language, "program"),
         )
     await state.set_state(States.payment_choice)
+    return sent is not None
 
 
 async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, profile: Profile) -> None:

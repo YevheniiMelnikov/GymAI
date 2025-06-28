@@ -163,6 +163,7 @@ async def reset_workout_plan(callback_query: CallbackQuery, state: FSMContext) -
 
     profile_id = int(profile_id_str)
     split_number = data.get("split", 1)
+    client = await Cache.client.get_client(profile_id)
     await callback_query.answer(btn_text("done", profile.language))
 
     if data.get("subscription"):
@@ -370,7 +371,9 @@ async def process_new_subscription(callback_query: CallbackQuery, profile: Profi
     await Cache.client.update_client(client.profile, {"credits": client.credits - required})
     next_payment = (datetime.today() + timedelta(days=int(settings.SUBSCRIPTION_PERIOD_DAYS))).strftime("%Y-%m-%d")
     await APIService.workout.update_subscription(sub_id, {"enabled": True, "payment_date": next_payment})
-    await Cache.workout.update_subscription(client.profile, {"id": sub_id, "enabled": True, "payment_date": next_payment})
+    await Cache.workout.update_subscription(
+        client.profile, {"id": sub_id, "enabled": True, "payment_date": next_payment}
+    )
     await callback_query.answer(msg_text("payment_success", language), show_alert=True)
 
 

@@ -119,7 +119,7 @@ class ProfileService(APIClient):
 
     @classmethod
     async def update_coach_profile(cls, coach_id: int, data: dict[str, Any]) -> bool:
-        url = urljoin(cls.api_url, f"api/v1/coach-profiles/{coach_id}/")
+        url = urljoin(cls.api_url, f"api/v1/coach-profiles/pk/{coach_id}/")
 
         for price_field in ("program_price", "subscription_price"):
             if price_field in data and isinstance(data[price_field], Decimal):
@@ -159,3 +159,16 @@ class ProfileService(APIClient):
     async def get_coach_by_tg_id(cls, tg_id: int) -> Coach | None:  # TODO: NOT USED YET
         profile = await cls.get_profile_by_tg_id(tg_id)
         return await cls.get_coach_by_profile_id(profile.id) if profile else None
+
+    @classmethod
+    async def list_coach_profiles(cls) -> list[Coach]:
+        url = urljoin(cls.api_url, "api/v1/coach-profiles/")
+        status, data = await cls._api_request(
+            "get",
+            url,
+            headers={"Authorization": f"Api-Key {cls.api_key}"},
+        )
+        if status == 200 and isinstance(data, list):
+            return [Coach.model_validate(item) for item in data]
+        logger.error(f"Failed to fetch coaches list. HTTP={status}")
+        return []

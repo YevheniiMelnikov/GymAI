@@ -47,6 +47,11 @@ class CoachCacheManager(BaseCacheManager):
     async def get_coaches(cls, *, include_ai: bool = False) -> list[Coach]:
         try:
             all_coaches = await cls.get_all("coaches")
+            if not all_coaches:
+                coaches = await cls.service.list_coach_profiles()
+                for coach in coaches:
+                    await cls.save_coach(coach.profile, coach.model_dump())
+                all_coaches = await cls.get_all("coaches")
             coaches_data = []
             for v in all_coaches.values():
                 coach_dict = json.loads(v)
