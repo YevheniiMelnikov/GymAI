@@ -52,33 +52,16 @@ async def contact_client(message: Message, state: FSMContext, bot: Bot) -> None:
 
     await state.update_data(sender_name=coach.name, recipient_language=client_profile.language)
 
-    caption = message.caption or ""
-    if message.photo:
-        await send_message(
-            recipient=client,
-            text=caption,
-            bot=bot,
-            state=state,
-            reply_markup=new_message_kb(client_profile.language, profile.id),
-            photo=message.photo[-1].file_id,
-        )
-    elif message.video:
-        await send_message(
-            recipient=client,
-            text=caption,
-            bot=bot,
-            state=state,
-            reply_markup=new_message_kb(client_profile.language, profile.id),
-            video=message.video,
-        )
-    else:
-        await send_message(
-            recipient=client,
-            text=message.text or "",
-            bot=bot,
-            state=state,
-            reply_markup=new_message_kb(client_profile.language, profile.id),
-        )
+    text = message.caption or message.text or ""
+    await send_message(
+        recipient=client,
+        text=text,
+        bot=bot,
+        state=state,
+        reply_markup=new_message_kb(client_profile.language, profile.id),
+        photo=message.photo[-1].file_id if message.photo else None,
+        video=message.video if message.video else None,
+    )
 
     await answer_msg(message, msg_text("message_sent", profile.language))
     logger.debug(f"Coach {profile.id} sent message to client {client.id}")
@@ -108,27 +91,9 @@ async def contact_coach(message: Message, state: FSMContext, bot: Bot) -> None:
 
     await state.update_data(sender_name=client.name, recipient_language=coach_profile.language)
 
-    caption = message.caption or ""
-    if message.photo:
-        await send_message(
-            recipient=coach,
-            text=caption,
-            bot=bot,
-            state=state,
-            reply_markup=new_message_kb(coach_profile.language, profile.id),
-            photo=message.photo[-1].file_id,
-        )
-    elif message.video:
-        await send_message(
-            recipient=coach,
-            text=caption,
-            bot=bot,
-            state=state,
-            reply_markup=new_message_kb(coach_profile.language, profile.id),
-            video=message.video,
-        )
-    else:
-        avatar = None
+    text = message.caption or message.text or ""
+    avatar = None
+    if not (message.photo or message.video):
         if client.profile_photo:
             avatar = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{client.profile_photo}"
         else:
@@ -136,14 +101,17 @@ async def contact_coach(message: Message, state: FSMContext, bot: Bot) -> None:
             file_path = Path(__file__).resolve().parent.parent / "images" / avatar_name
             if file_path.exists():
                 avatar = FSInputFile(file_path)
-        await send_message(
-            recipient=coach,
-            text=message.text or "",
-            bot=bot,
-            state=state,
-            reply_markup=new_message_kb(coach_profile.language, profile.id),
-            avatar_url=avatar,
-        )
+
+    await send_message(
+        recipient=coach,
+        text=text,
+        bot=bot,
+        state=state,
+        reply_markup=new_message_kb(coach_profile.language, profile.id),
+        photo=message.photo[-1].file_id if message.photo else None,
+        video=message.video if message.video else None,
+        avatar_url=avatar,
+    )
 
     await answer_msg(message, msg_text("message_sent", profile.language))
     logger.debug(f"Client {profile.id} sent message to coach {coach.id}")

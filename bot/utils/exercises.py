@@ -48,17 +48,17 @@ async def save_exercise(
 
     if data.get("subscription"):
         days: list[str] = data.get("days", [])
-        try:
-            current_day_code = days[day_index]
-        except IndexError:
+        if day_index < len(days):
+            day_code = days[day_index]
+        else:
             logger.warning(f"Invalid day_index {day_index} for days: {days}")
-            current_day_code = "monday"
-        day_label = get_translated_week_day(profile.language, current_day_code).lower()
+            day_code = "monday"
+        day_label = get_translated_week_day(profile.language, day_code).lower()
         split_number = len(days)
     else:
         day_label = day_index + 1
-        split_number = data.get("split")
-        if split_number is None:
+        split_number = data.get("split") or 0
+        if not split_number:
             try:
                 from core.cache import Cache
 
@@ -66,7 +66,8 @@ async def save_exercise(
                 split_number = program.split_number
             except ProgramNotFoundError:
                 logger.warning(
-                    f"Program not found for client {profile_id} in save_exercise, defaulting split_number to 1."
+                    "Program not found for client %s in save_exercise, defaulting split_number to 1.",
+                    profile_id,
                 )
                 split_number = 1
 

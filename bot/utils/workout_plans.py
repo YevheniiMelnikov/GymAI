@@ -212,9 +212,7 @@ async def next_day_workout_plan(callback_query: CallbackQuery, state: FSMContext
     assert profile is not None
     data = await state.get_data()
     completed_days = data.get("day_index", 0)
-    split_number = data.get("split")
-    if split_number is None:
-        split_number = 0
+    split_number = data.get("split") or 0
     exercises = data.get("exercises", [])
 
     if not any(day.exercises for day in exercises):
@@ -231,11 +229,10 @@ async def next_day_workout_plan(callback_query: CallbackQuery, state: FSMContext
 
     if data.get("subscription"):
         days = data.get("days", [])
-        if completed_days < len(days):
-            week_day = get_translated_week_day(profile.language, days[completed_days]).lower()
-        else:
+        if completed_days >= len(days):
             await callback_query.answer(msg_text("out_of_range", profile.language))
             return
+        week_day = get_translated_week_day(profile.language, days[completed_days]).lower()
     else:
         week_day = completed_days + 1
 
@@ -250,11 +247,7 @@ async def next_day_workout_plan(callback_query: CallbackQuery, state: FSMContext
         reply_markup=program_manage_kb(profile.language, split_number or 1),
     )
 
-    message_ids = []
-    if exercise_msg:
-        message_ids.append(exercise_msg.message_id)
-    if program_msg:
-        message_ids.append(program_msg.message_id)
+    message_ids = [m.message_id for m in [exercise_msg, program_msg] if m]
 
     await state.update_data(
         day_index=completed_days,
