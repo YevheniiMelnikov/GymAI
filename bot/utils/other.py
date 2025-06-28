@@ -19,6 +19,7 @@ from aiogram.types import BotCommand, CallbackQuery, Message
 
 from config.env_settings import settings
 from bot.texts.text_manager import TextManager
+from core.enums import CommandName
 from core.containers import App
 
 
@@ -40,7 +41,13 @@ async def short_url(url: str) -> str:
 async def set_bot_commands(bot: Bot, lang: Optional[str] = None) -> None:
     lang = lang or settings.DEFAULT_LANG
     command_texts = TextManager.commands
-    commands = [BotCommand(command=cmd, description=desc[lang]) for cmd, desc in command_texts.items()]
+    commands = [
+        BotCommand(
+            command=cmd,
+            description=command_texts.get(f"/{cmd}", {}).get(lang, ""),
+        )
+        for cmd in CommandName
+    ]
     await bot.set_my_commands(commands)
 
 
