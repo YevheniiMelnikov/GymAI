@@ -3,6 +3,7 @@ from contextlib import suppress
 from aiogram import Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
+from core.enums import CommandName
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
@@ -19,7 +20,7 @@ from bot.texts.text_manager import msg_text
 cmd_router = Router()
 
 
-@cmd_router.message(Command("language"))
+@cmd_router.message(Command(CommandName.language))
 async def cmd_language(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile_data = data.get("profile", {})
@@ -31,7 +32,7 @@ async def cmd_language(message: Message, state: FSMContext) -> None:
         await message.delete()
 
 
-@cmd_router.message(Command("menu"))
+@cmd_router.message(Command(CommandName.menu))
 async def cmd_menu(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile_data = data.get("profile", {})
@@ -46,7 +47,7 @@ async def cmd_menu(message: Message, state: FSMContext) -> None:
         await message.delete()
 
 
-@cmd_router.message(Command("start"))
+@cmd_router.message(Command(CommandName.start))
 async def cmd_start(message: Message, state: FSMContext) -> None:
     await state.clear()
     if not message.from_user:
@@ -75,7 +76,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
             await message.delete()
 
 
-@cmd_router.message(Command("help"))
+@cmd_router.message(Command(CommandName.help))
 async def cmd_help(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile_data = data.get("profile", {})
@@ -84,7 +85,7 @@ async def cmd_help(message: Message, state: FSMContext) -> None:
     await message.answer(msg_text("help", language))
 
 
-@cmd_router.message(Command("feedback"))
+@cmd_router.message(Command(CommandName.feedback))
 async def cmd_feedback(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile_data = data.get("profile", {})
@@ -96,7 +97,7 @@ async def cmd_feedback(message: Message, state: FSMContext) -> None:
         await message.delete()
 
 
-@cmd_router.message(Command("offer"))
+@cmd_router.message(Command(CommandName.offer))
 async def cmd_policy(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile_data = data.get("profile", {})
@@ -113,7 +114,7 @@ async def cmd_policy(message: Message, state: FSMContext) -> None:
         await message.delete()
 
 
-@cmd_router.message(Command("info"))
+@cmd_router.message(Command(CommandName.info))
 async def cmd_info(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile_data = data.get("profile", {})

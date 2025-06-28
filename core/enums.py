@@ -35,3 +35,13 @@ class PaymentStatus(str, Enum):
 class CoachType(str, Enum):
     human = "human"
     ai = "ai"
+
+
+class CommandName(str, Enum):
+    start = "start"
+    menu = "menu"
+    language = "language"
+    help = "help"
+    feedback = "feedback"
+    offer = "offer"
+    info = "info"
