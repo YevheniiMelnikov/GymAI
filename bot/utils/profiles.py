@@ -38,11 +38,16 @@ async def update_profile_data(message: Message, state: FSMContext, role: str, bo
         user_data.pop("profile", None)
 
         if role == "client":
+            credits_delta = data.pop("credits_delta", 0)
             if data.get("status") != ClientStatus.initial:
                 client = await Cache.client.get_client(profile.id)
+                if credits_delta:
+                    user_data["credits"] = client.credits + credits_delta
                 await Cache.client.update_client(client.profile, user_data)
                 await APIService.profile.update_client_profile(client.id, user_data)
             else:
+                if credits_delta:
+                    user_data["credits"] = credits_delta
                 client = await APIService.profile.create_client_profile(profile.id, user_data)
                 await Cache.client.save_client(profile.id, client.model_dump())
         else:

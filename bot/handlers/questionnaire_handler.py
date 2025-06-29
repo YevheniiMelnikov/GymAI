@@ -51,6 +51,7 @@ async def select_language(callback_query: CallbackQuery, state: FSMContext, bot:
         if profile:
             await APIService.profile.update_profile(profile.id, {"language": lang})
             await Cache.profile.update_profile(callback_query.from_user.id, dict(language=lang))
+            profile.language = lang
             message = callback_query.message
             if message is not None:
                 await show_main_menu(cast(Message, message), profile, state)
@@ -225,8 +226,11 @@ async def health_notes(message: Message, state: FSMContext, bot: Bot) -> None:
     await state.update_data(health_notes=message.text, status=ClientStatus.default)
     if not data.get("edit_mode"):
         await answer_msg(
-            message, msg_text("initial_credits_granted", data.get("lang", settings.DEFAULT_LANG))
+            message,
+            msg_text("initial_credits_granted", data.get("lang", settings.DEFAULT_LANG)),
         )
+        await state.update_data(credits_delta=1000)
+
     await update_profile_data(cast(Message, message), state, "client", bot)
 
 
