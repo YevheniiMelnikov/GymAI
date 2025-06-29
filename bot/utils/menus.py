@@ -20,13 +20,12 @@ from decimal import Decimal
 from bot.states import States
 from bot.texts import msg_text
 from core.cache import Cache
-from core.enums import ClientStatus, CoachType, PaymentStatus
+from core.enums import ClientStatus, CoachType
 from core.exceptions import (
     ClientNotFoundError,
     CoachNotFoundError,
     SubscriptionNotFoundError,
     ProgramNotFoundError,
-    PaymentNotFoundError,
 )
 from core.schemas import Client, Coach, Profile, Subscription, Program, DayExercises, Exercise
 from bot.utils.text import (
