@@ -129,6 +129,7 @@ class MessageText(AutoName):
     initial_credits_granted = auto()
     credit_balance = auto()
     not_enough_credits = auto()
+    ai_coach_promo = auto()
 
     upload_photo = auto()
     photo_uploaded = auto()

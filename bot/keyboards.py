@@ -43,6 +43,13 @@ def tariff_plans_kb(lang: str, plans: list[str]) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
+def ai_tariff_kb(lang: str, plans: list[str]) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [[builder.add(f"{plan}_plan", f"ai_plan_{plan}")] for plan in plans]
+    buttons.append([builder.add("prev_menu", "back")])
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
 def coach_menu_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [

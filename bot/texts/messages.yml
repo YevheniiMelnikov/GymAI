@@ -219,6 +219,11 @@ no_coaches:
   ru: "На платформе пока нет активных тренеров 🚫"
   ua: "На платформі поки що немає активних тренерів 🚫"
 
+choose_coach:
+  eng: "Choose a coach \ud83c\udfcb\ufe0f"
+  ru: "Выберите тренера \ud83c\udfcb\ufe0f"
+  ua: "Оберіть тренера \ud83c\udfcb\ufe0f"
+
 
 coach_page:
   eng: "<b>Name 🆔</b>\n{name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Work experience (years) 🎓</b>\n{work_experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Additional information ℹ️</b>\n<em>{additional_info}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Subscription price 🚀</b>\n<em>{subscription_price} UAH/month</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Program price 📃</b>\n<em>{program_price} UAH</em>"
@@ -597,3 +602,8 @@ not_enough_credits:
   eng: "Not enough credits. Please top up your balance."
   ru: "Недостаточно кредитов. Пополните баланс."
   ua: "Недостатньо кредитів. Поповніть баланс."
+
+ai_coach_promo:
+  eng: "<b>AI coach \ud83e\udd16</b>\n{prices}\nYour balance: {balance} credits"
+  ru: "<b>ИИ тренер \ud83e\udd16</b>\n{prices}\nВаш баланс: {balance} кредитов"
+  ua: "<b>ШІ тренер \ud83e\udd16</b>\n{prices}\nВаш баланс: {balance} кредитів"
