@@ -28,18 +28,13 @@ class PaymentProcessor:
         if payment.processed:
             logger.info(f"Payment {payment.id} already processed")
             return
-
         try:
             client = await cls.cache.client.get_client(payment.client_profile)
-
             if payment.status == PaymentStatus.SUCCESS:
                 await cls.cache.payment.set_status(client.id, payment.payment_type, PaymentStatus.SUCCESS)
                 profile = await cls.profile_service.get_profile(client.profile)
                 if profile:
-                    send_payment_message.delay(
-                        client.id,
-                        msg_text("payment_success", profile.language),
-                    )
+                    send_payment_message.delay(client.id, msg_text("payment_success", profile.language))
                 await cls.process_credit_topup(client, payment.amount)
             elif payment.status == PaymentStatus.FAILURE:
                 await cls.cache.payment.set_status(client.id, payment.payment_type, PaymentStatus.FAILURE)
@@ -48,19 +43,49 @@ class PaymentProcessor:
                     send_payment_message.delay(
                         client.id,
                         msg_text("payment_failure", profile.language).format(
-                            mail=settings.EMAIL,
-                            tg=settings.TG_SUPPORT_CONTACT,
+                            mail=settings.EMAIL, tg=settings.TG_SUPPORT_CONTACT
                         ),
                     )
-
         except ClientNotFoundError:
             logger.error(f"Client profile not found for payment {payment.id}")
-
         except Exception as e:
             logger.exception(f"Payment processing failed for {payment.id}: {e}")
-
         finally:
             await cls.payment_service.update_payment(payment.id, {"processed": True})
+
+    @classmethod
+    async def _process_payout(cls, payment: Payment) -> list[str] | None:
+        try:
+            client = await cls.cache.client.get_client(payment.client_profile)
+            if not client or not client.assigned_to:
+                logger.warning(f"Skip payment {payment.order_id}: client/coach missing")
+                return None
+            coach = await cls.cache.coach.get_coach(client.assigned_to[0])
+            if not coach:
+                logger.error(f"Coach {client.assigned_to[0]} not found for payment {payment.order_id}")
+                return None
+            if coach.coach_type == CoachType.ai:
+                logger.info(f"Skip AI coach {coach.id} for payment {payment.order_id}")
+                return None
+            amount = (payment.amount / Decimal("1.3")).quantize(Decimal("0.01"), ROUND_HALF_UP)
+            ok = await cls.payment_service.update_payment(
+                payment.id, {"status": PaymentStatus.CLOSED, "payout_handled": True}
+            )
+            if not ok:
+                logger.error(f"Cannot mark payment {payment.order_id} as closed")
+                return None
+            await cls.cache.payment.set_status(payment.client_profile, payment.payment_type, PaymentStatus.CLOSED)
+            logger.info(f"Payment {payment.order_id} closed, payout {amount} UAH")
+            return [
+                coach.name or "",
+                coach.surname or "",
+                coach.payment_details or "",
+                payment.order_id,
+                str(amount),
+            ]
+        except Exception as e:
+            logger.exception(f"Failed to process payment {payment.order_id}: {e}")
+            return None
 
     @classmethod
     async def process_credit_topup(cls, client: Client, amount: Decimal) -> None:
@@ -78,63 +103,20 @@ class PaymentProcessor:
 
     @classmethod
     async def export_coach_payouts(cls) -> None:
+        """
+        Updates Google Sheets with coach payouts once a month (with 'closed' PaymentStatus)
+        """
         try:
             payments = await cls.payment_service.get_unclosed_payments()
             if not payments:
                 logger.info("No unclosed payments found")
                 return
-
-            payout_rows: list[list[str]] = []
-
-            for payment in payments:
-                try:
-                    client = await cls.cache.client.get_client(payment.client_profile)  # type: ignore[attr-defined]
-                    if not client or not client.assigned_to:
-                        logger.warning(f"Skip payment {payment.order_id}: client/coach missing")
-                        continue
-
-                    coach_id = client.assigned_to[0]
-                    coach = await cls.cache.coach.get_coach(coach_id)
-                    if not coach:
-                        logger.error(f"Coach {coach_id} not found for payment {payment.order_id}")
-                        continue
-                    if coach.coach_type == CoachType.ai:
-                        logger.info(f"Skip AI coach {coach_id} for payment {payment.order_id}")
-                        continue
-
-                    amount = (payment.amount / Decimal("1.3")).quantize(Decimal("0.01"), ROUND_HALF_UP)
-
-                    ok = await cls.payment_service.update_payment(
-                        payment.id, {"status": PaymentStatus.CLOSED, "payout_handled": True}
-                    )
-                    if ok:
-                        await cls.cache.payment.set_status(
-                            payment.client_profile,
-                            payment.payment_type,
-                            PaymentStatus.CLOSED,
-                            # type: ignore[attr-defined]
-                        )
-                    else:
-                        logger.error(f"Cannot mark payment {payment.order_id} as closed")
-                        continue
-
-                    payout_rows.append(
-                        [
-                            coach.name or "",
-                            coach.surname or "",
-                            coach.payment_details or "",
-                            payment.order_id,
-                            str(amount),
-                        ]
-                    )
-                    logger.info(f"Payment {payment.order_id} closed, payout {amount} UAH")
-
-                except Exception as e:
-                    logger.exception(f"Failed to process payment {payment.order_id}: {e}")
-
+            payout_rows = [
+                row for payment in payments
+                if (row := await cls._process_payout(payment))
+            ]
             if payout_rows:
                 await asyncio.to_thread(GSheetsService.create_new_payment_sheet, payout_rows)
                 logger.info(f"Payout sheet created: {len(payout_rows)} rows")
-
         except Exception as e:
             logger.exception(f"Failed batch payout: {e}")
