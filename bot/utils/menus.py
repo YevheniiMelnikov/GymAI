@@ -45,11 +45,11 @@ async def show_subscription_page(callback_query: CallbackQuery, state: FSMContex
     await callback_query.answer()
     profile = await Cache.profile.get_profile(callback_query.from_user.id)
     assert profile is not None
-    language = cast(str, profile.language)
+    lang = cast(str, profile.language)
 
     next_payment_date_str = subscription.payment_date
     enabled_status = "✅" if subscription.enabled else "❌"
-    translated_week_days = ", ".join(get_translated_week_day(language, x) for x in subscription.workout_days)
+    translated_week_days = ", ".join(get_translated_week_day(lang, x) for x in subscription.workout_days)
 
     await state.set_state(States.show_subscription)
     message = callback_query.message
@@ -57,13 +57,13 @@ async def show_subscription_page(callback_query: CallbackQuery, state: FSMContex
     if message and isinstance(message, Message):
         await answer_msg(
             message,
-            msg_text("subscription_page", language).format(
+            msg_text("subscription_page", lang).format(
                 next_payment_date=next_payment_date_str,
                 enabled=enabled_status,
                 price=subscription.price,
                 days=translated_week_days,
             ),
-            reply_markup=kb.show_subscriptions_kb(language),
+            reply_markup=kb.show_subscriptions_kb(lang),
         )
         await del_msg(message)
 
@@ -124,14 +124,14 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext) 
 
 
 async def show_balance_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    language = cast(str, profile.language)
+    lang = cast(str, profile.language)
     client = await Cache.client.get_client(profile.id)
     await callback_query.answer()
     await state.set_state(States.balance)
     await answer_msg(
         callback_query,
-        msg_text("credit_balance", language).format(credits=client.credits),
-        reply_markup=kb.balance_menu_kb(language),
+        msg_text("credit_balance", lang).format(credits=client.credits),
+        reply_markup=kb.balance_menu_kb(lang),
     )
     await del_msg(callback_query)
 
@@ -203,10 +203,10 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
 async def show_coaches_menu(message: Message, coaches: list[Coach], bot: Bot, current_index: int = 0) -> None:
     profile = await Cache.profile.get_profile(message.chat.id)
     assert profile is not None
-    language = cast(str, profile.language)
+    lang = cast(str, profile.language)
 
     if not coaches:
-        await answer_msg(message, msg_text("no_coaches", language))
+        await answer_msg(message, msg_text("no_coaches", lang))
         return
 
     current_index %= len(coaches)
@@ -217,7 +217,7 @@ async def show_coaches_menu(message: Message, coaches: list[Coach], bot: Bot, cu
         coach_photo_url = FSInputFile(file_path)
     else:
         coach_photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{current_coach.profile_photo}"
-    formatted_text = msg_text("coach_page", language).format(**current_coach.model_dump(mode="json"))
+    formatted_text = msg_text("coach_page", lang).format(**current_coach.model_dump(mode="json"))
 
     try:
         media = InputMediaPhoto(media=coach_photo_url)
@@ -225,7 +225,7 @@ async def show_coaches_menu(message: Message, coaches: list[Coach], bot: Bot, cu
             await message.edit_media(media=media)
             await message.edit_caption(
                 caption=formatted_text,
-                reply_markup=kb.coach_select_kb(language, current_coach.id, current_index),
+                reply_markup=kb.coach_select_kb(lang, current_coach.id, current_index),
                 parse_mode=ParseMode.HTML,
             )
         else:
@@ -233,14 +233,14 @@ async def show_coaches_menu(message: Message, coaches: list[Coach], bot: Bot, cu
                 message.chat.id,
                 photo=coach_photo_url,
                 caption=formatted_text,
-                reply_markup=kb.coach_select_kb(language, current_coach.id, current_index),
+                reply_markup=kb.coach_select_kb(lang, current_coach.id, current_index),
                 parse_mode=ParseMode.HTML,
             )
     except TelegramBadRequest:
         await answer_msg(
             message,
             text=formatted_text,
-            reply_markup=kb.coach_select_kb(language, current_coach.id, current_index),
+            reply_markup=kb.coach_select_kb(lang, current_coach.id, current_index),
             parse_mode=ParseMode.HTML,
         )
         await del_msg(cast(Message | CallbackQuery | None, message))
@@ -248,21 +248,21 @@ async def show_coaches_menu(message: Message, coaches: list[Coach], bot: Bot, cu
 
 async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     user = await fetch_user(profile)
-    language = cast(str, profile.language)
+    lang = cast(str, profile.language)
 
     if profile.role == "client" and isinstance(user, Client):
         if user.status == ClientStatus.initial:
-            await callback_query.answer(msg_text("finish_registration_to_get_credits", language), show_alert=True)
+            await callback_query.answer(msg_text("finish_registration_to_get_credits", lang), show_alert=True)
             await state.set_state(States.workout_goals)
-            msg = await answer_msg(callback_query, msg_text("workout_goals", language))
+            msg = await answer_msg(callback_query, msg_text("workout_goals", lang))
             if msg is not None:
                 await state.update_data(chat_id=callback_query.from_user.id, message_ids=[msg.message_id])
             return
 
     text = msg_text(
         "client_profile" if profile.role == "client" else "coach_profile",
-        language,
-    ).format(**get_profile_attributes(role=profile.role, user=user, lang=language))
+        lang,
+    ).format(**get_profile_attributes(role=profile.role, user=user, lang=lang))
 
     await answer_profile(callback_query, profile, user, text)
     await state.set_state(States.profile)
@@ -270,7 +270,7 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
 
 
 async def show_my_clients_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    language = cast(str, profile.language)
+    lang = cast(str, profile.language)
     coach = await Cache.coach.get_coach(profile.id)
     assert coach
     assigned_ids = coach.assigned_to if coach.assigned_to else []
@@ -286,7 +286,7 @@ async def show_my_clients_menu(callback_query: CallbackQuery, profile: Profile, 
                 logger.warning(f"Client data not found for ID {cid} while listing coach's clients. Skipping.")
 
         if not clients:
-            await callback_query.answer(msg_text("no_clients", language), show_alert=True)
+            await callback_query.answer(msg_text("no_clients", lang), show_alert=True)
             await state.set_state(States.main_menu)
             return
 
@@ -295,19 +295,19 @@ async def show_my_clients_menu(callback_query: CallbackQuery, profile: Profile, 
         await show_clients(message, clients, state)
     else:
         if not coach.verified:
-            await callback_query.answer(msg_text("coach_info_message", language), show_alert=True)
-        await callback_query.answer(msg_text("no_clients", language), show_alert=True)
+            await callback_query.answer(msg_text("coach_info_message", lang), show_alert=True)
+        await callback_query.answer(msg_text("no_clients", lang), show_alert=True)
         await state.set_state(States.main_menu)
 
 
 async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    language = cast(str, profile.language)
+    lang = cast(str, profile.language)
 
     try:
         client = await Cache.client.get_client(profile.id)
     except ClientNotFoundError:
         logger.error(f"Client data not found for profile {profile.id} in show_my_workouts_menu.")
-        await callback_query.answer(msg_text("questionnaire_not_completed", language), show_alert=True)
+        await callback_query.answer(msg_text("questionnaire_not_completed", lang), show_alert=True)
         message = cast(Message, callback_query.message)
         assert message
         await show_profile_editing_menu(message, profile, state)
@@ -317,9 +317,9 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
     assert message
 
     if client.status == ClientStatus.initial:
-        await callback_query.answer(msg_text("finish_registration_to_get_credits", language), show_alert=True)
+        await callback_query.answer(msg_text("finish_registration_to_get_credits", lang), show_alert=True)
         await state.set_state(States.workout_goals)
-        msg = await answer_msg(callback_query, msg_text("workout_goals", language))
+        msg = await answer_msg(callback_query, msg_text("workout_goals", lang))
         if msg is not None:
             await state.update_data(chat_id=callback_query.from_user.id, message_ids=[msg.message_id])
         return
@@ -327,16 +327,16 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
     if not client.assigned_to:
         await answer_msg(
             message,
-            msg_text("no_program", language),
-            reply_markup=kb.choose_coach_kb(language),
+            msg_text("no_program", lang),
+            reply_markup=kb.choose_coach_kb(lang),
         )
         await state.set_state(States.choose_coach)
     else:
         await state.set_state(States.select_service)
         await answer_msg(
             message,
-            msg_text("select_service", language),
-            reply_markup=kb.select_service_kb(language),
+            msg_text("select_service", lang),
+            reply_markup=kb.select_service_kb(lang),
         )
 
     await del_msg(cast(Message | CallbackQuery | None, message))
@@ -368,12 +368,14 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
         if not client_profile.assigned_to:
             await callback_query.answer(msg_text("client_not_assigned_to_coach", language), show_alert=True)
             return
+
         coach_id = client_profile.assigned_to[0]
         coach = await Cache.coach.get_coach(coach_id)
 
         try:
             price_uah = (coach.subscription_price or Decimal("0")) * Decimal("1.3")
             credits = uah_to_credits(price_uah, settings.CREDIT_RATE)
+            print(credits, " credits")
             sent = await answer_msg(
                 message,
                 caption=msg_text("subscription_price", language).format(price=credits),
@@ -392,9 +394,11 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
             await state.update_data(exercises=subscription.exercises, subscription=True)
             await show_subscription_page(callback_query, state, subscription)
             return
+
         else:
             await callback_query.answer(msg_text("program_not_ready", language), show_alert=True)
             return
+
     if sent is not None:
         await del_msg(cast(Message | CallbackQuery | None, message))
 

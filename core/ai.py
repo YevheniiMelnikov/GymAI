@@ -1,7 +1,6 @@
 from typing import Any
 
 
-
 async def ai_coach_request(*args: Any, **kwargs: Any) -> None:
     """Handle a request sent to the AI coach (placeholder)."""
     pass

@@ -513,45 +513,53 @@ async def show_history(callback_query: CallbackQuery, state: FSMContext) -> None
 
 @workout_router.callback_query(States.program_history)
 async def program_history_nav(callback_query: CallbackQuery, state: FSMContext) -> None:
-    data_str = callback_query.data or ""
-    if data_str == "back":
-        data = await state.get_data()
+    cb_data = callback_query.data or ""
+    data = await state.get_data()
+
+    if cb_data == "back":
         await show_exercises_menu(callback_query, state, Profile.model_validate(data["profile"]))
         return
-    if "_" not in data_str:
+
+    if "_" not in cb_data:
         lang = (await Cache.profile.get_profile(callback_query.from_user.id)).language
         await callback_query.answer(msg_text("out_of_range", lang))
         return
-    _, index_str = data_str.rsplit("_", 1)
+
+    _, index_str = cb_data.rsplit("_", 1)
     try:
         index = int(index_str)
     except ValueError:
         lang = (await Cache.profile.get_profile(callback_query.from_user.id)).language
         await callback_query.answer(msg_text("out_of_range", lang))
         return
-    profile = await Cache.profile.get_profile(callback_query.from_user.id)
+
+    profile = Profile.model_validate(data["profile"])
     assert profile is not None
     await program_history_pagination(callback_query, profile, index, state)
 
 
 @workout_router.callback_query(States.subscription_history)
 async def subscription_history_nav(callback_query: CallbackQuery, state: FSMContext) -> None:
-    data_str = callback_query.data or ""
-    if data_str == "back":
+    cb_data = callback_query.data or ""
+    if cb_data == "back":
         subscription = await Cache.workout.get_latest_subscription(callback_query.from_user.id)
         await show_subscription_page(callback_query, state, subscription)
         return
-    if "_" not in data_str:
+
+    if "_" not in cb_data:
         lang = (await Cache.profile.get_profile(callback_query.from_user.id)).language
         await callback_query.answer(msg_text("out_of_range", lang))
         return
-    _, index_str = data_str.rsplit("_", 1)
+
+    _, index_str = cb_data.rsplit("_", 1)
     try:
         index = int(index_str)
     except ValueError:
         lang = (await Cache.profile.get_profile(callback_query.from_user.id)).language
         await callback_query.answer(msg_text("out_of_range", lang))
         return
-    profile = await Cache.profile.get_profile(callback_query.from_user.id)
+
+    data = await state.get_data()
+    profile = Profile.model_validate(data["profile"])
     assert profile is not None
     await subscription_history_pagination(callback_query, profile, index, state)

@@ -81,14 +81,10 @@ async def assign_coach(coach: Coach, client: Client) -> None:
     coach_clients = coach.assigned_to or []
     if client.profile not in coach_clients:
         coach_clients.append(client.profile)
-        await APIService.profile.update_coach_profile(
-            coach.id, {"assigned_to": coach_clients}
-        )
+        await APIService.profile.update_coach_profile(coach.id, {"assigned_to": coach_clients})
         await Cache.coach.update_coach(coach.profile, {"assigned_to": coach_clients})
 
-    await APIService.profile.update_client_profile(
-        client.id, {"assigned_to": [coach.profile]}
-    )
+    await APIService.profile.update_client_profile(client.id, {"assigned_to": [coach.profile]})
     await Cache.client.update_client(client.profile, {"assigned_to": [coach.profile]})
 
 

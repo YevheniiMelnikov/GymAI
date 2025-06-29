@@ -6,9 +6,11 @@ from core.cache import Cache
 from core.enums import ClientStatus
 from core.schemas import Client
 
+
 @pytest.fixture(autouse=True)
 async def fake_redis(monkeypatch):
     yield
+
 
 @pytest.mark.asyncio
 async def test_update_client_uses_profile_key(monkeypatch):
@@ -32,6 +34,7 @@ async def test_update_client_uses_profile_key(monkeypatch):
 async def test_get_client_not_found(monkeypatch):
     async def fake_get(_: int):
         return None
+
     monkeypatch.setattr(Cache.client.service, "get_client_by_profile_id", fake_get)
     with pytest.raises(Exception):
         await Cache.client.get_client(999)

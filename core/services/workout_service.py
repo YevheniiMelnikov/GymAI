@@ -65,17 +65,13 @@ class WorkoutService(APIClient):
                 results = data.get("results", [])
             if isinstance(results, list):
                 if not results:
-                    logger.info(
-                        f"No program found for client_profile={client_profile_id}. HTTP={status}"
-                    )
+                    logger.info(f"No program found for client_profile={client_profile_id}. HTTP={status}")
                     return None
 
                 sorted_data = sorted(results, key=lambda p: p.get("created_at", 0), reverse=True)
                 return Program.model_validate(sorted_data[0])
 
-        logger.warning(
-            f"Program lookup failed for client_profile={client_profile_id}. HTTP={status}, Response: {data}"
-        )
+        logger.warning(f"Program lookup failed for client_profile={client_profile_id}. HTTP={status}, Response: {data}")
         return None
 
     @classmethod
@@ -125,9 +121,7 @@ class WorkoutService(APIClient):
                 results = data.get("results", [])
             if isinstance(results, list):
                 if not results:
-                    logger.info(
-                        f"No subscription found for client_profile={client_profile_id}. HTTP={status}"
-                    )
+                    logger.info(f"No subscription found for client_profile={client_profile_id}. HTTP={status}")
                     return None
 
                 sorted_data = sorted(results, key=lambda s: s.get("updated_at", 0), reverse=True)
@@ -164,9 +158,7 @@ class WorkoutService(APIClient):
                     try:
                         subscriptions.append(Subscription.model_validate(item))
                     except Exception as e:
-                        logger.warning(
-                            f"Skipping invalid subscription for client_profile_id={client_profile_id}: {e}"
-                        )
+                        logger.warning(f"Skipping invalid subscription for client_profile_id={client_profile_id}: {e}")
                 return subscriptions
 
         logger.error(
@@ -192,9 +184,7 @@ class WorkoutService(APIClient):
                     try:
                         programs.append(Program.model_validate(item))
                     except Exception as e:
-                        logger.warning(
-                            f"Skipping invalid program for client_profile_id={client_profile_id}: {e}"
-                        )
+                        logger.warning(f"Skipping invalid program for client_profile_id={client_profile_id}: {e}")
                 programs.sort(key=lambda p: p.created_at, reverse=True)
                 return programs
 

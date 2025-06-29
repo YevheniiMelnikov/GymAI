@@ -528,50 +528,56 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
 async def workout_days(callback_query: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
+    lang = profile.language or settings.DEFAULT_LANG
+
     try:
         client = await Cache.client.get_client(profile.id)
     except ClientNotFoundError:
         logger.error(f"Client profile not found for profile {profile.id}")
-        await callback_query.answer(msg_text("unexpected_error", profile.language or settings.DEFAULT_LANG))
+        await callback_query.answer(msg_text("unexpected_error", lang))
         return
 
-    days = data.get("workout_days", [])
-    if callback_query.data == "complete":
-        if days:
-            await state.update_data(workout_days=days)
-            if data.get("edit_mode"):
-                subscription = await Cache.workout.get_latest_subscription(client.profile)
-                if subscription and len(subscription.workout_days) == len(days):
-                    await edit_subscription_days(callback_query, days, client.profile, state, subscription)
-                else:
-                    if callback_query.message is not None:
-                        await answer_msg(
-                            cast(Message, callback_query.message),
-                            msg_text("workout_plan_delete_warning", profile.language or settings.DEFAULT_LANG),
-                            reply_markup=yes_no_kb(profile.language or settings.DEFAULT_LANG),
-                        )
-                    await state.set_state(States.confirm_subscription_reset)
-            else:
-                await callback_query.answer(msg_text("saved", profile.language or settings.DEFAULT_LANG))
-                await process_new_subscription(callback_query, profile, state)
-        else:
-            await callback_query.answer("❌")
-    else:
-        if callback_query.data not in days:
-            days.append(callback_query.data)
-        else:
+    days: list[str] = data.get("workout_days", [])
+
+    if callback_query.data != "complete":
+        if callback_query.data in days:
             days.remove(callback_query.data)
+        else:
+            days.append(callback_query.data)
 
         await state.update_data(workout_days=days)
 
-        if callback_query.message is not None:
-            with suppress(TelegramBadRequest, AttributeError):
-                if isinstance(callback_query.message, Message):
-                    await callback_query.message.edit_reply_markup(
-                        reply_markup=select_days_kb(profile.language or settings.DEFAULT_LANG, days)
-                    )
+        if isinstance(callback_query.message, Message):
+            with suppress(TelegramBadRequest):
+                await callback_query.message.edit_reply_markup(reply_markup=select_days_kb(lang, days))
 
         await state.set_state(States.workout_days)
+        return
+
+    if not days:
+        await callback_query.answer("❌")
+        return
+
+    await state.update_data(workout_days=days)
+    if data.get("edit_mode"):
+        subscription = await Cache.workout.get_latest_subscription(client.profile)
+
+        if subscription and len(subscription.workout_days) == len(days):
+            await edit_subscription_days(callback_query, days, client.profile, state, subscription)
+            return
+
+        if isinstance(callback_query.message, Message):
+            await answer_msg(
+                callback_query.message,
+                msg_text("workout_plan_delete_warning", lang),
+                reply_markup=yes_no_kb(lang),
+            )
+
+        await state.set_state(States.confirm_subscription_reset)
+        return
+
+    await callback_query.answer(msg_text("saved", lang))
+    await process_new_subscription(callback_query, profile, state)
 
 
 @questionnaire_router.callback_query(States.profile_delete)
