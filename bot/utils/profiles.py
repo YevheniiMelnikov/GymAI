@@ -43,13 +43,8 @@ async def update_profile_data(message: Message, state: FSMContext, role: str, bo
                 await Cache.client.update_client(client.profile, user_data)
                 await APIService.profile.update_client_profile(client.id, user_data)
             else:
-                if client := await APIService.profile.create_client_profile(profile.id, user_data):
-                    await Cache.client.save_client(profile.id, client.model_dump())
-                    await answer_msg(
-                        message, msg_text("initial_credits_granted", data.get("lang", settings.DEFAULT_LANG))
-                    )
-                else:
-                    await Cache.client.save_client(profile.id, {"profile": profile.id, **user_data})
+                client = await APIService.profile.create_client_profile(profile.id, user_data)
+                await Cache.client.save_client(profile.id, client.model_dump())
         else:
             if data.get("edit_mode"):
                 coach = await Cache.coach.get_coach(profile.id)
@@ -61,10 +56,8 @@ async def update_profile_data(message: Message, state: FSMContext, role: str, bo
                         message, msg_text("wait_for_verification", data.get("lang", settings.DEFAULT_LANG))
                     )
                     await send_coach_request(message.from_user.id, profile, data, bot)
-                    if coach := await APIService.profile.create_coach_profile(profile.id, user_data):
-                        await Cache.coach.save_coach(profile.id, coach.model_dump())
-                    else:
-                        await Cache.coach.save_coach(profile.id, {"profile": profile.id, **user_data})
+                    coach = await APIService.profile.create_coach_profile(profile.id, user_data)
+                    await Cache.coach.save_coach(profile.id, coach.model_dump())
 
         await answer_msg(message, msg_text("your_data_updated", data.get("lang", settings.DEFAULT_LANG)))
         await menus.show_main_menu(message, profile, state)

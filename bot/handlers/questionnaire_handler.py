@@ -147,7 +147,8 @@ async def born_in(message: Message, state: FSMContext, bot: Bot) -> None:
         chat_id=message.chat.id,
         status=ClientStatus.initial,
     )
-    await update_profile_data(message, state, "client", bot)
+    await send_policy_confirmation(cast(Message, message), state)
+    await state.set_state(States.accept_policy)
 
 
 @questionnaire_router.message(States.workout_goals)
@@ -222,11 +223,11 @@ async def health_notes(message: Message, state: FSMContext, bot: Bot) -> None:
     await delete_messages(state)
     data = await state.get_data()
     await state.update_data(health_notes=message.text, status=ClientStatus.default)
-    if data.get("edit_mode"):
-        await update_profile_data(cast(Message, message), state, "client", bot)
-    else:
-        await send_policy_confirmation(cast(Message, message), state)
-        await state.set_state(States.accept_policy)
+    if not data.get("edit_mode"):
+        await answer_msg(
+            message, msg_text("initial_credits_granted", data.get("lang", settings.DEFAULT_LANG))
+        )
+    await update_profile_data(cast(Message, message), state, "client", bot)
 
 
 @questionnaire_router.message(States.surname)
