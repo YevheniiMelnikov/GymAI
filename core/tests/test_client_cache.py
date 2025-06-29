@@ -1,10 +1,8 @@
 import pytest
-import fakeredis
 
 from core.cache.base import BaseCacheManager
 from core.cache import Cache
 from core.enums import ClientStatus
-from core.schemas import Client
 
 
 @pytest.fixture(autouse=True)

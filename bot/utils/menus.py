@@ -20,7 +20,7 @@ from decimal import Decimal
 from bot.states import States
 from bot.texts import msg_text
 from core.cache import Cache
-from core.enums import ClientStatus, CoachType
+from core.enums import ClientStatus, CoachType, PaymentStatus
 from core.exceptions import (
     ClientNotFoundError,
     CoachNotFoundError,
@@ -346,16 +346,6 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
     language = cast(str, profile.language)
     message = cast(Message, callback_query.message)
     assert message
-    client = await Cache.client.get_client(profile.id)
-
-    status = None
-    try:
-        status = await Cache.payment.get_status(client.profile, "subscription")
-    except PaymentNotFoundError:
-        pass
-    if status:
-        await callback_query.answer(msg_text("program_not_ready", language), show_alert=True)
-        return
 
     try:
         subscription = await Cache.workout.get_latest_subscription(profile.id)
@@ -370,6 +360,7 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
             await callback_query.answer(msg_text("client_not_assigned_to_coach", language), show_alert=True)
             return
 
+        await callback_query.answer()
         coach_id = client_profile.assigned_to[0]
         coach = await Cache.coach.get_coach(coach_id)
         price_uah = (coach.subscription_price or Decimal("0")) * Decimal("1.3")
@@ -381,6 +372,7 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
             photo=subscription_img,
             reply_markup=kb.choose_payment_options_kb(language, "subscription"),
         )
+        await del_msg(cast(Message | CallbackQuery | None, message))
     else:
         if subscription.exercises:
             await state.update_data(exercises=subscription.exercises, subscription=True)
@@ -403,50 +395,48 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
         program = None
 
     if program:
-        status = None
-        try:
-            status = await Cache.payment.get_status(client.profile, "program")
-        except PaymentNotFoundError:
-            pass
-        if status:
+        if not program.exercises_by_day:
             await callback_query.answer(msg_text("program_not_ready", profile.language), show_alert=True)
             return
 
-        sent = await answer_msg(
+        await answer_msg(
             message,
             msg_text("select_action", profile.language),
             reply_markup=kb.program_action_kb(profile.language),
         )
         await state.update_data(program=program.model_dump())
         await state.set_state(States.program_action_choice)
-        if sent is not None:
-            await del_msg(cast(Message | CallbackQuery | None, message))
+        await del_msg(cast(Message | CallbackQuery | None, message))
     else:
         await show_program_promo_page(callback_query, profile, state)
 
-async def show_program_promo_page(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    language = cast(str, profile.language)
-    message = cast(Message, callback_query.message)
-    assert message
 
-    file_path = Path(settings.BOT_PAYMENT_OPTIONS) / f"program_{language}.jpeg"
-    program_img = FSInputFile(file_path)
+async def show_program_promo_page(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     client_profile = await Cache.client.get_client(profile.id)
+    language = cast(str, profile.language)
+
     if not client_profile.assigned_to:
         await callback_query.answer(msg_text("client_not_assigned_to_coach", language), show_alert=True)
         return
 
+    await callback_query.answer()
     coach_id = client_profile.assigned_to[0]
     coach = await Cache.coach.get_coach(coach_id)
-    await state.set_state(States.payment_choice)
+    file_path = Path(settings.BOT_PAYMENT_OPTIONS) / f"program_{language}.jpeg"
+    program_img = FSInputFile(file_path)
     price_uah = (coach.program_price or Decimal("0")) * Decimal("1.3")
     credits = uah_to_credits(price_uah, settings.CREDIT_RATE)
+    message = cast(Message, callback_query.message)
+    assert message
+
     await answer_msg(
         message,
         caption=msg_text("program_price", language).format(price=credits),
         photo=program_img,
         reply_markup=kb.choose_payment_options_kb(language, "program"),
     )
+    await del_msg(cast(Message | CallbackQuery | None, message))
+    await state.set_state(States.payment_choice)
 
 
 async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, profile: Profile) -> None:

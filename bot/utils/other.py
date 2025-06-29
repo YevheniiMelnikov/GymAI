@@ -19,7 +19,6 @@ from aiogram.types import BotCommand, CallbackQuery, Message
 
 from config.env_settings import settings
 from bot.texts.text_manager import TextManager
-from core.enums import CommandName
 from core.containers import App
 
 

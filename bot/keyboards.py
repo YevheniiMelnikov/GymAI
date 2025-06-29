@@ -420,6 +420,7 @@ def program_action_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
         [builder.add("view", "show_old"), builder.add("new_program", "new_program")],
+        [builder.add("prev_menu", "back")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 

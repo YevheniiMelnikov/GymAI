@@ -16,9 +16,9 @@ def configure_routers(dp: Dispatcher) -> None:
         cmd_router,
         questionnaire_router,
         menu_router,
+        payment_router,
         workout_router,
         chat_router,
-        payment_router,
         invalid_content_router,
     ]
     for router in routers:
