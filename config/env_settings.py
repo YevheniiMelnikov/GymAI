@@ -5,10 +5,11 @@ from typing import Annotated
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings
+from pathlib import Path
 
 
 class Settings(BaseSettings):
-    BOT_PAYMENT_OPTIONS: str = "https://storage.googleapis.com/services_promo/"
+    BOT_PAYMENT_OPTIONS: str = str((Path(__file__).resolve().parents[1] / "bot" / "images"))
     PAYMENT_CHECK_INTERVAL: int = 60
     COACH_PAYOUT_RATE: Decimal = Decimal("0.7")
     CREDIT_RATE: Decimal = Decimal("1")
