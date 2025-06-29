@@ -363,7 +363,8 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
         subscription = None
     sent = None
     if not subscription or not subscription.enabled:
-        subscription_img = settings.BOT_PAYMENT_OPTIONS + f"subscription_{language}.jpeg"
+        file_path = Path(settings.BOT_PAYMENT_OPTIONS) / f"subscription_{language}.jpeg"
+        subscription_img = FSInputFile(file_path)
         client_profile = await Cache.client.get_client(profile.id)
         if not client_profile.assigned_to:
             await callback_query.answer(msg_text("client_not_assigned_to_coach", language), show_alert=True)
@@ -443,7 +444,8 @@ async def show_program_promo_page(callback_query: CallbackQuery, profile: Profil
     message = cast(Message, callback_query.message)
     assert message
 
-    program_img = settings.BOT_PAYMENT_OPTIONS + f"program_{language}.jpeg"
+    file_path = Path(settings.BOT_PAYMENT_OPTIONS) / f"program_{language}.jpeg"
+    program_img = FSInputFile(file_path)
     client_profile = await Cache.client.get_client(profile.id)
     if not client_profile.assigned_to:
         await callback_query.answer(msg_text("client_not_assigned_to_coach", language), show_alert=True)
