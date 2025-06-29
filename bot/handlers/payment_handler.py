@@ -48,7 +48,6 @@ async def get_the_gift(callback_query: CallbackQuery, state: FSMContext):
 
 @payment_router.callback_query(States.payment_choice)
 async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
-    await callback_query.answer()
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     if callback_query.data == "back":

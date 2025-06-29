@@ -5,6 +5,9 @@ class ProfileRole(str, Enum):
     client = "client"
     coach = "coach"
 
+    def __str__(self) -> str:
+        return self.value
+
 
 class ClientStatus(str, Enum):
     waiting_for_text = "waiting_for_text"
@@ -13,16 +16,25 @@ class ClientStatus(str, Enum):
     waiting_for_program = "waiting_for_program"
     initial = "initial"
 
+    def __str__(self) -> str:
+        return self.value
+
 
 class Language(str, Enum):
     ua = "ua"
     ru = "ru"
     eng = "eng"
 
+    def __str__(self) -> str:
+        return self.value
+
 
 class Gender(str, Enum):
     male = "male"
     female = "female"
+
+    def __str__(self) -> str:
+        return self.value
 
 
 class PaymentStatus(str, Enum):
@@ -31,10 +43,16 @@ class PaymentStatus(str, Enum):
     FAILURE = "FAILURE"
     CLOSED = "CLOSED"
 
+    def __str__(self) -> str:
+        return self.value
+
 
 class CoachType(str, Enum):
     human = "human"
     ai = "ai"
+
+    def __str__(self) -> str:
+        return self.value
 
 
 class CommandName(str, Enum):
@@ -45,3 +63,6 @@ class CommandName(str, Enum):
     feedback = "feedback"
     offer = "offer"
     info = "info"
+
+    def __str__(self) -> str:
+        return self.value
