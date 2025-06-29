@@ -1,6 +1,6 @@
 from datetime import datetime
-from typing import Annotated
-from pydantic import BaseModel, Field, field_validator, condecimal
+from typing import Annotated, Any
+from pydantic import BaseModel, Field, field_validator, condecimal, ConfigDict
 
 from core.encryptor import Encryptor
 from core.enums import (
@@ -20,6 +20,7 @@ class Profile(BaseModel):
     role: Annotated[ProfileRole, Field()]
     tg_id: int
     language: Annotated[Language, Field()]
+    model_config = ConfigDict(extra="ignore")
 
 
 class Client(BaseModel):
@@ -36,6 +37,7 @@ class Client(BaseModel):
     status: ClientStatus = ClientStatus.initial
     assigned_to: list[int] = Field(default_factory=list)
     credits: int = Field(default=1000, ge=0)  # pyrefly: ignore [no-matching-overload]
+    profile_data: dict[str, Any] = {}
 
     @field_validator("born_in", mode="before")
     def born_in_to_str(cls, v):
@@ -58,6 +60,8 @@ class Coach(BaseModel):
     assigned_to: list[int] = Field(default_factory=list)
     verified: bool = False
     coach_type: CoachType = CoachType.human
+    profile_data: dict[str, Any] = {}
+    model_config = ConfigDict(extra="ignore")
 
     @property
     def payment_details_plain(self) -> str:
@@ -74,11 +78,13 @@ class Exercise(BaseModel):
     weight: str | None = None
     set_id: int | None = None
     drop_set: bool = False
+    model_config = ConfigDict(extra="ignore")
 
 
 class DayExercises(BaseModel):
     day: str
     exercises: list[Exercise]
+    model_config = ConfigDict(extra="ignore")
 
 
 class Program(BaseModel):
@@ -89,6 +95,7 @@ class Program(BaseModel):
     split_number: int
     workout_type: str
     wishes: str
+    model_config = ConfigDict(extra="ignore")
 
 
 class Subscription(BaseModel):
@@ -101,6 +108,7 @@ class Subscription(BaseModel):
     workout_days: list[str] = Field(default_factory=list)
     exercises: list[DayExercises] = Field(default_factory=list)
     payment_date: str
+    model_config = ConfigDict(extra="ignore")
 
     @field_validator("payment_date", mode="before")
     def normalize_payment_date(cls, v: str) -> str:
@@ -122,3 +130,4 @@ class Payment(BaseModel):
     processed: bool = False
     payout_handled: bool = False
     error: str | None = None
+    model_config = ConfigDict(extra="ignore")

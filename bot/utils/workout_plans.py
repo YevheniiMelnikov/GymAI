@@ -73,7 +73,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bo
         await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
         return
 
-    client_profile: Profile = await APIService.profile.get_profile(client.profile)  # pyre-ignore[bad-assignment]
+    client_profile = Profile.model_validate(client.profile_data)
     client_lang = client_profile.language if client_profile else settings.DEFAULT_LANG
 
     if data.get("subscription"):

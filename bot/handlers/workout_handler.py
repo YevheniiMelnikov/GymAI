@@ -341,7 +341,7 @@ async def workout_description(message: Message, state: FSMContext, bot: Bot):
     profile = Profile.model_validate(data["profile"])
     client = await Cache.client.get_client(profile.id)
     coach = await Cache.coach.get_coach(client.assigned_to.pop())
-    coach_profile: Profile = await APIService.profile.get_profile(coach.profile)  # pyre-ignore[bad-assignment]
+    coach_profile = Profile.model_validate(coach.profile_data)
     coach_lang = cast(str, coach_profile.language)
     day_index = cast(int, data.get("day_index"))
     exercises = [DayExercises.model_validate(e) for e in data.get("exercises", [])]

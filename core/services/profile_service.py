@@ -168,7 +168,13 @@ class ProfileService(APIClient):
             url,
             headers={"Authorization": f"Api-Key {cls.api_key}"},
         )
-        if status == 200 and isinstance(data, list):
-            return [Coach.model_validate(item) for item in data]
-        logger.error(f"Failed to fetch coaches list. HTTP={status}")
-        return []
+
+        if status != 200:
+            logger.error(f"Failed to fetch coaches list. HTTP={status}")
+            return []
+
+        items: list[dict] = (
+            data if isinstance(data, list) else data.get("results", []) if isinstance(data, dict) else []
+        )
+
+        return [Coach.model_validate(item) for item in items]
