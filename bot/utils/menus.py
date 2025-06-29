@@ -256,6 +256,7 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
             msg = await answer_msg(callback_query, msg_text("workout_goals", lang))
             if msg is not None:
                 await state.update_data(chat_id=callback_query.from_user.id, message_ids=[msg.message_id])
+            await del_msg(cast(Message | CallbackQuery | None, callback_query))
             return
 
     text = msg_text(
