@@ -17,7 +17,7 @@ from bot.keyboards import (
 from bot.states import States
 from bot.texts.text_manager import msg_text
 from core.cache import Cache
-from core.schemas import Coach, Profile
+from core.schemas import Coach, Client, Profile
 from bot.utils.chat import contact_client, process_feedback_content
 from bot.utils.menus import (
     show_main_menu,
@@ -32,6 +32,7 @@ from bot.utils.menus import (
     clients_menu_pagination,
     show_balance_menu,
     show_tariff_plans,
+    show_ai_coach_promo,
 )
 from bot.utils.profiles import assign_coach
 from bot.utils.workout_plans import manage_program, cancel_subscription
@@ -121,6 +122,42 @@ async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
         )
 
 
+@menu_router.callback_query(States.choose_ai_tariff)
+async def ai_tariff_choice(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+    data = await state.get_data()
+    profile = Profile.model_validate(data.get("profile"))
+    cb_data = callback_query.data or ""
+
+    if cb_data == "back":
+        await state.set_state(States.choose_coach)
+        await answer_msg(
+            callback_query,
+            msg_text("choose_coach", profile.language),
+            reply_markup=choose_coach_kb(profile.language),
+        )
+        await del_msg(callback_query)
+        return
+
+    if cb_data.startswith("ai_plan_"):
+        coach_data = data.get("ai_coach")
+        client_data = data.get("client")
+        if not coach_data or not client_data:
+            await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
+            return
+        coach = Coach.model_validate(coach_data)
+        client = Client.model_validate(client_data)
+        await assign_coach(coach, client)
+        await callback_query.answer(msg_text("saved", profile.language))
+        await state.set_state(States.workout_type)
+        await answer_msg(
+            callback_query,
+            msg_text("workout_type", profile.language),
+            reply_markup=workout_type_kb(profile.language),
+        )
+        await state.update_data(new_client=True)
+        await del_msg(callback_query)
+
+
 @menu_router.callback_query(States.profile)
 async def profile_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
     await callback_query.answer()
@@ -186,15 +223,8 @@ async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext, bo
             await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
             await del_msg(message)
             return
-        await assign_coach(coach, client)
-        await callback_query.answer(msg_text("saved", profile.language))
-        await state.set_state(States.workout_type)
-        await message.answer(
-            msg_text("workout_type", profile.language),
-            reply_markup=workout_type_kb(profile.language),
-        )
-        await state.update_data(new_client=True)
-        await del_msg(message)
+        await state.update_data(ai_coach=coach.model_dump(mode="json"), client=client.model_dump())
+        await show_ai_coach_promo(callback_query, profile, state)
     else:
         coaches = await Cache.coach.get_coaches()
         if not coaches:
