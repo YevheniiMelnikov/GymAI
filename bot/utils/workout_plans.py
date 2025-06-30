@@ -345,7 +345,7 @@ async def process_new_subscription(callback_query: CallbackQuery, profile: Profi
     if not coach:
         return
 
-    required = required_credits(coach.subscription_price or Decimal("0"), settings.CREDIT_RATE)
+    required = required_credits(coach.subscription_price or Decimal("0"))
     if client.credits < required:
         await callback_query.answer(msg_text("not_enough_credits", language), show_alert=True)
         return

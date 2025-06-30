@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Annotated
 
 from pydantic import Field, model_validator
@@ -12,7 +12,6 @@ class Settings(BaseSettings):
     BOT_PAYMENT_OPTIONS: str = str((Path(__file__).resolve().parents[1] / "bot" / "images"))
     PAYMENT_CHECK_INTERVAL: int = 60
     COACH_PAYOUT_RATE: Decimal = Decimal("0.7")
-    CREDIT_RATE: Decimal = Decimal("1")
     PACKAGE_START_CREDITS: int = 500
     PACKAGE_START_PRICE: Decimal = Decimal("250")
     PACKAGE_OPTIMUM_CREDITS: int = 1200
@@ -98,6 +97,13 @@ class Settings(BaseSettings):
             self.PAYMENT_CALLBACK_URL = f"{self.WEBHOOK_HOST}/payment-webhook/"
 
         return self
+
+    @property
+    def CREDIT_RATE_MAX_PACK(self) -> Decimal:
+        """Cost of one credit for the most profitable package."""
+        return (self.PACKAGE_MAX_PRICE / Decimal(self.PACKAGE_MAX_CREDITS)).quantize(
+            Decimal("0.0001"), ROUND_HALF_UP
+        )
 
 
 settings = Settings()  # noqa

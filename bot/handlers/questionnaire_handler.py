@@ -505,7 +505,7 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
                     reply_markup=select_days_kb(profile.language or settings.DEFAULT_LANG, []),
                 )
         elif data.get("service_type") == "program":
-            required = required_credits(coach.program_price or Decimal("0"), settings.CREDIT_RATE)
+            required = required_credits(coach.program_price or Decimal("0"))
             if client.credits < required:
                 if message is not None:
                     await answer_msg(message, msg_text("not_enough_credits", profile.language or settings.DEFAULT_LANG))
