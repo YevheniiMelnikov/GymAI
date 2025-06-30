@@ -111,10 +111,7 @@ class PaymentProcessor:
             if not payments:
                 logger.info("No unclosed payments found")
                 return
-            payout_rows = [
-                row for payment in payments
-                if (row := await cls._process_payout(payment))
-            ]
+            payout_rows = [row for payment in payments if (row := await cls._process_payout(payment))]
             if payout_rows:
                 await asyncio.to_thread(GSheetsService.create_new_payment_sheet, payout_rows)
                 logger.info(f"Payout sheet created: {len(payout_rows)} rows")
