@@ -12,8 +12,6 @@ class ButtonText(AutoName):
     client = auto()
     coach = auto()
 
-    sign_in = auto()
-    sign_up = auto()
     back = auto()
     quit = auto()
     forward = auto()
@@ -34,6 +32,10 @@ class ButtonText(AutoName):
     start_plan = auto()
     optimum_plan = auto()
     max_plan = auto()
+    subscription_6_months = auto()
+    subscription_14_days = auto()
+    subscription_30_days = auto()
+    chat_message = auto()
 
     my_clients = auto()
     my_profile = auto()

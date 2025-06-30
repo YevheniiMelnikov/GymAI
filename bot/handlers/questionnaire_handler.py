@@ -229,7 +229,7 @@ async def health_notes(message: Message, state: FSMContext, bot: Bot) -> None:
             message,
             msg_text("initial_credits_granted", data.get("lang", settings.DEFAULT_LANG)),
         )
-        await state.update_data(credits_delta=1000)
+        await state.update_data(credits_delta=settings.PACKAGE_START_CREDITS)
 
     await update_profile_data(cast(Message, message), state, "client", bot)
 

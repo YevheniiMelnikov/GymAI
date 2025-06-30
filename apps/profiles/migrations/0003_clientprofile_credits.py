@@ -2,6 +2,8 @@
 
 from django.db import migrations, models
 
+from config.env_settings import settings
+
 
 class Migration(migrations.Migration):
     dependencies = [
@@ -12,6 +14,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="clientprofile",
             name="credits",
-            field=models.PositiveIntegerField(default=1000),
+            field=models.PositiveIntegerField(default=settings.PACKAGE_START_CREDITS),
         ),
     ]

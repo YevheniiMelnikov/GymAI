@@ -36,7 +36,7 @@ class Client(BaseModel):
     weight: int | None = None
     status: ClientStatus = ClientStatus.initial
     assigned_to: list[int] = Field(default_factory=list)
-    credits: int = Field(default=1000, ge=0)  # pyrefly: ignore [no-matching-overload]
+    credits: int = Field(default=500, ge=0)  # pyrefly: ignore [no-matching-overload]
     profile_data: dict[str, Any] = {}
 
     @field_validator("born_in", mode="before")
