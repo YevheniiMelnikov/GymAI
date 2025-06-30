@@ -100,7 +100,7 @@ async def warn_low_credits(self):  # pyre-ignore[valid-type]
             continue
         client = await Cache.client.get_client(sub.client_profile)
         profile = await ProfileService.get_profile(client.profile)
-        required = required_credits(Decimal(str(sub.price)), settings.CREDIT_RATE)
+        required = required_credits(Decimal(str(sub.price)))
         if client.credits < required:
             lang = profile.language if profile else settings.DEFAULT_LANG
             send_payment_message.delay(
@@ -117,7 +117,7 @@ async def charge_due_subscriptions(self):  # pyre-ignore[valid-type]
         if not sub.id or not sub.client_profile:
             continue
         client = await Cache.client.get_client(sub.client_profile)
-        required = required_credits(Decimal(str(sub.price)), settings.CREDIT_RATE)
+        required = required_credits(Decimal(str(sub.price)))
         if client.credits < required:
             await APIService.workout.update_subscription(
                 sub.id, {"enabled": False, "client_profile": sub.client_profile}

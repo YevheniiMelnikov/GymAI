@@ -14,7 +14,7 @@ from core.services.payment_service import PaymentService
 from core.services.profile_service import ProfileService
 from apps.payments.tasks import send_payment_message
 from bot.texts.text_manager import msg_text
-from core.credits import uah_to_credits
+from core.credits import uah_to_credits, available_packages
 
 
 class PaymentProcessor:
@@ -89,7 +89,10 @@ class PaymentProcessor:
 
     @classmethod
     async def process_credit_topup(cls, client: Client, amount: Decimal) -> None:
-        credits = uah_to_credits(amount, settings.CREDIT_RATE)
+        package_map = {p.price: p.credits for p in available_packages()}
+        credits = package_map.get(amount)
+        if credits is None:
+            credits = uah_to_credits(amount, apply_markup=False)
         await cls.profile_service.adjust_client_credits(client.profile, credits)
         await cls.cache.client.update_client(client.profile, {"credits": client.credits + credits})
 

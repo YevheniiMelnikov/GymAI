@@ -363,8 +363,8 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
         await callback_query.answer()
         coach_id = client_profile.assigned_to[0]
         coach = await Cache.coach.get_coach(coach_id)
-        price_uah = (coach.subscription_price or Decimal("0")) * Decimal("1.3")
-        credits = uah_to_credits(price_uah, settings.CREDIT_RATE)
+        price_uah = coach.subscription_price or Decimal("0")
+        credits = uah_to_credits(price_uah)
         await state.set_state(States.payment_choice)
         await answer_msg(
             message,
@@ -424,8 +424,8 @@ async def show_program_promo_page(callback_query: CallbackQuery, profile: Profil
     coach = await Cache.coach.get_coach(coach_id)
     file_path = Path(settings.BOT_PAYMENT_OPTIONS) / f"program_{language}.jpeg"
     program_img = FSInputFile(file_path)
-    price_uah = (coach.program_price or Decimal("0")) * Decimal("1.3")
-    credits = uah_to_credits(price_uah, settings.CREDIT_RATE)
+    price_uah = coach.program_price or Decimal("0")
+    credits = uah_to_credits(price_uah)
     message = cast(Message, callback_query.message)
     assert message
 
