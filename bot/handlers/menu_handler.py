@@ -30,8 +30,8 @@ from bot.utils.menus import (
     show_my_profile_menu,
     show_subscription_history,
     clients_menu_pagination,
+    show_services_menu,
     show_balance_menu,
-    show_tariff_plans,
     show_ai_services,
 )
 from bot.utils.profiles import assign_coach
@@ -73,19 +73,7 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
         await show_my_workouts_menu(callback_query, profile, state)
 
     elif cb_data == "balance":
-        await show_balance_menu(callback_query, profile, state)
-
-
-@menu_router.callback_query(States.balance)
-async def balance_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
-    data = await state.get_data()
-    profile = Profile.model_validate(data.get("profile"))
-    cb_data = callback_query.data or ""
-
-    if cb_data == "back" and isinstance(callback_query.message, Message):
-        await show_main_menu(callback_query.message, profile, state)
-    elif cb_data == "plans":
-        await show_tariff_plans(callback_query, profile, state)
+        await show_services_menu(callback_query, profile, state)
 
 
 @menu_router.callback_query(States.choose_plan)
@@ -95,7 +83,7 @@ async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
     cb_data = callback_query.data or ""
 
     if cb_data == "back":
-        await show_balance_menu(callback_query, profile, state)
+        await show_services_menu(callback_query, profile, state)
         return
 
     if cb_data.startswith("plan_"):
@@ -120,6 +108,41 @@ async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
             msg_text("follow_link", profile.language),
             reply_markup=payment_kb(profile.language, link, "credits"),
         )
+
+
+@menu_router.callback_query(States.services_menu)
+async def services_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    profile = Profile.model_validate(data.get("profile"))
+    cb_data = callback_query.data or ""
+
+    if cb_data == "back" and isinstance(callback_query.message, Message):
+        await show_main_menu(callback_query.message, profile, state)
+        return
+
+    if cb_data == "balance":
+        await show_balance_menu(callback_query, profile, state)
+        return
+
+    if cb_data == "ai_coach":
+        coach = await Cache.coach.get_ai_coach()
+        if not coach:
+            await callback_query.answer(msg_text("no_coaches", profile.language), show_alert=True)
+            return
+        client = await Cache.client.get_client(profile.id)
+        await state.update_data(ai_coach=coach.model_dump(mode="json"), client=client.model_dump())
+        await show_ai_services(callback_query, profile, state)
+        return
+
+    if cb_data == "choose_coach":
+        await state.set_state(States.choose_coach)
+        await answer_msg(
+            callback_query,
+            msg_text("no_program", profile.language),
+            reply_markup=choose_coach_kb(profile.language),
+        )
+        await del_msg(callback_query)
+        return
 
 
 @menu_router.callback_query(States.choose_ai_service)
@@ -301,6 +324,19 @@ async def paginate_coaches(cbq: CallbackQuery, state: FSMContext, bot: Bot) -> N
             logger.warning("Client not found for profile_id %s", profile.id)
             await message.answer(msg_text("unexpected_error", profile.language))
             return
+
+        if client.assigned_to and client.assigned_to[0] == selected_coach.profile:
+            await cbq.answer(msg_text("same_coach_selected", profile.language), show_alert=True)
+            await del_msg(message)
+            return
+
+        if client.assigned_to:
+            try:
+                subscription = await Cache.workout.get_latest_subscription(profile.id)
+            except SubscriptionNotFoundError:
+                subscription = None
+            if subscription and subscription.enabled:
+                await cancel_subscription(profile.id, subscription.id)
 
         await assign_coach(selected_coach, client)
         await cbq.answer(msg_text("saved", profile.language))

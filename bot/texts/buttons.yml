@@ -38,7 +38,12 @@ my_program:
   ru: "Мои тренировки 🏋️"
   ua: "Мої тренування 🏋️"
 
-balance:
+services:
+  eng: "Services 🪄"
+  ru: "Услуги 🪄"
+  ua: "Послуги 🪄"
+
+balance_status:
   eng: "Balance 💰"
   ru: "Баланс 💰"
   ua: "Баланс 💰"
@@ -54,14 +59,14 @@ edit:
   ua: "Редагувати ✏️"
 
 subscription:
-  eng: "Subscription 🧭"
-  ru: "Подписка 🧭"
-  ua: "Підписка 🧭"
+  eng: "Subscriptions 🧭"
+  ru: "Подписки 🧭"
+  ua: "Підписки 🧭"
 
 program:
-  eng: "Training program 🏋️"
-  ru: "Программа тренировок 🏋️"
-  ua: "Програма тренувань 🏋️"
+  eng: "Programs 🏋️"
+  ru: "Программы 🏋️"
+  ua: "Програми 🏋️"
 
 tariff_plans:
   eng: "Tariff plans 💳"
