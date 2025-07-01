@@ -18,7 +18,7 @@ from bot.keyboards import program_view_kb, subscription_manage_kb, program_edit_
 from core.credits import uah_to_credits, available_packages, available_ai_services
 from decimal import Decimal
 from bot.states import States
-from bot.texts import msg_text, btn_text
+from bot.texts import msg_text
 from core.cache import Cache
 from core.enums import ClientStatus, CoachType
 from core.exceptions import (
@@ -125,12 +125,20 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext) 
 async def show_balance_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     lang = cast(str, profile.language)
     client = await Cache.client.get_client(profile.id)
+    plans = [p.name for p in available_packages()]
+    file_path = Path(settings.BOT_PAYMENT_OPTIONS) / f"credit_packages_{lang}.png"
+    packages_img = FSInputFile(file_path)
     await callback_query.answer()
-    await state.set_state(States.balance)
+    await state.set_state(States.choose_plan)
     await answer_msg(
         callback_query,
-        msg_text("credit_balance", lang).format(credits=client.credits),
-        reply_markup=kb.balance_menu_kb(lang),
+        caption=(
+            msg_text("credit_balance", lang).format(credits=client.credits)
+            + "\n"
+            + msg_text("tariff_plans", lang)
+        ),
+        photo=packages_img,
+        reply_markup=kb.tariff_plans_kb(lang, plans),
     )
     await del_msg(callback_query)
 
@@ -327,20 +335,12 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
             await state.update_data(chat_id=callback_query.from_user.id, message_ids=[msg.message_id])
         return
 
-    if not client.assigned_to:
-        await answer_msg(
-            message,
-            msg_text("no_program", lang),
-            reply_markup=kb.choose_coach_kb(lang),
-        )
-        await state.set_state(States.choose_coach)
-    else:
-        await state.set_state(States.select_service)
-        await answer_msg(
-            message,
-            msg_text("select_service", lang),
-            reply_markup=kb.select_service_kb(lang),
-        )
+    await state.set_state(States.select_service)
+    await answer_msg(
+        message,
+        msg_text("select_service", lang),
+        reply_markup=kb.workouts_menu_kb(lang),
+    )
 
     await del_msg(cast(Message | CallbackQuery | None, message))
 

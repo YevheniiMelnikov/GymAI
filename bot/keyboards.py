@@ -192,6 +192,18 @@ def select_service_kb(lang: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
+def workouts_menu_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [
+        [builder.add("ai_coach", "ai_coach")],
+        [builder.add("choose_coach", "choose_coach")],
+        [builder.add("subscription", "subscription")],
+        [builder.add("program", "program")],
+        [builder.add("prev_menu", "back")],
+    ]
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
 def program_manage_kb(lang: str, workouts_per_week: int) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
