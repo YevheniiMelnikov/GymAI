@@ -192,7 +192,6 @@ def select_service_kb(lang: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-
 def services_menu_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
