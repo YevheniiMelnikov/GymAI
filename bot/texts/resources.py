@@ -40,7 +40,7 @@ class ButtonText(AutoName):
     my_clients = auto()
     my_profile = auto()
     my_program = auto()
-    balance = auto()
+    services = auto()
     balance_status = auto()
     edit = auto()
     program = auto()

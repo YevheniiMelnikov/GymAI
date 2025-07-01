@@ -110,7 +110,7 @@ async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
         )
 
 
-@menu_router.callback_query(States.balance)
+@menu_router.callback_query(States.services_menu)
 async def services_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     profile = Profile.model_validate(data.get("profile"))
