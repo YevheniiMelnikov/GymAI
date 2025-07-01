@@ -193,12 +193,14 @@ def select_service_kb(lang: str) -> KbMarkup:
 
 
 
-def services_menu_kb(lang: str, plans: list[str]) -> KbMarkup:
+def services_menu_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
-    buttons = [[builder.add(f"{plan}_plan", f"plan_{plan}")] for plan in plans]
-    buttons.append([builder.add("ai_coach", "ai_coach")])
-    buttons.append([builder.add("choose_coach", "choose_coach")])
-    buttons.append([builder.add("prev_menu", "back")])
+    buttons = [
+        [builder.add("balance_status", "balance")],
+        [builder.add("ai_coach", "ai_coach")],
+        [builder.add("choose_coach", "choose_coach")],
+        [builder.add("prev_menu", "back")],
+    ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 

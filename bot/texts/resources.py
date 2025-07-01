@@ -41,6 +41,7 @@ class ButtonText(AutoName):
     my_profile = auto()
     my_program = auto()
     balance = auto()
+    balance_status = auto()
     edit = auto()
     program = auto()
     program_price = auto()
@@ -231,6 +232,7 @@ class MessageText(AutoName):
     not_verified = auto()
     gift = auto()
     select_service = auto()
+    services_menu = auto()
     set_mode_on = auto()
     set_mode_off = auto()
 
