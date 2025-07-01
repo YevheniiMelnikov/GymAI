@@ -11,6 +11,12 @@ class CreditPackage:
     price: Decimal
 
 
+@dataclass(frozen=True)
+class AIService:
+    name: str
+    credits: int
+
+
 def uah_to_credits(
     price_uah: Decimal,
     *,
@@ -47,4 +53,14 @@ def available_packages() -> list[CreditPackage]:
         CreditPackage("start", settings.PACKAGE_START_CREDITS, settings.PACKAGE_START_PRICE),
         CreditPackage("optimum", settings.PACKAGE_OPTIMUM_CREDITS, settings.PACKAGE_OPTIMUM_PRICE),
         CreditPackage("max", settings.PACKAGE_MAX_CREDITS, settings.PACKAGE_MAX_PRICE),
+    ]
+
+
+def available_ai_services() -> list[AIService]:
+    return [
+        AIService("program", settings.AI_PROGRAM_PRICE),
+        AIService("subscription_14_days", settings.SMALL_AI_SUBSCRIPTION_PRICE),
+        AIService("subscription_1_month", settings.MEDIUM_AI_SUBSCRIPTION_PRICE),
+        AIService("subscription_6_months", settings.LARGE_AI_SUBSCRIPTION_PRICE),
+        AIService("ask_ai", settings.ASK_AI_PRICE),
     ]

@@ -43,9 +43,9 @@ def tariff_plans_kb(lang: str, plans: list[str]) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def ai_tariff_kb(lang: str, plans: list[str]) -> KbMarkup:
+def ai_services_kb(lang: str, services: list[str]) -> KbMarkup:
     builder = ButtonsBuilder(lang)
-    buttons = [[builder.add(f"{plan}_plan", f"ai_plan_{plan}")] for plan in plans]
+    buttons = [[builder.add(service, f"ai_service_{service}")] for service in services]
     buttons.append([builder.add("prev_menu", "back")])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 

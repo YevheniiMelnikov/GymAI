@@ -73,4 +73,4 @@ class States(StatesGroup):
     select_service = State()
     balance = State()
     choose_plan = State()
-    choose_ai_tariff = State()
+    choose_ai_service = State()

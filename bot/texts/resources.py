@@ -35,7 +35,7 @@ class ButtonText(AutoName):
     subscription_6_months = auto()
     subscription_14_days = auto()
     subscription_30_days = auto()
-    chat_message = auto()
+    ask_ai = auto()
 
     my_clients = auto()
     my_profile = auto()
@@ -131,7 +131,7 @@ class MessageText(AutoName):
     initial_credits_granted = auto()
     credit_balance = auto()
     not_enough_credits = auto()
-    ai_coach_promo = auto()
+    ai_services = auto()
 
     upload_photo = auto()
     photo_uploaded = auto()

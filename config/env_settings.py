@@ -11,14 +11,7 @@ from pathlib import Path
 class Settings(BaseSettings):
     BOT_PAYMENT_OPTIONS: str = str((Path(__file__).resolve().parents[1] / "bot" / "images"))
     PAYMENT_CHECK_INTERVAL: int = 60
-    COACH_PAYOUT_RATE: Decimal = Decimal("0.7")
-    PACKAGE_START_CREDITS: int = 500
-    PACKAGE_START_PRICE: Decimal = Decimal("250")
-    PACKAGE_OPTIMUM_CREDITS: int = 1200
-    PACKAGE_OPTIMUM_PRICE: Decimal = Decimal("500")
-    PACKAGE_MAX_CREDITS: int = 6200
-    PACKAGE_MAX_PRICE: Decimal = Decimal("2300")
-    SUBSCRIPTION_PERIOD_DAYS: int = 30
+    SUBSCRIPTION_PERIOD_DAYS: int = 30  # TODO: make it dynamic
     MIN_BIRTH_YEAR: int = 1940
     MAX_BIRTH_YEAR: int = 2020
 
@@ -75,6 +68,20 @@ class Settings(BaseSettings):
     WEBHOOK_URL: str | None = None
     PAYMENT_CALLBACK_URL: str | None = None
 
+    # PRICING
+    PACKAGE_START_CREDITS: int = 500
+    PACKAGE_START_PRICE: Decimal = Decimal("250")  # UAH
+    PACKAGE_OPTIMUM_CREDITS: int = 1200
+    PACKAGE_OPTIMUM_PRICE: Decimal = Decimal("500")  # UAH
+    PACKAGE_MAX_CREDITS: int = 6200
+    PACKAGE_MAX_PRICE: Decimal = Decimal("2300")  # UAH
+
+    AI_PROGRAM_PRICE: Decimal = Decimal("500")
+    SMALL_AI_SUBSCRIPTION_PRICE: Decimal = Decimal("350")
+    MEDIUM_AI_SUBSCRIPTION_PRICE: Decimal = Decimal("600")
+    LARGE_AI_SUBSCRIPTION_PRICE: Decimal = Decimal("2500")
+    ASK_AI_PRICE: Decimal = Decimal("10")
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
@@ -101,9 +108,7 @@ class Settings(BaseSettings):
     @property
     def CREDIT_RATE_MAX_PACK(self) -> Decimal:
         """Cost of one credit for the most profitable package."""
-        return (self.PACKAGE_MAX_PRICE / Decimal(self.PACKAGE_MAX_CREDITS)).quantize(
-            Decimal("0.0001"), ROUND_HALF_UP
-        )
+        return (self.PACKAGE_MAX_PRICE / Decimal(self.PACKAGE_MAX_CREDITS)).quantize(Decimal("0.0001"), ROUND_HALF_UP)
 
 
 settings = Settings()  # noqa

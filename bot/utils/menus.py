@@ -15,7 +15,7 @@ from pathlib import Path
 from bot import keyboards as kb
 from bot.utils.profiles import fetch_user, answer_profile
 from bot.keyboards import program_view_kb, subscription_manage_kb, program_edit_kb
-from core.credits import uah_to_credits, available_packages
+from core.credits import uah_to_credits, available_packages, available_ai_services
 from decimal import Decimal
 from bot.states import States
 from bot.texts import msg_text, btn_text
@@ -442,22 +442,18 @@ async def show_program_promo_page(callback_query: CallbackQuery, profile: Profil
     await state.set_state(States.payment_choice)
 
 
-async def show_ai_coach_promo(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+async def show_ai_services(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    await callback_query.answer()
     language = cast(str, profile.language)
     client = await Cache.client.get_client(profile.id)
     file_path = Path(__file__).resolve().parent.parent / "images" / "ai_coach.png"
-    ai_img = FSInputFile(file_path)
-    plans = available_packages()
-    price_lines = "\n".join(
-        f"{btn_text(f'{p.name}_plan', language)} - {p.price} UAH ({p.credits} credits)" for p in plans
-    )
-    await callback_query.answer()
-    await state.set_state(States.choose_ai_tariff)
+    services = available_ai_services()
+    await state.set_state(States.choose_ai_service)
     await answer_msg(
         callback_query,
-        caption=msg_text("ai_coach_promo", language).format(prices=price_lines, balance=client.credits),
-        photo=ai_img,
-        reply_markup=kb.ai_tariff_kb(language, [p.name for p in plans]),
+        caption=msg_text("ai_services", language).format(balance=client.credits),
+        photo=FSInputFile(file_path),
+        reply_markup=kb.ai_services_kb(language, [p.name for p in services]),
     )
     await del_msg(callback_query)
 
