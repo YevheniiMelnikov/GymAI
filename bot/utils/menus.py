@@ -140,9 +140,12 @@ async def show_tariff_plans(callback_query: CallbackQuery, profile: Profile, sta
     plans = [p.name for p in available_packages()]
     await callback_query.answer()
     await state.set_state(States.choose_plan)
+    file_path = Path(settings.BOT_PAYMENT_OPTIONS) / f"credit_packages_{language}.png"
+    packages_img = FSInputFile(file_path)
     await answer_msg(
         callback_query,
-        msg_text("tariff_plans", language),
+        caption=msg_text("tariff_plans", language),
+        photo=packages_img,
         reply_markup=kb.tariff_plans_kb(language, plans),
     )
     await del_msg(callback_query)
