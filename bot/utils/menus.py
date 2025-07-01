@@ -122,7 +122,7 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext) 
     await del_msg(cast(Message | CallbackQuery | None, message))
 
 
-async def show_balance_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+async def show_services_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     lang = cast(str, profile.language)
     client = await Cache.client.get_client(profile.id)
     plans = [p.name for p in available_packages()]
@@ -138,7 +138,7 @@ async def show_balance_menu(callback_query: CallbackQuery, profile: Profile, sta
             + msg_text("tariff_plans", lang)
         ),
         photo=packages_img,
-        reply_markup=kb.tariff_plans_kb(lang, plans),
+        reply_markup=kb.services_menu_kb(lang, plans),
     )
     await del_msg(callback_query)
 
@@ -339,7 +339,7 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
     await answer_msg(
         message,
         msg_text("select_service", lang),
-        reply_markup=kb.workouts_menu_kb(lang),
+        reply_markup=kb.select_service_kb(lang),
     )
 
     await del_msg(cast(Message | CallbackQuery | None, message))

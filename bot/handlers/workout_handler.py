@@ -17,7 +17,6 @@ from bot.keyboards import (
     program_manage_kb,
     select_service_kb,
     workout_type_kb,
-    choose_coach_kb,
 )
 from bot.states import States
 from bot.texts.exercises import exercise_dict
@@ -38,7 +37,6 @@ from bot.utils.menus import (
     show_subscription_history,
     subscription_history_pagination,
     show_subscription_page,
-    show_ai_services,
 )
 from bot.utils.other import (
     short_url,
@@ -63,22 +61,6 @@ async def program_type(callback_query: CallbackQuery, state: FSMContext):
         await show_my_subscription_menu(callback_query, profile, state)
     elif callback_query.data == "program":
         await show_my_program_menu(callback_query, profile, state)
-    elif callback_query.data == "ai_coach":
-        coach = await Cache.coach.get_ai_coach()
-        if not coach:
-            await callback_query.answer(msg_text("no_coaches", profile.language), show_alert=True)
-            return
-        client = await Cache.client.get_client(profile.id)
-        await state.update_data(ai_coach=coach.model_dump(mode="json"), client=client.model_dump())
-        await show_ai_services(callback_query, profile, state)
-    elif callback_query.data == "choose_coach":
-        await state.set_state(States.choose_coach)
-        await answer_msg(
-            callback_query,
-            msg_text("no_program", profile.language),
-            reply_markup=choose_coach_kb(profile.language),
-        )
-        await del_msg(callback_query)
     else:
         message = cast(Message, callback_query.message)
         assert message is not None

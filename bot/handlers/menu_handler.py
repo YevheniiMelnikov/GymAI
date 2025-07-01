@@ -30,7 +30,7 @@ from bot.utils.menus import (
     show_my_profile_menu,
     show_subscription_history,
     clients_menu_pagination,
-    show_balance_menu,
+    show_services_menu,
     show_ai_services,
 )
 from bot.utils.profiles import assign_coach
@@ -72,7 +72,7 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
         await show_my_workouts_menu(callback_query, profile, state)
 
     elif cb_data == "balance":
-        await show_balance_menu(callback_query, profile, state)
+        await show_services_menu(callback_query, profile, state)
 
 
 @menu_router.callback_query(States.choose_plan)
@@ -84,6 +84,26 @@ async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
     if cb_data == "back":
         if isinstance(callback_query.message, Message):
             await show_main_menu(callback_query.message, profile, state)
+        return
+
+    if cb_data == "ai_coach":
+        coach = await Cache.coach.get_ai_coach()
+        if not coach:
+            await callback_query.answer(msg_text("no_coaches", profile.language), show_alert=True)
+            return
+        client = await Cache.client.get_client(profile.id)
+        await state.update_data(ai_coach=coach.model_dump(mode="json"), client=client.model_dump())
+        await show_ai_services(callback_query, profile, state)
+        return
+
+    if cb_data == "choose_coach":
+        await state.set_state(States.choose_coach)
+        await answer_msg(
+            callback_query,
+            msg_text("no_program", profile.language),
+            reply_markup=choose_coach_kb(profile.language),
+        )
+        await del_msg(callback_query)
         return
 
     if cb_data.startswith("plan_"):
