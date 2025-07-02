@@ -24,10 +24,11 @@ from core.exceptions import (
 )
 from core.services import APIService
 from bot.utils.chat import send_message, send_program
-from bot.utils.menus import show_main_menu, show_subscription_page
+from bot.utils.menus import show_main_menu, show_subscription_page, show_balance_menu
 from bot.utils.text import get_translated_week_day
 from bot.utils.exercises import format_program
 from bot.utils.other import delete_messages, del_msg, answer_msg
+from bot.keyboards import yes_no_kb
 from core.credits import required_credits
 from core.services.profile_service import ProfileService
 from bot.texts import msg_text, btn_text
@@ -346,7 +347,13 @@ async def cancel_subscription(profile_id: int, subscription_id: int) -> None:
     await Cache.payment.reset_status(profile_id, "subscription")
 
 
-async def process_new_subscription(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+async def process_new_subscription(
+    callback_query: CallbackQuery,
+    profile: Profile,
+    state: FSMContext,
+    *,
+    confirmed: bool = False,
+) -> None:
     language = cast(str, profile.language or settings.DEFAULT_LANG)
     await callback_query.answer(msg_text("checkbox_reminding", language), show_alert=True)
     data = await state.get_data()
@@ -360,6 +367,7 @@ async def process_new_subscription(callback_query: CallbackQuery, profile: Profi
     required = required_credits(coach.subscription_price or Decimal("0"))
     if client.credits < required:
         await callback_query.answer(msg_text("not_enough_credits", language), show_alert=True)
+        await show_balance_menu(callback_query, profile, state)
         return
 
     service_type = data.get("service_type", "subscription")
@@ -369,6 +377,17 @@ async def process_new_subscription(callback_query: CallbackQuery, profile: Profi
         "subscription_6_months": "6m",
     }
     period = period_map.get(service_type, "1m")
+
+    if not confirmed:
+        await state.update_data(required=required, period=period, coach=coach.model_dump())
+        await state.set_state(States.confirm_service)
+        await answer_msg(
+            callback_query,
+            msg_text("confirm_service", language).format(balance=client.credits, price=required),
+            reply_markup=yes_no_kb(language),
+        )
+        return
+
     sub_id = await APIService.workout.create_subscription(
         client_profile_id=client.id,
         workout_days=data.get("workout_days", []),
