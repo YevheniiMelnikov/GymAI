@@ -21,7 +21,7 @@ def client_menu_kb(lang: str) -> KbMarkup:
     buttons = [
         [builder.add("my_profile", "my_profile")],
         [builder.add("my_program", "my_workouts")],
-        [builder.add("balance", "balance")],
+        [builder.add("services", "services")],
         [builder.add("feedback", "feedback")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)

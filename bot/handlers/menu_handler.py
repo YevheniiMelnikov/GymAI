@@ -4,6 +4,7 @@ from __future__ import annotations
 from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from typing import cast
 from loguru import logger
 
 from bot.keyboards import (
@@ -72,7 +73,7 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
     elif cb_data == "my_workouts":
         await show_my_workouts_menu(callback_query, profile, state)
 
-    elif cb_data == "balance":
+    elif cb_data == "services":
         await show_services_menu(callback_query, profile, state)
 
 
@@ -108,10 +109,11 @@ async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
             msg_text("follow_link", profile.language),
             reply_markup=payment_kb(profile.language, link, "credits"),
         )
+    await del_msg(callback_query)
 
 
 @menu_router.callback_query(States.services_menu)
-async def services_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
+async def services_menu(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()
     profile = Profile.model_validate(data.get("profile"))
     cb_data = callback_query.data or ""
@@ -135,13 +137,15 @@ async def services_menu(callback_query: CallbackQuery, state: FSMContext) -> Non
         return
 
     if cb_data == "choose_coach":
-        await state.set_state(States.choose_coach)
-        await answer_msg(
-            callback_query,
-            msg_text("no_program", profile.language),
-            reply_markup=choose_coach_kb(profile.language),
-        )
-        await del_msg(callback_query)
+        coaches = await Cache.coach.get_coaches()
+        if not coaches:
+            await callback_query.answer(msg_text("no_coaches", profile.language), show_alert=True)
+            return
+
+        await state.set_state(States.coach_selection)
+        await state.update_data(coaches=[coach.model_dump(mode="json") for coach in coaches])
+        message = cast(Message, callback_query.message)
+        await show_coaches_menu(message, coaches, bot)
         return
 
 
@@ -152,13 +156,7 @@ async def ai_service_choice(callback_query: CallbackQuery, state: FSMContext) ->
     cb_data = callback_query.data or ""
 
     if cb_data == "back":
-        await state.set_state(States.choose_coach)
-        await answer_msg(
-            callback_query,
-            msg_text("no_program", profile.language),
-            reply_markup=choose_coach_kb(profile.language),
-        )
-        await del_msg(callback_query)
+        await show_services_menu(callback_query, profile, state)
         return
 
     if cb_data.startswith("ai_plan_"):

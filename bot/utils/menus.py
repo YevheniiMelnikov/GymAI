@@ -125,7 +125,7 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext) 
 async def show_services_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     lang = cast(str, profile.language)
     await callback_query.answer()
-    await state.set_state(States.balance)
+    await state.set_state(States.services_menu)
     await answer_msg(
         callback_query,
         msg_text("services_menu", lang),
