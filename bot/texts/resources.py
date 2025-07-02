@@ -232,7 +232,7 @@ class MessageText(AutoName):
     wait_for_verification = auto()
     not_verified = auto()
     gift = auto()
-    select_service = auto()
+    select_workout = auto()
     services_menu = auto()
     set_mode_on = auto()
     set_mode_off = auto()

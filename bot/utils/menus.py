@@ -346,11 +346,11 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
             await state.update_data(chat_id=callback_query.from_user.id, message_ids=[msg.message_id])
         return
 
-    await state.set_state(States.select_service)
+    await state.set_state(States.select_workout)
     await answer_msg(
         message,
-        msg_text("select_service", lang),
-        reply_markup=kb.select_service_kb(lang),
+        msg_text("select_workout", lang),
+        reply_markup=kb.select_workout_kb(lang),
     )
 
     await del_msg(cast(Message | CallbackQuery | None, message))

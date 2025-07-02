@@ -15,7 +15,7 @@ from bot.keyboards import (
     reps_number_kb,
     sets_number_kb,
     program_manage_kb,
-    select_service_kb,
+    select_workout_kb,
     workout_type_kb,
 )
 from bot.states import States
@@ -53,7 +53,7 @@ from core.services.outer import gif_manager
 workout_router = Router()
 
 
-@workout_router.callback_query(States.select_service)
+@workout_router.callback_query(States.select_workout)
 async def program_type(callback_query: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
@@ -138,19 +138,19 @@ async def program_actions(callback_query: CallbackQuery, state: FSMContext) -> N
 
     if cb_data == "back":
         await callback_query.answer()
-        await state.set_state(States.select_service)
+        await state.set_state(States.select_workout)
         await message.answer(
-            msg_text("select_service", profile.language),
-            reply_markup=select_service_kb(profile.language),
+            msg_text("select_workout", profile.language),
+            reply_markup=select_workout_kb(profile.language),
         )
     elif cb_data == "show_old":
         program_data = data.get("program")
         if not program_data:
             await callback_query.answer(msg_text("no_program", profile.language), show_alert=True)
-            await state.set_state(States.select_service)
+            await state.set_state(States.select_workout)
             await message.answer(
-                msg_text("select_service", profile.language),
-                reply_markup=select_service_kb(profile.language),
+                msg_text("select_workout", profile.language),
+                reply_markup=select_workout_kb(profile.language),
             )
         else:
             program = Program.model_validate(program_data)

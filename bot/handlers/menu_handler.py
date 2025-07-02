@@ -8,7 +8,7 @@ from typing import cast
 from loguru import logger
 
 from bot.keyboards import (
-    select_service_kb,
+    select_workout_kb,
     choose_coach_kb,
     select_days_kb,
     gift_kb,
@@ -412,11 +412,11 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
 
     if cb_data == "back":
         await callback_query.answer()
-        await state.set_state(States.select_service)
+        await state.set_state(States.select_workout)
         # FIXME
         await message.answer(
-            msg_text("select_service", profile.language),
-            reply_markup=select_service_kb(profile.language),
+            msg_text("select_workout", profile.language),
+            reply_markup=select_workout_kb(profile.language),
         )
 
     elif cb_data == "change_days":

@@ -64,7 +64,7 @@ class States(StatesGroup):
     payment_choice = State()
     handle_payment = State()
     gift = State()
-    select_service = State()
+    select_workout = State()
     services_menu = State()
     choose_plan = State()
     choose_ai_service = State()

@@ -182,7 +182,7 @@ def new_message_kb(lang: str, profile_id: int) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons)
 
 
-def select_service_kb(lang: str) -> KbMarkup:
+def select_workout_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
         [builder.add("subscription", "subscription")],
