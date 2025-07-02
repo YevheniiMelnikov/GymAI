@@ -1,8 +1,9 @@
 import os
 import shutil
 import subprocess
-from datetime import datetime, timedelta
-from decimal import Decimal
+from datetime import datetime, timedelta, date
+from dateutil.relativedelta import relativedelta
+from decimal import Decimal, ROUND_HALF_UP
 
 from celery import shared_task
 from loguru import logger
@@ -15,6 +16,18 @@ from bot.texts.text_manager import msg_text
 from apps.payments.tasks import send_payment_message
 from core.credits import required_credits
 from core.services.profile_service import ProfileService
+
+
+def _next_payment_date(period: str) -> str:
+    today = date.today()
+    if period == "14d":
+        next_date = today + timedelta(days=14)
+    elif period == "6m":
+        next_date = today + relativedelta(months=+6)
+    else:
+        next_date = today + relativedelta(months=+1)
+    return next_date.isoformat()
+
 
 _dumps_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dumps")
 _pg_dir = os.path.join(_dumps_dir, "postgres")
@@ -128,7 +141,13 @@ async def charge_due_subscriptions(self):  # pyre-ignore[valid-type]
 
         await ProfileService.adjust_client_credits(client.profile, -required)
         await Cache.client.update_client(client.profile, {"credits": client.credits - required})
-        next_date = (datetime.now() + timedelta(days=int(settings.SUBSCRIPTION_PERIOD_DAYS))).date().isoformat()
+        if client.assigned_to:
+            coach = await Cache.coach.get_coach(client.assigned_to[0])
+            payout = Decimal(str(sub.price)).quantize(Decimal("0.01"), ROUND_HALF_UP)
+            await ProfileService.adjust_coach_payout_due(coach.profile, payout)
+            new_due = (coach.payout_due or Decimal("0")) + payout
+            await Cache.coach.update_coach(coach.profile, {"payout_due": str(new_due)})
+        next_date = _next_payment_date(getattr(sub, "period", "1m"))
         await APIService.workout.update_subscription(sub.id, {"payment_date": next_date})
         await Cache.workout.update_subscription(sub.client_profile, {"payment_date": next_date})
 

@@ -98,6 +98,16 @@ class ProfileService(APIClient):
         return await cls.update_client_profile(client.id, {"credits": new_credits})
 
     @classmethod
+    async def adjust_coach_payout_due(cls, profile_id: int, delta: Decimal) -> bool:
+        coach = await cls.get_coach_by_profile_id(profile_id)
+        if coach is None:
+            logger.error(f"CoachProfile not found for profile_id={profile_id}")
+            return False
+
+        new_due = (coach.payout_due or Decimal("0")) + delta
+        return await cls.update_coach_profile(coach.id, {"payout_due": str(new_due)})
+
+    @classmethod
     async def create_coach_profile(cls, profile_id: int, data: dict[str, Any] | None = None) -> Coach | None:
         url = urljoin(cls.api_url, "api/v1/coach-profiles/")
         payload: dict[str, Any] = {"profile": profile_id}

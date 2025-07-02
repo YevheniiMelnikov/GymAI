@@ -80,6 +80,7 @@ def get_profile_attributes(role: str, user: Optional[Client | Coach], lang: str)
         "payment_details": attr("payment_details_plain"),
         "subscription_price": attr("subscription_price"),
         "program_price": attr("program_price"),
+        "payout_due": attr("payout_due"),
         "verif_status": verification_status_map(lang).get(verified_value, msg_text("not_verified", lang)),
     }
 

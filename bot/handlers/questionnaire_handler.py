@@ -1,7 +1,7 @@
 from contextlib import suppress
 from typing import cast
 import os
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from aiogram import Router, Bot
 from aiogram.exceptions import TelegramBadRequest
@@ -513,6 +513,10 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
 
             await ProfileService.adjust_client_credits(profile.id, -required)
             await Cache.client.update_client(client.profile, {"credits": client.credits - required})
+            payout = (coach.program_price or Decimal("0")).quantize(Decimal("0.01"), ROUND_HALF_UP)
+            await ProfileService.adjust_coach_payout_due(coach.profile, payout)
+            new_due = (coach.payout_due or Decimal("0")) + payout
+            await Cache.coach.update_coach(coach.profile, {"payout_due": str(new_due)})
             await state.set_state(States.main_menu)
             if message is not None:
                 await answer_msg(message, msg_text("payment_success", profile.language or settings.DEFAULT_LANG))

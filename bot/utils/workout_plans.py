@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
+from dateutil.relativedelta import relativedelta
 from typing import cast
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from aiogram import Bot
 from aiogram.fsm.context import FSMContext
@@ -30,6 +31,17 @@ from bot.utils.other import delete_messages, del_msg, answer_msg
 from core.credits import required_credits
 from core.services.profile_service import ProfileService
 from bot.texts import msg_text, btn_text
+
+
+def _next_payment_date(period: str) -> str:
+    today = date.today()
+    if period == "14d":
+        next_date = today + timedelta(days=14)
+    elif period == "6m":
+        next_date = today + relativedelta(months=+6)
+    else:
+        next_date = today + relativedelta(months=+1)
+    return next_date.strftime("%Y-%m-%d")
 
 
 async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
@@ -350,11 +362,19 @@ async def process_new_subscription(callback_query: CallbackQuery, profile: Profi
         await callback_query.answer(msg_text("not_enough_credits", language), show_alert=True)
         return
 
+    service_type = data.get("service_type", "subscription")
+    period_map = {
+        "subscription_14_days": "14d",
+        "subscription_1_month": "1m",
+        "subscription_6_months": "6m",
+    }
+    period = period_map.get(service_type, "1m")
     sub_id = await APIService.workout.create_subscription(
         client_profile_id=client.id,
         workout_days=data.get("workout_days", []),
         wishes=data.get("wishes", ""),
         amount=coach.subscription_price or Decimal("0"),
+        period=period,
     )
     if sub_id is None:
         await callback_query.answer(msg_text("unexpected_error", language), show_alert=True)
@@ -362,10 +382,14 @@ async def process_new_subscription(callback_query: CallbackQuery, profile: Profi
 
     await ProfileService.adjust_client_credits(profile.id, -required)
     await Cache.client.update_client(client.profile, {"credits": client.credits - required})
-    next_payment = (datetime.today() + timedelta(days=int(settings.SUBSCRIPTION_PERIOD_DAYS))).strftime("%Y-%m-%d")
+    payout = (coach.subscription_price or Decimal("0")).quantize(Decimal("0.01"), ROUND_HALF_UP)
+    await ProfileService.adjust_coach_payout_due(coach.profile, payout)
+    await Cache.coach.update_coach(coach.profile, {"payout_due": str((coach.payout_due or Decimal("0")) + payout)})
+    next_payment = _next_payment_date(period)
     await APIService.workout.update_subscription(sub_id, {"enabled": True, "payment_date": next_payment})
     await Cache.workout.update_subscription(
-        client.profile, {"id": sub_id, "enabled": True, "payment_date": next_payment}
+        client.profile,
+        {"id": sub_id, "enabled": True, "payment_date": next_payment, "period": period},
     )
     await callback_query.answer(msg_text("payment_success", language), show_alert=True)
 

@@ -85,7 +85,12 @@ class WorkoutService(APIClient):
 
     @classmethod
     async def create_subscription(
-        cls, client_profile_id: int, workout_days: list[str], wishes: str, amount: Decimal
+        cls,
+        client_profile_id: int,
+        workout_days: list[str],
+        wishes: str,
+        amount: Decimal,
+        period: str = "1m",
     ) -> int | None:
         url = urljoin(cls.api_url, "api/v1/subscriptions/")
         data = {
@@ -93,6 +98,7 @@ class WorkoutService(APIClient):
             "enabled": False,
             "price": str(amount),
             "workout_days": workout_days,
+            "period": period,
             "payment_date": datetime.today().strftime("%Y-%m-%d"),
             "wishes": wishes,
             "exercises": [],

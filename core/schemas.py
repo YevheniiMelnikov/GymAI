@@ -60,6 +60,7 @@ class Coach(BaseModel):
     assigned_to: list[int] = Field(default_factory=list)
     verified: bool = False
     coach_type: CoachType = CoachType.human
+    payout_due: Price | None = None
     profile_data: dict[str, Any] = {}
     model_config = ConfigDict(extra="ignore")
 
@@ -105,6 +106,7 @@ class Subscription(BaseModel):
     price: int
     workout_type: str
     wishes: str
+    period: str
     workout_days: list[str] = Field(default_factory=list)
     exercises: list[DayExercises] = Field(default_factory=list)
     payment_date: str

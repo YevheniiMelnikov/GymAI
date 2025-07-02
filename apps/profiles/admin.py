@@ -20,6 +20,14 @@ class ClientProfileAdmin(ModelAdmin):
 
 @admin.register(CoachProfile)
 class CoachProfileAdmin(ModelAdmin):
-    list_display = ("id", "profile", "name", "surname", "verified", "work_experience")
+    list_display = (
+        "id",
+        "profile",
+        "name",
+        "surname",
+        "verified",
+        "work_experience",
+        "payout_due",
+    )
     search_fields = ("name", "surname")
     list_filter = ("verified",)
