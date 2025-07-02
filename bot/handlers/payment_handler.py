@@ -150,11 +150,18 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
         await cache_program_data(data, client.profile)
     else:
         price = coach.subscription_price or Decimal("0")
+        period_map = {
+            "subscription_14_days": "14d",
+            "subscription_1_month": "1m",
+            "subscription_6_months": "6m",
+        }
+        period = period_map.get(service_type, "1m")
         subscription_id = await APIService.workout.create_subscription(
             client_profile_id=client.id,
             workout_days=data.get("workout_days", []),
             wishes=wishes,
             amount=price,
+            period=period,
         )
 
         subscription_data = {
@@ -162,6 +169,7 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
             "payment_date": datetime.today().strftime("%Y-%m-%d"),
             "enabled": False,
             "price": price,
+            "period": period,
             "client_profile": client.profile,
             "workout_days": data.get("workout_days", []),
             "workout_type": data.get("workout_type"),

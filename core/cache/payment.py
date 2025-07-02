@@ -68,9 +68,6 @@ class PaymentCacheManager(BaseCacheManager):
     @classmethod
     async def is_payed(cls, client_profile_id: int, service_type: str) -> bool:
         try:
-            return (await cls.get_status(client_profile_id, service_type)) in (
-                PaymentStatus.SUCCESS,
-                PaymentStatus.CLOSED,
-            )
+            return (await cls.get_status(client_profile_id, service_type)) == PaymentStatus.SUCCESS
         except PaymentNotFoundError:
             return False

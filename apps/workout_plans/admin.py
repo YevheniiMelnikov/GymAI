@@ -13,7 +13,15 @@ class ProgramAdmin(ModelAdmin):
 
 @admin.register(Subscription)
 class SubscriptionAdmin(ModelAdmin):
-    list_display = ("id", "client_profile", "enabled", "price", "payment_date", "updated_at")
+    list_display = (
+        "id",
+        "client_profile",
+        "enabled",
+        "price",
+        "period",
+        "payment_date",
+        "updated_at",
+    )
     search_fields = ("client_profile__profile__tg_id",)
     list_filter = ("enabled", "updated_at")
     readonly_fields = ("updated_at",)

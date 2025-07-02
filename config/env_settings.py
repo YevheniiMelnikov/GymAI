@@ -11,7 +11,6 @@ from pathlib import Path
 class Settings(BaseSettings):
     BOT_PAYMENT_OPTIONS: str = str((Path(__file__).resolve().parents[1] / "bot" / "images"))
     PAYMENT_CHECK_INTERVAL: int = 60
-    SUBSCRIPTION_PERIOD_DAYS: int = 30  # TODO: make it dynamic
     MIN_BIRTH_YEAR: int = 1940
     MAX_BIRTH_YEAR: int = 2020
 

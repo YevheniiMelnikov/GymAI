@@ -3,6 +3,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from loguru import logger
 
 from core.cache import Cache
+from datetime import datetime
 from core.enums import PaymentStatus, CoachType
 from core.exceptions import ClientNotFoundError
 from core.services.workout_service import WorkoutService
@@ -67,15 +68,12 @@ class PaymentProcessor:
             if coach.coach_type == CoachType.ai:
                 logger.info(f"Skip AI coach {coach.id} for payment {payment.order_id}")
                 return None
-            amount = (payment.amount / Decimal("1.3")).quantize(Decimal("0.01"), ROUND_HALF_UP)
-            ok = await cls.payment_service.update_payment(
-                payment.id, {"status": PaymentStatus.CLOSED, "payout_handled": True}
-            )
+            amount = payment.amount.quantize(Decimal("0.01"), ROUND_HALF_UP)
+            ok = await cls.payment_service.update_payment(payment.id, {"payout_handled": True})
             if not ok:
-                logger.error(f"Cannot mark payment {payment.order_id} as closed")
+                logger.error(f"Cannot mark payment {payment.order_id} as handled")
                 return None
-            await cls.cache.payment.set_status(payment.client_profile, payment.payment_type, PaymentStatus.CLOSED)
-            logger.info(f"Payment {payment.order_id} closed, payout {amount} UAH")
+            logger.info(f"Payment {payment.order_id} processed, payout {amount} UAH")
             return [
                 coach.name or "",
                 coach.surname or "",
@@ -106,15 +104,27 @@ class PaymentProcessor:
 
     @classmethod
     async def export_coach_payouts(cls) -> None:
-        """
-        Updates Google Sheets with coach payouts once a month (with 'closed' PaymentStatus)
-        """
+        """Accrue coach payouts based on their monthly due amount."""
         try:
-            payments = await cls.payment_service.get_unclosed_payments()
-            if not payments:
-                logger.info("No unclosed payments found")
-                return
-            payout_rows = [row for payment in payments if (row := await cls._process_payout(payment))]
+            coaches = await cls.profile_service.list_coach_profiles()
+            payout_rows = []
+            for coach in coaches:
+                if coach.coach_type == CoachType.ai:
+                    continue
+                amount = (coach.payout_due or Decimal("0")).quantize(Decimal("0.01"), ROUND_HALF_UP)
+                if amount <= 0:
+                    continue
+                payout_rows.append(
+                    [
+                        coach.name or "",
+                        coach.surname or "",
+                        coach.payment_details_plain,
+                        datetime.today().strftime("%Y-%m"),
+                        str(amount),
+                    ]
+                )
+                await cls.profile_service.update_coach_profile(coach.id, {"payout_due": "0"})
+                await cls.cache.coach.update_coach(coach.profile, {"payout_due": "0"})
             if payout_rows:
                 await asyncio.to_thread(GSheetsService.create_new_payment_sheet, payout_rows)
                 logger.info(f"Payout sheet created: {len(payout_rows)} rows")
