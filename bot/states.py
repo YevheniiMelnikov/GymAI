@@ -2,16 +2,10 @@ from aiogram.fsm.state import State, StatesGroup
 
 
 class States(StatesGroup):
-    action_choice = State()
     main_menu = State()
     feedback = State()
 
     select_language = State()
-    username = State()
-    password = State()
-    email = State()
-    password_reset = State()
-    password_retype = State()
     account_type = State()
 
     gender = State()

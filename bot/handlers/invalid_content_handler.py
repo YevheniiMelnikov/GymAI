@@ -15,9 +15,7 @@ async def handle_invalid_content(message: Message, lang: str) -> None:
 
 
 HANDLED_STATES = [
-    States.username,
     States.select_language,
-    States.password,
     States.born_in,
     States.account_type,
     States.gender,

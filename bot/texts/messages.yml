@@ -4,14 +4,9 @@ main_menu:
   ua: "Оберіть дію із запропонованих"
 
 select_language:
-  eng: "Choose a language 👇"
-  ru: "Выберите язык 👇"
-  ua: "Оберіть мову 👇"
-
-username:
-  eng: "Enter your nickname ✏️"
-  ru: "Укажите свой никнейм ✏️"
-  ua: "Вкажіть свій нікнейм ✏️"
+  eng: "Choose a language 🌐"
+  ru: "Выберите язык 🌐"
+  ua: "Оберіть мову 🌐"
 
 invalid_content:
   eng: "Invalid data type, try again 😕"
@@ -192,7 +187,9 @@ not_verified:
   ua: "Не верифікований ❌"
 
 new_coach_request:
+  eng: "A new coach is awaiting verification!\n\nName: {name}\nSurname: {surname}\nExperience: {experience}\nAdditional info: {info}\nCard: {card}\nTelegram: {contact}\nProfile ID: {profile_id}\nSubscription price: {subscription_price}\nProgram price: {program_price}"
   ru: "Новый тренер ожидает верификации!\n\nИмя: {name}\nФамилия: {surname}\nОпыт работы: {experience}\nДополнительная информация: {info}\nКарта: {card}\nТелеграм: {contact}\nID профиля: {profile_id}\nЦена подписки: {subscription_price}\nЦена программы: {program_price}"
+  ua: "Новий тренер очікує на верифікацію!\n\nІм'я: {name}\nПрізвище: {surname}\nДосвід роботи: {experience}\nДодаткова інформація: {info}\nКарта: {card}\nТелеграм: {contact}\nID профілю: {profile_id}\nЦіна підписки: {subscription_price}\nЦіна програми: {program_price}"
 
 coach_verified:
   eng: "Congratulations, your profile has been verified! Expect new clients 🎉"

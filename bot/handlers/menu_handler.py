@@ -413,6 +413,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
     if cb_data == "back":
         await callback_query.answer()
         await state.set_state(States.select_service)
+        # FIXME
         await message.answer(
             msg_text("select_service", profile.language),
             reply_markup=select_service_kb(profile.language),
