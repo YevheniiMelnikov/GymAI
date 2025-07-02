@@ -134,23 +134,24 @@ async def show_services_menu(callback_query: CallbackQuery, profile: Profile, st
     await del_msg(callback_query)
 
 
-async def show_balance_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+async def show_balance_menu(callback_obj: CallbackQuery | Message, profile: Profile, state: FSMContext) -> None:
     lang = cast(str, profile.language)
     client = await Cache.client.get_client(profile.id)
     plans = [p.name for p in available_packages()]
     file_path = Path(settings.BOT_PAYMENT_OPTIONS) / f"credit_packages_{lang}.png"
     packages_img = FSInputFile(file_path)
-    await callback_query.answer()
+    if isinstance(callback_obj, CallbackQuery):
+        await callback_obj.answer()
     await state.set_state(States.choose_plan)
     await answer_msg(
-        callback_query,
+        callback_obj,
         caption=(
             msg_text("credit_balance", lang).format(credits=client.credits) + "\n" + msg_text("tariff_plans", lang)
         ),
         photo=packages_img,
         reply_markup=kb.tariff_plans_kb(lang, plans),
     )
-    await del_msg(callback_query)
+    await del_msg(callback_obj)
 
 
 async def show_tariff_plans(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:

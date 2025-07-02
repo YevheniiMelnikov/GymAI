@@ -1,7 +1,7 @@
 from contextlib import suppress
 from typing import cast
 import os
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 
 from aiogram import Router, Bot
 from aiogram.exceptions import TelegramBadRequest
@@ -25,11 +25,9 @@ from core.exceptions import ProfileNotFoundError, ClientNotFoundError
 from core.schemas import Profile
 from core.services import APIService
 from bot.utils.chat import client_request
-from apps.payments.tasks import send_client_request
 from core.credits import required_credits
-from core.services.profile_service import ProfileService
 from bot.utils.workout_plans import process_new_subscription, edit_subscription_days
-from bot.utils.menus import show_main_menu, show_my_profile_menu, send_policy_confirmation
+from bot.utils.menus import show_main_menu, show_my_profile_menu, send_policy_confirmation, show_balance_menu
 from bot.utils.profiles import update_profile_data, check_assigned_clients
 from bot.utils.text import get_state_and_message
 from bot.utils.other import delete_messages, set_bot_commands, answer_msg, del_msg, parse_price
@@ -508,27 +506,25 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
             required = required_credits(coach.program_price or Decimal("0"))
             if client.credits < required:
                 if message is not None:
-                    await answer_msg(message, msg_text("not_enough_credits", profile.language or settings.DEFAULT_LANG))
+                    await answer_msg(
+                        message,
+                        msg_text("not_enough_credits", profile.language or settings.DEFAULT_LANG),
+                    )
+                    await show_balance_menu(message, profile, state)
                 return
 
-            await ProfileService.adjust_client_credits(profile.id, -required)
-            await Cache.client.update_client(client.profile, {"credits": client.credits - required})
-            payout = (coach.program_price or Decimal("0")).quantize(Decimal("0.01"), ROUND_HALF_UP)
-            await ProfileService.adjust_coach_payout_due(coach.profile, payout)
-            new_due = (coach.payout_due or Decimal("0")) + payout
-            await Cache.coach.update_coach(coach.profile, {"payout_due": str(new_due)})
-            await state.set_state(States.main_menu)
+            await state.update_data(required=required, coach=coach.model_dump())
+            await state.set_state(States.confirm_service)
             if message is not None:
-                await answer_msg(message, msg_text("payment_success", profile.language or settings.DEFAULT_LANG))
-            send_client_request.delay(
-                coach.profile,
-                client.profile,
-                {
-                    "service_type": "program",
-                    "workout_type": data.get("workout_type"),
-                    "wishes": data.get("wishes", ""),
-                },
-            )
+                await answer_msg(
+                    message,
+                    msg_text("confirm_service", profile.language or settings.DEFAULT_LANG).format(
+                        balance=client.credits,
+                        price=required,
+                    ),
+                    reply_markup=yes_no_kb(profile.language or settings.DEFAULT_LANG),
+                )
+            return
         if message is not None:
             await del_msg(cast(Message | CallbackQuery | None, message))
 

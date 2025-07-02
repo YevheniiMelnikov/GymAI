@@ -133,6 +133,7 @@ class MessageText(AutoName):
     credit_balance = auto()
     not_enough_credits = auto()
     ai_services = auto()
+    confirm_service = auto()
 
     upload_photo = auto()
     photo_uploaded = auto()

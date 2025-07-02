@@ -17,8 +17,11 @@ from core.cache.payment import PaymentCacheManager
 from core.enums import ClientStatus, PaymentStatus
 from core.services import APIService
 from core.services.payment_service import PaymentService
-from bot.utils.menus import show_main_menu
-from bot.utils.workout_plans import cache_program_data
+from bot.utils.menus import show_main_menu, show_services_menu
+from core.schemas import Coach, Client
+from core.services.profile_service import ProfileService
+from apps.payments.tasks import send_client_request
+from bot.utils.workout_plans import cache_program_data, process_new_subscription
 from bot.texts import msg_text, btn_text
 from core.schemas import Profile
 from core.exceptions import ClientNotFoundError, CoachNotFoundError
@@ -186,3 +189,41 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
         await show_main_menu(msg, profile, state)
 
     await del_msg(callback_query)
+
+
+@payment_router.callback_query(States.confirm_service)
+async def confirm_service(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    profile = Profile.model_validate(data["profile"])
+    if callback_query.data == "no":
+        await show_services_menu(callback_query, profile, state)
+        return
+
+    service_type = data.get("service_type")
+    if service_type == "subscription":
+        await process_new_subscription(callback_query, profile, state, confirmed=True)
+        return
+    if service_type == "program":
+        coach = Coach.model_validate(data.get("coach"))
+        client = Client.model_validate(data.get("client"))
+        required = int(data.get("required", 0))
+        wishes = data.get("wishes", "")
+        await ProfileService.adjust_client_credits(profile.id, -required)
+        await Cache.client.update_client(client.profile, {"credits": client.credits - required})
+        payout = (coach.program_price or Decimal("0")).quantize(Decimal("0.01"), ROUND_HALF_UP)
+        await ProfileService.adjust_coach_payout_due(coach.profile, payout)
+        new_due = (coach.payout_due or Decimal("0")) + payout
+        await Cache.coach.update_coach(coach.profile, {"payout_due": str(new_due)})
+        send_client_request.delay(
+            coach.profile,
+            client.profile,
+            {
+                "service_type": "program",
+                "workout_type": data.get("workout_type"),
+                "wishes": wishes,
+            },
+        )
+        await callback_query.answer(msg_text("payment_success", profile.language), show_alert=True)
+        if callback_query.message:
+            await show_main_menu(callback_query.message, profile, state)
+        await del_msg(callback_query)
