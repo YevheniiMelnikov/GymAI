@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 
-class AICoachService(ABC):
+class AIService(ABC):
     """Abstract interface for AI coach backends."""
 
     @classmethod
