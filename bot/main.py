@@ -19,6 +19,8 @@ from bot.handlers import configure_routers
 from core.cache.base import BaseCacheManager
 from bot.utils.other import set_bot_commands
 from core.containers import App
+from core.services.ai import CogneeService
+from core.services.outer import GDriveDocumentLoader
 
 
 async def on_shutdown(bot: Bot) -> None:
@@ -41,6 +43,12 @@ async def main() -> None:
     container.config.bot_token.from_value(settings.BOT_TOKEN)  # type: ignore[attr-defined]
     container.config.parse_mode.from_value("HTML")  # type: ignore[attr-defined]
     container.wire(modules=["bot.utils.other", "core.tasks"])
+
+    if settings.GDRIVE_FOLDER_ID:
+        await CogneeService.init_loader(
+            GDriveDocumentLoader(settings.GDRIVE_FOLDER_ID)
+        )
+
     bot = container.bot()
     await bot.delete_webhook(drop_pending_updates=True)
 

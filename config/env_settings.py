@@ -52,6 +52,7 @@ class Settings(BaseSettings):
     WEBHOOK_PORT: int
 
     GOOGLE_APPLICATION_CREDENTIALS: str
+    GDRIVE_FOLDER_ID: str | None = None
     SPREADSHEET_ID: str
     TG_SUPPORT_CONTACT: str
     PUBLIC_OFFER: str
