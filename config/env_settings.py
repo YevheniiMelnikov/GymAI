@@ -41,6 +41,8 @@ class Settings(BaseSettings):
 
     API_KEY: str
     API_URL: str
+    COGNEE_API_URL: Annotated[str, Field(default="https://openrouter.ai/api/v1")]
+    COGNEE_API_KEY: Annotated[str, Field(default="")] 
 
     BOT_TOKEN: str
     BOT_LINK: str
