@@ -29,9 +29,13 @@ def load_service(monkeypatch, calls):
     def set_llm_api_key(key: str) -> None:
         config_calls.setdefault("key", []).append(key)
 
+    def set_llm_model(model: str) -> None:
+        config_calls.setdefault("model", []).append(model)
+
     config_obj = types.SimpleNamespace(
         set_llm_endpoint=set_llm_endpoint,
         set_llm_api_key=set_llm_api_key,
+        set_llm_model=set_llm_model,
     )
 
     monkeypatch.setitem(sys.modules, "cognee", dummy_cognee)
@@ -53,11 +57,13 @@ async def test_configured_once(monkeypatch):
     service, config_calls = load_service(monkeypatch, calls)
     monkeypatch.setattr(service, "api_url", "http://api")
     monkeypatch.setattr(service, "api_key", "secret")
+    monkeypatch.setattr(service, "model", "test-model")
     service._configured = False
 
     await service.coach_request("hello")
     assert config_calls["endpoint"] == ["http://api"]
     assert config_calls["key"] == ["secret"]
+    assert config_calls["model"] == ["test-model"]
     assert service._configured is True
 
     await service.coach_request("again")

@@ -14,6 +14,7 @@ class CogneeService(AICoachService):
 
     api_url = settings.COGNEE_API_URL
     api_key = settings.COGNEE_API_KEY
+    model = settings.COGNEE_MODEL
     _configured = False
 
     @classmethod
@@ -24,6 +25,8 @@ class CogneeService(AICoachService):
             config.set_llm_endpoint(cls.api_url)
         if cls.api_key:
             config.set_llm_api_key(cls.api_key)
+        if cls.model:
+            config.set_llm_model(cls.model)
         cls._configured = True
 
     @classmethod
