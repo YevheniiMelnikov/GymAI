@@ -3,6 +3,8 @@ import os
 env_defaults = {
     "API_KEY": "test_api_key",
     "API_URL": "http://localhost/",
+    "COGNEE_API_KEY": "cognee_api_key",
+    "COGNEE_API_URL": "http://localhost/",
     "BOT_TOKEN": "bot_token",
     "BOT_LINK": "http://bot",
     "WEBHOOK_HOST": "http://localhost",

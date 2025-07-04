@@ -41,6 +41,8 @@ class Settings(BaseSettings):
 
     API_KEY: str
     API_URL: str
+    COGNEE_API_KEY: str
+    COGNEE_API_URL: str
 
     BOT_TOKEN: str
     BOT_LINK: str
