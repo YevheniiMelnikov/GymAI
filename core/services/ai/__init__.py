@@ -1,5 +1,5 @@
-from .coach_service import AICoachService
+from .coach_service import AIService
 from .cognee_service import CogneeService
 
-__all__ = ["CogneeService", "AICoachService"]
+__all__ = ["CogneeService", "AIService"]
 
