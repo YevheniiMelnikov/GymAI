@@ -30,6 +30,7 @@ dependencies = [
     "dependency-injector>=4.47.1",
     "pydantic-settings>=2.9.1",
     "django-unfold>=0.59.0",
+    "cognee>=0.2.0",
 ]
 
 [project.optional-dependencies]
