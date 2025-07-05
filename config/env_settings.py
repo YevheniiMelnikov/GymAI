@@ -46,7 +46,6 @@ class Settings(BaseSettings):
     COGNEE_API_KEY: Annotated[str, Field(default="")]
     COGNEE_MODEL: Annotated[str, Field(default="openrouter/cypher-alpha:free")]
     VECTORDATABASE_PROVIDER: Annotated[str, Field(default="pgvector")]
-    VECTORDATABASE_URL: Annotated[str, Field(default="postgresql://user:pass@db:5432/gymbot")]
     GRAPH_DATABASE_PROVIDER: Annotated[str, Field(default="networkx")]
 
     BOT_TOKEN: str
@@ -116,6 +115,10 @@ class Settings(BaseSettings):
     def CREDIT_RATE_MAX_PACK(self) -> Decimal:
         """Cost of one credit for the most profitable package."""
         return (self.PACKAGE_MAX_PRICE / Decimal(self.PACKAGE_MAX_CREDITS)).quantize(Decimal("0.0001"), ROUND_HALF_UP)
+
+    @property
+    def VECTORDATABASE_URL(self) -> str:
+        return f"postgresql+psycopg2://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
 
 settings = Settings()  # noqa
