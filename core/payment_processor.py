@@ -15,7 +15,7 @@ from core.services.payment_service import PaymentService
 from core.services.profile_service import ProfileService
 from apps.payments.tasks import send_payment_message
 from bot.texts.text_manager import msg_text
-from core.credits import uah_to_credits, available_packages
+from bot.utils.credits import uah_to_credits, available_packages
 
 
 class PaymentProcessor:

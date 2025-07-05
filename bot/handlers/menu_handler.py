@@ -41,7 +41,7 @@ from bot.utils.other import del_msg, generate_order_id, answer_msg
 from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
 from core.services import APIService
 from bot.keyboards import payment_kb
-from core.credits import available_packages
+from bot.utils.credits import available_packages
 
 menu_router = Router()
 

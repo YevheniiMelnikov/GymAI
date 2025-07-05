@@ -29,7 +29,7 @@ from bot.utils.text import get_translated_week_day
 from bot.utils.exercises import format_program
 from bot.utils.other import delete_messages, del_msg, answer_msg
 from bot.keyboards import yes_no_kb
-from core.credits import required_credits
+from bot.utils.credits import required_credits
 from core.services.profile_service import ProfileService
 from bot.texts import msg_text, btn_text
 

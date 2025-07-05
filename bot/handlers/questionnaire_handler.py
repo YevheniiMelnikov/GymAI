@@ -25,7 +25,7 @@ from core.exceptions import ProfileNotFoundError, ClientNotFoundError
 from core.schemas import Profile
 from core.services import APIService
 from bot.utils.chat import client_request
-from core.credits import required_credits
+from bot.utils.credits import required_credits
 from bot.utils.workout_plans import process_new_subscription, edit_subscription_days
 from bot.utils.menus import show_main_menu, show_my_profile_menu, send_policy_confirmation, show_balance_menu
 from bot.utils.profiles import update_profile_data, check_assigned_clients

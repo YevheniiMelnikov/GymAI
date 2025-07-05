@@ -14,7 +14,7 @@ from core.cache import Cache
 from core.services import APIService
 from bot.texts.text_manager import msg_text
 from apps.payments.tasks import send_payment_message
-from core.credits import required_credits
+from bot.utils.credits import required_credits
 from core.services.profile_service import ProfileService
 
 
