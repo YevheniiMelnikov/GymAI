@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Optional
 import asyncio
 
@@ -22,11 +23,13 @@ class CogneeCoach(BaseAICoach):
 
     @classmethod
     async def initialize(cls) -> None:
-        """Run database migrations and verify connectivity."""
+        cls._ensure_config()
         process = await asyncio.create_subprocess_exec(
-            "alembic",
-            "upgrade",
-            "head",
+            "alembic", "upgrade", "head",
+            env={
+                **os.environ,
+                "DATABASE_URL": settings.VECTORDATABASE_URL,
+            },
         )
         await process.wait()
         await cognee.search("ping")

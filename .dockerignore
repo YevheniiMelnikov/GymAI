@@ -10,6 +10,7 @@ __pycache__/
 .venv*
 env/
 site/
+.venv-win/
 
 # Dependency managers
 poetry.lock
