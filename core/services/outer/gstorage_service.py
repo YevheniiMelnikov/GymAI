@@ -5,6 +5,7 @@ from aiogram.types import Message
 from google.cloud import storage
 from google.auth.exceptions import DefaultCredentialsError
 
+from config.env_settings import settings
 from core.cache import Cache
 
 
@@ -68,9 +69,9 @@ class GCStorageService:
             logger.warning(f"File {file[:10]}...jpg does not exist, skipping deletion")
 
     @staticmethod
-    def check_file_size(file_path: str, max_size_mb: float) -> bool:
+    def check_file_size(file_path: str) -> bool:
         file_size = os.path.getsize(file_path) / (1024 * 1024)
-        return file_size <= max_size_mb
+        return file_size <= settings.MAX_FILE_SIZE_MB
 
 
 class ExerciseGIFStorage(GCStorageService):

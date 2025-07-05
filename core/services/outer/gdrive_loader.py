@@ -10,7 +10,7 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 from loguru import logger
 from docx import Document
-import fitz  # PyMuPDF
+import fitz
 import cognee
 
 from config.env_settings import settings
@@ -19,15 +19,14 @@ from core.services.ai.knowledge_loader import KnowledgeLoader
 
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 ALLOWED_EXTS = {".pdf", ".docx", ".txt"}
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 
 
 class GDriveDocumentLoader(KnowledgeLoader):
     """Load documents from Google Drive into Cognee."""
 
-    def __init__(self, folder_id: str, credentials_path: str | None = None) -> None:
+    def __init__(self, folder_id: str) -> None:
         self.folder_id = folder_id
-        self.credentials_path = credentials_path or settings.GOOGLE_APPLICATION_CREDENTIALS
+        self.credentials_path = settings.GOOGLE_APPLICATION_CREDENTIALS
         self._files_service: Any | None = None
 
     def _get_drive_service(self) -> Any:
@@ -84,7 +83,7 @@ class GDriveDocumentLoader(KnowledgeLoader):
 
                 if ext not in ALLOWED_EXTS:
                     continue
-                if size > MAX_FILE_SIZE:
+                if size > settings.MAX_FILE_SIZE_MB:
                     logger.info(f"Skip {name}: file too large")
                     continue
                 if not file_id:
@@ -102,12 +101,8 @@ class GDriveDocumentLoader(KnowledgeLoader):
                     if not text.strip():
                         continue
 
-                    await cognee.add(
-                        text,
-                        dataset_name="external_docs",
-                        metadata={"source": "gdrive", "filename": name},
-                    )
-                except Exception as exc:  # noqa: BLE001
+                    await cognee.add(text, dataset_name="external_docs", node_set=[f"gdrive:{name}"])
+                except Exception as exc:
                     logger.error(f"Failed to process {name}: {exc}")
 
             page_token = response.get("nextPageToken")

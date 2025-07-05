@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     PAYMENT_CHECK_INTERVAL: int = 60
     MIN_BIRTH_YEAR: int = 1940
     MAX_BIRTH_YEAR: int = 2020
+    MAX_FILE_SIZE_MB = 10
 
     SITE_NAME: str = "AchieveTogether"
 

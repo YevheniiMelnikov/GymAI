@@ -394,7 +394,7 @@ async def profile_photo(message: Message, state: FSMContext, bot: Bot) -> None:
     lang = data.get("lang", settings.DEFAULT_LANG)
     local_file = await avatar_manager.save_image(message)
 
-    if local_file and avatar_manager.check_file_size(local_file, 20):
+    if local_file and avatar_manager.check_file_size(local_file):
         if avatar_manager.load_file_to_bucket(local_file):
             msg = await answer_msg(message, msg_text("photo_uploaded", lang))
             if msg:
