@@ -16,4 +16,4 @@ class ClientStatus(models.TextChoices):
 
 class CoachType(models.TextChoices):
     HUMAN = "human"
-    AI = "ai"
+    AI = "ai_coach"

@@ -32,7 +32,7 @@ from bot.utils.profiles import update_profile_data, check_assigned_clients
 from bot.utils.text import get_state_and_message
 from bot.utils.other import delete_messages, set_bot_commands, answer_msg, del_msg, parse_price
 from bot.texts.text_manager import msg_text
-from core.services.outer import avatar_manager
+from core.services.external import avatar_manager
 from core.validators import is_valid_year
 
 questionnaire_router = Router()

@@ -12,7 +12,7 @@ class Migration(migrations.Migration):
             name="coach_type",
             field=models.CharField(
                 max_length=10,
-                choices=[("human", "human"), ("ai", "ai")],
+                choices=[("human", "human"), ("ai_coach", "ai_coach")],
                 default="human",
             ),
         ),

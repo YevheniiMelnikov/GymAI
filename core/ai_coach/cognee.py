@@ -2,35 +2,27 @@ from __future__ import annotations
 
 from typing import Optional
 
-from loguru import logger
-
 import cognee
-from cognee.api.v1.config import config
+from cognee import config
 
 from config.env_settings import settings
-from ..knowledge_loader import KnowledgeLoader
-from .base import BaseAICoachService
+from core.ai_coach.base import BaseAICoach
+
+from core.ai_coach.knowledge_loader import KnowledgeLoader
 from core.schemas import Client
 
 
-async def init_cognee_memory() -> None:
-    """Run Cognee migrations and ensure DB connectivity."""
-    await cognee.alembic("upgrade", "head")
-    try:
-        await cognee.search("ping")
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("Cognee connection failed: %s", exc)
-        raise
-
-
-class CogneeService(BaseAICoachService):
-    """Minimal Cognee-based implementation of :class:`BaseAIService`."""
-
+class CogneeCoach(BaseAICoach):
     api_url = settings.COGNEE_API_URL
     api_key = settings.COGNEE_API_KEY
     model = settings.COGNEE_MODEL  # TODO: IMPLEMENT KNOWLEDGE BASE
     _configured = False
     _loader: Optional[KnowledgeLoader] = None
+
+    @classmethod
+    async def initialize(cls) -> None:
+        await cognee.alembic("upgrade", "head")
+        await cognee.search("ping")
 
     @classmethod
     def set_loader(cls, loader: KnowledgeLoader) -> None:

@@ -49,7 +49,7 @@ class PaymentStatus(str, Enum):
 
 class CoachType(str, Enum):
     human = "human"
-    ai = "ai"
+    ai = "ai_coach"
 
     def __str__(self) -> str:
         return self.value

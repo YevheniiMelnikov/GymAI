@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from core.services.outer.gateways.payment_gateway import LiqPayGateway
+from core.services.external.gateways.payment_gateway import LiqPayGateway
 
 
 class DummyLiqPay:
@@ -24,7 +24,7 @@ class DummyLiqPay:
 @pytest.fixture(autouse=True)
 def patch_liqpay(monkeypatch):
     monkeypatch.setattr(
-        "core.services.outer.gateways.payment_gateway.LiqPay",
+        "core.services.external.gateways.payment_gateway.LiqPay",
         DummyLiqPay,
     )
 

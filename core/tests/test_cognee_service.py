@@ -45,7 +45,7 @@ def load_service(monkeypatch, calls):
     config_mod.config = config_obj
     monkeypatch.setitem(sys.modules, "cognee.api.v1.config", config_mod)
 
-    module = importlib.import_module("core.ai.services.cognee_service")
+    module = importlib.import_module("core.ai_coach.services.cognee_service")
     importlib.reload(module)
     CogneeService = module.CogneeService
     return CogneeService, config_calls

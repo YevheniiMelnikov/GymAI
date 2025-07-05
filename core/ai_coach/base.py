@@ -2,12 +2,18 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from ..knowledge_loader import KnowledgeLoader
+from core.ai_coach.knowledge_loader import KnowledgeLoader
 from core.schemas import Client
 
 
-class BaseAICoachService(ABC):
+class BaseAICoach(ABC):
     """Pure interface-layer for AI coach backends."""
+
+    @classmethod
+    @abstractmethod
+    async def initialize(cls) -> None:
+        """Run necessary bootstrapping (e.g. DB migrations, LLM pings)"""
+        raise NotImplementedError
 
     @classmethod
     @abstractmethod

@@ -12,6 +12,6 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name="coachprofile",
             name="coach_type",
-            field=models.CharField(choices=[("human", "Human"), ("ai", "Ai")], default="human", max_length=10),
+            field=models.CharField(choices=[("human", "Human"), ("ai_coach", "Ai")], default="human", max_length=10),
         ),
     ]

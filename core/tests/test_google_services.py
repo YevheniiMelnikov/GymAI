@@ -5,7 +5,7 @@ import types
 from typing import Any
 from unittest.mock import Mock
 
-services_path = Path(__file__).resolve().parents[1] / "services" / "outer"
+services_path = Path(__file__).resolve().parents[1] / "services" / "external"
 
 dummy_cache = types.ModuleType("core.cache")
 workout_cache = Mock()

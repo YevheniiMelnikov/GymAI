@@ -10,7 +10,7 @@ from core.services.workout_service import WorkoutService
 
 from core.schemas import Payment, Client
 from config.env_settings import settings
-from core.services.outer.gsheets_service import GSheetsService
+from core.services.external.gsheets_service import GSheetsService
 from core.services.payment_service import PaymentService
 from core.services.profile_service import ProfileService
 from apps.payments.tasks import send_payment_message

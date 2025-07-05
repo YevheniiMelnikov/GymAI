@@ -14,7 +14,7 @@ import fitz
 import cognee
 
 from config.env_settings import settings
-from core.ai.knowledge_loader import KnowledgeLoader
+from core.ai_coach.knowledge_loader import KnowledgeLoader
 
 
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
@@ -24,10 +24,9 @@ ALLOWED_EXTS = {".pdf", ".docx", ".txt"}
 class GDriveDocumentLoader(KnowledgeLoader):
     """Load documents from Google Drive into Cognee."""
 
-    def __init__(self, folder_id: str) -> None:
-        self.folder_id = folder_id
-        self.credentials_path = settings.GOOGLE_APPLICATION_CREDENTIALS
-        self._files_service: Any | None = None
+    folder_id = settings.GDRIVE_FOLDER_ID
+    credentials_path = settings.GOOGLE_APPLICATION_CREDENTIALS
+    _files_service: Any | None = None
 
     def _get_drive_service(self) -> Any:
         creds = Credentials.from_service_account_file(self.credentials_path, scopes=SCOPES)
