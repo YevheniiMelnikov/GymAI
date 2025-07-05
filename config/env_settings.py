@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     COGNEE_API_URL: Annotated[str, Field(default="https://openrouter.ai/api/v1")]
     COGNEE_API_KEY: Annotated[str, Field(default="")]
     COGNEE_MODEL: Annotated[str, Field(default="openrouter/cypher-alpha:free")]
+    VECTORDATABASE_PROVIDER: Annotated[str, Field(default="pgvector")]
+    VECTORDATABASE_URL: Annotated[str, Field(default="postgresql://user:pass@db:5432/gymbot")]
+    GRAPH_DATABASE_PROVIDER: Annotated[str, Field(default="networkx")]
 
     BOT_TOKEN: str
     BOT_LINK: str

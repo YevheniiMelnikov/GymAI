@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Optional
+
+from loguru import logger
 
 import cognee
 from cognee.api.v1.config import config
@@ -9,6 +11,16 @@ from config.env_settings import settings
 from .knowledge_loader import KnowledgeLoader
 from .base import BaseAICoachService
 from core.schemas import Client
+
+
+async def init_cognee_memory() -> None:
+    """Run Cognee migrations and ensure DB connectivity."""
+    await cognee.alembic("upgrade", "head")
+    try:
+        await cognee.search("ping")
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Cognee connection failed: %s", exc)
+        raise
 
 
 class CogneeService(BaseAICoachService):
@@ -45,6 +57,9 @@ class CogneeService(BaseAICoachService):
             config.set_llm_api_key(cls.api_key)
         if cls.model:
             config.set_llm_model(cls.model)
+        config.set_vector_db_provider(settings.VECTORDATABASE_PROVIDER)
+        config.set_vector_db_url(settings.VECTORDATABASE_URL)
+        config.set_graph_database_provider(settings.GRAPH_DATABASE_PROVIDER)
         cls._configured = True
 
     @staticmethod
@@ -82,3 +97,18 @@ class CogneeService(BaseAICoachService):
         client_data = cls._extract_client_data(client)
         prompt = cls._make_initial_prompt(client_data)
         await cls.coach_request(prompt)
+
+    @classmethod
+    async def save_user_message(cls, text: str, chat_id: int, client_id: int) -> None:
+        """Persist user message in Cognee memory."""
+        if not text.strip():
+            return
+        cls._ensure_config()
+        await cognee.memory.add(text, metadata={"chat_id": chat_id, "client_id": client_id})
+        await cognee.cognify()
+
+    @classmethod
+    async def get_context(cls, chat_id: int, query: str) -> list:
+        """Retrieve context for ``query`` from chat history."""
+        cls._ensure_config()
+        return await cognee.memory.search(query, filter_metadata={"chat_id": chat_id}, top_k=5)
