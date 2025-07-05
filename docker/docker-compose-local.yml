@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:17
+    image: pgvector/pgvector:pg17
     container_name: db
     env_file: ../.env
     command: ["postgres", "-c", "shared_preload_libraries=vector"]
