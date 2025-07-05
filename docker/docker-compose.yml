@@ -2,12 +2,12 @@ services:
   db:
     image: postgres:17
     container_name: db
-    env_file: .env
+    env_file: ../.env
     command: ["postgres", "-c", "shared_preload_libraries=vector"]
     ports: ["5432:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./docker:/docker-entrypoint-initdb.d:ro
+      - ./init_pgvector.sql:/docker-entrypoint-initdb.d/init_pgvector.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
       interval: 10s
@@ -34,17 +34,17 @@ services:
 
   api:
     build:
-      context: .
-      dockerfile: api.Dockerfile
+      context: ..
+      dockerfile: docker/api.Dockerfile
       args: { INSTALL_DEV: "false" }
     container_name: api
-    env_file: .env
+    env_file: ../.env
     environment:
       RUN_MIGRATIONS: "true"
     command: >
       uvicorn config.asgi:application --host 0.0.0.0 --port 8000 --reload
     volumes:
-      - ./config:/app/config
+      - ../config:/app/config
     depends_on:
       db:    { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -58,16 +58,16 @@ services:
 
   bot:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: bot
-    env_file: .env
+    env_file: ../.env
     command: ["python", "-u", "/app/bot/main.py"]
     ports: ["8080:8000"]
     volumes:
-      - ./google_creds.json:/app/google_creds.json:ro
-      - ./dumps:/app/dumps
-      - ./config:/app/config
+      - ../google_creds.json:/app/google_creds.json:ro
+      - ../dumps:/app/dumps
+      - ../config:/app/config
     depends_on:
       api:   { condition: service_healthy }
       db:    { condition: service_healthy }
@@ -77,19 +77,19 @@ services:
 
   celery:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: celery_worker
-    env_file: .env
+    env_file: ../.env
     command: >
       celery -A config.celery:celery_app worker
              -l info
              -Q default,maintenance
              -P threads
     volumes:
-      - ./google_creds.json:/app/google_creds.json:ro
-      - ./dumps:/app/dumps
-      - ./config:/app/config
+      - ../google_creds.json:/app/google_creds.json:ro
+      - ../dumps:/app/dumps
+      - ../config:/app/config
       - redisdata:/app/redis/data:ro
     depends_on:
       db:    { condition: service_healthy }
@@ -100,13 +100,13 @@ services:
 
   beat:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: celery_beat
-    env_file: .env
+    env_file: ../.env
     command: celery -A config.celery:celery_app beat -l info
     volumes:
-      - ./config:/app/config
+      - ../config:/app/config
     depends_on:
       db:    { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -123,7 +123,7 @@ services:
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
-      - ./static:/app/staticfiles:ro
+      - ../static:/app/staticfiles:ro
     depends_on:
       api: { condition: service_healthy }
     restart: unless-stopped

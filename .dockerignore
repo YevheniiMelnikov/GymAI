@@ -29,9 +29,10 @@ build/
 .gitignore
 
 # Docker
-Dockerfile
+docker/Dockerfile
+docker/api.Dockerfile
+docker/docker-compose*.yml
 .dockerignore
-docker-compose*.yml
 
 # Sensitive / local only
 .env

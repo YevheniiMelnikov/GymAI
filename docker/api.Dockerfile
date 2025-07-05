@@ -21,7 +21,7 @@ RUN if [ "$INSTALL_DEV" = "true" ]; then \
 
 COPY . /app
 
-COPY entrypoint.sh /app/entrypoint.sh
+COPY docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
 ENTRYPOINT ["/app/entrypoint.sh"]

@@ -39,7 +39,7 @@ GymBot is a Dockerized platform that connects a Telegram bot with a Django API. 
    Or manually:
 
    ```bash
-   docker compose up --build
+   docker compose -f docker/docker-compose.yml up --build
    ```
 
 ---
@@ -65,7 +65,7 @@ Use the credentials from `.env` (`DJANGO_ADMIN` / `DJANGO_PASSWORD`) to access t
 
 ## Redis
 
-Redis runs with `appendonly.aof` and LRU eviction. Configuration is stored in `redis.conf`.
+Redis runs with `appendonly.aof` and LRU eviction. Configuration is stored in `docker/redis.conf`.
 
 ---
 
@@ -73,13 +73,13 @@ Redis runs with `appendonly.aof` and LRU eviction. Configuration is stored in `r
 
 Background tasks are processed by Celery workers. Docker Compose includes two
 services (`celery` and `beat`) for this purpose. When running the worker outside
-of Docker make sure Redis is reachable and adjust `REDIS_URL` accordingly. You
-may also need to update `BOT_INTERNAL_URL` so Celery can reach the bot API:
+of Docker make sure Redis is reachable and update the `REDIS_URL` in your `.env`
+file accordingly. You may also need to set `BOT_INTERNAL_URL` so Celery can
+reach the bot API.
 
 ```bash
-export REDIS_URL=redis://localhost:16379  # port from docker-compose-local.yml
-export BOT_INTERNAL_URL=http://localhost:8080  # bot runs locally
-PYTHONPATH=. celery -A config.celery:celery_app worker -l info -Q default,maintenance -P threads
+PYTHONPATH=. celery -A config.celery:celery_app worker \
+    -l info -Q default,maintenance -P threads
 ```
 
 If Celery prints connection errors such as `Error -2 connecting to redis:6379`,
@@ -147,7 +147,7 @@ task pre-commit
 ## Production deployment
 
 ```bash
-docker compose -f docker-compose.yml up -d --build
+docker compose -f docker/docker-compose.yml up -d --build
 ```
 
 Verify the API is available:
@@ -166,8 +166,8 @@ Nginx acts as a reverse proxy with HTTPS (Let's Encrypt) and routes requests:
 - `/api/` → API server
 - `/` → Telegram bot
 
-See `nginx.conf` for configuration. Rebuild the image to apply changes:
+See `docker/nginx.conf` for configuration. Rebuild the image to apply changes:
 
 ```bash
-docker compose up -d --build nginx
+docker compose -f docker/docker-compose.yml up -d --build nginx
 ```
