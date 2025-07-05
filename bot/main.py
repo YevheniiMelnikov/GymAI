@@ -19,7 +19,7 @@ from bot.handlers import configure_routers
 from core.cache.base import BaseCacheManager
 from bot.utils.other import set_bot_commands
 from core.containers import App
-from core.services.ai import CogneeService
+from core.ai import CogneeService
 from core.services.outer import GDriveDocumentLoader
 
 

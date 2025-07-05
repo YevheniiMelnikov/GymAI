@@ -8,7 +8,7 @@ import cognee
 from cognee.api.v1.config import config
 
 from config.env_settings import settings
-from .knowledge_loader import KnowledgeLoader
+from ..knowledge_loader import KnowledgeLoader
 from .base import BaseAICoachService
 from core.schemas import Client
 
