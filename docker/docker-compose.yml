@@ -81,7 +81,8 @@ services:
       dockerfile: docker/Dockerfile
     container_name: celery_worker
     env_file: ../.env
-    command: "celery -A config.celery:celery_app worker -l info -Q default,maintenance -P threads"
+    entrypoint: /app/docker/entrypoint.sh
+    command: celery -A config.celery:celery_app worker -l info -Q default,maintenance -P threads
     volumes:
       - ../google_creds.json:/app/google_creds.json:ro
       - ../dumps:/app/dumps
@@ -100,6 +101,7 @@ services:
       dockerfile: docker/Dockerfile
     container_name: celery_beat
     env_file: ../.env
+    entrypoint: /app/docker/entrypoint.sh
     command: "celery -A config.celery:celery_app beat -l info"
     volumes:
       - ../config:/app/config
