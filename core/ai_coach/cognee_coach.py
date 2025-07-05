@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from typing import Optional
 import asyncio
 
@@ -25,7 +26,11 @@ class CogneeCoach(BaseAICoach):
     async def initialize(cls) -> None:
         cls._ensure_config()
         process = await asyncio.create_subprocess_exec(
-            "alembic", "upgrade", "head",
+            sys.executable,
+            "-m",
+            "alembic",
+            "upgrade",
+            "head",
             env={
                 **os.environ,
                 "DATABASE_URL": settings.VECTORDATABASE_URL,
