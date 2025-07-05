@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Optional
+import asyncio
 
 import cognee
 from cognee import config
@@ -21,7 +22,13 @@ class CogneeCoach(BaseAICoach):
 
     @classmethod
     async def initialize(cls) -> None:
-        await cognee.alembic("upgrade", "head")
+        """Run database migrations and verify connectivity."""
+        process = await asyncio.create_subprocess_exec(
+            "alembic",
+            "upgrade",
+            "head",
+        )
+        await process.wait()
         await cognee.search("ping")
 
     @classmethod
