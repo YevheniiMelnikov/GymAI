@@ -16,7 +16,7 @@ from bot.handlers.internal import (
 from config.env_settings import settings
 from bot.middlewares import ProfileMiddleware
 from bot.handlers import configure_routers
-from core.ai_coach.cognee import CogneeCoach
+from core.ai_coach.cognee_coach import CogneeCoach
 from core.ai_coach.utils import init_ai_coach
 from core.cache.base import BaseCacheManager
 from bot.utils.other import set_bot_commands

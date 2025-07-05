@@ -11,7 +11,6 @@ dependencies = [
     "aiohttp>=3.10.5",
     "liqpay-python @ git+https://github.com/liqpay/sdk-python",
     "loguru>=0.7.2",
-    "psycopg[binary]>=3.2.6",
     "pyyaml>=6.0.2",
     "httpx>=0.28.1",
     "redis>=5.2.1",
@@ -31,9 +30,10 @@ dependencies = [
     "dependency-injector>=4.47.1",
     "pydantic-settings>=2.9.1",
     "django-unfold>=0.59.0",
-    "cognee[postgres]>=0.2.0",
+    "cognee>=0.2.0",
     "PyMuPDF>=1.23.22",
     "python-docx>=1.1.0",
+    "psycopg2-binary>=2.9.10",
 ]
 
 [project.optional-dependencies]
