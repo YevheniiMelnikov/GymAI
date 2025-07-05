@@ -113,5 +113,3 @@ class GDriveDocumentLoader(KnowledgeLoader):
             page_token = response.get("nextPageToken")
             if not page_token:
                 break
-
-

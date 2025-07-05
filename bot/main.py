@@ -45,9 +45,7 @@ async def main() -> None:
     container.wire(modules=["bot.utils.other", "core.tasks"])
 
     if settings.GDRIVE_FOLDER_ID:
-        await CogneeService.init_loader(
-            GDriveDocumentLoader(settings.GDRIVE_FOLDER_ID)
-        )
+        await CogneeService.init_loader(GDriveDocumentLoader(settings.GDRIVE_FOLDER_ID))
 
     bot = container.bot()
     await bot.delete_webhook(drop_pending_updates=True)

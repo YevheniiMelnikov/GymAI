@@ -1,16 +1,20 @@
 from __future__ import annotations
+from typing import Iterable, Protocol, runtime_checkable
 
-from abc import ABC, abstractmethod
 
+@runtime_checkable
+class KnowledgeLoader(Protocol):
+    """Common interface for external knowledge loaders."""
 
-class KnowledgeLoader(ABC):
-    """Abstract interface for knowledge loading backends.
-
-    Only one method is required for now, but keeping this ABC makes it
-    straightforward to plug in alternative loaders later.
-    """
-
-    @abstractmethod
     async def load(self) -> None:
-        """Load external knowledge into Cognee."""
-        raise NotImplementedError
+        """Perform a full sync from the source into Cognee."""
+
+    async def refresh(self) -> None: ...
+
+    async def supports(self, filename: str, mime_type: str | None = None) -> bool: ...
+
+    async def list_items(self) -> Iterable[str]: ...
+
+    async def download(self, item_id: str) -> bytes: ...
+
+    async def shutdown(self) -> None: ...

@@ -7,13 +7,12 @@ from cognee.api.v1.config import config
 
 from config.env_settings import settings
 from .knowledge_loader import KnowledgeLoader
-from .coach_service import AIService
+from .base import BaseAICoachService
 from core.schemas import Client
 
 
-
-class CogneeService(AIService):
-    """Minimal Cognee-based implementation of :class:`AICoachService`."""
+class CogneeService(BaseAICoachService):
+    """Minimal Cognee-based implementation of :class:`BaseAIService`."""
 
     api_url = settings.COGNEE_API_URL
     api_key = settings.COGNEE_API_KEY
@@ -78,6 +77,7 @@ class CogneeService(AIService):
         cls._ensure_config()
         await cognee.cognify()
 
+    @classmethod
     async def coach_assign(cls, client: Client) -> None:
         client_data = cls._extract_client_data(client)
         prompt = cls._make_initial_prompt(client_data)
