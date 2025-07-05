@@ -1,4 +1,4 @@
-FROM python:3.13-slim
+FROM python:3.12-slim
 
 ENV UV_CACHE_DIR=/root/.cache/uv \
     PYTHONDONTWRITEBYTECODE=1 \

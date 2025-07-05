@@ -1,9 +1,7 @@
 import logging
 import sys
 import types
-
 from loguru import logger
-
 from config.env_settings import settings
 
 
@@ -14,7 +12,12 @@ def configure_loguru():
             {
                 "sink": sys.stdout,
                 "level": "DEBUG",
-                "format": "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",  # noqa
+                "format": (
+                    "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | "
+                    "<level>{level}</level> | "
+                    "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
+                    "<level>{message}</level>"
+                ),
                 "colorize": True,
             },
             {
@@ -29,6 +32,24 @@ def configure_loguru():
             },
         ]
     )
+
+    _suppress_third_party_logs()
+
+
+def _suppress_third_party_logs():
+    suppress_map = {
+        "cognee": "WARNING",
+        "cognee.shared.logging_utils": "ERROR",
+        "litellm": "WARNING",
+        "httpx": "WARNING",
+        "httpcore": "WARNING",
+        "matplotlib": "ERROR",
+        "urllib3": "WARNING",
+        "asyncio": "WARNING",
+    }
+
+    for logger_name, level in suppress_map.items():
+        logging.getLogger(logger_name).setLevel(level)
 
 
 LOGGING = {
@@ -61,9 +82,6 @@ LOGGING = {
 
 class InterceptHandler(logging.Handler):
     def emit(self, record: logging.LogRecord) -> None:
-        from typing import Union
-
-        loguru_level: Union[str, int]
         try:
             loguru_level = logger.level(record.levelname).name
         except Exception:
@@ -76,4 +94,5 @@ class InterceptHandler(logging.Handler):
             frame = frame.f_back
             depth += 1
 
-        logger.opt(depth=depth, exception=record.exc_info).log(loguru_level, record.getMessage())
+        if record.levelno >= logging.getLevelName(settings.LOG_LEVEL):
+            logger.opt(depth=depth, exception=record.exc_info).log(loguru_level, record.getMessage())
