@@ -2,12 +2,12 @@ services:
   db:
     image: postgres:17
     container_name: db
-    env_file: .env
+    env_file: ../.env
     command: ["postgres", "-c", "shared_preload_libraries=vector"]
     ports: ["15432:5432"]
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./docker:/docker-entrypoint-initdb.d:ro
+      - ./init_pgvector.sql:/docker-entrypoint-initdb.d/init_pgvector.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
       interval: 10s
@@ -32,14 +32,14 @@ services:
 
   api:
     build:
-      context: .
-      dockerfile: api.Dockerfile
+      context: ..
+      dockerfile: docker/api.Dockerfile
       args: { INSTALL_DEV: "true" }
     container_name: api
-    env_file: .env
+    env_file: ../.env
     volumes:
-      - .:/app
-      - ./config:/app/config
+      - ../:/app
+      - ../config:/app/config
     environment:
       RUN_MIGRATIONS: "true"
     command: >
@@ -57,18 +57,18 @@ services:
 
   celery:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: celery_worker
-    env_file: .env
+    env_file: ../.env
     command: >
       celery -A config.celery:celery_app worker
              -l info
              -Q default,maintenance
              -P threads
     volumes:
-      - .:/app
-      - ./config:/app/config
+      - ../:/app
+      - ../config:/app/config
       - redisdata:/app/redis/data:ro
     depends_on:
       db:    { condition: service_healthy }
@@ -77,14 +77,14 @@ services:
 
   beat:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     container_name: celery_beat
-    env_file: .env
+    env_file: ../.env
     command: celery -A config.celery:celery_app beat -l info
     volumes:
-      - .:/app
-      - ./config:/app/config
+      - ../:/app
+      - ../config:/app/config
     depends_on:
       db:    { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -95,17 +95,17 @@ services:
 #  bot:
 #    container_name: bot
 #    build:
-#      context: .
-#      dockerfile: Dockerfile
+#      context: ..
+#      dockerfile: docker/Dockerfile
 #    depends_on:
 #      redis: {condition: service_healthy}
 #      db:    {condition: service_healthy}
 #    env_file: .env
 #    command: ["python", "-u", "/app/bot/main.py"]
 #    volumes:
-#      - ./google_creds.json:/app/google_creds.json:ro
-#      - ./dumps:/app/dumps
-#      - ./config:/app/config
+#      - ../google_creds.json:/app/google_creds.json:ro
+#      - ../dumps:/app/dumps
+#      - ../config:/app/config
 #    ports: ["8080:8080"]
 #    restart: unless-stopped
 

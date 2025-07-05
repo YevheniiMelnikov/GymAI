@@ -4,14 +4,19 @@ tasks:
   run:
     desc: Run production docker setup
     cmds:
-      - docker compose -f docker-compose.yml up --build
+      - docker compose -f docker/docker-compose.yml up --build
+
+  stop:
+    desc: Stop and remove docker containers
+    cmds:
+      - docker compose -f docker/docker-compose.yml down
 
   localrun:
     desc: Run bot locally
     env:
       COMPOSE_BAKE: 1
     cmds:
-      - docker compose -f docker-compose-local.yml up --build
+      - docker compose -f docker/docker-compose-local.yml up --build
 
   lint:
     desc: Run linters (ruff + pyrefly)
