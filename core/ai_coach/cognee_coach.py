@@ -67,6 +67,17 @@ class CogneeCoach(BaseAICoach):
         config.set_vector_db_provider(settings.VECTORDATABASE_PROVIDER)
         config.set_vector_db_url(settings.VECTORDATABASE_URL)
         config.set_graph_database_provider(settings.GRAPH_DATABASE_PROVIDER)
+        config.set_relational_db_config(
+            {
+                "db_host": settings.DB_HOST,
+                "db_port": settings.DB_PORT,
+                "db_username": settings.DB_USER,
+                "db_password": settings.DB_PASSWORD,
+                "db_name": settings.DB_NAME,
+                "db_path": "",
+                "db_provider": "postgres",
+            }
+        )
         cls._configured = True
 
     @staticmethod
