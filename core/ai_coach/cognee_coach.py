@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Optional
+import asyncio
 
 import cognee
 from cognee import config
@@ -21,7 +22,13 @@ class CogneeCoach(BaseAICoach):
 
     @classmethod
     async def initialize(cls) -> None:
-        await cognee.alembic("upgrade", "head")
+        """Run database migrations and verify connectivity."""
+        process = await asyncio.create_subprocess_exec(
+            "alembic",
+            "upgrade",
+            "head",
+        )
+        await process.wait()
         await cognee.search("ping")
 
     @classmethod
@@ -96,11 +103,13 @@ class CogneeCoach(BaseAICoach):
         if not text.strip():
             return
         cls._ensure_config()
-        await cognee.memory.add(text, metadata={"chat_id": chat_id, "client_id": client_id})
+        dataset = f"chat_{chat_id}"
+        await cognee.add(text, dataset_name=dataset)
         await cognee.cognify()
 
     @classmethod
     async def get_context(cls, chat_id: int, query: str) -> list:
         """Retrieve context for ``query`` from chat history."""
         cls._ensure_config()
-        return await cognee.memory.search(query, filter_metadata={"chat_id": chat_id}, top_k=5)
+        dataset = f"chat_{chat_id}"
+        return await cognee.search(query, datasets=[dataset], top_k=5)
