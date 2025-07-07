@@ -22,7 +22,7 @@ class BaseAICoach(ABC):
 
     @classmethod
     @abstractmethod
-    async def coach_assign(cls, client: Client) -> None:
+    async def assign_client(cls, client: Client) -> None:
         """Run one-off logic when a new client is assigned."""
 
     @classmethod

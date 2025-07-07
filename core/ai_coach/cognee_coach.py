@@ -91,11 +91,11 @@ class CogneeCoach(BaseAICoach):
         return ""  # TODO IMPLEMENT DB (CHAT MEMORY)
 
     @classmethod
-    async def coach_request(cls, text: str) -> None:
+    async def coach_request(cls, text: str) -> list:
         cls._ensure_config()
         await cognee.add(text)
         await cognee.cognify()
-        await cognee.search(text)
+        return await cognee.search(text)
 
     @classmethod
     async def load_external_knowledge(cls) -> None:
@@ -111,7 +111,7 @@ class CogneeCoach(BaseAICoach):
         await cognee.cognify()
 
     @classmethod
-    async def coach_assign(cls, client: Client) -> None:
+    async def assign_client(cls, client: Client) -> None:
         client_data = cls._extract_client_data(client)
         prompt = cls._make_initial_prompt(client_data)
         await cls.coach_request(prompt)
