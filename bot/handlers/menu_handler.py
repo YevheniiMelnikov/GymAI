@@ -4,6 +4,8 @@ from __future__ import annotations
 from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from aiogram.exceptions import TelegramBadRequest
+from contextlib import suppress
 from typing import cast
 from loguru import logger
 
@@ -19,6 +21,7 @@ from bot.states import States
 from bot.texts.text_manager import msg_text
 from core.cache import Cache
 from core.schemas import Coach, Client, Profile
+from core.services.profile_service import ProfileService
 from bot.utils.chat import contact_client, process_feedback_content
 from bot.utils.menus import (
     show_main_menu,
@@ -42,6 +45,8 @@ from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
 from core.services import APIService
 from bot.keyboards import payment_kb
 from bot.utils.credits import available_packages
+from bot.utils.ai_services import generate_program, generate_subscription
+from bot.utils.credits import available_ai_services
 
 menu_router = Router()
 
@@ -177,6 +182,83 @@ async def ai_service_choice(callback_query: CallbackQuery, state: FSMContext) ->
         )
         await state.update_data(new_client=True)
         await del_msg(callback_query)
+        return
+
+    if cb_data.startswith("ai_service_"):
+        client_data = data.get("client")
+        if not client_data:
+            await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
+            return
+        client = Client.model_validate(client_data)
+
+        service = cb_data.removeprefix("ai_service_")
+        services = {s.name: s.credits for s in available_ai_services()}
+        required = services.get(service, 0)
+        if client.credits < required:
+            await callback_query.answer(msg_text("not_enough_credits", profile.language), show_alert=True)
+            await show_balance_menu(callback_query, profile, state)
+            return
+
+        await ProfileService.adjust_client_credits(profile.id, -required)
+        await Cache.client.update_client(client.profile, {"credits": client.credits - required})
+
+        workout_type = data.get("workout_type", "gym")
+        wishes = data.get("wishes", "")
+
+        if service == "program":
+            await generate_program(client, workout_type, wishes, state, callback_query.bot)
+            await callback_query.answer(msg_text("payment_success", profile.language), show_alert=True)
+            await show_main_menu(callback_query, profile, state)
+            return
+        elif service.startswith("subscription"):
+            period_map = {
+                "subscription_14_days": "14d",
+                "subscription_1_month": "1m",
+                "subscription_6_months": "6m",
+            }
+            await state.update_data(ai_service=service, period=period_map.get(service, "1m"), required=required)
+            await state.set_state(States.ai_workout_days)
+            await answer_msg(
+                callback_query,
+                msg_text("select_days", profile.language),
+                reply_markup=select_days_kb(profile.language, []),
+            )
+            await del_msg(callback_query)
+            return
+
+
+@menu_router.callback_query(States.ai_workout_days)
+async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    profile = Profile.model_validate(data.get("profile"))
+    lang = profile.language
+    days: list[str] = data.get("workout_days", [])
+
+    if callback_query.data != "complete":
+        if callback_query.data in days:
+            days.remove(callback_query.data)
+        else:
+            days.append(callback_query.data)
+        await state.update_data(workout_days=days)
+        message = callback_query.message
+        if message and isinstance(message, Message):
+            with suppress(TelegramBadRequest):
+                await message.edit_reply_markup(reply_markup=select_days_kb(lang, days))
+        await state.set_state(States.ai_workout_days)
+        return
+
+    if not days:
+        await callback_query.answer("❌")
+        return
+
+    await state.update_data(workout_days=days)
+    client = Client.model_validate(data.get("client"))
+    workout_type = data.get("workout_type", "gym")
+    wishes = data.get("wishes", "")
+    period = data.get("period", "1m")
+    await generate_subscription(client, workout_type, wishes, period, days, state, callback_query.bot)
+    await callback_query.answer(msg_text("payment_success", lang), show_alert=True)
+    await show_main_menu(callback_query, profile, state)
 
 
 @menu_router.callback_query(States.profile)
