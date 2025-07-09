@@ -7,8 +7,6 @@ import asyncio
 
 from loguru import logger
 from config.logger import configure_loguru
-
-configure_loguru()
 import contextlib
 import io
 
@@ -24,6 +22,9 @@ from core.ai_coach.base import BaseAICoach
 
 from core.ai_coach.knowledge_loader import KnowledgeLoader
 from core.schemas import Client
+
+
+configure_loguru()
 
 
 class CogneeCoach(BaseAICoach):
@@ -46,6 +47,8 @@ class CogneeCoach(BaseAICoach):
                 **os.environ,
                 "DATABASE_URL": settings.VECTORDATABASE_URL,
             },
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
         )
         await process.wait()
         try:
