@@ -41,6 +41,7 @@ def _suppress_third_party_logs():
         "cognee": "WARNING",
         "cognee.shared.logging_utils": "ERROR",
         "litellm": "WARNING",
+        "LiteLLM": "WARNING",
         "httpx": "WARNING",
         "httpcore": "WARNING",
         "matplotlib": "ERROR",

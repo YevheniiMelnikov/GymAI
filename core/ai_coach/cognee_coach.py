@@ -22,6 +22,7 @@ from core.ai_coach.base import BaseAICoach
 
 from core.ai_coach.knowledge_loader import KnowledgeLoader
 from core.schemas import Client
+from cognee.modules.data.exceptions import DatasetNotFoundError
 
 
 configure_loguru()
@@ -120,7 +121,10 @@ class CogneeCoach(BaseAICoach):
     async def coach_request(cls, text: str) -> list:
         cls._ensure_config()
         await cognee.add(text)
-        await cognee.cognify()
+        try:
+            await cognee.cognify()
+        except DatasetNotFoundError:
+            logger.warning("No datasets found to process")
         return await cognee.search(text)
 
     @classmethod
@@ -134,7 +138,10 @@ class CogneeCoach(BaseAICoach):
     @classmethod
     async def update_knowledge_base(cls) -> None:
         cls._ensure_config()
-        await cognee.cognify()
+        try:
+            await cognee.cognify()
+        except DatasetNotFoundError:
+            logger.warning("No datasets found to process")
 
     @classmethod
     async def assign_client(cls, client: Client) -> None:
@@ -150,7 +157,10 @@ class CogneeCoach(BaseAICoach):
         cls._ensure_config()
         dataset = f"chat_{chat_id}"
         await cognee.add(text, dataset_name=dataset)
-        await cognee.cognify()
+        try:
+            await cognee.cognify()
+        except DatasetNotFoundError:
+            logger.warning("No datasets found to process")
 
     @classmethod
     async def get_context(cls, chat_id: int, query: str) -> list:
