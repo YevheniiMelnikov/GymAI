@@ -42,9 +42,10 @@ class Settings(BaseSettings):
 
     API_KEY: str
     API_URL: str
-    COGNEE_API_URL: Annotated[str, Field(default="https://openrouter.ai/api/v1")]
+    COGNEE_API_URL: Annotated[str, Field(default="https://api.openai.com/v1")]
     COGNEE_API_KEY: Annotated[str, Field(default="")]
-    COGNEE_MODEL: Annotated[str, Field(default="openrouter/cypher-alpha:free")]
+    COGNEE_MODEL: Annotated[str, Field(default="gpt-4o")]
+    COGNEE_LLM_PROVIDER: Annotated[str, Field(default="openai")]
     VECTORDATABASE_PROVIDER: Annotated[str, Field(default="pgvector")]
     GRAPH_DATABASE_PROVIDER: Annotated[str, Field(default="networkx")]
 

@@ -17,7 +17,6 @@ async def init_ai_coach(ai_coach: type[BaseAICoach], knowledge_loader: Knowledge
         await ai_coach.init_loader(knowledge_loader)
 
     set_ai_coach(ai_coach)
-    logger.info("AI coach initialized")
 
 
 async def ai_coach_request(*args: Any, **kwargs: Any) -> list | None:

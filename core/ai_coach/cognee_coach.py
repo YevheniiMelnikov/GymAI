@@ -30,6 +30,7 @@ configure_loguru()
 class CogneeCoach(BaseAICoach):
     api_url = settings.COGNEE_API_URL
     api_key = settings.COGNEE_API_KEY
+    llm_provider = settings.COGNEE_LLM_PROVIDER
     model = settings.COGNEE_MODEL  # TODO: IMPLEMENT KNOWLEDGE BASE
     _configured = False
     _loader: Optional[KnowledgeLoader] = None
@@ -75,15 +76,21 @@ class CogneeCoach(BaseAICoach):
         """Ensure Cognee is configured."""
         if cls._configured:
             return
-        if cls.api_url:
-            cognee_config.set_llm_endpoint(cls.api_url)
-        if cls.api_key:
-            cognee_config.set_llm_api_key(cls.api_key)
-        if cls.model:
-            cognee_config.set_llm_model(cls.model)
+
+        cognee_config.set_llm_provider(settings.COGNEE_LLM_PROVIDER)
+        cognee_config.set_llm_model(settings.COGNEE_MODEL)
+        cognee_config.set_llm_api_key(settings.COGNEE_API_KEY)
+        cognee_config.set_llm_endpoint(settings.COGNEE_API_URL)
+
+        print(settings.COGNEE_LLM_PROVIDER)
+        print(settings.COGNEE_MODEL)
+        print(settings.COGNEE_API_KEY)
+        print(settings.COGNEE_API_URL)
+
         cognee_config.set_vector_db_provider(settings.VECTORDATABASE_PROVIDER)
         cognee_config.set_vector_db_url(settings.VECTORDATABASE_URL)
         cognee_config.set_graph_database_provider(settings.GRAPH_DATABASE_PROVIDER)
+
         cognee_config.set_relational_db_config(
             {
                 "db_host": settings.DB_HOST,
@@ -95,6 +102,8 @@ class CogneeCoach(BaseAICoach):
                 "db_provider": "postgres",
             }
         )
+
+        logger.info("Cognee successfully configured")
         cls._configured = True
 
     @staticmethod
