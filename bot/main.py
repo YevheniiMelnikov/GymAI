@@ -5,6 +5,9 @@ from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
 from loguru import logger
+from config.logger import configure_loguru
+
+configure_loguru()
 
 from bot.handlers.internal import (
     internal_payment_handler,
