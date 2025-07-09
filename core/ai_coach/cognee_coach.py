@@ -65,12 +65,12 @@ class CogneeCoach(BaseAICoach):
 
     @classmethod
     async def init_loader(cls, loader: KnowledgeLoader) -> None:
-        """Register ``loader`` and load its data.
+        """Register ``loader`` and refresh the knowledge base.
 
         This should be invoked once during startup, e.g. from ``bot/main.py``.
         """
         cls.set_loader(loader)
-        await cls.load_external_knowledge()
+        await cls.refresh_knowledge_base()
 
     @classmethod
     def _ensure_config(cls) -> None:
@@ -124,11 +124,12 @@ class CogneeCoach(BaseAICoach):
         return await cognee.search(text)
 
     @classmethod
-    async def load_external_knowledge(cls) -> None:
+    async def refresh_knowledge_base(cls) -> None:
+        """Reload external knowledge via the registered loader."""
         cls._ensure_config()
         if cls._loader is None:
             return
-        await cls._loader.load()
+        await cls._loader.refresh()
         await cls.update_knowledge_base()
 
     @classmethod

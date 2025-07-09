@@ -107,3 +107,7 @@ class GDriveDocumentLoader(KnowledgeLoader):
             page_token = response.get("nextPageToken")
             if not page_token:
                 break
+
+    async def refresh(self) -> None:
+        """Refresh documents from Google Drive."""
+        await self.load()
