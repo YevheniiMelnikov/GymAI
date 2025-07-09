@@ -7,8 +7,6 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 from loguru import logger
 from config.logger import configure_loguru
 
-configure_loguru()
-
 from bot.handlers.internal import (
     internal_payment_handler,
     internal_send_payment_message,
@@ -25,6 +23,9 @@ from core.cache.base import BaseCacheManager
 from bot.utils.other import set_bot_commands
 from core.containers import App
 from core.services.external import GDriveDocumentLoader
+
+
+configure_loguru()
 
 
 async def on_shutdown(bot: Bot) -> None:
@@ -80,7 +81,7 @@ async def main() -> None:
     setup_application(app, dp, bot=bot)
     runner = await start_web_app(app)
     logger.success("Bot started")
-    await init_ai_coach(CogneeCoach, GDriveDocumentLoader)
+    await init_ai_coach(CogneeCoach, GDriveDocumentLoader())
     stop_event = asyncio.Event()
 
     try:
