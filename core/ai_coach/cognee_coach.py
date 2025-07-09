@@ -5,8 +5,19 @@ import sys
 from typing import Optional
 import asyncio
 
-import cognee
-from cognee import config
+from loguru import logger
+from config.logger import configure_loguru
+
+configure_loguru()
+import contextlib
+import io
+
+os.environ.setdefault("LITELLM_LOG", "WARNING")
+os.environ.setdefault("LOG_LEVEL", "WARNING")
+
+with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+    import cognee
+    from cognee import config as cognee_config
 
 from config.env_settings import settings
 from core.ai_coach.base import BaseAICoach
@@ -37,7 +48,10 @@ class CogneeCoach(BaseAICoach):
             },
         )
         await process.wait()
-        await cognee.search("ping")
+        try:
+            await cognee.search("ping")
+        except Exception as e:
+            logger.warning(f"Cognee ping failed: {e}")
 
     @classmethod
     def set_loader(cls, loader: KnowledgeLoader) -> None:
@@ -59,15 +73,15 @@ class CogneeCoach(BaseAICoach):
         if cls._configured:
             return
         if cls.api_url:
-            config.set_llm_endpoint(cls.api_url)
+            cognee_config.set_llm_endpoint(cls.api_url)
         if cls.api_key:
-            config.set_llm_api_key(cls.api_key)
+            cognee_config.set_llm_api_key(cls.api_key)
         if cls.model:
-            config.set_llm_model(cls.model)
-        config.set_vector_db_provider(settings.VECTORDATABASE_PROVIDER)
-        config.set_vector_db_url(settings.VECTORDATABASE_URL)
-        config.set_graph_database_provider(settings.GRAPH_DATABASE_PROVIDER)
-        config.set_relational_db_config(
+            cognee_config.set_llm_model(cls.model)
+        cognee_config.set_vector_db_provider(settings.VECTORDATABASE_PROVIDER)
+        cognee_config.set_vector_db_url(settings.VECTORDATABASE_URL)
+        cognee_config.set_graph_database_provider(settings.GRAPH_DATABASE_PROVIDER)
+        cognee_config.set_relational_db_config(
             {
                 "db_host": settings.DB_HOST,
                 "db_port": settings.DB_PORT,
