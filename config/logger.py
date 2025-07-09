@@ -42,6 +42,13 @@ def _suppress_third_party_logs():
         "cognee.shared.logging_utils": "ERROR",
         "litellm": "WARNING",
         "LiteLLM": "WARNING",
+        "LiteLLMEmbeddingEngine": "WARNING",
+        "openai": "WARNING",
+        "stainless_sdk": "WARNING",
+        "instructor": "WARNING",
+        "langfuse": "WARNING",
+        "google": "WARNING",
+        "googleapiclient": "WARNING",
         "httpx": "WARNING",
         "httpcore": "WARNING",
         "matplotlib": "ERROR",
@@ -51,6 +58,9 @@ def _suppress_third_party_logs():
 
     for logger_name, level in suppress_map.items():
         logging.getLogger(logger_name).setLevel(level)
+
+    # silence noisy info logs from libraries using the root logger
+    logging.getLogger().setLevel("WARNING")
 
 
 LOGGING = {
@@ -64,7 +74,7 @@ LOGGING = {
     },
     "root": {
         "handlers": ["loguru"],
-        "level": "DEBUG",
+        "level": "WARNING",
     },
     "loggers": {
         "django": {
