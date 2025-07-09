@@ -83,10 +83,6 @@ class CogneeCoach(BaseAICoach):
         cognee_config.set_llm_api_key(settings.COGNEE_API_KEY)
         cognee_config.set_llm_endpoint(settings.COGNEE_API_URL)
 
-        print(settings.COGNEE_LLM_PROVIDER)
-        print(settings.COGNEE_MODEL)
-        print(settings.COGNEE_API_KEY)
-        print(settings.COGNEE_API_URL)
 
         cognee_config.set_vector_db_provider(settings.VECTORDATABASE_PROVIDER)
         cognee_config.set_vector_db_url(settings.VECTORDATABASE_URL)
