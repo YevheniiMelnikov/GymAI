@@ -191,3 +191,15 @@ def send_daily_survey(self):
     except httpx.HTTPError as exc:
         logger.warning(f"Bot call failed for daily survey: {exc!s}")
         raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
+async def refresh_external_knowledge(self):  # pyre-ignore[valid-type]
+    """Refresh external knowledge and rebuild Cognee index."""
+    from core.ai_coach.registry import get_ai_coach
+
+    coach = get_ai_coach()
+    try:
+        await coach.refresh_knowledge_base()
+    except Exception as exc:  # noqa: BLE001
+        raise self.retry(exc=exc)

@@ -50,6 +50,11 @@ celery_config = {
             "schedule": crontab(hour=9, minute=0),
             "options": {"queue": "maintenance"},
         },
+        "refresh_external_knowledge": {
+            "task": "core.tasks.refresh_external_knowledge",
+            "schedule": crontab(hour=3, minute=30),
+            "options": {"queue": "maintenance"},
+        },
     },
 }
 
