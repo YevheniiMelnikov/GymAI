@@ -75,28 +75,41 @@ class GCStorageService:
 
 
 class ExerciseGIFStorage(GCStorageService):
-    async def find_gif(self, exercise: str, exercise_dict: dict[str, list[str]]) -> str | None:
+    BASE_URL = "https://storage.googleapis.com"
+
+    async def find_gif(
+        self,
+        exercise: str,
+        exercise_dict: dict[str, list[str]],
+    ) -> str | None:
         if not self.bucket:
             logger.warning("GCS bucket is not configured")
             return None
-        try:
-            exercise_lc = exercise.lower()
-            for filename, synonyms in exercise_dict.items():
-                if exercise_lc in (syn.lower() for syn in synonyms):
-                    cached = await Cache.workout.get_exercise_gif(exercise_lc)
-                    if cached:
-                        return f"https://storage.googleapis.com/{self.bucket_name}/{cached}"
 
-                    blobs = list(self.bucket.list_blobs(prefix=filename))
-                    if blobs:
-                        blob = blobs[0]
-                        if blob.exists():
-                            file_url = f"https://storage.googleapis.com/{self.bucket_name}/{blob.name}"
-                            for syn in synonyms:
-                                await Cache.workout.cache_gif_filename(syn.lower(), blob.name)
-                            return file_url
-        except Exception as e:
-            logger.error(f"Failed to find gif for exercise {exercise}: {e}")
+        exercise_lc = exercise.lower()
+
+        cached = await Cache.workout.get_exercise_gif(exercise_lc)
+        if cached:
+            return f"{self.BASE_URL}/{self.bucket_name}/{cached}"
+
+        try:
+            for filename, synonyms in exercise_dict.items():
+                if exercise_lc not in {s.lower() for s in synonyms}:
+                    continue
+
+                blobs = list(self.bucket.list_blobs(prefix=filename, max_results=1))
+                if not blobs or not blobs[0].exists():
+                    continue
+
+                blob = blobs[0]
+                file_url =  f"{self.BASE_URL}/{self.bucket_name}/{blob.name}"
+
+                for syn in synonyms:
+                    await Cache.workout.cache_gif_filename(syn.lower(), blob.name)
+
+                return file_url
+        except Exception as exc:
+            logger.error(f"Failed to find gif for exercise {exercise}: {exc}")
 
         logger.debug(f"No matching file found for exercise: {exercise}")
         return None
