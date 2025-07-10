@@ -8,7 +8,6 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from loguru import logger
 
 from bot.keyboards import (
-    workout_feedback_kb,
     select_exercise_kb,
     subscription_view_kb,
     program_view_kb,
@@ -24,6 +23,7 @@ from core.cache import Cache
 from core.enums import ClientStatus
 from core.services import APIService
 from bot.utils.chat import send_message
+from core.tasks import send_workout_result
 from bot.utils.exercises import update_exercise_data, save_exercise, format_program, create_exercise
 from bot.utils.menus import (
     show_main_menu,
@@ -303,7 +303,6 @@ async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMCon
 async def send_workout_results(callback_query: CallbackQuery, state: FSMContext, bot: Bot):
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
-    day = cast(str, data.get("day", ""))
     day_index = cast(int, data.get("day_index", 0))
     exercises = [DayExercises.model_validate(e) for e in data.get("exercises", [])]
     program = await format_program(exercises, day_index)
@@ -317,13 +316,10 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext,
         coach_profile = await APIService.profile.get_profile(coach.profile)
         coach_lang = cast(str, coach_profile.language)
 
-        await send_message(
-            recipient=coach,
-            text=msg_text("workout_completed", coach_lang).format(name=client.name, program=program),
-            bot=bot,
-            state=state,
-            reply_markup=workout_feedback_kb(coach_lang, client.profile, day),
-            include_incoming_message=False,
+        send_workout_result.delay(
+            coach.profile,
+            client.profile,
+            msg_text("workout_completed", coach_lang).format(name=client.name, program=program),
         )
 
         message = cast(Message, callback_query.message)
@@ -348,17 +344,14 @@ async def workout_description(message: Message, state: FSMContext, bot: Bot):
     day_data = next((d for d in exercises if d.day == str(day_index)), None)
     program = await format_program(exercises, day_index) if day_data else ""
 
-    await send_message(
-        recipient=coach,
-        text=msg_text("workout_feedback", coach_lang).format(
+    send_workout_result.delay(
+        coach.profile,
+        client.profile,
+        msg_text("workout_feedback", coach_lang).format(
             name=client.name,
             feedback=message.text,
             program=program,
         ),
-        bot=bot,
-        state=state,
-        reply_markup=workout_feedback_kb(coach_lang, client.profile, cast(str, data.get("day", ""))),
-        include_incoming_message=False,
     )
 
     await answer_msg(message, msg_text("keep_going", profile.language))

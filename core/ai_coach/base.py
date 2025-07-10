@@ -39,3 +39,8 @@ class BaseAICoach(ABC):
     async def update_knowledge_base(cls) -> None:
         """Re-index knowledge after load (override to use)."""
         raise NotImplementedError
+
+    @classmethod
+    @abstractmethod
+    async def process_workout_result(cls, client_id: int, feedback: str) -> str:
+        """Return updated program text for ``client_id`` based on ``feedback``."""

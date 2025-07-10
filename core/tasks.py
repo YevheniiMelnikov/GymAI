@@ -193,6 +193,34 @@ def send_daily_survey(self):
         raise self.retry(exc=exc)
 
 
+@shared_task(
+    bind=True,
+    autoretry_for=(httpx.HTTPError,),
+    retry_backoff=180,
+    retry_jitter=True,
+    max_retries=3,
+)  # pyre-ignore[not-callable]
+def send_workout_result(
+    self, coach_profile_id: int, client_profile_id: int, text: str
+) -> None:
+    """Forward workout survey results to the appropriate recipient."""
+
+    url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/send_workout_result/"
+    headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
+    payload = {
+        "coach_id": coach_profile_id,
+        "client_id": client_profile_id,
+        "text": text,
+    }
+
+    try:
+        resp = httpx.post(url, json=payload, timeout=15.0, headers=headers)
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        logger.warning(f"Bot call failed for workout result: {exc!s}")
+        raise self.retry(exc=exc)
+
+
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
 async def refresh_external_knowledge(self):  # pyre-ignore[valid-type]
     """Refresh external knowledge and rebuild Cognee index."""
