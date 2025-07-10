@@ -17,7 +17,7 @@ from core.enums import ClientStatus
 from core.schemas import Profile
 from core.services import APIService
 from bot.utils.chat import send_message
-from core.services.external import avatar_manager
+from core.services import avatar_manager
 from bot.utils.exercises import edit_subscription_exercises
 from bot.utils.menus import show_main_menu, manage_subscription, show_exercises_menu, program_menu_pagination
 from bot.texts.text_manager import msg_text

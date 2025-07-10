@@ -19,7 +19,7 @@ from core.enums import CoachType
 from core.ai_coach.utils import ai_coach_request, ai_assign_client
 from core.services import APIService
 from bot.utils.text import format_new_client_message, get_client_page, get_workout_types
-from core.services.external import avatar_manager
+from core.services import avatar_manager
 
 
 async def send_message(

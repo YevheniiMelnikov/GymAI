@@ -10,7 +10,7 @@ from core.encryptor import Encryptor
 from core.exceptions import CoachNotFoundError
 from core.validators import validate_or_raise
 from .base import BaseCacheManager
-from core.services.profile_service import ProfileService
+from core.services import ProfileService
 
 
 class CoachCacheManager(BaseCacheManager):

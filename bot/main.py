@@ -24,7 +24,7 @@ from core.ai_coach.utils import init_ai_coach
 from core.cache.base import BaseCacheManager
 from bot.utils.other import set_bot_commands
 from core.containers import App
-from core.services.external import GDriveDocumentLoader
+from core.services import GDriveDocumentLoader
 
 
 configure_loguru()

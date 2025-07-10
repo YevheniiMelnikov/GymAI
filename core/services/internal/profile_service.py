@@ -5,7 +5,7 @@ from loguru import logger
 
 from core.schemas import Profile, Client, Coach
 from core.encryptor import Encryptor
-from core.services.api_client import APIClient
+from core.services.internal.api_client import APIClient
 
 
 class ProfileService(APIClient):

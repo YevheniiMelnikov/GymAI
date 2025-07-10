@@ -4,7 +4,7 @@ import json
 
 from .base import BaseCacheManager
 from core.enums import PaymentStatus
-from core.services.payment_service import PaymentService
+from core.services.internal.payment_service import PaymentService
 from core.exceptions import PaymentNotFoundError
 
 

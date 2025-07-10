@@ -21,7 +21,7 @@ from bot.states import States
 from bot.texts.text_manager import msg_text
 from core.cache import Cache
 from core.schemas import Coach, Client, Profile
-from core.services.profile_service import ProfileService
+from core.services import ProfileService
 from bot.utils.chat import contact_client, process_feedback_content
 from bot.utils.menus import (
     show_main_menu,

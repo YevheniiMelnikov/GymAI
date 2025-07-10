@@ -16,10 +16,10 @@ from core.cache import Cache
 from core.cache.payment import PaymentCacheManager
 from core.enums import ClientStatus, PaymentStatus
 from core.services import APIService
-from core.services.payment_service import PaymentService
+from core.services.internal.payment_service import PaymentService
 from bot.utils.menus import show_main_menu, show_services_menu
 from core.schemas import Coach, Client
-from core.services.profile_service import ProfileService
+from core.services import ProfileService
 from apps.payments.tasks import send_client_request
 from bot.utils.workout_plans import cache_program_data, process_new_subscription
 from bot.texts import msg_text, btn_text

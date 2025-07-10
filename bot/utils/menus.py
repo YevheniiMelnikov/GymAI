@@ -36,7 +36,7 @@ from bot.utils.text import (
 from bot.utils.exercises import format_program, format_full_program
 from config.env_settings import settings
 from bot.utils.other import answer_msg, del_msg
-from core.services.external import avatar_manager
+from core.services import avatar_manager
 from core.validators import validate_or_raise
 
 

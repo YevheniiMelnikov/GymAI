@@ -30,7 +30,7 @@ from bot.utils.exercises import format_program
 from bot.utils.other import delete_messages, del_msg, answer_msg
 from bot.keyboards import yes_no_kb
 from bot.utils.credits import required_credits
-from core.services.profile_service import ProfileService
+from core.services import ProfileService
 from bot.texts import msg_text, btn_text
 
 

@@ -9,9 +9,9 @@ from pydantic_core._pydantic_core import ValidationError
 from config.env_settings import settings
 from core.enums import PaymentStatus
 from core.schemas import Payment, Subscription
-from core.services.api_client import APIClient
-from core.services.external.payments.liqpay import LiqPayGateway
-from core.services.external.payments.payment_gateway import PaymentGateway
+from core.services.internal.api_client import APIClient
+from core.services.payments.liqpay import LiqPayGateway
+from core.services.payments.payment_gateway import PaymentGateway
 
 
 class PaymentService(APIClient):

@@ -6,13 +6,13 @@ from core.cache import Cache
 from datetime import datetime
 from core.enums import PaymentStatus, CoachType
 from core.exceptions import ClientNotFoundError
-from core.services.workout_service import WorkoutService
+from core.services import WorkoutService
 
 from core.schemas import Payment, Client
 from config.env_settings import settings
-from core.services.external.gsheets_service import GSheetsService
-from core.services.payment_service import PaymentService
-from core.services.profile_service import ProfileService
+from core.services import GSheetsService
+from core.services.internal.payment_service import PaymentService
+from core.services import ProfileService
 from apps.payments.tasks import send_payment_message
 from bot.texts.text_manager import msg_text
 from bot.utils.credits import uah_to_credits, available_packages

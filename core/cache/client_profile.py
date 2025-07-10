@@ -6,7 +6,7 @@ from core.schemas import Client
 from core.exceptions import ClientNotFoundError
 from .base import BaseCacheManager
 from core.validators import validate_or_raise
-from core.services.profile_service import ProfileService
+from core.services import ProfileService
 
 
 class ClientCacheManager(BaseCacheManager):

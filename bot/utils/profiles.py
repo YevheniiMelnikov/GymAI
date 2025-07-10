@@ -23,7 +23,7 @@ from bot.utils.chat import send_coach_request
 from bot.utils.other import delete_messages, del_msg, answer_msg
 from core.schemas import Client, Coach, Profile
 from bot.texts.text_manager import msg_text
-from core.services.external import avatar_manager
+from core.services import avatar_manager
 
 
 async def update_profile_data(message: Message, state: FSMContext, role: str, bot: Bot) -> None:

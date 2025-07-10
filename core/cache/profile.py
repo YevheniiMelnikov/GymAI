@@ -6,7 +6,7 @@ from pydantic_core._pydantic_core import ValidationError
 from .base import BaseCacheManager
 from core.exceptions import ProfileNotFoundError
 from core.schemas import Profile
-from core.services.profile_service import ProfileService
+from core.services import ProfileService
 
 
 class ProfileCacheManager(BaseCacheManager):

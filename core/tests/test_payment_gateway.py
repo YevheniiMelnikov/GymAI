@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from core.services.external.payments.liqpay import LiqPayGateway, ParamValidationError
+from core.services import LiqPayGateway, ParamValidationError
 
 
 class DummyLiqPay:

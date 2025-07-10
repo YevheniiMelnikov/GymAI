@@ -7,7 +7,7 @@ from urllib.parse import urlencode, urljoin
 
 from django.conf import settings
 
-from core.services.external.payments.payment_gateway import PaymentGateway
+from core.services.payments.payment_gateway import PaymentGateway
 
 
 class ParamValidationError(Exception):

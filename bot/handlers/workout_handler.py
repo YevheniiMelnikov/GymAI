@@ -48,7 +48,7 @@ from bot.utils.workout_plans import reset_workout_plan, save_workout_plan, next_
 from core.schemas import DayExercises, Profile, Program
 from bot.texts import msg_text, btn_text
 from core.exceptions import SubscriptionNotFoundError
-from core.services.external import gif_manager
+from core.services import gif_manager
 
 workout_router = Router()
 

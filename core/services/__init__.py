@@ -1,21 +1,11 @@
-class _APIServiceProxy:
-    @property
-    def payment(self):
-        from .payment_service import PaymentService
+from core.services.gdrive_loader import GDriveDocumentLoader
+from core.services.gstorage_service import GCStorageService, ExerciseGIFStorage
 
-        return PaymentService
+avatar_manager = GCStorageService("coach_avatars")
+gif_manager = ExerciseGIFStorage("exercises_guide")
 
-    @property
-    def profile(self):
-        from .profile_service import ProfileService
-
-        return ProfileService
-
-    @property
-    def workout(self):
-        from .workout_service import WorkoutService
-
-        return WorkoutService
-
-
-APIService = _APIServiceProxy()
+__all__ = [
+    "avatar_manager",
+    "gif_manager",
+    "GDriveDocumentLoader",
+]

@@ -4,7 +4,7 @@ from typing import Any
 from urllib.parse import urljoin
 from loguru import logger
 
-from core.services.api_client import APIClient
+from core.services.internal.api_client import APIClient
 from core.exceptions import UserServiceError
 from core.schemas import Program, DayExercises, Subscription
 from bot.utils.exercises import serialize_day_exercises
