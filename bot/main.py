@@ -1,4 +1,5 @@
 import asyncio
+from functools import partial
 from aiohttp import web
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.redis import RedisStorage
@@ -13,6 +14,7 @@ from bot.handlers.internal import (
     internal_client_request,
     internal_export_coach_payouts,
     internal_send_daily_survey,
+    internal_send_workout_result,
 )
 from config.env_settings import settings
 from bot.middlewares import ProfileMiddleware
@@ -74,6 +76,10 @@ async def main() -> None:
     app.router.add_post("/internal/payments/send_message/", internal_send_payment_message)
     app.router.add_post("/internal/payments/client_request/", internal_client_request)
     app.router.add_post("/internal/tasks/send_daily_survey/", internal_send_daily_survey)
+    app.router.add_post(
+        "/internal/tasks/send_workout_result/",
+        partial(internal_send_workout_result, ai_coach=CogneeCoach),
+    )
     app.router.add_post(
         "/internal/tasks/export_coach_payouts/",
         internal_export_coach_payouts,

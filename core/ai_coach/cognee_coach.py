@@ -164,3 +164,21 @@ class CogneeCoach(BaseAICoach):
         cls._ensure_config()
         dataset = f"chat_{chat_id}"
         return await cognee.search(query, datasets=[dataset], top_k=5)
+
+    @classmethod
+    async def process_workout_result(cls, client_id: int, feedback: str) -> str:
+        """Generate an updated workout program based on ``feedback``."""
+
+        cls._ensure_config()
+        context = []
+        try:
+            context = await cls.get_context(client_id, "workout")
+        except Exception:
+            context = []
+
+        prompt_parts = [feedback]
+        if context:
+            prompt_parts.append("\n".join(context))
+        prompt_parts.append("Update the workout plan accordingly.")
+        response = await cls.coach_request("\n".join(prompt_parts))
+        return response[0] if response else ""

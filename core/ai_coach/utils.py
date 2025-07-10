@@ -32,3 +32,8 @@ async def ai_assign_client(*args: Any, **kwargs: Any) -> None:
         return
     coach = get_ai_coach()
     await coach.assign_client(client)
+
+
+async def ai_process_workout_result(client_id: int, feedback: str) -> str:
+    coach = get_ai_coach()
+    return await coach.process_workout_result(client_id, feedback)
