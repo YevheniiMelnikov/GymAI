@@ -113,7 +113,7 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
     wishes = data.get("wishes", "")
 
     if not isinstance(order_id, str) or not isinstance(service_type, str):
-        await callback_query.answer("Invalid payment data", show_alert=True)
+        await callback_query.answer("Invalid payments data", show_alert=True)
         return
 
     try:

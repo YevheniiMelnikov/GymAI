@@ -10,7 +10,8 @@ from config.env_settings import settings
 from core.enums import PaymentStatus
 from core.schemas import Payment, Subscription
 from core.services.api_client import APIClient
-from core.services.external.gateways.payment_gateway import PaymentGateway, LiqPayGateway
+from core.services.external.payments.liqpay import LiqPayGateway
+from core.services.external.payments.payment_gateway import PaymentGateway
 
 
 class PaymentService(APIClient):

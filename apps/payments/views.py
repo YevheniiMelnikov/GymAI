@@ -8,7 +8,6 @@ from django.core.cache import cache
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django.http import JsonResponse
-from liqpay import LiqPay
 from loguru import logger
 from rest_framework import generics, status, serializers
 from rest_framework.permissions import AllowAny
@@ -20,6 +19,7 @@ from apps.payments.repos import PaymentRepository
 from apps.payments.serializers import PaymentSerializer
 from apps.payments.tasks import process_payment_webhook
 from config.env_settings import settings
+from core.services.external.payments.liqpay import LiqPay
 
 
 class PaymentWebhookView(APIView):

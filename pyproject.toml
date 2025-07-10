@@ -9,7 +9,6 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "uvicorn>=0.34.2",
     "aiohttp>=3.10.5",
-    "liqpay-python @ git+https://github.com/liqpay/sdk-python",
     "loguru>=0.7.2",
     "pyyaml>=6.0.2",
     "httpx>=0.28.1",

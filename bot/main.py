@@ -70,9 +70,9 @@ async def main() -> None:
     if settings.WEBHOOK_PATH is None:
         raise ValueError("WEBHOOK_PATH is not set in environment variables")
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=settings.WEBHOOK_PATH)
-    app.router.add_post("/internal/payment/process/", internal_payment_handler)
-    app.router.add_post("/internal/payment/send_message/", internal_send_payment_message)
-    app.router.add_post("/internal/payment/client_request/", internal_client_request)
+    app.router.add_post("/internal/payments/process/", internal_payment_handler)
+    app.router.add_post("/internal/payments/send_message/", internal_send_payment_message)
+    app.router.add_post("/internal/payments/client_request/", internal_client_request)
     app.router.add_post("/internal/tasks/send_daily_survey/", internal_send_daily_survey)
     app.router.add_post(
         "/internal/tasks/export_coach_payouts/",

@@ -1,0 +1,105 @@
+import base64
+import hashlib
+import json
+from copy import deepcopy
+from decimal import Decimal, ROUND_HALF_UP
+from urllib.parse import urlencode, urljoin
+
+from django.conf import settings
+
+from core.services.external.payments.payment_gateway import PaymentGateway
+
+
+class ParamValidationError(Exception):
+    pass
+
+
+class LiqPay:
+    SUPPORTED_PARAMS = [
+        "public_key",
+        "amount",
+        "currency",
+        "description",
+        "order_id",
+        "result_url",
+        "server_url",
+        "type",
+        "signature",
+        "language",
+        "version",
+        "action",
+    ]
+    SUPPORTED_CURRENCIES = ["EUR", "USD", "UAH"]
+    SUPPORTED_LANGS = ["uk", "en"]
+
+    def __init__(self, public_key: str, private_key: str, host: str = "https://www.liqpay.ua/api/"):
+        self.public_key = public_key
+        self.private_key = private_key
+        self.host = host
+
+    def _make_signature(self, *args) -> str:
+        data = "".join(args).encode("utf-8")
+        return base64.b64encode(hashlib.sha1(data).digest()).decode("ascii")
+
+    def _prepare_params(self, params: dict | None) -> dict:
+        params = deepcopy(params or {})
+        params["public_key"] = self.public_key
+        return params
+
+    def get_data_end_signature(self, type: str, params: dict) -> tuple[str, str]:
+        json_params = json.dumps(params, sort_keys=True)
+        if type == "cnb_form":
+            encoded = base64.b64encode(json_params.encode("utf-8")).decode("utf-8")
+            sign = self._make_signature(self.private_key, encoded, self.private_key)
+            return encoded, sign
+        else:
+            sign = self._make_signature(self.private_key, json_params, self.private_key)
+            return json_params, sign
+
+    def cnb_signature(self, params: dict) -> str:
+        prepared = self._prepare_params(params)
+        encoded = self.data_to_sign(prepared)
+        return self._make_signature(self.private_key, encoded, self.private_key)
+
+    def cnb_data(self, params: dict) -> str:
+        prepared = self._prepare_params(params)
+        return self.data_to_sign(prepared)
+
+    def data_to_sign(self, params: dict) -> str:
+        return base64.b64encode(json.dumps(params, sort_keys=True).encode("utf-8")).decode("utf-8")
+
+    def decode_data_from_str(self, data: str, signature: str | None = None) -> dict:
+        decoded = base64.b64decode(data).decode("utf-8")
+        if signature:
+            expected = self._make_signature(self.private_key, decoded, self.private_key)
+            if expected != signature:
+                raise ParamValidationError("Invalid signature")
+        return json.loads(decoded)
+
+
+class LiqPayGateway(PaymentGateway):
+    def __init__(self, public_key: str, private_key: str) -> None:
+        self.client = LiqPay(public_key, private_key)
+
+    async def get_payment_link(
+        self,
+        action: str,
+        amount: Decimal,
+        order_id: str,
+        payment_type: str,
+        client_id: int,
+    ) -> str:
+        params = {
+            "action": action,
+            "amount": str(amount.quantize(Decimal("0.01"), ROUND_HALF_UP)),
+            "currency": "UAH",
+            "description": f"{payment_type} payment from client {client_id}",
+            "order_id": order_id,
+            "version": "3",
+            "server_url": settings.PAYMENT_CALLBACK_URL,
+            "result_url": settings.BOT_LINK,
+            "rro_info": {"delivery_emails": [settings.EMAIL]},
+        }
+        data = self.client.cnb_data(params)
+        signature = self.client.cnb_signature(params)
+        return urljoin(settings.CHECKOUT_URL, f"?{urlencode({'data': data, 'signature': signature})}")

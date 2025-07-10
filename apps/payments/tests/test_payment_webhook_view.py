@@ -11,7 +11,7 @@ from apps.payments.views import PaymentWebhookView
 def test_webhook_view_valid(monkeypatch):
     factory = RequestFactory()
     data = base64.b64encode(json.dumps({"order_id": "1", "status": "success"}).encode()).decode()
-    request = factory.post("/payment-webhook/", {"data": data, "signature": "sig"})
+    request = factory.post("/payments-webhook/", {"data": data, "signature": "sig"})
 
     monkeypatch.setattr(PaymentWebhookView, "_verify_signature", staticmethod(lambda d, s: True))
     called = {}
@@ -30,7 +30,7 @@ def test_webhook_view_valid(monkeypatch):
 def test_webhook_view_bad_signature(monkeypatch):
     factory = RequestFactory()
     data = base64.b64encode(json.dumps({"order_id": "1"}).encode()).decode()
-    request = factory.post("/payment-webhook/", {"data": data, "signature": "bad"})
+    request = factory.post("/payments-webhook/", {"data": data, "signature": "bad"})
 
     monkeypatch.setattr(PaymentWebhookView, "_verify_signature", staticmethod(lambda d, s: False))
     response = PaymentWebhookView.as_view()(request)

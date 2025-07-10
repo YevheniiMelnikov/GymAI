@@ -1315,7 +1315,6 @@ dependencies = [
     { name = "google-cloud-storage" },
     { name = "gspread" },
     { name = "httpx" },
-    { name = "liqpay-python" },
     { name = "loguru" },
     { name = "matplotlib" },
     { name = "numpy" },
@@ -1372,7 +1371,6 @@ requires-dist = [
     { name = "google-cloud-storage", specifier = ">=3.1.0" },
     { name = "gspread", specifier = ">=6.2.0" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "liqpay-python", git = "https://github.com/liqpay/sdk-python" },
     { name = "loguru", specifier = ">=0.7.2" },
     { name = "matplotlib", specifier = ">=3.8.3" },
     { name = "mypy-extensions", marker = "extra == 'dev'", specifier = ">=1.0.0" },
@@ -1768,14 +1766,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/71/c6/18c4676257f78add093babffbe4d101ff943e9b86e4f708ca5b8fad03a9e/limits-4.8.0.tar.gz", hash = "sha256:74a9691f8a2c82c37480ee9305de3490f6cab3df5b8c61dbde670550f2b34510", size = 95679 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/6d/c9/556846b9d112a3387397850d5560f5ec63464508c6aa068257f0516159d0/limits-4.8.0-py3-none-any.whl", hash = "sha256:de43d24969a0050b859dd29bbd61bd807a5de3ed9255f666aec1ea3dd3fc407e", size = 62028 },
-]
-
-[[package]]
-name = "liqpay-python"
-version = "1.1"
-source = { git = "https://github.com/liqpay/sdk-python#ae287304c5183f525b94e5aa57d8b8a40a3233a0" }
-dependencies = [
-    { name = "requests" },
 ]
 
 [[package]]
