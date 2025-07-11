@@ -42,6 +42,10 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv pip install --system .
 
+# Create writable logs directory for Cognee
+RUN mkdir -p /usr/local/lib/python3.12/site-packages/logs \
+    && chown appuser:appgroup /usr/local/lib/python3.12/site-packages/logs
+
 # ─────────────────────── project code ─────────────────────────
 COPY . .
 
