@@ -17,7 +17,14 @@ class BaseAICoach(ABC):
 
     @classmethod
     @abstractmethod
-    async def coach_request(cls, text: str, *, client: Client | None = None, chat_id: int | None = None) -> None:
+    async def coach_request(
+        cls,
+        text: str,
+        *,
+        client: Client | None = None,
+        chat_id: int | None = None,
+        language: str | None = None,
+    ) -> None:
         """Handle an incoming user message."""
 
     @classmethod
@@ -42,5 +49,7 @@ class BaseAICoach(ABC):
 
     @classmethod
     @abstractmethod
-    async def process_workout_result(cls, client_id: int, feedback: str) -> str:
+    async def process_workout_result(
+        cls, client_id: int, feedback: str, language: str | None = None
+    ) -> str:
         """Return updated program text for ``client_id`` based on ``feedback``."""

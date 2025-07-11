@@ -22,10 +22,13 @@ async def ai_coach_request(*args: Any, **kwargs: Any) -> list | None:
     text = kwargs.get("text") or (args[0] if args else None)
     client: Client | None = kwargs.get("client")
     chat_id: int | None = kwargs.get("chat_id")
+    language: str | None = kwargs.get("language")
     if not text:
         return None
     coach = get_ai_coach()
-    return await coach.coach_request(str(text), client=client, chat_id=chat_id)
+    return await coach.coach_request(
+        str(text), client=client, chat_id=chat_id, language=language
+    )
 
 
 async def ai_assign_client(*args: Any, **kwargs: Any) -> None:
@@ -36,6 +39,8 @@ async def ai_assign_client(*args: Any, **kwargs: Any) -> None:
     await coach.assign_client(client)
 
 
-async def ai_process_workout_result(client_id: int, feedback: str) -> str:
+async def ai_process_workout_result(
+    client_id: int, feedback: str, language: str | None = None
+) -> str:
     coach = get_ai_coach()
-    return await coach.process_workout_result(client_id, feedback)
+    return await coach.process_workout_result(client_id, feedback, language)
