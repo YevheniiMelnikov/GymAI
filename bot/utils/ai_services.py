@@ -20,8 +20,14 @@ from core.services.internal import APIService
 async def generate_program(client: Client, workout_type: str, wishes: str, state: FSMContext, bot: Bot) -> None:
     await ai_assign_client(client)
     req = ProgramRequest(workout_type=workout_type, wishes=wishes)
-    prompt = PROGRAM_PROMPT.format(request=req.model_dump_json(indent=2))
-    response = await ai_coach_request(text=prompt, client=client, chat_id=client.id)
+    data = await state.get_data()
+    lang = data.get("lang")
+    prompt = PROGRAM_PROMPT.format(
+        request=req.model_dump_json(indent=2), language=lang
+    )
+    response = await ai_coach_request(
+        text=prompt, client=client, chat_id=client.id, language=lang
+    )
     program_raw = response[0] if response else ""
     program_dto = parse_program_json(program_raw)
     if program_dto is not None:
@@ -67,8 +73,14 @@ async def generate_subscription(
         period=period,
         days=len(workout_days),
     )
-    prompt = SUBSCRIPTION_PROMPT.format(request=req.model_dump_json(indent=2))
-    response = await ai_coach_request(text=prompt, client=client, chat_id=client.id)
+    data = await state.get_data()
+    lang = data.get("lang")
+    prompt = SUBSCRIPTION_PROMPT.format(
+        request=req.model_dump_json(indent=2), language=lang
+    )
+    response = await ai_coach_request(
+        text=prompt, client=client, chat_id=client.id, language=lang
+    )
     sub_raw = response[0] if response else ""
     sub_dto = parse_subscription_json(sub_raw)
     exercises = sub_dto.exercises if sub_dto is not None else []

@@ -20,6 +20,8 @@ os.environ.setdefault("LOG_LEVEL", "WARNING")
 import cognee
 from cognee.modules.data.exceptions import DatasetNotFoundError
 
+LANGUAGE_NAMES = {"ua": "Ukrainian", "ru": "Russian", "eng": "English"}
+
 
 configure_loguru()
 
@@ -156,7 +158,14 @@ class CogneeCoach(BaseAICoach):
         )
 
     @classmethod
-    async def coach_request(cls, text: str, *, client: Client | None = None, chat_id: int | None = None) -> list:
+    async def coach_request(
+        cls,
+        text: str,
+        *,
+        client: Client | None = None,
+        chat_id: int | None = None,
+        language: str | None = None,
+    ) -> list:
         cls._ensure_config()
 
         prompt_parts = []
@@ -183,6 +192,9 @@ class CogneeCoach(BaseAICoach):
                 pass
 
         prompt_parts.append(text)
+        if language:
+            lang_name = LANGUAGE_NAMES.get(language, language)
+            prompt_parts.append(f"Answer in {lang_name}.")
         final_prompt = "\n".join(prompt_parts)
 
         await cognee.add(final_prompt)
@@ -236,7 +248,9 @@ class CogneeCoach(BaseAICoach):
         return await cognee.search(query, datasets=[dataset], top_k=5)
 
     @classmethod
-    async def process_workout_result(cls, client_id: int, feedback: str) -> str:
+    async def process_workout_result(
+        cls, client_id: int, feedback: str, language: str | None = None
+    ) -> str:
         """Generate an updated workout program based on ``feedback``."""
 
         cls._ensure_config()
@@ -250,5 +264,7 @@ class CogneeCoach(BaseAICoach):
         if context:
             prompt_parts.append("\n".join(context))
         prompt_parts.append("Update the workout plan accordingly.")
-        response = await cls.coach_request("\n".join(prompt_parts), chat_id=client_id)
+        response = await cls.coach_request(
+            "\n".join(prompt_parts), chat_id=client_id, language=language
+        )
         return response[0] if response else ""
