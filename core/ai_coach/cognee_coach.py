@@ -2,43 +2,80 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Optional
 import asyncio
+from dataclasses import dataclass
+from typing import Optional
 
 from loguru import logger
 from config.logger import configure_loguru
-import contextlib
-import io
+
+from config.env_settings import settings
+from core.ai_coach.base import BaseAICoach
+from core.ai_coach.knowledge_loader import KnowledgeLoader
+from core.schemas import Client
 
 os.environ.setdefault("LITELLM_LOG", "WARNING")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
 
-with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-    import cognee
-    from cognee import config as cognee_config
-
-from config.env_settings import settings
-from core.ai_coach.base import BaseAICoach
-
-from core.ai_coach.knowledge_loader import KnowledgeLoader
-from core.schemas import Client
+import cognee
 from cognee.modules.data.exceptions import DatasetNotFoundError
 
 
 configure_loguru()
 
 
+@dataclass
+class CogneeConfig:
+    api_key: str
+    model: str
+    provider: str
+    endpoint: str
+    vector_provider: str
+    vector_url: str
+    graph_provider: str
+    db_host: str
+    db_port: int
+    db_user: str
+    db_password: str
+    db_name: str
+
+    def apply(self) -> None:
+        cognee.config.set_llm_provider(self.provider)
+        cognee.config.set_llm_model(self.model)
+        cognee.config.set_llm_api_key(self.api_key)
+        cognee.config.set_llm_endpoint(self.endpoint)
+
+        cognee.config.set_vector_db_provider(self.vector_provider)
+        cognee.config.set_vector_db_url(self.vector_url)
+        cognee.config.set_graph_database_provider(self.graph_provider)
+
+        cognee.config.set_relational_db_config(
+            {
+                "db_host": self.db_host,
+                "db_port": self.db_port,
+                "db_username": self.db_user,
+                "db_password": self.db_password,
+                "db_name": self.db_name,
+                "db_path": "",
+                "db_provider": "postgres",
+            }
+        )
+
+        logger.info("Cognee successfully configured")
+
+
 class CogneeCoach(BaseAICoach):
-    api_url = settings.COGNEE_API_URL
-    api_key = settings.COGNEE_API_KEY
-    llm_provider = settings.COGNEE_LLM_PROVIDER
-    model = settings.COGNEE_MODEL  # TODO: IMPLEMENT KNOWLEDGE BASE
-    _configured = False
+    _configured: bool = False
     _loader: Optional[KnowledgeLoader] = None
 
     @classmethod
     async def initialize(cls) -> None:
-        cls._ensure_config()
+        try:
+            cls._ensure_config()
+        except Exception as e:
+            logger.warning(f"Cognee initialization failed: {e}")
+            return
+
         process = await asyncio.create_subprocess_exec(
             sys.executable,
             "-m",
@@ -53,6 +90,7 @@ class CogneeCoach(BaseAICoach):
             stderr=asyncio.subprocess.DEVNULL,
         )
         await process.wait()
+
         try:
             await cognee.search("ping")
         except Exception as e:
@@ -65,10 +103,7 @@ class CogneeCoach(BaseAICoach):
 
     @classmethod
     async def init_loader(cls, loader: KnowledgeLoader) -> None:
-        """Register ``loader`` and refresh the knowledge base.
-
-        This should be invoked once during startup, e.g. from ``bot/main.py``.
-        """
+        """Register ``loader`` and refresh the knowledge base."""
         cls.set_loader(loader)
         await cls.refresh_knowledge_base()
 
@@ -76,30 +111,24 @@ class CogneeCoach(BaseAICoach):
     def _ensure_config(cls) -> None:
         """Ensure Cognee is configured."""
         if cls._configured:
+            logger.info("Cognee successfully configured")
             return
 
-        cognee_config.set_llm_provider(settings.COGNEE_LLM_PROVIDER)
-        cognee_config.set_llm_model(settings.COGNEE_MODEL)
-        cognee_config.set_llm_api_key(settings.COGNEE_API_KEY)
-        cognee_config.set_llm_endpoint(settings.COGNEE_API_URL)
-
-        cognee_config.set_vector_db_provider(settings.VECTORDATABASE_PROVIDER)
-        cognee_config.set_vector_db_url(settings.VECTORDATABASE_URL)
-        cognee_config.set_graph_database_provider(settings.GRAPH_DATABASE_PROVIDER)
-
-        cognee_config.set_relational_db_config(
-            {
-                "db_host": settings.DB_HOST,
-                "db_port": settings.DB_PORT,
-                "db_username": settings.DB_USER,
-                "db_password": settings.DB_PASSWORD,
-                "db_name": settings.DB_NAME,
-                "db_path": "",
-                "db_provider": "postgres",
-            }
+        config = CogneeConfig(
+            api_key=settings.COGNEE_API_URL,
+            model=settings.COGNEE_MODEL,
+            provider=settings.COGNEE_LLM_PROVIDER,
+            endpoint=settings.COGNEE_API_URL,
+            vector_provider=settings.VECTORDATABASE_PROVIDER,
+            vector_url=settings.VECTORDATABASE_URL,
+            graph_provider=settings.GRAPH_DATABASE_PROVIDER,
+            db_host=settings.DB_HOST,
+            db_port=settings.DB_PORT,
+            db_user=settings.DB_USER,
+            db_password=settings.DB_PASSWORD,
+            db_name=settings.DB_NAME,
         )
-
-        logger.info("Cognee successfully configured")
+        config.apply()
         cls._configured = True
 
     @staticmethod
