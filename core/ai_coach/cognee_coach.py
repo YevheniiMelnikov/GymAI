@@ -105,22 +105,66 @@ class CogneeCoach(BaseAICoach):
     @staticmethod
     def _extract_client_data(client: Client) -> str:
         """Extract client data from the client object."""
-        return ""
+        details = {
+            "name": client.name,
+            "gender": client.gender,
+            "born_in": client.born_in,
+            "weight": client.weight,
+            "health_notes": client.health_notes,
+            "workout_experience": client.workout_experience,
+            "workout_goals": client.workout_goals,
+        }
+        parts = [f"{k}: {v}" for k, v in details.items() if v]
+        return "; ".join(parts)
 
     @staticmethod
     def _make_initial_prompt(client_data: str) -> str:
         """Create the initial prompt based on the client data."""
-        return ""  # TODO IMPLEMENT DB (CHAT MEMORY)
+        return (
+            "Memorize the following client profile information and use it as "
+            "context for all future responses.\n" f"{client_data}"
+        )
 
     @classmethod
-    async def coach_request(cls, text: str) -> list:
+    async def coach_request(
+        cls, text: str, *, client: Client | None = None, chat_id: int | None = None
+    ) -> list:
         cls._ensure_config()
-        await cognee.add(text)
+
+        prompt_parts = []
+        if client is not None:
+            client_data = cls._extract_client_data(client)
+            if client_data:
+                prompt_parts.append(f"Client info: {client_data}")
+            try:
+                from core.cache import Cache
+
+                program = await Cache.workout.get_program(client.profile, use_fallback=False)
+                prompt_parts.append(f"Latest program: {program.workout_type}, split {program.split_number}")
+                sub = await Cache.workout.get_latest_subscription(client.profile, use_fallback=False)
+                prompt_parts.append(
+                    f"Active subscription: {sub.workout_type} {sub.workout_days} period {sub.period}"
+                )
+            except Exception:
+                pass
+
+        if chat_id is not None:
+            try:
+                history = await cls.get_context(chat_id, text)
+                if history:
+                    prompt_parts.append("\n".join(history))
+            except Exception:
+                pass
+
+        prompt_parts.append(text)
+        final_prompt = "\n".join(prompt_parts)
+
+        await cognee.add(final_prompt)
         try:
             await cognee.cognify()
         except DatasetNotFoundError:
             logger.warning("No datasets found to process")
-        return await cognee.search(text)
+        return await cognee.search(final_prompt)
 
     @classmethod
     async def refresh_knowledge_base(cls) -> None:
@@ -180,5 +224,7 @@ class CogneeCoach(BaseAICoach):
         if context:
             prompt_parts.append("\n".join(context))
         prompt_parts.append("Update the workout plan accordingly.")
-        response = await cls.coach_request("\n".join(prompt_parts))
+        response = await cls.coach_request(
+            "\n".join(prompt_parts), chat_id=client_id
+        )
         return response[0] if response else ""
