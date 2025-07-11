@@ -12,9 +12,9 @@ from core.ai_coach.parsers import (
 from core.ai_coach.schemas import ProgramRequest, SubscriptionRequest
 from core.cache import Cache
 from core.schemas import Client
-from core.services import APIService
 from bot.utils.workout_plans import _next_payment_date
 from bot.utils.chat import send_program
+from core.services.internal import APIService
 
 
 async def generate_program(client: Client, workout_type: str, wishes: str, state: FSMContext, bot: Bot) -> None:

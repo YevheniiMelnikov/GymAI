@@ -61,9 +61,7 @@ async def internal_export_coach_payouts(request: web.Request) -> web.Response:
         return web.json_response({"detail": str(e)}, status=500)
 
 
-async def internal_send_workout_result(
-    request: web.Request, *, ai_coach: type[BaseAICoach]
-) -> web.Response:
+async def internal_send_workout_result(request: web.Request, *, ai_coach: type[BaseAICoach]) -> web.Response:
     """Forward workout survey result to a coach or AI system."""
 
     if request.headers.get("Authorization") != f"Api-Key {settings.API_KEY}":

@@ -102,7 +102,7 @@ class ExerciseGIFStorage(GCStorageService):
                     continue
 
                 blob = blobs[0]
-                file_url =  f"{self.BASE_URL}/{self.bucket_name}/{blob.name}"
+                file_url = f"{self.BASE_URL}/{self.bucket_name}/{blob.name}"
 
                 for syn in synonyms:
                     await Cache.workout.cache_gif_filename(syn.lower(), blob.name)

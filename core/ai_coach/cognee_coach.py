@@ -122,13 +122,12 @@ class CogneeCoach(BaseAICoach):
         """Create the initial prompt based on the client data."""
         return (
             "Memorize the following client profile information and use it as "
-            "context for all future responses.\n" f"{client_data}"
+            "context for all future responses.\n"
+            f"{client_data}"
         )
 
     @classmethod
-    async def coach_request(
-        cls, text: str, *, client: Client | None = None, chat_id: int | None = None
-    ) -> list:
+    async def coach_request(cls, text: str, *, client: Client | None = None, chat_id: int | None = None) -> list:
         cls._ensure_config()
 
         prompt_parts = []
@@ -142,9 +141,7 @@ class CogneeCoach(BaseAICoach):
                 program = await Cache.workout.get_program(client.profile, use_fallback=False)
                 prompt_parts.append(f"Latest program: {program.workout_type}, split {program.split_number}")
                 sub = await Cache.workout.get_latest_subscription(client.profile, use_fallback=False)
-                prompt_parts.append(
-                    f"Active subscription: {sub.workout_type} {sub.workout_days} period {sub.period}"
-                )
+                prompt_parts.append(f"Active subscription: {sub.workout_type} {sub.workout_days} period {sub.period}")
             except Exception:
                 pass
 
@@ -224,7 +221,5 @@ class CogneeCoach(BaseAICoach):
         if context:
             prompt_parts.append("\n".join(context))
         prompt_parts.append("Update the workout plan accordingly.")
-        response = await cls.coach_request(
-            "\n".join(prompt_parts), chat_id=client_id
-        )
+        response = await cls.coach_request("\n".join(prompt_parts), chat_id=client_id)
         return response[0] if response else ""

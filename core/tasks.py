@@ -200,9 +200,7 @@ def send_daily_survey(self):
     retry_jitter=True,
     max_retries=3,
 )  # pyre-ignore[not-callable]
-def send_workout_result(
-    self, coach_profile_id: int, client_profile_id: int, text: str
-) -> None:
+def send_workout_result(self, coach_profile_id: int, client_profile_id: int, text: str) -> None:
     """Forward workout survey results to the appropriate recipient."""
 
     url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/send_workout_result/"

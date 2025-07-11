@@ -27,4 +27,3 @@ class SubscriptionResponse(BaseModel):
 
 class AskAIRequest(BaseModel):
     question: str
-

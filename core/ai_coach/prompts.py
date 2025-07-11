@@ -6,9 +6,9 @@ PROGRAM_PROMPT = (
     "Request:\n{request}\n"
     "Example response:\n"
     "{\n"
-    "  \"days\": [\n"
-    "    {\"day\": \"day_1\", \"exercises\": [\n"
-    "      {\"name\": \"Push ups\", \"sets\": \"3\", \"reps\": \"12\"}\n"
+    '  "days": [\n'
+    '    {"day": "day_1", "exercises": [\n'
+    '      {"name": "Push ups", "sets": "3", "reps": "12"}\n'
     "    ]}\n"
     "  ]\n"
     "}"
@@ -21,9 +21,9 @@ SUBSCRIPTION_PROMPT = (
     "Request:\n{request}\n"
     "Example response:\n"
     "{\n"
-    "  \"workout_days\": [\"monday\", \"wednesday\"],\n"
-    "  \"exercises\": [\n"
-    "    {\"day\": \"monday\", \"exercises\": [{\"name\": \"Squats\", \"sets\": \"3\", \"reps\": \"10\"}]}\n"
+    '  "workout_days": ["monday", "wednesday"],\n'
+    '  "exercises": [\n'
+    '    {"day": "monday", "exercises": [{"name": "Squats", "sets": "3", "reps": "10"}]}\n'
     "  ]\n"
     "}"
 )
