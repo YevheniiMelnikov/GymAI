@@ -19,6 +19,10 @@ RUN if [ "$INSTALL_DEV" = "true" ]; then \
       uv pip install --system .; \
     fi
 
+# Create writable logs directory for Cognee
+RUN mkdir -p /usr/local/lib/python3.12/site-packages/logs \
+    && chown 1000:1000 /usr/local/lib/python3.12/site-packages/logs
+
 COPY . /app
 
 COPY docker/entrypoint.sh /app/docker/entrypoint.sh
