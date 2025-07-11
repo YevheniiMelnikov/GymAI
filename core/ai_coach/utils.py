@@ -20,10 +20,12 @@ async def init_ai_coach(ai_coach: type[BaseAICoach], knowledge_loader: Knowledge
 
 async def ai_coach_request(*args: Any, **kwargs: Any) -> list | None:
     text = kwargs.get("text") or (args[0] if args else None)
+    client: Client | None = kwargs.get("client")
+    chat_id: int | None = kwargs.get("chat_id")
     if not text:
         return None
     coach = get_ai_coach()
-    return await coach.coach_request(str(text))
+    return await coach.coach_request(str(text), client=client, chat_id=chat_id)
 
 
 async def ai_assign_client(*args: Any, **kwargs: Any) -> None:

@@ -91,6 +91,7 @@ class WorkoutService(APIClient):
         wishes: str,
         amount: Decimal,
         period: str = "1m",
+        exercises: list[dict] | None = None,
     ) -> int | None:
         url = urljoin(cls.api_url, "api/v1/subscriptions/")
         data = {
@@ -101,7 +102,7 @@ class WorkoutService(APIClient):
             "period": period,
             "payment_date": datetime.today().strftime("%Y-%m-%d"),
             "wishes": wishes,
-            "exercises": [],
+            "exercises": exercises or [],
         }
         status_code, response = await cls._api_request(
             "post", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"}

@@ -17,7 +17,9 @@ class BaseAICoach(ABC):
 
     @classmethod
     @abstractmethod
-    async def coach_request(cls, text: str) -> None:
+    async def coach_request(
+        cls, text: str, *, client: Client | None = None, chat_id: int | None = None
+    ) -> None:
         """Handle an incoming user message."""
 
     @classmethod

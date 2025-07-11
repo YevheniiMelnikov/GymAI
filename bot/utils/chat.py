@@ -34,7 +34,22 @@ async def send_message(
     avatar_url: str | FSInputFile | None = None,
 ) -> None:
     if isinstance(recipient, Coach) and recipient.coach_type == CoachType.ai:
-        await ai_coach_request(recipient=recipient, text=text)
+        sender_id: int | None = None
+        if state:
+            data = await state.get_data()
+            profile_data = data.get("profile")
+            if isinstance(profile_data, dict) and "id" in profile_data:
+                sender_id = int(profile_data["id"])
+        client_obj: Client | None = None
+        if sender_id is not None:
+            from core.ai_coach.cognee_coach import CogneeCoach
+
+            await CogneeCoach.save_user_message(text, chat_id=sender_id, client_id=sender_id)
+            try:
+                client_obj = await Cache.client.get_client(sender_id)
+            except Exception:
+                client_obj = None
+        await ai_coach_request(recipient=recipient, text=text, client=client_obj, chat_id=sender_id)
         return
     if state:
         data = await state.get_data()
