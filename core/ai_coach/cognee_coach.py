@@ -151,10 +151,14 @@ class CogneeCoach(BaseAICoach):
     @staticmethod
     def _make_initial_prompt(client_data: str) -> str:
         """Create the initial prompt based on the client data."""
-        return (
-            "Memorize the following client profile information and use it as "
-            "context for all future responses.\n"
-            f"{client_data}"
+        from core.ai_coach.prompts import META_PROMPT
+
+        return "\n".join(
+            [
+                META_PROMPT,
+                "Memorize the following client profile information and use it as context for all future responses.",
+                client_data,
+            ]
         )
 
     @classmethod
@@ -168,7 +172,9 @@ class CogneeCoach(BaseAICoach):
     ) -> list:
         cls._ensure_config()
 
-        prompt_parts = []
+        from core.ai_coach.prompts import META_PROMPT
+
+        prompt_parts = [META_PROMPT]
         if client is not None:
             client_data = cls._extract_client_data(client)
             if client_data:
