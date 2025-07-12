@@ -49,7 +49,5 @@ class BaseAICoach(ABC):
 
     @classmethod
     @abstractmethod
-    async def process_workout_result(
-        cls, client_id: int, feedback: str, language: str | None = None
-    ) -> str:
+    async def process_workout_result(cls, client_id: int, feedback: str, language: str | None = None) -> str:
         """Return updated program text for ``client_id`` based on ``feedback``."""

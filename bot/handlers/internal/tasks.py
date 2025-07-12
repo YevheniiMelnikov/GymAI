@@ -85,15 +85,11 @@ async def internal_send_workout_result(request: web.Request, *, ai_coach: type[B
         return web.json_response({"detail": "Coach not found"}, status=404)
 
     if coach.coach_type == CoachType.ai:
-        await ai_coach.save_user_message(
-            str(text), chat_id=int(client_id), client_id=int(client_id)
-        )
+        await ai_coach.save_user_message(str(text), chat_id=int(client_id), client_id=int(client_id))
         client = await Cache.client.get_client(int(client_id))
         profile = await APIService.profile.get_profile(client.profile)
         lang = profile.language if profile else settings.DEFAULT_LANG
-        program_text = await ai_coach.process_workout_result(
-            int(client_id), str(text), lang
-        )
+        program_text = await ai_coach.process_workout_result(int(client_id), str(text), lang)
         if profile is not None and program_text:
             await bot.send_message(
                 chat_id=profile.tg_id,
