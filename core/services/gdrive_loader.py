@@ -84,7 +84,7 @@ class GDriveDocumentLoader(KnowledgeLoader):
 
                 if ext not in ALLOWED_EXTS:
                     continue
-                if size > settings.MAX_FILE_SIZE_MB:
+                if size / (1024 * 1024) > settings.MAX_FILE_SIZE_MB:  # MB
                     logger.info(f"Skip {name}: file too large")
                     continue
                 if not file_id:
