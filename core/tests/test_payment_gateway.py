@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
+from django.conf import settings
 
 from core.services import LiqPayGateway, ParamValidationError
 
@@ -41,9 +42,13 @@ class DummyLiqPay:
 @pytest.fixture(autouse=True)
 def patch_liqpay(monkeypatch):
     monkeypatch.setattr(
-        "core.services.external.payments.payment_gateway.LiqPay",
+        "core.services.payments.liqpay.LiqPay",
         DummyLiqPay,
     )
+    settings.PAYMENT_CALLBACK_URL = "https://callback/"
+    settings.CHECKOUT_URL = "https://checkout/"
+    settings.BOT_LINK = "https://bot/"
+    settings.EMAIL = "test@example.com"
 
 
 def test_get_payment_link():

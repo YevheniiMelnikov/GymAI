@@ -1,22 +1,8 @@
 import importlib.util
 from pathlib import Path
-import sys
-import types
 from typing import Any
-from unittest.mock import Mock
 
-services_path = Path(__file__).resolve().parents[1] / "services" / "external"
-
-dummy_cache = types.ModuleType("core.cache")
-workout_cache = Mock()
-workout_cache.get_exercise_gif = None
-workout_cache.cache_gif_filename = None
-
-cache_obj = Mock()
-cache_obj.workout = workout_cache
-setattr(dummy_cache, "Cache", cache_obj)
-
-sys.modules["core.cache"] = dummy_cache
+services_path = Path(__file__).resolve().parents[1] / "services"
 
 gs_spec = importlib.util.spec_from_file_location("gsheets_service", services_path / "gsheets_service.py")
 if gs_spec is None:
@@ -76,7 +62,9 @@ def test_find_gif(monkeypatch: Any) -> None:
             return True
 
     class FakeBucket:
-        def list_blobs(self, prefix: str | None = None) -> list[FakeBlob]:
+        def list_blobs(
+            self, prefix: str | None = None, max_results: int | None = None
+        ) -> list[FakeBlob]:
             return [FakeBlob()]
 
     class FakeClient:
