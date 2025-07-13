@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import asyncio
+import warnings
 from dataclasses import dataclass
 from typing import Optional
 
@@ -14,11 +15,30 @@ from core.ai_coach.base import BaseAICoach
 from core.ai_coach.knowledge_loader import KnowledgeLoader
 from core.schemas import Client
 
+import cognee
+from cognee.modules.data.exceptions import DatasetNotFoundError
+
+
 os.environ.setdefault("LITELLM_LOG", "WARNING")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
 
-import cognee
-from cognee.modules.data.exceptions import DatasetNotFoundError
+# Silence repetitive SQLAlchemy warnings from dlt which clutter the logs
+warnings.filterwarnings(
+    "ignore",
+    message="Table 'file_metadata' already exists within the given MetaData",
+    category=UserWarning,
+)
+warnings.filterwarnings(
+    "ignore",
+    message="Table '_dlt_pipeline_state' already exists within the given MetaData",
+    category=UserWarning,
+)
+warnings.filterwarnings(
+    "ignore",
+    message="implicitly coercing SELECT object to scalar subquery",
+    category=UserWarning,
+)
+
 
 LANGUAGE_NAMES = {"ua": "Ukrainian", "ru": "Russian", "eng": "English"}
 
