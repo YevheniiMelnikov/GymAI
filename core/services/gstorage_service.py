@@ -13,12 +13,12 @@ class GCStorageService:
     def __init__(self, bucket_name: str):
         self.bucket_name = bucket_name
         try:
-            self.storage_client = storage.Client()
-            self.bucket = self.storage_client.bucket(bucket_name)
+            self.storage_client: storage.Client | None = storage.Client()
+            self.bucket: storage.bucket.Bucket | None = self.storage_client.bucket(bucket_name)
         except DefaultCredentialsError as exc:  # noqa: BLE001
             logger.error(f"GCS credentials error: {exc}")
-            self.storage_client = None  # pyre-ignore[bad-assignment]
-            self.bucket = None  # pyre-ignore[bad-assignment]
+            self.storage_client = None
+            self.bucket = None
 
     def load_file_to_bucket(self, source_file_name: str) -> bool:
         if not self.bucket:

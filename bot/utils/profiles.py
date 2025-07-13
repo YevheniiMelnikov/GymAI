@@ -49,7 +49,8 @@ async def update_profile_data(message: Message, state: FSMContext, role: str, bo
                 if credits_delta:
                     user_data["credits"] = credits_delta
                 client = await APIService.profile.create_client_profile(profile.id, user_data)
-                await Cache.client.save_client(profile.id, client.model_dump())
+                if client is not None:
+                    await Cache.client.save_client(profile.id, client.model_dump())
         else:
             if data.get("edit_mode"):
                 coach = await Cache.coach.get_coach(profile.id)
@@ -62,7 +63,8 @@ async def update_profile_data(message: Message, state: FSMContext, role: str, bo
                     )
                     await send_coach_request(message.from_user.id, profile, data, bot)
                     coach = await APIService.profile.create_coach_profile(profile.id, user_data)
-                    await Cache.coach.save_coach(profile.id, coach.model_dump())
+                    if coach is not None:
+                        await Cache.coach.save_coach(profile.id, coach.model_dump())
 
         await answer_msg(message, msg_text("your_data_updated", data.get("lang", settings.DEFAULT_LANG)))
         await menus.show_main_menu(message, profile, state)

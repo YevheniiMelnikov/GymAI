@@ -33,6 +33,11 @@ class BaseAICoach(ABC):
         """Run one-off logic when a new client is assigned."""
 
     @classmethod
+    async def save_user_message(cls, text: str, chat_id: int, client_id: int) -> None:
+        """Persist a user message for later context retrieval."""
+        raise NotImplementedError
+
+    @classmethod
     async def init_loader(cls, loader: KnowledgeLoader) -> None:  # noqa: D401
         """Attach a loader at startup (override to use)."""
         raise NotImplementedError

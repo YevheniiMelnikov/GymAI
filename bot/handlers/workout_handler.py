@@ -316,7 +316,7 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext,
         coach_profile = await APIService.profile.get_profile(coach.profile)
         coach_lang = cast(str, coach_profile.language)
 
-        send_workout_result.delay(
+        send_workout_result.delay(  # pyre-ignore[not-callable]
             coach.profile,
             client.profile,
             msg_text("workout_completed", coach_lang).format(name=client.name, program=program),
@@ -344,7 +344,7 @@ async def workout_description(message: Message, state: FSMContext, bot: Bot):
     day_data = next((d for d in exercises if d.day == str(day_index)), None)
     program = await format_program(exercises, day_index) if day_data else ""
 
-    send_workout_result.delay(
+    send_workout_result.delay(  # pyre-ignore[not-callable]
         coach.profile,
         client.profile,
         msg_text("workout_feedback", coach_lang).format(

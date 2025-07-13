@@ -545,10 +545,12 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
     days: list[str] = data.get("workout_days", [])
 
     if callback_query.data != "complete":
-        if callback_query.data in days:
-            days.remove(callback_query.data)
-        else:
-            days.append(callback_query.data)
+        data_val = callback_query.data
+        if data_val is not None:
+            if data_val in days:
+                days.remove(data_val)
+            else:
+                days.append(data_val)
 
         await state.update_data(workout_days=days)
 

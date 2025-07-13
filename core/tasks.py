@@ -116,7 +116,7 @@ async def warn_low_credits(self):  # pyre-ignore[valid-type]
         required = required_credits(Decimal(str(sub.price)))
         if client.credits < required:
             lang = profile.language if profile else settings.DEFAULT_LANG
-            send_payment_message.delay(
+            send_payment_message.delay(  # pyre-ignore[not-callable]
                 sub.client_profile,
                 msg_text("not_enough_credits", lang),
             )
