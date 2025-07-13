@@ -62,9 +62,7 @@ def test_find_gif(monkeypatch: Any) -> None:
             return True
 
     class FakeBucket:
-        def list_blobs(
-            self, prefix: str | None = None, max_results: int | None = None
-        ) -> list[FakeBlob]:
+        def list_blobs(self, prefix: str | None = None, max_results: int | None = None) -> list[FakeBlob]:
             return [FakeBlob()]
 
     class FakeClient:

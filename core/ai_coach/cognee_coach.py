@@ -117,7 +117,7 @@ class CogneeCoach(BaseAICoach):
             return
 
         config = CogneeConfig(
-            api_key=settings.COGNEE_API_URL,
+            api_key=settings.COGNEE_API_KEY,
             model=settings.COGNEE_MODEL,
             provider=settings.COGNEE_LLM_PROVIDER,
             endpoint=settings.COGNEE_API_URL,
