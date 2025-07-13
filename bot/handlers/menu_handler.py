@@ -206,9 +206,10 @@ async def ai_service_choice(callback_query: CallbackQuery, state: FSMContext) ->
         wishes = data.get("wishes", "")
 
         if service == "program":
-            await generate_program(client, workout_type, wishes, state, callback_query.bot)
+            bot = cast(Bot, callback_query.bot)
+            await generate_program(client, workout_type, wishes, state, bot)
             await callback_query.answer(msg_text("payment_success", profile.language), show_alert=True)
-            await show_main_menu(callback_query, profile, state)
+            await show_main_menu(callback_query.message, profile, state)
             return
         elif service.startswith("subscription"):
             period_map = {
@@ -235,10 +236,12 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     days: list[str] = data.get("workout_days", [])
 
     if callback_query.data != "complete":
-        if callback_query.data in days:
-            days.remove(callback_query.data)
-        else:
-            days.append(callback_query.data)
+        data_val = callback_query.data
+        if data_val is not None:
+            if data_val in days:
+                days.remove(data_val)
+            else:
+                days.append(data_val)
         await state.update_data(workout_days=days)
         message = callback_query.message
         if message and isinstance(message, Message):
@@ -256,9 +259,10 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     workout_type = data.get("workout_type", "gym")
     wishes = data.get("wishes", "")
     period = data.get("period", "1m")
-    await generate_subscription(client, workout_type, wishes, period, days, state, callback_query.bot)
+    bot = cast(Bot, callback_query.bot)
+    await generate_subscription(client, workout_type, wishes, period, days, state, bot)
     await callback_query.answer(msg_text("payment_success", lang), show_alert=True)
-    await show_main_menu(callback_query, profile, state)
+    await show_main_menu(callback_query.message, profile, state)
 
 
 @menu_router.callback_query(States.profile)

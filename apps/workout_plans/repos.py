@@ -68,7 +68,7 @@ class ProgramRepository:
             program = cast(Program, instance)
         else:
             existing = Program.objects.filter(client_profile=client_profile).first()
-            if existing:
+            if existing is not None:
                 existing.exercises_by_day = exercises  # type: ignore[attr-defined]
                 existing.save()  # type: ignore[attr-defined]
                 program = cast(Program, existing)

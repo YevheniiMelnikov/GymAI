@@ -214,7 +214,7 @@ async def confirm_service(callback_query: CallbackQuery, state: FSMContext) -> N
         await ProfileService.adjust_coach_payout_due(coach.profile, payout)
         new_due = (coach.payout_due or Decimal("0")) + payout
         await Cache.coach.update_coach(coach.profile, {"payout_due": str(new_due)})
-        send_client_request.delay(
+        send_client_request.delay(  # pyre-ignore[not-callable]
             coach.profile,
             client.profile,
             {

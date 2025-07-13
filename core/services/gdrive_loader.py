@@ -64,11 +64,13 @@ class GDriveDocumentLoader(KnowledgeLoader):
 
     async def load(self) -> None:
         self._files_service = self._get_drive_service()
+        files_service = self._files_service
+        assert files_service is not None
         page_token: str | None = None
 
         while True:
             response = await asyncio.to_thread(
-                lambda: self._files_service.list(
+                lambda: files_service.list(
                     q=f"'{self.folder_id}' in parents and trashed=false",
                     fields="nextPageToken, files(id, name, mimeType, size)",
                     pageToken=page_token,

@@ -30,7 +30,7 @@ async def ai_coach_request(*args: Any, **kwargs: Any) -> list | None:
 
 
 async def ai_assign_client(*args: Any, **kwargs: Any) -> None:
-    client: Client = kwargs.get("client") or (args[0] if args else None)
+    client: Client | None = kwargs.get("client") or (args[0] if args else None)
     if client is None:
         return
     coach = get_ai_coach()
