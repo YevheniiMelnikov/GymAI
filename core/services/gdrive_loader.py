@@ -65,6 +65,7 @@ class GDriveDocumentLoader(KnowledgeLoader):
     async def load(self) -> None:
         self._files_service = self._get_drive_service()
         files_service = self._files_service
+        # print(files_service)
         assert files_service is not None
         page_token: str | None = None
 
@@ -76,6 +77,7 @@ class GDriveDocumentLoader(KnowledgeLoader):
                     pageToken=page_token,
                 ).execute()
             )
+            print(response)
             for file in response.get("files", []):
                 name = file.get("name", "")
                 file_id = file.get("id")
@@ -92,6 +94,7 @@ class GDriveDocumentLoader(KnowledgeLoader):
 
                 try:
                     data = await self._download_file(file_id)
+                    print("97", data)
                     if ext == ".pdf":
                         text = await asyncio.to_thread(self._parse_pdf, data)
                     elif ext == ".docx":

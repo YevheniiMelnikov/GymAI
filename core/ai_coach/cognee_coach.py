@@ -113,7 +113,6 @@ class CogneeCoach(BaseAICoach):
     def _ensure_config(cls) -> None:
         """Ensure Cognee is configured."""
         if cls._configured:
-            logger.info("Cognee successfully configured")
             return
 
         config = CogneeConfig(
