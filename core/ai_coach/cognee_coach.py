@@ -16,6 +16,12 @@ from core.ai_coach.base import BaseAICoach
 from core.ai_coach.knowledge_loader import KnowledgeLoader
 from core.schemas import Client
 
+# Ensure the graph prompt path environment variable is set before importing
+# cognee so that its configuration picks up the correct value on import.
+default_prompt = os.environ.get("GRAPH_PROMPT_PATH", "./core/ai_coach/global_system_prompt.txt")
+prompt_file = Path(default_prompt).resolve()
+os.environ["GRAPH_PROMPT_PATH"] = prompt_file.as_posix()
+
 import cognee
 from cognee.modules.data.exceptions import DatasetNotFoundError
 
@@ -37,6 +43,11 @@ warnings.filterwarnings(
 warnings.filterwarnings(
     "ignore",
     message="implicitly coercing SELECT object to scalar subquery",
+    category=UserWarning,
+)
+warnings.filterwarnings(
+    "ignore",
+    message="This declarative base already contains a class with the same class name",
     category=UserWarning,
 )
 
