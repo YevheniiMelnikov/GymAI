@@ -6,6 +6,7 @@ import asyncio
 import warnings
 from dataclasses import dataclass
 from typing import Optional
+from pathlib import Path
 
 from loguru import logger
 from config.logger import configure_loguru
@@ -55,6 +56,7 @@ class CogneeConfig:
     vector_provider: str
     vector_url: str
     graph_provider: str
+    graph_prompt_path: str
     db_host: str
     db_port: int
     db_user: str
@@ -70,6 +72,11 @@ class CogneeConfig:
         cognee.config.set_vector_db_provider(self.vector_provider)
         cognee.config.set_vector_db_url(self.vector_url)
         cognee.config.set_graph_database_provider(self.graph_provider)
+        prompt_file = Path(self.graph_prompt_path)
+        if not prompt_file.is_file():
+            raise FileNotFoundError(f"System prompt file not found: {prompt_file}")
+        os.environ["GRAPH_PROMPT_PATH"] = str(prompt_file)
+        cognee.config.set_llm_config({"graph_prompt_path": str(prompt_file)})
 
         cognee.config.set_relational_db_config(
             {
@@ -143,6 +150,7 @@ class CogneeCoach(BaseAICoach):
             vector_provider=settings.VECTORDATABASE_PROVIDER,
             vector_url=settings.VECTORDATABASE_URL,
             graph_provider=settings.GRAPH_DATABASE_PROVIDER,
+            graph_prompt_path=settings.GRAPH_PROMPT_PATH,
             db_host=settings.DB_HOST,
             db_port=settings.DB_PORT,
             db_user=settings.DB_USER,
@@ -170,11 +178,8 @@ class CogneeCoach(BaseAICoach):
     @staticmethod
     def _make_initial_prompt(client_data: str) -> str:
         """Create the initial prompt based on the client data."""
-        from core.ai_coach.prompts import META_PROMPT
-
         return "\n".join(
             [
-                META_PROMPT,
                 "Memorize the following client profile information and use it as context for all future responses.",
                 client_data,
             ]
@@ -191,9 +196,7 @@ class CogneeCoach(BaseAICoach):
     ) -> list:
         cls._ensure_config()
 
-        from core.ai_coach.prompts import META_PROMPT
-
-        prompt_parts = [META_PROMPT]
+        prompt_parts = []
         if client is not None:
             client_data = cls._extract_client_data(client)
             if client_data:
