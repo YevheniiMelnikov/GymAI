@@ -72,11 +72,12 @@ class CogneeConfig:
         cognee.config.set_vector_db_provider(self.vector_provider)
         cognee.config.set_vector_db_url(self.vector_url)
         cognee.config.set_graph_database_provider(self.graph_provider)
-        prompt_file = Path(self.graph_prompt_path)
+        prompt_file = Path(self.graph_prompt_path).resolve()
         if not prompt_file.is_file():
             raise FileNotFoundError(f"System prompt file not found: {prompt_file}")
-        os.environ["GRAPH_PROMPT_PATH"] = str(prompt_file)
-        cognee.config.set_llm_config({"graph_prompt_path": str(prompt_file)})
+        posix_path = prompt_file.as_posix()
+        os.environ["GRAPH_PROMPT_PATH"] = posix_path
+        cognee.config.set_llm_config({"graph_prompt_path": posix_path})
 
         cognee.config.set_relational_db_config(
             {
