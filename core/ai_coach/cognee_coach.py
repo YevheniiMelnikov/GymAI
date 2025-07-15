@@ -4,6 +4,7 @@ import os
 import sys
 import asyncio
 import warnings
+import logging
 from dataclasses import dataclass
 from typing import Optional
 from pathlib import Path
@@ -46,6 +47,9 @@ warnings.filterwarnings(
     message="This declarative base already contains a class with the same class name",
     category=SAWarning,
 )
+
+# Silence noisy warnings from langfuse when no API key is provided
+logging.getLogger("langfuse").setLevel(logging.ERROR)
 
 import cognee
 from cognee.modules.data.exceptions import DatasetNotFoundError
