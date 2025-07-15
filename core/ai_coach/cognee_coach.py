@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from typing import Optional
 from pathlib import Path
 
+from sqlalchemy.exc import SAWarning
+
 from loguru import logger
 from config.logger import configure_loguru
 
@@ -18,9 +20,32 @@ from core.schemas import Client
 
 # Ensure the graph prompt path environment variable is set before importing
 # cognee so that its configuration picks up the correct value on import.
+
 default_prompt = os.environ.get("GRAPH_PROMPT_PATH", "./core/ai_coach/global_system_prompt.txt")
 prompt_file = Path(default_prompt).resolve()
 os.environ["GRAPH_PROMPT_PATH"] = prompt_file.as_posix()
+
+# Silence repetitive SQLAlchemy warnings from dlt which clutter the logs
+warnings.filterwarnings(
+    "ignore",
+    message="Table 'file_metadata' already exists within the given MetaData",
+    category=SAWarning,
+)
+warnings.filterwarnings(
+    "ignore",
+    message="Table '_dlt_pipeline_state' already exists within the given MetaData",
+    category=SAWarning,
+)
+warnings.filterwarnings(
+    "ignore",
+    message="implicitly coercing SELECT object to scalar subquery",
+    category=SAWarning,
+)
+warnings.filterwarnings(
+    "ignore",
+    message="This declarative base already contains a class with the same class name",
+    category=SAWarning,
+)
 
 import cognee
 from cognee.modules.data.exceptions import DatasetNotFoundError
@@ -28,28 +53,6 @@ from cognee.modules.data.exceptions import DatasetNotFoundError
 
 os.environ.setdefault("LITELLM_LOG", "WARNING")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
-
-# Silence repetitive SQLAlchemy warnings from dlt which clutter the logs
-warnings.filterwarnings(
-    "ignore",
-    message="Table 'file_metadata' already exists within the given MetaData",
-    category=UserWarning,
-)
-warnings.filterwarnings(
-    "ignore",
-    message="Table '_dlt_pipeline_state' already exists within the given MetaData",
-    category=UserWarning,
-)
-warnings.filterwarnings(
-    "ignore",
-    message="implicitly coercing SELECT object to scalar subquery",
-    category=UserWarning,
-)
-warnings.filterwarnings(
-    "ignore",
-    message="This declarative base already contains a class with the same class name",
-    category=UserWarning,
-)
 
 
 LANGUAGE_NAMES = {"ua": "Ukrainian", "ru": "Russian", "eng": "English"}
