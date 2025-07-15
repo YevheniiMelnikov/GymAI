@@ -1,6 +1,7 @@
 from json import JSONDecodeError
 import asyncio
 from typing import Optional
+from decimal import Decimal
 
 import httpx
 from loguru import logger
@@ -19,6 +20,23 @@ class APIClient:
     backoff_factor = settings.API_RETRY_BACKOFF_FACTOR
     max_delay = settings.API_RETRY_MAX_DELAY
 
+    @staticmethod
+    def _json_safe(obj: Optional[dict]) -> Optional[dict]:
+        """Convert Decimals in payload to primitive types for JSON."""
+        if obj is None:
+            return None
+
+        def convert(value):
+            if isinstance(value, Decimal):
+                return int(value) if value == value.to_integral() else str(value)
+            if isinstance(value, dict):
+                return {k: convert(v) for k, v in value.items()}
+            if isinstance(value, list):
+                return [convert(v) for v in value]
+            return value
+
+        return convert(obj)
+
     @classmethod
     async def _api_request(
         cls,
@@ -32,6 +50,7 @@ class APIClient:
             headers.setdefault("Authorization", f"Bearer {cls.api_key}")
 
         delay = cls.initial_delay
+        data = cls._json_safe(data)
 
         for attempt in range(1, cls.max_retries + 1):
             try:
