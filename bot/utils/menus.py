@@ -454,9 +454,12 @@ async def show_program_promo_page(callback_query: CallbackQuery, profile: Profil
 
 
 async def show_ai_services(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    await callback_query.answer()
     language = cast(str, profile.language)
     client = await Cache.client.get_client(profile.id)
+    if client.status == ClientStatus.initial:
+        await callback_query.answer(msg_text("finish_registration_to_get_credits", language), show_alert=True)
+    else:
+        await callback_query.answer()
     file_path = Path(__file__).resolve().parent.parent / "images" / "ai_coach.png"
     services = available_ai_services()
     await state.set_state(States.choose_ai_service)
