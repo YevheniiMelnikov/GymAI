@@ -248,15 +248,16 @@ class CogneeCoach(BaseAICoach):
         logger.debug(
             f"Adding prompt to dataset {dataset}: {final_prompt[:100]}"
         )
-        await cognee.add(final_prompt, dataset_name=dataset)
+        dataset_id = await cognee.add(final_prompt, dataset_name=dataset)
+        logger.debug(f"Dataset {dataset} id: {dataset_id}")
         try:
-            await cognee.cognify()
+            await cognee.cognify(datasets=[dataset_id])
         except DatasetNotFoundError:
             logger.warning("No datasets found to process")
             return []
         logger.debug("Searching dataset for response")
         try:
-            return await cognee.search(final_prompt)
+            return await cognee.search(final_prompt, datasets=[dataset_id])
         except DatasetNotFoundError:
             logger.error("Search failed, dataset not found")
             return []
@@ -291,9 +292,9 @@ class CogneeCoach(BaseAICoach):
             return
         cls._ensure_config()
         dataset = f"chat_{chat_id}"
-        await cognee.add(text, dataset_name=dataset)
+        dataset_id = await cognee.add(text, dataset_name=dataset)
         try:
-            await cognee.cognify()
+            await cognee.cognify(datasets=[dataset_id])
         except DatasetNotFoundError:
             logger.warning("No datasets found to process")
 
