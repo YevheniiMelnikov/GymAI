@@ -88,14 +88,15 @@ class ProfileService(APIClient):
         return False
 
     @classmethod
-    async def adjust_client_credits(cls, profile_id: int, delta: int) -> bool:
+    async def adjust_client_credits(cls, profile_id: int, delta: int | Decimal) -> bool:
         client = await cls.get_client_by_profile_id(profile_id)
         if client is None:
             logger.error(f"ClientProfile not found for profile_id={profile_id}")
             return False
 
-        new_credits = max(0, client.credits + delta)
-        return await cls.update_client_profile(client.id, {"credits": new_credits})
+        int_delta = int(delta)
+        new_credits = max(0, int(client.credits) + int_delta)
+        return await cls.update_client_profile(client.id, {"credits": int(new_credits)})
 
     @classmethod
     async def adjust_coach_payout_due(cls, profile_id: int, delta: Decimal) -> bool:
