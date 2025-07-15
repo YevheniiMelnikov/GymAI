@@ -51,8 +51,8 @@ warnings.filterwarnings(
 # Silence noisy warnings from langfuse when no API key is provided
 logging.getLogger("langfuse").setLevel(logging.ERROR)
 
-import cognee
-from cognee.modules.data.exceptions import DatasetNotFoundError
+import cognee  # noqa: E402
+from cognee.modules.data.exceptions import DatasetNotFoundError  # noqa: E402
 
 
 os.environ.setdefault("LITELLM_LOG", "WARNING")
@@ -245,17 +245,20 @@ class CogneeCoach(BaseAICoach):
         final_prompt = "\n".join(prompt_parts)
 
         dataset = "main_dataset"
-        logger.debug(f"Adding prompt to dataset {dataset}: {final_prompt[:100]}")
-        await cognee.add(final_prompt, dataset_name=dataset)
-        logger.debug(f"Running cognify on dataset {dataset}")
+        logger.debug(
+            f"Adding prompt to dataset {dataset}: {final_prompt[:100]}"
+        )
+        run_info = await cognee.add(final_prompt, dataset_name=dataset)
+        dataset_id = str(run_info.dataset_id) if run_info else dataset
+        logger.debug(f"Running cognify on dataset {dataset_id}")
         try:
-            await cognee.cognify(datasets=dataset)
+            await cognee.cognify(datasets=dataset_id)
         except DatasetNotFoundError:
             logger.warning("No datasets found to process")
             return []
-        logger.debug(f"Searching dataset {dataset}")
+        logger.debug(f"Searching dataset {dataset_id}")
         try:
-            return await cognee.search(final_prompt, datasets=dataset)
+            return await cognee.search(final_prompt, datasets=dataset_id)
         except DatasetNotFoundError:
             logger.error("Search failed, dataset not found")
             return []

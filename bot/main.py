@@ -54,8 +54,8 @@ async def main() -> None:
     bot = container.bot()
     await bot.delete_webhook(drop_pending_updates=True)
 
-    # Initialize AI coach before receiving any updates to avoid race conditions
-    await init_ai_coach(CogneeCoach, GDriveDocumentLoader())
+    # Initialize AI coach in the background so the bot starts faster
+    ai_init = asyncio.create_task(init_ai_coach(CogneeCoach, GDriveDocumentLoader()))
 
     if settings.WEBHOOK_URL is None:
         raise ValueError("WEBHOOK_URL is not set in environment variables")
@@ -90,6 +90,7 @@ async def main() -> None:
     setup_application(app, dp, bot=bot)
     runner = await start_web_app(app)
     logger.success("Bot started")
+    await ai_init
     stop_event = asyncio.Event()
 
     try:
