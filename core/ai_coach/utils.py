@@ -10,13 +10,19 @@ from core.schemas import Client
 from loguru import logger
 
 
-async def init_ai_coach(ai_coach: type[BaseAICoach], knowledge_loader: KnowledgeLoader | None = None) -> None:
+async def init_ai_coach(
+    ai_coach: type[BaseAICoach], knowledge_loader: KnowledgeLoader | None = None
+) -> None:
+    """Initialize the AI coach and register it."""
+
+    set_ai_coach(ai_coach)
+    logger.info("Starting AI coach initialization")
+
     await ai_coach.initialize()
 
     if knowledge_loader is not None:
         await ai_coach.init_loader(knowledge_loader)
 
-    set_ai_coach(ai_coach)
     logger.info(f"AI coach {ai_coach.__name__} initialized")
 
 
