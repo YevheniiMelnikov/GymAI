@@ -7,6 +7,7 @@ from core.ai_coach.base import BaseAICoach
 from core.ai_coach.knowledge_loader import KnowledgeLoader
 from core.ai_coach.registry import set_ai_coach, get_ai_coach
 from core.schemas import Client
+from loguru import logger
 
 
 async def init_ai_coach(ai_coach: type[BaseAICoach], knowledge_loader: KnowledgeLoader | None = None) -> None:
@@ -16,6 +17,7 @@ async def init_ai_coach(ai_coach: type[BaseAICoach], knowledge_loader: Knowledge
         await ai_coach.init_loader(knowledge_loader)
 
     set_ai_coach(ai_coach)
+    logger.info(f"AI coach {ai_coach.__name__} initialized")
 
 
 async def ai_coach_request(*args: Any, **kwargs: Any) -> list | None:
