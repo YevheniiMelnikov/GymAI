@@ -42,7 +42,7 @@ class WorkoutService(APIClient):
                 id=int(response.get("id", 0)),
                 split_number=split_number,
                 exercises_by_day=exercises,
-                created_at=float(response.get("created_at", 0)),
+                created_at=response.get("created_at", 0),
                 client_profile=client_profile_id,
                 wishes=wishes,
                 workout_type=str(response.get("workout_type", "")),

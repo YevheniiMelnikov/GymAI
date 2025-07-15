@@ -101,6 +101,15 @@ class Program(BaseModel):
     wishes: str
     model_config = ConfigDict(extra="ignore")
 
+    @field_validator("created_at", mode="before")
+    def _normalize_created_at(cls, v: Any) -> float:
+        if isinstance(v, (int, float)):
+            return float(v)
+        try:
+            return datetime.fromisoformat(str(v)).timestamp()
+        except Exception:
+            return 0.0
+
 
 class Subscription(BaseModel):
     id: int
@@ -136,3 +145,12 @@ class Payment(BaseModel):
     payout_handled: bool = False
     error: str | None = None
     model_config = ConfigDict(extra="ignore")
+
+    @field_validator("created_at", "updated_at", mode="before")
+    def _normalize_timestamp(cls, v: Any) -> float:
+        if isinstance(v, (int, float)):
+            return float(v)
+        try:
+            return datetime.fromisoformat(str(v)).timestamp()
+        except Exception:
+            return 0.0
