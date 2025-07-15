@@ -13,6 +13,9 @@ from core.enums import (
 )
 
 Price = condecimal(max_digits=10, decimal_places=2, gt=0)
+# `payout_due` can legitimately be zero, therefore we define a separate
+# type that allows non-negative values for such cases.
+NonNegativePrice = condecimal(max_digits=10, decimal_places=2, ge=0)
 
 
 class Profile(BaseModel):
@@ -60,7 +63,7 @@ class Coach(BaseModel):
     assigned_to: list[int] = Field(default_factory=list)
     verified: bool = False
     coach_type: CoachType = CoachType.human
-    payout_due: Price | None = None
+    payout_due: NonNegativePrice | None = None
     profile_data: dict[str, Any] = {}
     model_config = ConfigDict(extra="ignore")
 
