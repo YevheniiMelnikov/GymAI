@@ -39,9 +39,9 @@ my_program:
   ua: "Мої тренування 🏋️"
 
 services:
-  eng: "Services 🛠️"
-  ru: "Услуги 🛠️"
-  ua: "Послуги 🛠️"
+  eng: "Services 🤝"
+  ru: "Услуги 🤝"
+  ua: "Послуги 🤝"
 
 balance_status:
   eng: "Balance 💰"
@@ -64,9 +64,9 @@ subscription:
   ua: "Підписки 🧭"
 
 program:
-  eng: "Programs 🏋️"
-  ru: "Программы 🏋️"
-  ua: "Програми 🏋️"
+  eng: "Program 🏋️"
+  ru: "Программа 🏋️"
+  ua: "Программа 🏋️"
 
 tariff_plans:
   eng: "Tariff plans 💳"

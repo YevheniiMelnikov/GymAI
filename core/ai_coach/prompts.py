@@ -6,13 +6,13 @@ PROGRAM_PROMPT = (
     "JSON compatible with the `ProgramResponse` Pydantic model.\n"
     "Request:\n{request}\n"
     "Example response:\n"
-    "{\n"
+    "{{\n"
     '  "days": [\n'
-    '    {"day": "day_1", "exercises": [\n'
-    '      {"name": "Push ups", "sets": "3", "reps": "12"}\n'
-    "    ]}\n"
+    '    {{"day": "day_1", "exercises": [\n'
+    '      {{"name": "Push ups", "sets": "3", "reps": "12"}}\n'
+    "    ]}}\n"
     "  ]\n"
-    "}"
+    "}}"
 )
 
 SUBSCRIPTION_PROMPT = (
@@ -22,10 +22,10 @@ SUBSCRIPTION_PROMPT = (
     "the `SubscriptionResponse` Pydantic model.\n"
     "Request:\n{request}\n"
     "Example response:\n"
-    "{\n"
+    "{{\n"
     '  "workout_days": ["monday", "wednesday"],\n'
     '  "exercises": [\n'
-    '    {"day": "monday", "exercises": [{"name": "Squats", "sets": "3", "reps": "10"}]}\n'
+    '    {{"day": "monday", "exercises": [{{"name": "Squats", "sets": "3", "reps": "10"}}]}}\n'
     "  ]\n"
-    "}"
+    "}}"
 )
