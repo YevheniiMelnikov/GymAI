@@ -4,9 +4,12 @@ import os
 import sys
 import asyncio
 import warnings
+import logging
 from dataclasses import dataclass
 from typing import Optional
 from pathlib import Path
+
+from sqlalchemy.exc import SAWarning
 
 from loguru import logger
 from config.logger import configure_loguru
@@ -16,29 +19,44 @@ from core.ai_coach.base import BaseAICoach
 from core.ai_coach.knowledge_loader import KnowledgeLoader
 from core.schemas import Client
 
+# Ensure the graph prompt path environment variable is set before importing
+# cognee so that its configuration picks up the correct value on import.
+
+default_prompt = os.environ.get("GRAPH_PROMPT_PATH", "./core/ai_coach/global_system_prompt.txt")
+prompt_file = Path(default_prompt).resolve()
+os.environ["GRAPH_PROMPT_PATH"] = prompt_file.as_posix()
+
+# Silence repetitive SQLAlchemy warnings from dlt which clutter the logs
+warnings.filterwarnings(
+    "ignore",
+    message="Table 'file_metadata' already exists within the given MetaData",
+    category=SAWarning,
+)
+warnings.filterwarnings(
+    "ignore",
+    message="Table '_dlt_pipeline_state' already exists within the given MetaData",
+    category=SAWarning,
+)
+warnings.filterwarnings(
+    "ignore",
+    message="implicitly coercing SELECT object to scalar subquery",
+    category=SAWarning,
+)
+warnings.filterwarnings(
+    "ignore",
+    message="This declarative base already contains a class with the same class name",
+    category=SAWarning,
+)
+
+# Silence noisy warnings from langfuse when no API key is provided
+logging.getLogger("langfuse").setLevel(logging.ERROR)
+
 import cognee
 from cognee.modules.data.exceptions import DatasetNotFoundError
 
 
 os.environ.setdefault("LITELLM_LOG", "WARNING")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
-
-# Silence repetitive SQLAlchemy warnings from dlt which clutter the logs
-warnings.filterwarnings(
-    "ignore",
-    message="Table 'file_metadata' already exists within the given MetaData",
-    category=UserWarning,
-)
-warnings.filterwarnings(
-    "ignore",
-    message="Table '_dlt_pipeline_state' already exists within the given MetaData",
-    category=UserWarning,
-)
-warnings.filterwarnings(
-    "ignore",
-    message="implicitly coercing SELECT object to scalar subquery",
-    category=UserWarning,
-)
 
 
 LANGUAGE_NAMES = {"ua": "Ukrainian", "ru": "Russian", "eng": "English"}
@@ -72,11 +90,12 @@ class CogneeConfig:
         cognee.config.set_vector_db_provider(self.vector_provider)
         cognee.config.set_vector_db_url(self.vector_url)
         cognee.config.set_graph_database_provider(self.graph_provider)
-        prompt_file = Path(self.graph_prompt_path)
+        prompt_file = Path(self.graph_prompt_path).resolve()
         if not prompt_file.is_file():
             raise FileNotFoundError(f"System prompt file not found: {prompt_file}")
-        os.environ["GRAPH_PROMPT_PATH"] = str(prompt_file)
-        cognee.config.set_llm_config({"graph_prompt_path": str(prompt_file)})
+        posix_path = prompt_file.as_posix()
+        os.environ["GRAPH_PROMPT_PATH"] = posix_path
+        cognee.config.set_llm_config({"graph_prompt_path": posix_path})
 
         cognee.config.set_relational_db_config(
             {
