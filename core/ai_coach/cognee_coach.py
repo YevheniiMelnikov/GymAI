@@ -244,12 +244,21 @@ class CogneeCoach(BaseAICoach):
             prompt_parts.append(f"Answer in {lang_name}.")
         final_prompt = "\n".join(prompt_parts)
 
-        await cognee.add(final_prompt)
+        dataset = "main_dataset"
+        logger.debug(f"Adding prompt to dataset {dataset}: {final_prompt[:100]}")
+        await cognee.add(final_prompt, dataset_name=dataset)
+        logger.debug(f"Running cognify on dataset {dataset}")
         try:
-            await cognee.cognify()
+            await cognee.cognify(datasets=dataset)
         except DatasetNotFoundError:
             logger.warning("No datasets found to process")
-        return await cognee.search(final_prompt)
+            return []
+        logger.debug(f"Searching dataset {dataset}")
+        try:
+            return await cognee.search(final_prompt, datasets=dataset)
+        except DatasetNotFoundError:
+            logger.error("Search failed, dataset not found")
+            return []
 
     @classmethod
     async def refresh_knowledge_base(cls) -> None:
