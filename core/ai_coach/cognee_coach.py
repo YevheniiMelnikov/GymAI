@@ -249,7 +249,7 @@ class CogneeCoach(BaseAICoach):
             f"Adding prompt to dataset {dataset}: {final_prompt[:100]}"
         )
         result = await cognee.add(final_prompt, dataset_name=dataset)
-        dataset_id = getattr(result, "dataset_id", result)
+        dataset_id = str(getattr(result, "dataset_id", result))
         logger.debug(f"Dataset {dataset} id: {dataset_id}")
         try:
             await cognee.cognify(datasets=[dataset_id])
@@ -294,7 +294,7 @@ class CogneeCoach(BaseAICoach):
         cls._ensure_config()
         dataset = f"chat_{chat_id}"
         result = await cognee.add(text, dataset_name=dataset)
-        dataset_id = getattr(result, "dataset_id", result)
+        dataset_id = str(getattr(result, "dataset_id", result))
         try:
             await cognee.cognify(datasets=[dataset_id])
         except DatasetNotFoundError:
