@@ -51,7 +51,8 @@ warnings.filterwarnings(
 # Silence noisy warnings from langfuse when no API key is provided
 logging.getLogger("langfuse").setLevel(logging.ERROR)
 
-os.environ.setdefault("ENABLE_BACKEND_ACCESS_CONTROL", "False")
+# Disable Cognee ACL for single-tenant GymBot
+os.environ["ENABLE_BACKEND_ACCESS_CONTROL"] = "False"
 
 import cognee  # noqa: E402
 from cognee.modules.data.exceptions import DatasetNotFoundError  # noqa: E402
@@ -275,12 +276,6 @@ class CogneeCoach(BaseAICoach):
             acl_on = os.environ.get("ENABLE_BACKEND_ACCESS_CONTROL", "False") != "False"
             dataset = f"{dataset_base}_{user.id}" if acl_on else dataset_base
             dataset_info = await cognee.add(final_prompt, dataset_name=dataset, user=user)
-            if "write" not in getattr(dataset_info, "permissions", []):
-                await cognee.share_dataset(
-                    dataset_id=dataset_info.dataset_id,
-                    principal_id=user.id,
-                    permissions=["write"],
-                )
             dataset_id = getattr(dataset_info, "dataset_id", dataset)
         except PermissionDeniedError as e:
             logger.error(f"Permission denied while adding data: {e}")
@@ -346,12 +341,6 @@ class CogneeCoach(BaseAICoach):
         dataset = f"{dataset_base}_{user.id}" if acl_on else dataset_base
         try:
             info = await cognee.add(text, dataset_name=dataset, user=user)
-            if "write" not in getattr(info, "permissions", []):
-                await cognee.share_dataset(
-                    dataset_id=info.dataset_id,
-                    principal_id=user.id,
-                    permissions=["write"],
-                )
             dataset_id = getattr(info, "dataset_id", dataset)
             await cls._cognify_dataset(dataset_id, user)
         except DatasetNotFoundError:
@@ -371,12 +360,6 @@ class CogneeCoach(BaseAICoach):
         dataset = f"{dataset_base}_{user.id}" if acl_on else dataset_base
         try:
             info = await cognee.add("", dataset_name=dataset, user=user)
-            if "write" not in getattr(info, "permissions", []):
-                await cognee.share_dataset(
-                    dataset_id=info.dataset_id,
-                    principal_id=user.id,
-                    permissions=["write"],
-                )
             dataset_id = getattr(info, "dataset_id", dataset)
             return await cognee.search(query, datasets=[dataset_id], top_k=5, user=user)
         except Exception as e:
