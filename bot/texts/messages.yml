@@ -354,6 +354,11 @@ incoming_request:
   ua: "Новий запит на послугу <b>{service}</b>\nВраховуйте обрану клієнтом мову комунікації: <b>{lang}</b>\nІ тип тренувань: <b>{workout_type}</b>"
 
 waiting_for_program:
+  eng: "Waiting for program ⏳"
+  ru: "Ожидает программу ⏳"
+  ua: "Очікує програму ⏳"
+
+request_in_progress:
   eng: "Your request is being processed, please wait ⏳"
   ru: "Запрос принят, ожидайте ⏳"
   ua: "Запит прийнято, очікуйте ⏳"

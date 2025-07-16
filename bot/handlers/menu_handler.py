@@ -239,7 +239,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
     bot = cast(Bot, callback_query.bot)
 
     if service == "program":
-        await answer_msg(callback_query, msg_text("waiting_for_program", profile.language))
+        await answer_msg(callback_query, msg_text("request_in_progress", profile.language))
         await show_main_menu(callback_query.message, profile, state)
         try:
             await generate_program(client, workout_type, wishes, state, bot)
@@ -301,7 +301,7 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     await answer_msg(callback_query, msg_text("waiting_for_subscription", lang))
     await show_main_menu(callback_query.message, profile, state)
     await generate_subscription(client, workout_type, wishes, period, days, state, bot)
-    
+
 
 @menu_router.callback_query(States.profile)
 async def profile_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
