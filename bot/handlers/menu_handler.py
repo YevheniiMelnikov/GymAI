@@ -199,33 +199,62 @@ async def ai_service_choice(callback_query: CallbackQuery, state: FSMContext) ->
             await show_balance_menu(callback_query, profile, state)
             return
 
-        await ProfileService.adjust_client_credits(profile.id, -required)
-        await Cache.client.update_client(client.profile, {"credits": client.credits - required})
-
         workout_type = data.get("workout_type", "gym")
-        wishes = data.get("wishes", "")
+        await state.update_data(
+            ai_service=service,
+            required=required,
+            workout_type=workout_type,
+        )
+        await state.set_state(States.ai_enter_wishes)
+        await answer_msg(callback_query, msg_text("enter_wishes", profile.language))
+        await del_msg(callback_query)
+        return
 
-        if service == "program":
-            bot = cast(Bot, callback_query.bot)
-            await generate_program(client, workout_type, wishes, state, bot)
-            await callback_query.answer(msg_text("payment_success", profile.language), show_alert=True)
-            await show_main_menu(callback_query.message, profile, state)
-            return
-        elif service.startswith("subscription"):
-            period_map = {
-                "subscription_14_days": "14d",
-                "subscription_1_month": "1m",
-                "subscription_6_months": "6m",
-            }
-            await state.update_data(ai_service=service, period=period_map.get(service, "1m"), required=required)
-            await state.set_state(States.ai_workout_days)
-            await answer_msg(
-                callback_query,
-                msg_text("select_days", profile.language),
-                reply_markup=select_days_kb(profile.language, []),
-            )
-            await del_msg(callback_query)
-            return
+
+@menu_router.message(States.ai_enter_wishes)
+async def ai_enter_wishes(message: Message, state: FSMContext) -> None:
+    if not message.text:
+        return
+
+    data = await state.get_data()
+    profile = Profile.model_validate(data.get("profile"))
+    client = Client.model_validate(data.get("client"))
+    service = data.get("ai_service", "program")
+    required = int(data.get("required", 0))
+    workout_type = data.get("workout_type", "gym")
+
+    wishes = message.text
+    await state.update_data(wishes=wishes)
+
+    if client.credits < required:
+        await answer_msg(message, msg_text("not_enough_credits", profile.language))
+        await show_balance_menu(message, profile, state)
+        return
+
+    await ProfileService.adjust_client_credits(profile.id, -required)
+    await Cache.client.update_client(client.profile, {"credits": client.credits - required})
+
+    if service == "program":
+        bot = cast(Bot, message.bot)
+        await generate_program(client, workout_type, wishes, state, bot)
+        await answer_msg(message, msg_text("payment_success", profile.language))
+        await show_main_menu(message, profile, state)
+        return
+
+    if service.startswith("subscription"):
+        period_map = {
+            "subscription_14_days": "14d",
+            "subscription_1_month": "1m",
+            "subscription_6_months": "6m",
+        }
+        await state.update_data(period=period_map.get(service, "1m"))
+        await state.set_state(States.ai_workout_days)
+        await answer_msg(
+            message,
+            msg_text("select_days", profile.language),
+            reply_markup=select_days_kb(profile.language, []),
+        )
+        return
 
 
 @menu_router.callback_query(States.ai_workout_days)
