@@ -1,7 +1,7 @@
 PROGRAM_PROMPT = (
     "You are an experienced fitness coach. Use your knowledge base, previous "
     "dialogue history and the saved client profile to craft a workout program.\n"
-    "Client wishes: {wishes}\n"
+    "Workout type: {workout_type}. Client wishes: {wishes}\n"
     "Respond in the client's language: {language}.\n"
     "The request parameters are provided as JSON below. Respond strictly with "
     "JSON compatible with the `ProgramResponse` Pydantic model.\n"
@@ -19,7 +19,7 @@ PROGRAM_PROMPT = (
 SUBSCRIPTION_PROMPT = (
     "Using the stored client information and chat context, create a training plan"
     " tailored to the request below.\n"
-    "Client wishes: {wishes}. Preferred workout days: {workout_days}.\n"
+    "Workout type: {workout_type}. Client wishes: {wishes}. Preferred workout days: {workout_days}.\n"
     "Respond in the client's language: {language}.\n"
     "Respond strictly with JSON that matches "
     "the `SubscriptionResponse` Pydantic model.\n"

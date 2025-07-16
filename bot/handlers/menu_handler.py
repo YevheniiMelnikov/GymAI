@@ -198,14 +198,22 @@ async def ai_service_choice(callback_query: CallbackQuery, state: FSMContext) ->
             await show_balance_menu(callback_query, profile, state)
             return
 
-        workout_type = data.get("workout_type", "gym")
+        workout_type = data.get("workout_type")
         await state.update_data(
             ai_service=service,
             required=required,
-            workout_type=workout_type,
         )
-        await state.set_state(States.enter_wishes)
-        await answer_msg(callback_query, msg_text("enter_wishes", profile.language))
+        if workout_type is None:
+            await state.set_state(States.workout_type)
+            await answer_msg(
+                callback_query,
+                msg_text("workout_type", profile.language),
+                reply_markup=workout_type_kb(profile.language),
+            )
+        else:
+            await state.update_data(workout_type=workout_type)
+            await state.set_state(States.enter_wishes)
+            await answer_msg(callback_query, msg_text("enter_wishes", profile.language))
         await del_msg(callback_query)
         return
 

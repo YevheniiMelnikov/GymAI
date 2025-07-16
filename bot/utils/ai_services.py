@@ -27,6 +27,7 @@ async def generate_program(client: Client, workout_type: str, wishes: str, state
         request=req.model_dump_json(indent=2),
         language=lang,
         wishes=wishes,
+        workout_type=workout_type,
     )
     response = await ai_coach_request(text=prompt, client=client, chat_id=client.id, language=lang)
     logger.debug(f"AI coach response: {response}")
@@ -83,6 +84,7 @@ async def generate_subscription(
         language=lang,
         wishes=wishes,
         workout_days=", ".join(workout_days),
+        workout_type=workout_type,
     )
     response = await ai_coach_request(text=prompt, client=client, chat_id=client.id, language=lang)
     sub_raw = response[0] if response else ""
