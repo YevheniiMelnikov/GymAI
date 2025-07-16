@@ -22,12 +22,13 @@ from config.env_settings import settings
 from core.cache import Cache
 from core.enums import ClientStatus
 from core.exceptions import ProfileNotFoundError, ClientNotFoundError
-from core.schemas import Profile
-from core.services import APIService
+from core.schemas import Profile, Client
+from core.services import APIService, ProfileService
 from bot.utils.chat import client_request
 from bot.utils.credits import required_credits
 from bot.utils.workout_plans import process_new_subscription, edit_subscription_days
 from bot.utils.menus import show_main_menu, show_my_profile_menu, send_policy_confirmation, show_balance_menu
+from bot.utils.ai_services import generate_program
 from bot.utils.profiles import update_profile_data, check_assigned_clients
 from bot.utils.text import get_state_and_message
 from bot.utils.other import delete_messages, set_bot_commands, answer_msg, del_msg, parse_price
@@ -475,6 +476,54 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
 
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
+
+    # AI coach flow
+    if data.get("ai_service"):
+        client = Client.model_validate(data.get("client"))
+        service = data.get("ai_service", "program")
+        required = int(data.get("required", 0))
+        workout_type = data.get("workout_type", "gym")
+        wishes = message.text
+        await state.update_data(wishes=wishes)
+
+        if client.credits < required:
+            await answer_msg(message, msg_text("not_enough_credits", profile.language))
+            await show_balance_menu(message, profile, state)
+            return
+
+        await ProfileService.adjust_client_credits(profile.id, -required)
+        await Cache.client.update_client(client.profile, {"credits": client.credits - required})
+
+        if service == "program":
+            bot_inst = cast(Bot, message.bot)
+            try:
+                await generate_program(client, workout_type, wishes, state, bot_inst)
+            except Exception as e:  # noqa: BLE001
+                logger.exception(f"Program generation failed: {e}")
+                await answer_msg(message, msg_text("unexpected_error", profile.language))
+            else:
+                await answer_msg(message, msg_text("payment_success", profile.language))
+                await show_main_menu(message, profile, state)
+            return
+
+        if service.startswith("subscription"):
+            period_map = {
+                "subscription_14_days": "14d",
+                "subscription_1_month": "1m",
+                "subscription_6_months": "6m",
+            }
+            await state.update_data(period=period_map.get(service, "1m"))
+            await state.set_state(States.ai_workout_days)
+            await answer_msg(
+                message,
+                msg_text("select_days", profile.language),
+                reply_markup=select_days_kb(profile.language, []),
+            )
+            return
+
+        return
+
+    # Regular coach flow
     client = await Cache.client.get_client(profile.id)
 
     if not client or not client.assigned_to:

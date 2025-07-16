@@ -68,6 +68,5 @@ class States(StatesGroup):
     services_menu = State()
     choose_plan = State()
     choose_ai_service = State()
-    ai_enter_wishes = State()
     ai_workout_days = State()
     confirm_service = State()
