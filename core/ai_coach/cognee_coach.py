@@ -53,6 +53,7 @@ logging.getLogger("langfuse").setLevel(logging.ERROR)
 
 import cognee  # noqa: E402
 from cognee.modules.data.exceptions import DatasetNotFoundError  # noqa: E402
+from cognee.modules.users.exceptions.exceptions import PermissionDeniedError  # noqa: E402
 
 
 os.environ.setdefault("LITELLM_LOG", "WARNING")
@@ -109,7 +110,7 @@ class CogneeConfig:
             }
         )
 
-        logger.info("Cognee successfully configured")
+        logger.success("AI coach successfully configured")
 
 
 class CogneeCoach(BaseAICoach):
@@ -260,11 +261,17 @@ class CogneeCoach(BaseAICoach):
         except DatasetNotFoundError:
             logger.warning("No datasets found to process")
             return []
+        except PermissionDeniedError as e:
+            logger.error(f"Permission denied during cognify: {e}")
+            return []
         logger.debug(f"Searching dataset {dataset_id} for response")
         try:
             return await cognee.search(final_prompt, datasets=[dataset_id])
         except DatasetNotFoundError:
             logger.error("Search failed, dataset not found")
+            return []
+        except PermissionDeniedError as e:
+            logger.error(f"Permission denied during search: {e}")
             return []
 
     @classmethod
@@ -283,6 +290,8 @@ class CogneeCoach(BaseAICoach):
             await cognee.cognify()
         except DatasetNotFoundError:
             logger.warning("No datasets found to process")
+        except PermissionDeniedError as e:
+            logger.error(f"Permission denied while updating knowledge base: {e}")
 
     @classmethod
     async def assign_client(cls, client: Client) -> None:
@@ -303,6 +312,8 @@ class CogneeCoach(BaseAICoach):
             await cognee.cognify(datasets=[dataset_id])
         except DatasetNotFoundError:
             logger.warning("No datasets found to process")
+        except PermissionDeniedError as e:
+            logger.error(f"Permission denied while saving message: {e}")
 
     @classmethod
     async def get_context(cls, chat_id: int, query: str) -> list:

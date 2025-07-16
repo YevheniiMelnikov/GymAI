@@ -22,7 +22,6 @@ async def init_ai_coach(
     coach_ready_event = asyncio.Event()
 
     set_ai_coach(ai_coach)
-    logger.info("Starting AI coach initialization")
 
     await ai_coach.initialize()
 
