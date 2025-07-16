@@ -245,6 +245,8 @@ class CogneeCoach(BaseAICoach):
         final_prompt = "\n".join(prompt_parts)
 
         dataset = "main_dataset"
+        if client is not None:
+            dataset = f"main_dataset_{client.id}"
         logger.debug(
             f"Adding prompt to dataset {dataset}: {final_prompt[:100]}"
         )

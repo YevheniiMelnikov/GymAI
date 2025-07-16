@@ -18,6 +18,7 @@ class SubscriptionRequest(BaseModel):
     wishes: str
     period: str
     days: int
+    workout_days: list[str]
 
 
 class SubscriptionResponse(BaseModel):
