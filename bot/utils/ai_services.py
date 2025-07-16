@@ -10,6 +10,7 @@ from core.ai_coach.parsers import (
     parse_subscription_json,
 )
 from core.ai_coach.schemas import ProgramRequest, SubscriptionRequest
+from loguru import logger
 from core.cache import Cache
 from core.schemas import Client
 from bot.utils.workout_plans import _next_payment_date
@@ -22,8 +23,14 @@ async def generate_program(client: Client, workout_type: str, wishes: str, state
     req = ProgramRequest(workout_type=workout_type, wishes=wishes)
     data = await state.get_data()
     lang = data.get("lang")
-    prompt = PROGRAM_PROMPT.format(request=req.model_dump_json(indent=2), language=lang)
+    prompt = PROGRAM_PROMPT.format(
+        request=req.model_dump_json(indent=2),
+        language=lang,
+        wishes=wishes,
+        workout_type=workout_type,
+    )
     response = await ai_coach_request(text=prompt, client=client, chat_id=client.id, language=lang)
+    logger.debug(f"AI coach response: {response}")
     program_raw = response[0] if response else ""
     program_dto = parse_program_json(program_raw)
     if program_dto is not None:
@@ -68,10 +75,17 @@ async def generate_subscription(
         wishes=wishes,
         period=period,
         days=len(workout_days),
+        workout_days=workout_days,
     )
     data = await state.get_data()
     lang = data.get("lang")
-    prompt = SUBSCRIPTION_PROMPT.format(request=req.model_dump_json(indent=2), language=lang)
+    prompt = SUBSCRIPTION_PROMPT.format(
+        request=req.model_dump_json(indent=2),
+        language=lang,
+        wishes=wishes,
+        workout_days=", ".join(workout_days),
+        workout_type=workout_type,
+    )
     response = await ai_coach_request(text=prompt, client=client, chat_id=client.id, language=lang)
     sub_raw = response[0] if response else ""
     sub_dto = parse_subscription_json(sub_raw)

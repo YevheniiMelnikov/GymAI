@@ -70,3 +70,4 @@ class States(StatesGroup):
     choose_ai_service = State()
     ai_workout_days = State()
     confirm_service = State()
+    ai_confirm_service = State()

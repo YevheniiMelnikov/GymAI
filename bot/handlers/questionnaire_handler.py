@@ -22,12 +22,13 @@ from config.env_settings import settings
 from core.cache import Cache
 from core.enums import ClientStatus
 from core.exceptions import ProfileNotFoundError, ClientNotFoundError
-from core.schemas import Profile
-from core.services import APIService
+from core.schemas import Profile, Client
+from core.services import APIService, ProfileService
 from bot.utils.chat import client_request
 from bot.utils.credits import required_credits
 from bot.utils.workout_plans import process_new_subscription, edit_subscription_days
 from bot.utils.menus import show_main_menu, show_my_profile_menu, send_policy_confirmation, show_balance_menu
+from bot.utils.ai_services import generate_program
 from bot.utils.profiles import update_profile_data, check_assigned_clients
 from bot.utils.text import get_state_and_message
 from bot.utils.other import delete_messages, set_bot_commands, answer_msg, del_msg, parse_price
@@ -475,6 +476,34 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
 
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
+
+    # AI coach flow
+    if data.get("ai_service"):
+        client = Client.model_validate(data.get("client"))
+        service = data.get("ai_service", "program")
+        required = int(data.get("required", 0))
+        workout_type = data.get("workout_type", "gym")
+        wishes = message.text
+        await state.update_data(wishes=wishes)
+
+        if client.credits < required:
+            await answer_msg(message, msg_text("not_enough_credits", profile.language))
+            await show_balance_menu(message, profile, state)
+            return
+
+        await state.update_data(wishes=wishes)
+        await state.set_state(States.ai_confirm_service)
+        await answer_msg(
+            message,
+            msg_text("confirm_service", profile.language).format(
+                balance=client.credits,
+                price=required,
+            ),
+            reply_markup=yes_no_kb(profile.language),
+        )
+        return
+
+    # Regular coach flow
     client = await Cache.client.get_client(profile.id)
 
     if not client or not client.assigned_to:

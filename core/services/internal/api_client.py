@@ -71,7 +71,9 @@ class APIClient:
                 if response.status_code == 404:
                     return response.status_code, error_data
 
-                logger.error(f"Request to {url} failed with HTTP={response.status_code}")
+                logger.error(
+                    f"Request to {url} failed with HTTP={response.status_code}, response: {error_data}"
+                )
                 if response.status_code >= 500 or response.status_code == 429:
                     raise httpx.HTTPStatusError("Retryable error", request=response.request, response=response)
                 return response.status_code, error_data

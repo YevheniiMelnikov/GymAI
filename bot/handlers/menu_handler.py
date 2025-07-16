@@ -21,7 +21,6 @@ from bot.states import States
 from bot.texts.text_manager import msg_text
 from core.cache import Cache
 from core.schemas import Coach, Client, Profile
-from core.services import ProfileService
 from bot.utils.chat import contact_client, process_feedback_content
 from bot.utils.menus import (
     show_main_menu,
@@ -42,10 +41,10 @@ from bot.utils.profiles import assign_coach
 from bot.utils.workout_plans import manage_program, cancel_subscription
 from bot.utils.other import del_msg, generate_order_id, answer_msg
 from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
-from core.services import APIService
+from core.services import APIService, ProfileService
 from bot.keyboards import payment_kb
 from bot.utils.credits import available_packages
-from bot.utils.ai_services import generate_program, generate_subscription
+from bot.utils.ai_services import generate_subscription, generate_program
 from bot.utils.credits import available_ai_services
 
 menu_router = Router()
@@ -199,33 +198,72 @@ async def ai_service_choice(callback_query: CallbackQuery, state: FSMContext) ->
             await show_balance_menu(callback_query, profile, state)
             return
 
-        await ProfileService.adjust_client_credits(profile.id, -required)
-        await Cache.client.update_client(client.profile, {"credits": client.credits - required})
-
-        workout_type = data.get("workout_type", "gym")
-        wishes = data.get("wishes", "")
-
-        if service == "program":
-            bot = cast(Bot, callback_query.bot)
-            await generate_program(client, workout_type, wishes, state, bot)
-            await callback_query.answer(msg_text("payment_success", profile.language), show_alert=True)
-            await show_main_menu(callback_query.message, profile, state)
-            return
-        elif service.startswith("subscription"):
-            period_map = {
-                "subscription_14_days": "14d",
-                "subscription_1_month": "1m",
-                "subscription_6_months": "6m",
-            }
-            await state.update_data(ai_service=service, period=period_map.get(service, "1m"), required=required)
-            await state.set_state(States.ai_workout_days)
+        workout_type = data.get("workout_type")
+        await state.update_data(
+            ai_service=service,
+            required=required,
+        )
+        if workout_type is None:
+            await state.set_state(States.workout_type)
             await answer_msg(
                 callback_query,
-                msg_text("select_days", profile.language),
-                reply_markup=select_days_kb(profile.language, []),
+                msg_text("workout_type", profile.language),
+                reply_markup=workout_type_kb(profile.language),
             )
-            await del_msg(callback_query)
-            return
+        else:
+            await state.update_data(workout_type=workout_type)
+            await state.set_state(States.enter_wishes)
+            await answer_msg(callback_query, msg_text("enter_wishes", profile.language))
+        await del_msg(callback_query)
+        return
+
+
+@menu_router.callback_query(States.ai_confirm_service)
+async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    profile = Profile.model_validate(data.get("profile"))
+    client = Client.model_validate(data.get("client"))
+    service = data.get("ai_service", "program")
+    required = int(data.get("required", 0))
+    workout_type = data.get("workout_type", "gym")
+    wishes = data.get("wishes", "")
+
+    if callback_query.data == "no":
+        await show_main_menu(callback_query.message, profile, state)
+        await del_msg(callback_query)
+        return
+
+    await ProfileService.adjust_client_credits(profile.id, -required)
+    await Cache.client.update_client(client.profile, {"credits": client.credits - required})
+
+    bot = cast(Bot, callback_query.bot)
+
+    if service == "program":
+        await answer_msg(callback_query, msg_text("request_in_progress", profile.language))
+        await show_main_menu(callback_query.message, profile, state)
+        try:
+            await generate_program(client, workout_type, wishes, state, bot)
+        except Exception as e:  # noqa: BLE001
+            logger.exception(f"Program generation failed: {e}")
+            await answer_msg(callback_query, msg_text("unexpected_error", profile.language))
+        return
+
+    period_map = {
+        "subscription_14_days": "14d",
+        "subscription_1_month": "1m",
+        "subscription_6_months": "6m",
+    }
+    await state.update_data(period=period_map.get(service, "1m"))
+    await state.set_state(States.ai_workout_days)
+    await answer_msg(
+        callback_query,
+        msg_text("select_days", profile.language),
+        reply_markup=select_days_kb(profile.language, []),
+    )
+    await del_msg(callback_query)
+    return
+
+
 
 
 @menu_router.callback_query(States.ai_workout_days)
@@ -260,9 +298,9 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     wishes = data.get("wishes", "")
     period = data.get("period", "1m")
     bot = cast(Bot, callback_query.bot)
-    await generate_subscription(client, workout_type, wishes, period, days, state, bot)
-    await callback_query.answer(msg_text("payment_success", lang), show_alert=True)
+    await answer_msg(callback_query, msg_text("waiting_for_subscription", lang))
     await show_main_menu(callback_query.message, profile, state)
+    await generate_subscription(client, workout_type, wishes, period, days, state, bot)
 
 
 @menu_router.callback_query(States.profile)

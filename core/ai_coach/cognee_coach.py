@@ -51,8 +51,8 @@ warnings.filterwarnings(
 # Silence noisy warnings from langfuse when no API key is provided
 logging.getLogger("langfuse").setLevel(logging.ERROR)
 
-import cognee
-from cognee.modules.data.exceptions import DatasetNotFoundError
+import cognee  # noqa: E402
+from cognee.modules.data.exceptions import DatasetNotFoundError  # noqa: E402
 
 
 os.environ.setdefault("LITELLM_LOG", "WARNING")
@@ -244,12 +244,28 @@ class CogneeCoach(BaseAICoach):
             prompt_parts.append(f"Answer in {lang_name}.")
         final_prompt = "\n".join(prompt_parts)
 
-        await cognee.add(final_prompt)
+        dataset = "main_dataset"
+        if client is not None:
+            dataset = f"main_dataset_{client.id}"
+        logger.debug(
+            f"Adding prompt to dataset {dataset}: {final_prompt[:100]}"
+        )
+        dataset_info = await cognee.add(final_prompt, dataset_name=dataset)
+        dataset_id = str(getattr(dataset_info, "dataset_id", dataset))
+        logger.debug(
+            f"Running cognify on dataset {dataset_id}"
+        )
         try:
-            await cognee.cognify()
+            await cognee.cognify(datasets=[dataset_id])
         except DatasetNotFoundError:
             logger.warning("No datasets found to process")
-        return await cognee.search(final_prompt)
+            return []
+        logger.debug(f"Searching dataset {dataset_id} for response")
+        try:
+            return await cognee.search(final_prompt, datasets=[dataset_id])
+        except DatasetNotFoundError:
+            logger.error("Search failed, dataset not found")
+            return []
 
     @classmethod
     async def refresh_knowledge_base(cls) -> None:
@@ -281,9 +297,10 @@ class CogneeCoach(BaseAICoach):
             return
         cls._ensure_config()
         dataset = f"chat_{chat_id}"
-        await cognee.add(text, dataset_name=dataset)
+        info = await cognee.add(text, dataset_name=dataset)
+        dataset_id = str(getattr(info, "dataset_id", dataset))
         try:
-            await cognee.cognify()
+            await cognee.cognify(datasets=[dataset_id])
         except DatasetNotFoundError:
             logger.warning("No datasets found to process")
 
@@ -292,7 +309,12 @@ class CogneeCoach(BaseAICoach):
         """Retrieve context for ``query`` from chat history."""
         cls._ensure_config()
         dataset = f"chat_{chat_id}"
-        return await cognee.search(query, datasets=[dataset], top_k=5)
+        try:
+            info = await cognee.add("", dataset_name=dataset)
+            dataset_id = str(getattr(info, "dataset_id", dataset))
+        except Exception:
+            dataset_id = dataset
+        return await cognee.search(query, datasets=[dataset_id], top_k=5)
 
     @classmethod
     async def process_workout_result(cls, client_id: int, feedback: str, language: str | None = None) -> str:

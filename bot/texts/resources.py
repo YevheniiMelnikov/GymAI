@@ -109,6 +109,7 @@ class MessageText(AutoName):
     client_default_status = auto()
     waiting_for_subscription = auto()
     waiting_for_program = auto()
+    request_in_progress = auto()
     waiting_for_text = auto()
     choose_gender = auto()
     born_in = auto()

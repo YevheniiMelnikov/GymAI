@@ -29,16 +29,20 @@ class WorkoutService(APIClient):
                 "post", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"}
             )
 
-            if status_code != 201:
-                logger.error(f"Failed to save program for client_profile_id={client_profile_id}: {response}")
-                raise UserServiceError(f"Failed to save program, received status {status_code}: {response}")
+            if status_code not in {200, 201}:
+                logger.error(
+                    f"Failed to save program for client_profile_id={client_profile_id}: {response}"
+                )
+                raise UserServiceError(
+                    f"Failed to save program, received status {status_code}: {response}"
+                )
 
             response = response or {}
             return Program(
                 id=int(response.get("id", 0)),
                 split_number=split_number,
                 exercises_by_day=exercises,
-                created_at=float(response.get("created_at", 0)),
+                created_at=response.get("created_at", 0),
                 client_profile=client_profile_id,
                 wishes=wishes,
                 workout_type=str(response.get("workout_type", "")),
