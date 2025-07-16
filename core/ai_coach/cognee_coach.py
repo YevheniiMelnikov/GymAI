@@ -54,6 +54,7 @@ logging.getLogger("langfuse").setLevel(logging.ERROR)
 import cognee  # noqa: E402
 from cognee.modules.data.exceptions import DatasetNotFoundError  # noqa: E402
 from cognee.modules.users.exceptions.exceptions import PermissionDeniedError  # noqa: E402
+from cognee.modules.users.methods.get_default_user import get_default_user  # noqa: E402
 
 
 os.environ.setdefault("LITELLM_LOG", "WARNING")
@@ -251,13 +252,21 @@ class CogneeCoach(BaseAICoach):
         logger.debug(
             f"Adding prompt to dataset {dataset}: {final_prompt[:100]}"
         )
-        dataset_info = await cognee.add(final_prompt, dataset_name=dataset)
-        dataset_id = str(getattr(dataset_info, "dataset_id", dataset))
+        try:
+            user = await get_default_user()
+            dataset_info = await cognee.add(final_prompt, dataset_name=dataset, user=user)
+            dataset_id = getattr(dataset_info, "dataset_id", dataset)
+        except PermissionDeniedError as e:
+            logger.error(f"Permission denied while adding data: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"Failed to add data to dataset: {e}")
+            return []
         logger.debug(
             f"Running cognify on dataset {dataset_id}"
         )
         try:
-            await cognee.cognify(datasets=[dataset_id])
+            await cognee.cognify(datasets=[dataset_id], user=user)
         except DatasetNotFoundError:
             logger.warning("No datasets found to process")
             return []
@@ -266,7 +275,7 @@ class CogneeCoach(BaseAICoach):
             return []
         logger.debug(f"Searching dataset {dataset_id} for response")
         try:
-            return await cognee.search(final_prompt, datasets=[dataset_id])
+            return await cognee.search(final_prompt, datasets=[dataset_id], user=user)
         except DatasetNotFoundError:
             logger.error("Search failed, dataset not found")
             return []
@@ -306,14 +315,17 @@ class CogneeCoach(BaseAICoach):
             return
         cls._ensure_config()
         dataset = f"chat_{chat_id}"
-        info = await cognee.add(text, dataset_name=dataset)
-        dataset_id = str(getattr(info, "dataset_id", dataset))
         try:
-            await cognee.cognify(datasets=[dataset_id])
+            user = await get_default_user()
+            info = await cognee.add(text, dataset_name=dataset, user=user)
+            dataset_id = getattr(info, "dataset_id", dataset)
+            await cognee.cognify(datasets=[dataset_id], user=user)
         except DatasetNotFoundError:
             logger.warning("No datasets found to process")
         except PermissionDeniedError as e:
             logger.error(f"Permission denied while saving message: {e}")
+        except Exception as e:
+            logger.error(f"Failed to save user message: {e}")
 
     @classmethod
     async def get_context(cls, chat_id: int, query: str) -> list:
@@ -321,11 +333,13 @@ class CogneeCoach(BaseAICoach):
         cls._ensure_config()
         dataset = f"chat_{chat_id}"
         try:
-            info = await cognee.add("", dataset_name=dataset)
-            dataset_id = str(getattr(info, "dataset_id", dataset))
-        except Exception:
-            dataset_id = dataset
-        return await cognee.search(query, datasets=[dataset_id], top_k=5)
+            user = await get_default_user()
+            info = await cognee.add("", dataset_name=dataset, user=user)
+            dataset_id = getattr(info, "dataset_id", dataset)
+            return await cognee.search(query, datasets=[dataset_id], top_k=5, user=user)
+        except Exception as e:
+            logger.error(f"Failed to get context: {e}")
+            return []
 
     @classmethod
     async def process_workout_result(cls, client_id: int, feedback: str, language: str | None = None) -> str:
