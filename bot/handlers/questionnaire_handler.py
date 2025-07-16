@@ -491,36 +491,16 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
             await show_balance_menu(message, profile, state)
             return
 
-        await ProfileService.adjust_client_credits(profile.id, -required)
-        await Cache.client.update_client(client.profile, {"credits": client.credits - required})
-
-        if service == "program":
-            bot_inst = cast(Bot, message.bot)
-            try:
-                await generate_program(client, workout_type, wishes, state, bot_inst)
-            except Exception as e:  # noqa: BLE001
-                logger.exception(f"Program generation failed: {e}")
-                await answer_msg(message, msg_text("unexpected_error", profile.language))
-            else:
-                await answer_msg(message, msg_text("payment_success", profile.language))
-                await show_main_menu(message, profile, state)
-            return
-
-        if service.startswith("subscription"):
-            period_map = {
-                "subscription_14_days": "14d",
-                "subscription_1_month": "1m",
-                "subscription_6_months": "6m",
-            }
-            await state.update_data(period=period_map.get(service, "1m"))
-            await state.set_state(States.ai_workout_days)
-            await answer_msg(
-                message,
-                msg_text("select_days", profile.language),
-                reply_markup=select_days_kb(profile.language, []),
-            )
-            return
-
+        await state.update_data(wishes=wishes)
+        await state.set_state(States.ai_confirm_service)
+        await answer_msg(
+            message,
+            msg_text("confirm_service", profile.language).format(
+                balance=client.credits,
+                price=required,
+            ),
+            reply_markup=yes_no_kb(profile.language),
+        )
         return
 
     # Regular coach flow
