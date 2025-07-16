@@ -54,7 +54,12 @@ async def main() -> None:
     bot = container.bot()
     await bot.delete_webhook(drop_pending_updates=True)
 
-    # Initialize the AI coach in the background to speed up startup
+    # Prepare and initialize the AI coach in the background to speed up startup
+    from core.ai_coach import utils as ai_utils
+    from core.ai_coach.registry import set_ai_coach
+
+    ai_utils.coach_ready_event = asyncio.Event()
+    set_ai_coach(CogneeCoach)
     asyncio.create_task(init_ai_coach(CogneeCoach, GDriveDocumentLoader()))
 
     if settings.WEBHOOK_URL is None:

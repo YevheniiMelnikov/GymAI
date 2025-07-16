@@ -236,9 +236,14 @@ async def ai_enter_wishes(message: Message, state: FSMContext) -> None:
 
     if service == "program":
         bot = cast(Bot, message.bot)
-        await generate_program(client, workout_type, wishes, state, bot)
-        await answer_msg(message, msg_text("payment_success", profile.language))
-        await show_main_menu(message, profile, state)
+        try:
+            await generate_program(client, workout_type, wishes, state, bot)
+        except Exception as e:  # noqa: BLE001
+            logger.exception(f"Program generation failed: {e}")
+            await answer_msg(message, msg_text("unexpected_error", profile.language))
+        else:
+            await answer_msg(message, msg_text("payment_success", profile.language))
+            await show_main_menu(message, profile, state)
         return
 
     if service.startswith("subscription"):
