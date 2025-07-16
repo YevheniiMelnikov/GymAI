@@ -51,6 +51,8 @@ warnings.filterwarnings(
 # Silence noisy warnings from langfuse when no API key is provided
 logging.getLogger("langfuse").setLevel(logging.ERROR)
 
+os.environ.setdefault("ENABLE_BACKEND_ACCESS_CONTROL", "False")
+
 import cognee  # noqa: E402
 from cognee.modules.data.exceptions import DatasetNotFoundError  # noqa: E402
 from cognee.modules.users.exceptions.exceptions import PermissionDeniedError  # noqa: E402
@@ -65,6 +67,15 @@ LANGUAGE_NAMES = {"ua": "Ukrainian", "ru": "Russian", "eng": "English"}
 
 
 configure_loguru()
+
+_COGNEE_USER = None
+
+
+async def _get_cognee_user():
+    global _COGNEE_USER
+    if _COGNEE_USER is None:
+        _COGNEE_USER = await get_default_user()
+    return _COGNEE_USER
 
 
 @dataclass
@@ -117,6 +128,7 @@ class CogneeConfig:
 class CogneeCoach(BaseAICoach):
     _configured: bool = False
     _loader: Optional[KnowledgeLoader] = None
+    _cognify_locks: dict[str, asyncio.Lock] = {}
 
     @classmethod
     async def initialize(cls) -> None:
@@ -180,6 +192,12 @@ class CogneeCoach(BaseAICoach):
         )
         config.apply()
         cls._configured = True
+
+    @classmethod
+    async def _cognify_dataset(cls, dataset_id: str, user) -> None:
+        lock = cls._cognify_locks.setdefault(dataset_id, asyncio.Lock())
+        async with lock:
+            await cognee.cognify(datasets=[dataset_id], user=user)
 
     @staticmethod
     def _extract_client_data(client: Client) -> str:
@@ -246,15 +264,23 @@ class CogneeCoach(BaseAICoach):
             prompt_parts.append(f"Answer in {lang_name}.")
         final_prompt = "\n".join(prompt_parts)
 
-        dataset = "main_dataset"
+        dataset_base = "main_dataset"
         if client is not None:
-            dataset = f"main_dataset_{client.id}"
+            dataset_base = f"main_dataset_{client.id}"
         logger.debug(
-            f"Adding prompt to dataset {dataset}: {final_prompt[:100]}"
+            f"Adding prompt to dataset {dataset_base}: {final_prompt[:100]}"
         )
         try:
-            user = await get_default_user()
+            user = await _get_cognee_user()
+            acl_on = os.environ.get("ENABLE_BACKEND_ACCESS_CONTROL", "False") != "False"
+            dataset = f"{dataset_base}_{user.id}" if acl_on else dataset_base
             dataset_info = await cognee.add(final_prompt, dataset_name=dataset, user=user)
+            if "write" not in getattr(dataset_info, "permissions", []):
+                await cognee.share_dataset(
+                    dataset_id=dataset_info.dataset_id,
+                    principal_id=user.id,
+                    permissions=["write"],
+                )
             dataset_id = getattr(dataset_info, "dataset_id", dataset)
         except PermissionDeniedError as e:
             logger.error(f"Permission denied while adding data: {e}")
@@ -266,7 +292,7 @@ class CogneeCoach(BaseAICoach):
             f"Running cognify on dataset {dataset_id}"
         )
         try:
-            await cognee.cognify(datasets=[dataset_id], user=user)
+            await cls._cognify_dataset(dataset_id, user)
         except DatasetNotFoundError:
             logger.warning("No datasets found to process")
             return []
@@ -314,12 +340,20 @@ class CogneeCoach(BaseAICoach):
         if not text.strip():
             return
         cls._ensure_config()
-        dataset = f"chat_{chat_id}"
+        user = await _get_cognee_user()
+        dataset_base = f"chat_{chat_id}"
+        acl_on = os.environ.get("ENABLE_BACKEND_ACCESS_CONTROL", "False") != "False"
+        dataset = f"{dataset_base}_{user.id}" if acl_on else dataset_base
         try:
-            user = await get_default_user()
             info = await cognee.add(text, dataset_name=dataset, user=user)
+            if "write" not in getattr(info, "permissions", []):
+                await cognee.share_dataset(
+                    dataset_id=info.dataset_id,
+                    principal_id=user.id,
+                    permissions=["write"],
+                )
             dataset_id = getattr(info, "dataset_id", dataset)
-            await cognee.cognify(datasets=[dataset_id], user=user)
+            await cls._cognify_dataset(dataset_id, user)
         except DatasetNotFoundError:
             logger.warning("No datasets found to process")
         except PermissionDeniedError as e:
@@ -331,10 +365,18 @@ class CogneeCoach(BaseAICoach):
     async def get_context(cls, chat_id: int, query: str) -> list:
         """Retrieve context for ``query`` from chat history."""
         cls._ensure_config()
-        dataset = f"chat_{chat_id}"
+        user = await _get_cognee_user()
+        dataset_base = f"chat_{chat_id}"
+        acl_on = os.environ.get("ENABLE_BACKEND_ACCESS_CONTROL", "False") != "False"
+        dataset = f"{dataset_base}_{user.id}" if acl_on else dataset_base
         try:
-            user = await get_default_user()
             info = await cognee.add("", dataset_name=dataset, user=user)
+            if "write" not in getattr(info, "permissions", []):
+                await cognee.share_dataset(
+                    dataset_id=info.dataset_id,
+                    principal_id=user.id,
+                    permissions=["write"],
+                )
             dataset_id = getattr(info, "dataset_id", dataset)
             return await cognee.search(query, datasets=[dataset_id], top_k=5, user=user)
         except Exception as e:

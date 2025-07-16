@@ -177,3 +177,9 @@ docker compose -f docker/docker-compose.yml up -d --build nginx
 The system instruction used by Cognee is loaded from `./core/ai_coach/global_system_prompt.txt`.
 This path is assigned to the `GRAPH_PROMPT_PATH` environment variable automatically on startup, but you can override it if needed.
 Make sure this file exists before starting the services.
+
+### Cognee access control
+
+If you don't need multi-tenant dataset permissions, disable Cognee ACL by setting
+`ENABLE_BACKEND_ACCESS_CONTROL=False` in your `.env` file. When enabled, dataset
+names include the Cognee user ID to avoid permission errors.
