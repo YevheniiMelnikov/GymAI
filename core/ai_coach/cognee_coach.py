@@ -8,6 +8,7 @@ import logging
 from dataclasses import dataclass
 from typing import Optional
 from pathlib import Path
+from uuid import uuid4
 
 from sqlalchemy.exc import SAWarning
 
@@ -51,8 +52,6 @@ warnings.filterwarnings(
 # Silence noisy warnings from langfuse when no API key is provided
 logging.getLogger("langfuse").setLevel(logging.ERROR)
 
-# Disable Cognee ACL for single-tenant GymBot
-os.environ["ENABLE_BACKEND_ACCESS_CONTROL"] = "False"
 
 import cognee  # noqa: E402
 from cognee.modules.data.exceptions import DatasetNotFoundError  # noqa: E402
@@ -77,6 +76,15 @@ async def _get_cognee_user():
     if _COGNEE_USER is None:
         _COGNEE_USER = await get_default_user()
     return _COGNEE_USER
+
+
+async def _safe_add(text: str, dataset: str, user):
+    """Add data to Cognee dataset handling name collisions."""
+    try:
+        return await cognee.add(text, dataset_name=dataset, user=user)
+    except PermissionDeniedError:
+        new_name = f"{dataset}_{uuid4().hex[:8]}"
+        return await cognee.add(text, dataset_name=new_name, user=user)
 
 
 @dataclass
@@ -273,9 +281,8 @@ class CogneeCoach(BaseAICoach):
         )
         try:
             user = await _get_cognee_user()
-            acl_on = os.environ.get("ENABLE_BACKEND_ACCESS_CONTROL", "False") != "False"
-            dataset = f"{dataset_base}_{user.id}" if acl_on else dataset_base
-            dataset_info = await cognee.add(final_prompt, dataset_name=dataset, user=user)
+            dataset = f"{dataset_base}_{user.id}"
+            dataset_info = await _safe_add(final_prompt, dataset, user)
             dataset_id = getattr(dataset_info, "dataset_id", dataset)
         except PermissionDeniedError as e:
             logger.error(f"Permission denied while adding data: {e}")
@@ -337,10 +344,9 @@ class CogneeCoach(BaseAICoach):
         cls._ensure_config()
         user = await _get_cognee_user()
         dataset_base = f"chat_{chat_id}"
-        acl_on = os.environ.get("ENABLE_BACKEND_ACCESS_CONTROL", "False") != "False"
-        dataset = f"{dataset_base}_{user.id}" if acl_on else dataset_base
+        dataset = f"{dataset_base}_{user.id}"
         try:
-            info = await cognee.add(text, dataset_name=dataset, user=user)
+            info = await _safe_add(text, dataset, user)
             dataset_id = getattr(info, "dataset_id", dataset)
             await cls._cognify_dataset(dataset_id, user)
         except DatasetNotFoundError:
@@ -356,10 +362,9 @@ class CogneeCoach(BaseAICoach):
         cls._ensure_config()
         user = await _get_cognee_user()
         dataset_base = f"chat_{chat_id}"
-        acl_on = os.environ.get("ENABLE_BACKEND_ACCESS_CONTROL", "False") != "False"
-        dataset = f"{dataset_base}_{user.id}" if acl_on else dataset_base
+        dataset = f"{dataset_base}_{user.id}"
         try:
-            info = await cognee.add("", dataset_name=dataset, user=user)
+            info = await _safe_add("", dataset, user)
             dataset_id = getattr(info, "dataset_id", dataset)
             return await cognee.search(query, datasets=[dataset_id], top_k=5, user=user)
         except Exception as e:

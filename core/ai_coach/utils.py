@@ -19,8 +19,10 @@ async def init_ai_coach(
 ) -> None:
     """Initialize the AI coach and register it."""
     global coach_ready_event
-    coach_ready_event = asyncio.Event()
+    if coach_ready_event is not None:
+        return
 
+    coach_ready_event = asyncio.Event()
     set_ai_coach(ai_coach)
 
     await ai_coach.initialize()

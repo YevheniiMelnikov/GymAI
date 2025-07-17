@@ -24,7 +24,6 @@ async def test_case_success_create_and_search(monkeypatch):
     monkeypatch.setattr(coach.cognee, "add", fake_add)
     monkeypatch.setattr(coach.cognee, "cognify", fake_cognify)
     monkeypatch.setattr(coach.cognee, "search", fake_search)
-    monkeypatch.setenv("ENABLE_BACKEND_ACCESS_CONTROL", "True")
 
     await coach.CogneeCoach.coach_request("hi")
 
@@ -40,14 +39,17 @@ async def test_case_conflict_existing_dataset(monkeypatch):
     calls = {}
 
     async def fake_add(prompt, dataset_name=None, user=None):
-        calls["dataset_name"] = dataset_name
-        return SimpleNamespace(dataset_id="ds2", permissions=["read"])
+        calls.setdefault("dataset_names", []).append(dataset_name)
+        if len(calls["dataset_names"]) == 1:
+            raise coach.PermissionDeniedError("denied")
+        return SimpleNamespace(dataset_id="ds2", permissions=["write"])
 
     monkeypatch.setattr(coach.cognee, "add", fake_add)
     monkeypatch.setattr(coach.cognee, "cognify", lambda datasets, user=None: None)
     monkeypatch.setattr(coach.cognee, "search", lambda *a, **k: [])
-    monkeypatch.setenv("ENABLE_BACKEND_ACCESS_CONTROL", "False")
 
     await coach.CogneeCoach.coach_request("hello")
 
-    assert calls["dataset_name"] == "main_dataset"
+    assert calls["dataset_names"][0] == f"main_dataset_{user.id}"
+    assert calls["dataset_names"][1].startswith(f"main_dataset_{user.id}_")
+    assert len(calls["dataset_names"][1]) > len(f"main_dataset_{user.id}_")
