@@ -7,6 +7,7 @@ import warnings
 import logging
 from dataclasses import dataclass
 from typing import Optional, Any
+from types import SimpleNamespace
 from pathlib import Path
 from uuid import uuid4
 
@@ -76,6 +77,9 @@ cognee_logger.setLevel(logging.INFO)
 async def _safe_add(text: str, dataset: str, user):
     """Add data to Cognee dataset handling name collisions."""
     logger.debug(f"safe_add → dataset={dataset}")
+    if not text.strip():
+        # Ensure dataset exists without ingesting empty data
+        return SimpleNamespace(dataset_id=dataset)
     try:
         return await cognee.add(text, dataset_name=dataset, user=user)
     except PermissionDeniedError:
@@ -370,11 +374,17 @@ class CogneeCoach(BaseAICoach):
             await cls.initialize()
         user = cls._user
         dataset_base = f"chat_{chat_id}"
-        dataset = f"{dataset_base}_{user.id}"
+        ds_name = f"{dataset_base}_{user.id}"
         try:
-            info = await _safe_add("", dataset, user)
-            dataset_id = getattr(info, "dataset_id", dataset)
-            return await cognee.search(query, datasets=[dataset_id], top_k=5, user=user)
+            return await cognee.search(query, datasets=[ds_name], top_k=5, user=user)
+        except DatasetNotFoundError:
+            try:
+                seed_doc = "init"
+                await _safe_add(seed_doc, ds_name, user)
+                return await cognee.search(query, datasets=[ds_name], top_k=5, user=user)
+            except Exception as e2:
+                logger.error(f"Failed to get context: {e2}")
+                return []
         except Exception as e:
             logger.error(f"Failed to get context: {e}")
             return []

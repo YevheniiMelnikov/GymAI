@@ -2,6 +2,7 @@ import pytest
 from types import SimpleNamespace
 
 from core.ai_coach.cognee_coach import CogneeCoach
+from core.ai_coach import cognee_coach as coach
 from core.ai_coach.utils import init_ai_coach, coach_ready_event
 
 @pytest.mark.asyncio
@@ -27,3 +28,23 @@ async def test_reinit_on_failure(monkeypatch):
     monkeypatch.setattr(CogneeCoach, "_ensure_config", ok)
     await init_ai_coach(CogneeCoach)
     assert CogneeCoach._user is not None
+
+
+@pytest.mark.asyncio
+async def test_empty_context_does_not_crash(monkeypatch):
+    CogneeCoach._user = SimpleNamespace(id="test-u")
+    monkeypatch.setattr(CogneeCoach, "_ensure_config", lambda: None)
+
+    async def fake_search(query, datasets, user=None, top_k=None):
+        if not hasattr(fake_search, "called"):
+            fake_search.called = True
+            raise coach.DatasetNotFoundError("missing")
+        return []
+
+    monkeypatch.setattr(coach.cognee, "search", fake_search)
+    monkeypatch.setattr(
+        CogneeCoach, "_safe_add", lambda text, dataset, user: SimpleNamespace(dataset_id=dataset)
+    )
+
+    res = await CogneeCoach.get_context(chat_id=42, query="hello")
+    assert isinstance(res, list)
