@@ -132,6 +132,8 @@ class CogneeConfig:
             }
         )
 
+        logger.success("AI coach successfully configured")
+
 
 
 class CogneeCoach(BaseAICoach):
@@ -377,11 +379,11 @@ class CogneeCoach(BaseAICoach):
         ds_name = f"{dataset_base}_{user.id}"
         try:
             return await cognee.search(query, datasets=[ds_name], top_k=5, user=user)
-        except DatasetNotFoundError:
+        except (DatasetNotFoundError, PermissionDeniedError):
             try:
-                seed_doc = "init"
-                await _safe_add(seed_doc, ds_name, user)
-                return await cognee.search(query, datasets=[ds_name], top_k=5, user=user)
+                new_ds = f"{ds_name}_{uuid4().hex[:6]}"
+                await _safe_add("init", new_ds, user)
+                return await cognee.search(query, datasets=[new_ds], top_k=5, user=user)
             except Exception as e2:
                 logger.error(f"Failed to get context: {e2}")
                 return []
