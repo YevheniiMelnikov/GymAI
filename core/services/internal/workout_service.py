@@ -30,12 +30,8 @@ class WorkoutService(APIClient):
             )
 
             if status_code not in {200, 201}:
-                logger.error(
-                    f"Failed to save program for client_profile_id={client_profile_id}: {response}"
-                )
-                raise UserServiceError(
-                    f"Failed to save program, received status {status_code}: {response}"
-                )
+                logger.error(f"Failed to save program for client_profile_id={client_profile_id}: {response}")
+                raise UserServiceError(f"Failed to save program, received status {status_code}: {response}")
 
             response = response or {}
             return Program(

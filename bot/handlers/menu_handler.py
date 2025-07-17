@@ -264,8 +264,6 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
     return
 
 
-
-
 @menu_router.callback_query(States.ai_workout_days)
 async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
