@@ -7,7 +7,8 @@ from core.ai_coach import cognee_coach as coach
 @pytest.mark.asyncio
 async def test_case_success_create_and_search(monkeypatch):
     user = SimpleNamespace(id="u1")
-    monkeypatch.setattr(coach, "_COGNEE_USER", user)
+    monkeypatch.setattr(coach.CogneeCoach, "_user", user)
+    monkeypatch.setattr(coach.CogneeCoach, "_ensure_config", lambda: None)
     calls = {}
 
     async def fake_add(prompt, dataset_name=None, user=None):
@@ -35,7 +36,8 @@ async def test_case_success_create_and_search(monkeypatch):
 @pytest.mark.asyncio
 async def test_case_conflict_existing_dataset(monkeypatch):
     user = SimpleNamespace(id="u2")
-    monkeypatch.setattr(coach, "_COGNEE_USER", user)
+    monkeypatch.setattr(coach.CogneeCoach, "_user", user)
+    monkeypatch.setattr(coach.CogneeCoach, "_ensure_config", lambda: None)
     calls = {}
 
     async def fake_add(prompt, dataset_name=None, user=None):

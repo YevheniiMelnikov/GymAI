@@ -6,7 +6,7 @@ import asyncio
 import warnings
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Any
 from pathlib import Path
 from uuid import uuid4
 
@@ -68,22 +68,19 @@ LANGUAGE_NAMES = {"ua": "Ukrainian", "ru": "Russian", "eng": "English"}
 
 configure_loguru()
 
-_COGNEE_USER = None
-
-
-async def _get_cognee_user():
-    global _COGNEE_USER
-    if _COGNEE_USER is None:
-        _COGNEE_USER = await get_default_user()
-    return _COGNEE_USER
+logger.level("COGNEE", no=15, color="<cyan>")
+cognee_logger = logging.getLogger("cognee")
+cognee_logger.setLevel(logging.INFO)
 
 
 async def _safe_add(text: str, dataset: str, user):
     """Add data to Cognee dataset handling name collisions."""
+    logger.debug(f"safe_add → dataset={dataset}")
     try:
         return await cognee.add(text, dataset_name=dataset, user=user)
     except PermissionDeniedError:
         new_name = f"{dataset}_{uuid4().hex[:8]}"
+        logger.warning(f"403 on {dataset}, retrying as {new_name}")
         return await cognee.add(text, dataset_name=new_name, user=user)
 
 
@@ -131,13 +128,13 @@ class CogneeConfig:
             }
         )
 
-        logger.success("AI coach successfully configured")
 
 
 class CogneeCoach(BaseAICoach):
     _configured: bool = False
     _loader: Optional[KnowledgeLoader] = None
     _cognify_locks: dict[str, asyncio.Lock] = {}
+    _user: Optional[Any] = None
 
     @classmethod
     async def initialize(cls) -> None:
@@ -145,7 +142,11 @@ class CogneeCoach(BaseAICoach):
             cls._ensure_config()
         except Exception as e:
             logger.warning(f"Cognee initialization failed: {e}")
-            return
+            raise
+
+        if cls._user is None:
+            cls._user = await get_default_user()
+            logger.debug(f"Cognee default user: {cls._user.id}")
 
         process = await asyncio.create_subprocess_exec(
             sys.executable,
@@ -163,9 +164,10 @@ class CogneeCoach(BaseAICoach):
         await process.wait()
 
         try:
-            await cognee.search("ping")
+            await cognee.search("ping", user=cls._user)
         except Exception as e:
             logger.warning(f"Cognee ping failed: {e}")
+        logger.success("AI coach successfully configured")
 
     @classmethod
     def set_loader(cls, loader: KnowledgeLoader) -> None:
@@ -279,8 +281,10 @@ class CogneeCoach(BaseAICoach):
         logger.debug(
             f"Adding prompt to dataset {dataset_base}: {final_prompt[:100]}"
         )
+        if cls._user is None:
+            await cls.initialize()
+        user = cls._user
         try:
-            user = await _get_cognee_user()
             dataset = f"{dataset_base}_{user.id}"
             dataset_info = await _safe_add(final_prompt, dataset, user)
             dataset_id = getattr(dataset_info, "dataset_id", dataset)
@@ -342,7 +346,9 @@ class CogneeCoach(BaseAICoach):
         if not text.strip():
             return
         cls._ensure_config()
-        user = await _get_cognee_user()
+        if cls._user is None:
+            await cls.initialize()
+        user = cls._user
         dataset_base = f"chat_{chat_id}"
         dataset = f"{dataset_base}_{user.id}"
         try:
@@ -360,7 +366,9 @@ class CogneeCoach(BaseAICoach):
     async def get_context(cls, chat_id: int, query: str) -> list:
         """Retrieve context for ``query`` from chat history."""
         cls._ensure_config()
-        user = await _get_cognee_user()
+        if cls._user is None:
+            await cls.initialize()
+        user = cls._user
         dataset_base = f"chat_{chat_id}"
         dataset = f"{dataset_base}_{user.id}"
         try:
