@@ -1,4 +1,6 @@
 from decimal import Decimal
+import json
+import re
 from aiogram import Bot
 from aiogram.fsm.context import FSMContext
 
@@ -16,6 +18,24 @@ from core.schemas import Client
 from bot.utils.workout_plans import _next_payment_date
 from bot.utils.chat import send_program
 from core.services.internal import APIService
+
+
+def _normalise_program(raw: str) -> dict:
+    """Extract and clean JSON workout program from ``raw`` text."""
+    m = re.search(r"\{.*\}", raw, re.S)
+    if not m:
+        raise ValueError("no JSON found")
+    data = json.loads(m.group(0))
+    for day in data.get("days", []):
+        day_val = str(day.get("day", ""))
+        match = re.search(r"\d+", day_val)
+        if match:
+            day["day"] = match.group(0)
+        for ex in day.get("exercises", []):
+            sets = ex.get("sets")
+            if isinstance(sets, str) and sets.isdigit():
+                ex["sets"] = int(sets)
+    return data
 
 
 async def generate_program(client: Client, workout_type: str, wishes: str, state: FSMContext, bot: Bot) -> None:
@@ -40,19 +60,25 @@ async def generate_program(client: Client, workout_type: str, wishes: str, state
         exercises, split_number = parse_program_text(program_raw)
     saved = await APIService.workout.save_program(client.id, exercises, split_number, wishes)
     if saved:
-        await Cache.workout.save_program(
-            client.profile,
-            {
-                "id": saved.id,
-                "client_profile": client.profile,
-                "exercises_by_day": [d.model_dump() for d in exercises],
-                "created_at": saved.created_at,
-                "split_number": split_number,
-                "workout_type": workout_type,
-                "wishes": wishes,
-                "program_text": program_raw,
-            },
-        )
+        try:
+            program_dict = _normalise_program(program_raw)
+            program_dict.update(
+                {
+                    "id": saved.id,
+                    "client_profile": client.profile,
+                    "created_at": saved.created_at,
+                    "split_number": len(program_dict.get("days", [])),
+                    "workout_type": workout_type,
+                    "wishes": wishes,
+                    "program_text": program_raw,
+                }
+            )
+            # rename key if needed for cache schema
+            if "days" in program_dict and "exercises_by_day" not in program_dict:
+                program_dict["exercises_by_day"] = program_dict.pop("days")
+            await Cache.workout.save_program(client.profile, program_dict)
+        except Exception as e:
+            logger.error(f"Program normalisation failed: {e}")
     data = await state.get_data()
     from bot.utils.exercises import format_full_program
 

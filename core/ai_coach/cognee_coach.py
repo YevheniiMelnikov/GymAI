@@ -6,65 +6,58 @@ import asyncio
 import warnings
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Any
 from pathlib import Path
+from uuid import uuid4
 
 from sqlalchemy.exc import SAWarning
-
 from loguru import logger
-from config.logger import configure_loguru
 
+from config.logger import configure_loguru
 from config.env_settings import settings
 from core.ai_coach.base import BaseAICoach
 from core.ai_coach.knowledge_loader import KnowledgeLoader
 from core.schemas import Client
 
-# Ensure the graph prompt path environment variable is set before importing
-# cognee so that its configuration picks up the correct value on import.
-
+# ────────────────────────── boilerplate ──────────────────────────
 default_prompt = os.environ.get("GRAPH_PROMPT_PATH", "./core/ai_coach/global_system_prompt.txt")
-prompt_file = Path(default_prompt).resolve()
-os.environ["GRAPH_PROMPT_PATH"] = prompt_file.as_posix()
+os.environ["GRAPH_PROMPT_PATH"] = Path(default_prompt).resolve().as_posix()
 
-# Silence repetitive SQLAlchemy warnings from dlt which clutter the logs
-warnings.filterwarnings(
-    "ignore",
-    message="Table 'file_metadata' already exists within the given MetaData",
-    category=SAWarning,
-)
-warnings.filterwarnings(
-    "ignore",
-    message="Table '_dlt_pipeline_state' already exists within the given MetaData",
-    category=SAWarning,
-)
-warnings.filterwarnings(
-    "ignore",
-    message="implicitly coercing SELECT object to scalar subquery",
-    category=SAWarning,
-)
-warnings.filterwarnings(
-    "ignore",
-    message="This declarative base already contains a class with the same class name",
-    category=SAWarning,
-)
-
-# Silence noisy warnings from langfuse when no API key is provided
+warnings.filterwarnings("ignore", category=SAWarning)
 logging.getLogger("langfuse").setLevel(logging.ERROR)
 
 import cognee  # noqa: E402
 from cognee.modules.data.exceptions import DatasetNotFoundError  # noqa: E402
-
+from cognee.modules.users.exceptions.exceptions import PermissionDeniedError  # noqa: E402
+from cognee.modules.users.methods.get_default_user import get_default_user  # noqa: E402
 
 os.environ.setdefault("LITELLM_LOG", "WARNING")
 os.environ.setdefault("LOG_LEVEL", "WARNING")
 
-
 LANGUAGE_NAMES = {"ua": "Ukrainian", "ru": "Russian", "eng": "English"}
 
-
 configure_loguru()
+logger.level("COGNEE", no=15, color="<cyan>")
+logging.getLogger("cognee").setLevel(logging.INFO)
 
 
+# ─────────────────────────── util helper ─────────────────────────
+async def _safe_add(text: str, dataset: str, user) -> tuple[str, bool]:
+    """Возвращает (dataset_id, created_now). При 403 создаём новый датасет."""
+    logger.debug(f"safe_add → dataset={dataset!r}")
+    if not text.strip():
+        return dataset, False
+    try:
+        info = await cognee.add(text, dataset_name=dataset, user=user)
+        return getattr(info, "dataset_id", dataset), True
+    except PermissionDeniedError:
+        new_name = f"{dataset}_{uuid4().hex[:8]}"
+        logger.warning(f"403 on {dataset}, retrying as {new_name}")
+        info = await cognee.add(text, dataset_name=new_name, user=user)
+        return getattr(info, "dataset_id", new_name), True
+
+
+# ────────────────────────── config dataclass ─────────────────────
 @dataclass
 class CogneeConfig:
     api_key: str
@@ -90,78 +83,72 @@ class CogneeConfig:
         cognee.config.set_vector_db_provider(self.vector_provider)
         cognee.config.set_vector_db_url(self.vector_url)
         cognee.config.set_graph_database_provider(self.graph_provider)
-        prompt_file = Path(self.graph_prompt_path).resolve()
-        if not prompt_file.is_file():
-            raise FileNotFoundError(f"System prompt file not found: {prompt_file}")
-        posix_path = prompt_file.as_posix()
-        os.environ["GRAPH_PROMPT_PATH"] = posix_path
-        cognee.config.set_llm_config({"graph_prompt_path": posix_path})
+
+        p = Path(self.graph_prompt_path).resolve().as_posix()
+        os.environ["GRAPH_PROMPT_PATH"] = p
+        cognee.config.set_llm_config({"graph_prompt_path": p})
 
         cognee.config.set_relational_db_config(
-            {
-                "db_host": self.db_host,
-                "db_port": self.db_port,
-                "db_username": self.db_user,
-                "db_password": self.db_password,
-                "db_name": self.db_name,
-                "db_path": "",
-                "db_provider": "postgres",
-            }
+            dict(
+                db_host=self.db_host,
+                db_port=self.db_port,
+                db_username=self.db_user,
+                db_password=self.db_password,
+                db_name=self.db_name,
+                db_path="",
+                db_provider="postgres",
+            )
         )
+        logger.success("AI coach successfully configured")
 
-        logger.info("Cognee successfully configured")
 
-
+# ───────────────────────────── main class ────────────────────────
 class CogneeCoach(BaseAICoach):
-    _configured: bool = False
+    _configured = False
     _loader: Optional[KnowledgeLoader] = None
+    _cognify_locks: dict[str, asyncio.Lock] = {}
+    _user: Optional[Any] = None
 
+    # ---------- bootstrap ----------
     @classmethod
     async def initialize(cls) -> None:
-        try:
-            cls._ensure_config()
-        except Exception as e:
-            logger.warning(f"Cognee initialization failed: {e}")
-            return
+        cls._ensure_config()
+        if cls._user is None:
+            cls._user = await get_default_user()
+            logger.debug(f"Cognee default user: {cls._user.id}")
 
-        process = await asyncio.create_subprocess_exec(
+        proc = await asyncio.create_subprocess_exec(
             sys.executable,
             "-m",
             "alembic",
             "upgrade",
             "head",
-            env={
-                **os.environ,
-                "DATABASE_URL": settings.VECTORDATABASE_URL,
-            },
+            env={**os.environ, "DATABASE_URL": settings.VECTORDATABASE_URL},
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )
-        await process.wait()
+        await proc.wait()
 
         try:
-            await cognee.search("ping")
+            await cognee.search("ping", user=cls._user)
         except Exception as e:
             logger.warning(f"Cognee ping failed: {e}")
-
-    @classmethod
-    def set_loader(cls, loader: KnowledgeLoader) -> None:
-        """Register a loader instance for fetching external knowledge."""
-        cls._loader = loader
+        logger.success("AI coach successfully configured")
 
     @classmethod
     async def init_loader(cls, loader: KnowledgeLoader) -> None:
-        """Register ``loader`` and refresh the knowledge base."""
         cls.set_loader(loader)
         await cls.refresh_knowledge_base()
 
     @classmethod
+    def set_loader(cls, loader: KnowledgeLoader) -> None:
+        cls._loader = loader
+
+    @classmethod
     def _ensure_config(cls) -> None:
-        """Ensure Cognee is configured."""
         if cls._configured:
             return
-
-        config = CogneeConfig(
+        CogneeConfig(
             api_key=settings.COGNEE_API_KEY,
             model=settings.COGNEE_MODEL,
             provider=settings.COGNEE_LLM_PROVIDER,
@@ -175,13 +162,19 @@ class CogneeCoach(BaseAICoach):
             db_user=settings.DB_USER,
             db_password=settings.DB_PASSWORD,
             db_name=settings.DB_NAME,
-        )
-        config.apply()
+        ).apply()
         cls._configured = True
 
+    # ---------- internal helpers ----------
+    @classmethod
+    async def _cognify_dataset(cls, dataset_id: str, user) -> None:
+        lock = cls._cognify_locks.setdefault(dataset_id, asyncio.Lock())
+        async with lock:
+            await cognee.cognify(datasets=[dataset_id], user=user)
+
+    # ---------- prompt helpers ----------
     @staticmethod
     def _extract_client_data(client: Client) -> str:
-        """Extract client data from the client object."""
         details = {
             "name": client.name,
             "gender": client.gender,
@@ -191,19 +184,32 @@ class CogneeCoach(BaseAICoach):
             "workout_experience": client.workout_experience,
             "workout_goals": client.workout_goals,
         }
-        parts = [f"{k}: {v}" for k, v in details.items() if v]
-        return "; ".join(parts)
+        return "; ".join(f"{k}: {v}" for k, v in details.items() if v)
 
     @staticmethod
     def _make_initial_prompt(client_data: str) -> str:
-        """Create the initial prompt based on the client data."""
-        return "\n".join(
-            [
-                "Memorize the following client profile information and use it as context for all future responses.",
-                client_data,
-            ]
+        return (
+            "Memorize the following client profile information and use it as "
+            "context for all future responses.\n" + client_data
         )
 
+    # ---------- dataset/context ----------
+    @classmethod
+    async def get_context(cls, chat_id: int, query: str) -> list:
+        """Создаём (или переименовываем) датасет и ищем уже по итоговому id."""
+        cls._ensure_config()
+        if cls._user is None:
+            await cls.initialize()
+        user = cls._user
+        base_name = f"chat_{chat_id}_{user.id}"
+        try:
+            ds_id, _ = await _safe_add("init", base_name, user)  # ensure exists / own
+            return await cognee.search(query, datasets=[ds_id], top_k=5, user=user)
+        except Exception as e:
+            logger.error(f"get_context failed: {e}")
+            return []
+
+    # ---------- main entry ----------
     @classmethod
     async def coach_request(
         cls,
@@ -215,66 +221,67 @@ class CogneeCoach(BaseAICoach):
     ) -> list:
         cls._ensure_config()
 
-        prompt_parts = []
-        if client is not None:
-            client_data = cls._extract_client_data(client)
-            if client_data:
-                prompt_parts.append(f"Client info: {client_data}")
+        parts: list[str] = []
+        if client:
+            cd = cls._extract_client_data(client)
+            if cd:
+                parts.append(f"Client info: {cd}")
             try:
                 from core.cache import Cache
 
-                program = await Cache.workout.get_program(client.profile, use_fallback=False)
-                prompt_parts.append(f"Latest program: {program.workout_type}, split {program.split_number}")
+                prg = await Cache.workout.get_program(client.profile, use_fallback=False)
+                parts.append(f"Latest program: {prg.workout_type}, split {prg.split_number}")
                 sub = await Cache.workout.get_latest_subscription(client.profile, use_fallback=False)
-                prompt_parts.append(f"Active subscription: {sub.workout_type} {sub.workout_days} period {sub.period}")
+                parts.append(f"Active subscription: {sub.workout_type} {sub.workout_days} period {sub.period}")
             except Exception:
                 pass
 
-        if chat_id is not None:
+        if chat_id:
             try:
-                history = await cls.get_context(chat_id, text)
-                if history:
-                    prompt_parts.append("\n".join(history))
+                hist = await cls.get_context(chat_id, text)
+                if hist:
+                    parts.append("\n".join(hist))
             except Exception:
                 pass
 
-        prompt_parts.append(text)
+        parts.append(text)
         if language:
-            lang_name = LANGUAGE_NAMES.get(language, language)
-            prompt_parts.append(f"Answer in {lang_name}.")
-        final_prompt = "\n".join(prompt_parts)
+            parts.append(f"Answer in {LANGUAGE_NAMES.get(language, language)}.")
+        final_prompt = "\n".join(parts)
 
-        dataset = "main_dataset"
-        if client is not None:
-            dataset = f"main_dataset_{client.id}"
-        logger.debug(
-            f"Adding prompt to dataset {dataset}: {final_prompt[:100]}"
-        )
-        dataset_info = await cognee.add(final_prompt, dataset_name=dataset)
-        dataset_id = str(getattr(dataset_info, "dataset_id", dataset))
-        logger.debug(
-            f"Running cognify on dataset {dataset_id}"
-        )
+        base = "main_dataset" if client is None else f"main_dataset_{client.id}"
+        if cls._user is None:
+            await cls.initialize()
+        user = cls._user
+        dataset = f"{base}_{user.id}"
+        logger.debug(f"Adding prompt to dataset {dataset}: {final_prompt[:100]}")
+
         try:
-            await cognee.cognify(datasets=[dataset_id])
-        except DatasetNotFoundError:
-            logger.warning("No datasets found to process")
+            ds_id, created = await _safe_add(final_prompt, dataset, user)
+            if created:
+                asyncio.create_task(cls._cognify_dataset(ds_id, user))
+        except PermissionDeniedError as e:
+            logger.error(f"Permission denied while adding data: {e}")
             return []
-        logger.debug(f"Searching dataset {dataset_id} for response")
+        except Exception as e:
+            logger.error(f"Failed to add data to dataset: {e}")
+            return []
+
         try:
-            return await cognee.search(final_prompt, datasets=[dataset_id])
+            return await cognee.search(final_prompt, datasets=[ds_id], user=user)
         except DatasetNotFoundError:
             logger.error("Search failed, dataset not found")
-            return []
+        except PermissionDeniedError as e:
+            logger.error(f"Permission denied during search: {e}")
+        return []
 
+    # ---------- knowledge base ----------
     @classmethod
     async def refresh_knowledge_base(cls) -> None:
-        """Reload external knowledge via the registered loader."""
         cls._ensure_config()
-        if cls._loader is None:
-            return
-        await cls._loader.refresh()
-        await cls.update_knowledge_base()
+        if cls._loader:
+            await cls._loader.refresh()
+            await cls.update_knowledge_base()
 
     @classmethod
     async def update_knowledge_base(cls) -> None:
@@ -283,53 +290,40 @@ class CogneeCoach(BaseAICoach):
             await cognee.cognify()
         except DatasetNotFoundError:
             logger.warning("No datasets found to process")
+        except PermissionDeniedError as e:
+            logger.error(f"Permission denied while updating knowledge base: {e}")
 
+    # ---------- misc helpers ----------
     @classmethod
     async def assign_client(cls, client: Client) -> None:
-        client_data = cls._extract_client_data(client)
-        prompt = cls._make_initial_prompt(client_data)
+        prompt = cls._make_initial_prompt(cls._extract_client_data(client))
         await cls.coach_request(prompt)
 
     @classmethod
     async def save_user_message(cls, text: str, chat_id: int, client_id: int) -> None:
-        """Persist user message in Cognee memory."""
         if not text.strip():
             return
         cls._ensure_config()
-        dataset = f"chat_{chat_id}"
-        info = await cognee.add(text, dataset_name=dataset)
-        dataset_id = str(getattr(info, "dataset_id", dataset))
-        try:
-            await cognee.cognify(datasets=[dataset_id])
-        except DatasetNotFoundError:
-            logger.warning("No datasets found to process")
+        if cls._user is None:
+            await cls.initialize()
+        user = cls._user
+        ds_id, created = await _safe_add(text, f"chat_{chat_id}_{user.id}", user)
+        if created:
+            asyncio.create_task(cls._cognify_dataset(ds_id, user))
 
+    # ---------- workout update ----------
     @classmethod
-    async def get_context(cls, chat_id: int, query: str) -> list:
-        """Retrieve context for ``query`` from chat history."""
+    async def process_workout_result(
+        cls,
+        client_id: int,
+        feedback: str,
+        language: str | None = None,
+    ) -> str:
         cls._ensure_config()
-        dataset = f"chat_{chat_id}"
         try:
-            info = await cognee.add("", dataset_name=dataset)
-            dataset_id = str(getattr(info, "dataset_id", dataset))
+            ctx = await cls.get_context(client_id, "workout")
         except Exception:
-            dataset_id = dataset
-        return await cognee.search(query, datasets=[dataset_id], top_k=5)
-
-    @classmethod
-    async def process_workout_result(cls, client_id: int, feedback: str, language: str | None = None) -> str:
-        """Generate an updated workout program based on ``feedback``."""
-
-        cls._ensure_config()
-        context = []
-        try:
-            context = await cls.get_context(client_id, "workout")
-        except Exception:
-            context = []
-
-        prompt_parts = [feedback]
-        if context:
-            prompt_parts.append("\n".join(context))
-        prompt_parts.append("Update the workout plan accordingly.")
-        response = await cls.coach_request("\n".join(prompt_parts), chat_id=client_id, language=language)
-        return response[0] if response else ""
+            ctx = []
+        prompt = "\n".join([feedback, *ctx, "Update the workout plan accordingly."])
+        resp = await cls.coach_request(prompt, chat_id=client_id, language=language)
+        return resp[0] if resp else ""

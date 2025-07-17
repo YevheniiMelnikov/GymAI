@@ -48,9 +48,7 @@ class Settings(BaseSettings):
     COGNEE_LLM_PROVIDER: Annotated[str, Field(default="openai")]
     VECTORDATABASE_PROVIDER: Annotated[str, Field(default="pgvector")]
     GRAPH_DATABASE_PROVIDER: Annotated[str, Field(default="networkx")]
-    GRAPH_PROMPT_PATH: Annotated[
-        str, Field(default="./core/ai_coach/global_system_prompt.txt")
-    ]
+    GRAPH_PROMPT_PATH: Annotated[str, Field(default="./core/ai_coach/global_system_prompt.txt")]
 
     BOT_TOKEN: str
     BOT_LINK: str

@@ -23,12 +23,11 @@ from core.cache import Cache
 from core.enums import ClientStatus
 from core.exceptions import ProfileNotFoundError, ClientNotFoundError
 from core.schemas import Profile, Client
-from core.services import APIService, ProfileService
+from core.services import APIService
 from bot.utils.chat import client_request
 from bot.utils.credits import required_credits
 from bot.utils.workout_plans import process_new_subscription, edit_subscription_days
 from bot.utils.menus import show_main_menu, show_my_profile_menu, send_policy_confirmation, show_balance_menu
-from bot.utils.ai_services import generate_program
 from bot.utils.profiles import update_profile_data, check_assigned_clients
 from bot.utils.text import get_state_and_message
 from bot.utils.other import delete_messages, set_bot_commands, answer_msg, del_msg, parse_price
@@ -480,9 +479,7 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
     # AI coach flow
     if data.get("ai_service"):
         client = Client.model_validate(data.get("client"))
-        service = data.get("ai_service", "program")
         required = int(data.get("required", 0))
-        workout_type = data.get("workout_type", "gym")
         wishes = message.text
         await state.update_data(wishes=wishes)
 
