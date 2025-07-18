@@ -27,8 +27,21 @@ def parse_program_text(program_text: str) -> tuple[list[DayExercises], int]:
     return days, len(days)
 
 
+def _extract_json(text: str) -> str | None:
+    """Return the first JSON object found within ``text``."""
+    match = re.search(r"\{.*\}", text, re.S)
+    if match:
+        return match.group(0)
+    return None
+
+
 def parse_program_json(program_json: str) -> ProgramResponse | None:
     """Validate and deserialize JSON program returned by the LLM."""
+    if not program_json:
+        return None
+    extracted = _extract_json(program_json)
+    if extracted:
+        program_json = extracted
     try:
         data = json.loads(program_json)
         return ProgramResponse.model_validate(data)
@@ -38,6 +51,11 @@ def parse_program_json(program_json: str) -> ProgramResponse | None:
 
 def parse_subscription_json(subscription_json: str) -> SubscriptionResponse | None:
     """Validate and deserialize JSON subscription plan returned by the LLM."""
+    if not subscription_json:
+        return None
+    extracted = _extract_json(subscription_json)
+    if extracted:
+        subscription_json = extracted
     try:
         data = json.loads(subscription_json)
         return SubscriptionResponse.model_validate(data)

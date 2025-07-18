@@ -10,6 +10,7 @@ from core.ai_coach.parsers import (
     parse_program_text,
     parse_program_json,
     parse_subscription_json,
+    _extract_json,
 )
 from core.ai_coach.schemas import ProgramRequest, SubscriptionRequest
 from loguru import logger
@@ -22,10 +23,10 @@ from core.services.internal import APIService
 
 def _normalise_program(raw: str) -> dict:
     """Extract and clean JSON workout program from ``raw`` text."""
-    m = re.search(r"\{.*\}", raw, re.S)
-    if not m:
+    extracted = _extract_json(raw)
+    if not extracted:
         raise ValueError("no JSON found")
-    data = json.loads(m.group(0))
+    data = json.loads(extracted)
     for day in data.get("days", []):
         day_val = str(day.get("day", ""))
         match = re.search(r"\d+", day_val)
