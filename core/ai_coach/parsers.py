@@ -44,6 +44,15 @@ def parse_program_json(program_json: str) -> ProgramResponse | None:
         program_json = extracted
     try:
         data = json.loads(program_json)
+        for day in data.get("days", []):
+            day_val = str(day.get("day", ""))
+            match = re.search(r"\d+", day_val)
+            if match:
+                day["day"] = match.group(0)
+            for ex in day.get("exercises", []):
+                sets = ex.get("sets")
+                if isinstance(sets, int):
+                    ex["sets"] = str(sets)
         return ProgramResponse.model_validate(data)
     except (json.JSONDecodeError, ValidationError):
         return None
@@ -58,6 +67,15 @@ def parse_subscription_json(subscription_json: str) -> SubscriptionResponse | No
         subscription_json = extracted
     try:
         data = json.loads(subscription_json)
+        for day in data.get("exercises", []):
+            day_val = str(day.get("day", ""))
+            match = re.search(r"\d+", day_val)
+            if match:
+                day["day"] = match.group(0)
+            for ex in day.get("exercises", []):
+                sets = ex.get("sets")
+                if isinstance(sets, int):
+                    ex["sets"] = str(sets)
         return SubscriptionResponse.model_validate(data)
     except (json.JSONDecodeError, ValidationError):
         return None
