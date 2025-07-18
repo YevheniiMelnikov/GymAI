@@ -1,6 +1,5 @@
 from decimal import Decimal
 import json
-import re
 from aiogram import Bot
 from aiogram.fsm.context import FSMContext
 
@@ -11,6 +10,7 @@ from core.ai_coach.parsers import (
     parse_program_json,
     parse_subscription_json,
     _extract_json,
+    _normalize_program_data,
 )
 from core.ai_coach.schemas import ProgramRequest, SubscriptionRequest
 from loguru import logger
@@ -27,15 +27,7 @@ def _normalise_program(raw: str) -> dict:
     if not extracted:
         raise ValueError("no JSON found")
     data = json.loads(extracted)
-    for day in data.get("days", []):
-        day_val = str(day.get("day", ""))
-        match = re.search(r"\d+", day_val)
-        if match:
-            day["day"] = match.group(0)
-        for ex in day.get("exercises", []):
-            sets = ex.get("sets")
-            if isinstance(sets, int):
-                ex["sets"] = str(sets)
+    _normalize_program_data(data)
     return data
 
 

@@ -35,6 +35,24 @@ def _extract_json(text: str) -> str | None:
     return None
 
 
+def _normalize_program_data(data: dict, *, key: str = "days") -> None:
+    """Normalize day identifiers and exercise fields in program JSON."""
+    for day in data.get(key, []):
+        day_val = str(day.get("day", ""))
+        match = re.search(r"\d+", day_val)
+        if match:
+            day["day"] = match.group(0)
+        for ex in day.get("exercises", []):
+            sets = ex.get("sets")
+            ex["sets"] = str(sets) if sets is not None else ""
+            reps = ex.get("reps")
+            if reps is None:
+                time_val = ex.pop("time", None)
+                ex["reps"] = str(time_val) if time_val is not None else ""
+            else:
+                ex["reps"] = str(reps)
+
+
 def parse_program_json(program_json: str) -> ProgramResponse | None:
     """Validate and deserialize JSON program returned by the LLM."""
     if not program_json:
@@ -44,15 +62,7 @@ def parse_program_json(program_json: str) -> ProgramResponse | None:
         program_json = extracted
     try:
         data = json.loads(program_json)
-        for day in data.get("days", []):
-            day_val = str(day.get("day", ""))
-            match = re.search(r"\d+", day_val)
-            if match:
-                day["day"] = match.group(0)
-            for ex in day.get("exercises", []):
-                sets = ex.get("sets")
-                if isinstance(sets, int):
-                    ex["sets"] = str(sets)
+        _normalize_program_data(data, key="days")
         return ProgramResponse.model_validate(data)
     except (json.JSONDecodeError, ValidationError):
         return None
@@ -67,15 +77,7 @@ def parse_subscription_json(subscription_json: str) -> SubscriptionResponse | No
         subscription_json = extracted
     try:
         data = json.loads(subscription_json)
-        for day in data.get("exercises", []):
-            day_val = str(day.get("day", ""))
-            match = re.search(r"\d+", day_val)
-            if match:
-                day["day"] = match.group(0)
-            for ex in day.get("exercises", []):
-                sets = ex.get("sets")
-                if isinstance(sets, int):
-                    ex["sets"] = str(sets)
+        _normalize_program_data(data, key="exercises")
         return SubscriptionResponse.model_validate(data)
     except (json.JSONDecodeError, ValidationError):
         return None
