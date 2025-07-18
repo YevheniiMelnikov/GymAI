@@ -52,7 +52,7 @@ async def _safe_add(text: str, dataset: str, user) -> tuple[str, bool]:
         return getattr(info, "dataset_id", dataset), True
     except PermissionDeniedError:
         new_name = f"{dataset}_{uuid4().hex[:8]}"
-        logger.warning(f"403 on {dataset}, retrying as {new_name}")
+        logger.debug(f"403 on {dataset}, retrying as {new_name}")
         info = await cognee.add(text, dataset_name=new_name, user=user)
         return getattr(info, "dataset_id", new_name), True
 
@@ -99,7 +99,6 @@ class CogneeConfig:
                 db_provider="postgres",
             )
         )
-        logger.success("AI coach successfully configured")
 
 
 # ───────────────────────────── main class ────────────────────────

@@ -34,8 +34,8 @@ def _normalise_program(raw: str) -> dict:
             day["day"] = match.group(0)
         for ex in day.get("exercises", []):
             sets = ex.get("sets")
-            if isinstance(sets, str) and sets.isdigit():
-                ex["sets"] = int(sets)
+            if isinstance(sets, int):
+                ex["sets"] = str(sets)
     return data
 
 
