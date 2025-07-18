@@ -288,7 +288,10 @@ class CogneeCoach(BaseAICoach):
             logger.error(f"Permission denied while updating knowledge base: {e}")
 
     # Backwards compatibility
-    update_knowledge_base = refresh_knowledge_base
+    @classmethod
+    async def update_knowledge_base(cls) -> None:
+        """Alias for ``refresh_knowledge_base`` kept for legacy calls."""
+        await cls.refresh_knowledge_base()
 
     # ---------- misc helpers ----------
     @classmethod
