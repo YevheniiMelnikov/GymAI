@@ -276,20 +276,19 @@ class CogneeCoach(BaseAICoach):
     # ---------- knowledge base ----------
     @classmethod
     async def refresh_knowledge_base(cls) -> None:
+        """Reload external knowledge and rebuild the Cognee index."""
         cls._ensure_config()
         if cls._loader:
             await cls._loader.refresh()
-            await cls.update_knowledge_base()
-
-    @classmethod
-    async def update_knowledge_base(cls) -> None:
-        cls._ensure_config()
         try:
             await cognee.cognify()
         except DatasetNotFoundError:
             logger.warning("No datasets found to process")
         except PermissionDeniedError as e:
             logger.error(f"Permission denied while updating knowledge base: {e}")
+
+    # Backwards compatibility
+    update_knowledge_base = refresh_knowledge_base
 
     # ---------- misc helpers ----------
     @classmethod
