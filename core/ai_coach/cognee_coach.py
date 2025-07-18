@@ -132,7 +132,6 @@ class CogneeCoach(BaseAICoach):
             await cognee.search("ping", user=cls._user)
         except Exception as e:
             logger.warning(f"Cognee ping failed: {e}")
-        logger.success("AI coach successfully configured")
 
     @classmethod
     async def init_loader(cls, loader: KnowledgeLoader) -> None:
