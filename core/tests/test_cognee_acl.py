@@ -26,7 +26,7 @@ async def test_case_success_create_and_search(monkeypatch):
     monkeypatch.setattr(coach.cognee, "cognify", fake_cognify)
     monkeypatch.setattr(coach.cognee, "search", fake_search)
 
-    await coach.CogneeCoach.coach_request("hi")
+    await coach.CogneeCoach.make_request("hi")
 
     assert calls["dataset_name"] == f"main_dataset_{user.id}"
     assert calls["cognify"] == ["ds1"]
@@ -50,7 +50,7 @@ async def test_case_conflict_existing_dataset(monkeypatch):
     monkeypatch.setattr(coach.cognee, "cognify", lambda datasets, user=None: None)
     monkeypatch.setattr(coach.cognee, "search", lambda *a, **k: [])
 
-    await coach.CogneeCoach.coach_request("hello")
+    await coach.CogneeCoach.make_request("hello")
 
     assert calls["dataset_names"][0] == f"main_dataset_{user.id}"
     assert calls["dataset_names"][1].startswith(f"main_dataset_{user.id}_")

@@ -46,7 +46,6 @@ async def generate_program(client: Client, workout_type: str, wishes: str, state
         workout_type=workout_type,
     )
     response = await ai_coach_request(text=prompt, client=client, chat_id=client.id, language=lang)
-    logger.debug(f"AI coach response: {response}")
     program_raw = response[0] if response else ""
     program_dto = parse_program_json(program_raw)
     if program_dto is not None:
@@ -155,6 +154,6 @@ async def generate_subscription(
                 "exercises": [d.model_dump() for d in exercises],
             },
         )
-        logger.info(f"Subscription created for client_id={client.id}")
+        logger.info(f"New AI-coach subscription generated for client_id={client.id}")
 
     return

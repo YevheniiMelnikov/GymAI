@@ -296,7 +296,7 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     wishes = data.get("wishes", "")
     period = data.get("period", "1m")
     bot = cast(Bot, callback_query.bot)
-    await answer_msg(callback_query, msg_text("waiting_for_subscription", lang))
+    await answer_msg(callback_query, msg_text("request_in_progress", lang))
     await show_main_menu(callback_query.message, profile, state)
     await generate_subscription(client, workout_type, wishes, period, days, state, bot)
 

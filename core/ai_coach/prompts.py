@@ -33,3 +33,7 @@ SUBSCRIPTION_PROMPT = (
     "  ]\n"
     "}}"
 )
+
+INITIAL_PROMPT = (
+    "Memorize the following client profile information and use it as context for all future responses.\n {client_data}"
+)

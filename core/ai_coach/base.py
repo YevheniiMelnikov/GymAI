@@ -17,14 +17,14 @@ class BaseAICoach(ABC):
 
     @classmethod
     @abstractmethod
-    async def coach_request(
+    async def make_request(
         cls,
         text: str,
         *,
         client: Client | None = None,
         chat_id: int | None = None,
         language: str | None = None,
-    ) -> None:
+    ) -> list[str]:
         """Handle an incoming user message."""
 
     @classmethod

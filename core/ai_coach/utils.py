@@ -43,7 +43,7 @@ async def _wait_for_coach() -> None:
         await coach_ready_event.wait()
 
 
-async def ai_coach_request(*args: Any, **kwargs: Any) -> list | None:
+async def ai_coach_request(*args: Any, **kwargs: Any) -> list[str] | None:
     text = kwargs.get("text") or (args[0] if args else None)
     client: Client | None = kwargs.get("client")
     chat_id: int | None = kwargs.get("chat_id")
@@ -52,7 +52,7 @@ async def ai_coach_request(*args: Any, **kwargs: Any) -> list | None:
         return None
     await _wait_for_coach()
     coach = get_ai_coach()
-    return await coach.coach_request(str(text), client=client, chat_id=chat_id, language=language)
+    return await coach.make_request(str(text), client=client, chat_id=chat_id, language=language)
 
 
 async def ai_assign_client(*args: Any, **kwargs: Any) -> None:
