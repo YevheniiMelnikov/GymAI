@@ -67,6 +67,8 @@ def parse_program_json(program_json: str) -> ProgramResponse | None:
     try:
         data = json.loads(program_json)
         _normalize_program_data(data, key="days")
+        if "days" in data:
+            data["days"] = sorted(data["days"], key=lambda d: int(d.get("day", 0)))
         return ProgramResponse.model_validate(data)
     except (json.JSONDecodeError, ValidationError):
         return None
@@ -82,6 +84,8 @@ def parse_subscription_json(subscription_json: str) -> SubscriptionResponse | No
     try:
         data = json.loads(subscription_json)
         _normalize_program_data(data, key="exercises")
+        if "exercises" in data:
+            data["exercises"] = sorted(data["exercises"], key=lambda d: d.get("day", ""))
         return SubscriptionResponse.model_validate(data)
     except (json.JSONDecodeError, ValidationError):
         return None

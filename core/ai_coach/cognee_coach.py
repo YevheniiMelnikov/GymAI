@@ -45,7 +45,7 @@ logging.getLogger("cognee").setLevel(logging.INFO)
 # ─────────────────────────── util helper ─────────────────────────
 async def _safe_add(text: str, dataset: str, user) -> tuple[str, bool]:
     """Возвращает (dataset_id, created_now). При 403 создаём новый датасет."""
-    logger.debug(f"safe_add → dataset={dataset!r}")
+    logger.trace(f"safe_add → dataset={dataset!r}")
     if not text.strip():
         return dataset, False
     try:
@@ -53,7 +53,7 @@ async def _safe_add(text: str, dataset: str, user) -> tuple[str, bool]:
         return getattr(info, "dataset_id", dataset), True
     except PermissionDeniedError:
         new_name = f"{dataset}_{uuid4().hex[:8]}"
-        logger.debug(f"403 on {dataset}, retrying as {new_name}")
+        logger.trace(f"403 on {dataset}, retrying as {new_name}")
         info = await cognee.add(text, dataset_name=new_name, user=user)
         return getattr(info, "dataset_id", new_name), True
 
@@ -115,7 +115,7 @@ class CogneeCoach(BaseAICoach):
         cls._ensure_config()
         if cls._user is None:
             cls._user = await get_default_user()
-            logger.debug(f"Cognee default user: {cls._user.id}")
+            logger.trace(f"Cognee default user: {cls._user.id}")
 
         proc = await asyncio.create_subprocess_exec(
             sys.executable,
@@ -245,7 +245,9 @@ class CogneeCoach(BaseAICoach):
 
         parts.append(text)
         if language:
-            parts.append(f"Answer in {LANGUAGE_NAMES.get(language, language)}.")
+            parts.append(
+                f"Answer strictly in {LANGUAGE_NAMES.get(language, language)}."
+            )
         final_prompt = "\n".join(parts)
 
         base = "main_dataset" if client is None else f"main_dataset_{client.id}"
@@ -253,7 +255,7 @@ class CogneeCoach(BaseAICoach):
             await cls.initialize()
         user = cls._user
         dataset = f"{base}_{user.id}"
-        logger.debug(f"Adding prompt to dataset {dataset}: {final_prompt[:100]}")
+        logger.trace(f"Adding prompt to dataset {dataset}: {final_prompt[:100]}")
 
         try:
             ds_id, created = await _safe_add(final_prompt, dataset, user)

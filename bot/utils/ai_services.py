@@ -3,6 +3,8 @@ import json
 from aiogram import Bot
 from aiogram.fsm.context import FSMContext
 
+from bot.states import States
+
 from core.ai_coach.utils import ai_coach_request, ai_assign_client
 from core.ai_coach.prompts import PROGRAM_PROMPT, SUBSCRIPTION_PROMPT
 from core.ai_coach.parsers import (
@@ -70,6 +72,7 @@ async def generate_program(client: Client, workout_type: str, wishes: str, state
             if "days" in program_dict and "exercises_by_day" not in program_dict:
                 program_dict["exercises_by_day"] = program_dict.pop("days")
             await Cache.workout.save_program(client.profile, program_dict)
+            logger.info(f"Program generated for client_id={client.id}")
         except Exception as e:
             logger.error(f"Program normalisation failed: {e}")
     data = await state.get_data()
@@ -77,6 +80,13 @@ async def generate_program(client: Client, workout_type: str, wishes: str, state
 
     program_text = await format_program(exercises, day=0)
     await send_program(client, data.get("lang", "ua"), program_text, state, bot)
+    await state.update_data(
+        exercises=[d.model_dump() for d in exercises],
+        split=len(exercises),
+        day_index=0,
+        client=True,
+    )
+    await state.set_state(States.program_view)
 
 
 async def generate_subscription(
@@ -133,5 +143,6 @@ async def generate_subscription(
                 "exercises": [d.model_dump() for d in exercises],
             },
         )
+        logger.info(f"Subscription created for client_id={client.id}")
 
     return
