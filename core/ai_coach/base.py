@@ -47,7 +47,6 @@ class BaseAICoach(ABC):
         """Fetch external knowledge and rebuild the knowledge base."""
         raise NotImplementedError
 
-
     @classmethod
     @abstractmethod
     async def process_workout_result(cls, client_id: int, feedback: str, language: str | None = None) -> str:

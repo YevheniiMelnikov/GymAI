@@ -245,9 +245,7 @@ class CogneeCoach(BaseAICoach):
 
         parts.append(text)
         if language:
-            parts.append(
-                f"Answer strictly in {LANGUAGE_NAMES.get(language, language)}."
-            )
+            parts.append(f"Answer strictly in {LANGUAGE_NAMES.get(language, language)}.")
         final_prompt = "\n".join(parts)
 
         base = "main_dataset" if client is None else f"main_dataset_{client.id}"
@@ -289,7 +287,6 @@ class CogneeCoach(BaseAICoach):
             logger.warning("No datasets found to process")
         except PermissionDeniedError as e:
             logger.error(f"Permission denied while updating knowledge base: {e}")
-
 
     # ---------- misc helpers ----------
     @classmethod

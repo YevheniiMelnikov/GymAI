@@ -189,10 +189,12 @@ def serialize_day_exercises(exercises: list[DayExercises]) -> list[dict[str, Any
     result: list[dict[str, Any]] = []
     for day in exercises:
         if isinstance(day, DayExercises):
-            result.append({
-                "day": day.day,
-                "exercises": [e.model_dump() for e in day.exercises],
-            })
+            result.append(
+                {
+                    "day": day.day,
+                    "exercises": [e.model_dump() for e in day.exercises],
+                }
+            )
     return result
 
 
