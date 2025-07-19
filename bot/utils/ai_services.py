@@ -19,7 +19,8 @@ from loguru import logger
 from core.cache import Cache
 from core.schemas import Client
 from bot.utils.workout_plans import _next_payment_date
-from bot.utils.chat import send_program
+from bot.utils.chat import send_program, send_message
+from bot.texts.text_manager import msg_text
 from core.services.internal import APIService
 
 
@@ -53,6 +54,17 @@ async def generate_program(client: Client, workout_type: str, wishes: str, state
         split_number = len(exercises)
     else:
         exercises, split_number = parse_program_text(program_raw)
+
+    if not exercises:
+        await send_message(
+            recipient=client,
+            text=msg_text("ai_program_error", lang),
+            bot=bot,
+            state=state,
+            include_incoming_message=False,
+        )
+        logger.error("Program parsing produced no exercises")
+        return
     saved = await APIService.workout.save_program(client.id, exercises, split_number, wishes)
     if saved:
         try:

@@ -23,7 +23,12 @@ def parse_program_text(program_text: str) -> tuple[list[DayExercises], int]:
             if not line:
                 continue
             exercises.append(Exercise(name=line, sets="", reps=""))
-        days.append(DayExercises(day=f"day_{day_num}", exercises=exercises))
+        # normalize day numbering to start from zero
+        try:
+            day_index = str(int(day_num) - 1)
+        except ValueError:
+            day_index = day_num
+        days.append(DayExercises(day=day_index, exercises=exercises))
     return days, len(days)
 
 

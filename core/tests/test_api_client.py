@@ -1,21 +1,9 @@
 import httpx
 import pytest
-import importlib.util
-from pathlib import Path
 from unittest.mock import Mock
 
 from core.exceptions import UserServiceError
-
-spec = importlib.util.spec_from_file_location(
-    "api_client", Path(__file__).resolve().parents[1] / "services" / "api_client.py"
-)
-if spec is None:
-    raise ImportError("Could not find module spec for api_client")
-module = importlib.util.module_from_spec(spec)
-if spec.loader is None:
-    raise ImportError("Module spec has no loader")
-spec.loader.exec_module(module)
-APIClient = module.APIClient
+from core.services.internal.api_client import APIClient
 
 
 class DummyResponse:

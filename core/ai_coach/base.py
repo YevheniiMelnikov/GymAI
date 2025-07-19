@@ -47,10 +47,6 @@ class BaseAICoach(ABC):
         """Fetch external knowledge and rebuild the knowledge base."""
         raise NotImplementedError
 
-    @classmethod
-    async def update_knowledge_base(cls) -> None:
-        """Re-index knowledge after load (override to use)."""
-        raise NotImplementedError
 
     @classmethod
     @abstractmethod
