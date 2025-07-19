@@ -11,7 +11,7 @@ PROGRAM_PROMPT = (
     "{{\n"
     '  "days": [\n'
     '    {{"day": "day_1", "exercises": [\n'
-    '      {{"name": "Push ups", "sets": "3", "reps": "12"}}\n'
+    '      {{"name": "Bench Press", "sets": "3", "reps": "10", "weight": "80"}}\n'
     "    ]}}\n"
     "  ]\n"
     "}}"
@@ -29,7 +29,7 @@ SUBSCRIPTION_PROMPT = (
     "{{\n"
     '  "workout_days": ["monday", "wednesday"],\n'
     '  "exercises": [\n'
-    '    {{"day": "monday", "exercises": [{{"name": "Squats", "sets": "3", "reps": "10"}}]}}\n'
+    '    {{"day": "monday", "exercises": [{{"name": "Dumbbell Rows", "sets": "3", "reps": "12", "weight": "20"}}]}}\n'
     "  ]\n"
     "}}"
 )
