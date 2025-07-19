@@ -73,9 +73,9 @@ async def generate_program(client: Client, workout_type: str, wishes: str, state
         except Exception as e:
             logger.error(f"Program normalisation failed: {e}")
     data = await state.get_data()
-    from bot.utils.exercises import format_full_program
+    from bot.utils.exercises import format_program
 
-    program_text = await format_full_program(exercises)
+    program_text = await format_program(exercises, day=0)
     await send_program(client, data.get("lang", "ua"), program_text, state, bot)
 
 

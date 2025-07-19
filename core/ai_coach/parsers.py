@@ -41,7 +41,8 @@ def _normalize_program_data(data: dict, *, key: str = "days") -> None:
         day_val = str(day.get("day", ""))
         match = re.search(r"\d+", day_val)
         if match:
-            day["day"] = match.group(0)
+            day_num = int(match.group(0))
+            day["day"] = str(day_num - 1)
         for ex in day.get("exercises", []):
             sets = ex.get("sets")
             ex["sets"] = str(sets) if sets is not None else ""
@@ -51,6 +52,9 @@ def _normalize_program_data(data: dict, *, key: str = "days") -> None:
                 ex["reps"] = str(time_val) if time_val is not None else ""
             else:
                 ex["reps"] = str(reps)
+            weight = ex.get("weight")
+            if weight is not None:
+                ex["weight"] = str(weight)
 
 
 def parse_program_json(program_json: str) -> ProgramResponse | None:

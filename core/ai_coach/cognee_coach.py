@@ -37,7 +37,8 @@ os.environ.setdefault("LOG_LEVEL", "WARNING")
 LANGUAGE_NAMES = {"ua": "Ukrainian", "ru": "Russian", "eng": "English"}
 
 configure_loguru()
-logger.level("COGNEE", no=15, color="<cyan>")
+# suppress verbose edge logs from Cognee
+logger.level("COGNEE", no=45, color="<cyan>")
 logging.getLogger("cognee").setLevel(logging.INFO)
 
 
