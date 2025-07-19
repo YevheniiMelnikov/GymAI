@@ -38,15 +38,15 @@ def configure_loguru():
 
 def _suppress_third_party_logs():
     suppress_map = {
-        "cognee": "WARNING",
-        "cognee.shared.logging_utils": "ERROR",
+        "cognee": "ERROR",
+        "cognee.shared.logging_utils": "CRITICAL",
         "litellm": "WARNING",
         "LiteLLM": "WARNING",
         "LiteLLMEmbeddingEngine": "WARNING",
         "openai": "WARNING",
         "stainless_sdk": "WARNING",
         "instructor": "WARNING",
-        "langfuse": "WARNING",
+        "langfuse": "ERROR",
         "google": "WARNING",
         "googleapiclient": "WARNING",
         "httpx": "WARNING",

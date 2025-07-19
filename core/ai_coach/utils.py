@@ -34,7 +34,7 @@ async def init_ai_coach(ai_coach: type[BaseAICoach], knowledge_loader: Knowledge
     if knowledge_loader is not None:
         await ai_coach.init_loader(knowledge_loader)
 
-    logger.info(f"AI coach {ai_coach.__name__} initialized")
+    logger.success("AI coach initialized")
     coach_ready_event.set()
 
 

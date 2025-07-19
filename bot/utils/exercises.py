@@ -184,8 +184,18 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
         await del_msg(callback_query.message)
 
 
-def serialize_day_exercises(exercises: list[DayExercises]) -> dict[str, list[dict[str, Any]]]:
-    return {day.day: [e.model_dump() for e in day.exercises] for day in exercises if isinstance(day, DayExercises)}
+def serialize_day_exercises(exercises: list[DayExercises]) -> list[dict[str, Any]]:
+    """Serialize a list of ``DayExercises`` to plain dictionaries."""
+    result: list[dict[str, Any]] = []
+    for day in exercises:
+        if isinstance(day, DayExercises):
+            result.append(
+                {
+                    "day": day.day,
+                    "exercises": [e.model_dump() for e in day.exercises],
+                }
+            )
+    return result
 
 
 async def format_program(exercises: list[DayExercises], day: int) -> str:
