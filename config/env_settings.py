@@ -90,6 +90,8 @@ class Settings(BaseSettings):
     LARGE_AI_SUBSCRIPTION_PRICE: Decimal = Decimal("2500")
     ASK_AI_PRICE: Decimal = Decimal("10")
 
+    AI_GENERATION_RETRIES: int = 3
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

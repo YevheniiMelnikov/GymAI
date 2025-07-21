@@ -6,6 +6,7 @@ from aiogram.fsm.context import FSMContext
 from bot.states import States
 
 from core.ai_coach.utils import ai_coach_request, ai_assign_client
+from config.env_settings import settings
 from core.ai_coach.prompts import PROGRAM_PROMPT, SUBSCRIPTION_PROMPT
 from core.ai_coach.parsers import (
     parse_program_text,
@@ -45,9 +46,14 @@ async def generate_program(client: Client, workout_type: str, wishes: str, state
         wishes=wishes,
         workout_type=workout_type,
     )
-    response = await ai_coach_request(text=prompt, client=client, chat_id=client.id, language=lang)
-    program_raw = response[0] if response else ""
-    program_dto = parse_program_json(program_raw)
+    program_raw = ""
+    program_dto = None
+    for _ in range(settings.AI_GENERATION_RETRIES):
+        response = await ai_coach_request(text=prompt, client=client, chat_id=client.id, language=lang)
+        program_raw = response[0] if response else ""
+        program_dto = parse_program_json(program_raw)
+        if program_dto is not None:
+            break
     if program_dto is not None:
         exercises = program_dto.days
         split_number = len(exercises)
@@ -126,9 +132,14 @@ async def generate_subscription(
         workout_days=", ".join(workout_days),
         workout_type=workout_type,
     )
-    response = await ai_coach_request(text=prompt, client=client, chat_id=client.id, language=lang)
-    sub_raw = response[0] if response else ""
-    sub_dto = parse_subscription_json(sub_raw)
+    sub_raw = ""
+    sub_dto = None
+    for _ in range(settings.AI_GENERATION_RETRIES):
+        response = await ai_coach_request(text=prompt, client=client, chat_id=client.id, language=lang)
+        sub_raw = response[0] if response else ""
+        sub_dto = parse_subscription_json(sub_raw)
+        if sub_dto is not None:
+            break
     exercises = sub_dto.exercises if sub_dto is not None else []
     sub_id = await APIService.workout.create_subscription(
         client_profile_id=client.id,

@@ -24,6 +24,15 @@ from core.ai_coach.knowledge_loader import KnowledgeLoader
 from core.ai_coach.prompts import INITIAL_PROMPT
 from core.schemas import Client
 
+
+def _patch_cognee() -> None:
+    """Fix issues in Cognee's graph ledger ID generation."""
+    try:
+        from cognee.modules.data.models.graph_relationship_ledger import GraphRelationshipLedger
+        GraphRelationshipLedger.__table__.c.id.default = uuid4
+    except Exception as e:
+        logger.debug(f"GraphRelationshipLedger patch failed: {e}")
+
 # Constants
 LANGUAGE_NAMES = {"ua": "Ukrainian", "ru": "Russian", "eng": "English"}
 
@@ -53,6 +62,7 @@ def configure_logging() -> None:
 # Initialize environment and logging at import
 configure_environment()
 configure_logging()
+_patch_cognee()
 
 
 async def _safe_add(text: str, dataset: str, user: Any) -> Tuple[str, bool]:  # (dataset_id, created_now)
