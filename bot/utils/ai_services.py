@@ -45,9 +45,14 @@ async def generate_program(client: Client, workout_type: str, wishes: str, state
         wishes=wishes,
         workout_type=workout_type,
     )
-    response = await ai_coach_request(text=prompt, client=client, chat_id=client.id, language=lang)
-    program_raw = response[0] if response else ""
-    program_dto = parse_program_json(program_raw)
+    program_raw = ""
+    program_dto = None
+    for _ in range(3):
+        response = await ai_coach_request(text=prompt, client=client, chat_id=client.id, language=lang)
+        program_raw = response[0] if response else ""
+        program_dto = parse_program_json(program_raw)
+        if program_dto is not None:
+            break
     if program_dto is not None:
         exercises = program_dto.days
         split_number = len(exercises)
