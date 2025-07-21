@@ -29,7 +29,7 @@ def _patch_cognee() -> None:
     """Fix issues in Cognee's graph ledger ID generation."""
     try:
         from cognee.modules.data.models.graph_relationship_ledger import GraphRelationshipLedger
-        GraphRelationshipLedger.id.default = uuid4
+        GraphRelationshipLedger.__table__.c.id.default = uuid4
     except Exception as e:
         logger.debug(f"GraphRelationshipLedger patch failed: {e}")
 
