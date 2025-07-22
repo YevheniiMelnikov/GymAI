@@ -7,7 +7,11 @@ from bot.states import States
 
 from core.ai_coach.utils import ai_coach_request
 from config.env_settings import settings
-from core.ai_coach.prompts import PROGRAM_PROMPT, SUBSCRIPTION_PROMPT
+from core.ai_coach.prompts import (
+    PROGRAM_PROMPT,
+    SUBSCRIPTION_PROMPT,
+    SYSTEM_MESSAGE,
+)
 from core.ai_coach.parsers import (
     parse_program_text,
     parse_program_json,
@@ -18,6 +22,7 @@ from core.ai_coach.parsers import (
 from core.ai_coach.schemas import ProgramRequest, SubscriptionRequest
 from loguru import logger
 from core.cache import Cache
+from core.exceptions import ProgramNotFoundError
 from core.schemas import Client
 from bot.utils.workout_plans import _next_payment_date
 from bot.utils.chat import send_program, send_message
@@ -39,11 +44,27 @@ async def generate_program(client: Client, workout_type: str, wishes: str, state
     req = ProgramRequest(workout_type=workout_type, wishes=wishes)
     data = await state.get_data()
     lang = data.get("lang")
-    prompt = PROGRAM_PROMPT.format(
+    details = {
+        "name": client.name,
+        "gender": client.gender,
+        "born_in": client.born_in,
+        "weight": client.weight,
+        "health_notes": client.health_notes,
+        "workout_experience": client.workout_experience,
+        "workout_goals": client.workout_goals,
+    }
+    client_profile = json.dumps({k: v for k, v in details.items() if v is not None}, ensure_ascii=False)
+    try:
+        prev_program = await Cache.workout.get_latest_program(client.profile, use_fallback=False)
+        previous_program = json.dumps([d.model_dump() for d in prev_program.exercises_by_day], ensure_ascii=False)
+    except ProgramNotFoundError:
+        previous_program = "[]"
+
+    prompt = SYSTEM_MESSAGE + "\n\n" + PROGRAM_PROMPT.format(
+        client_profile=client_profile,
+        previous_program=previous_program,
         request=req.model_dump_json(indent=2),
         language=lang,
-        wishes=wishes,
-        workout_type=workout_type,
     )
     program_raw = ""
     program_dto = None

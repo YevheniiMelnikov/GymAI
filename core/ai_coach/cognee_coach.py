@@ -8,6 +8,7 @@ import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional, Tuple
+import json
 from uuid import uuid4
 
 import cognee
@@ -233,7 +234,8 @@ class CogneeCoach(BaseAICoach):
             "workout_experience": client.workout_experience,
             "workout_goals": client.workout_goals,
         }
-        return "; ".join(f"{k}: {v}" for k, v in details.items() if v)
+        clean = {k: v for k, v in details.items() if v is not None}
+        return json.dumps(clean, ensure_ascii=False)
 
     @staticmethod
     def _make_initial_prompt(client_data: str) -> str:
@@ -282,32 +284,7 @@ class CogneeCoach(BaseAICoach):
         cls._ensure_config()
         user = await cls._get_user()
 
-        parts: list[str] = []
-        if client:
-            if client_info := cls._extract_client_data(client):
-                parts.append(f"Client info: {client_info}")
-            try:
-                program = await Cache.workout.get_latest_program(client.profile, use_fallback=False)
-                parts.append(f"Latest program: {program.exercises_by_day}")
-            except ProgramNotFoundError:
-                pass
-            try:
-                subscription = await Cache.workout.get_latest_subscription(client.profile, use_fallback=False)
-                parts.append(f"Latest subscription: {subscription.exercises}")
-            except SubscriptionNotFoundError:
-                pass
-
-        if chat_id is not None:
-            if chat_history := await cls.get_context(chat_id, text):
-                parts.append("\n".join(chat_history))
-
-        parts.append(text)
-        if language:
-            languages = {"ua": "Ukrainian", "ru": "Russian", "eng": "English"}
-            lang_name = languages.get(language)
-            parts.append(f"Answer STRICTLY in {lang_name}!")
-
-        final_prompt = "\n".join(parts)
+        final_prompt = text
         print(f"Final prompt: {final_prompt}")
         dataset_base = "main_dataset" if client is None else f"main_dataset_{client.id}"
         dataset_name = f"{dataset_base}_{user.id}"

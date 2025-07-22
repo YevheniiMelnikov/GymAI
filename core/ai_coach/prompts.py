@@ -1,23 +1,22 @@
+SYSTEM_MESSAGE = (
+    "You are an experienced fitness coach. Use your expert knowledge, client "
+    "history, and structured data to generate an individualized gym workout "
+    "plan."
+)
+
 PROGRAM_PROMPT = """
-    You are an experienced fitness coach. Use your knowledge base, previous 
-    dialogue history and the saved client profile to craft a workout program.
-    Workout type: {workout_type}. Client wishes: {wishes}
-    Respond exclusively in the client's language: {language}. Use this language for all text.
-    Include an estimated working weight for each weighted exercise when possible.
-    The request parameters are provided as JSON below. Respond strictly with 
-    JSON compatible with the `ProgramResponse` Pydantic model. The reply MUST 
-    contain only valid JSON starting with '{{' and ending with '}}' and no extra 
-    text.
-    Request:
-    {request}
-    Example response:
-    {{
-      "days": [
-        {{"day": "day_1", "exercises": [
-          {{"name": "Bench Press", "sets": "3", "reps": "10", "weight": "80"}}
-        ]}}
-      ]
-    }}
+Input:
+{{
+  "client_profile": {client_profile},
+  "previous_program": {previous_program},
+  "request": {request}
+}}
+
+Instructions:
+- Include an estimated working weight for each weighted exercise where possible.
+- Respond strictly in the client's language: {language}
+- Return only valid JSON compatible with the ProgramResponse Pydantic model.
+- The reply MUST start with '{{' and end with '}}' — no extra text.
 """
 
 SUBSCRIPTION_PROMPT = """
