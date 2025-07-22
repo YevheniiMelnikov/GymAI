@@ -16,7 +16,7 @@ from config.env_settings import settings
 from core.cache import Cache
 from core.schemas import Coach, Profile, Client
 from core.enums import CoachType
-from core.ai_coach.utils import ai_coach_request, ai_assign_client
+from core.ai_coach.utils import ai_coach_request
 from core.services import APIService
 from bot.utils.text import format_new_client_message, get_client_page, get_workout_types
 from core.services import avatar_manager
@@ -171,9 +171,6 @@ async def contact_client(callback_query: CallbackQuery, profile: Profile, profil
 
 
 async def client_request(coach: Coach, client: Client, data: dict[str, Any], bot: Bot) -> None:
-    if coach.coach_type == CoachType.ai:
-        await ai_assign_client(client)
-        return
     coach_profile = await APIService.profile.get_profile(coach.profile)
     if coach_profile is None:
         from loguru import logger

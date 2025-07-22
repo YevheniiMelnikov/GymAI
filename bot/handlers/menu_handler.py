@@ -19,7 +19,9 @@ from bot.keyboards import (
 )
 from bot.states import States
 from bot.texts.text_manager import msg_text
+from core.ai_coach.utils import ai_assign_client
 from core.cache import Cache
+from core.enums import CoachType
 from core.schemas import Coach, Client, Profile
 from bot.utils.chat import contact_client, process_feedback_content
 from bot.utils.menus import (
@@ -237,6 +239,11 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
     await Cache.client.update_client(client.profile, {"credits": client.credits - required})
 
     bot = cast(Bot, callback_query.bot)
+    assigned_coaches = [await Cache.coach.get_coach(coach_id) for coach_id in client.assigned_to]
+    if any(coach.coach_type == CoachType.ai for coach in assigned_coaches):
+        pass  # already assigned to AI
+    else:
+        await ai_assign_client(client)
 
     if service == "program":
         await answer_msg(callback_query, msg_text("request_in_progress", profile.language))

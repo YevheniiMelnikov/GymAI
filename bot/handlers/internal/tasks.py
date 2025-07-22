@@ -4,7 +4,7 @@ from aiohttp import web
 from aiogram import Bot
 from loguru import logger
 
-from bot.keyboards import workout_survey_kb, program_view_kb
+from bot.keyboards import workout_survey_kb
 from bot.texts.text_manager import msg_text
 from bot.utils.profiles import get_clients_to_survey
 from config.env_settings import settings
@@ -89,19 +89,13 @@ async def internal_send_workout_result(request: web.Request, *, ai_coach: type[B
         client = await Cache.client.get_client(int(client_id))
         profile = await APIService.profile.get_profile(client.profile)
         lang = profile.language if profile else settings.DEFAULT_LANG
-        program_text = await ai_coach.process_workout_result(int(client_id), str(text), lang)
-        if profile is not None and program_text:
+        updated_workout = await ai_coach.process_workout_result(int(client_id), str(text), lang)
+        if profile is not None and updated_workout:
             await bot.send_message(
                 chat_id=profile.tg_id,
                 text=msg_text("new_program", profile.language),
                 parse_mode=ParseMode.HTML,
-            )
-            await bot.send_message(
-                chat_id=profile.tg_id,
-                text=msg_text("program_page", profile.language).format(program=program_text, day=1),
-                reply_markup=program_view_kb(profile.language),
-                parse_mode=ParseMode.HTML,
-            )
+            )  # TODO: REPLACE WITH 'UPDATED' MESSAGE INSTEAD OF 'NEW'
     else:
         await send_message(
             recipient=coach,

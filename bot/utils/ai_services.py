@@ -5,15 +5,15 @@ from aiogram.fsm.context import FSMContext
 
 from bot.states import States
 
-from core.ai_coach.utils import ai_coach_request, ai_assign_client
+from core.ai_coach.utils import ai_coach_request
 from config.env_settings import settings
 from core.ai_coach.prompts import PROGRAM_PROMPT, SUBSCRIPTION_PROMPT
 from core.ai_coach.parsers import (
     parse_program_text,
     parse_program_json,
     parse_subscription_json,
-    _extract_json,
-    _normalize_program_data,
+    extract_json,
+    normalize_program_data,
 )
 from core.ai_coach.schemas import ProgramRequest, SubscriptionRequest
 from loguru import logger
@@ -27,16 +27,15 @@ from core.services.internal import APIService
 
 def _normalise_program(raw: str) -> dict:
     """Extract and clean JSON workout program from ``raw`` text."""
-    extracted = _extract_json(raw)
+    extracted = extract_json(raw)
     if not extracted:
         raise ValueError("no JSON found")
     data = json.loads(extracted)
-    _normalize_program_data(data)
+    normalize_program_data(data)
     return data
 
 
 async def generate_program(client: Client, workout_type: str, wishes: str, state: FSMContext, bot: Bot) -> None:
-    await ai_assign_client(client)
     req = ProgramRequest(workout_type=workout_type, wishes=wishes)
     data = await state.get_data()
     lang = data.get("lang")
@@ -50,6 +49,7 @@ async def generate_program(client: Client, workout_type: str, wishes: str, state
     program_dto = None
     for _ in range(settings.AI_GENERATION_RETRIES):
         response = await ai_coach_request(text=prompt, client=client, chat_id=client.id, language=lang)
+        print(f"Response: {response}")
         program_raw = response[0] if response else ""
         program_dto = parse_program_json(program_raw)
         if program_dto is not None:
@@ -115,7 +115,6 @@ async def generate_subscription(
     state: FSMContext,
     bot: Bot,
 ) -> None:
-    await ai_assign_client(client)
     req = SubscriptionRequest(
         workout_type=workout_type,
         wishes=wishes,

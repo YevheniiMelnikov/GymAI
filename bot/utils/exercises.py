@@ -62,7 +62,7 @@ async def save_exercise(
             try:
                 from core.cache import Cache
 
-                program = await Cache.workout.get_program(profile_id)
+                program = await Cache.workout.get_latest_program(profile_id)
                 split_number = program.split_number
             except ProgramNotFoundError:
                 logger.warning(

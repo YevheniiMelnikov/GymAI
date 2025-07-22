@@ -404,7 +404,7 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
     client = await Cache.client.get_client(profile.id)
 
     try:
-        program = await Cache.workout.get_program(client.profile)
+        program = await Cache.workout.get_latest_program(client.profile)
     except ProgramNotFoundError:
         program = None
 

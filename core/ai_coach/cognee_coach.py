@@ -22,6 +22,8 @@ from config.logger import configure_loguru
 from core.ai_coach.base import BaseAICoach
 from core.ai_coach.knowledge_loader import KnowledgeLoader
 from core.ai_coach.prompts import INITIAL_PROMPT
+from core.cache import Cache
+from core.exceptions import SubscriptionNotFoundError, ProgramNotFoundError
 from core.schemas import Client
 
 
@@ -29,12 +31,10 @@ def _patch_cognee() -> None:
     """Fix issues in Cognee's graph ledger ID generation."""
     try:
         from cognee.modules.data.models.graph_relationship_ledger import GraphRelationshipLedger
+
         GraphRelationshipLedger.__table__.c.id.default = uuid4
     except Exception as e:
         logger.debug(f"GraphRelationshipLedger patch failed: {e}")
-
-# Constants
-LANGUAGE_NAMES = {"ua": "Ukrainian", "ru": "Russian", "eng": "English"}
 
 
 def configure_environment() -> None:
@@ -177,7 +177,6 @@ class CogneeCoach(BaseAICoach):
         """
         if cls._user is None:
             cls._user = await get_default_user()
-            logger.trace(f"Cognee default user: {cls._user.id}")
         return cls._user
 
     @classmethod
@@ -285,30 +284,31 @@ class CogneeCoach(BaseAICoach):
 
         parts: list[str] = []
         if client:
-            client_info = cls._extract_client_data(client)
-            if client_info:
+            if client_info := cls._extract_client_data(client):
                 parts.append(f"Client info: {client_info}")
             try:
-                from core.cache import Cache
-
-                prg = await Cache.workout.get_program(client.profile, use_fallback=False)
-                parts.append(f"Latest program: {prg.workout_type}, split {prg.split_number}")
-                sub = await Cache.workout.get_latest_subscription(client.profile, use_fallback=False)
-                parts.append(f"Active subscription: {sub.workout_type} {sub.workout_days} period {sub.period}")
-            except Exception:
+                program = await Cache.workout.get_latest_program(client.profile, use_fallback=False)
+                parts.append(f"Latest program: {program.exercises_by_day}")
+            except ProgramNotFoundError:
+                pass
+            try:
+                subscription = await Cache.workout.get_latest_subscription(client.profile, use_fallback=False)
+                parts.append(f"Latest subscription: {subscription.exercises}")
+            except SubscriptionNotFoundError:
                 pass
 
         if chat_id is not None:
-            history = await cls.get_context(chat_id, text)
-            if history:
-                parts.append("\n".join(history))
+            if chat_history := await cls.get_context(chat_id, text):
+                parts.append("\n".join(chat_history))
 
         parts.append(text)
         if language:
-            lang_name = LANGUAGE_NAMES.get(language, language)
-            parts.append(f"Answer strictly in {lang_name}.")
+            languages = {"ua": "Ukrainian", "ru": "Russian", "eng": "English"}
+            lang_name = languages.get(language)
+            parts.append(f"Answer STRICTLY in {lang_name}!")
 
         final_prompt = "\n".join(parts)
+        print(f"Final prompt: {final_prompt}")
         dataset_base = "main_dataset" if client is None else f"main_dataset_{client.id}"
         dataset_name = f"{dataset_base}_{user.id}"
 
@@ -362,6 +362,12 @@ class CogneeCoach(BaseAICoach):
         except Exception:
             ctx = []
 
-        prompt_parts = [feedback, *ctx, "Update the workout plan accordingly."]
-        responses = await cls.make_request("\n".join(prompt_parts), chat_id=client_id, language=language)
-        return responses[0] if responses else ""
+        prompt_parts = [
+            feedback,
+            *ctx,
+            "Update the workout plan accordingly.",
+        ]  # TODO: CREATE DETAILED PROMPT FOR REQUEST
+        responses = await cls.make_request(
+            "\n".join(prompt_parts), chat_id=client_id, language=language
+        )  # TODO: UPDATE WORKOUT PROGRAM
+        return responses[0] if responses else ""  # TODO: VALIDATE AS SUBSCRIPTION, RETURN BOOLEAN

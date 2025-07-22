@@ -466,7 +466,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
                     include_incoming_message=False,
                 )
         else:
-            current_program = await Cache.workout.get_program(profile_id)
+            current_program = await Cache.workout.get_latest_program(profile_id)
             program_text = await format_program(exercises, 0)
             if current_program is not None:
                 if program := await APIService.workout.save_program(
@@ -502,7 +502,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
             subscription = await Cache.workout.get_latest_subscription(profile_id)
             split_number = len(subscription.workout_days) if subscription else 1
         else:
-            program = await Cache.workout.get_program(profile_id)
+            program = await Cache.workout.get_latest_program(profile_id)
             split_number = program.split_number if program else 1
 
         await state.update_data(split=split_number)

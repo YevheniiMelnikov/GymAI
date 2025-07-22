@@ -84,7 +84,7 @@ class WorkoutCacheManager(BaseCacheManager):
             logger.error(f"Failed to update program for client_profile_id={client_profile_id}: {e}")
 
     @classmethod
-    async def get_program(cls, client_profile_id: int, *, use_fallback: bool = True) -> Program:
+    async def get_latest_program(cls, client_profile_id: int, *, use_fallback: bool = True) -> Program:
         return await cls.get_or_fetch(
             "workout_plans:programs",
             str(client_profile_id),

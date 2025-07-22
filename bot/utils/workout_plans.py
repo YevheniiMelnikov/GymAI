@@ -126,7 +126,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bo
         program_text = await format_program(exercises, 0)
 
         try:
-            current_program = await Cache.workout.get_program(profile_id)
+            current_program = await Cache.workout.get_latest_program(profile_id)
             wishes = current_program.wishes
             workout_type = getattr(current_program, "workout_type", data.get("workout_type"))
         except ProgramNotFoundError:
@@ -200,7 +200,7 @@ async def reset_workout_plan(callback_query: CallbackQuery, state: FSMContext) -
             return
     else:
         try:
-            program = await Cache.workout.get_program(profile_id)
+            program = await Cache.workout.get_latest_program(profile_id)
         except ProgramNotFoundError:
             logger.info(f"Program not found for client {profile_id} to reset")
             await answer_msg(callback_query, msg_text("unexpected_error", profile.language))
@@ -273,7 +273,7 @@ async def manage_program(callback_query: CallbackQuery, profile: Profile, profil
     program_paid = await Cache.payment.is_payed(int(profile_id), "program")
     workout_program: Program | None = None
     try:
-        workout_program = await Cache.workout.get_program(int(profile_id))
+        workout_program = await Cache.workout.get_latest_program(int(profile_id))
     except ProgramNotFoundError:
         logger.info(f"Program not found for client {profile_id} in manage_program.")
 
