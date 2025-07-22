@@ -16,7 +16,6 @@ from config.env_settings import settings
 from core.cache import Cache
 from core.schemas import Coach, Profile, Client
 from core.enums import CoachType
-from core.ai_coach.utils import ai_coach_request
 from core.services import APIService
 from bot.utils.text import format_new_client_message, get_client_page, get_workout_types
 from core.services import avatar_manager
@@ -33,6 +32,7 @@ async def send_message(
     video=None,
     avatar_url: str | FSInputFile | None = None,
 ) -> None:
+    # AI COACH FLOW
     if isinstance(recipient, Coach) and recipient.coach_type == CoachType.ai:
         sender_id: int | None = None
         if state:
@@ -58,14 +58,9 @@ async def send_message(
                 lang = profile.language
             except Exception:
                 lang = settings.DEFAULT_LANG
-        await ai_coach_request(
-            recipient=recipient,
-            text=text,
-            client=client_obj,
-            chat_id=sender_id,
-            language=lang,
-        )
         return
+
+    # REGULAR COACH FLOW
     if state:
         data = await state.get_data()
         language = cast(str, data.get("recipient_language", settings.DEFAULT_LANG))

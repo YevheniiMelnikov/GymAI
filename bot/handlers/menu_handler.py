@@ -237,17 +237,17 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
 
     await ProfileService.adjust_client_credits(profile.id, -required)
     await Cache.client.update_client(client.profile, {"credits": client.credits - required})
-
+    await answer_msg(callback_query, msg_text("request_in_progress", profile.language))
+    await show_main_menu(callback_query.message, profile, state)
     bot = cast(Bot, callback_query.bot)
     assigned_coaches = [await Cache.coach.get_coach(coach_id) for coach_id in client.assigned_to]
     if any(coach.coach_type == CoachType.ai for coach in assigned_coaches):
         pass  # already assigned to AI
     else:
+        await assign_coach(await Cache.coach.get_ai_coach(), client)
         await ai_assign_client(client)
 
     if service == "program":
-        await answer_msg(callback_query, msg_text("request_in_progress", profile.language))
-        await show_main_menu(callback_query.message, profile, state)
         try:
             await generate_program(client, workout_type, wishes, state, bot)
         except Exception as e:  # noqa: BLE001
