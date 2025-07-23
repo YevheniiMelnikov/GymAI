@@ -43,15 +43,15 @@ async def send_message(
             lang = data.get("lang")
         else:
             lang = None
-        client_obj: Client | None = None
+        _: Client | None = None
         if sender_id is not None:
             from core.ai_coach.cognee_coach import CogneeCoach
 
             await CogneeCoach.save_user_message(text, chat_id=sender_id, client_id=sender_id)
             try:
-                client_obj = await Cache.client.get_client(sender_id)
+                _ = await Cache.client.get_client(sender_id)
             except Exception:
-                client_obj = None
+                pass
         if lang is None and sender_id is not None:
             try:
                 profile = await Cache.profile.get_profile(sender_id)

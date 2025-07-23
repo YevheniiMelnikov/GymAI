@@ -156,6 +156,7 @@ class MessageText(AutoName):
     coach_declined = auto()
     contact_coach = auto()
     coach_page = auto()
+    coach_switch_warning = auto()
 
     new_client = auto()
     contact_client = auto()
@@ -230,6 +231,7 @@ class MessageText(AutoName):
     image_error = auto()
     no_profiles_found = auto()
     new_program = auto()
+    program_updated = auto()
     wait_for_verification = auto()
     not_verified = auto()
     gift = auto()

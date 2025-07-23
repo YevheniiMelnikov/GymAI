@@ -78,14 +78,46 @@ async def update_profile_data(message: Message, state: FSMContext, role: str, bo
 
 
 async def assign_coach(coach: Coach, client: Client) -> None:
+    """Assign ``coach`` to ``client`` preserving other coach types."""
     coach_clients = coach.assigned_to or []
     if client.profile not in coach_clients:
         coach_clients.append(client.profile)
         await APIService.profile.update_coach_profile(coach.id, {"assigned_to": coach_clients})
         await Cache.coach.update_coach(coach.profile, {"assigned_to": coach_clients})
 
-    await APIService.profile.update_client_profile(client.id, {"assigned_to": [coach.profile]})
-    await Cache.client.update_client(client.profile, {"assigned_to": [coach.profile]})
+    assigned = client.assigned_to or []
+
+    for cid in assigned:
+        try:
+            existing = await Cache.coach.get_coach(cid)
+        except CoachNotFoundError:
+            continue
+        if existing.coach_type == coach.coach_type:
+            assigned.remove(cid)
+            break
+
+    if coach.profile not in assigned:
+        assigned.append(coach.profile)
+
+    await APIService.profile.update_client_profile(client.id, {"assigned_to": assigned})
+    await Cache.client.update_client(client.profile, {"assigned_to": assigned})
+
+
+async def get_assigned_coach(client: Client, *, coach_type: CoachType | None = None) -> Coach | None:
+    """Return client's coach filtered by ``coach_type`` if provided."""
+    for cid in client.assigned_to:
+        try:
+            coach = await Cache.coach.get_coach(cid)
+        except CoachNotFoundError:
+            continue
+        if coach_type is None or coach.coach_type == coach_type:
+            return coach
+    return None
+
+
+async def get_assigned_coach_id(client: Client, *, coach_type: CoachType | None = None) -> int | None:
+    coach = await get_assigned_coach(client, coach_type=coach_type)
+    return coach.profile if coach else None
 
 
 async def check_assigned_clients(profile_id: int) -> bool:

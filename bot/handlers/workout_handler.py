@@ -10,7 +10,6 @@ from loguru import logger
 from bot.keyboards import (
     select_exercise_kb,
     subscription_view_kb,
-    program_view_kb,
     reps_number_kb,
     sets_number_kb,
     program_manage_kb,
@@ -20,7 +19,7 @@ from bot.keyboards import (
 from bot.states import States
 from bot.texts.exercises import exercise_dict
 from core.cache import Cache
-from core.enums import ClientStatus
+from core.enums import ClientStatus, CoachType
 from core.services import APIService
 from bot.utils.chat import send_message
 from core.tasks import send_workout_result
@@ -38,6 +37,8 @@ from bot.utils.menus import (
     subscription_history_pagination,
     show_subscription_page,
 )
+from bot.utils.menus import has_active_human_subscription
+from bot.utils.profiles import get_assigned_coach
 from bot.utils.other import (
     short_url,
     delete_messages,
@@ -61,6 +62,24 @@ async def program_type(callback_query: CallbackQuery, state: FSMContext):
         await show_my_subscription_menu(callback_query, profile, state)
     elif callback_query.data == "program":
         await show_my_program_menu(callback_query, profile, state)
+    elif callback_query.data == "contact":
+        try:
+            client = await Cache.client.get_client(profile.id)
+        except Exception:
+            await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
+            return
+        if not client.assigned_to:
+            await callback_query.answer(msg_text("client_not_assigned_to_coach", profile.language), show_alert=True)
+            return
+        coach = await get_assigned_coach(client, coach_type=CoachType.human)
+        if coach is None:
+            await callback_query.answer(msg_text("client_not_assigned_to_coach", profile.language), show_alert=True)
+            return
+        coach_id = coach.profile
+        await state.update_data(recipient_id=coach_id, sender_name=client.name)
+        await state.set_state(States.contact_coach)
+        await callback_query.message.answer(msg_text("enter_your_message", profile.language))
+        await del_msg(cast(Message | CallbackQuery | None, callback_query))
     else:
         message = cast(Message, callback_query.message)
         assert message is not None
@@ -139,18 +158,20 @@ async def program_actions(callback_query: CallbackQuery, state: FSMContext) -> N
     if cb_data == "back":
         await callback_query.answer()
         await state.set_state(States.select_workout)
+        contact = await has_active_human_subscription(profile.id)
         await message.answer(
             msg_text("select_workout", profile.language),
-            reply_markup=select_workout_kb(profile.language),
+            reply_markup=select_workout_kb(profile.language, contact),
         )
     elif cb_data == "show_old":
         program_data = data.get("program")
         if not program_data:
             await callback_query.answer(msg_text("no_program", profile.language), show_alert=True)
             await state.set_state(States.select_workout)
+            contact = await has_active_human_subscription(profile.id)
             await message.answer(
                 msg_text("select_workout", profile.language),
-                reply_markup=select_workout_kb(profile.language),
+                reply_markup=select_workout_kb(profile.language, contact),
             )
         else:
             program = Program.model_validate(program_data)
@@ -312,7 +333,8 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext,
         await callback_query.answer(msg_text("keep_going", profile.language), show_alert=True)
 
         client = await Cache.client.get_client(profile.id)
-        coach = await Cache.coach.get_coach(client.assigned_to.pop())
+        coach = await get_assigned_coach(client, coach_type=CoachType.human)
+        assert coach is not None
         coach_profile = await APIService.profile.get_profile(coach.profile)
         coach_lang = cast(str, coach_profile.language)
 
@@ -336,7 +358,8 @@ async def workout_description(message: Message, state: FSMContext, bot: Bot):
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     client = await Cache.client.get_client(profile.id)
-    coach = await Cache.coach.get_coach(client.assigned_to.pop())
+    coach = await get_assigned_coach(client, coach_type=CoachType.human)
+    assert coach is not None
     coach_profile = Profile.model_validate(coach.profile_data)
     coach_lang = cast(str, coach_profile.language)
     day_index = cast(int, data.get("day_index"))
@@ -459,7 +482,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
                 await Cache.payment.reset_status(profile_id, "subscription")
                 await send_message(
                     recipient=client,
-                    text=msg_text("new_program", client_lang),
+                    text=msg_text("program_updated", client_lang),
                     bot=bot,
                     state=state,
                     reply_markup=subscription_view_kb(client_lang),
@@ -467,7 +490,6 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
                 )
         else:
             current_program = await Cache.workout.get_latest_program(profile_id)
-            program_text = await format_program(exercises, 0)
             if current_program is not None:
                 if program := await APIService.workout.save_program(
                     profile_id, exercises, current_program.split_number, current_program.wishes
@@ -478,17 +500,9 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
                     await Cache.payment.reset_status(profile_id, "program")
             await send_message(
                 recipient=client,
-                text=msg_text("new_program", client_lang),
+                text=msg_text("program_updated", client_lang),
                 bot=bot,
                 state=state,
-                include_incoming_message=False,
-            )
-            await send_message(
-                recipient=client,
-                text=msg_text("program_page", client_lang).format(program=program_text, day=1),
-                bot=bot,
-                state=state,
-                reply_markup=program_view_kb(client_lang),
                 include_incoming_message=False,
             )
 

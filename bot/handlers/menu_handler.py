@@ -39,7 +39,8 @@ from bot.utils.menus import (
     show_balance_menu,
     show_ai_services,
 )
-from bot.utils.profiles import assign_coach
+from bot.utils.menus import has_active_human_subscription
+from bot.utils.profiles import assign_coach, get_assigned_coach
 from bot.utils.workout_plans import manage_program, cancel_subscription
 from bot.utils.other import del_msg, generate_order_id, answer_msg
 from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
@@ -381,6 +382,16 @@ async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext, bo
             await callback_query.answer(msg_text("no_coaches", profile.language), show_alert=True)
             return
 
+        try:
+            client = await Cache.client.get_client(profile.id)
+        except ClientNotFoundError:
+            client = None
+
+        if client and client.assigned_to:
+            human = await get_assigned_coach(client, coach_type=CoachType.human)
+            if human:
+                coaches = [c for c in coaches if c.profile != human.profile]
+
         await state.set_state(States.coach_selection)
         await state.update_data(coaches=[coach.model_dump(mode="json") for coach in coaches])
         await show_coaches_menu(message, coaches, bot)
@@ -452,10 +463,12 @@ async def paginate_coaches(cbq: CallbackQuery, state: FSMContext, bot: Bot) -> N
             await message.answer(msg_text("unexpected_error", profile.language))
             return
 
-        if client.assigned_to and client.assigned_to[0] == selected_coach.profile:
-            await cbq.answer(msg_text("same_coach_selected", profile.language), show_alert=True)
-            await del_msg(message)
-            return
+        if client.assigned_to:
+            human = await get_assigned_coach(client, coach_type=CoachType.human)
+            if human and human.profile == selected_coach.profile:
+                await cbq.answer(msg_text("same_coach_selected", profile.language), show_alert=True)
+                await del_msg(message)
+                return
 
         if client.assigned_to:
             try:
@@ -542,10 +555,10 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
     if cb_data == "back":
         await callback_query.answer()
         await state.set_state(States.select_workout)
-        # FIXME
+        contact = await has_active_human_subscription(profile.id)
         await message.answer(
             msg_text("select_workout", profile.language),
-            reply_markup=select_workout_kb(profile.language),
+            reply_markup=select_workout_kb(profile.language, contact),
         )
 
     elif cb_data == "change_days":
@@ -562,7 +575,11 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
 
     elif cb_data == "contact":
         await callback_query.answer()
-        coach_id = client.assigned_to.pop()
+        coach = await get_assigned_coach(client, coach_type=CoachType.human)
+        if not coach:
+            await callback_query.answer(msg_text("client_not_assigned_to_coach", profile.language), show_alert=True)
+            return
+        coach_id = coach.profile
         await state.update_data(recipient_id=coach_id, sender_name=client.name)
         await state.set_state(States.contact_coach)
         await message.answer(msg_text("enter_your_message", profile.language))

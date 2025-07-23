@@ -93,9 +93,9 @@ async def internal_send_workout_result(request: web.Request, *, ai_coach: type[B
         if profile is not None and updated_workout:
             await bot.send_message(
                 chat_id=profile.tg_id,
-                text=msg_text("new_program", profile.language),
+                text=msg_text("program_updated", profile.language),
                 parse_mode=ParseMode.HTML,
-            )  # TODO: REPLACE WITH 'UPDATED' MESSAGE INSTEAD OF 'NEW'
+            )
     else:
         await send_message(
             recipient=coach,

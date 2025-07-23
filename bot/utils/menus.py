@@ -13,7 +13,7 @@ from aiogram.types import CallbackQuery, InputMediaPhoto, Message, FSInputFile
 from pathlib import Path
 
 from bot import keyboards as kb
-from bot.utils.profiles import fetch_user, answer_profile
+from bot.utils.profiles import fetch_user, answer_profile, get_assigned_coach
 from bot.keyboards import program_view_kb, subscription_manage_kb, program_edit_kb
 from bot.utils.credits import uah_to_credits, available_packages, available_ai_services
 from decimal import Decimal
@@ -39,6 +39,24 @@ from bot.utils.other import answer_msg, del_msg
 from core.services import avatar_manager
 from core.validators import validate_or_raise
 
+
+async def has_active_human_subscription(client_id: int) -> bool:
+    try:
+        subscription = await Cache.workout.get_latest_subscription(client_id)
+    except SubscriptionNotFoundError:
+        return False
+
+    if not subscription or not subscription.enabled:
+        return False
+
+    try:
+        client = await Cache.client.get_client(client_id)
+        if not client.assigned_to:
+            return False
+        coach = await get_assigned_coach(client, coach_type=CoachType.human)
+        return coach is not None
+    except Exception:
+        return False
 
 async def show_subscription_page(callback_query: CallbackQuery, state: FSMContext, subscription: Subscription) -> None:
     await callback_query.answer()
@@ -240,6 +258,9 @@ async def show_coaches_menu(message: Message, coaches: list[Coach], bot: Bot, cu
         coach_photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{current_coach.profile_photo}"
     formatted_text = msg_text("coach_page", lang).format(**current_coach.model_dump(mode="json"))
 
+    if await has_active_human_subscription(profile.id):
+        formatted_text += "\n" + msg_text("coach_switch_warning", lang)
+
     try:
         media = InputMediaPhoto(media=coach_photo_url)
         if message.photo:
@@ -346,11 +367,13 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
             await state.update_data(chat_id=callback_query.from_user.id, message_ids=[msg.message_id])
         return
 
+    contact = await has_active_human_subscription(profile.id)
+
     await state.set_state(States.select_workout)
     await answer_msg(
         message,
         msg_text("select_workout", lang),
-        reply_markup=kb.select_workout_kb(lang),
+        reply_markup=kb.select_workout_kb(lang, contact),
     )
 
     await del_msg(cast(Message | CallbackQuery | None, message))
@@ -375,8 +398,10 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
             return
 
         await callback_query.answer()
-        coach_id = client_profile.assigned_to[0]
-        coach = await Cache.coach.get_coach(coach_id)
+        coach = await get_assigned_coach(client_profile, coach_type=CoachType.human)
+        if coach is None:
+            await callback_query.answer(msg_text("client_not_assigned_to_coach", language), show_alert=True)
+            return
         price_uah = coach.subscription_price or Decimal("0")
         credits = uah_to_credits(price_uah)
         await state.set_state(States.payment_choice)
@@ -434,8 +459,10 @@ async def show_program_promo_page(callback_query: CallbackQuery, profile: Profil
         return
 
     await callback_query.answer()
-    coach_id = client_profile.assigned_to[0]
-    coach = await Cache.coach.get_coach(coach_id)
+    coach = await get_assigned_coach(client_profile, coach_type=CoachType.human)
+    if coach is None:
+        await callback_query.answer(msg_text("client_not_assigned_to_coach", language), show_alert=True)
+        return
     file_path = Path(settings.BOT_PAYMENT_OPTIONS) / f"program_{language}.jpeg"
     program_img = FSInputFile(file_path)
     price_uah = coach.program_price or Decimal("0")

@@ -182,13 +182,15 @@ def new_message_kb(lang: str, profile_id: int) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons)
 
 
-def select_workout_kb(lang: str) -> KbMarkup:
+def select_workout_kb(lang: str, contact: bool = False) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
         [builder.add("subscription", "subscription")],
         [builder.add("program", "program")],
-        [builder.add("prev_menu", "back")],
     ]
+    if contact:
+        buttons.append([builder.add("contact_coach", "contact")])
+    buttons.append([builder.add("prev_menu", "back")])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 

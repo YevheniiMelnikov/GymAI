@@ -16,6 +16,7 @@ from core.services import ProfileService
 from apps.payments.tasks import send_payment_message
 from bot.texts.text_manager import msg_text
 from bot.utils.credits import uah_to_credits, available_packages
+from bot.utils.profiles import get_assigned_coach
 
 
 class PaymentProcessor:
@@ -63,9 +64,11 @@ class PaymentProcessor:
             if not client or not client.assigned_to:
                 logger.warning(f"Skip payment {payment.order_id}: client/coach missing")
                 return None
-            coach = await cls.cache.coach.get_coach(client.assigned_to[0])
+            coach = await get_assigned_coach(client, coach_type=CoachType.human)
             if not coach:
-                logger.error(f"Coach {client.assigned_to[0]} not found for payment {payment.order_id}")
+                logger.error(
+                    f"Coach not found for payment {payment.order_id}"
+                )
                 return None
             if coach.coach_type == CoachType.ai:
                 logger.info(f"Skip AI coach {coach.id} for payment {payment.order_id}")

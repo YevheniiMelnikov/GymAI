@@ -23,9 +23,11 @@ from config.logger import configure_loguru
 from core.ai_coach.base import BaseAICoach
 from core.ai_coach.knowledge_loader import KnowledgeLoader
 from core.ai_coach.prompts import INITIAL_PROMPT
+from core.ai_coach.parsers import parse_program_json, parse_program_text
 from core.cache import Cache
-from core.exceptions import SubscriptionNotFoundError, ProgramNotFoundError
+from core.exceptions import SubscriptionNotFoundError
 from core.schemas import Client
+from core.services.internal import APIService
 
 
 def _patch_cognee() -> None:
@@ -346,5 +348,35 @@ class CogneeCoach(BaseAICoach):
         ]  # TODO: CREATE DETAILED PROMPT FOR REQUEST
         responses = await cls.make_request(
             "\n".join(prompt_parts), chat_id=client_id, language=language
-        )  # TODO: UPDATE WORKOUT PROGRAM
-        return responses[0] if responses else ""  # TODO: VALIDATE AS SUBSCRIPTION, RETURN BOOLEAN
+        )
+        result = responses[0] if responses else ""
+
+        if not result:
+            return ""
+
+        dto = parse_program_json(result)
+        if dto is not None:
+            exercises = dto.days
+        else:
+            exercises, _ = parse_program_text(result)
+
+        if not exercises:
+            logger.error("AI workout update produced no exercises")
+            return result
+
+        try:
+            subscription = await Cache.workout.get_latest_subscription(client_id)
+        except SubscriptionNotFoundError:
+            logger.error(f"No subscription found for client_id={client_id}")
+            return result
+
+        serialized = [day.model_dump() for day in exercises]
+        subscription_data = subscription.model_dump()
+        subscription_data.update(client_profile=client_id, exercises=serialized)
+
+        await APIService.workout.update_subscription(subscription.id, subscription_data)
+        await Cache.workout.update_subscription(
+            client_id,
+            {"exercises": serialized, "client_profile": client_id},
+        )
+        return result
