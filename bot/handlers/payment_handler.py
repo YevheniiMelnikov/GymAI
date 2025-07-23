@@ -10,11 +10,13 @@ from loguru import logger
 
 from bot.utils.other import del_msg, answer_msg
 from bot.keyboards import select_workout_kb, workout_type_kb
+from bot.utils.menus import has_active_human_subscription
+from bot.utils.profiles import get_assigned_coach
 from bot.states import States
 
 from core.cache import Cache
 from core.cache.payment import PaymentCacheManager
-from core.enums import ClientStatus, PaymentStatus
+from core.enums import ClientStatus, PaymentStatus, CoachType
 from core.services import APIService
 from core.services.internal.payment_service import PaymentService
 from bot.utils.menus import show_main_menu, show_services_menu
@@ -55,10 +57,11 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
     profile = Profile.model_validate(data["profile"])
     if callback_query.data == "back":
         await state.set_state(States.select_workout)
+        contact = await has_active_human_subscription(profile.id)
         await answer_msg(
             msg_obj=callback_query,
             text=msg_text("select_workout", profile.language),
-            reply_markup=select_workout_kb(profile.language),
+            reply_markup=select_workout_kb(profile.language, contact),
         )
         await del_msg(cast(Message | CallbackQuery | None, callback_query))
         return
@@ -78,8 +81,10 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
         if not client.assigned_to:
             await callback_query.answer(msg_text("client_not_assigned_to_coach", profile.language), show_alert=True)
             return
-        coach_profile_id = client.assigned_to[0]
-        coach = await Cache.coach.get_coach(coach_profile_id)
+        coach = await get_assigned_coach(client, coach_type=CoachType.human)
+        if coach is None:
+            await callback_query.answer(msg_text("coach_data_not_found_error", profile.language), show_alert=True)
+            return
 
     except ClientNotFoundError:
         logger.warning(f"Client not found for profile {profile.id} in payment_choice.")
@@ -132,8 +137,13 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
                 show_alert=True,
             )
             return
-        coach_profile_id = client.assigned_to[0]
-        coach = await Cache.coach.get_coach(coach_profile_id)
+        coach = await get_assigned_coach(client, coach_type=CoachType.human)
+        if coach is None:
+            await callback_query.answer(
+                msg_text("coach_data_not_found_error", profile.language),
+                show_alert=True,
+            )
+            return
     except ClientNotFoundError:
         logger.warning(f"Client not found for profile {profile.id}")
         await callback_query.answer(

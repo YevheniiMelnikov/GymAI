@@ -25,6 +25,8 @@ from core.exceptions import (
 from core.services import APIService
 from bot.utils.chat import send_message, send_program
 from bot.utils.menus import show_main_menu, show_subscription_page, show_balance_menu
+from bot.utils.profiles import get_assigned_coach
+from core.enums import CoachType
 from bot.utils.text import get_translated_week_day
 from bot.utils.exercises import format_program
 from bot.utils.other import delete_messages, del_msg, answer_msg
@@ -112,7 +114,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bo
 
             await send_message(
                 recipient=client,
-                text=msg_text("new_program", client_lang),
+                text=msg_text("program_updated", client_lang),
                 bot=bot,
                 state=state,
                 reply_markup=subscription_view_kb(client_lang),
@@ -360,7 +362,7 @@ async def process_new_subscription(
     client = await Cache.client.get_client(profile.id)
     if not client or not client.assigned_to:
         return
-    coach = await Cache.coach.get_coach(client.assigned_to.pop())
+    coach = await get_assigned_coach(client, coach_type=CoachType.human)
     if not coach:
         return
 

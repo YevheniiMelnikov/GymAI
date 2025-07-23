@@ -28,7 +28,8 @@ from bot.utils.chat import client_request
 from bot.utils.credits import required_credits
 from bot.utils.workout_plans import process_new_subscription, edit_subscription_days
 from bot.utils.menus import show_main_menu, show_my_profile_menu, send_policy_confirmation, show_balance_menu
-from bot.utils.profiles import update_profile_data, check_assigned_clients
+from bot.utils.profiles import update_profile_data, check_assigned_clients, get_assigned_coach
+from core.enums import CoachType
 from bot.utils.text import get_state_and_message
 from bot.utils.other import delete_messages, set_bot_commands, answer_msg, del_msg, parse_price
 from bot.texts.text_manager import msg_text
@@ -506,7 +507,9 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
     if not client or not client.assigned_to:
         return
 
-    coach = await Cache.coach.get_coach(client.assigned_to.pop())
+    coach = await get_assigned_coach(client, coach_type=CoachType.human)
+    if coach is None:
+        return
     await state.update_data(wishes=message.text, sender_name=client.name)
     data = await state.get_data()
 
