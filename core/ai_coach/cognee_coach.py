@@ -11,6 +11,8 @@ from typing import Any, Optional, Tuple
 import json
 from uuid import uuid4
 
+from core.ai_coach.lock_cache import LockCache
+
 import cognee
 from cognee.modules.data.exceptions import DatasetNotFoundError
 from cognee.modules.users.exceptions.exceptions import PermissionDeniedError
@@ -145,7 +147,7 @@ class CogneeCoach(BaseAICoach):
 
     _configured: bool = False
     _loader: Optional[KnowledgeLoader] = None
-    _cognify_locks: dict[str, asyncio.Lock] = {}
+    _cognify_locks: LockCache = LockCache()
     _user: Optional[Any] = None
 
     @classmethod
@@ -245,7 +247,7 @@ class CogneeCoach(BaseAICoach):
 
     @classmethod
     async def _cognify_dataset(cls, dataset_id: str, user: Any) -> None:
-        lock = cls._cognify_locks.setdefault(dataset_id, asyncio.Lock())
+        lock = cls._cognify_locks.get(dataset_id)
         async with lock:
             await cognee.cognify(datasets=[dataset_id], user=user)
 

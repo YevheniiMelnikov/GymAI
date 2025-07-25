@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     DB_HOST: Annotated[str, Field(default="db")]
 
     API_KEY: str
+    SECRET_KEY: str
     API_URL: str
     COGNEE_API_URL: Annotated[str, Field(default="https://api.openai.com/v1")]
     COGNEE_API_KEY: Annotated[str, Field(default="")]
