@@ -66,9 +66,7 @@ class PaymentProcessor:
                 return None
             coach = await get_assigned_coach(client, coach_type=CoachType.human)
             if not coach:
-                logger.error(
-                    f"Coach not found for payment {payment.order_id}"
-                )
+                logger.error(f"Coach not found for payment {payment.order_id}")
                 return None
             if coach.coach_type == CoachType.ai:
                 logger.info(f"Skip AI coach {coach.id} for payment {payment.order_id}")

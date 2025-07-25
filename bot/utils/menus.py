@@ -58,6 +58,7 @@ async def has_active_human_subscription(client_id: int) -> bool:
     except Exception:
         return False
 
+
 async def show_subscription_page(callback_query: CallbackQuery, state: FSMContext, subscription: Subscription) -> None:
     await callback_query.answer()
     profile = await Cache.profile.get_profile(callback_query.from_user.id)

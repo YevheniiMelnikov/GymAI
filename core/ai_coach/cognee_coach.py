@@ -346,9 +346,7 @@ class CogneeCoach(BaseAICoach):
             *ctx,
             "Update the workout plan accordingly.",
         ]  # TODO: CREATE DETAILED PROMPT FOR REQUEST
-        responses = await cls.make_request(
-            "\n".join(prompt_parts), chat_id=client_id, language=language
-        )
+        responses = await cls.make_request("\n".join(prompt_parts), chat_id=client_id, language=language)
         result = responses[0] if responses else ""
 
         if not result:

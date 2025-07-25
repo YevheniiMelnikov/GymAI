@@ -60,11 +60,15 @@ async def generate_program(client: Client, workout_type: str, wishes: str, state
     except ProgramNotFoundError:
         previous_program = "[]"
 
-    prompt = SYSTEM_MESSAGE + "\n\n" + PROGRAM_PROMPT.format(
-        client_profile=client_profile,
-        previous_program=previous_program,
-        request=req.model_dump_json(indent=2),
-        language=lang,
+    prompt = (
+        SYSTEM_MESSAGE
+        + "\n\n"
+        + PROGRAM_PROMPT.format(
+            client_profile=client_profile,
+            previous_program=previous_program,
+            request=req.model_dump_json(indent=2),
+            language=lang,
+        )
     )
     program_raw = ""
     program_dto = None

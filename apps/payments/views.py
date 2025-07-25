@@ -7,7 +7,7 @@ from typing import Any
 from django.core.cache import cache
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpRequest
 from loguru import logger
 from rest_framework import generics, status, serializers
 from rest_framework.permissions import AllowAny
@@ -32,27 +32,39 @@ class PaymentWebhookView(APIView):
         return signature == expected
 
     @staticmethod
-    def post(request, *args, **kwargs):
+    def post(request: HttpRequest, *args, **kwargs) -> JsonResponse:
         try:
-            raw_data: str | None = request.POST.get("data")
-            signature: str | None = request.POST.get("signature")
+            raw_data = request.POST.get("data")
+            signature = request.POST.get("signature")
+
             if not raw_data or not signature:
                 return JsonResponse({"detail": "Missing fields"}, status=status.HTTP_400_BAD_REQUEST)
+
             if not PaymentWebhookView._verify_signature(raw_data, signature):
                 return JsonResponse({"detail": "Invalid signature"}, status=status.HTTP_400_BAD_REQUEST)
-            payment_info: dict[str, Any] = json.loads(base64.b64decode(raw_data).decode())
 
-            cache.delete(f"payment:{payment_info.get('order_id')}")
+            try:
+                decoded = base64.b64decode(raw_data).decode()
+                payment_info: dict[str, Any] = json.loads(decoded)
+            except Exception:
+                logger.warning("Failed to decode or parse payment data")
+                return JsonResponse({"detail": "Invalid payload format"}, status=status.HTTP_400_BAD_REQUEST)
+
+            order_id = payment_info.get("order_id")
+            if order_id:
+                cache.delete(f"payment:{order_id}")
 
             process_payment_webhook.delay(
-                order_id=payment_info.get("order_id"),
+                order_id=order_id,
                 status=payment_info.get("status"),
                 err_description=payment_info.get("err_description", ""),
             )
+
             return JsonResponse({"result": "OK"}, status=status.HTTP_200_OK)
-        except Exception as exc:  # noqa: BLE001
-            logger.exception("Webhook processing error")
-            return JsonResponse({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception:
+            logger.exception("Unexpected webhook error")
+            return JsonResponse({"detail": "Webhook handling error"}, status=status.HTTP_400_BAD_REQUEST)
 
 
 @method_decorator(cache_page(60 * 5), name="dispatch")
