@@ -5,7 +5,7 @@ from config.env_settings import settings
 from config.logger import *
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-SECRET_KEY = settings.API_KEY
+SECRET_KEY = settings.SECRET_KEY
 DEBUG = os.environ.get("DEBUG_STATUS", "False").lower() == "true"
 ALLOWED_HOSTS = [
     "localhost",
