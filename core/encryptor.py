@@ -5,7 +5,7 @@ from typing import Optional, ClassVar
 from cryptography.fernet import Fernet
 
 from loguru import logger
-from config.env_settings import settings
+from config.app_settings import settings
 
 
 class Encryptor:

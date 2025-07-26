@@ -5,6 +5,7 @@ from typing import Any
 
 import asyncio
 
+from config.app_settings import settings
 from core.ai_coach.base import BaseAICoach
 from core.ai_coach.knowledge_loader import KnowledgeLoader
 from core.ai_coach.registry import set_ai_coach, get_ai_coach
@@ -46,25 +47,18 @@ async def _wait_for_coach() -> None:
 async def ai_coach_request(*args: Any, **kwargs: Any) -> list[str] | None:
     text = kwargs.get("text") or (args[0] if args else None)
     client: Client | None = kwargs.get("client")
-    chat_id: int | None = kwargs.get("chat_id")
-    language: str | None = kwargs.get("language")
     if not text:
         return None
     await _wait_for_coach()
     coach = get_ai_coach()
-    return await coach.make_request(str(text), client=client, chat_id=chat_id, language=language)
+    return await coach.make_request(str(text), client=client)
 
 
 async def ai_assign_client(*args: Any, **kwargs: Any) -> None:
     client: Client | None = kwargs.get("client") or (args[0] if args else None)
+    lang = kwargs.get("lang", settings.DEFAULT_LANG)
     if client is None:
         return
     await _wait_for_coach()
     coach = get_ai_coach()
-    await coach.assign_client(client)
-
-
-async def ai_process_workout_result(client_id: int, feedback: str, language: str | None = None) -> str:
-    await _wait_for_coach()
-    coach = get_ai_coach()
-    return await coach.process_workout_result(client_id, feedback, language)
+    await coach.assign_client(client, lang)

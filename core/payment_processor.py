@@ -9,7 +9,7 @@ from core.exceptions import ClientNotFoundError
 from core.services import WorkoutService
 
 from core.schemas import Payment, Client
-from config.env_settings import settings
+from config.app_settings import settings
 from core.services.gsheets_service import GSheetsService
 from core.services.internal.payment_service import PaymentService
 from core.services import ProfileService

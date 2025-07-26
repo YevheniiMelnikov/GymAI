@@ -17,19 +17,12 @@ class BaseAICoach(ABC):
 
     @classmethod
     @abstractmethod
-    async def make_request(
-        cls,
-        text: str,
-        *,
-        client: Client | None = None,
-        chat_id: int | None = None,
-        language: str | None = None,
-    ) -> list[str]:
+    async def make_request(cls, prompt: str, *, client: Client | None = None) -> list[str]:
         """Handle an incoming user message."""
 
     @classmethod
     @abstractmethod
-    async def assign_client(cls, client: Client) -> None:
+    async def assign_client(cls, client: Client, lang: str) -> None:
         """Run one-off logic when a new client is assigned."""
 
     @classmethod
@@ -49,5 +42,7 @@ class BaseAICoach(ABC):
 
     @classmethod
     @abstractmethod
-    async def process_workout_result(cls, client_id: int, feedback: str, language: str | None = None) -> str:
+    async def process_workout_result(
+        cls, client_id: int, expected_workout_result: str, feedback: str, language: str
+    ) -> str:
         """Return updated program text for ``client_id`` based on ``feedback``."""

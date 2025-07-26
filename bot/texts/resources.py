@@ -33,7 +33,6 @@ class ButtonText(AutoName):
     optimum_plan = auto()
     max_plan = auto()
     subscription_6_months = auto()
-    subscription_14_days = auto()
     subscription_1_month = auto()
     ask_ai = auto()
 

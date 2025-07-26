@@ -18,7 +18,7 @@ from bot.keyboards import (
     select_language_kb,
 )
 from bot.states import States
-from config.env_settings import settings
+from config.app_settings import settings
 from core.cache import Cache
 from core.enums import ClientStatus
 from core.exceptions import ProfileNotFoundError, ClientNotFoundError
@@ -460,11 +460,15 @@ async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> No
 async def workout_type(callback_query: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
-    await state.update_data(workout_type=callback_query.data)
     await state.set_state(States.enter_wishes)
     if callback_query.message is not None:
-        await answer_msg(
+        wishes_msg = await answer_msg(
             cast(Message, callback_query.message), msg_text("enter_wishes", profile.language or settings.DEFAULT_LANG)
+        )
+        await state.update_data(
+            workout_type=callback_query.data,
+            chat_id=callback_query.message.chat.id,
+            message_ids=[wishes_msg.message_id],
         )
     await del_msg(cast(Message | CallbackQuery | None, callback_query))
 
@@ -474,6 +478,7 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
     if not message.text:
         return
 
+    await delete_messages(state)
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
 
@@ -499,6 +504,8 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
             ),
             reply_markup=yes_no_kb(profile.language),
         )
+        if message is not None:
+            await del_msg(cast(Message | CallbackQuery | None, message))
         return
 
     # Regular coach flow

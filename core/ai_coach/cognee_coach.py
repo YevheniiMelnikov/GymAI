@@ -20,16 +20,12 @@ from cognee.modules.users.methods.get_default_user import get_default_user
 from sqlalchemy.exc import SAWarning
 from loguru import logger
 
-from config.env_settings import settings
+from config.app_settings import settings
 from config.logger import configure_loguru
 from core.ai_coach.base import BaseAICoach
 from core.ai_coach.knowledge_loader import KnowledgeLoader
-from core.ai_coach.prompts import INITIAL_PROMPT
-from core.ai_coach.parsers import parse_program_json, parse_program_text
-from core.cache import Cache
-from core.exceptions import SubscriptionNotFoundError
+from core.ai_coach.prompts import INITIAL_PROMPT, UPDATE_WORKOUT_PROMPT, SYSTEM_MESSAGE
 from core.schemas import Client
-from core.services.internal import APIService
 
 
 def _patch_cognee() -> None:
@@ -43,9 +39,7 @@ def _patch_cognee() -> None:
 
 
 def configure_environment() -> None:
-    """
-    Set up environment variables for graph prompt and logging defaults.
-    """
+    """Set up environment variables for graph prompt and logging defaults."""
     default_prompt = os.environ.get("GRAPH_PROMPT_PATH", "./core/ai_coach/global_system_prompt.txt")
     os.environ["GRAPH_PROMPT_PATH"] = Path(default_prompt).resolve().as_posix()
     os.environ.setdefault("LITELLM_LOG", "WARNING")
@@ -53,9 +47,7 @@ def configure_environment() -> None:
 
 
 def configure_logging() -> None:
-    """
-    Configure warnings, standard logging, and loguru for consistent output.
-    """
+    """Configure warnings, standard logging, and loguru for consistent output."""
     warnings.filterwarnings("ignore", category=SAWarning)
     logging.getLogger("langfuse").setLevel(logging.ERROR)
     configure_loguru()
@@ -152,9 +144,7 @@ class CogneeCoach(BaseAICoach):
 
     @classmethod
     async def initialize(cls) -> None:
-        """
-        Ensure database migrations are applied and Cognee is reachable.
-        """
+        """Ensure database migrations are applied and Cognee is reachable."""
         cls._ensure_config()
         user = await cls._get_user()
 
@@ -186,9 +176,7 @@ class CogneeCoach(BaseAICoach):
 
     @classmethod
     def _ensure_config(cls) -> None:
-        """
-        Apply Cognee configuration only once.
-        """
+        """Apply Cognee configuration only once."""
         if not cls._configured:
             CogneeConfig(
                 api_key=settings.COGNEE_API_KEY,
@@ -214,9 +202,7 @@ class CogneeCoach(BaseAICoach):
 
     @classmethod
     async def refresh_knowledge_base(cls) -> None:
-        """
-        Reload external knowledge and rebuild Cognee index.
-        """
+        """Reload external knowledge and rebuild Cognee index."""
         cls._ensure_config()
         if cls._loader:
             await cls._loader.refresh()
@@ -228,22 +214,8 @@ class CogneeCoach(BaseAICoach):
             logger.error(f"Permission denied while updating knowledge base: {e}")
 
     @staticmethod
-    def _extract_client_data(client: Client) -> str:
-        details = {
-            "name": client.name,
-            "gender": client.gender,
-            "born_in": client.born_in,
-            "weight": client.weight,
-            "health_notes": client.health_notes,
-            "workout_experience": client.workout_experience,
-            "workout_goals": client.workout_goals,
-        }
-        clean = {k: v for k, v in details.items() if v is not None}
-        return json.dumps(clean, ensure_ascii=False)
-
-    @staticmethod
-    def _make_initial_prompt(client_data: str) -> str:
-        return INITIAL_PROMPT.format(client_data=client_data)
+    def _make_initial_prompt(client_data: str, lang: str) -> str:
+        return INITIAL_PROMPT.format(client_data=client_data, language=lang)
 
     @classmethod
     async def _cognify_dataset(cls, dataset_id: str, user: Any) -> None:
@@ -253,9 +225,7 @@ class CogneeCoach(BaseAICoach):
 
     @classmethod
     async def _add_and_cognify(cls, text: str, dataset: str, user: Any) -> str:
-        """
-        Add text to dataset and trigger background cognification if created.
-        """
+        """Add text to dataset and trigger background cognification if created."""
         ds_id, created = await _safe_add(text, dataset, user)
         if created:
             asyncio.create_task(cls._cognify_dataset(ds_id, user))
@@ -274,52 +244,33 @@ class CogneeCoach(BaseAICoach):
             return []
 
     @classmethod
-    async def make_request(
-        cls,
-        text: str,
-        *,
-        client: Optional[Client] = None,
-        chat_id: Optional[int] = None,
-        language: Optional[str] = None,
-    ) -> list[str]:
-        """
-        Build prompt, store history, and query Cognee.
-        """
+    async def make_request(cls, prompt: str, *, client: Optional[Client] = None) -> list[str]:
+        """Store history and query Cognee."""
         cls._ensure_config()
         user = await cls._get_user()
-
-        final_prompt = text
-        print(f"Final prompt: {final_prompt}")
+        print(f"Final prompt: {prompt}")  # TODO: REMOVE
         dataset_base = "main_dataset" if client is None else f"main_dataset_{client.id}"
         dataset_name = f"{dataset_base}_{user.id}"
 
         try:
-            ds_id = await cls._add_and_cognify(final_prompt, dataset_name, user)
+            ds_id = await cls._add_and_cognify(prompt, dataset_name, user)
+            return await cognee.search(prompt, datasets=[ds_id], user=user)
         except PermissionDeniedError as e:
-            logger.error(f"Permission denied while adding data: {e}")
-            return []
-        except Exception as e:
-            logger.error(f"Failed to add data: {e}")
-            return []
-
-        try:
-            return await cognee.search(final_prompt, datasets=[ds_id], user=user)
+            logger.error(f"Permission denied: {e}")
         except DatasetNotFoundError:
-            logger.error("Search failed, dataset not found")
-        except PermissionDeniedError as e:
-            logger.error(f"Permission denied during search: {e}")
+            logger.error("Search failed: dataset not found")
+        except Exception as e:
+            logger.error(f"Unexpected AI coach error during client {client.id} request: {e}")
         return []
 
     @classmethod
-    async def assign_client(cls, client: Client) -> None:
-        prompt = cls._make_initial_prompt(cls._extract_client_data(client))
+    async def assign_client(cls, client: Client, lang: str) -> None:
+        prompt = cls._make_initial_prompt(cls._extract_client_data(client), lang)
         await cls.make_request(prompt)
 
     @classmethod
     async def save_user_message(cls, text: str, chat_id: int, client_id: int) -> None:
-        """
-        Store a raw user message into the chat history dataset.
-        """
+        """Store a raw user message into the chat history dataset."""
         if not text.strip():
             return
         cls._ensure_config()
@@ -331,52 +282,43 @@ class CogneeCoach(BaseAICoach):
     async def process_workout_result(
         cls,
         client_id: int,
+        expected_workout_result: str,
         feedback: str,
-        language: Optional[str] = None,
+        language: str,
     ) -> str:
-        """
-        Update workout plan based on feedback and previous context.
-        """
+        """Update workout plan based on client's feedback and previous context."""
+
         cls._ensure_config()
+
         try:
             ctx = await cls.get_context(client_id, "workout")
         except Exception:
             ctx = []
 
-        prompt_parts = [
-            feedback,
-            *ctx,
-            "Update the workout plan accordingly.",
-        ]  # TODO: CREATE DETAILED PROMPT FOR REQUEST
-        responses = await cls.make_request("\n".join(prompt_parts), chat_id=client_id, language=language)
-        result = responses[0] if responses else ""
-
-        if not result:
-            return ""
-
-        dto = parse_program_json(result)
-        if dto is not None:
-            exercises = dto.days
-        else:
-            exercises, _ = parse_program_text(result)
-
-        if not exercises:
-            logger.error("AI workout update produced no exercises")
-            return result
-
-        try:
-            subscription = await Cache.workout.get_latest_subscription(client_id)
-        except SubscriptionNotFoundError:
-            logger.error(f"No subscription found for client_id={client_id}")
-            return result
-
-        serialized = [day.model_dump() for day in exercises]
-        subscription_data = subscription.model_dump()
-        subscription_data.update(client_profile=client_id, exercises=serialized)
-
-        await APIService.workout.update_subscription(subscription.id, subscription_data)
-        await Cache.workout.update_subscription(
-            client_id,
-            {"exercises": serialized, "client_profile": client_id},
+        prompt = (
+            SYSTEM_MESSAGE
+            + "\n\n"
+            + UPDATE_WORKOUT_PROMPT.format(
+                expected_workout=expected_workout_result.strip(),
+                feedback=feedback.strip(),
+                context="\n".join(ctx).strip(),
+                language=language,
+            )
         )
-        return result
+
+        responses = await cls.make_request(prompt=prompt, client=None)
+        return responses[0] if responses else ""
+
+    @staticmethod
+    def _extract_client_data(client: Client) -> str:
+        details = {
+            "name": client.name,
+            "gender": client.gender,
+            "born_in": client.born_in,
+            "weight": client.weight,
+            "health_notes": client.health_notes,
+            "workout_experience": client.workout_experience,
+            "workout_goals": client.workout_goals,
+        }
+        clean = {k: v for k, v in details.items() if v is not None}
+        return json.dumps(clean, ensure_ascii=False)

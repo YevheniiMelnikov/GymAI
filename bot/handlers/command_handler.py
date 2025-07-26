@@ -10,7 +10,7 @@ from aiogram.types import Message
 from bot.keyboards import select_language_kb
 from bot.states import States
 from loguru import logger
-from config.env_settings import settings
+from config.app_settings import settings
 from core.cache import Cache
 from core.exceptions import ProfileNotFoundError
 from core.schemas import Profile

@@ -6,7 +6,7 @@ from rest_framework.exceptions import ValidationError, NotFound
 
 from apps.profiles.models import Profile, CoachProfile, ClientProfile
 from apps.profiles.serializers import ProfileSerializer
-from config.env_settings import settings
+from config.app_settings import settings
 
 
 class ProfileRepository:

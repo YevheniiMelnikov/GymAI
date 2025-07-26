@@ -1,8 +1,10 @@
 import os
 from pathlib import Path
 
-from config.env_settings import settings
+from config.app_settings import settings
 from config.logger import *
+
+# Following module relates strictly to Django
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = settings.SECRET_KEY

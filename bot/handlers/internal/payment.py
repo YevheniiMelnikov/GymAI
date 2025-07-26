@@ -5,7 +5,7 @@ from core.payment_processor import PaymentProcessor
 from core.cache import Cache
 from aiogram import Bot
 from bot.utils.chat import send_message, client_request
-from config.env_settings import settings
+from config.app_settings import settings
 
 
 async def internal_payment_handler(request: web.Request) -> web.Response:

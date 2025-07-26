@@ -2,7 +2,7 @@ import httpx
 from celery import shared_task
 from loguru import logger
 
-from config.env_settings import settings
+from config.app_settings import settings
 
 
 @shared_task(bind=True, max_retries=3, retry_backoff=30, retry_backoff_max=300)  # pyre-ignore[not-callable]

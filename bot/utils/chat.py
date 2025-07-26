@@ -12,7 +12,7 @@ from bot.texts import msg_text
 from bot.utils.other import answer_msg
 from bot.keyboards import new_coach_kb, incoming_request_kb, client_msg_bk, program_view_kb
 from bot.states import States
-from config.env_settings import settings
+from config.app_settings import settings
 from core.cache import Cache
 from core.schemas import Coach, Profile, Client
 from core.enums import CoachType

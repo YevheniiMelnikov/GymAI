@@ -9,7 +9,7 @@ from celery import shared_task
 from loguru import logger
 import httpx
 
-from config.env_settings import settings
+from config.app_settings import settings
 from core.cache import Cache
 from core.services import APIService
 from bot.texts.text_manager import msg_text

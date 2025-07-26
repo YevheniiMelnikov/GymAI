@@ -17,7 +17,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import BotCommand, CallbackQuery, Message
 
-from config.env_settings import settings
+from config.app_settings import settings
 from bot.texts.text_manager import TextManager
 from core.containers import App
 

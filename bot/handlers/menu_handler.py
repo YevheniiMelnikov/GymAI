@@ -19,6 +19,7 @@ from bot.keyboards import (
 )
 from bot.states import States
 from bot.texts.text_manager import msg_text
+from config.app_settings import settings
 from core.ai_coach.utils import ai_assign_client
 from core.cache import Cache
 from core.enums import CoachType
@@ -246,18 +247,17 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
         pass  # already assigned to AI
     else:
         await assign_coach(await Cache.coach.get_ai_coach(), client)
-        await ai_assign_client(client)
+        await ai_assign_client(client, lang=profile.language)
 
     if service == "program":
         try:
-            await generate_program(client, workout_type, wishes, state, bot)
+            await generate_program(client, profile.language, workout_type, wishes, state, bot)
         except Exception as e:  # noqa: BLE001
             logger.exception(f"Program generation failed: {e}")
             await answer_msg(callback_query, msg_text("unexpected_error", profile.language))
         return
 
     period_map = {
-        "subscription_14_days": "14d",
         "subscription_1_month": "1m",
         "subscription_6_months": "6m",
     }
@@ -268,7 +268,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
         msg_text("select_days", profile.language),
         reply_markup=select_days_kb(profile.language, []),
     )
-    await del_msg(callback_query)
+    await del_msg(cast(Message | CallbackQuery | None, callback_query))
     return
 
 
@@ -276,7 +276,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
 async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     profile = Profile.model_validate(data.get("profile"))
-    lang = profile.language
+    lang = profile.language or settings.DEFAULT_LANGUAGE
     days: list[str] = data.get("workout_days", [])
 
     if callback_query.data != "complete":
@@ -306,7 +306,7 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     bot = cast(Bot, callback_query.bot)
     await answer_msg(callback_query, msg_text("request_in_progress", lang))
     await show_main_menu(callback_query.message, profile, state)
-    await generate_subscription(client, workout_type, wishes, period, days, state, bot)
+    await generate_subscription(client, lang, workout_type, wishes, period, days, state, bot)
 
 
 @menu_router.callback_query(States.profile)

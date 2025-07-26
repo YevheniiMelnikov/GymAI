@@ -10,7 +10,7 @@ from bot.utils.other import delete_messages, answer_msg, del_msg
 from bot.keyboards import program_edit_kb, program_manage_kb
 from bot.states import States
 from bot.texts.text_manager import msg_text
-from config.env_settings import settings
+from config.app_settings import settings
 from core.schemas import Exercise, DayExercises, Subscription, Profile
 from core.exceptions import ProgramNotFoundError, SubscriptionNotFoundError, ProfileNotFoundError
 

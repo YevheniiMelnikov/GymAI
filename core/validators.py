@@ -2,7 +2,7 @@ from typing import TypeVar, Type, cast
 from pydantic import BaseModel, ValidationError
 from loguru import logger
 
-from config.env_settings import settings
+from config.app_settings import settings
 from core.exceptions import UserServiceError
 
 T = TypeVar("T", bound=BaseModel)

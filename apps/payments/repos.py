@@ -8,7 +8,7 @@ from rest_framework.exceptions import NotFound
 
 from apps.payments.models import Payment
 from apps.payments.serializers import PaymentSerializer
-from config.env_settings import settings
+from config.app_settings import settings
 
 
 class PaymentRepository:

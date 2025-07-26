@@ -557,17 +557,18 @@ async def toggle_drop_set_callback(callback_query: CallbackQuery, state: FSMCont
     )
 
 
-@workout_router.callback_query()
-async def show_history(callback_query: CallbackQuery, state: FSMContext) -> None:
-    if callback_query.data != "history":
-        return
+@workout_router.callback_query(States.program_view)
+async def view_program(callback_query: CallbackQuery, state: FSMContext) -> None:
+    await callback_query.answer()
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
-    current_state = await state.get_state()
-    if current_state == States.program_view.state:
+    if callback_query.data == "history":
         await show_program_history(callback_query, profile, state)
-    elif current_state == States.show_subscription.state:
-        await show_subscription_history(callback_query, profile, state)
+    elif callback_query.data == "quit":
+        await show_main_menu(callback_query.message, profile, state)
+    else:
+        await program_menu_pagination(state, callback_query)
+    await del_msg(cast(Message | CallbackQuery | None, callback_query))
 
 
 @workout_router.callback_query(States.program_history)

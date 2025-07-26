@@ -9,10 +9,6 @@ class ProgramRequest(BaseModel):
     wishes: str
 
 
-class ProgramResponse(BaseModel):
-    days: list[DayExercises]
-
-
 class SubscriptionRequest(BaseModel):
     workout_type: str
     wishes: str
@@ -21,10 +17,10 @@ class SubscriptionRequest(BaseModel):
     workout_days: list[str]
 
 
+class ProgramResponse(BaseModel):
+    days: list[DayExercises]
+
+
 class SubscriptionResponse(BaseModel):
     workout_days: list[str]
     exercises: list[DayExercises]
-
-
-class AskAIRequest(BaseModel):
-    question: str

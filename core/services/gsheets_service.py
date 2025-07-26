@@ -5,7 +5,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 from gspread.utils import ValueInputOption
 
-from config.env_settings import settings
+from config.app_settings import settings
 
 
 class GSheetsService:

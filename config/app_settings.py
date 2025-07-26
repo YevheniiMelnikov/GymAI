@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     API_RETRY_BACKOFF_FACTOR: int = 2
     API_RETRY_MAX_DELAY: int = 10
     API_TIMEOUT: int = 10
+    AI_GENERATION_RETRIES: int = 3
 
     CACHE_TTL: int = 60 * 5
 
@@ -53,7 +54,6 @@ class Settings(BaseSettings):
 
     BOT_TOKEN: str
     BOT_LINK: str
-
     WEBHOOK_HOST: str
     WEBHOOK_PORT: int
 
@@ -85,13 +85,10 @@ class Settings(BaseSettings):
     PACKAGE_MAX_CREDITS: int = 6200
     PACKAGE_MAX_PRICE: Decimal = Decimal("2300")  # UAH
 
-    AI_PROGRAM_PRICE: Decimal = Decimal("500")
-    SMALL_AI_SUBSCRIPTION_PRICE: Decimal = Decimal("350")
-    MEDIUM_AI_SUBSCRIPTION_PRICE: Decimal = Decimal("600")
-    LARGE_AI_SUBSCRIPTION_PRICE: Decimal = Decimal("2500")
+    AI_PROGRAM_PRICE: Decimal = Decimal("350")
+    REGULAR_AI_SUBSCRIPTION_PRICE: Decimal = Decimal("450")  # 1 month
+    LARGE_AI_SUBSCRIPTION_PRICE: Decimal = Decimal("2000")  # 6 months
     ASK_AI_PRICE: Decimal = Decimal("10")
-
-    AI_GENERATION_RETRIES: int = 3
 
     model_config = {
         "env_file": ".env",

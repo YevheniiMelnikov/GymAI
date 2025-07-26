@@ -7,7 +7,7 @@ from loguru import logger
 from bot.texts import msg_text
 from bot.utils.chat import send_message
 from bot.utils.other import del_msg
-from config.env_settings import settings
+from config.app_settings import settings
 from core.cache import Cache
 from core.exceptions import CoachNotFoundError
 from core.schemas import Profile

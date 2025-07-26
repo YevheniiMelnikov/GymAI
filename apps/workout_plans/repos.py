@@ -7,7 +7,7 @@ from rest_framework.exceptions import NotFound
 
 from apps.profiles.models import ClientProfile
 from apps.workout_plans.models import Program, Subscription
-from config.env_settings import settings
+from config.app_settings import settings
 
 
 class ProgramRepository:

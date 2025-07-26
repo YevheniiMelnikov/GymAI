@@ -16,7 +16,7 @@ from bot.handlers.internal import (
     internal_send_daily_survey,
     internal_send_workout_result,
 )
-from config.env_settings import settings
+from config.app_settings import settings
 from bot.middlewares import ProfileMiddleware
 from bot.handlers import configure_routers
 from core.ai_coach.cognee_coach import CogneeCoach

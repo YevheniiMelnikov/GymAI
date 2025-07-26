@@ -5,7 +5,7 @@ from aiogram.types import Message
 from google.cloud import storage
 from google.auth.exceptions import DefaultCredentialsError
 
-from config.env_settings import settings
+from config.app_settings import settings
 from core.cache import Cache
 
 

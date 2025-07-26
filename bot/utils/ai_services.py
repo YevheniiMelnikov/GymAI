@@ -6,7 +6,7 @@ from aiogram.fsm.context import FSMContext
 from bot.states import States
 
 from core.ai_coach.utils import ai_coach_request
-from config.env_settings import settings
+from config.app_settings import settings
 from core.ai_coach.prompts import (
     PROGRAM_PROMPT,
     SUBSCRIPTION_PROMPT,
@@ -32,6 +32,7 @@ from core.services.internal import APIService
 
 def _normalise_program(raw: str) -> dict:
     """Extract and clean JSON workout program from ``raw`` text."""
+
     extracted = extract_json(raw)
     if not extracted:
         raise ValueError("no JSON found")
@@ -40,10 +41,10 @@ def _normalise_program(raw: str) -> dict:
     return data
 
 
-async def generate_program(client: Client, workout_type: str, wishes: str, state: FSMContext, bot: Bot) -> None:
+async def generate_program(
+    client: Client, lang: str, workout_type: str, wishes: str, state: FSMContext, bot: Bot
+) -> None:
     req = ProgramRequest(workout_type=workout_type, wishes=wishes)
-    data = await state.get_data()
-    lang = data.get("lang")
     details = {
         "name": client.name,
         "gender": client.gender,
@@ -74,7 +75,7 @@ async def generate_program(client: Client, workout_type: str, wishes: str, state
     program_dto = None
     for _ in range(settings.AI_GENERATION_RETRIES):
         response = await ai_coach_request(text=prompt, client=client, chat_id=client.id, language=lang)
-        print(f"Response: {response}")
+        print(f"Response: {response}")  # TODO: REMOVE
         program_raw = response[0] if response else ""
         program_dto = parse_program_json(program_raw)
         if program_dto is not None:
@@ -121,7 +122,7 @@ async def generate_program(client: Client, workout_type: str, wishes: str, state
     from bot.utils.exercises import format_program
 
     program_text = await format_program(exercises, day=0)
-    await send_program(client, data.get("lang", "ua"), program_text, state, bot)
+    await send_program(client, data.get("lang", settings.DEFAULT_LANG), program_text, state, bot)
     await state.update_data(
         exercises=[d.model_dump() for d in exercises],
         split=len(exercises),
@@ -133,6 +134,7 @@ async def generate_program(client: Client, workout_type: str, wishes: str, state
 
 async def generate_subscription(
     client: Client,
+    lang: str,
     workout_type: str,
     wishes: str,
     period: str,
@@ -148,13 +150,16 @@ async def generate_subscription(
         workout_days=workout_days,
     )
     data = await state.get_data()
-    lang = data.get("lang")
-    prompt = SUBSCRIPTION_PROMPT.format(
-        request=req.model_dump_json(indent=2),
-        language=lang,
-        wishes=wishes,
-        workout_days=", ".join(workout_days),
-        workout_type=workout_type,
+    prompt = (
+        SYSTEM_MESSAGE
+        + "\n\n"
+        + SUBSCRIPTION_PROMPT.format(
+            request=req.model_dump_json(indent=2),
+            language=lang,
+            wishes=wishes,
+            workout_days=", ".join(workout_days),
+            workout_type=workout_type,
+        )
     )
     sub_raw = ""
     sub_dto = None

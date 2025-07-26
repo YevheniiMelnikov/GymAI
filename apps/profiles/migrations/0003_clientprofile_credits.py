@@ -2,7 +2,7 @@
 
 from django.db import migrations, models
 
-from config.env_settings import settings
+from config.app_settings import settings
 
 
 class Migration(migrations.Migration):

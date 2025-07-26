@@ -164,7 +164,6 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
     else:
         price = coach.subscription_price or Decimal("0")
         period_map = {
-            "subscription_14_days": "14d",
             "subscription_1_month": "1m",
             "subscription_6_months": "6m",
         }

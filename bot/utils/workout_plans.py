@@ -12,7 +12,7 @@ from loguru import logger
 
 from bot.keyboards import program_edit_kb, program_manage_kb, subscription_view_kb
 from bot.states import States
-from config.env_settings import settings
+from config.app_settings import settings
 from core.cache import Cache
 from core.enums import ClientStatus, PaymentStatus
 from core.schemas import Profile, DayExercises, Subscription, Program
@@ -374,7 +374,6 @@ async def process_new_subscription(
 
     service_type = data.get("service_type", "subscription")
     period_map = {
-        "subscription_14_days": "14d",
         "subscription_1_month": "1m",
         "subscription_6_months": "6m",
     }

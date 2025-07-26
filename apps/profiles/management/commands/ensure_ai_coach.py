@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from apps.profiles.models import Profile, CoachProfile
-from config.env_settings import settings
+from config.app_settings import settings
 from apps.profiles.choices import Role, CoachType
 
 

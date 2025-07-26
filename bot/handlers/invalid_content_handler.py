@@ -4,7 +4,7 @@ from aiogram.types import Message
 
 from bot.states import States
 from bot.texts.text_manager import msg_text
-from config.env_settings import settings
+from config.app_settings import settings
 
 invalid_content_router = Router()
 

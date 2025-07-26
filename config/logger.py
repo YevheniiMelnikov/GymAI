@@ -2,7 +2,7 @@ import logging
 import sys
 import types
 from loguru import logger
-from config.env_settings import settings
+from config.app_settings import settings
 
 
 def configure_loguru():

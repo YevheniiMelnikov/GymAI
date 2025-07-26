@@ -7,7 +7,9 @@ from loguru import logger
 from bot.keyboards import workout_survey_kb
 from bot.texts.text_manager import msg_text
 from bot.utils.profiles import get_clients_to_survey
-from config.env_settings import settings
+from config.app_settings import settings
+from core.ai_coach.parsers import parse_program_text, parse_program_json
+from core.exceptions import SubscriptionNotFoundError
 from core.payment_processor import PaymentProcessor
 from core.cache import Cache
 from core.enums import CoachType
@@ -74,9 +76,10 @@ async def internal_send_workout_result(request: web.Request, *, ai_coach: type[B
 
     coach_id = payload.get("coach_id")
     client_id = payload.get("client_id")
-    text = payload.get("text")
+    client_workout_feedback = payload.get("text")
+    expected_workout_result = payload.get("program")
 
-    if not coach_id or not client_id or text is None:
+    if not coach_id or not client_id or client_workout_feedback is None:
         return web.json_response({"detail": "Missing parameters"}, status=400)
 
     bot: Bot = request.app["bot"]
@@ -85,12 +88,41 @@ async def internal_send_workout_result(request: web.Request, *, ai_coach: type[B
         return web.json_response({"detail": "Coach not found"}, status=404)
 
     if coach.coach_type == CoachType.ai:
-        await ai_coach.save_user_message(str(text), chat_id=int(client_id), client_id=int(client_id))
+        await ai_coach.save_user_message(str(client_workout_feedback), chat_id=int(client_id), client_id=int(client_id))
         client = await Cache.client.get_client(int(client_id))
         profile = await APIService.profile.get_profile(client.profile)
-        lang = profile.language if profile else settings.DEFAULT_LANG
-        updated_workout = await ai_coach.process_workout_result(int(client_id), str(text), lang)
+        updated_workout = await ai_coach.process_workout_result(
+            client_id=int(client_id),
+            expected_workout_result=expected_workout_result,
+            feedback=str(client_workout_feedback),
+            language=profile.language if profile else settings.DEFAULT_LANG,
+        )
         if profile is not None and updated_workout:
+            dto = parse_program_json(updated_workout)
+            if dto is not None:
+                exercises = dto.days
+            else:
+                exercises, _ = parse_program_text(updated_workout)
+
+            if not exercises:
+                logger.error("AI workout update produced no exercises")
+                return web.json_response({"result": "AI workout update produced no exercises"})
+
+            try:
+                subscription = await Cache.workout.get_latest_subscription(client_id)
+            except SubscriptionNotFoundError:
+                logger.error(f"No subscription found for client_id={client_id}")
+                return web.json_response({"result": f"No subscription found for client_id={client_id}"})
+
+            serialized = [day.model_dump() for day in exercises]
+            subscription_data = subscription.model_dump()
+            subscription_data.update(client_profile=client_id, exercises=serialized)
+
+            await APIService.workout.update_subscription(subscription.id, subscription_data)
+            await Cache.workout.update_subscription(
+                client_id,
+                {"exercises": serialized, "client_profile": client_id},
+            )
             await bot.send_message(
                 chat_id=profile.tg_id,
                 text=msg_text("program_updated", profile.language),
@@ -99,7 +131,7 @@ async def internal_send_workout_result(request: web.Request, *, ai_coach: type[B
     else:
         await send_message(
             recipient=coach,
-            text=str(text),
+            text=str(client_workout_feedback),
             bot=bot,
             state=None,
             include_incoming_message=False,

@@ -6,7 +6,7 @@ from urllib.parse import urljoin
 from loguru import logger
 from pydantic_core._pydantic_core import ValidationError
 
-from config.env_settings import settings
+from config.app_settings import settings
 from core.enums import PaymentStatus
 from core.schemas import Payment, Subscription
 from core.services.internal.api_client import APIClient

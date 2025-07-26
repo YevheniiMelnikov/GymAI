@@ -7,7 +7,7 @@ from loguru import logger
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
-from config.env_settings import settings
+from config.app_settings import settings
 
 
 class BaseCacheManager:

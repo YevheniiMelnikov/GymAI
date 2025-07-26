@@ -1,6 +1,6 @@
 from celery import Celery
 from celery.schedules import crontab
-from config.env_settings import settings
+from config.app_settings import settings
 
 celery_config = {
     "broker_url": settings.REDIS_URL,

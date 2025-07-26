@@ -9,7 +9,7 @@ from aiogram.exceptions import TelegramBadRequest
 from pathlib import Path
 
 from bot.keyboards import profile_menu_kb
-from config.env_settings import settings
+from config.app_settings import settings
 from core.cache import Cache
 from core.enums import ClientStatus, CoachType
 from core.exceptions import (
@@ -18,7 +18,6 @@ from core.exceptions import (
     ClientNotFoundError,
 )
 from core.services import APIService
-from bot.utils import menus
 from bot.utils.chat import send_coach_request
 from bot.utils.other import delete_messages, del_msg, answer_msg
 from core.schemas import Client, Coach, Profile
@@ -67,7 +66,9 @@ async def update_profile_data(message: Message, state: FSMContext, role: str, bo
                         await Cache.coach.save_coach(profile.id, coach.model_dump())
 
         await answer_msg(message, msg_text("your_data_updated", data.get("lang", settings.DEFAULT_LANG)))
-        await menus.show_main_menu(message, profile, state)
+        from bot.utils.menus import show_main_menu  # circular import
+
+        await show_main_menu(message, profile, state)
 
     except Exception as e:
         logger.error(f"Unexpected error updating profile: {e}")
