@@ -20,10 +20,10 @@ PROGRAM_PROMPT = """
     Example response:
     {{
       "exercises_by_day": [
-        {
+        {{
           "day": "day_1",
           "exercises": [
-            {
+            {{
               "name": "Bench Press",
               "sets": "4",
               "reps": "8",
@@ -31,8 +31,8 @@ PROGRAM_PROMPT = """
               "weight": "80",  // kg
               "set_id": None,  // use it to combine exercises into sets
               "drop_set": false
-            },
-            {
+            }},
+            {{
               "name": "Incline Dumbbell Press",
               "sets": "3",
               "reps": "10",
@@ -40,9 +40,9 @@ PROGRAM_PROMPT = """
               "weight": "24",
               "set_id": None,
               "drop_set": false
-            }
+            }}
           ]
-        }
+        }}
       ]
     }}
 """
