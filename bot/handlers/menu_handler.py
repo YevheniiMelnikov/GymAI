@@ -20,7 +20,7 @@ from bot.keyboards import (
 from bot.states import States
 from bot.texts.text_manager import msg_text
 from config.app_settings import settings
-from core.ai_coach.utils import ai_assign_client
+from bot.utils.ai_services import assign_client
 from core.cache import Cache
 from core.enums import CoachType
 from core.schemas import Coach, Client, Profile
@@ -247,7 +247,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
         pass  # already assigned to AI
     else:
         await assign_coach(await Cache.coach.get_ai_coach(), client)
-        await ai_assign_client(client, lang=profile.language)
+        await assign_client(client, profile.language)
 
     if service == "program":
         try:

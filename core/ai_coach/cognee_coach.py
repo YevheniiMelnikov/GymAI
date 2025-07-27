@@ -4,7 +4,6 @@ import asyncio
 import os
 import sys
 from typing import Any, Optional, Tuple
-import json
 from uuid import uuid4
 
 from core.ai_coach.cognee_config import CogneeConfig
@@ -21,7 +20,6 @@ from loguru import logger
 from config.app_settings import settings
 from core.ai_coach.base import BaseAICoach
 from core.ai_coach.knowledge_loader import KnowledgeLoader
-from core.ai_coach.prompts import INITIAL_PROMPT, UPDATE_WORKOUT_PROMPT, SYSTEM_MESSAGE
 from core.schemas import Client
 
 
@@ -112,9 +110,6 @@ class CogneeCoach(BaseAICoach):
             info = await cognee.add(text, dataset_name=new_name, user=user)
             return getattr(info, "dataset_id", new_name), True
 
-    @staticmethod
-    def _make_initial_prompt(client_data: str, lang: str) -> str:
-        return INITIAL_PROMPT.format(client_data=client_data, language=lang)
 
     @classmethod
     async def _cognify_dataset(cls, dataset_id: str, user: Any) -> None:
@@ -163,11 +158,6 @@ class CogneeCoach(BaseAICoach):
         return []
 
     @classmethod
-    async def assign_client(cls, client: Client, lang: str) -> None:
-        prompt = cls._make_initial_prompt(cls._extract_client_data(client), lang)
-        await cls.make_request(prompt)
-
-    @classmethod
     async def save_user_message(cls, text: str, chat_id: int, client_id: int) -> None:
         """Store a raw user message into the chat history dataset."""
         if not text.strip():
@@ -176,48 +166,3 @@ class CogneeCoach(BaseAICoach):
         user = await cls._get_user()
         ds_name = f"chat_{chat_id}_{user.id}"
         await cls._add_and_cognify(text, ds_name, user)
-
-    @classmethod
-    async def process_workout_result(
-        cls,
-        client_id: int,
-        expected_workout_result: str,
-        feedback: str,
-        language: str,
-    ) -> str:
-        """Update workout plan based on client's feedback and previous context."""
-
-        cls._ensure_config()
-
-        try:
-            ctx = await cls.get_context(client_id, "workout")
-        except Exception:
-            ctx = []
-
-        prompt = (
-            SYSTEM_MESSAGE
-            + "\n\n"
-            + UPDATE_WORKOUT_PROMPT.format(
-                expected_workout=expected_workout_result.strip(),
-                feedback=feedback.strip(),
-                context="\n".join(ctx).strip(),
-                language=language,
-            )
-        )
-
-        responses = await cls.make_request(prompt=prompt, client=None)
-        return responses[0] if responses else ""
-
-    @staticmethod
-    def _extract_client_data(client: Client) -> str:
-        details = {
-            "name": client.name,
-            "gender": client.gender,
-            "born_in": client.born_in,
-            "weight": client.weight,
-            "health_notes": client.health_notes,
-            "workout_experience": client.workout_experience,
-            "workout_goals": client.workout_goals,
-        }
-        clean = {k: v for k, v in details.items() if v is not None}
-        return json.dumps(clean, ensure_ascii=False)

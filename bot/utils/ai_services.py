@@ -5,12 +5,14 @@ from aiogram.fsm.context import FSMContext
 
 from bot.states import States
 
-from core.ai_coach.utils import ai_coach_request
+from core.ai_coach.utils import ai_coach_request, extract_client_data
 from config.app_settings import settings
 from core.ai_coach.prompts import (
     PROGRAM_PROMPT,
     SUBSCRIPTION_PROMPT,
     SYSTEM_MESSAGE,
+    UPDATE_WORKOUT_PROMPT,
+    INITIAL_PROMPT,
 )
 from core.ai_coach.parsers import (
     parse_program_text,
@@ -20,6 +22,7 @@ from core.ai_coach.parsers import (
     normalize_program_data,
 )
 from core.ai_coach.schemas import ProgramRequest, SubscriptionRequest
+from core.ai_coach.cognee_coach import CogneeCoach
 from loguru import logger
 from core.cache import Cache
 from core.exceptions import ProgramNotFoundError
@@ -28,6 +31,14 @@ from bot.utils.workout_plans import _next_payment_date
 from bot.utils.chat import send_program, send_message
 from bot.texts.text_manager import msg_text
 from core.services.internal import APIService
+
+
+async def assign_client(client: Client, lang: str) -> None:
+    prompt = INITIAL_PROMPT.format(
+        client_data=extract_client_data(client),
+        language=lang,
+    )
+    await ai_coach_request(text=prompt, client=client)
 
 
 def _normalise_program(raw: str) -> dict:
@@ -45,16 +56,7 @@ async def generate_program(
     client: Client, lang: str, workout_type: str, wishes: str, state: FSMContext, bot: Bot
 ) -> None:
     req = ProgramRequest(workout_type=workout_type, wishes=wishes)
-    details = {
-        "name": client.name,
-        "gender": client.gender,
-        "born_in": client.born_in,
-        "weight": client.weight,
-        "health_notes": client.health_notes,
-        "workout_experience": client.workout_experience,
-        "workout_goals": client.workout_goals,
-    }
-    client_profile = json.dumps({k: v for k, v in details.items() if v is not None}, ensure_ascii=False)
+    client_profile = extract_client_data(client)
     try:
         prev_program = await Cache.workout.get_latest_program(client.profile, use_fallback=False)
         previous_program = json.dumps([d.model_dump() for d in prev_program.exercises_by_day], ensure_ascii=False)
@@ -194,3 +196,31 @@ async def generate_subscription(
         logger.info(f"New AI-coach subscription generated for client_id={client.id}")
 
     return
+
+
+async def process_workout_result(
+    client_id: int,
+    expected_workout_result: str,
+    feedback: str,
+    language: str,
+) -> str:
+    """Return updated workout plan for ``client_id`` based on ``feedback``."""
+
+    try:
+        ctx = await CogneeCoach.get_context(client_id, "workout")
+    except Exception:
+        ctx = []
+
+    prompt = (
+        SYSTEM_MESSAGE
+        + "\n\n"
+        + UPDATE_WORKOUT_PROMPT.format(
+            expected_workout=expected_workout_result.strip(),
+            feedback=feedback.strip(),
+            context="\n".join(ctx).strip(),
+            language=language,
+        )
+    )
+
+    responses = await ai_coach_request(text=prompt, client=None)
+    return responses[0] if responses else ""
