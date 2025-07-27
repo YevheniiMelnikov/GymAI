@@ -139,8 +139,6 @@ async def generate_subscription(
     wishes: str,
     period: str,
     workout_days: list[str],
-    state: FSMContext,
-    bot: Bot,
 ) -> None:
     req = SubscriptionRequest(
         workout_type=workout_type,
@@ -149,7 +147,6 @@ async def generate_subscription(
         days=len(workout_days),
         workout_days=workout_days,
     )
-    data = await state.get_data()
     prompt = (
         SYSTEM_MESSAGE
         + "\n\n"

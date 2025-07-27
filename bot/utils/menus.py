@@ -27,7 +27,7 @@ from core.exceptions import (
     SubscriptionNotFoundError,
     ProgramNotFoundError,
 )
-from core.schemas import Client, Coach, Profile, Subscription, Program, DayExercises, Exercise
+from core.schemas import Client, Coach, Profile, Subscription, Program, DayExercises
 from bot.utils.text import (
     get_client_page,
     get_profile_attributes,

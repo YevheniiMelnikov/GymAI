@@ -33,7 +33,6 @@ from bot.utils.menus import (
     show_exercises_menu,
     show_program_history,
     program_history_pagination,
-    show_subscription_history,
     subscription_history_pagination,
     show_subscription_page,
 )
