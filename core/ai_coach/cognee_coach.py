@@ -17,6 +17,8 @@ import cognee
 from cognee.modules.data.exceptions import DatasetNotFoundError
 from cognee.modules.users.exceptions.exceptions import PermissionDeniedError
 from cognee.modules.users.methods.get_default_user import get_default_user
+from cognee.infrastructure.databases.exceptions import DatabaseNotCreatedError
+from cognee.modules.engine.operations.setup import setup as cognee_setup
 from sqlalchemy.exc import SAWarning
 from loguru import logger
 
@@ -31,7 +33,11 @@ from core.schemas import Client
 OPENROUTER_API_KEY = "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"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
-OPENAI_API_KEY     = "sk-svcacct-rtE7qv2lBdDw1f1HaEGhi2WkbG3A__bylo3J2EU4rRpLLnoq7hNzJpE5yjL0Gy96H-lpymdmT3BlbkFJl75ntMwuTInpuzpYhy8de6lgxWyq9Z6T_KC27GgidEYVvyCblmPU5XmT5H4sK5KvYxqGpGcA"
+OPENAI_API_KEY = (
+    "sk-svcacct-rtE7qv2lBdDw1f1HaEGhi2WkbG3A__bylo3J2EU4rRpLLnoq7hNzJpE5yjL0Gy96H-"
+    "lpymdmT3BlbkFJl75ntMwuTInpuzpYhy8de6lgxWyq9Z6T_KC27GgidEYVvyCblmPU5XmT5H4sK5KvY"
+    "xqGpGcA"
+)
 OPENAI_BASE_URL    = "https://api.openai.com/v1"
 EMBEDDING_MODEL    = "openai/text-embedding-3-large"  # работает в Cognee ≥0.27
 OPENROUTER_HEADERS = {
@@ -218,7 +224,11 @@ class CogneeCoach(BaseAICoach):
         Retrieve and cache the default Cognee user.
         """
         if cls._user is None:
-            cls._user = await get_default_user()
+            try:
+                cls._user = await get_default_user()
+            except DatabaseNotCreatedError:
+                await cognee_setup()
+                cls._user = await get_default_user()
         return cls._user
 
     @classmethod
