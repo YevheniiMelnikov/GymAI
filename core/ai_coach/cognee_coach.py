@@ -226,8 +226,15 @@ class CogneeConfig:
         os.environ.setdefault("EMBEDDING_API_KEY", OPENAI_API_KEY)
 
         # Логи
-        os.environ.setdefault("LITELLM_LOG", "WARNING")
+        os.environ.setdefault("LITELLM_LOG", "ERROR")
         os.environ.setdefault("LOG_LEVEL", "WARNING")
+
+        try:
+            import litellm
+            litellm.suppress_debug_info = True
+            logger.debug("LiteLLM debug info suppressed")
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"Failed to suppress LiteLLM debug info: {exc}")
 
         storage_root = Path(".data_storage").resolve()
         storage_root.mkdir(parents=True, exist_ok=True)

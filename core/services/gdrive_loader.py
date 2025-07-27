@@ -12,6 +12,7 @@ from loguru import logger
 from docx import Document
 import fitz
 import cognee
+from litellm import RateLimitError
 
 from config.app_settings import settings
 from core.ai_coach.knowledge_loader import KnowledgeLoader
@@ -103,6 +104,9 @@ class GDriveDocumentLoader(KnowledgeLoader):
                         continue
 
                     await cognee.add(text, dataset_name="external_docs", node_set=[f"gdrive:{name}"])
+                except RateLimitError as exc:
+                    logger.warning(f"Rate limited while processing {name}: {exc}")
+                    break
                 except Exception as exc:
                     logger.error(f"Failed to process {name}: {exc}")
 
