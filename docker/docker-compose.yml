@@ -94,6 +94,9 @@ services:
       bot: { condition: service_healthy }
     restart: unless-stopped
     networks: [monitoring]
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
 
   beat:
     build:
@@ -111,6 +114,9 @@ services:
       bot: { condition: service_healthy }
     restart: unless-stopped
     networks: [monitoring]
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
 
   nginx:
     image: nginx:latest

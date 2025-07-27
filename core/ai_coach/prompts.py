@@ -4,22 +4,22 @@ SYSTEM_MESSAGE = """
 """
 
 PROGRAM_PROMPT = """
+    Instructions:
+    - Include an estimated working weight (kg) for each weighted exercise where possible.
+    - Respond strictly in the client's language: {language}
+    - Return only valid JSON compatible with the example bellow.
+    - The reply MUST start with '{{' and end with '}}' — no extra text.
+
     Request:
     {{
       "client_profile": {client_profile},
       "previous_program": {previous_program},
       "request": {request}
     }}
-    
-    Instructions:
-    - Include an estimated working weight (kg) for each weighted exercise where possible.
-    - Respond strictly in the client's language: {language}
-    - Return only valid JSON compatible with the example bellow.
-    - The reply MUST start with '{{' and end with '}}' — no extra text.
-    
+     
     Example response:
     {{
-      "exercises_by_day": [
+      "days": [
         {{
           "day": "day_1",
           "exercises": [
@@ -48,6 +48,13 @@ PROGRAM_PROMPT = """
 """
 
 SUBSCRIPTION_PROMPT = """
+    Instructions:
+    - Generate a workout plan distributed over the preferred workout days.
+    - Include an estimated working weight (kg) for each weighted exercise where possible.
+    - Respond strictly in the client's language: {language}
+    - Return only valid JSON compatible with the example below.
+    - The reply MUST start with '{{' and end with '}}' — no extra text.
+    
     Request:
     {{
       "workout_type": "{workout_type}",
@@ -55,13 +62,6 @@ SUBSCRIPTION_PROMPT = """
       "preferred_workout_days": {workout_days},
       "request": {request}
     }}
-    
-    Instructions:
-    - Generate a workout plan distributed over the preferred workout days.
-    - Include an estimated working weight (kg) for each weighted exercise where possible.
-    - Respond strictly in the client's language: {language}
-    - Return only valid JSON compatible with the example below.
-    - The reply MUST start with '{{' and end with '}}' — no extra text.
     
     Example response:
     {{

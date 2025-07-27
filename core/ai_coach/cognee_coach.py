@@ -45,13 +45,13 @@ class CogneeConfig:
     db_name: str
 
     def apply(self) -> None:
+        self._configure_environment()
+        self._configure_logging()
+        self._patch_cognee()
         self._configure_llm()
         self._configure_vector_db()
         self._configure_graph_db()
         self._configure_relational_db()
-        self._configure_environment()
-        self._configure_logging()
-        self._patch_cognee()
 
     def _configure_llm(self) -> None:
         cognee.config.set_llm_provider(self.provider)

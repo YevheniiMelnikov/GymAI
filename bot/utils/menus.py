@@ -617,11 +617,8 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
     current_day = data.get("day_index", 0)
     exercises = data.get("exercises", [])
 
-    if isinstance(exercises, dict):
-        exercises = [
-            DayExercises(day=k, exercises=[Exercise.model_validate(e) if isinstance(e, dict) else e for e in v])
-            for k, v in exercises.items()
-        ]
+    if exercises and isinstance(exercises[0], dict):
+        exercises = [DayExercises.model_validate(d) for d in exercises]
 
     split_number = data.get("split")
     assert split_number is not None
