@@ -121,6 +121,9 @@ class CogneeConfig:
             from cognee.modules.data.models.graph_relationship_ledger import GraphRelationshipLedger
             from cognee.infrastructure.databases.vector.embeddings import LiteLLMEmbeddingEngine
             from cognee.infrastructure.llm.generic_llm_api.adapter import GenericAPIAdapter
+            from cognee.infrastructure.files.utils import open_data_file as _orig_open_data_file
+            from cognee.infrastructure.files import utils as file_utils
+            from contextlib import asynccontextmanager
             from openai import AsyncOpenAI
 
             # 1️⃣ UUID вместо sequence
@@ -152,6 +155,18 @@ class CogneeConfig:
                     target.default_headers.update(OPENROUTER_HEADERS)
 
             GenericAPIAdapter.__init__ = _new_init
+
+            @asynccontextmanager
+            async def _fixed_open_data_file(file_path: str, mode: str = "rb", encoding: str | None = None, **kwargs):
+                if os.name == "nt" and file_path.startswith("file://") and "\\" in file_path:
+                    path_part = file_path[len("file://") :]
+                    if not path_part.startswith("/"):
+                        path_part = "/" + path_part
+                    file_path = "file://" + path_part.replace("\\", "/")
+                async with _orig_open_data_file(file_path, mode=mode, encoding=encoding, **kwargs) as f:
+                    yield f
+
+            file_utils.utils.open_data_file = _fixed_open_data_file
 
         except Exception as e:  # noqa: BLE001
             logger.debug(f"Cognee patch failed: {e}")
@@ -191,6 +206,7 @@ class CogneeConfig:
         configure_loguru()
         logger.level("COGNEE", no=45, color="<cyan>")
         logging.getLogger("cognee").setLevel(logging.INFO)
+        logging.getLogger("GraphCompletionRetriever").setLevel(logging.ERROR)
 
 
 class CogneeCoach(BaseAICoach):
