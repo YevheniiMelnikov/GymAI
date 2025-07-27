@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Optional, Tuple
 import json
 from uuid import uuid4
+from urllib.parse import urlparse
 
 from core.ai_coach.lock_cache import LockCache
 
@@ -161,14 +162,26 @@ class CogneeConfig:
             GenericAPIAdapter.__init__ = _new_init
 
             @asynccontextmanager
-            async def _fixed_open_data_file(file_path: str, mode: str = "rb", encoding: str | None = None, **kwargs):
-                if os.name == "nt" and file_path.startswith("file://") and "\\" in file_path:
-                    path_part = file_path[len("file://") :]
-                    if not path_part.startswith("/"):
-                        path_part = "/" + path_part
-                    file_path = "file://" + path_part.replace("\\", "/")
-                async with _orig_open_data_file(file_path, mode=mode, encoding=encoding, **kwargs) as f:
-                    yield f
+            async def _fixed_open_data_file(
+                file_path: str, mode: str = "rb", encoding: str | None = None, **kwargs
+            ):
+                if file_path.startswith("file://"):
+                    parsed = urlparse(file_path)
+                    fs_path = parsed.path or parsed.netloc
+                    if os.name == "nt":
+                        if fs_path.startswith("/") and len(fs_path) > 2 and fs_path[2] == ":":
+                            fs_path = fs_path[1:]
+                        fs_path = fs_path.replace("/", "\\")
+                    file_dir = os.path.dirname(fs_path)
+                    file_name = os.path.basename(fs_path)
+                    storage = LocalFileStorage(file_dir)
+                    with storage.open(file_name, mode=mode, encoding=encoding, **kwargs) as f:
+                        yield f
+                else:
+                    async with _orig_open_data_file(
+                        file_path, mode=mode, encoding=encoding, **kwargs
+                    ) as f:
+                        yield f
 
             file_utils.open_data_file = _fixed_open_data_file
 
@@ -176,6 +189,14 @@ class CogneeConfig:
 
             def _ensure_open(self, file_path: str, mode: str = "rb", *args, **kwargs):
                 parsed_storage_path = get_parsed_path(self.storage_path)
+                if (
+                    os.name == "nt"
+                    and parsed_storage_path.startswith("\\")
+                    and len(parsed_storage_path) > 2
+                    and parsed_storage_path[1] != "\\"
+                    and parsed_storage_path[2] == ":"
+                ):
+                    parsed_storage_path = parsed_storage_path.lstrip("\\")
                 if not os.path.exists(parsed_storage_path):
                     os.makedirs(parsed_storage_path, exist_ok=True)
                 return _orig_local_open(self, file_path, mode=mode, *args, **kwargs)
