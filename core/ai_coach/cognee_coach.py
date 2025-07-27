@@ -28,59 +28,6 @@ from core.ai_coach.prompts import INITIAL_PROMPT, UPDATE_WORKOUT_PROMPT, SYSTEM_
 from core.schemas import Client
 
 
-def _patch_cognee() -> None:
-    """Fix issues in Cognee's graph ledger ID generation."""
-    try:
-        from cognee.modules.data.models.graph_relationship_ledger import GraphRelationshipLedger
-
-        GraphRelationshipLedger.__table__.c.id.default = uuid4
-    except Exception as e:
-        logger.debug(f"GraphRelationshipLedger patch failed: {e}")
-
-
-def configure_environment() -> None:
-    """Set up environment variables for graph prompt and logging defaults."""
-    default_prompt = os.environ.get("GRAPH_PROMPT_PATH", "./core/ai_coach/global_system_prompt.txt")
-    os.environ["GRAPH_PROMPT_PATH"] = Path(default_prompt).resolve().as_posix()
-    os.environ.setdefault("LITELLM_LOG", "WARNING")
-    os.environ.setdefault("LOG_LEVEL", "WARNING")
-
-
-def configure_logging() -> None:
-    """Configure warnings, standard logging, and loguru for consistent output."""
-    warnings.filterwarnings("ignore", category=SAWarning)
-    logging.getLogger("langfuse").setLevel(logging.ERROR)
-    configure_loguru()
-    # Suppress verbose Cognee logs
-    logger.level("COGNEE", no=45, color="<cyan>")
-    logging.getLogger("cognee").setLevel(logging.INFO)
-
-
-# Initialize environment and logging at import
-configure_environment()
-configure_logging()
-_patch_cognee()
-
-
-async def _safe_add(text: str, dataset: str, user: Any) -> Tuple[str, bool]:  # (dataset_id, created_now)
-    """
-    Safely add text to a Cognee dataset.
-    Retries with a new dataset name on PermissionDeniedError.
-    """
-    logger.trace(f"_safe_add → dataset={dataset!r}")
-    if not text.strip():
-        return dataset, False
-
-    try:
-        info = await cognee.add(text, dataset_name=dataset, user=user)
-        return getattr(info, "dataset_id", dataset), True
-    except PermissionDeniedError:
-        new_name = f"{dataset}_{uuid4().hex[:8]}"
-        logger.trace(f"PermissionDenied on {dataset}, retrying as {new_name}")
-        info = await cognee.add(text, dataset_name=new_name, user=user)
-        return getattr(info, "dataset_id", new_name), True
-
-
 @dataclass
 class CogneeConfig:
     api_key: str
@@ -102,6 +49,9 @@ class CogneeConfig:
         self._configure_vector_db()
         self._configure_graph_db()
         self._configure_relational_db()
+        self._configure_environment()
+        self._configure_logging()
+        self._patch_cognee()
 
     def _configure_llm(self) -> None:
         cognee.config.set_llm_provider(self.provider)
@@ -130,6 +80,33 @@ class CogneeConfig:
                 "db_provider": "postgres",
             }
         )
+
+    @staticmethod
+    def _patch_cognee() -> None:
+        """Fix issues in Cognee's graph ledger ID generation."""
+        try:
+            from cognee.modules.data.models.graph_relationship_ledger import GraphRelationshipLedger
+
+            GraphRelationshipLedger.__table__.c.id.default = uuid4
+        except Exception as e:
+            logger.debug(f"GraphRelationshipLedger patch failed: {e}")
+
+    @staticmethod
+    def _configure_environment() -> None:
+        """Set up environment variables for graph prompt and logging defaults."""
+        default_prompt = os.environ.get("GRAPH_PROMPT_PATH", "./core/ai_coach/global_system_prompt.txt")
+        os.environ["GRAPH_PROMPT_PATH"] = Path(default_prompt).resolve().as_posix()
+        os.environ.setdefault("LITELLM_LOG", "WARNING")
+        os.environ.setdefault("LOG_LEVEL", "WARNING")
+
+    @staticmethod
+    def _configure_logging() -> None:
+        """Configure warnings, standard logging, and loguru for consistent output."""
+        warnings.filterwarnings("ignore", category=SAWarning)
+        logging.getLogger("langfuse").setLevel(logging.ERROR)
+        configure_loguru()
+        logger.level("COGNEE", no=45, color="<cyan>")
+        logging.getLogger("cognee").setLevel(logging.INFO)
 
 
 class CogneeCoach(BaseAICoach):
@@ -214,6 +191,22 @@ class CogneeCoach(BaseAICoach):
             logger.error(f"Permission denied while updating knowledge base: {e}")
 
     @staticmethod
+    async def _safe_add(text: str, dataset: str, user: Any) -> Tuple[str, bool]:  # (dataset_id, created_now)
+        """Safely add text to a Cognee dataset."""
+        logger.trace(f"_safe_add → dataset={dataset!r}")
+        if not text.strip():
+            return dataset, False
+
+        try:
+            info = await cognee.add(text, dataset_name=dataset, user=user)
+            return getattr(info, "dataset_id", dataset), True
+        except PermissionDeniedError:
+            new_name = f"{dataset}_{uuid4().hex[:8]}"
+            logger.trace(f"PermissionDenied on {dataset}, retrying as {new_name}")
+            info = await cognee.add(text, dataset_name=new_name, user=user)
+            return getattr(info, "dataset_id", new_name), True
+
+    @staticmethod
     def _make_initial_prompt(client_data: str, lang: str) -> str:
         return INITIAL_PROMPT.format(client_data=client_data, language=lang)
 
@@ -226,7 +219,7 @@ class CogneeCoach(BaseAICoach):
     @classmethod
     async def _add_and_cognify(cls, text: str, dataset: str, user: Any) -> str:
         """Add text to dataset and trigger background cognification if created."""
-        ds_id, created = await _safe_add(text, dataset, user)
+        ds_id, created = await cls._safe_add(text, dataset, user)
         if created:
             asyncio.create_task(cls._cognify_dataset(ds_id, user))
         return ds_id
@@ -237,7 +230,7 @@ class CogneeCoach(BaseAICoach):
         user = await cls._get_user()
         base = f"chat_{chat_id}_{user.id}"
         try:
-            ds_id, _ = await _safe_add("init", base, user)
+            ds_id, _ = await cls._safe_add("init", base, user)
             return await cognee.search(query, datasets=[ds_id], top_k=5, user=user)
         except Exception as e:
             logger.error(f"get_context failed: {e}")
