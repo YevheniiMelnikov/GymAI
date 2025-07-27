@@ -28,6 +28,18 @@ from core.ai_coach.prompts import INITIAL_PROMPT, UPDATE_WORKOUT_PROMPT, SYSTEM_
 from core.schemas import Client
 
 
+OPENROUTER_API_KEY = "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"
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+
+OPENAI_API_KEY     = "sk-svcacct-rtE7qv2lBdDw1f1HaEGhi2WkbG3A__bylo3J2EU4rRpLLnoq7hNzJpE5yjL0Gy96H-lpymdmT3BlbkFJl75ntMwuTInpuzpYhy8de6lgxWyq9Z6T_KC27GgidEYVvyCblmPU5XmT5H4sK5KvYxqGpGcA"
+OPENAI_BASE_URL    = "https://api.openai.com/v1"
+EMBEDDING_MODEL    = "openai/text-embedding-3-large"  # работает в Cognee ≥0.27
+OPENROUTER_HEADERS = {
+    "HTTP-Referer": "https://gymbot.local",
+    "X-Title": "GymBot",
+}
+
+
 @dataclass
 class CogneeConfig:
     api_key: str
@@ -54,10 +66,20 @@ class CogneeConfig:
         self._configure_relational_db()
 
     def _configure_llm(self) -> None:
-        cognee.config.set_llm_provider(self.provider)
-        cognee.config.set_llm_model(self.model)
-        cognee.config.set_llm_api_key(self.api_key)
-        cognee.config.set_llm_endpoint(self.endpoint)
+        """
+        Чат-LLM → OpenRouter; эмбединги → OpenAI.
+        """
+        # 🗣️ LLM (OpenRouter)
+        cognee.config.set_llm_provider("custom")
+        cognee.config.set_llm_model("openrouter/deepseek/deepseek-chat-v3-0324:free")
+        cognee.config.set_llm_api_key(OPENROUTER_API_KEY)
+        cognee.config.set_llm_endpoint(OPENROUTER_BASE_URL)
+
+        # 📐 Embeddings (ENV читает Cognee → LiteLLM)
+        os.environ["EMBEDDING_PROVIDER"] = "openai"
+        os.environ["EMBEDDING_MODEL"] = EMBEDDING_MODEL
+        os.environ["EMBEDDING_ENDPOINT"] = OPENAI_BASE_URL
+        os.environ["EMBEDDING_API_KEY"] = OPENAI_API_KEY
 
     def _configure_vector_db(self) -> None:
         cognee.config.set_vector_db_provider(self.vector_provider)
@@ -65,6 +87,7 @@ class CogneeConfig:
 
     def _configure_graph_db(self) -> None:
         os.environ["GRAPH_PROMPT_PATH"] = Path(self.graph_prompt_path).resolve().as_posix()
+        os.environ["OPENAI_API_KEY"] = OPENAI_API_KEY
         cognee.config.set_graph_database_provider(self.graph_provider)
         cognee.config.set_llm_config({"graph_prompt_path": os.environ["GRAPH_PROMPT_PATH"]})
 
@@ -83,19 +106,66 @@ class CogneeConfig:
 
     @staticmethod
     def _patch_cognee() -> None:
-        """Fix issues in Cognee's graph ledger ID generation."""
+        """
+        • UUID PK для GraphRelationshipLedger
+        • Фикс эмбедингов на OpenAI
+        • Добавляем обязательные заголовки к OpenRouter-клиенту
+        """
         try:
             from cognee.modules.data.models.graph_relationship_ledger import GraphRelationshipLedger
+            from cognee.infrastructure.databases.vector.embeddings import LiteLLMEmbeddingEngine
+            from cognee.infrastructure.llm.generic_llm_api.adapter import GenericAPIAdapter
+            from openai import AsyncOpenAI
 
+            # 1️⃣ UUID вместо sequence
             GraphRelationshipLedger.__table__.c.id.default = uuid4
-        except Exception as e:
-            logger.debug(f"GraphRelationshipLedger patch failed: {e}")
 
+            async def _patched_embedding(texts, model=None, **kwargs):
+                from litellm import embedding
+                return await embedding(
+                    texts,
+                    model=EMBEDDING_MODEL,
+                    api_key=OPENAI_API_KEY,
+                    base_url=OPENAI_BASE_URL,
+                )
+
+            LiteLLMEmbeddingEngine.get_embedding_fn = staticmethod(_patched_embedding)
+
+            _orig_init = GenericAPIAdapter.__init__
+
+            def _new_init(self, *args, **kwargs):
+                _orig_init(self, *args, **kwargs)
+                client = getattr(self, "aclient", None)
+                # AsyncInstructor → .client  |  pure AsyncOpenAI → self
+                target = getattr(client, "client", client)
+                if isinstance(target, AsyncOpenAI):
+                    target.default_headers.update(OPENROUTER_HEADERS)
+
+            GenericAPIAdapter.__init__ = _new_init
+
+        except Exception as e:  # noqa: BLE001
+            logger.debug(f"Cognee patch failed: {e}")
+
+    # ------------------------------------------------------------------ #
     @staticmethod
     def _configure_environment() -> None:
-        """Set up environment variables for graph prompt and logging defaults."""
-        default_prompt = os.environ.get("GRAPH_PROMPT_PATH", "./core/ai_coach/global_system_prompt.txt")
-        os.environ["GRAPH_PROMPT_PATH"] = Path(default_prompt).resolve().as_posix()
+        """
+        Минимальный набор ENV.
+        """
+        os.environ.setdefault(
+            "GRAPH_PROMPT_PATH",
+            Path("./core/ai_coach/global_system_prompt.txt").resolve().as_posix(),
+        )
+
+        os.environ.setdefault("OPENAI_API_KEY", OPENAI_API_KEY)
+        os.environ.setdefault("OPENAI_BASE_URL", OPENAI_BASE_URL)
+
+        os.environ.setdefault("EMBEDDING_PROVIDER", "openai")
+        os.environ.setdefault("EMBEDDING_MODEL", EMBEDDING_MODEL)
+        os.environ.setdefault("EMBEDDING_ENDPOINT", OPENAI_BASE_URL)
+        os.environ.setdefault("EMBEDDING_API_KEY", OPENAI_API_KEY)
+
+        # Логи
         os.environ.setdefault("LITELLM_LOG", "WARNING")
         os.environ.setdefault("LOG_LEVEL", "WARNING")
 
