@@ -124,7 +124,11 @@ class CogneeConfig:
             from openai import AsyncOpenAI
 
             # 1️⃣ UUID вместо sequence
-            GraphRelationshipLedger.__table__.c.id.default = uuid4
+            from sqlalchemy import schema as sa_schema
+
+            GraphRelationshipLedger.__table__.c.id.default = sa_schema.ColumnDefault(
+                uuid4
+            )
 
             async def _patched_embedding(texts, model=None, **kwargs):
                 from litellm import embedding
