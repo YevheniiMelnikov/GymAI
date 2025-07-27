@@ -123,7 +123,10 @@ class CogneeConfig:
             from cognee.infrastructure.llm.generic_llm_api.adapter import GenericAPIAdapter
             from cognee.infrastructure.files.utils import open_data_file as _orig_open_data_file
             from cognee.infrastructure.files import utils as file_utils
-            from cognee.infrastructure.files.storage import LocalFileStorage, get_parsed_path
+            from cognee.infrastructure.files.storage.LocalFileStorage import (
+                LocalFileStorage,
+                get_parsed_path,
+            )
             from contextlib import asynccontextmanager
             from openai import AsyncOpenAI
 
