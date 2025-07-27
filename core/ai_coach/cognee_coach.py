@@ -166,7 +166,7 @@ class CogneeConfig:
                 async with _orig_open_data_file(file_path, mode=mode, encoding=encoding, **kwargs) as f:
                     yield f
 
-            file_utils.utils.open_data_file = _fixed_open_data_file
+            file_utils.open_data_file = _fixed_open_data_file
 
         except Exception as e:  # noqa: BLE001
             logger.debug(f"Cognee patch failed: {e}")
