@@ -258,7 +258,7 @@ class CogneeCoach(BaseAICoach):
     async def initialize(cls) -> None:
         """Ensure database migrations are applied and Cognee is reachable."""
         cls._ensure_config()
-        user = await cls._get_user()
+        await cls._get_user()
 
         proc = await asyncio.create_subprocess_exec(
             sys.executable,
@@ -272,10 +272,10 @@ class CogneeCoach(BaseAICoach):
         )
         await proc.wait()
 
-        try:
-            await cognee.search("ping", user=user)
-        except Exception as e:
-            logger.warning(f"Cognee ping failed: {e}")
+        # Avoid spamming the logs with LiteLLM rate limit messages by skipping
+        # the OpenRouter ping during startup. Cognee will raise a clear error
+        # later if it cannot reach the LLM service.
+        # await cognee.search("ping", user=user)
 
     @classmethod
     async def _get_user(cls) -> Any:
