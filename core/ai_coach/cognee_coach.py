@@ -78,7 +78,7 @@ class CogneeConfig:
         """
         # 🗣️ LLM (OpenRouter)
         cognee.config.set_llm_provider("custom")
-        cognee.config.set_llm_model("openrouter/deepseek/deepseek-chat-v3-0324:free")
+        cognee.config.set_llm_model("openrouter/deepseek/deepseek-r1-0528:free")
         cognee.config.set_llm_api_key(OPENROUTER_API_KEY)
         cognee.config.set_llm_endpoint(OPENROUTER_BASE_URL)
 
