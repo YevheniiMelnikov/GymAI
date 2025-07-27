@@ -123,6 +123,7 @@ class CogneeConfig:
             from cognee.infrastructure.llm.generic_llm_api.adapter import GenericAPIAdapter
             from cognee.infrastructure.files.utils import open_data_file as _orig_open_data_file
             from cognee.infrastructure.files import utils as file_utils
+            from cognee.infrastructure.files.storage import LocalFileStorage, get_parsed_path
             from contextlib import asynccontextmanager
             from openai import AsyncOpenAI
 
@@ -168,6 +169,16 @@ class CogneeConfig:
 
             file_utils.open_data_file = _fixed_open_data_file
 
+            _orig_local_open = LocalFileStorage.open
+
+            def _ensure_open(self, file_path: str, mode: str = "rb", *args, **kwargs):
+                parsed_storage_path = get_parsed_path(self.storage_path)
+                if not os.path.exists(parsed_storage_path):
+                    os.makedirs(parsed_storage_path, exist_ok=True)
+                return _orig_local_open(self, file_path, mode=mode, *args, **kwargs)
+
+            LocalFileStorage.open = _ensure_open
+
         except Exception as e:  # noqa: BLE001
             logger.debug(f"Cognee patch failed: {e}")
 
@@ -196,7 +207,7 @@ class CogneeConfig:
 
         storage_root = Path(".data_storage").resolve()
         storage_root.mkdir(parents=True, exist_ok=True)
-        cognee.config.data_root_directory(storage_root.as_posix())
+        cognee.config.data_root_directory(str(storage_root))
 
     @staticmethod
     def _configure_logging() -> None:
