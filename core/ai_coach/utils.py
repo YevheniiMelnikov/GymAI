@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import Any
 
+import json
+
 
 import asyncio
 
-from config.app_settings import settings
 from core.ai_coach.base import BaseAICoach
 from core.ai_coach.knowledge_loader import KnowledgeLoader
 from core.ai_coach.registry import set_ai_coach, get_ai_coach
@@ -54,11 +55,17 @@ async def ai_coach_request(*args: Any, **kwargs: Any) -> list[str] | None:
     return await coach.make_request(str(text), client=client)
 
 
-async def ai_assign_client(*args: Any, **kwargs: Any) -> None:
-    client: Client | None = kwargs.get("client") or (args[0] if args else None)
-    lang = kwargs.get("lang", settings.DEFAULT_LANG)
-    if client is None:
-        return
-    await _wait_for_coach()
-    coach = get_ai_coach()
-    await coach.assign_client(client, lang)
+def extract_client_data(client: Client) -> str:
+    """Return JSON representation of ``client`` profile details."""
+
+    details = {
+        "name": client.name,
+        "gender": client.gender,
+        "born_in": client.born_in,
+        "weight": client.weight,
+        "health_notes": client.health_notes,
+        "workout_experience": client.workout_experience,
+        "workout_goals": client.workout_goals,
+    }
+    clean = {k: v for k, v in details.items() if v is not None}
+    return json.dumps(clean, ensure_ascii=False)

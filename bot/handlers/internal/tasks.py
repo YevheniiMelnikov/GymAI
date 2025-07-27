@@ -17,6 +17,7 @@ from bot.utils.chat import send_message
 from aiogram.enums import ParseMode
 from core.services import APIService
 from core.ai_coach.base import BaseAICoach
+from bot.utils.ai_services import process_workout_result
 
 
 async def internal_send_daily_survey(request: web.Request) -> web.Response:
@@ -91,7 +92,7 @@ async def internal_send_workout_result(request: web.Request, *, ai_coach: type[B
         await ai_coach.save_user_message(str(client_workout_feedback), chat_id=int(client_id), client_id=int(client_id))
         client = await Cache.client.get_client(int(client_id))
         profile = await APIService.profile.get_profile(client.profile)
-        updated_workout = await ai_coach.process_workout_result(
+        updated_workout = await process_workout_result(
             client_id=int(client_id),
             expected_workout_result=expected_workout_result,
             feedback=str(client_workout_feedback),
