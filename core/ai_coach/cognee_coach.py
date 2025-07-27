@@ -179,6 +179,10 @@ class CogneeConfig:
         os.environ.setdefault("LITELLM_LOG", "WARNING")
         os.environ.setdefault("LOG_LEVEL", "WARNING")
 
+        storage_root = Path(".data_storage").resolve()
+        storage_root.mkdir(parents=True, exist_ok=True)
+        cognee.config.data_root_directory(storage_root.as_posix())
+
     @staticmethod
     def _configure_logging() -> None:
         """Configure warnings, standard logging, and loguru for consistent output."""
