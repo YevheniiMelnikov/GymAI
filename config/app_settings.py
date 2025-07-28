@@ -40,17 +40,25 @@ class Settings(BaseSettings):
     DB_USER: Annotated[str, Field(default="postgres")]
     DB_PASSWORD: Annotated[str, Field(alias="POSTGRES_PASSWORD")]
     DB_HOST: Annotated[str, Field(default="db")]
+    DB_PROVIDER: Annotated[str, Field(default="postgres")]
+    VECTORDATABASE_PROVIDER: Annotated[str, Field(default="pgvector")]
+    GRAPH_DATABASE_PROVIDER: Annotated[str, Field(default="networkx")]
+    GRAPH_PROMPT_PATH: Annotated[str, Field(default="./core/ai_coach/global_system_prompt.txt")]
 
     API_KEY: str
     SECRET_KEY: str
     API_URL: str
-    COGNEE_API_URL: Annotated[str, Field(default="https://api.openai.com/v1")]
-    COGNEE_API_KEY: Annotated[str, Field(default="")]
-    COGNEE_MODEL: Annotated[str, Field(default="gpt-4o")]
-    COGNEE_LLM_PROVIDER: Annotated[str, Field(default="openai")]
-    VECTORDATABASE_PROVIDER: Annotated[str, Field(default="pgvector")]
-    GRAPH_DATABASE_PROVIDER: Annotated[str, Field(default="networkx")]
-    GRAPH_PROMPT_PATH: Annotated[str, Field(default="./core/ai_coach/global_system_prompt.txt")]
+
+    OPENAI_BASE_URL: Annotated[str, Field(default="https://api.openai.com/v1")]
+    OPENAI_API_KEY: Annotated[str, Field(default="")]  # used for embeddings
+    LLM_API_URL: Annotated[str, Field(default="https://openrouter.ai/api/v1")]
+    LLM_API_KEY: Annotated[str, Field(default="")]
+    LLM_MODEL: Annotated[str, Field(default="gpt-4o")]
+    LLM_PROVIDER: Annotated[str, Field(default="custom")]
+
+    EMBEDDING_MODEL: Annotated[str, Field(default="openai/text-embedding-3-large")]
+    EMBEDDING_PROVIDER: Annotated[str, Field(default="openai")]
+    EMBEDDING_ENDPOINT: Annotated[str, Field(default="https://api.openai.com/v1")]
 
     BOT_TOKEN: str
     BOT_LINK: str

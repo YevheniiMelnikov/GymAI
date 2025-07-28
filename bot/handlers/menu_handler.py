@@ -20,7 +20,7 @@ from bot.keyboards import (
 from bot.states import States
 from bot.texts.text_manager import msg_text
 from config.app_settings import settings
-from core.ai_coach.utils import ai_assign_client
+from bot.utils.ai_services import assign_client
 from core.cache import Cache
 from core.enums import CoachType
 from core.schemas import Coach, Client, Profile
@@ -247,7 +247,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
         pass  # already assigned to AI
     else:
         await assign_coach(await Cache.coach.get_ai_coach(), client)
-        await ai_assign_client(client, lang=profile.language)
+        await assign_client(client, profile.language)
 
     if service == "program":
         try:
@@ -303,10 +303,9 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     workout_type = data.get("workout_type", "gym")
     wishes = data.get("wishes", "")
     period = data.get("period", "1m")
-    bot = cast(Bot, callback_query.bot)
     await answer_msg(callback_query, msg_text("request_in_progress", lang))
     await show_main_menu(callback_query.message, profile, state)
-    await generate_subscription(client, lang, workout_type, wishes, period, days, state, bot)
+    await generate_subscription(client, lang, workout_type, wishes, period, days)
 
 
 @menu_router.callback_query(States.profile)
