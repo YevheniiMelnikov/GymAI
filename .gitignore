@@ -162,3 +162,4 @@ gym_bot.log
 .venv-win/
 staticfiles/
 **/celerybeat-schedule*
+/.data_storage

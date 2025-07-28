@@ -62,18 +62,20 @@ class CogneeConfig:
 
     @staticmethod
     def _patch_cognee() -> None:
-        """Fix issues in Cognee's start"""
         try:
+            from contextlib import asynccontextmanager
+            from openai import AsyncOpenAI
+            from sqlalchemy import schema as sa_schema
+
             from cognee.modules.data.models.graph_relationship_ledger import GraphRelationshipLedger
             from cognee.infrastructure.databases.vector.embeddings import LiteLLMEmbeddingEngine
             from cognee.infrastructure.llm.generic_llm_api.adapter import GenericAPIAdapter
             from cognee.infrastructure.files.utils import open_data_file as _orig_open_data_file
             from cognee.infrastructure.files import utils as file_utils
-            from cognee.infrastructure.files.storage.LocalFileStorage import LocalFileStorage, get_parsed_path
-            from contextlib import asynccontextmanager
-            from openai import AsyncOpenAI
-
-            from sqlalchemy import schema as sa_schema
+            from cognee.infrastructure.files.storage.LocalFileStorage import (
+                LocalFileStorage,
+                get_parsed_path,
+            )
 
             GraphRelationshipLedger.__table__.c.id.default = sa_schema.ColumnDefault(uuid4)
 
@@ -93,61 +95,44 @@ class CogneeConfig:
 
             def _new_init(self, *args, **kwargs):
                 _orig_init(self, *args, **kwargs)
-                client = getattr(self, "aclient", None)
-                target = getattr(client, "client", client)
+                target = getattr(getattr(self, "aclient", None), "client", None) or getattr(self, "aclient", None)
                 if isinstance(target, AsyncOpenAI):
-                    openrouter_headers = {
-                        "HTTP-Referer": "https://gymbot.local",
-                        "X-Title": "GymBot",
-                    }
-                    target.default_headers.update(openrouter_headers)
+                    target.default_headers.update({"HTTP-Referer": "https://gymbot.local", "X-Title": "GymBot"})
 
             GenericAPIAdapter.__init__ = _new_init
 
             @asynccontextmanager
             async def _fixed_open_data_file(file_path: str, mode: str = "rb", encoding: str | None = None, **kwargs):
                 if file_path.startswith("file://"):
-                    parsed = urlparse(file_path)
-                    fs_path = parsed.path or parsed.netloc
-                    if os.name == "nt":
-                        if fs_path.startswith("/") and len(fs_path) > 2 and fs_path[2] == ":":
-                            fs_path = fs_path[1:]
-                        fs_path = fs_path.replace("/", "\\")
-                    file_dir = os.path.dirname(fs_path)
-                    file_name = os.path.basename(fs_path)
-                    storage = LocalFileStorage(file_dir)
-                    with storage.open(file_name, mode=mode, encoding=encoding, **kwargs) as f:
+                    parsed_path = Path(urlparse(file_path).path)
+                    fs_path = parsed_path.absolute()
+                    storage = LocalFileStorage(str(fs_path.parent))
+                    with storage.open(fs_path.name, mode=mode, encoding=encoding, **kwargs) as f:
                         yield f
                 else:
                     async with _orig_open_data_file(file_path, mode=mode, encoding=encoding, **kwargs) as f:
                         yield f
 
-            file_utils.open_data_file = _fixed_open_data_file
+            file_utils.open_data_file = _fixed_open_data_file  # type: ignore
 
+            # ───── 5. Patch LocalFileStorage.open ─────
             _orig_local_open = LocalFileStorage.open
 
             def _ensure_open(self, file_path: str, mode: str = "rb", *args, **kwargs):
-                parsed_storage_path = get_parsed_path(self.storage_path)
-                if (
-                    os.name == "nt"
-                    and parsed_storage_path.startswith("\\")
-                    and len(parsed_storage_path) > 2
-                    and parsed_storage_path[1] != "\\"
-                    and parsed_storage_path[2] == ":"
-                ):
-                    parsed_storage_path = parsed_storage_path.lstrip("\\")
-                if not os.path.exists(parsed_storage_path):
-                    os.makedirs(parsed_storage_path, exist_ok=True)
+                raw_storage_path = get_parsed_path(self.storage_path)
+                safe_path = Path(raw_storage_path).absolute()
+                safe_path.mkdir(parents=True, exist_ok=True)
+                self.storage_path = str(safe_path)
                 return _orig_local_open(self, file_path, mode=mode, *args, **kwargs)
 
-            LocalFileStorage.open = _ensure_open
+            LocalFileStorage.open = _ensure_open  # type: ignore[attr-defined]
 
         except Exception as e:  # noqa: BLE001
             logger.debug(f"Cognee patch failed: {e}")
 
     @staticmethod
     def _configure_environment() -> None:
-        """Set up environment variables for graph prompt and logging defaults."""
+        """Prepare ENV vars + create default .data_storage folder."""
         os.environ.setdefault(
             "GRAPH_PROMPT_PATH",
             Path("./core/ai_coach/global_system_prompt.txt").resolve().as_posix(),
@@ -169,7 +154,7 @@ class CogneeConfig:
 
     @staticmethod
     def _configure_logging() -> None:
-        """Configure warnings, standard logging, and loguru for consistent output."""
+        """Unify std-logging, warnings and loguru."""
         warnings.filterwarnings("ignore", category=SAWarning)
         logging.getLogger("langfuse").setLevel(logging.ERROR)
         configure_loguru()

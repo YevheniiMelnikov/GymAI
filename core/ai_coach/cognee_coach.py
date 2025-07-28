@@ -110,7 +110,6 @@ class CogneeCoach(BaseAICoach):
             info = await cognee.add(text, dataset_name=new_name, user=user)
             return getattr(info, "dataset_id", new_name), True
 
-
     @classmethod
     async def _cognify_dataset(cls, dataset_id: str, user: Any) -> None:
         lock = cls._cognify_locks.get(dataset_id)
