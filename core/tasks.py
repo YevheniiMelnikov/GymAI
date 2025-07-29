@@ -221,10 +221,7 @@ def send_workout_result(self, coach_profile_id: int, client_profile_id: int, tex
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
 async def refresh_external_knowledge(self):  # pyre-ignore[valid-type]
     """Refresh external knowledge and rebuild Cognee index."""
-    from core.ai_coach.registry import get_ai_coach
-
-    coach = get_ai_coach()
     try:
-        await coach.refresh_knowledge_base()
+        await APIService.ai_coach.refresh_knowledge()
     except Exception as exc:  # noqa: BLE001
         raise self.retry(exc=exc)

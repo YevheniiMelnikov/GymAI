@@ -1,9 +1,9 @@
 import pytest
 from types import SimpleNamespace
 
-from core.ai_coach.cognee_coach import CogneeCoach
-from core.ai_coach import cognee_coach as coach
-from core.ai_coach.utils import init_ai_coach, coach_ready_event
+from ai_coach.cognee_coach import CogneeCoach
+from ai_coach import cognee_coach as coach
+from ai_coach.utils import init_ai_coach, coach_ready_event
 
 
 @pytest.mark.asyncio
@@ -22,7 +22,7 @@ async def test_reinit_on_failure(monkeypatch):
     async def fake_user():
         return SimpleNamespace(id="test")
 
-    monkeypatch.setattr("core.ai_coach.cognee_coach.get_default_user", fake_user)
+    monkeypatch.setattr("ai_coach.cognee_coach.get_default_user", fake_user)
     if coach_ready_event is not None:
         coach_ready_event.clear()
     with pytest.raises(RuntimeError):

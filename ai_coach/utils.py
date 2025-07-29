@@ -7,9 +7,9 @@ import json
 
 import asyncio
 
-from core.ai_coach.base import BaseAICoach
-from core.ai_coach.knowledge_loader import KnowledgeLoader
-from core.ai_coach.registry import set_ai_coach, get_ai_coach
+from .base import BaseAICoach
+from .knowledge_loader import KnowledgeLoader
+from .registry import set_ai_coach, get_ai_coach
 from core.schemas import Client
 from loguru import logger
 

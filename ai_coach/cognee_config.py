@@ -135,7 +135,7 @@ class CogneeConfig:
         """Prepare ENV vars + create default .data_storage folder."""
         os.environ.setdefault(
             "GRAPH_PROMPT_PATH",
-            Path("./core/ai_coach/global_system_prompt.txt").resolve().as_posix(),
+            Path("./ai_coach/global_system_prompt.txt").resolve().as_posix(),
         )
         os.environ.setdefault("LITELLM_LOG", "ERROR")
         os.environ.setdefault("LOG_LEVEL", "WARNING")

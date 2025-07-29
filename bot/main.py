@@ -1,5 +1,4 @@
 import asyncio
-from functools import partial
 from aiohttp import web
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.redis import RedisStorage
@@ -19,12 +18,9 @@ from bot.handlers.internal import (
 from config.app_settings import settings
 from bot.middlewares import ProfileMiddleware
 from bot.handlers import configure_routers
-from core.ai_coach.cognee_coach import CogneeCoach
-from core.ai_coach.utils import init_ai_coach
 from core.cache.base import BaseCacheManager
 from bot.utils.other import set_bot_commands
 from core.containers import App
-from core.ai_coach import GDriveDocumentLoader
 
 
 configure_loguru()
@@ -54,14 +50,6 @@ async def main() -> None:
     bot = container.bot()
     await bot.delete_webhook(drop_pending_updates=True)
 
-    # Prepare and initialize the AI coach in the background to speed up startup
-    from core.ai_coach import utils as ai_utils
-    from core.ai_coach.registry import set_ai_coach
-
-    ai_utils.coach_ready_event = asyncio.Event()
-    set_ai_coach(CogneeCoach)
-    asyncio.create_task(init_ai_coach(CogneeCoach, GDriveDocumentLoader()))
-
     if settings.WEBHOOK_URL is None:
         raise ValueError("WEBHOOK_URL is not set in environment variables")
 
@@ -86,7 +74,7 @@ async def main() -> None:
     app.router.add_post("/internal/tasks/send_daily_survey/", internal_send_daily_survey)
     app.router.add_post(
         "/internal/tasks/send_workout_result/",
-        partial(internal_send_workout_result, ai_coach=CogneeCoach),
+        internal_send_workout_result,
     )
     app.router.add_post(
         "/internal/tasks/export_coach_payouts/",

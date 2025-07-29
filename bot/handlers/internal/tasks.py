@@ -8,7 +8,7 @@ from bot.keyboards import workout_survey_kb
 from bot.texts.text_manager import msg_text
 from bot.utils.profiles import get_clients_to_survey
 from config.app_settings import settings
-from core.ai_coach.parsers import parse_program_text, parse_program_json
+from ai_coach.parsers import parse_program_text, parse_program_json
 from core.exceptions import SubscriptionNotFoundError
 from core.payment_processor import PaymentProcessor
 from core.cache import Cache
@@ -16,7 +16,6 @@ from core.enums import CoachType
 from bot.utils.chat import send_message
 from aiogram.enums import ParseMode
 from core.services import APIService
-from core.ai_coach.base import BaseAICoach
 from bot.utils.ai_services import process_workout_result
 
 
@@ -64,7 +63,7 @@ async def internal_export_coach_payouts(request: web.Request) -> web.Response:
         return web.json_response({"detail": str(e)}, status=500)
 
 
-async def internal_send_workout_result(request: web.Request, *, ai_coach: type[BaseAICoach]) -> web.Response:
+async def internal_send_workout_result(request: web.Request) -> web.Response:
     """Forward workout survey result to a coach or AI system."""
 
     if request.headers.get("Authorization") != f"Api-Key {settings.API_KEY}":
@@ -89,7 +88,9 @@ async def internal_send_workout_result(request: web.Request, *, ai_coach: type[B
         return web.json_response({"detail": "Coach not found"}, status=404)
 
     if coach.coach_type == CoachType.ai:
-        await ai_coach.save_user_message(str(client_workout_feedback), chat_id=int(client_id), client_id=int(client_id))
+        await APIService.ai_coach.save_user_message(
+            str(client_workout_feedback), chat_id=int(client_id), client_id=int(client_id)
+        )
         client = await Cache.client.get_client(int(client_id))
         profile = await APIService.profile.get_profile(client.profile)
         updated_workout = await process_workout_result(

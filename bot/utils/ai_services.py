@@ -5,24 +5,23 @@ from aiogram.fsm.context import FSMContext
 
 from bot.states import States
 
-from core.ai_coach.utils import ai_coach_request, extract_client_data
+from core.services.internal import APIService
 from config.app_settings import settings
-from core.ai_coach.prompts import (
+from ai_coach.prompts import (
     PROGRAM_PROMPT,
     SUBSCRIPTION_PROMPT,
     SYSTEM_MESSAGE,
     UPDATE_WORKOUT_PROMPT,
     INITIAL_PROMPT,
 )
-from core.ai_coach.parsers import (
+from ai_coach.parsers import (
     parse_program_text,
     parse_program_json,
     parse_subscription_json,
     extract_json,
     normalize_program_data,
 )
-from core.ai_coach.schemas import ProgramRequest, SubscriptionRequest
-from core.ai_coach.cognee_coach import CogneeCoach
+from ai_coach.schemas import ProgramRequest, SubscriptionRequest
 from loguru import logger
 from core.cache import Cache
 from core.exceptions import ProgramNotFoundError
@@ -30,7 +29,20 @@ from core.schemas import Client
 from bot.utils.workout_plans import _next_payment_date
 from bot.utils.chat import send_program, send_message
 from bot.texts.text_manager import msg_text
-from core.services.internal import APIService
+
+
+def extract_client_data(client: Client) -> str:
+    details = {
+        "name": client.name,
+        "gender": client.gender,
+        "born_in": client.born_in,
+        "weight": client.weight,
+        "health_notes": client.health_notes,
+        "workout_experience": client.workout_experience,
+        "workout_goals": client.workout_goals,
+    }
+    clean = {k: v for k, v in details.items() if v is not None}
+    return json.dumps(clean, ensure_ascii=False)
 
 
 async def assign_client(client: Client, lang: str) -> None:
@@ -38,7 +50,7 @@ async def assign_client(client: Client, lang: str) -> None:
         client_data=extract_client_data(client),
         language=lang,
     )
-    await ai_coach_request(text=prompt, client=client)
+    await APIService.ai_coach.ask(prompt, client=client)
 
 
 def _normalise_program(raw: str) -> dict:
@@ -76,7 +88,7 @@ async def generate_program(
     program_raw = ""
     program_dto = None
     for _ in range(settings.AI_GENERATION_RETRIES):
-        response = await ai_coach_request(text=prompt, client=client, chat_id=client.id, language=lang)
+        response = await APIService.ai_coach.ask(prompt, client=client, chat_id=client.id, language=lang)
         print(f"Response: {response}")  # TODO: REMOVE
         program_raw = response[0] if response else ""
         program_dto = parse_program_json(program_raw)
@@ -163,7 +175,7 @@ async def generate_subscription(
     sub_raw = ""
     sub_dto = None
     for _ in range(settings.AI_GENERATION_RETRIES):
-        response = await ai_coach_request(text=prompt, client=client, chat_id=client.id, language=lang)
+        response = await APIService.ai_coach.ask(prompt, client=client, chat_id=client.id, language=lang)
         sub_raw = response[0] if response else ""
         sub_dto = parse_subscription_json(sub_raw)
         if sub_dto is not None:
@@ -207,7 +219,7 @@ async def process_workout_result(
     """Return updated workout plan for ``client_id`` based on ``feedback``."""
 
     try:
-        ctx = await CogneeCoach.get_context(client_id, "workout")
+        ctx = await APIService.ai_coach.get_context(client_id, "workout")
     except Exception:
         ctx = []
 
@@ -222,5 +234,5 @@ async def process_workout_result(
         )
     )
 
-    responses = await ai_coach_request(text=prompt, client=None)
+    responses = await APIService.ai_coach.ask(prompt, client=None)
     return responses[0] if responses else ""

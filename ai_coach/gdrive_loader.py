@@ -14,7 +14,7 @@ import fitz
 import cognee
 
 from config.app_settings import settings
-from core.ai_coach.knowledge_loader import KnowledgeLoader
+from .knowledge_loader import KnowledgeLoader
 
 
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
