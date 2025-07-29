@@ -6,6 +6,7 @@ import warnings
 from pathlib import Path
 from urllib.parse import urlparse
 from uuid import uuid4
+from typing import Any
 
 from cognee.base_config import get_base_config
 
@@ -79,9 +80,11 @@ class CogneeConfig:
                 get_parsed_path,
             )
 
-            GraphRelationshipLedger.__table__.c.id.default = sa_schema.ColumnDefault(uuid4)
+            GraphRelationshipLedger.__table__.c.id.default = sa_schema.ColumnDefault(
+                uuid4
+            )  # pyre-ignore[missing-attribute]
 
-            async def _patched_embedding(texts, model=None, **kwargs):
+            async def _patched_embedding(texts, model=None, **kwargs) -> Any:
                 from litellm import embedding
 
                 return await embedding(
@@ -91,11 +94,11 @@ class CogneeConfig:
                     base_url=settings.OPENAI_BASE_URL,
                 )
 
-            LiteLLMEmbeddingEngine.get_embedding_fn = staticmethod(_patched_embedding)
+            LiteLLMEmbeddingEngine.get_embedding_fn = staticmethod(_patched_embedding)  # pyre-ignore[assignment]
 
             _orig_init = GenericAPIAdapter.__init__
 
-            def _new_init(self, *args, **kwargs):
+            def _new_init(self, *args, **kwargs) -> None:
                 _orig_init(self, *args, **kwargs)
                 target = getattr(getattr(self, "aclient", None), "client", None) or getattr(self, "aclient", None)
                 if isinstance(target, AsyncOpenAI):
@@ -115,7 +118,9 @@ class CogneeConfig:
                     with storage.open(fs_path.name, mode=mode, encoding=encoding, **kwargs) as f:
                         yield f
                 else:
-                    async with _orig_open_data_file(file_path, mode=mode, encoding=encoding, **kwargs) as f:
+                    async with _orig_open_data_file(
+                        file_path, mode=mode, encoding=encoding, **kwargs
+                    ) as f:  # pyre-ignore[async-error]
                         yield f
 
             file_utils.open_data_file = _fixed_open_data_file  # type: ignore

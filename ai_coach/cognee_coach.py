@@ -152,7 +152,8 @@ class CogneeCoach(BaseAICoach):
         except DatasetNotFoundError:
             logger.error("Search failed: dataset not found")
         except Exception as e:
-            logger.error(f"Unexpected AI coach error during client {client.id} request: {e}")
+            client_id = getattr(client, "id", "<unknown>")
+            logger.error(f"Unexpected AI coach error during client {client_id} request: {e}")
         return []
 
     @classmethod
