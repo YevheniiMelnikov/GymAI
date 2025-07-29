@@ -137,14 +137,14 @@ class CogneeConfig:
             "GRAPH_PROMPT_PATH",
             Path("./ai_coach/global_system_prompt.txt").resolve().as_posix(),
         )
-        os.environ.setdefault("LITELLM_LOG", "ERROR")
-        os.environ.setdefault("LOG_LEVEL", "WARNING")
+        os.environ.setdefault("LITELLM_LOG", "WARNING")
+        os.environ.setdefault("LOG_LEVEL", "INFO")
         os.environ.setdefault("EMBEDDING_API_KEY", settings.OPENAI_API_KEY)
 
         try:
             import litellm
 
-            litellm.suppress_debug_info = True
+            litellm.suppress_debug_info = False
         except Exception as exc:  # noqa: BLE001
             logger.debug(f"Failed to suppress LiteLLM debug info: {exc}")
 

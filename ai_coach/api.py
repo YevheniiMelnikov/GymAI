@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from pydantic import BaseModel
 
@@ -7,7 +9,14 @@ from ai_coach.cognee_coach import CogneeCoach
 from ai_coach.utils import init_ai_coach
 from ai_coach import GDriveDocumentLoader
 
-app = FastAPI(title="AI Coach")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_ai_coach(CogneeCoach, GDriveDocumentLoader())
+    yield
+
+
+app = FastAPI(title="AI Coach", lifespan=lifespan)
 
 
 class AskRequest(BaseModel):
@@ -15,11 +24,6 @@ class AskRequest(BaseModel):
     client: dict | None = None
     chat_id: int | None = None
     language: str | None = None
-
-
-@app.on_event("startup")
-async def startup_event() -> None:
-    await init_ai_coach(CogneeCoach, GDriveDocumentLoader())
 
 
 @app.post("/ask/", response_model=list[str] | None)
