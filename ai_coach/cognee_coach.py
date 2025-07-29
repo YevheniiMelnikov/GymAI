@@ -141,7 +141,6 @@ class CogneeCoach(BaseAICoach):
         """Store history and query Cognee."""
         cls._ensure_config()
         user = await cls._get_user()
-        print(f"Final prompt: {prompt}")  # TODO: REMOVE
         dataset_base = "main_dataset" if client is None else f"main_dataset_{client.id}"
         dataset_name = f"{dataset_base}_{user.id}"
 

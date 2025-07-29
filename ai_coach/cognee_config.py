@@ -7,6 +7,8 @@ from pathlib import Path
 from urllib.parse import urlparse
 from uuid import uuid4
 
+from cognee.base_config import get_base_config
+
 import cognee
 from loguru import logger
 from sqlalchemy.exc import SAWarning
@@ -106,6 +108,9 @@ class CogneeConfig:
                 if file_path.startswith("file://"):
                     parsed_path = Path(urlparse(file_path).path)
                     fs_path = parsed_path.absolute()
+                    if not fs_path.exists() and ":" in parsed_path.as_posix():
+                        data_root = Path(get_base_config().data_root_directory)
+                        fs_path = data_root / parsed_path.name
                     storage = LocalFileStorage(str(fs_path.parent))
                     with storage.open(fs_path.name, mode=mode, encoding=encoding, **kwargs) as f:
                         yield f
@@ -150,6 +155,7 @@ class CogneeConfig:
 
         storage_root = Path(".data_storage").resolve()
         storage_root.mkdir(parents=True, exist_ok=True)
+        os.environ.setdefault("COGNEE_DATA_ROOT", str(storage_root))
         cognee.config.data_root_directory(str(storage_root))
 
     @staticmethod
