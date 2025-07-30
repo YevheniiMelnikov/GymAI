@@ -81,6 +81,7 @@ class CogneeConfig:
 
             async def _patched_embedding(texts, model=None, **kwargs) -> Any:
                 from litellm import embedding
+
                 return await embedding(
                     texts,
                     model=settings.EMBEDDING_MODEL,
@@ -128,9 +129,7 @@ class CogneeConfig:
                     with storage.open(fs_path.name, mode=mode, encoding=encoding, **kwargs) as f:
                         yield f
                 else:
-                    async with _orig_open_data_file(
-                        file_path, mode=mode, encoding=encoding, **kwargs
-                    ) as f:
+                    async with _orig_open_data_file(file_path, mode=mode, encoding=encoding, **kwargs) as f:
                         yield f
 
             import cognee.infrastructure.files.utils as file_utils
@@ -158,6 +157,7 @@ class CogneeConfig:
         os.environ.setdefault("EMBEDDING_API_KEY", settings.OPENAI_API_KEY)
         try:
             import litellm
+
             litellm.suppress_debug_info = False
         except Exception:
             pass

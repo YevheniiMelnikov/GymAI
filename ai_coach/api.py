@@ -28,11 +28,6 @@ class AskRequest(BaseModel):
 
 @app.post("/ask/", response_model=list[str] | None)
 async def ask(data: AskRequest) -> list[str] | None:
-    @app.post("/ask/", response_model=list[str] | None)
-    async def ask(data: AskRequest) -> list[str] | None:
-        from loguru import logger
-        logger.info(f"Received request: {data.model_dump()}")
-        return await CogneeCoach.make_request(data.prompt, client=None)
     return await CogneeCoach.make_request(data.prompt, client=None)
 
 

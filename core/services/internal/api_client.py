@@ -13,7 +13,7 @@ from config.app_settings import settings
 class APIClient:
     api_url = settings.API_URL
     api_key = settings.API_KEY
-    client = httpx.AsyncClient(timeout=settings.API_TIMEOUT)
+    client = httpx.AsyncClient()
     use_default_auth = True
 
     max_retries = settings.API_MAX_RETRIES
@@ -45,6 +45,7 @@ class APIClient:
         url: str,
         data: Optional[dict] = None,
         headers: Optional[dict] = None,
+        timeout: int = settings.API_TIMEOUT,
     ) -> tuple[int, Optional[dict]]:
         headers = headers or {}
         if cls.use_default_auth and cls.api_key:
@@ -55,7 +56,7 @@ class APIClient:
 
         for attempt in range(1, cls.max_retries + 1):
             try:
-                response = await cls.client.request(method, url, json=data, headers=headers)
+                response = await cls.client.request(method, url, json=data, headers=headers, timeout=timeout)
 
                 if response.is_success:
                     try:

@@ -30,9 +30,8 @@ class AiCoachService(APIClient):
             chat_id=chat_id,
             language=language.value if isinstance(language, Enum) else language,
         )
-        logger.debug(f"POST to {url} payload={request.model_dump()}")
 
-        status, data = await cls._api_request("post", url, request.model_dump())
+        status, data = await cls._api_request("post", url, request.model_dump(), timeout=60)
         if status == 200 and isinstance(data, list):
             return data
         if status == 200 and isinstance(data, dict):
