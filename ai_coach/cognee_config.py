@@ -107,11 +107,23 @@ class CogneeConfig:
             GenericAPIAdapter.__init__ = _new_init
 
             @asynccontextmanager
-            async def _fixed_open_data_file(file_path: str, mode: str = "rb", encoding: str | None = None, **kwargs):
+            async def _fixed_open_data_file(
+                file_path: str,
+                mode: str = "rb",
+                encoding: str | None = None,
+                **kwargs,
+            ):
                 if file_path.startswith("file://"):
-                    parsed_path = Path(urlparse(file_path).path)
-                    fs_path = parsed_path.absolute()
-                    if not fs_path.exists() and ":" in parsed_path.as_posix():
+                    parsed_url = urlparse(file_path)
+                    path_str = parsed_url.path or parsed_url.netloc
+                    path_str = path_str.replace("\\", "/")
+                    if path_str.startswith("/") and len(path_str) > 2 and path_str[2] == ":":
+                        path_str = path_str[1:]
+                    parsed_path = Path(path_str.lstrip("/"))
+                    fs_path = parsed_path
+                    if not fs_path.is_absolute():
+                        fs_path = fs_path.absolute()
+                    if not fs_path.exists() and (":" in path_str or "\\" in file_path):
                         data_root = Path(get_base_config().data_root_directory)
                         fs_path = data_root / parsed_path.name
                     storage = LocalFileStorage(str(fs_path.parent))
