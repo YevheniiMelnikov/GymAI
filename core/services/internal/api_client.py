@@ -14,6 +14,7 @@ class APIClient:
     api_url = settings.API_URL
     api_key = settings.API_KEY
     client = httpx.AsyncClient(timeout=settings.API_TIMEOUT)
+    use_default_auth = True
 
     max_retries = settings.API_MAX_RETRIES
     initial_delay = settings.API_RETRY_INITIAL_DELAY
@@ -46,7 +47,7 @@ class APIClient:
         headers: Optional[dict] = None,
     ) -> tuple[int, Optional[dict]]:
         headers = headers or {}
-        if cls.api_key:
+        if cls.use_default_auth and cls.api_key:
             headers.setdefault("Authorization", f"Bearer {cls.api_key}")
 
         delay = cls.initial_delay
