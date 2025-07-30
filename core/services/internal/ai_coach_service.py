@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
+from enum import Enum
+from fastapi.encoders import jsonable_encoder
 from urllib.parse import urljoin
 
 from loguru import logger
@@ -23,12 +24,14 @@ class AiCoachService(APIClient):
         language: str | None = None,
     ) -> list[str] | None:
         url = urljoin(cls.base_url, "ask/")
-        payload: dict[str, Any] = {
+        payload = {
             "prompt": prompt,
-            "client": client.model_dump(mode="json") if client else None,
+            "client": jsonable_encoder(client) if client else None,
             "chat_id": chat_id,
-            "language": language,
+            "language": language.value if isinstance(language, Enum) else language,
         }
+        logger.debug(f"POST to {url} payload={payload}")
+
         status, data = await cls._api_request("post", url, payload)
         if status == 200 and isinstance(data, list):
             return data
