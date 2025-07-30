@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from core.ai_coach.knowledge_loader import KnowledgeLoader
+from .knowledge_loader import KnowledgeLoader
 from core.schemas import Client
 
 

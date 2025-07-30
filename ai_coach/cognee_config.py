@@ -6,6 +6,9 @@ import warnings
 from pathlib import Path
 from urllib.parse import urlparse
 from uuid import uuid4
+from typing import Any
+
+from cognee.base_config import get_base_config
 
 import cognee
 from loguru import logger
@@ -16,8 +19,6 @@ from config.app_settings import settings
 
 
 class CogneeConfig:
-    """Configure Cognee for the AI Coach."""
-
     @classmethod
     def apply(cls) -> None:
         cls._configure_environment()
@@ -71,7 +72,6 @@ class CogneeConfig:
             from cognee.infrastructure.databases.vector.embeddings import LiteLLMEmbeddingEngine
             from cognee.infrastructure.llm.generic_llm_api.adapter import GenericAPIAdapter
             from cognee.infrastructure.files.utils import open_data_file as _orig_open_data_file
-            from cognee.infrastructure.files import utils as file_utils
             from cognee.infrastructure.files.storage.LocalFileStorage import (
                 LocalFileStorage,
                 get_parsed_path,
@@ -79,7 +79,7 @@ class CogneeConfig:
 
             GraphRelationshipLedger.__table__.c.id.default = sa_schema.ColumnDefault(uuid4)
 
-            async def _patched_embedding(texts, model=None, **kwargs):
+            async def _patched_embedding(texts, model=None, **kwargs) -> Any:
                 from litellm import embedding
 
                 return await embedding(
@@ -93,7 +93,7 @@ class CogneeConfig:
 
             _orig_init = GenericAPIAdapter.__init__
 
-            def _new_init(self, *args, **kwargs):
+            def _new_init(self, *args, **kwargs) -> None:
                 _orig_init(self, *args, **kwargs)
                 target = getattr(getattr(self, "aclient", None), "client", None) or getattr(self, "aclient", None)
                 if isinstance(target, AsyncOpenAI):
@@ -102,10 +102,29 @@ class CogneeConfig:
             GenericAPIAdapter.__init__ = _new_init
 
             @asynccontextmanager
-            async def _fixed_open_data_file(file_path: str, mode: str = "rb", encoding: str | None = None, **kwargs):
-                if file_path.startswith("file://"):
-                    parsed_path = Path(urlparse(file_path).path)
-                    fs_path = parsed_path.absolute()
+            async def _fixed_open_data_file(
+                file_path: str,
+                mode: str = "rb",
+                encoding: str | None = None,
+                **kwargs,
+            ):
+                raw_win_path = ":" in file_path and "\\" in file_path
+                uri_scheme = file_path.startswith("file://")
+
+                if raw_win_path:
+                    file_path = "file://" + file_path.replace("\\", "/")
+
+                if uri_scheme or raw_win_path:
+                    parsed_url = urlparse(file_path)
+                    path_str = parsed_url.path or parsed_url.netloc
+                    path_str = path_str.replace("\\", "/")
+                    if path_str.startswith("/") and len(path_str) > 2 and path_str[2] == ":":
+                        path_str = path_str[1:]
+                    parsed_path = Path(path_str.lstrip("/"))
+                    fs_path = parsed_path if parsed_path.is_absolute() else parsed_path.absolute()
+                    if not fs_path.exists():
+                        data_root = Path(get_base_config().data_root_directory)
+                        fs_path = data_root / parsed_path.name
                     storage = LocalFileStorage(str(fs_path.parent))
                     with storage.open(fs_path.name, mode=mode, encoding=encoding, **kwargs) as f:
                         yield f
@@ -113,9 +132,10 @@ class CogneeConfig:
                     async with _orig_open_data_file(file_path, mode=mode, encoding=encoding, **kwargs) as f:
                         yield f
 
-            file_utils.open_data_file = _fixed_open_data_file  # type: ignore
+            import cognee.infrastructure.files.utils as file_utils
 
-            # ───── 5. Patch LocalFileStorage.open ─────
+            file_utils.open_data_file = _fixed_open_data_file
+
             _orig_local_open = LocalFileStorage.open
 
             def _ensure_open(self, file_path: str, mode: str = "rb", *args, **kwargs):
@@ -125,36 +145,29 @@ class CogneeConfig:
                 self.storage_path = str(safe_path)
                 return _orig_local_open(self, file_path, mode=mode, *args, **kwargs)
 
-            LocalFileStorage.open = _ensure_open  # type: ignore[attr-defined]
-
-        except Exception as e:  # noqa: BLE001
+            LocalFileStorage.open = _ensure_open
+        except Exception as e:
             logger.debug(f"Cognee patch failed: {e}")
 
     @staticmethod
     def _configure_environment() -> None:
-        """Prepare ENV vars + create default .data_storage folder."""
-        os.environ.setdefault(
-            "GRAPH_PROMPT_PATH",
-            Path("./core/ai_coach/global_system_prompt.txt").resolve().as_posix(),
-        )
-        os.environ.setdefault("LITELLM_LOG", "ERROR")
-        os.environ.setdefault("LOG_LEVEL", "WARNING")
+        os.environ.setdefault("GRAPH_PROMPT_PATH", Path("./ai_coach/global_system_prompt.txt").resolve().as_posix())
+        os.environ.setdefault("LITELLM_LOG", "WARNING")
+        os.environ.setdefault("LOG_LEVEL", "INFO")
         os.environ.setdefault("EMBEDDING_API_KEY", settings.OPENAI_API_KEY)
-
         try:
             import litellm
 
-            litellm.suppress_debug_info = True
-        except Exception as exc:  # noqa: BLE001
-            logger.debug(f"Failed to suppress LiteLLM debug info: {exc}")
-
+            litellm.suppress_debug_info = False
+        except Exception:
+            pass
         storage_root = Path(".data_storage").resolve()
         storage_root.mkdir(parents=True, exist_ok=True)
+        os.environ.setdefault("COGNEE_DATA_ROOT", str(storage_root))
         cognee.config.data_root_directory(str(storage_root))
 
     @staticmethod
     def _configure_logging() -> None:
-        """Unify std-logging, warnings and loguru."""
         warnings.filterwarnings("ignore", category=SAWarning)
         logging.getLogger("langfuse").setLevel(logging.ERROR)
         configure_loguru()

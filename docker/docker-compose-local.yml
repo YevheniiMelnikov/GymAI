@@ -15,6 +15,26 @@ services:
       retries: 5
     restart: unless-stopped
 
+  ai_coach:
+    build:
+      context: ..
+      dockerfile: docker/coach.Dockerfile
+    container_name: ai_coach
+    ports: ["9000:9000"]
+    environment:
+      - COGNEE_DATA_ROOT=/app/.data_storage
+    env_file: ../.env
+    command: uvicorn ai_coach.api:app --host 0.0.0.0 --port 9000
+    volumes:
+      - ../.data_storage:/app/.data_storage
+      - ../config:/app/config
+      - ../google_creds.json:/app/google_creds.json:ro
+
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+
   redis:
     image: redis:7.4.2
     container_name: redis

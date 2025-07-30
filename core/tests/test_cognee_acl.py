@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 import pytest
 
-from core.ai_coach import cognee_coach as coach
+from ai_coach import cognee_coach as coach
 
 
 @pytest.mark.asyncio

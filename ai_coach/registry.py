@@ -1,4 +1,4 @@
-from core.ai_coach.base import BaseAICoach
+from .base import BaseAICoach
 
 from typing import Type
 

@@ -174,7 +174,7 @@ docker compose -f docker/docker-compose.yml up -d --build nginx
 
 ## Global system prompt
 
-The system instruction used by Cognee is loaded from `./core/ai_coach/global_system_prompt.txt`.
+The system instruction used by Cognee is loaded from `./ai_coach/global_system_prompt.txt`.
 This path is assigned to the `GRAPH_PROMPT_PATH` environment variable automatically on startup, but you can override it if needed.
 Make sure this file exists before starting the services.
 

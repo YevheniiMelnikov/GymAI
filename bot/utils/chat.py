@@ -45,9 +45,7 @@ async def send_message(
             lang = None
         _: Client | None = None
         if sender_id is not None:
-            from core.ai_coach.cognee_coach import CogneeCoach
-
-            await CogneeCoach.save_user_message(text, chat_id=sender_id, client_id=sender_id)
+            await APIService.ai_coach.save_user_message(text, chat_id=sender_id, client_id=sender_id)
             try:
                 _ = await Cache.client.get_client(sender_id)
             except Exception:

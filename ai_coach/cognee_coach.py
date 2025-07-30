@@ -6,8 +6,8 @@ import sys
 from typing import Any, Optional, Tuple
 from uuid import uuid4
 
-from core.ai_coach.cognee_config import CogneeConfig
-from core.ai_coach.lock_cache import LockCache
+from ai_coach.cognee_config import CogneeConfig
+from ai_coach.lock_cache import LockCache
 
 import cognee
 from cognee.modules.data.exceptions import DatasetNotFoundError
@@ -18,8 +18,8 @@ from cognee.modules.engine.operations.setup import setup as cognee_setup
 from loguru import logger
 
 from config.app_settings import settings
-from core.ai_coach.base import BaseAICoach
-from core.ai_coach.knowledge_loader import KnowledgeLoader
+from ai_coach.base import BaseAICoach
+from ai_coach.knowledge_loader import KnowledgeLoader
 from core.schemas import Client
 
 
@@ -141,7 +141,6 @@ class CogneeCoach(BaseAICoach):
         """Store history and query Cognee."""
         cls._ensure_config()
         user = await cls._get_user()
-        print(f"Final prompt: {prompt}")  # TODO: REMOVE
         dataset_base = "main_dataset" if client is None else f"main_dataset_{client.id}"
         dataset_name = f"{dataset_base}_{user.id}"
 
@@ -153,7 +152,8 @@ class CogneeCoach(BaseAICoach):
         except DatasetNotFoundError:
             logger.error("Search failed: dataset not found")
         except Exception as e:
-            logger.error(f"Unexpected AI coach error during client {client.id} request: {e}")
+            client_id = getattr(client, "id", "<unknown>")
+            logger.error(f"Unexpected AI coach error during client {client_id} request: {e}")
         return []
 
     @classmethod

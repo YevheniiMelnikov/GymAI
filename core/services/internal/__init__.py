@@ -17,5 +17,11 @@ class _APIServiceProxy:
 
         return WorkoutService
 
+    @property
+    def ai_coach(self):
+        from core.services.internal.ai_coach_service import AiCoachService
+
+        return AiCoachService
+
 
 APIService = _APIServiceProxy()
