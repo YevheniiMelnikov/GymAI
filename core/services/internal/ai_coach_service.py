@@ -1,18 +1,18 @@
 from __future__ import annotations
 
 from enum import Enum
-from fastapi.encoders import jsonable_encoder
 from urllib.parse import urljoin
 
 from loguru import logger
 
 from config.app_settings import settings
-from core.schemas import Client
+from core.schemas import Client, AiCoachAskRequest, AiCoachMessageRequest
 from .api_client import APIClient
 
 
 class AiCoachService(APIClient):
     base_url = settings.AI_COACH_URL
+    use_default_auth = False
 
     @classmethod
     async def ask(
@@ -24,15 +24,15 @@ class AiCoachService(APIClient):
         language: str | None = None,
     ) -> list[str] | None:
         url = urljoin(cls.base_url, "ask/")
-        payload = {
-            "prompt": prompt,
-            "client": jsonable_encoder(client) if client else None,
-            "chat_id": chat_id,
-            "language": language.value if isinstance(language, Enum) else language,
-        }
-        logger.debug(f"POST to {url} payload={payload}")
+        request = AiCoachAskRequest(
+            prompt=prompt,
+            client=client,
+            chat_id=chat_id,
+            language=language.value if isinstance(language, Enum) else language,
+        )
+        logger.debug(f"POST to {url} payload={request.model_dump()}")
 
-        status, data = await cls._api_request("post", url, payload)
+        status, data = await cls._api_request("post", url, request.model_dump())
         if status == 200 and isinstance(data, list):
             return data
         if status == 200 and isinstance(data, dict):
@@ -43,8 +43,8 @@ class AiCoachService(APIClient):
     @classmethod
     async def save_user_message(cls, text: str, chat_id: int, client_id: int) -> None:
         url = urljoin(cls.base_url, "messages/")
-        payload = {"text": text, "chat_id": chat_id, "client_id": client_id}
-        await cls._api_request("post", url, payload)
+        request = AiCoachMessageRequest(text=text, chat_id=chat_id, client_id=client_id)
+        await cls._api_request("post", url, request.model_dump())
 
     @classmethod
     async def get_context(cls, chat_id: int, query: str) -> list[str]:

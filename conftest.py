@@ -24,6 +24,7 @@ env_defaults = {
     "PAYMENT_PUB_KEY": "pub",
     "CHECKOUT_URL": "http://checkout",
     "POSTGRES_PASSWORD": "password",
+    "SECRET_KEY": "test",
     "AI_COACH_URL": "http://localhost/",
 }
 for key, value in env_defaults.items():
