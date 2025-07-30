@@ -20,6 +20,7 @@ services:
       context: ..
       dockerfile: docker/coach.Dockerfile
     container_name: ai_coach
+    ports: ["9000:9000"]
     environment:
       - COGNEE_DATA_ROOT=/app/.data_storage
     env_file: ../.env
