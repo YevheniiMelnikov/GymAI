@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import json
 import re
 from pydantic import ValidationError
 
-from core.schemas import DayExercises, Exercise
-from .schemas import ProgramResponse, SubscriptionResponse
+from core.schemas import DayExercises, Exercise, Client
+from ai_coach.schemas import ProgramResponse, SubscriptionResponse
 
 
 def parse_program_text(program_text: str) -> tuple[list[DayExercises], int]:
@@ -94,3 +96,19 @@ def parse_subscription_json(subscription_json: str) -> SubscriptionResponse | No
         return SubscriptionResponse.model_validate(data)
     except (json.JSONDecodeError, ValidationError):
         return None
+
+
+def extract_client_data(client: Client) -> str:
+    """Return JSON representation of ``client`` profile details."""
+
+    details = {
+        "name": client.name,
+        "gender": client.gender,
+        "born_in": client.born_in,
+        "weight": client.weight,
+        "health_notes": client.health_notes,
+        "workout_experience": client.workout_experience,
+        "workout_goals": client.workout_goals,
+    }
+    clean = {k: v for k, v in details.items() if v is not None}
+    return json.dumps(clean, ensure_ascii=False)

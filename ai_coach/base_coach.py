@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from .knowledge_loader import KnowledgeLoader
+from .base_knowledge_loader import KnowledgeLoader
 from core.schemas import Client
 
 

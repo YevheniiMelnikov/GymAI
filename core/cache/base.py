@@ -94,7 +94,7 @@ class BaseCacheManager:
     async def set_json(cls, key: str, field: str, data: dict[str, Any]) -> None:
         try:
             safe = cls._json_safe(data)
-            await cls.set(key, field, json.dumps(safe))
+            await cls.set(key, field, json.dumps(safe, ensure_ascii=False, separators=(",", ":")))
         except RedisError as e:
             logger.error(f"Redis SET JSON error [{key}:{field}]: {e}")
 
@@ -148,7 +148,7 @@ class BaseCacheManager:
         data = await cls._fetch_from_service(cache_key, field, use_fallback=use_fallback)
         try:
             prepared = cls._prepare_for_cache(data, cache_key, field)
-            await cls.set(cache_key, field, json.dumps(prepared))
+            await cls.set(cache_key, field, json.dumps(prepared, ensure_ascii=False, separators=(",", ":")))
         except Exception as e:  # pragma: no cover - caching failure shouldn't crash
             logger.error(f"Failed to cache {cache_key}:{field}: {e}")
         return data

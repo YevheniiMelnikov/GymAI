@@ -6,8 +6,8 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from ai_coach.cognee_coach import CogneeCoach
-from ai_coach.utils import init_ai_coach
 from ai_coach import GDriveDocumentLoader
+from ai_coach.utils.coach_utils import init_ai_coach
 
 
 @asynccontextmanager

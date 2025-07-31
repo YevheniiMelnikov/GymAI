@@ -7,7 +7,7 @@ from typing import Any, Optional, Tuple
 from uuid import uuid4
 
 from ai_coach.cognee_config import CogneeConfig
-from ai_coach.lock_cache import LockCache
+from ai_coach.utils.lock_cache import LockCache
 
 import cognee
 from cognee.modules.data.exceptions import DatasetNotFoundError
@@ -18,8 +18,8 @@ from cognee.modules.engine.operations.setup import setup as cognee_setup
 from loguru import logger
 
 from config.app_settings import settings
-from ai_coach.base import BaseAICoach
-from ai_coach.knowledge_loader import KnowledgeLoader
+from ai_coach.base_coach import BaseAICoach
+from ai_coach.base_knowledge_loader import KnowledgeLoader
 from core.schemas import Client
 
 

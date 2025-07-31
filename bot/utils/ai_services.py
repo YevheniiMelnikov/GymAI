@@ -14,7 +14,7 @@ from ai_coach.prompts import (
     UPDATE_WORKOUT_PROMPT,
     INITIAL_PROMPT,
 )
-from ai_coach.parsers import (
+from ai_coach.utils.parsers import (
     parse_program_text,
     parse_program_json,
     parse_subscription_json,
