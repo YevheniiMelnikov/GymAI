@@ -14,6 +14,7 @@ from bot.handlers.internal import (
     internal_export_coach_payouts,
     internal_send_daily_survey,
     internal_send_workout_result,
+    internal_prune_cognee,
 )
 from config.app_settings import settings
 from bot.middlewares import ProfileMiddleware
@@ -79,6 +80,10 @@ async def main() -> None:
     app.router.add_post(
         "/internal/tasks/export_coach_payouts/",
         internal_export_coach_payouts,
+    )
+    app.router.add_post(
+        "/internal/tasks/prune_cognee/",
+        internal_prune_cognee,
     )
     setup_application(app, dp, bot=bot)
     runner = await start_web_app(app)

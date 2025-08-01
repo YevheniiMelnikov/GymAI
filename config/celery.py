@@ -55,6 +55,11 @@ celery_config = {
             "schedule": crontab(hour=3, minute=30),
             "options": {"queue": "maintenance"},
         },
+        "prune_cognee": {
+            "task": "core.tasks.prune_cognee",
+            "schedule": crontab(hour=2, minute=10),
+            "options": {"queue": "maintenance"},
+        },
     },
 }
 

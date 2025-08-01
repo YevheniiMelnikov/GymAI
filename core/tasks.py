@@ -225,3 +225,18 @@ async def refresh_external_knowledge(self):  # pyre-ignore[valid-type]
         await APIService.ai_coach.refresh_knowledge()
     except Exception as exc:  # noqa: BLE001
         raise self.retry(exc=exc)
+
+
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
+async def prune_cognee(self):  # pyre-ignore[valid-type]
+    """Remove cached Cognee data storage."""
+    url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/prune_cognee/"
+    headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(url, headers=headers)
+            resp.raise_for_status()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"Bot call failed for prune_cognee: {exc}")
+        raise self.retry(exc=exc)
