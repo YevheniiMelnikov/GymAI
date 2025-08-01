@@ -25,6 +25,7 @@ services:
     ports: [ "9000:9000" ]
     environment:
       - COGNEE_DATA_ROOT=/app/.data_storage
+      - EMBEDDING_API_KEY=${OPENAI_API_KEY}
     command: uvicorn ai_coach.api:app --host 0.0.0.0 --port 9000
     volumes:
       - ../.data_storage:/app/.data_storage

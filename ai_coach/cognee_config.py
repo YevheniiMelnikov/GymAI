@@ -26,12 +26,11 @@ class CogneeConfig:
     @classmethod
     def apply(cls) -> None:
         """Apply all configurations in sequence."""
-        cls._configure_environment()
         cls._configure_logging()
         cls._patch_cognee()
         cls._configure_llm()
         cls._configure_vector_db()
-        cls._configure_graph_db()
+        cls._configure_data_processing()
         cls._configure_relational_db()
 
     @staticmethod
@@ -49,10 +48,15 @@ class CogneeConfig:
         cognee.config.set_vector_db_url(settings.VECTORDATABASE_URL)
 
     @staticmethod
-    def _configure_graph_db() -> None:
-        """Configure Graph Database provider and prompt path."""
+    def _configure_data_processing() -> None:
+        """Configure Graph Database provider, storage root and prompt path."""
         prompt_path = Path(settings.GRAPH_PROMPT_PATH).resolve().as_posix()
         os.environ["GRAPH_PROMPT_PATH"] = prompt_path
+        storage_root = Path(".data_storage").resolve()
+        storage_root.mkdir(parents=True, exist_ok=True)
+        os.environ.setdefault("COGNEE_DATA_ROOT", str(storage_root))
+
+        cognee.config.data_root_directory(str(storage_root))
         cognee.config.set_graph_database_provider(settings.GRAPH_DATABASE_PROVIDER)
         cognee.config.set_llm_config({"graph_prompt_path": prompt_path})
 
@@ -70,25 +74,6 @@ class CogneeConfig:
                 "db_provider": settings.DB_PROVIDER,
             }
         )
-
-    @staticmethod
-    def _configure_environment() -> None:
-        """Set default environment variables and create storage directories."""
-        os.environ.setdefault("LITELLM_LOG", "WARNING")
-        os.environ.setdefault("LOG_LEVEL", "INFO")
-        os.environ.setdefault("EMBEDDING_API_KEY", settings.OPENAI_API_KEY)
-
-        try:
-            import litellm
-
-            litellm.suppress_debug_info = False
-        except ImportError:
-            pass  # litellm is optional
-
-        storage_root = Path(".data_storage").resolve()
-        storage_root.mkdir(parents=True, exist_ok=True)
-        os.environ.setdefault("COGNEE_DATA_ROOT", str(storage_root))
-        cognee.config.data_root_directory(str(storage_root))
 
     @staticmethod
     def _configure_logging() -> None:
