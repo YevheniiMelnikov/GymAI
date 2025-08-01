@@ -22,7 +22,6 @@ env_defaults = {
     "DB_USER": "postgres",
     "DB_HOST": "localhost",
     "DB_PORT": "5432",
-    "GRAPH_PROMPT_PATH": "./ai_coach/global_system_prompt.txt",
     "AI_COACH_URL": "http://localhost/",
 }
 

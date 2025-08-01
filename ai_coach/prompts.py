@@ -1,4 +1,4 @@
-SYSTEM_MESSAGE = """
+SYSTEM_PROMPT = """
     You are an experienced fitness coach. Use your expert knowledge, client 
     history, and structured data to generate an individualized gym workout plan.
 """

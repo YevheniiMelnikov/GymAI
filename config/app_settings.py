@@ -43,7 +43,6 @@ class Settings(BaseSettings):
     DB_PROVIDER: Annotated[str, Field(default="postgres")]
     VECTORDATABASE_PROVIDER: Annotated[str, Field(default="pgvector")]
     GRAPH_DATABASE_PROVIDER: Annotated[str, Field(default="networkx")]
-    GRAPH_PROMPT_PATH: Annotated[str, Field(default="./ai_coach/global_system_prompt.txt")]
     AI_COACH_URL: Annotated[str, Field(default="http://ai_coach:9000/")]
 
     API_KEY: str

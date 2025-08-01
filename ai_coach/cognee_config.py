@@ -49,16 +49,13 @@ class CogneeConfig:
 
     @staticmethod
     def _configure_data_processing() -> None:
-        """Configure Graph Database provider, storage root and prompt path."""
-        prompt_path = Path(settings.GRAPH_PROMPT_PATH).resolve().as_posix()
-        os.environ["GRAPH_PROMPT_PATH"] = prompt_path
+        """Configure Graph Database provider, storage root."""
         storage_root = Path(".data_storage").resolve()
         storage_root.mkdir(parents=True, exist_ok=True)
         os.environ.setdefault("COGNEE_DATA_ROOT", str(storage_root))
 
         cognee.config.data_root_directory(str(storage_root))
         cognee.config.set_graph_database_provider(settings.GRAPH_DATABASE_PROVIDER)
-        cognee.config.set_llm_config({"graph_prompt_path": prompt_path})
 
     @staticmethod
     def _configure_relational_db() -> None:

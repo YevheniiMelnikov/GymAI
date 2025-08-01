@@ -10,7 +10,7 @@ from config.app_settings import settings
 from ai_coach.prompts import (
     PROGRAM_PROMPT,
     SUBSCRIPTION_PROMPT,
-    SYSTEM_MESSAGE,
+    SYSTEM_PROMPT,
     UPDATE_WORKOUT_PROMPT,
     INITIAL_PROMPT,
 )
@@ -76,7 +76,7 @@ async def generate_program(
         previous_program = "[]"
 
     prompt = (
-        SYSTEM_MESSAGE
+        SYSTEM_PROMPT
         + "\n\n"
         + PROGRAM_PROMPT.format(
             client_profile=client_profile,
@@ -161,7 +161,7 @@ async def generate_subscription(
         workout_days=workout_days,
     )
     prompt = (
-        SYSTEM_MESSAGE
+        SYSTEM_PROMPT
         + "\n\n"
         + SUBSCRIPTION_PROMPT.format(
             request=req.model_dump_json(indent=2),
@@ -223,7 +223,7 @@ async def process_workout_result(
         ctx = []
 
     prompt = (
-        SYSTEM_MESSAGE
+        SYSTEM_PROMPT
         + "\n\n"
         + UPDATE_WORKOUT_PROMPT.format(
             expected_workout=expected_workout_result.strip(),
