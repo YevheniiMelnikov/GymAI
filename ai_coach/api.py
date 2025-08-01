@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 from ai_coach.cognee_coach import CogneeCoach
+from core.schemas import Client
 from ai_coach import GDriveDocumentLoader
 from ai_coach.utils.coach_utils import init_ai_coach
 
@@ -28,7 +29,10 @@ class AskRequest(BaseModel):
 
 @app.post("/ask/", response_model=list[str] | None)
 async def ask(data: AskRequest) -> list[str] | None:
-    return await CogneeCoach.make_request(data.prompt, client=None)
+    if data.client is None:
+        raise HTTPException(status_code=400, detail="client required")
+    client = Client(**data.client)
+    return await CogneeCoach.make_request(data.prompt, client=client)
 
 
 class MessageRequest(BaseModel):

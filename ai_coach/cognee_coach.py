@@ -130,13 +130,13 @@ class CogneeCoach(BaseAICoach):
         return ds_id
 
     @classmethod
-    async def save_prompt(cls, text: str, *, client: Optional[Client] = None) -> None:
+    async def save_prompt(cls, text: str, *, client: Client) -> None:
         """Persist a user prompt in the main dataset."""
         if not text.strip():
             return
         cls._ensure_config()
         user = await cls._get_user()
-        ds_name = cls._dataset_name(getattr(client, "id", None))
+        ds_name = cls._dataset_name(client.id)
         await cls._add_and_cognify(text, ds_name, user)
 
     @classmethod
@@ -154,11 +154,11 @@ class CogneeCoach(BaseAICoach):
             return []
 
     @classmethod
-    async def make_request(cls, prompt: str, *, client: Optional[Client] = None) -> list[str]:
+    async def make_request(cls, prompt: str, *, client: Client) -> list[str]:
         """Query Cognee without modifying datasets."""
         cls._ensure_config()
         user = await cls._get_user()
-        ds_name = cls._dataset_name(getattr(client, "id", None))
+        ds_name = cls._dataset_name(client.id)
 
         try:
             return await cognee.search(prompt, datasets=[ds_name], user=user)
@@ -167,8 +167,9 @@ class CogneeCoach(BaseAICoach):
         except DatasetNotFoundError:
             logger.error("Search failed: dataset not found")
         except Exception as e:
-            client_id = getattr(client, "id", "<unknown>")
-            logger.error(f"Unexpected AI coach error during client {client_id} request: {e}")
+            logger.error(
+                f"Unexpected AI coach error during client {client.id} request: {e}"
+            )
         return []
 
     @classmethod
@@ -187,4 +188,5 @@ class CogneeCoach(BaseAICoach):
         cls._ensure_config()
         user = await cls._get_user()
         ds_name = cls._dataset_name(client.id)
+        logger.info(f"Reindexing dataset {ds_name}")
         await cls._cognify_dataset(ds_name, user)

@@ -47,6 +47,8 @@ async def ai_coach_request(*args: Any, **kwargs: Any) -> list[str] | None:
     client: Client | None = kwargs.get("client")
     if not text:
         return None
+    if client is None:
+        raise ValueError("client required")
     await _wait_for_coach()
     coach = get_ai_coach()
     return await coach.make_request(str(text), client=client)
