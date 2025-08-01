@@ -17,6 +17,7 @@ from bot.utils.chat import send_message
 from aiogram.enums import ParseMode
 from core.services import APIService
 from bot.utils.ai_services import process_workout_result
+from cognee.api.v1.prune import prune
 
 
 async def internal_send_daily_survey(request: web.Request) -> web.Response:
@@ -140,3 +141,17 @@ async def internal_send_workout_result(request: web.Request) -> web.Response:
         )
 
     return web.json_response({"result": "ok"})
+
+
+async def internal_prune_cognee(request: web.Request) -> web.Response:
+    """Trigger Cognee prune to cleanup local data storage."""
+
+    if request.headers.get("Authorization") != f"Api-Key {settings.API_KEY}":
+        return web.json_response({"detail": "Forbidden"}, status=403)
+
+    try:
+        await prune.prune_data()
+        return web.json_response({"result": "ok"})
+    except Exception as e:  # noqa: BLE001
+        logger.exception(f"Cognee prune failed: {e}")
+        return web.json_response({"detail": str(e)}, status=500)
