@@ -4,7 +4,6 @@ import asyncio
 import os
 import sys
 from typing import Any, Optional, Tuple
-from uuid import uuid4
 
 from ai_coach.cognee_config import CogneeConfig
 from ai_coach.utils.lock_cache import LockCache
@@ -32,6 +31,17 @@ class CogneeCoach(BaseAICoach):
     _loader: Optional[KnowledgeLoader] = None
     _cognify_locks: LockCache = LockCache()
     _user: Optional[Any] = None
+    _added_hashes: dict[str, set[int]] = {}
+
+    @staticmethod
+    def _dataset_name(prefix: str, user: Any, *, client: Client | None = None, chat_id: int | None = None) -> str:
+        parts = [prefix]
+        if client is not None:
+            parts.append(str(client.id))
+        if chat_id is not None:
+            parts.append(str(chat_id))
+        parts.append(str(user.id))
+        return "_".join(parts)
 
     @classmethod
     async def initialize(cls) -> None:
@@ -95,20 +105,20 @@ class CogneeCoach(BaseAICoach):
         return cls._user
 
     @staticmethod
-    async def _safe_add(text: str, dataset: str, user: Any) -> Tuple[str, bool]:  # (dataset_id, created_now)
-        """Safely add text to a Cognee dataset."""
+    async def _safe_add(text: str, dataset: str, user: Any) -> Tuple[str, bool]:
+        """Add text to dataset if not already present."""
         logger.trace(f"_safe_add → dataset={dataset!r}")
         if not text.strip():
             return dataset, False
 
-        try:
-            info = await cognee.add(text, dataset_name=dataset, user=user)
-            return getattr(info, "dataset_id", dataset), True
-        except PermissionDeniedError:
-            new_name = f"{dataset}_{uuid4().hex[:8]}"
-            logger.trace(f"PermissionDenied on {dataset}, retrying as {new_name}")
-            info = await cognee.add(text, dataset_name=new_name, user=user)
-            return getattr(info, "dataset_id", new_name), True
+        hashed = hash(text)
+        added = CogneeCoach._added_hashes.setdefault(dataset, set())
+        if hashed in added:
+            return dataset, False
+
+        info = await cognee.add(text, dataset_name=dataset, user=user)
+        added.add(hashed)
+        return getattr(info, "dataset_id", dataset), True
 
     @classmethod
     async def _cognify_dataset(cls, dataset_id: str, user: Any) -> None:
@@ -121,32 +131,42 @@ class CogneeCoach(BaseAICoach):
         """Add text to dataset and trigger background cognification if created."""
         ds_id, created = await cls._safe_add(text, dataset, user)
         if created:
-            asyncio.create_task(cls._cognify_dataset(ds_id, user))
+            await cls._cognify_dataset(ds_id, user)
         return ds_id
 
     @classmethod
-    async def get_context(cls, chat_id: int, query: str) -> list[str]:
+    async def save_prompt(cls, text: str, *, client: Optional[Client] = None) -> None:
+        """Persist a user prompt in the main dataset."""
+        if not text.strip():
+            return
         cls._ensure_config()
         user = await cls._get_user()
-        base = f"chat_{chat_id}_{user.id}"
+        ds_name = cls._dataset_name("main", user, client=client)
+        await cls._add_and_cognify(text, ds_name, user)
+
+    @classmethod
+    async def get_context(cls, chat_id: int, query: str) -> list[str]:
+        """Search chat history for relevant context."""
+        cls._ensure_config()
+        user = await cls._get_user()
+        ds_name = cls._dataset_name("chat", user, chat_id=chat_id)
         try:
-            ds_id, _ = await cls._safe_add("init", base, user)
-            return await cognee.search(query, datasets=[ds_id], top_k=5, user=user)
+            return await cognee.search(query, datasets=[ds_name], top_k=5, user=user)
+        except DatasetNotFoundError:
+            return []
         except Exception as e:
             logger.error(f"get_context failed: {e}")
             return []
 
     @classmethod
     async def make_request(cls, prompt: str, *, client: Optional[Client] = None) -> list[str]:
-        """Store history and query Cognee."""
+        """Query Cognee without modifying datasets."""
         cls._ensure_config()
         user = await cls._get_user()
-        dataset_base = "main_dataset" if client is None else f"main_dataset_{client.id}"
-        dataset_name = f"{dataset_base}_{user.id}"
+        ds_name = cls._dataset_name("main", user, client=client)
 
         try:
-            ds_id = await cls._add_and_cognify(prompt, dataset_name, user)
-            return await cognee.search(prompt, datasets=[ds_id], user=user)
+            return await cognee.search(prompt, datasets=[ds_name], user=user)
         except PermissionDeniedError as e:
             logger.error(f"Permission denied: {e}")
         except DatasetNotFoundError:
@@ -163,5 +183,5 @@ class CogneeCoach(BaseAICoach):
             return
         cls._ensure_config()
         user = await cls._get_user()
-        ds_name = f"chat_{chat_id}_{user.id}"
+        ds_name = cls._dataset_name("chat", user, chat_id=chat_id)
         await cls._add_and_cognify(text, ds_name, user)

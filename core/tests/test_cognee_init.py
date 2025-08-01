@@ -2,7 +2,7 @@ import pytest
 from types import SimpleNamespace
 
 from ai_coach.cognee_coach import CogneeCoach
-from ai_coach import cognee_coach as coach
+import ai_coach.cognee_coach as coach
 from ai_coach.utils import init_ai_coach, coach_ready_event
 
 
@@ -48,7 +48,7 @@ async def test_empty_context_does_not_crash(monkeypatch):
         return []
 
     monkeypatch.setattr(coach.cognee, "search", fake_search)
-    monkeypatch.setattr(CogneeCoach, "_safe_add", lambda text, dataset, user: SimpleNamespace(dataset_id=dataset))
 
     res = await CogneeCoach.get_context(chat_id=42, query="hello")
     assert isinstance(res, list)
+
