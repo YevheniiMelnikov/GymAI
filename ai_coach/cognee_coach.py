@@ -4,9 +4,11 @@ import asyncio
 import os
 import sys
 from typing import Any, Optional, Tuple
+from hashlib import sha256
 
 from ai_coach.cognee_config import CogneeConfig
 from ai_coach.utils.lock_cache import LockCache
+from ai_coach.utils.hash_store import HashStore
 
 import cognee
 from cognee.modules.data.exceptions import DatasetNotFoundError
@@ -31,17 +33,11 @@ class CogneeCoach(BaseAICoach):
     _loader: Optional[KnowledgeLoader] = None
     _cognify_locks: LockCache = LockCache()
     _user: Optional[Any] = None
-    _added_hashes: dict[str, set[int]] = {}
 
     @staticmethod
-    def _dataset_name(prefix: str, user: Any, *, client: Client | None = None, chat_id: int | None = None) -> str:
-        parts = [prefix]
-        if client is not None:
-            parts.append(str(client.id))
-        if chat_id is not None:
-            parts.append(str(chat_id))
-        parts.append(str(user.id))
-        return "_".join(parts)
+    def _dataset_name(identifier: int | None) -> str:
+        """Return dataset name for a client or chat."""
+        return str(identifier) if identifier is not None else "default"
 
     @classmethod
     async def initialize(cls) -> None:
@@ -111,13 +107,12 @@ class CogneeCoach(BaseAICoach):
         if not text.strip():
             return dataset, False
 
-        hashed = hash(text)
-        added = CogneeCoach._added_hashes.setdefault(dataset, set())
-        if hashed in added:
+        digest = sha256(text.encode()).hexdigest()
+        if await HashStore.contains(dataset, digest):
             return dataset, False
 
         info = await cognee.add(text, dataset_name=dataset, user=user)
-        added.add(hashed)
+        await HashStore.add(dataset, digest)
         return getattr(info, "dataset_id", dataset), True
 
     @classmethod
@@ -131,7 +126,7 @@ class CogneeCoach(BaseAICoach):
         """Add text to dataset and trigger background cognification if created."""
         ds_id, created = await cls._safe_add(text, dataset, user)
         if created:
-            await cls._cognify_dataset(ds_id, user)
+            asyncio.create_task(cls._cognify_dataset(ds_id, user))
         return ds_id
 
     @classmethod
@@ -141,7 +136,7 @@ class CogneeCoach(BaseAICoach):
             return
         cls._ensure_config()
         user = await cls._get_user()
-        ds_name = cls._dataset_name("main", user, client=client)
+        ds_name = cls._dataset_name(getattr(client, "id", None))
         await cls._add_and_cognify(text, ds_name, user)
 
     @classmethod
@@ -149,7 +144,7 @@ class CogneeCoach(BaseAICoach):
         """Search chat history for relevant context."""
         cls._ensure_config()
         user = await cls._get_user()
-        ds_name = cls._dataset_name("chat", user, chat_id=chat_id)
+        ds_name = cls._dataset_name(chat_id)
         try:
             return await cognee.search(query, datasets=[ds_name], top_k=5, user=user)
         except DatasetNotFoundError:
@@ -163,7 +158,7 @@ class CogneeCoach(BaseAICoach):
         """Query Cognee without modifying datasets."""
         cls._ensure_config()
         user = await cls._get_user()
-        ds_name = cls._dataset_name("main", user, client=client)
+        ds_name = cls._dataset_name(getattr(client, "id", None))
 
         try:
             return await cognee.search(prompt, datasets=[ds_name], user=user)
@@ -183,5 +178,13 @@ class CogneeCoach(BaseAICoach):
             return
         cls._ensure_config()
         user = await cls._get_user()
-        ds_name = cls._dataset_name("chat", user, chat_id=chat_id)
+        ds_name = cls._dataset_name(client_id)
         await cls._add_and_cognify(text, ds_name, user)
+
+    @classmethod
+    async def reindex(cls, client: Client) -> None:
+        """Force re-cognify of a client's dataset."""
+        cls._ensure_config()
+        user = await cls._get_user()
+        ds_name = cls._dataset_name(client.id)
+        await cls._cognify_dataset(ds_name, user)

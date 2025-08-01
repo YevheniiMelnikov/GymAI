@@ -1,0 +1,40 @@
+from __future__ import annotations
+
+import logging
+
+from redis.asyncio import Redis
+
+from config.app_settings import settings
+
+
+logger = logging.getLogger(__name__)
+
+
+class HashStore:
+    """Persist SHA256 hashes for deduplication."""
+
+    redis: Redis = Redis.from_url(
+        f"{settings.REDIS_URL}/2",
+        encoding="utf-8",
+        decode_responses=True,
+    )
+
+    @staticmethod
+    def _key(dataset: str) -> str:
+        return f"cognee_hashes:{dataset}"
+
+    @classmethod
+    async def contains(cls, dataset: str, hash_value: str) -> bool:
+        try:
+            return await cls.redis.sismember(cls._key(dataset), hash_value)
+        except Exception as e:  # pragma: no cover - best effort
+            logger.error(f"HashStore.contains error {dataset}: {e}")
+            return False
+
+    @classmethod
+    async def add(cls, dataset: str, hash_value: str) -> None:
+        try:
+            await cls.redis.sadd(cls._key(dataset), hash_value)
+        except Exception as e:  # pragma: no cover - best effort
+            logger.error(f"HashStore.add error {dataset}: {e}")
+

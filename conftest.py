@@ -65,11 +65,21 @@ sys.modules.setdefault("cognee.base_config", types.ModuleType("cognee.base_confi
 sys.modules["cognee.base_config"].get_base_config = lambda: None
 sys.modules.setdefault("openai", types.ModuleType("openai"))
 sys.modules["openai"].AsyncOpenAI = object
+loguru_mod = types.ModuleType("loguru")
+loguru_mod.logger = types.SimpleNamespace(
+    info=lambda *a, **k: None,
+    debug=lambda *a, **k: None,
+    trace=lambda *a, **k: None,
+    warning=lambda *a, **k: None,
+    error=lambda *a, **k: None,
+)
+sys.modules.setdefault("loguru", loguru_mod)
 settings_stub = types.SimpleNamespace(
     VECTORDATABASE_URL="sqlite://",
     LOG_LEVEL="INFO",
     GDRIVE_FOLDER_ID="folder",
     GOOGLE_APPLICATION_CREDENTIALS="/tmp/creds.json",
+    REDIS_URL="redis://localhost:6379",
 )
 sys.modules.setdefault("config.app_settings", types.ModuleType("config.app_settings"))
 sys.modules["config.app_settings"].settings = settings_stub
@@ -96,6 +106,14 @@ sqlalchemy_mod.exc.SAWarning = type("SAWarning", (Warning,), {})
 sys.modules.setdefault("sqlalchemy", sqlalchemy_mod)
 sys.modules.setdefault("sqlalchemy.schema", sqlalchemy_mod.schema)
 sys.modules.setdefault("sqlalchemy.exc", sqlalchemy_mod.exc)
+redis_async_mod = types.ModuleType("redis.asyncio")
+class DummyRedis:
+    async def sadd(self, *a, **k):
+        pass
+    async def sismember(self, *a, **k):
+        return False
+redis_async_mod.Redis = type("Redis", (), {"from_url": lambda *a, **k: DummyRedis()})
+sys.modules.setdefault("redis.asyncio", redis_async_mod)
 
 django = types.SimpleNamespace(setup=lambda: None)
 
