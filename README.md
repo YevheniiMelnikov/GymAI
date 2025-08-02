@@ -87,6 +87,27 @@ verify that `REDIS_URL` points to your local Redis instance.
 
 ---
 
+## AI Coach and knowledge base
+
+The project ships an AI coach backed by Cognee. Each client and chat is mapped to
+its own dataset whose name equals the numeric identifier. Prompts and user
+messages are saved with SHA‑256 deduplication in Redis. New texts are ingested
+asynchronously and cognified before they are available for search.
+
+To refresh external knowledge (e.g. documents from Google Drive), Celery calls
+`refresh_external_knowledge` every `KNOWLEDGE_REFRESH_INTERVAL` seconds. The
+task invokes `CogneeCoach.refresh_knowledge_base` under basic authentication.
+
+Key settings:
+
+- `KNOWLEDGE_REFRESH_INTERVAL` – periodic rebuild interval in seconds
+- `AI_COACH_TIMEOUT` – timeout for direct requests to the AI coach
+- `BACKUP_RETENTION_DAYS` – how long database backups are kept
+
+Adjust these values in `.env` to tune time‑based behaviour.
+
+---
+
 ## Tests
 
 Run tests with:
@@ -177,4 +198,3 @@ docker compose -f docker/docker-compose.yml up -d --build nginx
 The system instruction used by Cognee is loaded from `./ai_coach/global_system_prompt.txt`.
 This path is assigned to the `GRAPH_PROMPT_PATH` environment variable automatically on startup, but you can override it if needed.
 Make sure this file exists before starting the services.
-

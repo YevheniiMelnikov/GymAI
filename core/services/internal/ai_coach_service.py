@@ -32,7 +32,9 @@ class AiCoachService(APIClient):
             language=language.value if isinstance(language, Enum) else language,
         )
 
-        status, data = await cls._api_request("post", url, request.model_dump(), timeout=60)
+        status, data = await cls._api_request(
+            "post", url, request.model_dump(), timeout=settings.AI_COACH_TIMEOUT
+        )
         if status == 200 and isinstance(data, list):
             return data
         if status == 200 and isinstance(data, dict):
@@ -62,6 +64,8 @@ class AiCoachService(APIClient):
             f"{settings.AI_COACH_REFRESH_USER}:{settings.AI_COACH_REFRESH_PASSWORD}".encode()
         ).decode()
         headers = {"Authorization": f"Basic {token}"}
-        status, _ = await cls._api_request("post", url, headers=headers)
+        status, _ = await cls._api_request(
+            "post", url, headers=headers, timeout=settings.AI_COACH_TIMEOUT
+        )
         if status != 200:
             logger.error(f"Knowledge refresh failed HTTP={status}")

@@ -85,7 +85,7 @@ def redis_backup(self):
 
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
 def cleanup_backups(self):
-    cutoff = datetime.now() - timedelta(days=30)
+    cutoff = datetime.now() - timedelta(days=settings.BACKUP_RETENTION_DAYS)
     for root in (_pg_dir, _redis_dir):
         for f in os.scandir(root):
             if f.is_file() and datetime.fromtimestamp(f.stat().st_ctime) < cutoff:

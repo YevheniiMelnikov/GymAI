@@ -26,6 +26,8 @@ env_defaults = {
     "KNOWLEDGE_REFRESH_INTERVAL": "3600",
     "AI_COACH_REFRESH_USER": "admin",
     "AI_COACH_REFRESH_PASSWORD": "password",
+    "AI_COACH_TIMEOUT": "60",
+    "BACKUP_RETENTION_DAYS": "30",
 }
 
 for key, value in env_defaults.items():
