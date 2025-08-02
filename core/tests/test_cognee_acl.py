@@ -12,13 +12,14 @@ def test_case_success_create_and_search(monkeypatch):
         monkeypatch.setattr(coach.CogneeCoach, "_user", user)
         monkeypatch.setattr(coach.CogneeCoach, "_ensure_config", lambda: None)
         calls = {}
+        cognify_calls: list[list[str]] = []
 
         async def fake_add(prompt, dataset_name=None, user=None):
             calls["dataset_name"] = dataset_name
             return SimpleNamespace(dataset_id="ds1", permissions=["write"])
 
         async def fake_cognify(datasets, user=None):
-            calls["cognify"] = datasets
+            cognify_calls.append(datasets)
 
         async def fake_search(query, datasets, user=None, top_k=None):
             calls["search"] = datasets
@@ -40,9 +41,10 @@ def test_case_success_create_and_search(monkeypatch):
         await asyncio.sleep(0)  # allow background task
         await coach.CogneeCoach.make_request("hi", client=client)
 
-        assert calls["dataset_name"] == str(client.id)
-        assert calls.get("cognify") == ["ds1"]
-        assert calls["search"] == [str(client.id)]
+        assert calls["dataset_name"] == f"client_{client.id}"
+        assert cognify_calls[0] == ["ds1"]
+        assert cognify_calls[1] == [f"client_{client.id}"]
+        assert calls["search"] == [f"client_{client.id}"]
 
     asyncio.run(runner())
 
@@ -70,6 +72,6 @@ def test_case_conflict_existing_dataset(monkeypatch):
         with pytest.raises(coach.PermissionDeniedError):
             await coach.CogneeCoach.save_prompt("hello", client=client)
 
-        assert calls["dataset_names"] == [str(client.id)]
+        assert calls["dataset_names"] == [f"client_{client.id}"]
 
     asyncio.run(runner())
