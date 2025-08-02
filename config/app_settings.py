@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     API_TIMEOUT: int = 10
     AI_GENERATION_RETRIES: int = 3
 
+    KNOWLEDGE_REFRESH_INTERVAL: int = 60 * 60
+
     CACHE_TTL: int = 60 * 5
 
     TIME_ZONE: Annotated[str, Field(default="Europe/Kyiv")]

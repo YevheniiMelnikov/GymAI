@@ -23,6 +23,7 @@ env_defaults = {
     "DB_HOST": "localhost",
     "DB_PORT": "5432",
     "AI_COACH_URL": "http://localhost/",
+    "KNOWLEDGE_REFRESH_INTERVAL": "3600",
 }
 
 for key, value in env_defaults.items():

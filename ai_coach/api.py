@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
 from ai_coach.cognee_coach import CogneeCoach
+from core.tasks import refresh_external_knowledge
+from config.app_settings import settings
 from core.schemas import Client
 from ai_coach import GDriveDocumentLoader
 from ai_coach.utils.coach_utils import init_ai_coach
@@ -53,6 +55,8 @@ async def get_context(chat_id: int, query: str) -> list[str]:
 
 
 @app.post("/knowledge/refresh/")
-async def refresh_knowledge() -> dict[str, str]:
-    await CogneeCoach.refresh_knowledge_base()
-    return {"status": "ok"}
+async def refresh_knowledge(request: Request) -> dict[str, str]:
+    if request.headers.get("Authorization") != f"Api-Key {settings.API_KEY}":
+        raise HTTPException(status_code=403, detail="Forbidden")
+    refresh_external_knowledge.delay()
+    return {"status": "scheduled"}
