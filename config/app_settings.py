@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     API_URL: str
 
+    AI_COACH_REFRESH_USER: Annotated[str, Field(default="admin")]
+    AI_COACH_REFRESH_PASSWORD: Annotated[str, Field(default="password")]
+
     OPENAI_BASE_URL: Annotated[str, Field(default="https://api.openai.com/v1")]
     OPENAI_API_KEY: Annotated[str, Field(default="")]  # used for embeddings
     LLM_API_URL: Annotated[str, Field(default="https://openrouter.ai/api/v1")]

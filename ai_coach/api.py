@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 
 from ai_coach.cognee_coach import CogneeCoach
@@ -20,6 +21,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="AI Coach", lifespan=lifespan)
+security = HTTPBasic()
 
 
 class AskRequest(BaseModel):
@@ -55,8 +57,11 @@ async def get_context(chat_id: int, query: str) -> list[str]:
 
 
 @app.post("/knowledge/refresh/")
-async def refresh_knowledge(request: Request) -> dict[str, str]:
-    if request.headers.get("Authorization") != f"Api-Key {settings.API_KEY}":
-        raise HTTPException(status_code=403, detail="Forbidden")
+async def refresh_knowledge(credentials: HTTPBasicCredentials = Depends(security)) -> dict[str, str]:
+    if (
+        credentials.username != settings.AI_COACH_REFRESH_USER
+        or credentials.password != settings.AI_COACH_REFRESH_PASSWORD
+    ):
+        raise HTTPException(status_code=401, detail="Unauthorized")
     refresh_external_knowledge.delay()
     return {"status": "scheduled"}

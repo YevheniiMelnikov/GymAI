@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from enum import Enum
 from urllib.parse import urljoin
 
@@ -57,6 +58,10 @@ class AiCoachService(APIClient):
     @classmethod
     async def refresh_knowledge(cls) -> None:
         url = urljoin(cls.base_url, "knowledge/refresh/")
-        status, _ = await cls._api_request("post", url)
+        token = base64.b64encode(
+            f"{settings.AI_COACH_REFRESH_USER}:{settings.AI_COACH_REFRESH_PASSWORD}".encode()
+        ).decode()
+        headers = {"Authorization": f"Basic {token}"}
+        status, _ = await cls._api_request("post", url, headers=headers)
         if status != 200:
             logger.error(f"Knowledge refresh failed HTTP={status}")

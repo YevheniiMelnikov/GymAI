@@ -24,6 +24,8 @@ env_defaults = {
     "DB_PORT": "5432",
     "AI_COACH_URL": "http://localhost/",
     "KNOWLEDGE_REFRESH_INTERVAL": "3600",
+    "AI_COACH_REFRESH_USER": "admin",
+    "AI_COACH_REFRESH_PASSWORD": "password",
 }
 
 for key, value in env_defaults.items():
