@@ -63,8 +63,8 @@ def test_empty_context_does_not_crash(monkeypatch):
         monkeypatch.setattr(coach.HashStore, "contains", fake_contains)
         monkeypatch.setattr(coach.HashStore, "add", fake_add_hash)
 
-        res = await CogneeCoach.get_context(chat_id=42, query="hello")
-        assert calls["datasets"] == ["chat_42"]
+        res = await CogneeCoach.get_context(client_id=42, query="hello")
+        assert calls["datasets"] == ["42"]
         assert isinstance(res, list)
 
     asyncio.run(runner())

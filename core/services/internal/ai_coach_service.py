@@ -21,14 +21,12 @@ class AiCoachService(APIClient):
         prompt: str,
         *,
         client: Client | None = None,
-        chat_id: int | None = None,
         language: str | None = None,
     ) -> list[str] | None:
         url = urljoin(cls.base_url, "ask/")
         request = AiCoachAskRequest(
             prompt=prompt,
             client=client,
-            chat_id=chat_id,
             language=language.value if isinstance(language, Enum) else language,
         )
 
@@ -43,14 +41,14 @@ class AiCoachService(APIClient):
         return None
 
     @classmethod
-    async def save_user_message(cls, text: str, chat_id: int, client_id: int) -> None:
+    async def save_user_message(cls, text: str, client_id: int) -> None:
         url = urljoin(cls.base_url, "messages/")
-        request = AiCoachMessageRequest(text=text, chat_id=chat_id, client_id=client_id)
+        request = AiCoachMessageRequest(text=text, client_id=client_id)
         await cls._api_request("post", url, request.model_dump())
 
     @classmethod
-    async def get_context(cls, chat_id: int, query: str) -> list[str]:
-        url = urljoin(cls.base_url, f"context/?chat_id={chat_id}&query={query}")
+    async def get_context(cls, client_id: int, query: str) -> list[str]:
+        url = urljoin(cls.base_url, f"context/?client_id={client_id}&query={query}")
         status, data = await cls._api_request("get", url)
         if status == 200 and isinstance(data, list):
             return data

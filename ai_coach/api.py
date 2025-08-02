@@ -27,7 +27,6 @@ security = HTTPBasic()
 class AskRequest(BaseModel):
     prompt: str
     client: dict | None = None
-    chat_id: int | None = None
     language: str | None = None
 
 
@@ -41,19 +40,18 @@ async def ask(data: AskRequest) -> list[str] | None:
 
 class MessageRequest(BaseModel):
     text: str
-    chat_id: int
     client_id: int
 
 
 @app.post("/messages/")
 async def save_message(data: MessageRequest) -> dict[str, str]:
-    await CogneeCoach.save_user_message(data.text, chat_id=data.chat_id, client_id=data.client_id)
+    await CogneeCoach.save_user_message(data.text, client_id=data.client_id)
     return {"status": "ok"}
 
 
 @app.get("/context/")
-async def get_context(chat_id: int, query: str) -> list[str]:
-    return await CogneeCoach.get_context(chat_id, query)
+async def get_context(client_id: int, query: str) -> list[str]:
+    return await CogneeCoach.get_context(client_id, query)
 
 
 @app.post("/knowledge/refresh/")

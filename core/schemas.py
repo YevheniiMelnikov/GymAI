@@ -159,11 +159,9 @@ class Payment(BaseModel):
 class AiCoachAskRequest(BaseModel):
     prompt: str
     client: Client | None = None
-    chat_id: int | None = None
     language: str | None = None
 
 
 class AiCoachMessageRequest(BaseModel):
     text: str
-    chat_id: int
     client_id: int

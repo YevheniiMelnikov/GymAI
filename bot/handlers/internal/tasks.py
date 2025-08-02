@@ -90,7 +90,7 @@ async def internal_send_workout_result(request: web.Request) -> web.Response:
 
     if coach.coach_type == CoachType.ai:
         await APIService.ai_coach.save_user_message(
-            str(client_workout_feedback), chat_id=int(client_id), client_id=int(client_id)
+            str(client_workout_feedback), client_id=int(client_id)
         )
         client = await Cache.client.get_client(int(client_id))
         profile = await APIService.profile.get_profile(client.profile)

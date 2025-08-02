@@ -34,15 +34,6 @@ class CogneeCoach(BaseAICoach):
     _cognify_locks: LockCache = LockCache()
     _user: Optional[Any] = None
 
-    @staticmethod
-    def _dataset_name(*, client_id: int | None = None, chat_id: int | None = None) -> str:
-        """Build a dataset name tied to a client or chat."""
-        if chat_id is not None:
-            return f"chat_{chat_id}"
-        if client_id is not None:
-            return f"client_{client_id}"
-        return "default"
-
     @classmethod
     async def initialize(cls) -> None:
         """Ensure database migrations are applied and Cognee is reachable."""
@@ -140,15 +131,15 @@ class CogneeCoach(BaseAICoach):
             return
         cls._ensure_config()
         user = await cls._get_user()
-        ds_name = cls._dataset_name(client_id=client.id)
+        ds_name = str(client.id)
         await cls._add_and_cognify(text, ds_name, user)
 
     @classmethod
-    async def get_context(cls, chat_id: int, query: str) -> list[str]:
-        """Search chat history for relevant context."""
+    async def get_context(cls, client_id: int, query: str) -> list[str]:
+        """Search client history for relevant context."""
         cls._ensure_config()
         user = await cls._get_user()
-        ds_name = cls._dataset_name(chat_id=chat_id)
+        ds_name = str(client_id)
         try:
             return await cognee.search(query, datasets=[ds_name], top_k=5, user=user)
         except DatasetNotFoundError:
@@ -162,7 +153,7 @@ class CogneeCoach(BaseAICoach):
         """Reindex and search an existing client dataset without modifying it."""
         cls._ensure_config()
         user = await cls._get_user()
-        ds_name = cls._dataset_name(client_id=client.id)
+        ds_name = str(client.id)
 
         try:
             await cls.reindex(client)
@@ -178,13 +169,13 @@ class CogneeCoach(BaseAICoach):
         return []
 
     @classmethod
-    async def save_user_message(cls, text: str, chat_id: int, client_id: int) -> None:  # noqa: ARG002
-        """Store a raw user message into the chat history dataset."""
+    async def save_user_message(cls, text: str, client_id: int) -> None:
+        """Store a raw user message into the client's dataset."""
         if not text.strip():
             return
         cls._ensure_config()
         user = await cls._get_user()
-        ds_name = cls._dataset_name(chat_id=chat_id)
+        ds_name = str(client_id)
         await cls._add_and_cognify(text, ds_name, user)
 
     @classmethod
@@ -192,6 +183,6 @@ class CogneeCoach(BaseAICoach):
         """Force re-cognify of a client's dataset."""
         cls._ensure_config()
         user = await cls._get_user()
-        ds_name = cls._dataset_name(client_id=client.id)
+        ds_name = str(client.id)
         logger.info(f"Reindexing dataset {ds_name}")
         await cls._cognify_dataset(ds_name, user)

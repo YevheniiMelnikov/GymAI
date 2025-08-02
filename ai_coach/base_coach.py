@@ -21,7 +21,7 @@ class BaseAICoach(ABC):
         """Handle an incoming user message."""
 
     @classmethod
-    async def save_user_message(cls, text: str, chat_id: int, client_id: int) -> None:
+    async def save_user_message(cls, text: str, client_id: int) -> None:
         """Persist a user message for later context retrieval."""
         raise NotImplementedError
 
