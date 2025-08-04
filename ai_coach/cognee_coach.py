@@ -119,8 +119,12 @@ class CogneeCoach(BaseAICoach):
         async with lock:
             await cognee.cognify(datasets=[dataset_id], user=user)
 
+    @staticmethod
+    def _dataset_name(client_id: int, kind: DataKind) -> str:
+        return f"client_{client_id}_{kind.value}"
+
     @classmethod
-    async def update_client_knowledge(
+    async def _update_client_knowledge(
         cls,
         text: str,
         client_id: int,
@@ -131,7 +135,7 @@ class CogneeCoach(BaseAICoach):
         """Persist a text entry to the client's dataset and trigger cognify."""
         cls._ensure_config()
         user = await cls._get_user()
-        ds_name = f"client_{client_id}_{kind.value}"
+        ds_name = cls._dataset_name(client_id, kind)
         if kind is DataKind.MESSAGE:
             if role is None:
                 raise ValueError("role is required for message entries")
@@ -141,18 +145,45 @@ class CogneeCoach(BaseAICoach):
             asyncio.create_task(cls._cognify_dataset(ds_id, user))
 
     @classmethod
-    async def get_context(cls, client_id: int, query: str) -> list[str]:
-        """Search client's message dataset for relevant context."""
+    async def save_user_message(cls, text: str, client_id: int) -> None:
+        await cls._update_client_knowledge(
+            text, client_id, kind=DataKind.MESSAGE, role=MessageRole.USER
+        )
+
+    @classmethod
+    async def save_ai_message(cls, text: str, client_id: int) -> None:
+        await cls._update_client_knowledge(
+            text, client_id, kind=DataKind.MESSAGE, role=MessageRole.BOT
+        )
+
+    @classmethod
+    async def save_prompt(cls, text: str, client_id: int) -> None:
+        await cls._update_client_knowledge(text, client_id, kind=DataKind.PROMPT)
+
+    @classmethod
+    async def get_client_knowledge(
+        cls, client_id: int, query: str
+    ) -> dict[str, list[str]]:
+        """Search client datasets for relevant context separated by kind."""
         cls._ensure_config()
         user = await cls._get_user()
-        ds_name = f"client_{client_id}_message"
+        msg_ds = cls._dataset_name(client_id, DataKind.MESSAGE)
+        prompt_ds = cls._dataset_name(client_id, DataKind.PROMPT)
+        messages: list[str] = []
+        prompts: list[str] = []
         try:
-            return await cognee.search(query, datasets=[ds_name], top_k=5, user=user)
+            messages = await cognee.search(query, datasets=[msg_ds], top_k=5, user=user)
         except DatasetNotFoundError:
-            return []
+            messages = []
         except Exception as e:  # pragma: no cover - best effort
-            logger.error(f"get_context failed: {e}")
-            return []
+            logger.error(f"get_client_knowledge messages failed: {e}")
+        try:
+            prompts = await cognee.search(query, datasets=[prompt_ds], top_k=5, user=user)
+        except DatasetNotFoundError:
+            prompts = []
+        except Exception as e:  # pragma: no cover - best effort
+            logger.error(f"get_client_knowledge prompts failed: {e}")
+        return {"messages": messages, "prompts": prompts}
 
     @classmethod
     async def make_request(cls, prompt: str, client_id: int) -> list[str]:

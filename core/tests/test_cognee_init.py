@@ -44,19 +44,18 @@ def test_empty_context_does_not_crash(monkeypatch):
         CogneeCoach._user = SimpleNamespace(id="test-u")
         monkeypatch.setattr(CogneeCoach, "_ensure_config", lambda: None)
 
-        calls = {}
+        calls: list[list[str]] = []
 
         async def fake_search(query, datasets, user=None, top_k=None):
-            calls["datasets"] = datasets
-            if not hasattr(fake_search, "called"):
-                fake_search.called = True
+            calls.append(datasets)
+            if len(calls) == 1:
                 raise coach.DatasetNotFoundError("missing")
             return []
 
         monkeypatch.setattr(coach.cognee, "search", fake_search)
 
-        res = await CogneeCoach.get_context(client_id=42, query="hello")
-        assert calls["datasets"] == ["client_42_message"]
-        assert isinstance(res, list)
+        res = await CogneeCoach.get_client_knowledge(client_id=42, query="hello")
+        assert calls == [["client_42_message"], ["client_42_prompt"]]
+        assert res == {"messages": [], "prompts": []}
 
     asyncio.run(runner())

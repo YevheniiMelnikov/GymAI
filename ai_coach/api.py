@@ -7,7 +7,6 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 
 from ai_coach.cognee_coach import CogneeCoach
-from ai_coach.enums import DataKind, MessageRole
 from core.tasks import refresh_external_knowledge
 from config.app_settings import settings
 from ai_coach import GDriveDocumentLoader
@@ -33,26 +32,12 @@ class AskRequest(BaseModel):
 @app.post("/ask/", response_model=list[str] | None)
 async def ask(data: AskRequest) -> list[str] | None:
     responses = await CogneeCoach.make_request(data.prompt, client_id=data.client_id)
-    await CogneeCoach.update_client_knowledge(
-        data.prompt,
-        client_id=data.client_id,
-        kind=DataKind.MESSAGE,
-        role=MessageRole.USER,
-    )
-    await CogneeCoach.update_client_knowledge(
-        data.prompt, client_id=data.client_id, kind=DataKind.PROMPT
-    )
+    await CogneeCoach.save_user_message(data.prompt, client_id=data.client_id)
+    await CogneeCoach.save_prompt(data.prompt, client_id=data.client_id)
     if responses:
         for r in responses:
-            await CogneeCoach.update_client_knowledge(
-                r,
-                client_id=data.client_id,
-                kind=DataKind.MESSAGE,
-                role=MessageRole.BOT,
-            )
-            await CogneeCoach.update_client_knowledge(
-                r, client_id=data.client_id, kind=DataKind.PROMPT
-            )
+            await CogneeCoach.save_ai_message(r, client_id=data.client_id)
+            await CogneeCoach.save_prompt(r, client_id=data.client_id)
     return responses
 
 
@@ -63,18 +48,13 @@ class MessageRequest(BaseModel):
 
 @app.post("/messages/")
 async def save_message(data: MessageRequest) -> dict[str, str]:
-    await CogneeCoach.update_client_knowledge(
-        data.text,
-        client_id=data.client_id,
-        kind=DataKind.MESSAGE,
-        role=MessageRole.USER,
-    )
+    await CogneeCoach.save_user_message(data.text, client_id=data.client_id)
     return {"status": "ok"}
 
 
-@app.get("/context/")
-async def get_context(client_id: int, query: str) -> list[str]:
-    return await CogneeCoach.get_context(client_id, query)
+@app.get("/knowledge/")
+async def get_knowledge(client_id: int, query: str) -> dict[str, list[str]]:
+    return await CogneeCoach.get_client_knowledge(client_id, query)
 
 
 @app.post("/knowledge/refresh/")

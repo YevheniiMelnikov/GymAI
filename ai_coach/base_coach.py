@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from .base_knowledge_loader import KnowledgeLoader
-from ai_coach.enums import DataKind, MessageRole
+from ai_coach.enums import DataKind
 
 
 class BaseAICoach(ABC):
@@ -17,21 +17,28 @@ class BaseAICoach(ABC):
 
     @classmethod
     @abstractmethod
-    async def update_client_knowledge(
-        cls,
-        text: str,
-        client_id: int,
-        *,
-        kind: DataKind = DataKind.MESSAGE,
-        role: MessageRole | None = None,
-    ) -> None:
-        """Persist ``text`` under ``client_id`` and ``kind``; ``role`` for messages."""
+    async def save_user_message(cls, text: str, client_id: int) -> None:
+        """Persist a user-authored message."""
         raise NotImplementedError
 
     @classmethod
     @abstractmethod
-    async def get_context(cls, client_id: int, query: str) -> list[str]:
-        """Retrieve context for ``client_id`` without side effects."""
+    async def save_ai_message(cls, text: str, client_id: int) -> None:
+        """Persist an AI-generated reply."""
+        raise NotImplementedError
+
+    @classmethod
+    @abstractmethod
+    async def save_prompt(cls, text: str, client_id: int) -> None:
+        """Persist a raw prompt exchanged with the model."""
+        raise NotImplementedError
+
+    @classmethod
+    @abstractmethod
+    async def get_client_knowledge(
+        cls, client_id: int, query: str
+    ) -> dict[str, list[str]]:
+        """Retrieve client context separated into messages and prompts."""
         raise NotImplementedError
 
     @classmethod
