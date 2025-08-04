@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from .base_knowledge_loader import KnowledgeLoader
-from ai_coach.enums import DataKind
+from ai_coach.enums import DataKind, MessageRole
 
 
 class BaseAICoach(ABC):
@@ -17,10 +17,15 @@ class BaseAICoach(ABC):
 
     @classmethod
     @abstractmethod
-    async def save_text_entry(
-        cls, text: str, client_id: int, kind: DataKind = DataKind.MESSAGE
+    async def update_client_knowledge(
+        cls,
+        text: str,
+        client_id: int,
+        *,
+        kind: DataKind = DataKind.MESSAGE,
+        role: MessageRole | None = None,
     ) -> None:
-        """Persist ``text`` under ``client_id`` and ``kind``."""
+        """Persist ``text`` under ``client_id`` and ``kind``; ``role`` for messages."""
         raise NotImplementedError
 
     @classmethod

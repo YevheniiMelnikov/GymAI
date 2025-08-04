@@ -6,3 +6,10 @@ class DataKind(str, Enum):
 
     MESSAGE = "message"
     PROMPT = "prompt"
+
+
+class MessageRole(str, Enum):
+    """Role of a chat message."""
+
+    USER = "user"
+    BOT = "bot"

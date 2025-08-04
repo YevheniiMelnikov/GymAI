@@ -17,7 +17,7 @@ from cognee.modules.engine.operations.setup import setup as cognee_setup
 from ai_coach.base_coach import BaseAICoach
 from ai_coach.base_knowledge_loader import KnowledgeLoader
 from ai_coach.cognee_config import CogneeConfig
-from ai_coach.enums import DataKind
+from ai_coach.enums import DataKind, MessageRole
 from ai_coach.utils.lock_cache import LockCache
 from ai_coach.utils.hash_store import HashStore
 from config.app_settings import settings
@@ -120,15 +120,22 @@ class CogneeCoach(BaseAICoach):
             await cognee.cognify(datasets=[dataset_id], user=user)
 
     @classmethod
-    async def save_text_entry(
-        cls, text: str, client_id: int, kind: DataKind = DataKind.MESSAGE
+    async def update_client_knowledge(
+        cls,
+        text: str,
+        client_id: int,
+        *,
+        kind: DataKind = DataKind.MESSAGE,
+        role: MessageRole | None = None,
     ) -> None:
-        """
-        Save a text entry (prompt or user message) to the client-specific dataset.
-        """
+        """Persist a text entry to the client's dataset and trigger cognify."""
         cls._ensure_config()
         user = await cls._get_user()
         ds_name = f"client_{client_id}_{kind.value}"
+        if kind is DataKind.MESSAGE:
+            if role is None:
+                raise ValueError("role is required for message entries")
+            text = f"{role.value}: {text}"
         ds_id, created = await cls._safe_add(text, ds_name, user)
         if created:
             asyncio.create_task(cls._cognify_dataset(ds_id, user))
@@ -149,20 +156,19 @@ class CogneeCoach(BaseAICoach):
 
     @classmethod
     async def make_request(cls, prompt: str, client_id: int) -> list[str]:
-        """
-        Reindex and search a client's prompt dataset without modifying it.
-        """
+        """Search a client's prompt dataset without modifying it."""
         cls._ensure_config()
         user = await cls._get_user()
         ds_name = f"client_{client_id}_prompt"
 
         try:
-            await cls.reindex(client_id, kind=DataKind.PROMPT)
             return await cognee.search(prompt, datasets=[ds_name], user=user)
         except (PermissionDeniedError, DatasetNotFoundError) as e:
             logger.warning(f"Search issue for client {client_id}: {e}")
         except Exception as e:  # pragma: no cover - best effort
-            logger.exception(f"Unexpected error during client {client_id} request: {e}")
+            logger.exception(
+                f"Unexpected error during client {client_id} request: {e}"
+            )
         return []
 
     @classmethod

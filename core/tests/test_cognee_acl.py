@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 import asyncio
+
 import pytest
 
 import ai_coach.cognee_coach as coach
@@ -36,11 +37,12 @@ def test_case_success_create_and_search(monkeypatch):
         monkeypatch.setattr(coach.HashStore, "contains", fake_contains)
         monkeypatch.setattr(coach.HashStore, "add", fake_add_hash)
 
-        res = await coach.CogneeCoach.save_text_entry(
+        res = await coach.CogneeCoach.update_client_knowledge(
             "hi", client_id=1, kind=coach.DataKind.PROMPT
         )
         assert res is None
         await asyncio.sleep(0)
+        await coach.CogneeCoach.reindex(1, kind=coach.DataKind.PROMPT)
         await coach.CogneeCoach.make_request("hi", client_id=1)
 
         assert calls["dataset_name"] == "client_1_prompt"
@@ -71,7 +73,7 @@ def test_case_conflict_existing_dataset(monkeypatch):
         monkeypatch.setattr(coach.HashStore, "contains", fake_contains)
 
         with pytest.raises(coach.PermissionDeniedError):
-            await coach.CogneeCoach.save_text_entry(
+            await coach.CogneeCoach.update_client_knowledge(
                 "hello", client_id=2, kind=coach.DataKind.PROMPT
             )
 
