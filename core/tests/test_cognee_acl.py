@@ -8,7 +8,6 @@ import ai_coach.cognee_coach as coach
 def test_case_success_create_and_search(monkeypatch):
     async def runner():
         user = SimpleNamespace(id="u1")
-        client = SimpleNamespace(id=1)
         monkeypatch.setattr(coach.CogneeCoach, "_user", user)
         monkeypatch.setattr(coach.CogneeCoach, "_ensure_config", lambda: None)
         calls = {}
@@ -37,14 +36,17 @@ def test_case_success_create_and_search(monkeypatch):
         monkeypatch.setattr(coach.HashStore, "contains", fake_contains)
         monkeypatch.setattr(coach.HashStore, "add", fake_add_hash)
 
-        await coach.CogneeCoach.save_prompt("hi", client=client)
-        await asyncio.sleep(0)  # allow background task
-        await coach.CogneeCoach.make_request("hi", client=client)
+        res = await coach.CogneeCoach.save_text_entry(
+            "hi", client_id=1, kind=coach.DataKind.PROMPT
+        )
+        assert res is None
+        await asyncio.sleep(0)
+        await coach.CogneeCoach.make_request("hi", client_id=1)
 
-        assert calls["dataset_name"] == f"client_{client.id}"
+        assert calls["dataset_name"] == "client_1_prompt"
         assert cognify_calls[0] == ["ds1"]
-        assert cognify_calls[1] == [f"client_{client.id}"]
-        assert calls["search"] == [f"client_{client.id}"]
+        assert cognify_calls[1] == ["client_1_prompt"]
+        assert calls["search"] == ["client_1_prompt"]
 
     asyncio.run(runner())
 
@@ -52,7 +54,6 @@ def test_case_success_create_and_search(monkeypatch):
 def test_case_conflict_existing_dataset(monkeypatch):
     async def runner():
         user = SimpleNamespace(id="u2")
-        client = SimpleNamespace(id=2)
         monkeypatch.setattr(coach.CogneeCoach, "_user", user)
         monkeypatch.setattr(coach.CogneeCoach, "_ensure_config", lambda: None)
         calls = {}
@@ -70,8 +71,10 @@ def test_case_conflict_existing_dataset(monkeypatch):
         monkeypatch.setattr(coach.HashStore, "contains", fake_contains)
 
         with pytest.raises(coach.PermissionDeniedError):
-            await coach.CogneeCoach.save_prompt("hello", client=client)
+            await coach.CogneeCoach.save_text_entry(
+                "hello", client_id=2, kind=coach.DataKind.PROMPT
+            )
 
-        assert calls["dataset_names"] == [f"client_{client.id}"]
+        assert calls["dataset_names"] == ["client_2_prompt"]
 
     asyncio.run(runner())

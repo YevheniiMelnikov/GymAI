@@ -158,7 +158,7 @@ class Payment(BaseModel):
 
 class AiCoachAskRequest(BaseModel):
     prompt: str
-    client: Client | None = None
+    client_id: int
     language: str | None = None
 
 

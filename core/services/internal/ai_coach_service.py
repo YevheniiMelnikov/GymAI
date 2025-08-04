@@ -7,7 +7,7 @@ from urllib.parse import urljoin
 from loguru import logger
 
 from config.app_settings import settings
-from core.schemas import Client, AiCoachAskRequest, AiCoachMessageRequest
+from core.schemas import AiCoachAskRequest, AiCoachMessageRequest
 from .api_client import APIClient
 
 
@@ -20,13 +20,13 @@ class AiCoachService(APIClient):
         cls,
         prompt: str,
         *,
-        client: Client | None = None,
+        client_id: int,
         language: str | None = None,
     ) -> list[str] | None:
         url = urljoin(cls.base_url, "ask/")
         request = AiCoachAskRequest(
             prompt=prompt,
-            client=client,
+            client_id=client_id,
             language=language.value if isinstance(language, Enum) else language,
         )
 

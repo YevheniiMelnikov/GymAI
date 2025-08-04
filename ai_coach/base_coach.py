@@ -3,7 +3,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 from .base_knowledge_loader import KnowledgeLoader
-from core.schemas import Client
+from ai_coach.enums import DataKind
 
 
 class BaseAICoach(ABC):
@@ -11,26 +11,40 @@ class BaseAICoach(ABC):
 
     @classmethod
     @abstractmethod
-    async def initialize(cls) -> None:
-        """Run necessary bootstrapping (e.g. DB migrations, LLM pings)"""
+    async def initialize(cls, knowledge_loader: KnowledgeLoader | None = None) -> None:
+        """Run necessary bootstrapping such as DB migrations or LLM pings."""
         raise NotImplementedError
 
     @classmethod
     @abstractmethod
-    async def make_request(cls, prompt: str, *, client: Client | None = None) -> list[str]:
-        """Handle an incoming user message."""
-
-    @classmethod
-    async def save_user_message(cls, text: str, client_id: int) -> None:
-        """Persist a user message for later context retrieval."""
+    async def save_text_entry(
+        cls, text: str, client_id: int, kind: DataKind = DataKind.MESSAGE
+    ) -> None:
+        """Persist ``text`` under ``client_id`` and ``kind``."""
         raise NotImplementedError
 
     @classmethod
-    async def init_loader(cls, loader: KnowledgeLoader) -> None:  # noqa: D401
-        """Attach a loader at startup (override to use)."""
+    @abstractmethod
+    async def get_context(cls, client_id: int, query: str) -> list[str]:
+        """Retrieve context for ``client_id`` without side effects."""
         raise NotImplementedError
 
     @classmethod
+    @abstractmethod
+    async def make_request(cls, prompt: str, client_id: int) -> list[str]:
+        """Search indexed data for ``prompt`` scoped to ``client_id``."""
+        raise NotImplementedError
+
+    @classmethod
+    @abstractmethod
     async def refresh_knowledge_base(cls) -> None:
         """Fetch external knowledge and rebuild the knowledge base."""
+        raise NotImplementedError
+
+    @classmethod
+    @abstractmethod
+    async def reindex(
+        cls, client_id: int, kind: DataKind = DataKind.MESSAGE
+    ) -> None:
+        """Force reindex of the specified dataset."""
         raise NotImplementedError

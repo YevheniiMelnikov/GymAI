@@ -7,13 +7,14 @@ import asyncio
 from ai_coach.base_coach import BaseAICoach
 from ai_coach.base_knowledge_loader import KnowledgeLoader
 from ai_coach.utils.registry import set_ai_coach, get_ai_coach
-from core.schemas import Client
 from loguru import logger
 
 coach_ready_event: asyncio.Event | None = None
 
 
-async def init_ai_coach(ai_coach: type[BaseAICoach], knowledge_loader: KnowledgeLoader | None = None) -> None:
+async def init_ai_coach(
+    ai_coach: type[BaseAICoach], knowledge_loader: KnowledgeLoader | None = None
+) -> None:
     """Initialize the AI coach and register it."""
     global coach_ready_event
     if coach_ready_event is None:
@@ -24,14 +25,11 @@ async def init_ai_coach(ai_coach: type[BaseAICoach], knowledge_loader: Knowledge
 
     set_ai_coach(ai_coach)
     try:
-        await ai_coach.initialize()
-    except Exception as e:
+        await ai_coach.initialize(knowledge_loader)
+    except Exception as e:  # pragma: no cover - best effort
         logger.error(f"AI coach init failed: {e}")
         coach_ready_event.clear()
         raise
-
-    if knowledge_loader is not None:
-        await ai_coach.init_loader(knowledge_loader)
 
     logger.success("AI coach initialized")
     coach_ready_event.set()
@@ -44,11 +42,11 @@ async def _wait_for_coach() -> None:
 
 async def ai_coach_request(*args: Any, **kwargs: Any) -> list[str] | None:
     text = kwargs.get("text") or (args[0] if args else None)
-    client: Client | None = kwargs.get("client")
+    client_id: int | None = kwargs.get("client_id")
     if not text:
         return None
-    if client is None:
-        raise ValueError("client required")
+    if client_id is None:
+        raise ValueError("client_id required")
     await _wait_for_coach()
     coach = get_ai_coach()
-    return await coach.make_request(str(text), client=client)
+    return await coach.make_request(str(text), client_id)

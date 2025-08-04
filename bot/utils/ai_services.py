@@ -50,7 +50,7 @@ async def assign_client(client: Client, lang: str) -> None:
         client_data=extract_client_data(client),
         language=lang,
     )
-    await APIService.ai_coach.ask(prompt, client=client)
+    await APIService.ai_coach.ask(prompt, client_id=client.id)
 
 
 def _normalise_program(raw: str) -> dict:
@@ -88,7 +88,9 @@ async def generate_program(
     program_raw = ""
     program_dto = None
     for _ in range(settings.AI_GENERATION_RETRIES):
-        response = await APIService.ai_coach.ask(prompt, client=client, language=lang)
+        response = await APIService.ai_coach.ask(
+            prompt, client_id=client.id, language=lang
+        )
         program_raw = response[0] if response else ""
         program_dto = parse_program_json(program_raw)
         if program_dto is not None:
@@ -174,7 +176,9 @@ async def generate_subscription(
     sub_raw = ""
     sub_dto = None
     for _ in range(settings.AI_GENERATION_RETRIES):
-        response = await APIService.ai_coach.ask(prompt, client=client, language=lang)
+        response = await APIService.ai_coach.ask(
+            prompt, client_id=client.id, language=lang
+        )
         sub_raw = response[0] if response else ""
         sub_dto = parse_subscription_json(sub_raw)
         if sub_dto is not None:
@@ -233,5 +237,5 @@ async def process_workout_result(
         )
     )
 
-    responses = await APIService.ai_coach.ask(prompt, client=None)
+    responses = await APIService.ai_coach.ask(prompt, client_id=client_id)
     return responses[0] if responses else ""

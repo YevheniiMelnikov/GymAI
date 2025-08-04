@@ -7,9 +7,9 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 
 from ai_coach.cognee_coach import CogneeCoach
+from ai_coach.enums import DataKind
 from core.tasks import refresh_external_knowledge
 from config.app_settings import settings
-from core.schemas import Client
 from ai_coach import GDriveDocumentLoader
 from ai_coach.utils.coach_utils import init_ai_coach
 
@@ -26,20 +26,21 @@ security = HTTPBasic()
 
 class AskRequest(BaseModel):
     prompt: str
-    client: dict | None = None
+    client_id: int
     language: str | None = None
 
 
 @app.post("/ask/", response_model=list[str] | None)
 async def ask(data: AskRequest) -> list[str] | None:
-    if data.client is None:
-        raise HTTPException(status_code=400, detail="client required")
-    client = Client(**data.client)
-    responses = await CogneeCoach.make_request(data.prompt, client=client)
-    await CogneeCoach.save_prompt(data.prompt, client=client)
+    responses = await CogneeCoach.make_request(data.prompt, client_id=data.client_id)
+    await CogneeCoach.save_text_entry(
+        data.prompt, client_id=data.client_id, kind=DataKind.PROMPT
+    )
     if responses:
         for r in responses:
-            await CogneeCoach.save_prompt(r, client=client)
+            await CogneeCoach.save_text_entry(
+                r, client_id=data.client_id, kind=DataKind.PROMPT
+            )
     return responses
 
 
@@ -50,7 +51,9 @@ class MessageRequest(BaseModel):
 
 @app.post("/messages/")
 async def save_message(data: MessageRequest) -> dict[str, str]:
-    await CogneeCoach.save_user_message(data.text, client_id=data.client_id)
+    await CogneeCoach.save_text_entry(
+        data.text, client_id=data.client_id, kind=DataKind.MESSAGE
+    )
     return {"status": "ok"}
 
 
