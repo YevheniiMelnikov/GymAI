@@ -35,7 +35,12 @@ async def ask(data: AskRequest) -> list[str] | None:
     if data.client is None:
         raise HTTPException(status_code=400, detail="client required")
     client = Client(**data.client)
-    return await CogneeCoach.make_request(data.prompt, client=client)
+    responses = await CogneeCoach.make_request(data.prompt, client=client)
+    await CogneeCoach.save_prompt(data.prompt, client=client)
+    if responses:
+        for r in responses:
+            await CogneeCoach.save_prompt(r, client=client)
+    return responses
 
 
 class MessageRequest(BaseModel):

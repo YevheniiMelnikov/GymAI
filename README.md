@@ -104,9 +104,9 @@ verify that `REDIS_URL` points to your local Redis instance.
 ## AI Coach and knowledge base
 
 The project ships an AI coach backed by Cognee. Each client and chat is mapped to
-its own dataset whose name equals the numeric identifier. Prompts and user
-messages are saved with SHA‑256 deduplication in Redis. New texts are ingested
-asynchronously and cognified before they are available for search.
+its own dataset whose name equals the numeric identifier. Prompts, AI replies,
+and user messages are saved with SHA‑256 deduplication in Redis. New texts are
+ingested asynchronously and cognified before they are available for search.
 
 To refresh external knowledge (e.g. documents from Google Drive), Celery calls
 `refresh_external_knowledge` every `KNOWLEDGE_REFRESH_INTERVAL` seconds. The

@@ -126,7 +126,7 @@ class CogneeCoach(BaseAICoach):
 
     @classmethod
     async def save_prompt(cls, text: str, *, client: Client) -> None:
-        """Persist a user prompt in the client's dataset."""
+        """Persist an AI prompt or response in the client's dataset."""
         if not text.strip():
             return
         cls._ensure_config()

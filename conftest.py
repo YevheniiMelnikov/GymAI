@@ -93,6 +93,7 @@ pydantic_mod.Field = lambda *a, **k: None
 pydantic_mod.field_validator = lambda *a, **k: (lambda x: x)
 pydantic_mod.condecimal = lambda *a, **k: float
 pydantic_mod.ConfigDict = dict
+pydantic_mod.create_model = lambda name, **fields: type(name, (object,), fields)
 sys.modules.setdefault("pydantic", pydantic_mod)
 crypto_mod = types.ModuleType("cryptography")
 crypto_mod.fernet = types.ModuleType("cryptography.fernet")
