@@ -117,29 +117,23 @@ class CogneeCoach(BaseAICoach):
             await cognee.cognify(datasets=[dataset_id], user=user)
 
     @classmethod
-    async def _add_and_cognify(cls, text: str, dataset: str, user: Any) -> str:
-        """Add text to dataset and trigger background cognification if created."""
-        ds_id, created = await cls._safe_add(text, dataset, user)
-        if created:
-            asyncio.create_task(cls._cognify_dataset(ds_id, user))
-        return ds_id
-
-    @classmethod
     async def save_prompt(cls, text: str, *, client: Client) -> None:
         """Persist an AI prompt or response in the client's dataset."""
         if not text.strip():
             return
         cls._ensure_config()
         user = await cls._get_user()
-        ds_name = str(client.id)
-        await cls._add_and_cognify(text, ds_name, user)
+        ds_name = f"client_{client.id}"
+        ds_id, created = await cls._safe_add(text, ds_name, user)
+        if created:
+            asyncio.create_task(cls._cognify_dataset(ds_id, user))
 
     @classmethod
     async def get_context(cls, client_id: int, query: str) -> list[str]:
         """Search client history for relevant context."""
         cls._ensure_config()
         user = await cls._get_user()
-        ds_name = str(client_id)
+        ds_name = f"client_{client_id}"
         try:
             return await cognee.search(query, datasets=[ds_name], top_k=5, user=user)
         except DatasetNotFoundError:
@@ -153,7 +147,7 @@ class CogneeCoach(BaseAICoach):
         """Reindex and search an existing client dataset without modifying it."""
         cls._ensure_config()
         user = await cls._get_user()
-        ds_name = str(client.id)
+        ds_name = f"client_{client.id}"
 
         try:
             await cls.reindex(client)
@@ -175,14 +169,16 @@ class CogneeCoach(BaseAICoach):
             return
         cls._ensure_config()
         user = await cls._get_user()
-        ds_name = str(client_id)
-        await cls._add_and_cognify(text, ds_name, user)
+        ds_name = f"client_{client_id}"
+        ds_id, created = await cls._safe_add(text, ds_name, user)
+        if created:
+            asyncio.create_task(cls._cognify_dataset(ds_id, user))
 
     @classmethod
     async def reindex(cls, client: Client) -> None:
         """Force re-cognify of a client's dataset."""
         cls._ensure_config()
         user = await cls._get_user()
-        ds_name = str(client.id)
+        ds_name = f"client_{client.id}"
         logger.info(f"Reindexing dataset {ds_name}")
         await cls._cognify_dataset(ds_name, user)

@@ -41,10 +41,10 @@ def test_case_success_create_and_search(monkeypatch):
         await asyncio.sleep(0)  # allow background task
         await coach.CogneeCoach.make_request("hi", client=client)
 
-        assert calls["dataset_name"] == str(client.id)
+        assert calls["dataset_name"] == f"client_{client.id}"
         assert cognify_calls[0] == ["ds1"]
-        assert cognify_calls[1] == [str(client.id)]
-        assert calls["search"] == [str(client.id)]
+        assert cognify_calls[1] == [f"client_{client.id}"]
+        assert calls["search"] == [f"client_{client.id}"]
 
     asyncio.run(runner())
 
@@ -72,6 +72,6 @@ def test_case_conflict_existing_dataset(monkeypatch):
         with pytest.raises(coach.PermissionDeniedError):
             await coach.CogneeCoach.save_prompt("hello", client=client)
 
-        assert calls["dataset_names"] == [str(client.id)]
+        assert calls["dataset_names"] == [f"client_{client.id}"]
 
     asyncio.run(runner())
