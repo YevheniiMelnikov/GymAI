@@ -82,14 +82,14 @@ async def assign_client(client: Client, lang: str) -> None:
     await APIService.ai_coach.ask(prompt, client_id=client.id)
 
 
-def _normalise_program(raw: str) -> dict:
-    """Extract and clean JSON workout program from ``raw`` text."""
+def _normalise_program(raw: str, *, key: str = "days") -> dict:
+    """Extract and clean JSON workout data from ``raw`` text."""
 
     extracted = extract_json(raw)
     if not extracted:
         raise ValueError("no JSON found")
     data = json.loads(extracted)
-    normalize_program_data(data)
+    normalize_program_data(data, key=key)
     return data
 
 
@@ -163,7 +163,7 @@ async def _generate_workout(
 
 async def generate_program(
     client: Client, lang: str, workout_type: str, wishes: str
-) -> list[DayExercises] | None:
+) -> tuple[list[DayExercises], str]:
     try:
         prev_program = await Cache.workout.get_latest_program(client.profile, use_fallback=False)
         previous_program = json.dumps([d.model_dump() for d in prev_program.exercises_by_day], ensure_ascii=False)
@@ -186,15 +186,20 @@ async def generate_program(
         exercises = program_dto.days
         split_number = len(exercises)
     else:
-        exercises, split_number = parse_program_text(program_raw)
+        try:
+            prog_dict = _normalise_program(program_raw, key="days")
+            exercises = [DayExercises.model_validate(d) for d in prog_dict.get("days", [])]
+            split_number = len(exercises)
+        except Exception:
+            exercises, split_number = parse_program_text(program_raw)
 
     if not exercises:
         logger.error("Program parsing produced no exercises")
-        return None
+        return [], program_raw
     saved = await APIService.workout.save_program(client.id, exercises, split_number, wishes)
     if saved:
         await _cache_program(client, program_raw, saved, workout_type, wishes)
-    return exercises
+    return exercises, program_raw
 
 
 async def generate_subscription(
@@ -204,7 +209,7 @@ async def generate_subscription(
     wishes: str,
     period: str,
     workout_days: list[str],
-) -> list[DayExercises]:
+) -> tuple[list[DayExercises], str]:
     request_context = (
         f"The client requests a {workout_type} program for a {period} subscription.\n"
         f"Wishes: {wishes}.\n"
@@ -218,7 +223,19 @@ async def generate_subscription(
         SUBSCRIPTION_RESPONSE_TEMPLATE,
         parse_subscription_json,
     )
-    exercises = sub_dto.exercises if sub_dto is not None else []
+    if sub_dto is not None:
+        exercises = sub_dto.exercises
+    else:
+        try:
+            sub_dict = _normalise_program(sub_raw, key="exercises")
+            exercises = [DayExercises.model_validate(d) for d in sub_dict.get("exercises", [])]
+        except Exception:
+            exercises, _ = parse_program_text(sub_raw)
+
+    if not exercises:
+        logger.error("Subscription parsing produced no exercises")
+        return [], sub_raw
+
     sub_id = await APIService.workout.create_subscription(
         client_profile_id=client.id,
         workout_days=workout_days,
@@ -245,7 +262,7 @@ async def generate_subscription(
         )
         logger.info(f"New AI-coach subscription generated for client_id={client.id}")
 
-    return exercises
+    return exercises, sub_raw
 
 
 async def process_workout_result(
