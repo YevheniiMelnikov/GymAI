@@ -563,11 +563,12 @@ async def view_program(callback_query: CallbackQuery, state: FSMContext) -> None
     profile = Profile.model_validate(data["profile"])
     if callback_query.data == "history":
         await show_program_history(callback_query, profile, state)
+        await del_msg(cast(Message | CallbackQuery | None, callback_query))
     elif callback_query.data == "quit":
         await show_main_menu(callback_query.message, profile, state)
+        await del_msg(cast(Message | CallbackQuery | None, callback_query))
     else:
         await program_menu_pagination(state, callback_query)
-    await del_msg(cast(Message | CallbackQuery | None, callback_query))
 
 
 @workout_router.callback_query(States.program_history)

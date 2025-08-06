@@ -24,7 +24,7 @@ from bot.ai_coach.utils import assign_client
 from core.cache import Cache
 from core.enums import CoachType
 from core.schemas import Coach, Client, Profile
-from bot.utils.chat import contact_client, process_feedback_content
+from bot.utils.chat import contact_client, process_feedback_content, send_program
 from bot.utils.menus import (
     show_main_menu,
     show_exercises_menu,
@@ -50,6 +50,7 @@ from bot.keyboards import payment_kb
 from bot.utils.credits import available_packages
 from bot.ai_coach.utils import generate_subscription, generate_program
 from bot.utils.credits import available_ai_services
+from bot.utils.exercises import format_program
 
 menu_router = Router()
 
@@ -251,10 +252,23 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
 
     if service == "program":
         try:
-            await generate_program(client, profile.language, workout_type, wishes, state, bot)
+            exercises = await generate_program(client, profile.language, workout_type, wishes)
         except Exception as e:  # noqa: BLE001
             logger.exception(f"Program generation failed: {e}")
             await answer_msg(callback_query, msg_text("unexpected_error", profile.language))
+            return
+        if not exercises:
+            await answer_msg(callback_query, msg_text("ai_program_error", profile.language))
+            return
+        program_text = await format_program(exercises, day=0)
+        await send_program(client, profile.language, program_text, state, bot)
+        await state.update_data(
+            exercises=[d.model_dump() for d in exercises],
+            split=len(exercises),
+            day_index=0,
+            client=True,
+        )
+        await state.set_state(States.program_view)
         return
 
     period_map = {
@@ -305,7 +319,22 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     period = data.get("period", "1m")
     await answer_msg(callback_query, msg_text("request_in_progress", lang))
     await show_main_menu(callback_query.message, profile, state)
-    await generate_subscription(client, lang, workout_type, wishes, period, days)
+    exercises = await generate_subscription(client, lang, workout_type, wishes, period, days)
+    if not exercises:
+        await answer_msg(callback_query, msg_text("ai_program_error", lang))
+        return
+    program_text = await format_program(exercises, day=0)
+    bot = cast(Bot, callback_query.bot)
+    await send_program(client, lang, program_text, state, bot)
+    await state.update_data(
+        exercises=[d.model_dump() for d in exercises],
+        split=len(exercises),
+        day_index=0,
+        client=True,
+        subscription=True,
+        days=days,
+    )
+    await state.set_state(States.program_view)
 
 
 @menu_router.callback_query(States.profile)
