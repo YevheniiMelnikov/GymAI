@@ -8,8 +8,8 @@
           "name": "Dumbbell Rows",
           "sets": "3",
           "reps": "12",
-          "gif_link": null,  // put the 'None' here
-          "weight": "20",    // kg
+          "gif_link": null,
+          "weight": "20",
           "set_id": null,
           "drop_set": false
         }

@@ -7,9 +7,9 @@
           "name": "Bench Press",
           "sets": "4",
           "reps": "8",
-          "gif_link": null,  // put the 'None' here
-          "weight": "80",  // kg
-          "set_id": null,  // use it to combine exercises into sets
+          "gif_link": null,
+          "weight": "80",
+          "set_id": null,
           "drop_set": false
         },
         {
