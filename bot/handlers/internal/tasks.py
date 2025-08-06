@@ -8,7 +8,7 @@ from bot.keyboards import workout_survey_kb
 from bot.texts.text_manager import msg_text
 from bot.utils.profiles import get_clients_to_survey
 from config.app_settings import settings
-from ai_coach.utils.parsers import parse_program_text, parse_program_json
+from bot.utils.ai_parsers import parse_program_text, parse_program_json
 from core.exceptions import SubscriptionNotFoundError
 from core.payment_processor import PaymentProcessor
 from core.cache import Cache

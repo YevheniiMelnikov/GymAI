@@ -7,7 +7,7 @@ from bot.states import States
 
 from core.services.internal import APIService
 from config.app_settings import settings
-from ai_coach.prompts import (
+from bot.prompts import (
     WORKOUT_PLAN_PROMPT,
     PROGRAM_RESPONSE_TEMPLATE,
     SUBSCRIPTION_RESPONSE_TEMPLATE,
@@ -16,7 +16,7 @@ from ai_coach.prompts import (
     UPDATE_WORKOUT_PROMPT,
     INITIAL_PROMPT,
 )
-from ai_coach.utils.parsers import (
+from bot.utils.ai_parsers import (
     parse_program_text,
     parse_program_json,
     parse_subscription_json,

@@ -13,7 +13,6 @@ import httpx
 from config.app_settings import settings
 from core.cache import Cache
 from core.services import APIService
-from ai_coach.cognee_coach import CogneeCoach
 from bot.texts.text_manager import msg_text
 from apps.payments.tasks import send_payment_message
 from bot.utils.credits import required_credits
@@ -225,7 +224,7 @@ def refresh_external_knowledge(self):
     """Refresh external knowledge and rebuild Cognee index."""
     logger.info("refresh_external_knowledge triggered")
     try:
-        asyncio.run(CogneeCoach.refresh_knowledge_base())
+        asyncio.run(APIService.ai_coach.refresh_knowledge())
     except Exception as exc:  # noqa: BLE001
         logger.exception(f"Knowledge refresh failed: {exc}")
         raise self.retry(exc=exc)
