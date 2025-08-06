@@ -4,15 +4,16 @@ from json import JSONDecodeError
 from typing import Any, ClassVar
 
 from loguru import logger
-from redis.asyncio import Redis
+from redis.asyncio import Redis, from_url
 from redis.exceptions import RedisError
 
 from config.app_settings import settings
 
 
 class BaseCacheManager:
-    redis: ClassVar[Redis] = Redis.from_url(
-        f"{settings.REDIS_URL}/1",
+    redis: ClassVar[Redis] = from_url(
+        settings.REDIS_URL,
+        db=1,
         encoding="utf-8",
         decode_responses=True,
     )
