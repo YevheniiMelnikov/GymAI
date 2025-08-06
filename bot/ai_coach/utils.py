@@ -161,9 +161,7 @@ async def _generate_workout(
     return raw, dto
 
 
-async def generate_program(
-    client: Client, lang: str, workout_type: str, wishes: str
-) -> tuple[list[DayExercises], str]:
+async def generate_program(client: Client, lang: str, workout_type: str, wishes: str) -> tuple[list[DayExercises], str]:
     try:
         prev_program = await Cache.workout.get_latest_program(client.profile, use_fallback=False)
         previous_program = json.dumps([d.model_dump() for d in prev_program.exercises_by_day], ensure_ascii=False)

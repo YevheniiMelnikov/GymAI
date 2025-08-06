@@ -17,9 +17,9 @@ from cognee.modules.engine.operations.setup import setup as cognee_setup
 from ai_coach.base_coach import BaseAICoach
 from ai_coach.base_knowledge_loader import KnowledgeLoader
 from ai_coach.cognee_config import CogneeConfig
-from ai_coach.enums import DataKind, MessageRole
-from ai_coach.utils.hash_store import HashStore
-from ai_coach.utils.lock_cache import LockCache
+from ai_coach.schemas import DataKind, MessageRole
+from ai_coach.hash_store import HashStore
+from ai_coach.lock_cache import LockCache
 from config.app_settings import settings
 
 
