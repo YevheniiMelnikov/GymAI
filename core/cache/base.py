@@ -4,28 +4,18 @@ from json import JSONDecodeError
 from typing import Any, ClassVar
 
 from loguru import logger
-from redis.asyncio import Redis, from_url
+from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
 from config.app_settings import settings
 
 
 class BaseCacheManager:
-    _redis: ClassVar[Redis | None] = None
-
-    @classmethod
-    def _client(cls) -> Redis:
-        if cls._redis is None:
-            logger.debug(
-                "Initializing Redis client", url=settings.REDIS_URL, db=1
-            )
-            cls._redis = from_url(
-                settings.REDIS_URL,
-                db=1,
-                encoding="utf-8",
-                decode_responses=True,
-            )
-        return cls._redis
+    redis: ClassVar[Redis] = Redis.from_url(
+        f"{settings.REDIS_URL}/1",
+        encoding="utf-8",
+        decode_responses=True,
+    )
 
     @classmethod
     def _add_prefix(cls, key: str) -> str:
@@ -45,10 +35,8 @@ class BaseCacheManager:
 
     @classmethod
     async def close_pool(cls) -> None:
-        if cls._redis is None:
-            return
         try:
-            await cls._client().close()
+            await cls.redis.close()
             logger.info("Redis connection closed.")
         except Exception as e:
             logger.error(f"Error closing Redis connection: {e}")
@@ -56,16 +44,15 @@ class BaseCacheManager:
     @classmethod
     async def healthcheck(cls) -> bool:
         try:
-            return await cls._client().ping()
-        except Exception as e:  # pragma: no cover - best effort
-            logger.exception("Redis healthcheck failed: {error}", error=e)
-            cls._redis = None
+            return await cls.redis.ping()
+        except Exception as e:
+            logger.critical(f"Redis healthcheck failed: {e}")
             return False
 
     @classmethod
     async def get(cls, key: str, field: str) -> str | None:
         try:
-            return await cls._client().hget(cls._add_prefix(key), field)
+            return await cls.redis.hget(cls._add_prefix(key), field)
         except RedisError as e:
             logger.error(f"Redis GET error [{key}:{field}]: {e}")
             return None
@@ -73,21 +60,21 @@ class BaseCacheManager:
     @classmethod
     async def set(cls, key: str, field: str, value: str) -> None:
         try:
-            await cls._client().hset(cls._add_prefix(key), field, value)
+            await cls.redis.hset(cls._add_prefix(key), field, value)
         except RedisError as e:
             logger.error(f"Redis SET error [{key}:{field}]: {e}")
 
     @classmethod
     async def delete(cls, key: str, field: str) -> None:
         try:
-            await cls._client().hdel(cls._add_prefix(key), field)
+            await cls.redis.hdel(cls._add_prefix(key), field)
         except RedisError as e:
             logger.error(f"Redis DELETE error [{key}:{field}]: {e}")
 
     @classmethod
     async def get_all(cls, key: str) -> dict[str, str]:
         try:
-            return await cls._client().hgetall(cls._add_prefix(key))
+            return await cls.redis.hgetall(cls._add_prefix(key))
         except RedisError as e:
             logger.error(f"Redis HGETALL error [{key}]: {e}")
             return {}
@@ -107,7 +94,7 @@ class BaseCacheManager:
     async def set_json(cls, key: str, field: str, data: dict[str, Any]) -> None:
         try:
             safe = cls._json_safe(data)
-            await cls.set(key, field, json.dumps(safe, ensure_ascii=False, separators=(",", ":")))
+            await cls.set(key, field, json.dumps(safe))
         except RedisError as e:
             logger.error(f"Redis SET JSON error [{key}:{field}]: {e}")
 
@@ -161,7 +148,7 @@ class BaseCacheManager:
         data = await cls._fetch_from_service(cache_key, field, use_fallback=use_fallback)
         try:
             prepared = cls._prepare_for_cache(data, cache_key, field)
-            await cls.set(cache_key, field, json.dumps(prepared, ensure_ascii=False, separators=(",", ":")))
+            await cls.set(cache_key, field, json.dumps(prepared))
         except Exception as e:  # pragma: no cover - caching failure shouldn't crash
             logger.error(f"Failed to cache {cache_key}:{field}: {e}")
         return data
