@@ -16,7 +16,7 @@ from core.enums import CoachType
 from bot.utils.chat import send_message
 from aiogram.enums import ParseMode
 from core.services import APIService
-from bot.ai_coach.services import process_workout_result
+from bot.ai_coach.utils import process_workout_result
 from cognee.api.v1.prune import prune
 
 
