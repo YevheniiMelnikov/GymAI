@@ -1,10 +1,6 @@
 from decimal import Decimal
 import json
-from aiogram import Bot
-from aiogram.fsm.context import FSMContext
 from typing import Callable, Optional, TypeVar
-
-from bot.states import States
 
 from core.services.internal import APIService
 from config.app_settings import settings
@@ -27,10 +23,8 @@ from .parsers import (
 from loguru import logger
 from core.cache import Cache
 from core.exceptions import ProgramNotFoundError
-from core.schemas import Client
+from core.schemas import Client, Program, DayExercises
 from bot.utils.workout_plans import _next_payment_date
-from bot.utils.chat import send_program, send_message
-from bot.texts.text_manager import msg_text
 from datetime import date
 
 T = TypeVar("T")
@@ -88,15 +82,49 @@ async def assign_client(client: Client, lang: str) -> None:
     await APIService.ai_coach.ask(prompt, client_id=client.id)
 
 
-def _normalise_program(raw: str) -> dict:
-    """Extract and clean JSON workout program from ``raw`` text."""
+def _normalise_program(raw: str, *, key: str = "days") -> dict:
+    """Extract and clean JSON workout data from ``raw`` text."""
 
     extracted = extract_json(raw)
     if not extracted:
         raise ValueError("no JSON found")
     data = json.loads(extracted)
-    normalize_program_data(data)
+    normalize_program_data(data, key=key)
     return data
+
+
+async def _cache_program(
+    client: Client,
+    program_raw: str,
+    saved: Program,
+    workout_type: str,
+    wishes: str,
+) -> None:
+    """Normalise ``program_raw`` and store result in cache."""
+
+    try:
+        program_dict = _normalise_program(program_raw)
+    except Exception as e:  # pragma: no cover - log and continue
+        logger.error(f"Program normalisation failed: {e}")
+        return
+
+    program_dict.update(
+        {
+            "id": saved.id,
+            "client_profile": client.profile,
+            "created_at": saved.created_at,
+            "split_number": len(program_dict.get("days", [])),
+            "workout_type": workout_type,
+            "wishes": wishes,
+            "program_text": program_raw,
+        }
+    )
+
+    if "days" in program_dict and "exercises_by_day" not in program_dict:
+        program_dict["exercises_by_day"] = program_dict.pop("days")
+
+    await Cache.workout.save_program(client.profile, program_dict)
+    logger.info(f"Program generated for client_id={client.id}")
 
 
 async def _generate_workout(
@@ -133,9 +161,7 @@ async def _generate_workout(
     return raw, dto
 
 
-async def generate_program(
-    client: Client, lang: str, workout_type: str, wishes: str, state: FSMContext, bot: Bot
-) -> None:
+async def generate_program(client: Client, lang: str, workout_type: str, wishes: str) -> tuple[list[DayExercises], str]:
     try:
         prev_program = await Cache.workout.get_latest_program(client.profile, use_fallback=False)
         previous_program = json.dumps([d.model_dump() for d in prev_program.exercises_by_day], ensure_ascii=False)
@@ -158,52 +184,20 @@ async def generate_program(
         exercises = program_dto.days
         split_number = len(exercises)
     else:
-        exercises, split_number = parse_program_text(program_raw)
+        try:
+            prog_dict = _normalise_program(program_raw, key="days")
+            exercises = [DayExercises.model_validate(d) for d in prog_dict.get("days", [])]
+            split_number = len(exercises)
+        except Exception:
+            exercises, split_number = parse_program_text(program_raw)
 
     if not exercises:
-        await send_message(
-            recipient=client,
-            text=msg_text("ai_program_error", lang),
-            bot=bot,
-            state=state,
-            include_incoming_message=False,
-        )
         logger.error("Program parsing produced no exercises")
-        return
+        return [], program_raw
     saved = await APIService.workout.save_program(client.id, exercises, split_number, wishes)
     if saved:
-        try:
-            program_dict = _normalise_program(program_raw)
-            program_dict.update(
-                {
-                    "id": saved.id,
-                    "client_profile": client.profile,
-                    "created_at": saved.created_at,
-                    "split_number": len(program_dict.get("days", [])),
-                    "workout_type": workout_type,
-                    "wishes": wishes,
-                    "program_text": program_raw,
-                }
-            )
-            # rename key if needed for cache schema
-            if "days" in program_dict and "exercises_by_day" not in program_dict:
-                program_dict["exercises_by_day"] = program_dict.pop("days")
-            await Cache.workout.save_program(client.profile, program_dict)
-            logger.info(f"Program generated for client_id={client.id}")
-        except Exception as e:
-            logger.error(f"Program normalisation failed: {e}")
-    data = await state.get_data()
-    from bot.utils.exercises import format_program
-
-    program_text = await format_program(exercises, day=0)
-    await send_program(client, data.get("lang", settings.DEFAULT_LANG), program_text, state, bot)
-    await state.update_data(
-        exercises=[d.model_dump() for d in exercises],
-        split=len(exercises),
-        day_index=0,
-        client=True,
-    )
-    await state.set_state(States.program_view)
+        await _cache_program(client, program_raw, saved, workout_type, wishes)
+    return exercises, program_raw
 
 
 async def generate_subscription(
@@ -213,7 +207,7 @@ async def generate_subscription(
     wishes: str,
     period: str,
     workout_days: list[str],
-) -> None:
+) -> tuple[list[DayExercises], str]:
     request_context = (
         f"The client requests a {workout_type} program for a {period} subscription.\n"
         f"Wishes: {wishes}.\n"
@@ -227,7 +221,19 @@ async def generate_subscription(
         SUBSCRIPTION_RESPONSE_TEMPLATE,
         parse_subscription_json,
     )
-    exercises = sub_dto.exercises if sub_dto is not None else []
+    if sub_dto is not None:
+        exercises = sub_dto.exercises
+    else:
+        try:
+            sub_dict = _normalise_program(sub_raw, key="exercises")
+            exercises = [DayExercises.model_validate(d) for d in sub_dict.get("exercises", [])]
+        except Exception:
+            exercises, _ = parse_program_text(sub_raw)
+
+    if not exercises:
+        logger.error("Subscription parsing produced no exercises")
+        return [], sub_raw
+
     sub_id = await APIService.workout.create_subscription(
         client_profile_id=client.id,
         workout_days=workout_days,
@@ -254,7 +260,7 @@ async def generate_subscription(
         )
         logger.info(f"New AI-coach subscription generated for client_id={client.id}")
 
-    return
+    return exercises, sub_raw
 
 
 async def process_workout_result(

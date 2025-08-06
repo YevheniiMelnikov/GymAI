@@ -9,6 +9,7 @@ from contextlib import suppress
 from typing import cast
 from loguru import logger
 
+import ai_coach.main
 from bot.keyboards import (
     select_workout_kb,
     choose_coach_kb,
@@ -24,7 +25,7 @@ from bot.ai_coach.utils import assign_client
 from core.cache import Cache
 from core.enums import CoachType
 from core.schemas import Coach, Client, Profile
-from bot.utils.chat import contact_client, process_feedback_content
+from bot.utils.chat import contact_client, process_feedback_content, send_program
 from bot.utils.menus import (
     show_main_menu,
     show_exercises_menu,
@@ -50,6 +51,7 @@ from bot.keyboards import payment_kb
 from bot.utils.credits import available_packages
 from bot.ai_coach.utils import generate_subscription, generate_program
 from bot.utils.credits import available_ai_services
+from bot.utils.exercises import format_program
 
 menu_router = Router()
 
@@ -135,7 +137,7 @@ async def services_menu(callback_query: CallbackQuery, state: FSMContext, bot: B
         return
 
     if cb_data == "ai_coach":
-        coach = await Cache.coach.get_ai_coach()
+        coach = await ai_coach.main.get_ai_coach()
         if not coach:
             await callback_query.answer(msg_text("no_coaches", profile.language), show_alert=True)
             return
@@ -246,15 +248,32 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
     if any(coach.coach_type == CoachType.ai for coach in assigned_coaches):
         pass  # already assigned to AI
     else:
-        await assign_coach(await Cache.coach.get_ai_coach(), client)
+        await assign_coach(await ai_coach.main.get_ai_coach(), client)
         await assign_client(client, profile.language)
 
     if service == "program":
         try:
-            await generate_program(client, profile.language, workout_type, wishes, state, bot)
+            exercises, program_raw = await generate_program(client, profile.language, workout_type, wishes)
         except Exception as e:  # noqa: BLE001
             logger.exception(f"Program generation failed: {e}")
             await answer_msg(callback_query, msg_text("unexpected_error", profile.language))
+            return
+        if not exercises:
+            await answer_msg(callback_query, msg_text("ai_program_error", profile.language))
+            await bot.send_message(
+                settings.ADMIN_ID,
+                f"AI program generation failed for client {client.id}\nRaw:\n{program_raw}",
+            )
+            return
+        program_text = await format_program(exercises, day=0)
+        await send_program(client, profile.language, program_text, state, bot)
+        await state.update_data(
+            exercises=[d.model_dump() for d in exercises],
+            split=len(exercises),
+            day_index=0,
+            client=True,
+        )
+        await state.set_state(States.program_view)
         return
 
     period_map = {
@@ -305,7 +324,27 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     period = data.get("period", "1m")
     await answer_msg(callback_query, msg_text("request_in_progress", lang))
     await show_main_menu(callback_query.message, profile, state)
-    await generate_subscription(client, lang, workout_type, wishes, period, days)
+    exercises, sub_raw = await generate_subscription(client, lang, workout_type, wishes, period, days)
+    if not exercises:
+        await answer_msg(callback_query, msg_text("ai_program_error", lang))
+        bot = cast(Bot, callback_query.bot)
+        await bot.send_message(
+            settings.ADMIN_ID,
+            f"AI subscription generation failed for client {client.id}\nRaw:\n{sub_raw}",
+        )
+        return
+    program_text = await format_program(exercises, day=0)
+    bot = cast(Bot, callback_query.bot)
+    await send_program(client, lang, program_text, state, bot)
+    await state.update_data(
+        exercises=[d.model_dump() for d in exercises],
+        split=len(exercises),
+        day_index=0,
+        client=True,
+        subscription=True,
+        days=days,
+    )
+    await state.set_state(States.program_view)
 
 
 @menu_router.callback_query(States.profile)
@@ -363,7 +402,7 @@ async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext, bo
     if cb_data == "back":
         await show_main_menu(message, profile, state)
     elif cb_data == "ai_coach":
-        coach = await Cache.coach.get_ai_coach()
+        coach = await ai_coach.main.get_ai_coach()
         if not coach:
             await callback_query.answer(msg_text("no_coaches", profile.language), show_alert=True)
             return
