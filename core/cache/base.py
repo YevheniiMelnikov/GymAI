@@ -4,7 +4,7 @@ from json import JSONDecodeError
 from typing import Any, ClassVar
 
 from loguru import logger
-from redis.asyncio import Redis
+from redis.asyncio import Redis, from_url
 from redis.exceptions import RedisError
 
 from config.app_settings import settings
@@ -16,7 +16,10 @@ class BaseCacheManager:
     @classmethod
     def _client(cls) -> Redis:
         if cls._redis is None:
-            cls._redis = Redis.from_url(
+            logger.debug(
+                "Initializing Redis client", url=settings.REDIS_URL, db=1
+            )
+            cls._redis = from_url(
                 settings.REDIS_URL,
                 db=1,
                 encoding="utf-8",
@@ -54,8 +57,9 @@ class BaseCacheManager:
     async def healthcheck(cls) -> bool:
         try:
             return await cls._client().ping()
-        except Exception as e:
-            logger.critical(f"Redis healthcheck failed: {e}")
+        except Exception as e:  # pragma: no cover - best effort
+            logger.exception("Redis healthcheck failed: {error}", error=e)
+            cls._redis = None
             return False
 
     @classmethod
