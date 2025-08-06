@@ -24,7 +24,7 @@ async def test_update_client_uses_profile_key(monkeypatch):
     monkeypatch.setattr(BaseCacheManager, "set", fake_set)
 
     profile_id = 5
-    await Cache.CLIENT.update_client(profile_id, {"status": ClientStatus.default})
+    await Cache.client.update_client(profile_id, {"status": ClientStatus.default})
     assert called.get("field") == str(profile_id)
 
 
@@ -33,6 +33,6 @@ async def test_get_client_not_found(monkeypatch):
     async def fake_get(_: int):
         return None
 
-    monkeypatch.setattr(Cache.CLIENT.service, "get_client_by_profile_id", fake_get)
+    monkeypatch.setattr(Cache.client.service, "get_client_by_profile_id", fake_get)
     with pytest.raises(Exception):
-        await Cache.CLIENT.get_client(999)
+        await Cache.client.get_client(999)

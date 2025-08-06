@@ -82,7 +82,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bo
     await callback_query.answer(msg_text("saved", profile.language))
 
     try:
-        client = await Cache.CLIENT.get_client(profile_id)
+        client = await Cache.client.get_client(profile_id)
     except ClientNotFoundError:
         logger.error(f"Client {profile_id} not found in save_workout_plan")
         await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
@@ -153,7 +153,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bo
 
         await send_program(client, client_lang, program_text, state, bot)
 
-    await Cache.CLIENT.update_client(client.profile, {"status": ClientStatus.default})
+    await Cache.client.update_client(client.profile, {"status": ClientStatus.default})
 
     message = callback_query.message
     if message and isinstance(message, Message):
@@ -178,7 +178,7 @@ async def reset_workout_plan(callback_query: CallbackQuery, state: FSMContext) -
 
     profile_id = int(profile_id_str)
     split_number = data.get("split", 1)
-    client = await Cache.CLIENT.get_client(profile_id)
+    client = await Cache.client.get_client(profile_id)
     await callback_query.answer(btn_text("done", profile.language))
 
     if data.get("subscription"):
@@ -195,7 +195,7 @@ async def reset_workout_plan(callback_query: CallbackQuery, state: FSMContext) -
                     "client_profile": profile_id,
                 },
             )
-            await Cache.CLIENT.update_client(client.profile, {"status": ClientStatus.waiting_for_subscription})
+            await Cache.client.update_client(client.profile, {"status": ClientStatus.waiting_for_subscription})
             await Cache.payment.set_status(profile_id, "subscription", PaymentStatus.PENDING)
         except SubscriptionNotFoundError:
             logger.error(f"Subscription not found for client {profile_id}, cannot reset")
@@ -210,7 +210,7 @@ async def reset_workout_plan(callback_query: CallbackQuery, state: FSMContext) -
 
         await APIService.workout.update_program(program.id, {"exercises_by_day": []})
         await Cache.workout.update_program(profile_id, {"exercises_by_day": []})
-        await Cache.CLIENT.update_client(client.profile, {"status": ClientStatus.waiting_for_program})
+        await Cache.client.update_client(client.profile, {"status": ClientStatus.waiting_for_program})
 
     await state.clear()
     await answer_msg(callback_query, msg_text("enter_daily_program", profile.language).format(day=1))
@@ -359,7 +359,7 @@ async def process_new_subscription(
     language = cast(str, profile.language or settings.DEFAULT_LANG)
     await callback_query.answer(msg_text("checkbox_reminding", language), show_alert=True)
     data = await state.get_data()
-    client = await Cache.CLIENT.get_client(profile.id)
+    client = await Cache.client.get_client(profile.id)
     if not client or not client.assigned_to:
         return
     coach = await get_assigned_coach(client, coach_type=CoachType.human)
@@ -401,7 +401,7 @@ async def process_new_subscription(
         return
 
     await ProfileService.adjust_client_credits(profile.id, -required)
-    await Cache.CLIENT.update_client(client.profile, {"credits": client.credits - required})
+    await Cache.client.update_client(client.profile, {"credits": client.credits - required})
     payout = (coach.subscription_price or Decimal("0")).quantize(Decimal("0.01"), ROUND_HALF_UP)
     await ProfileService.adjust_coach_payout_due(coach.profile, payout)
     await Cache.coach.update_coach(coach.profile, {"payout_due": str((coach.payout_due or Decimal("0")) + payout)})

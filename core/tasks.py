@@ -115,7 +115,7 @@ async def warn_low_credits(self):  # pyre-ignore[valid-type]
     for sub in subs:
         if not sub.client_profile:
             continue
-        client = await Cache.CLIENT.get_client(sub.client_profile)
+        client = await Cache.client.get_client(sub.client_profile)
         profile = await ProfileService.get_profile(client.profile)
         required = required_credits(Decimal(str(sub.price)))
         if client.credits < required:
@@ -133,7 +133,7 @@ async def charge_due_subscriptions(self):  # pyre-ignore[valid-type]
     for sub in subs:
         if not sub.id or not sub.client_profile:
             continue
-        client = await Cache.CLIENT.get_client(sub.client_profile)
+        client = await Cache.client.get_client(sub.client_profile)
         required = required_credits(Decimal(str(sub.price)))
         if client.credits < required:
             await APIService.workout.update_subscription(
@@ -144,7 +144,7 @@ async def charge_due_subscriptions(self):  # pyre-ignore[valid-type]
             continue
 
         await ProfileService.adjust_client_credits(client.profile, -required)
-        await Cache.CLIENT.update_client(client.profile, {"credits": client.credits - required})
+        await Cache.client.update_client(client.profile, {"credits": client.credits - required})
         if client.assigned_to:
             coach = await get_assigned_coach(client, coach_type=CoachType.human)
             if coach:

@@ -39,17 +39,17 @@ async def update_profile_data(message: Message, state: FSMContext, role: str, bo
         if role == "client":
             credits_delta = data.pop("credits_delta", 0)
             if data.get("status") != ClientStatus.initial:
-                client = await Cache.CLIENT.get_client(profile.id)
+                client = await Cache.client.get_client(profile.id)
                 if credits_delta:
                     user_data["credits"] = client.credits + credits_delta
-                await Cache.CLIENT.update_client(client.profile, user_data)
+                await Cache.client.update_client(client.profile, user_data)
                 await APIService.profile.update_client_profile(client.id, user_data)
             else:
                 if credits_delta:
                     user_data["credits"] = credits_delta
                 client = await APIService.profile.create_client_profile(profile.id, user_data)
                 if client is not None:
-                    await Cache.CLIENT.save_client(profile.id, client.model_dump())
+                    await Cache.client.save_client(profile.id, client.model_dump())
         else:
             if data.get("edit_mode"):
                 coach = await Cache.coach.get_coach(profile.id)
@@ -101,7 +101,7 @@ async def assign_coach(coach: Coach, client: Client) -> None:
         assigned.append(coach.profile)
 
     await APIService.profile.update_client_profile(client.id, {"assigned_to": assigned})
-    await Cache.CLIENT.update_client(client.profile, {"assigned_to": assigned})
+    await Cache.client.update_client(client.profile, {"assigned_to": assigned})
 
 
 async def get_assigned_coach(client: Client, *, coach_type: CoachType | None = None) -> Coach | None:
@@ -147,7 +147,7 @@ async def check_assigned_clients(profile_id: int) -> bool:
 async def fetch_user(profile: Profile) -> Client | Coach:
     if profile.role == "client":
         try:
-            return await Cache.CLIENT.get_client(profile.id)
+            return await Cache.client.get_client(profile.id)
         except ClientNotFoundError:
             logger.error(
                 f"ClientNotFoundError for an existing profile {profile.id}. This might indicate data inconsistency."
@@ -219,7 +219,7 @@ async def get_clients_to_survey() -> list[Profile]:
 
     try:
         yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
-        raw_clients = await Cache.CLIENT.get_all("clients") or []
+        raw_clients = await Cache.client.get_all("clients") or []
 
         for profile_id_str in raw_clients:
             try:
@@ -238,7 +238,7 @@ async def get_clients_to_survey() -> list[Profile]:
                     and subscription.exercises
                     and yesterday in [day.lower() for day in subscription.workout_days]
                 ):
-                    client = await Cache.CLIENT.get_client(profile_id)
+                    client = await Cache.client.get_client(profile_id)
                     profile = await APIService.profile.get_profile(client.profile)
                     if profile is not None:
                         clients_with_workout.append(profile)
