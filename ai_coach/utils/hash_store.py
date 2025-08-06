@@ -19,7 +19,9 @@ class HashStore:
         encoding="utf-8",
         decode_responses=True,
     )
-    logger.debug("HashStore Redis client initialized", url=settings.REDIS_URL, db=2)
+    logger.debug(
+        f"HashStore Redis client initialized url={settings.REDIS_URL} db=2"
+    )
 
     @staticmethod
     def _key(dataset: str) -> str:
