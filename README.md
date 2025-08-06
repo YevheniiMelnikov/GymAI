@@ -85,6 +85,44 @@ PYTHONPATH=. celery -A config.celery:celery_app worker \
 If Celery prints connection errors such as `Error -2 connecting to redis:6379`,
 verify that `REDIS_URL` points to your local Redis instance.
 
+### Scheduled tasks
+
+| Task | Schedule | Purpose |
+|------|----------|---------|
+| `pg_backup` | daily 02:00 | dump Postgres database |
+| `redis_backup` | daily 02:01 | export Redis data |
+| `cleanup_backups` | daily 02:02 | remove backups older than `BACKUP_RETENTION_DAYS` |
+| `deactivate_expired_subscriptions` | daily 01:00 | disable subscriptions past end date |
+| `warn_low_credits` | daily 00:00 | notify clients with insufficient credits |
+| `charge_due_subscriptions` | daily 00:30 | deduct credits for active plans |
+| `send_daily_survey` | daily 09:00 | trigger workout feedback survey |
+| `refresh_external_knowledge` | every `KNOWLEDGE_REFRESH_INTERVAL` | rebuild AI coach knowledge |
+| `prune_cognee` | daily 02:10 | clear cached Cognee data |
+
+---
+
+## AI Coach and knowledge base
+
+The project ships an AI coach backed by Cognee. Each client and chat is mapped to
+datasets named `client_<id>_prompt` and `client_<id>_message`. Chat entries are
+stored with a `user:` or `bot:` prefix so Cognee keeps the full dialog history,
+while prompts are saved separately. SHA‑256 hashes are cached in Redis with a
+TTL derived from `BACKUP_RETENTION_DAYS` to prevent repeat ingestion. New texts
+are ingested asynchronously and cognified before they are searchable.
+
+To refresh external knowledge (e.g. documents from Google Drive), Celery calls
+`refresh_external_knowledge` every `KNOWLEDGE_REFRESH_INTERVAL` seconds. The
+task invokes `CogneeCoach.refresh_knowledge_base` under basic authentication.
+
+Key settings:
+
+- `KNOWLEDGE_REFRESH_INTERVAL` – periodic rebuild interval in seconds
+- `AI_COACH_TIMEOUT` – timeout for HTTP calls to the AI coach
+
+Other maintenance:
+
+- `BACKUP_RETENTION_DAYS` – retention period for Postgres and Redis backups
+
 ---
 
 ## Tests
@@ -177,4 +215,3 @@ docker compose -f docker/docker-compose.yml up -d --build nginx
 The system instruction used by Cognee is loaded from `./ai_coach/global_system_prompt.txt`.
 This path is assigned to the `GRAPH_PROMPT_PATH` environment variable automatically on startup, but you can override it if needed.
 Make sure this file exists before starting the services.
-

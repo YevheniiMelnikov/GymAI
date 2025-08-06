@@ -24,7 +24,11 @@ class Settings(BaseSettings):
     API_TIMEOUT: int = 10
     AI_GENERATION_RETRIES: int = 3
 
-    CACHE_TTL: int = 60 * 5
+    KNOWLEDGE_REFRESH_INTERVAL: int = 60 * 60
+    AI_COACH_TIMEOUT: int = 60
+
+    CACHE_TTL: int = 60 * 5  # Django cache TTL
+    BACKUP_RETENTION_DAYS: int = 30  # Postgres/Redis backup retention
 
     TIME_ZONE: Annotated[str, Field(default="Europe/Kyiv")]
     DEFAULT_LANG: Annotated[str, Field(default="ua")]
@@ -49,8 +53,11 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     API_URL: str
 
+    AI_COACH_REFRESH_USER: Annotated[str, Field(default="admin")]
+    AI_COACH_REFRESH_PASSWORD: Annotated[str, Field(default="password")]
+
     OPENAI_BASE_URL: Annotated[str, Field(default="https://api.openai.com/v1")]
-    OPENAI_API_KEY: Annotated[str, Field(default="")]  # used for embeddings
+    EMBEDDING_API_KEY: Annotated[str, Field(default="")]  # used for embeddings
     LLM_API_URL: Annotated[str, Field(default="https://openrouter.ai/api/v1")]
     LLM_API_KEY: Annotated[str, Field(default="")]
     LLM_MODEL: Annotated[str, Field(default="gpt-4o")]

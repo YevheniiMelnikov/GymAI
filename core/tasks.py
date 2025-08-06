@@ -6,12 +6,14 @@ from dateutil.relativedelta import relativedelta
 from decimal import Decimal, ROUND_HALF_UP
 
 from celery import shared_task
+import asyncio
 from loguru import logger
 import httpx
 
 from config.app_settings import settings
 from core.cache import Cache
 from core.services import APIService
+from ai_coach.cognee_coach import CogneeCoach
 from bot.texts.text_manager import msg_text
 from apps.payments.tasks import send_payment_message
 from bot.utils.credits import required_credits
@@ -83,7 +85,7 @@ def redis_backup(self):
 
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
 def cleanup_backups(self):
-    cutoff = datetime.now() - timedelta(days=30)
+    cutoff = datetime.now() - timedelta(days=settings.BACKUP_RETENTION_DAYS)
     for root in (_pg_dir, _redis_dir):
         for f in os.scandir(root):
             if f.is_file() and datetime.fromtimestamp(f.stat().st_ctime) < cutoff:
@@ -219,11 +221,13 @@ def send_workout_result(self, coach_profile_id: int, client_profile_id: int, tex
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
-async def refresh_external_knowledge(self):  # pyre-ignore[valid-type]
+def refresh_external_knowledge(self):
     """Refresh external knowledge and rebuild Cognee index."""
+    logger.info("refresh_external_knowledge triggered")
     try:
-        await APIService.ai_coach.refresh_knowledge()
+        asyncio.run(CogneeCoach.refresh_knowledge_base())
     except Exception as exc:  # noqa: BLE001
+        logger.exception(f"Knowledge refresh failed: {exc}")
         raise self.retry(exc=exc)
 
 

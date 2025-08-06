@@ -23,7 +23,6 @@ services:
     ports: ["9000:9000"]
     environment:
       - COGNEE_DATA_ROOT=/app/.data_storage
-      - EMBEDDING_API_KEY=${OPENAI_API_KEY}
     env_file: ../.env
     command: uvicorn ai_coach.api:app --host 0.0.0.0 --port 9000
     volumes:
@@ -82,6 +81,8 @@ services:
       dockerfile: docker/Dockerfile
     container_name: celery_worker
     env_file: ../.env
+    environment:
+      - COGNEE_DATA_ROOT=/app/.data_storage
     entrypoint: /app/docker/entrypoint.sh
     command: celery -A config.celery:celery_app worker -l info -Q default,maintenance -P threads
     volumes:

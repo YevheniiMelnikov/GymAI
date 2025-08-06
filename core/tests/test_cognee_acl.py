@@ -1,57 +1,80 @@
 from types import SimpleNamespace
+import asyncio
+
 import pytest
 
-from ai_coach import cognee_coach as coach
+
+import ai_coach.cognee_coach as coach
 
 
-@pytest.mark.asyncio
-async def test_case_success_create_and_search(monkeypatch):
-    user = SimpleNamespace(id="u1")
-    monkeypatch.setattr(coach.CogneeCoach, "_user", user)
-    monkeypatch.setattr(coach.CogneeCoach, "_ensure_config", lambda: None)
-    calls = {}
+def test_case_success_create_and_search(monkeypatch):
+    async def runner():
+        user = SimpleNamespace(id="u1")
+        monkeypatch.setattr(coach.CogneeCoach, "_user", user)
+        monkeypatch.setattr(coach.CogneeCoach, "_ensure_config", lambda: None)
+        calls = {}
+        cognify_calls: list[list[str]] = []
 
-    async def fake_add(prompt, dataset_name=None, user=None):
-        calls["dataset_name"] = dataset_name
-        return SimpleNamespace(dataset_id="ds1", permissions=["write"])
+        async def fake_add(prompt, dataset_name=None, user=None):
+            calls["dataset_name"] = dataset_name
+            return SimpleNamespace(dataset_id="ds1", permissions=["write"])
 
-    async def fake_cognify(datasets, user=None):
-        calls["cognify"] = datasets
+        async def fake_cognify(datasets, user=None):
+            cognify_calls.append(datasets)
 
-    async def fake_search(query, datasets, user=None, top_k=None):
-        calls["search"] = datasets
-        return ["ok"]
+        async def fake_search(query, datasets, user=None, top_k=None):
+            calls["search"] = datasets
+            return ["ok"]
 
-    monkeypatch.setattr(coach.cognee, "add", fake_add)
-    monkeypatch.setattr(coach.cognee, "cognify", fake_cognify)
-    monkeypatch.setattr(coach.cognee, "search", fake_search)
+        monkeypatch.setattr(coach.cognee, "add", fake_add)
+        monkeypatch.setattr(coach.cognee, "cognify", fake_cognify)
+        monkeypatch.setattr(coach.cognee, "search", fake_search)
 
-    await coach.CogneeCoach.make_request("hi")
+        async def fake_contains(*a, **k):
+            return False
 
-    assert calls["dataset_name"] == f"main_dataset_{user.id}"
-    assert calls["cognify"] == ["ds1"]
-    assert calls["search"] == ["ds1"]
+        async def fake_add_hash(*a, **k):
+            pass
+
+        monkeypatch.setattr(coach.HashStore, "contains", fake_contains)
+        monkeypatch.setattr(coach.HashStore, "add", fake_add_hash)
+
+        await coach.CogneeCoach.save_prompt("hi", client_id=1)
+        await asyncio.sleep(0)
+        await coach.CogneeCoach.refresh_client_knowledge(1, data_kind=coach.DataKind.PROMPT)
+        await coach.CogneeCoach.make_request("hi", client_id=1)
+
+        assert calls["dataset_name"] == "client_1_prompt"
+        assert cognify_calls[0] == ["ds1"]
+        assert cognify_calls[1] == ["client_1_prompt"]
+        assert calls["search"] == ["client_1_prompt"]
+
+    asyncio.run(runner())
 
 
-@pytest.mark.asyncio
-async def test_case_conflict_existing_dataset(monkeypatch):
-    user = SimpleNamespace(id="u2")
-    monkeypatch.setattr(coach.CogneeCoach, "_user", user)
-    monkeypatch.setattr(coach.CogneeCoach, "_ensure_config", lambda: None)
-    calls = {}
+def test_case_conflict_existing_dataset(monkeypatch):
+    async def runner():
+        user = SimpleNamespace(id="u2")
+        monkeypatch.setattr(coach.CogneeCoach, "_user", user)
+        monkeypatch.setattr(coach.CogneeCoach, "_ensure_config", lambda: None)
+        calls = {}
 
-    async def fake_add(prompt, dataset_name=None, user=None):
-        calls.setdefault("dataset_names", []).append(dataset_name)
-        if len(calls["dataset_names"]) == 1:
+        async def fake_add(prompt, dataset_name=None, user=None):
+            calls.setdefault("dataset_names", []).append(dataset_name)
             raise coach.PermissionDeniedError("denied")
-        return SimpleNamespace(dataset_id="ds2", permissions=["write"])
 
-    monkeypatch.setattr(coach.cognee, "add", fake_add)
-    monkeypatch.setattr(coach.cognee, "cognify", lambda datasets, user=None: None)
-    monkeypatch.setattr(coach.cognee, "search", lambda *a, **k: [])
+        monkeypatch.setattr(coach.cognee, "add", fake_add)
+        monkeypatch.setattr(coach.cognee, "cognify", lambda datasets, user=None: None)
+        monkeypatch.setattr(coach.cognee, "search", lambda *a, **k: [])
 
-    await coach.CogneeCoach.make_request("hello")
+        async def fake_contains(*a, **k):
+            return False
 
-    assert calls["dataset_names"][0] == f"main_dataset_{user.id}"
-    assert calls["dataset_names"][1].startswith(f"main_dataset_{user.id}_")
-    assert len(calls["dataset_names"][1]) > len(f"main_dataset_{user.id}_")
+        monkeypatch.setattr(coach.HashStore, "contains", fake_contains)
+
+        with pytest.raises(coach.PermissionDeniedError):
+            await coach.CogneeCoach.save_prompt("hello", client_id=2)
+
+        assert calls["dataset_names"] == ["client_2_prompt"]
+
+    asyncio.run(runner())
