@@ -7,7 +7,7 @@ from bot.states import States
 
 from core.services.internal import APIService
 from config.app_settings import settings
-from bot.prompts import (
+from prompts import (
     WORKOUT_PLAN_PROMPT,
     PROGRAM_RESPONSE_TEMPLATE,
     SUBSCRIPTION_RESPONSE_TEMPLATE,
