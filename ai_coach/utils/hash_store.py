@@ -14,13 +14,10 @@ class HashStore:
     """Persist SHA256 hashes for deduplication."""
 
     redis: Redis = from_url(
-        settings.REDIS_URL,
+        url=settings.REDIS_URL,
         db=2,
         encoding="utf-8",
         decode_responses=True,
-    )
-    logger.debug(
-        f"HashStore Redis client initialized url={settings.REDIS_URL} db=2"
     )
 
     @staticmethod

@@ -12,7 +12,7 @@ from config.app_settings import settings
 
 class BaseCacheManager:
     redis: ClassVar[Redis] = from_url(
-        settings.REDIS_URL,
+        url=settings.REDIS_URL,
         db=1,
         encoding="utf-8",
         decode_responses=True,

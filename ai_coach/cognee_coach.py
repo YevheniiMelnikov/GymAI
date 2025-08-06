@@ -18,8 +18,8 @@ from ai_coach.base_coach import BaseAICoach
 from ai_coach.base_knowledge_loader import KnowledgeLoader
 from ai_coach.cognee_config import CogneeConfig
 from ai_coach.enums import DataKind, MessageRole
-from ai_coach.utils.lock_cache import LockCache
 from ai_coach.utils.hash_store import HashStore
+from ai_coach.utils.lock_cache import LockCache
 from config.app_settings import settings
 
 
@@ -100,9 +100,7 @@ class CogneeCoach(BaseAICoach):
         except (PermissionDeniedError, DatasetNotFoundError) as e:
             logger.warning(f"Search issue for client {client_id}: {e}")
         except Exception as e:  # pragma: no cover - best effort
-            logger.exception(
-                f"Unexpected error during client {client_id} request: {e}"
-            )
+            logger.exception(f"Unexpected error during client {client_id} request: {e}")
         return []
 
     @staticmethod
@@ -174,18 +172,14 @@ class CogneeCoach(BaseAICoach):
         """
         Save a user message to the client's message dataset.
         """
-        await cls._update_client_knowledge(
-            text, client_id, data_kind=DataKind.MESSAGE, role=MessageRole.CLIENT
-        )
+        await cls._update_client_knowledge(text, client_id, data_kind=DataKind.MESSAGE, role=MessageRole.CLIENT)
 
     @classmethod
     async def save_ai_message(cls, text: str, client_id: int) -> None:
         """
         Save an AI message to the client's message dataset.
         """
-        await cls._update_client_knowledge(
-            text, client_id, data_kind=DataKind.MESSAGE, role=MessageRole.AI_COACH
-        )
+        await cls._update_client_knowledge(text, client_id, data_kind=DataKind.MESSAGE, role=MessageRole.AI_COACH)
 
     @classmethod
     async def save_prompt(cls, text: str, client_id: int) -> None:
@@ -195,9 +189,7 @@ class CogneeCoach(BaseAICoach):
         await cls._update_client_knowledge(text, client_id, data_kind=DataKind.PROMPT)
 
     @classmethod
-    async def get_client_context(
-        cls, client_id: int, query: str
-    ) -> dict[str, list[str]]:
+    async def get_client_context(cls, client_id: int, query: str) -> dict[str, list[str]]:
         """
         Search client datasets (message and prompt) for relevant context.
         """
