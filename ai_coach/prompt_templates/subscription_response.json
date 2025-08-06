@@ -1,0 +1,33 @@
+{
+  "workout_days": ["monday", "wednesday"],
+  "exercises": [
+    {
+      "day": "monday",
+      "exercises": [
+        {
+          "name": "Dumbbell Rows",
+          "sets": "3",
+          "reps": "12",
+          "gif_link": null,  // put the 'None' here
+          "weight": "20",    // kg
+          "set_id": null,
+          "drop_set": false
+        }
+      ]
+    },
+    {
+      "day": "wednesday",
+      "exercises": [
+        {
+          "name": "Lat Pulldown",
+          "sets": "3",
+          "reps": "10",
+          "gif_link": null,
+          "weight": "50",
+          "set_id": null,
+          "drop_set": false
+        }
+      ]
+    }
+  ]
+}

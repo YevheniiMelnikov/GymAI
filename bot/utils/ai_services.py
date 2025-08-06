@@ -8,8 +8,10 @@ from bot.states import States
 from core.services.internal import APIService
 from config.app_settings import settings
 from ai_coach.prompts import (
-    PROGRAM_PROMPT,
-    SUBSCRIPTION_PROMPT,
+    WORKOUT_PLAN_PROMPT,
+    PROGRAM_RESPONSE_TEMPLATE,
+    SUBSCRIPTION_RESPONSE_TEMPLATE,
+    WORKOUT_RULES,
     SYSTEM_PROMPT,
     UPDATE_WORKOUT_PROMPT,
     INITIAL_PROMPT,
@@ -105,16 +107,21 @@ async def generate_program(
     except ProgramNotFoundError:
         previous_program = "[]"
 
+    request_context = (
+        f"Previous program (JSON):\n{previous_program}\n\n"
+        f"The client requests a {workout_type} program. Additional wishes: {wishes}."
+    )
+
     prompt = (
         SYSTEM_PROMPT
         + "\n\n"
-        + PROGRAM_PROMPT.format(
+        + WORKOUT_PLAN_PROMPT.format(
             client_profile=profile_description,
-            previous_program=previous_program,
-            workout_type=workout_type,
-            wishes=wishes,
+            request_context=request_context,
             language=lang,
             current_date=today,
+            workout_rules=WORKOUT_RULES,
+            response_template=PROGRAM_RESPONSE_TEMPLATE,
         )
     )
     program_raw = ""
@@ -185,16 +192,24 @@ async def generate_subscription(
     period: str,
     workout_days: list[str],
 ) -> None:
+    profile_description = describe_client(client)
+    today = date.today().isoformat()
+    request_context = (
+        f"The client requests a {workout_type} program for a {period} subscription.\n"
+        f"Wishes: {wishes}.\n"
+        f"Preferred workout days: {', '.join(workout_days)} (total {len(workout_days)} days per week)."
+    )
+
     prompt = (
         SYSTEM_PROMPT
         + "\n\n"
-        + SUBSCRIPTION_PROMPT.format(
+        + WORKOUT_PLAN_PROMPT.format(
+            client_profile=profile_description,
+            request_context=request_context,
             language=lang,
-            wishes=wishes,
-            workout_days=", ".join(workout_days),
-            workout_type=workout_type,
-            period=period,
-            days=len(workout_days),
+            current_date=today,
+            workout_rules=WORKOUT_RULES,
+            response_template=SUBSCRIPTION_RESPONSE_TEMPLATE,
         )
     )
     sub_raw = ""
