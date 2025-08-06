@@ -5,18 +5,25 @@ from typing import Any, ClassVar
 
 from loguru import logger
 from redis.asyncio import Redis
+from redis.asyncio import from_url
 from redis.exceptions import RedisError
 
 from config.app_settings import settings
 
 
 class BaseCacheManager:
-    redis: ClassVar[Redis] = Redis.from_url(
-        settings.REDIS_URL,
-        db=1,
-        encoding="utf-8",
-        decode_responses=True,
-    )
+    _redis: ClassVar[Redis | None] = None
+
+    @classmethod
+    def _client(cls) -> Redis:
+        if cls._redis is None:
+            cls._redis = from_url(
+                settings.REDIS_URL,
+                db=1,
+                encoding="utf-8",
+                decode_responses=True,
+            )
+        return cls._redis
 
     @classmethod
     def _add_prefix(cls, key: str) -> str:
@@ -36,8 +43,10 @@ class BaseCacheManager:
 
     @classmethod
     async def close_pool(cls) -> None:
+        if cls._redis is None:
+            return
         try:
-            await cls.redis.close()
+            await cls._client().close()
             logger.info("Redis connection closed.")
         except Exception as e:
             logger.error(f"Error closing Redis connection: {e}")
@@ -45,7 +54,7 @@ class BaseCacheManager:
     @classmethod
     async def healthcheck(cls) -> bool:
         try:
-            return await cls.redis.ping()
+            return await cls._client().ping()
         except Exception as e:
             logger.critical(f"Redis healthcheck failed: {e}")
             return False
@@ -53,7 +62,7 @@ class BaseCacheManager:
     @classmethod
     async def get(cls, key: str, field: str) -> str | None:
         try:
-            return await cls.redis.hget(cls._add_prefix(key), field)
+            return await cls._client().hget(cls._add_prefix(key), field)
         except RedisError as e:
             logger.error(f"Redis GET error [{key}:{field}]: {e}")
             return None
@@ -61,21 +70,21 @@ class BaseCacheManager:
     @classmethod
     async def set(cls, key: str, field: str, value: str) -> None:
         try:
-            await cls.redis.hset(cls._add_prefix(key), field, value)
+            await cls._client().hset(cls._add_prefix(key), field, value)
         except RedisError as e:
             logger.error(f"Redis SET error [{key}:{field}]: {e}")
 
     @classmethod
     async def delete(cls, key: str, field: str) -> None:
         try:
-            await cls.redis.hdel(cls._add_prefix(key), field)
+            await cls._client().hdel(cls._add_prefix(key), field)
         except RedisError as e:
             logger.error(f"Redis DELETE error [{key}:{field}]: {e}")
 
     @classmethod
     async def get_all(cls, key: str) -> dict[str, str]:
         try:
-            return await cls.redis.hgetall(cls._add_prefix(key))
+            return await cls._client().hgetall(cls._add_prefix(key))
         except RedisError as e:
             logger.error(f"Redis HGETALL error [{key}]: {e}")
             return {}
