@@ -21,7 +21,6 @@ from ai_coach.utils.parsers import (
     extract_json,
     normalize_program_data,
 )
-from ai_coach.schemas import ProgramRequest, SubscriptionRequest
 from loguru import logger
 from core.cache import Cache
 from core.exceptions import ProgramNotFoundError
@@ -29,6 +28,7 @@ from core.schemas import Client
 from bot.utils.workout_plans import _next_payment_date
 from bot.utils.chat import send_program, send_message
 from bot.texts.text_manager import msg_text
+from datetime import date
 
 
 def extract_client_data(client: Client) -> str:
@@ -43,6 +43,36 @@ def extract_client_data(client: Client) -> str:
     }
     clean = {k: v for k, v in details.items() if v is not None}
     return json.dumps(clean, ensure_ascii=False)
+
+
+def describe_client(client: Client) -> str:
+    """Return natural language description of ``client``."""
+
+    today = date.today()
+    parts: list[str] = []
+    if client.name:
+        parts.append(f"Name: {client.name}")
+    if client.gender:
+        parts.append(f"Gender: {client.gender}")
+    if client.born_in:
+        try:
+            age = today.year - int(client.born_in)
+            parts.append(f"Age: {age}")
+        except ValueError:
+            pass
+    if client.weight:
+        parts.append(f"Weight: {client.weight} kg")
+    if client.workout_experience:
+        if client.workout_experience == "5+":
+            exp_text = "Training experience: 5 or more years (maximum option in the questionnaire)"
+        else:
+            exp_text = f"Training experience: {client.workout_experience} years"
+        parts.append(exp_text)
+    if client.workout_goals:
+        parts.append(f"Goals: {client.workout_goals}")
+    if client.health_notes:
+        parts.append(f"Health notes: {client.health_notes}")
+    return "; ".join(parts)
 
 
 async def assign_client(client: Client, lang: str) -> None:
@@ -67,8 +97,8 @@ def _normalise_program(raw: str) -> dict:
 async def generate_program(
     client: Client, lang: str, workout_type: str, wishes: str, state: FSMContext, bot: Bot
 ) -> None:
-    req = ProgramRequest(workout_type=workout_type, wishes=wishes)
-    client_profile = extract_client_data(client)
+    profile_description = describe_client(client)
+    today = date.today().isoformat()
     try:
         prev_program = await Cache.workout.get_latest_program(client.profile, use_fallback=False)
         previous_program = json.dumps([d.model_dump() for d in prev_program.exercises_by_day], ensure_ascii=False)
@@ -79,10 +109,12 @@ async def generate_program(
         SYSTEM_PROMPT
         + "\n\n"
         + PROGRAM_PROMPT.format(
-            client_profile=client_profile,
+            client_profile=profile_description,
             previous_program=previous_program,
-            request=req.model_dump_json(indent=2),
+            workout_type=workout_type,
+            wishes=wishes,
             language=lang,
+            current_date=today,
         )
     )
     program_raw = ""
@@ -153,22 +185,16 @@ async def generate_subscription(
     period: str,
     workout_days: list[str],
 ) -> None:
-    req = SubscriptionRequest(
-        workout_type=workout_type,
-        wishes=wishes,
-        period=period,
-        days=len(workout_days),
-        workout_days=workout_days,
-    )
     prompt = (
         SYSTEM_PROMPT
         + "\n\n"
         + SUBSCRIPTION_PROMPT.format(
-            request=req.model_dump_json(indent=2),
             language=lang,
             wishes=wishes,
             workout_days=", ".join(workout_days),
             workout_type=workout_type,
+            period=period,
+            days=len(workout_days),
         )
     )
     sub_raw = ""
