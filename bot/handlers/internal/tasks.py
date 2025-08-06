@@ -8,7 +8,7 @@ from bot.keyboards import workout_survey_kb
 from bot.texts.text_manager import msg_text
 from bot.utils.profiles import get_clients_to_survey
 from config.app_settings import settings
-from bot.utils.ai_parsers import parse_program_text, parse_program_json
+from bot.ai_coach.parsers import parse_program_text, parse_program_json
 from core.exceptions import SubscriptionNotFoundError
 from core.payment_processor import PaymentProcessor
 from core.cache import Cache
@@ -16,7 +16,7 @@ from core.enums import CoachType
 from bot.utils.chat import send_message
 from aiogram.enums import ParseMode
 from core.services import APIService
-from bot.utils.ai_services import process_workout_result
+from bot.ai_coach.services import process_workout_result
 from cognee.api.v1.prune import prune
 
 

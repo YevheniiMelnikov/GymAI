@@ -2,18 +2,10 @@ from __future__ import annotations
 
 import json
 import re
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 
 from core.schemas import DayExercises, Exercise
-
-
-class ProgramResponse(BaseModel):
-    days: list[DayExercises]
-
-
-class SubscriptionResponse(BaseModel):
-    workout_days: list[str]
-    exercises: list[DayExercises]
+from .schemas import ProgramResponse, SubscriptionResponse
 
 
 def parse_program_text(program_text: str) -> tuple[list[DayExercises], int]:
