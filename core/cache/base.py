@@ -5,7 +5,6 @@ from typing import Any, ClassVar
 
 from loguru import logger
 from redis.asyncio import Redis
-from redis.asyncio import from_url
 from redis.exceptions import RedisError
 
 from config.app_settings import settings
@@ -17,7 +16,7 @@ class BaseCacheManager:
     @classmethod
     def _client(cls) -> Redis:
         if cls._redis is None:
-            cls._redis = from_url(
+            cls._redis = Redis.from_url(
                 settings.REDIS_URL,
                 db=1,
                 encoding="utf-8",

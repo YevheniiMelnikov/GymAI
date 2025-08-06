@@ -14,7 +14,8 @@ class HashStore:
     """Persist SHA256 hashes for deduplication."""
 
     redis: Redis = Redis.from_url(
-        f"{settings.REDIS_URL}/2",
+        settings.REDIS_URL,
+        db=2,
         encoding="utf-8",
         decode_responses=True,
     )
