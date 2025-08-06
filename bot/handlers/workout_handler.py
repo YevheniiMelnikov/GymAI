@@ -63,7 +63,7 @@ async def program_type(callback_query: CallbackQuery, state: FSMContext):
         await show_my_program_menu(callback_query, profile, state)
     elif callback_query.data == "contact":
         try:
-            client = await Cache.client.get_client(profile.id)
+            client = await Cache.CLIENT.get_client(profile.id)
         except Exception:
             await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
             return
@@ -331,7 +331,7 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext,
         await callback_query.answer()
         await callback_query.answer(msg_text("keep_going", profile.language), show_alert=True)
 
-        client = await Cache.client.get_client(profile.id)
+        client = await Cache.CLIENT.get_client(profile.id)
         coach = await get_assigned_coach(client, coach_type=CoachType.human)
         assert coach is not None
         coach_profile = await APIService.profile.get_profile(coach.profile)
@@ -356,7 +356,7 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext,
 async def workout_description(message: Message, state: FSMContext, bot: Bot):
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
-    client = await Cache.client.get_client(profile.id)
+    client = await Cache.CLIENT.get_client(profile.id)
     coach = await get_assigned_coach(client, coach_type=CoachType.human)
     assert coach is not None
     coach_profile = Profile.model_validate(coach.profile_data)
@@ -463,7 +463,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
 
     elif callback_query.data == "finish_editing":
         await callback_query.answer(btn_text("done", profile.language))
-        client = await Cache.client.get_client(profile_id)
+        client = await Cache.CLIENT.get_client(profile_id)
         client_profile = await APIService.profile.get_profile(client.profile)
         client_lang = cast(str, client_profile.language)
 
@@ -505,7 +505,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
                 include_incoming_message=False,
             )
 
-        await Cache.client.update_client(client.profile, dict(status=ClientStatus.default))
+        await Cache.CLIENT.update_client(client.profile, dict(status=ClientStatus.default))
         message = cast(Message, callback_query.message)
         assert message is not None
         await show_main_menu(message, profile, state)

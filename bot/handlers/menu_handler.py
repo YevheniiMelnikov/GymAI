@@ -139,7 +139,7 @@ async def services_menu(callback_query: CallbackQuery, state: FSMContext, bot: B
         if not coach:
             await callback_query.answer(msg_text("no_coaches", profile.language), show_alert=True)
             return
-        client = await Cache.client.get_client(profile.id)
+        client = await Cache.CLIENT.get_client(profile.id)
         await state.update_data(ai_coach=coach.model_dump(mode="json"), client=client.model_dump())
         await show_ai_services(callback_query, profile, state)
         return
@@ -238,7 +238,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
         return
 
     await ProfileService.adjust_client_credits(profile.id, -required)
-    await Cache.client.update_client(client.profile, {"credits": client.credits - required})
+    await Cache.CLIENT.update_client(client.profile, {"credits": client.credits - required})
     await answer_msg(callback_query, msg_text("request_in_progress", profile.language))
     await show_main_menu(callback_query.message, profile, state)
     bot = cast(Bot, callback_query.bot)
@@ -368,7 +368,7 @@ async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext, bo
             await callback_query.answer(msg_text("no_coaches", profile.language), show_alert=True)
             return
         try:
-            client = await Cache.client.get_client(profile.id)
+            client = await Cache.CLIENT.get_client(profile.id)
         except ClientNotFoundError:
             await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
             await del_msg(message)
@@ -382,7 +382,7 @@ async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext, bo
             return
 
         try:
-            client = await Cache.client.get_client(profile.id)
+            client = await Cache.CLIENT.get_client(profile.id)
         except ClientNotFoundError:
             client = None
 
@@ -456,7 +456,7 @@ async def paginate_coaches(cbq: CallbackQuery, state: FSMContext, bot: Bot) -> N
             return
 
         try:
-            client = await Cache.client.get_client(profile.id)
+            client = await Cache.CLIENT.get_client(profile.id)
         except ClientNotFoundError:
             logger.warning("Client not found for profile_id %s", profile.id)
             await message.answer(msg_text("unexpected_error", profile.language))
@@ -545,7 +545,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
     cb_data = callback_query.data or ""
 
     try:
-        client = await Cache.client.get_client(profile.id)
+        client = await Cache.CLIENT.get_client(profile.id)
     except ClientNotFoundError:
         logger.warning(f"Client not found for profile_id {profile.id}")
         await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)

@@ -11,5 +11,5 @@ class DataKind(str, Enum):
 class MessageRole(str, Enum):
     """Role of a chat message."""
 
-    USER = "user"
-    BOT = "bot"
+    CLIENT = "client"
+    AI_COACH = "ai_coach"

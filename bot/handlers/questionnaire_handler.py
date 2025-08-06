@@ -509,7 +509,7 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
         return
 
     # Regular coach flow
-    client = await Cache.client.get_client(profile.id)
+    client = await Cache.CLIENT.get_client(profile.id)
 
     if not client or not client.assigned_to:
         return
@@ -572,7 +572,7 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
     lang = profile.language or settings.DEFAULT_LANG
 
     try:
-        client = await Cache.client.get_client(profile.id)
+        client = await Cache.CLIENT.get_client(profile.id)
     except ClientNotFoundError:
         logger.error(f"Client profile not found for profile {profile.id}")
         await callback_query.answer(msg_text("unexpected_error", lang))

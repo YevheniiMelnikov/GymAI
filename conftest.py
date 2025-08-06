@@ -39,26 +39,41 @@ discovery_mod = types.ModuleType("googleapiclient.discovery")
 discovery_mod.build = lambda *a, **k: types.SimpleNamespace(files=lambda: None)
 sys.modules.setdefault("googleapiclient.discovery", discovery_mod)
 http_mod = types.ModuleType("googleapiclient.http")
+
+
 class DummyDownloader:
     def __init__(self, *a, **k):
         pass
+
     def next_chunk(self):
         return None, True
+
+
 http_mod.MediaIoBaseDownload = DummyDownloader
 sys.modules.setdefault("googleapiclient.http", http_mod)
 docx_mod = types.ModuleType("docx")
+
+
 class DummyDoc:
     paragraphs = []
+
+
 docx_mod.Document = lambda *a, **k: DummyDoc()
 sys.modules.setdefault("docx", docx_mod)
 fitz_mod = types.ModuleType("fitz")
+
+
 class DummyPDF:
     def __enter__(self):
         return self
+
     def __exit__(self, exc_type, exc, tb):
         pass
+
     def __iter__(self):
         return iter([])
+
+
 fitz_mod.open = lambda *a, **k: DummyPDF()
 sys.modules.setdefault("fitz", fitz_mod)
 sys.modules.setdefault("cognee.base_config", types.ModuleType("cognee.base_config"))
@@ -108,11 +123,16 @@ sys.modules.setdefault("sqlalchemy", sqlalchemy_mod)
 sys.modules.setdefault("sqlalchemy.schema", sqlalchemy_mod.schema)
 sys.modules.setdefault("sqlalchemy.exc", sqlalchemy_mod.exc)
 redis_async_mod = types.ModuleType("redis.asyncio")
+
+
 class DummyRedis:
     async def sadd(self, *a, **k):
         pass
+
     async def sismember(self, *a, **k):
         return False
+
+
 redis_async_mod.Redis = type("Redis", (), {"from_url": lambda *a, **k: DummyRedis()})
 sys.modules.setdefault("redis.asyncio", redis_async_mod)
 

@@ -118,7 +118,7 @@ class CogneeConfig:
             return await embedding(
                 texts,
                 model=settings.EMBEDDING_MODEL,
-                api_key=settings.OPENAI_API_KEY,
+                api_key=settings.EMBEDDING_API_KEY,
                 base_url=settings.OPENAI_BASE_URL,
             )
 

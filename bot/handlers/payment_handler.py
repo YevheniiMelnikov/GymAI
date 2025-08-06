@@ -39,8 +39,8 @@ async def get_the_gift(callback_query: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     await callback_query.answer(btn_text("done", profile.language))
-    client = await Cache.client.get_client(profile.id)
-    await Cache.client.update_client(client.profile, dict(status=ClientStatus.waiting_for_text))
+    client = await Cache.CLIENT.get_client(profile.id)
+    await Cache.CLIENT.update_client(client.profile, dict(status=ClientStatus.waiting_for_text))
     await answer_msg(
         msg_obj=callback_query,
         text=msg_text("workout_type", profile.language),
@@ -77,7 +77,7 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
     option = parts[1]
 
     try:
-        client = await Cache.client.get_client(profile.id)
+        client = await Cache.CLIENT.get_client(profile.id)
         if not client.assigned_to:
             await callback_query.answer(msg_text("client_not_assigned_to_coach", profile.language), show_alert=True)
             return
@@ -130,7 +130,7 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
         return
 
     try:
-        client = await Cache.client.get_client(profile.id)
+        client = await Cache.CLIENT.get_client(profile.id)
         if not client.assigned_to:
             await callback_query.answer(
                 msg_text("client_not_assigned_to_coach", profile.language),
@@ -218,7 +218,7 @@ async def confirm_service(callback_query: CallbackQuery, state: FSMContext) -> N
         required = int(data.get("required", 0))
         wishes = data.get("wishes", "")
         await ProfileService.adjust_client_credits(profile.id, -required)
-        await Cache.client.update_client(client.profile, {"credits": client.credits - required})
+        await Cache.CLIENT.update_client(client.profile, {"credits": client.credits - required})
         payout = (coach.program_price or Decimal("0")).quantize(Decimal("0.01"), ROUND_HALF_UP)
         await ProfileService.adjust_coach_payout_due(coach.profile, payout)
         new_due = (coach.payout_due or Decimal("0")) + payout

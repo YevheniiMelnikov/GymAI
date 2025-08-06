@@ -12,9 +12,7 @@ from loguru import logger
 coach_ready_event: asyncio.Event | None = None
 
 
-async def init_ai_coach(
-    ai_coach: type[BaseAICoach], knowledge_loader: KnowledgeLoader | None = None
-) -> None:
+async def init_ai_coach(ai_coach: type[BaseAICoach], knowledge_loader: KnowledgeLoader | None = None) -> None:
     """Initialize the AI coach and register it."""
     global coach_ready_event
     if coach_ready_event is None:

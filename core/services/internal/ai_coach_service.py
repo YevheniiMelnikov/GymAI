@@ -30,9 +30,7 @@ class AiCoachService(APIClient):
             language=language.value if isinstance(language, Enum) else language,
         )
 
-        status, data = await cls._api_request(
-            "post", url, request.model_dump(), timeout=settings.AI_COACH_TIMEOUT
-        )
+        status, data = await cls._api_request("post", url, request.model_dump(), timeout=settings.AI_COACH_TIMEOUT)
         if status == 200 and isinstance(data, list):
             return data
         if status == 200 and isinstance(data, dict):
@@ -47,9 +45,7 @@ class AiCoachService(APIClient):
         await cls._api_request("post", url, request.model_dump())
 
     @classmethod
-    async def get_client_knowledge(
-        cls, client_id: int, query: str
-    ) -> dict[str, list[str]]:
+    async def get_client_knowledge(cls, client_id: int, query: str) -> dict[str, list[str]]:
         url = urljoin(cls.base_url, f"knowledge/?client_id={client_id}&query={query}")
         status, data = await cls._api_request("get", url)
         if status == 200 and isinstance(data, dict):
@@ -67,8 +63,6 @@ class AiCoachService(APIClient):
             f"{settings.AI_COACH_REFRESH_USER}:{settings.AI_COACH_REFRESH_PASSWORD}".encode()
         ).decode()
         headers = {"Authorization": f"Basic {token}"}
-        status, _ = await cls._api_request(
-            "post", url, headers=headers, timeout=settings.AI_COACH_TIMEOUT
-        )
+        status, _ = await cls._api_request("post", url, headers=headers, timeout=settings.AI_COACH_TIMEOUT)
         if status != 200:
             logger.error(f"Knowledge refresh failed HTTP={status}")

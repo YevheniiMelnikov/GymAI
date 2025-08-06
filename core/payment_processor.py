@@ -31,7 +31,7 @@ class PaymentProcessor:
             logger.info(f"Payment {payment.id} already processed")
             return
         try:
-            client = await cls.cache.client.get_client(payment.client_profile)
+            client = await cls.cache.CLIENT.get_client(payment.client_profile)
             if payment.status == PaymentStatus.SUCCESS:
                 await cls.cache.payment.set_status(client.id, payment.payment_type, PaymentStatus.SUCCESS)
                 profile = await cls.profile_service.get_profile(client.profile)
@@ -60,7 +60,7 @@ class PaymentProcessor:
     @classmethod
     async def _process_payout(cls, payment: Payment) -> list[str] | None:
         try:
-            client = await cls.cache.client.get_client(payment.client_profile)
+            client = await cls.cache.CLIENT.get_client(payment.client_profile)
             if not client or not client.assigned_to:
                 logger.warning(f"Skip payment {payment.order_id}: client/coach missing")
                 return None
@@ -95,7 +95,7 @@ class PaymentProcessor:
         if credits is None:
             credits = uah_to_credits(amount, apply_markup=False)
         await cls.profile_service.adjust_client_credits(client.profile, credits)
-        await cls.cache.client.update_client(client.profile, {"credits": client.credits + credits})
+        await cls.cache.CLIENT.update_client(client.profile, {"credits": client.credits + credits})
 
     @classmethod
     async def handle_webhook_event(cls, order_id: str, status_: str, error: str = "") -> None:

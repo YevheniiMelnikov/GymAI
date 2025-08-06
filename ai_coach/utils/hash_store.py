@@ -36,8 +36,6 @@ class HashStore:
         try:
             key = cls._key(dataset)
             await cls.redis.sadd(key, hash_value)
-            await cls.redis.expire(
-                key, settings.BACKUP_RETENTION_DAYS * 24 * 60 * 60
-            )
+            await cls.redis.expire(key, settings.BACKUP_RETENTION_DAYS * 24 * 60 * 60)
         except Exception as e:  # pragma: no cover - best effort
             logger.error(f"HashStore.add error {dataset}: {e}")

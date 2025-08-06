@@ -40,7 +40,7 @@ async def contact_client(message: Message, state: FSMContext, bot: Bot) -> None:
         logger.error("Recipient ID is None in contact_client handler")
         await answer_msg(message, "Internal error: recipient not specified.")
         return
-    client = await Cache.client.get_client(recipient_id)
+    client = await Cache.CLIENT.get_client(recipient_id)
     assert client is not None
     client_profile = await APIService.profile.get_profile(client.profile)
     assert client_profile is not None
@@ -48,7 +48,7 @@ async def contact_client(message: Message, state: FSMContext, bot: Bot) -> None:
     assert coach is not None
 
     if client.status == ClientStatus.waiting_for_text:
-        await Cache.client.update_client(client.profile, {"status": ClientStatus.default})
+        await Cache.CLIENT.update_client(client.profile, {"status": ClientStatus.default})
 
     await state.update_data(sender_name=coach.name, recipient_language=client_profile.language)
 
@@ -86,7 +86,7 @@ async def contact_coach(message: Message, state: FSMContext, bot: Bot) -> None:
     assert coach is not None
     coach_profile = await APIService.profile.get_profile(coach.profile)
     assert coach_profile is not None
-    client = await Cache.client.get_client(profile.id)
+    client = await Cache.CLIENT.get_client(profile.id)
     assert client is not None
 
     await state.update_data(sender_name=client.name, recipient_language=coach_profile.language)
@@ -218,14 +218,14 @@ async def answer_message(callback_query: CallbackQuery, state: FSMContext) -> No
         return
 
     if profile.role == "client":
-        sender = await Cache.client.get_client(profile.id)
+        sender = await Cache.CLIENT.get_client(profile.id)
         state_to_set = States.contact_coach
     else:
         sender = await Cache.coach.get_coach(profile.id)
         state_to_set = States.contact_client
-        client = await Cache.client.get_client(recipient_id)
+        client = await Cache.CLIENT.get_client(recipient_id)
         if client and client.status == ClientStatus.waiting_for_text:
-            await Cache.client.update_client(client.profile, {"status": ClientStatus.default})
+            await Cache.CLIENT.update_client(client.profile, {"status": ClientStatus.default})
 
     assert sender is not None
 
@@ -244,7 +244,7 @@ async def navigate_days(callback_query: CallbackQuery, state: FSMContext) -> Non
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     assert profile is not None
-    client = await Cache.client.get_client(profile.id)
+    client = await Cache.CLIENT.get_client(profile.id)
     program = await Cache.workout.get_latest_program(client.profile)
 
     if data.get("subscription"):

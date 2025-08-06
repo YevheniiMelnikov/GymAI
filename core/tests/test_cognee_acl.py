@@ -29,6 +29,7 @@ def test_case_success_create_and_search(monkeypatch):
         monkeypatch.setattr(coach.cognee, "add", fake_add)
         monkeypatch.setattr(coach.cognee, "cognify", fake_cognify)
         monkeypatch.setattr(coach.cognee, "search", fake_search)
+
         async def fake_contains(*a, **k):
             return False
 
@@ -40,7 +41,7 @@ def test_case_success_create_and_search(monkeypatch):
 
         await coach.CogneeCoach.save_prompt("hi", client_id=1)
         await asyncio.sleep(0)
-        await coach.CogneeCoach.reindex(1, kind=coach.DataKind.PROMPT)
+        await coach.CogneeCoach.refresh_client_knowledge(1, data_kind=coach.DataKind.PROMPT)
         await coach.CogneeCoach.make_request("hi", client_id=1)
 
         assert calls["dataset_name"] == "client_1_prompt"
@@ -65,6 +66,7 @@ def test_case_conflict_existing_dataset(monkeypatch):
         monkeypatch.setattr(coach.cognee, "add", fake_add)
         monkeypatch.setattr(coach.cognee, "cognify", lambda datasets, user=None: None)
         monkeypatch.setattr(coach.cognee, "search", lambda *a, **k: [])
+
         async def fake_contains(*a, **k):
             return False
 

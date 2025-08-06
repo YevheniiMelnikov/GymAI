@@ -50,7 +50,7 @@ async def internal_send_payment_message(request: web.Request) -> web.Response:
     bot: Bot = request.app["bot"]
 
     try:
-        client = await Cache.client.get_client(int(client_profile_id))
+        client = await Cache.CLIENT.get_client(int(client_profile_id))
         if not client:
             return web.json_response({"detail": "Client not found"}, status=404)
         await send_message(
@@ -86,7 +86,7 @@ async def internal_client_request(request: web.Request) -> web.Response:
 
     try:
         coach = await Cache.coach.get_coach(int(coach_profile_id))
-        client = await Cache.client.get_client(int(client_profile_id))
+        client = await Cache.CLIENT.get_client(int(client_profile_id))
         if not coach or not client:
             return web.json_response({"detail": "Coach or client not found"}, status=404)
         await client_request(coach=coach, client=client, data=data, bot=bot)

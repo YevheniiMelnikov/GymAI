@@ -45,9 +45,9 @@ async def send_message(
             lang = None
         _: Client | None = None
         if sender_id is not None:
-            await APIService.ai_coach.save_user_message(text, client_id=sender_id)
+            await APIService.ai_coach.save_client_message(text, client_id=sender_id)
             try:
-                _ = await Cache.client.get_client(sender_id)
+                _ = await Cache.CLIENT.get_client(sender_id)
             except Exception:
                 pass
         if lang is None and sender_id is not None:

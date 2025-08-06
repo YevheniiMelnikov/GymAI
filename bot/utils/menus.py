@@ -50,7 +50,7 @@ async def has_active_human_subscription(client_id: int) -> bool:
         return False
 
     try:
-        client = await Cache.client.get_client(client_id)
+        client = await Cache.CLIENT.get_client(client_id)
         if not client.assigned_to:
             return False
         coach = await get_assigned_coach(client, coach_type=CoachType.human)
@@ -95,7 +95,7 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
 
     if profile.role == "client":
         try:
-            user_profile = await Cache.client.get_client(profile.id)
+            user_profile = await Cache.CLIENT.get_client(profile.id)
             reply_markup = kb.edit_client_profile_kb(profile.language)
         except ClientNotFoundError:
             logger.info(f"Client data not found for profile {profile.id} during profile editing setup.")
@@ -155,7 +155,7 @@ async def show_services_menu(callback_query: CallbackQuery, profile: Profile, st
 
 async def show_balance_menu(callback_obj: CallbackQuery | Message, profile: Profile, state: FSMContext) -> None:
     lang = cast(str, profile.language)
-    client = await Cache.client.get_client(profile.id)
+    client = await Cache.CLIENT.get_client(profile.id)
     plans = [p.name for p in available_packages()]
     file_path = Path(settings.BOT_PAYMENT_OPTIONS) / f"credit_packages_{lang}.png"
     packages_img = FSInputFile(file_path)
@@ -324,7 +324,7 @@ async def show_my_clients_menu(callback_query: CallbackQuery, profile: Profile, 
         clients: list[Client] = []
         for cid in assigned_ids:
             try:
-                client = await Cache.client.get_client(cid)
+                client = await Cache.CLIENT.get_client(cid)
                 clients.append(client)
             except ClientNotFoundError:
                 logger.warning(f"Client data not found for ID {cid} while listing coach's clients. Skipping.")
@@ -348,7 +348,7 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
     lang = cast(str, profile.language)
 
     try:
-        client = await Cache.client.get_client(profile.id)
+        client = await Cache.CLIENT.get_client(profile.id)
     except ClientNotFoundError:
         logger.error(f"Client data not found for profile {profile.id} in show_my_workouts_menu.")
         await callback_query.answer(msg_text("questionnaire_not_completed", lang), show_alert=True)
@@ -393,7 +393,7 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
     if not subscription or not subscription.enabled:
         file_path = Path(settings.BOT_PAYMENT_OPTIONS) / f"subscription_{language}.jpeg"
         subscription_img = FSInputFile(file_path)
-        client_profile = await Cache.client.get_client(profile.id)
+        client_profile = await Cache.CLIENT.get_client(profile.id)
         if not client_profile.assigned_to:
             await callback_query.answer(msg_text("client_not_assigned_to_coach", language), show_alert=True)
             return
@@ -427,7 +427,7 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
 async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     message = cast(Message, callback_query.message)
     assert message
-    client = await Cache.client.get_client(profile.id)
+    client = await Cache.CLIENT.get_client(profile.id)
 
     try:
         program = await Cache.workout.get_latest_program(client.profile)
@@ -452,7 +452,7 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
 
 
 async def show_program_promo_page(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    client_profile = await Cache.client.get_client(profile.id)
+    client_profile = await Cache.CLIENT.get_client(profile.id)
     language = cast(str, profile.language)
 
     if not client_profile.assigned_to:
@@ -483,7 +483,7 @@ async def show_program_promo_page(callback_query: CallbackQuery, profile: Profil
 
 async def show_ai_services(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     language = cast(str, profile.language)
-    client = await Cache.client.get_client(profile.id)
+    client = await Cache.CLIENT.get_client(profile.id)
     if client.status == ClientStatus.initial:
         await callback_query.answer(msg_text("finish_registration_to_get_credits", language), show_alert=True)
     else:

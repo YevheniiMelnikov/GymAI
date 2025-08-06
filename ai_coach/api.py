@@ -32,7 +32,7 @@ class AskRequest(BaseModel):
 @app.post("/ask/", response_model=list[str] | None)
 async def ask(data: AskRequest) -> list[str] | None:
     responses = await CogneeCoach.make_request(data.prompt, client_id=data.client_id)
-    await CogneeCoach.save_user_message(data.prompt, client_id=data.client_id)
+    await CogneeCoach.save_client_message(data.prompt, client_id=data.client_id)
     await CogneeCoach.save_prompt(data.prompt, client_id=data.client_id)
     if responses:
         for r in responses:
@@ -48,13 +48,13 @@ class MessageRequest(BaseModel):
 
 @app.post("/messages/")
 async def save_message(data: MessageRequest) -> dict[str, str]:
-    await CogneeCoach.save_user_message(data.text, client_id=data.client_id)
+    await CogneeCoach.save_client_message(data.text, client_id=data.client_id)
     return {"status": "ok"}
 
 
 @app.get("/knowledge/")
 async def get_knowledge(client_id: int, query: str) -> dict[str, list[str]]:
-    return await CogneeCoach.get_client_knowledge(client_id, query)
+    return await CogneeCoach.get_client_context(client_id, query)
 
 
 @app.post("/knowledge/refresh/")

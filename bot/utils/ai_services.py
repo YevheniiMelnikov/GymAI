@@ -88,9 +88,7 @@ async def generate_program(
     program_raw = ""
     program_dto = None
     for _ in range(settings.AI_GENERATION_RETRIES):
-        response = await APIService.ai_coach.ask(
-            prompt, client_id=client.id, language=lang
-        )
+        response = await APIService.ai_coach.ask(prompt, client_id=client.id, language=lang)
         program_raw = response[0] if response else ""
         program_dto = parse_program_json(program_raw)
         if program_dto is not None:
@@ -176,9 +174,7 @@ async def generate_subscription(
     sub_raw = ""
     sub_dto = None
     for _ in range(settings.AI_GENERATION_RETRIES):
-        response = await APIService.ai_coach.ask(
-            prompt, client_id=client.id, language=lang
-        )
+        response = await APIService.ai_coach.ask(prompt, client_id=client.id, language=lang)
         sub_raw = response[0] if response else ""
         sub_dto = parse_subscription_json(sub_raw)
         if sub_dto is not None:
@@ -222,7 +218,7 @@ async def process_workout_result(
     """Return updated workout plan for ``client_id`` based on ``feedback``."""
 
     try:
-        ctx = await APIService.ai_coach.get_client_knowledge(client_id, "workout")
+        ctx = await APIService.ai_coach.get_client_context(client_id, "workout")
     except Exception:
         ctx = {"messages": [], "prompts": []}
 

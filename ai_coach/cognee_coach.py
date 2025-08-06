@@ -28,7 +28,6 @@ class CogneeCoach(BaseAICoach):
     AI Coach implementation using Cognee for context, memory, and knowledge management.
     """
 
-    _configured: bool = False
     _loader: Optional[KnowledgeLoader] = None
     _cognify_locks: LockCache = LockCache()
     _user: Optional[Any] = None
@@ -38,10 +37,10 @@ class CogneeCoach(BaseAICoach):
         """
         Initialize Cognee configuration, apply DB migrations and test connectivity.
         """
-        cls._ensure_config()
+        CogneeConfig.apply()
         cls._loader = knowledge_loader
+        cls._user = await cls._get_cognee_user()
         await cls.refresh_knowledge_base()
-        await cls._get_user()
 
         proc = await asyncio.create_subprocess_exec(
             sys.executable,
@@ -61,20 +60,13 @@ class CogneeCoach(BaseAICoach):
             logger.warning(f"Cognee ping failed: {e}")
 
     @classmethod
-    def _ensure_config(cls) -> None:
-        """Apply Cognee configuration once."""
-        if not cls._configured:
-            CogneeConfig.apply()
-            cls._configured = True
-
-    @classmethod
     async def refresh_knowledge_base(cls) -> None:
         """
         Reload external knowledge and rebuild Cognee index.
         """
-        cls._ensure_config()
         if cls._loader:
             await cls._loader.refresh()
+
         try:
             await cognee.cognify()
         except DatasetNotFoundError:
@@ -83,8 +75,10 @@ class CogneeCoach(BaseAICoach):
             logger.error(f"Permission denied while updating knowledge base: {e}")
 
     @classmethod
-    async def _get_user(cls) -> Any:
-        """Retrieve and cache the default Cognee user."""
+    async def _get_cognee_user(cls) -> Any:
+        """
+        Retrieve and cache the default Cognee user.
+        """
         if cls._user is None:
             try:
                 cls._user = await get_default_user()
@@ -93,13 +87,30 @@ class CogneeCoach(BaseAICoach):
                 cls._user = await get_default_user()
         return cls._user
 
+    @classmethod
+    async def make_request(cls, prompt: str, client_id: int) -> list[str]:
+        """
+        Perform a search in the client's prompt dataset without modifying or reindexing it.
+        """
+        user = await cls._get_cognee_user()
+        ds_name = cls._dataset_name(client_id, DataKind.PROMPT)
+
+        try:
+            return await cognee.search(prompt, datasets=[ds_name], user=user)
+        except (PermissionDeniedError, DatasetNotFoundError) as e:
+            logger.warning(f"Search issue for client {client_id}: {e}")
+        except Exception as e:  # pragma: no cover - best effort
+            logger.exception(
+                f"Unexpected error during client {client_id} request: {e}"
+            )
+        return []
+
     @staticmethod
-    async def _safe_add(text: str, dataset: str, user: Any) -> Tuple[str, bool]:
+    async def update_dataset(text: str, dataset: str, user: Any) -> Tuple[str, bool]:
         """
         Add text to dataset if not already present.
         Returns (dataset_id, was_created).
         """
-        logger.trace(f"_safe_add → dataset={dataset!r}")
         text = text.strip()
         if not text:
             return dataset, False
@@ -113,11 +124,13 @@ class CogneeCoach(BaseAICoach):
         return getattr(info, "dataset_id", dataset), True
 
     @classmethod
-    async def _cognify_dataset(cls, dataset_id: str, user: Any) -> None:
-        """Trigger index update for a dataset, with locking."""
-        lock = cls._cognify_locks.get(dataset_id)
+    async def _process_dataset(cls, dataset: str, user: Any) -> None:
+        """
+        Trigger index update for a dataset, with locking.
+        """
+        lock = cls._cognify_locks.get(dataset)
         async with lock:
-            await cognee.cognify(datasets=[dataset_id], user=user)
+            await cognee.cognify(datasets=[dataset], user=user)
 
     @staticmethod
     def _dataset_name(client_id: int, kind: DataKind) -> str:
@@ -129,86 +142,79 @@ class CogneeCoach(BaseAICoach):
         text: str,
         client_id: int,
         *,
-        kind: DataKind = DataKind.MESSAGE,
+        data_kind: DataKind = DataKind.MESSAGE,
         role: MessageRole | None = None,
     ) -> None:
-        """Persist a text entry to the client's dataset and trigger cognify."""
-        cls._ensure_config()
-        user = await cls._get_user()
-        ds_name = cls._dataset_name(client_id, kind)
-        if kind is DataKind.MESSAGE:
+        """
+        Persist a text entry to the client's dataset and trigger indexing if new.
+        """
+        user = await cls._get_cognee_user()
+        ds_name = cls._dataset_name(client_id, data_kind)
+        if data_kind is DataKind.MESSAGE:
             if role is None:
                 raise ValueError("role is required for message entries")
             text = f"{role.value}: {text}"
-        ds_id, created = await cls._safe_add(text, ds_name, user)
+        dataset, created = await cls.update_dataset(text, ds_name, user)
         if created:
-            asyncio.create_task(cls._cognify_dataset(ds_id, user))
+            asyncio.create_task(cls._process_dataset(dataset, user))
 
     @classmethod
-    async def save_user_message(cls, text: str, client_id: int) -> None:
+    async def refresh_client_knowledge(cls, client_id: int, data_kind: Any = None) -> None:
+        """
+        Manually force reindexing of a client's dataset.
+        """
+        data_kind = data_kind or DataKind.PROMPT
+        user = await cls._get_cognee_user()
+        dataset = cls._dataset_name(client_id, data_kind)
+        logger.info(f"Reindexing dataset {dataset}")
+        asyncio.create_task(cls._process_dataset(dataset, user))
+
+    @classmethod
+    async def save_client_message(cls, text: str, client_id: int) -> None:
+        """
+        Save a user message to the client's message dataset.
+        """
         await cls._update_client_knowledge(
-            text, client_id, kind=DataKind.MESSAGE, role=MessageRole.USER
+            text, client_id, data_kind=DataKind.MESSAGE, role=MessageRole.CLIENT
         )
 
     @classmethod
     async def save_ai_message(cls, text: str, client_id: int) -> None:
+        """
+        Save an AI message to the client's message dataset.
+        """
         await cls._update_client_knowledge(
-            text, client_id, kind=DataKind.MESSAGE, role=MessageRole.BOT
+            text, client_id, data_kind=DataKind.MESSAGE, role=MessageRole.AI_COACH
         )
 
     @classmethod
     async def save_prompt(cls, text: str, client_id: int) -> None:
-        await cls._update_client_knowledge(text, client_id, kind=DataKind.PROMPT)
+        """
+        Save a prompt to the client's prompt dataset.
+        """
+        await cls._update_client_knowledge(text, client_id, data_kind=DataKind.PROMPT)
 
     @classmethod
-    async def get_client_knowledge(
+    async def get_client_context(
         cls, client_id: int, query: str
     ) -> dict[str, list[str]]:
-        """Search client datasets for relevant context separated by kind."""
-        cls._ensure_config()
-        user = await cls._get_user()
-        msg_ds = cls._dataset_name(client_id, DataKind.MESSAGE)
-        prompt_ds = cls._dataset_name(client_id, DataKind.PROMPT)
-        messages: list[str] = []
-        prompts: list[str] = []
-        try:
-            messages = await cognee.search(query, datasets=[msg_ds], top_k=5, user=user)
-        except DatasetNotFoundError:
-            messages = []
-        except Exception as e:  # pragma: no cover - best effort
-            logger.error(f"get_client_knowledge messages failed: {e}")
-        try:
-            prompts = await cognee.search(query, datasets=[prompt_ds], top_k=5, user=user)
-        except DatasetNotFoundError:
-            prompts = []
-        except Exception as e:  # pragma: no cover - best effort
-            logger.error(f"get_client_knowledge prompts failed: {e}")
-        return {"messages": messages, "prompts": prompts}
+        """
+        Search client datasets (message and prompt) for relevant context.
+        """
+        user = await cls._get_cognee_user()
+        datasets = {
+            "messages": cls._dataset_name(client_id, DataKind.MESSAGE),
+            "prompts": cls._dataset_name(client_id, DataKind.PROMPT),
+        }
+        results: dict[str, list[str]] = {}
 
-    @classmethod
-    async def make_request(cls, prompt: str, client_id: int) -> list[str]:
-        """Search a client's prompt dataset without modifying it."""
-        cls._ensure_config()
-        user = await cls._get_user()
-        ds_name = f"client_{client_id}_prompt"
+        for kind, ds_name in datasets.items():
+            try:
+                results[kind] = await cognee.search(query, datasets=[ds_name], top_k=5, user=user)
+            except DatasetNotFoundError:
+                results[kind] = []
+            except Exception as e:  # pragma: no cover - best effort
+                logger.error(f"get_client_context failed on {kind}: {e}")
+                results[kind] = []
 
-        try:
-            return await cognee.search(prompt, datasets=[ds_name], user=user)
-        except (PermissionDeniedError, DatasetNotFoundError) as e:
-            logger.warning(f"Search issue for client {client_id}: {e}")
-        except Exception as e:  # pragma: no cover - best effort
-            logger.exception(
-                f"Unexpected error during client {client_id} request: {e}"
-            )
-        return []
-
-    @classmethod
-    async def reindex(
-        cls, client_id: int, kind: DataKind = DataKind.MESSAGE
-    ) -> None:
-        """Force reindex of a client's dataset."""
-        cls._ensure_config()
-        user = await cls._get_user()
-        ds_name = f"client_{client_id}_{kind.value}"
-        logger.info(f"Reindexing dataset {ds_name}")
-        await cls._cognify_dataset(ds_name, user)
+        return results
