@@ -4,8 +4,8 @@ import json
 import re
 from pydantic import ValidationError
 
-from core.schemas import DayExercises, Exercise, Client
-from ai_coach.schemas import ProgramResponse, SubscriptionResponse
+from core.schemas import DayExercises, Exercise
+from .schemas import ProgramResponse, SubscriptionResponse
 
 
 def parse_program_text(program_text: str) -> tuple[list[DayExercises], int]:
@@ -13,11 +13,10 @@ def parse_program_text(program_text: str) -> tuple[list[DayExercises], int]:
     days: list[DayExercises] = []
     if not program_text:
         return days, 0
-    # Split by "Day X" headings
     pattern = re.compile(r"day\s*(\d+)[:.-]?", re.IGNORECASE)
     sections = pattern.split(program_text)
     iterator = iter(sections)
-    next(iterator, None)  # discard text before first day
+    next(iterator, None)
     for day_num, section in zip(iterator, iterator):
         exercises: list[Exercise] = []
         for line in section.splitlines():
@@ -25,7 +24,6 @@ def parse_program_text(program_text: str) -> tuple[list[DayExercises], int]:
             if not line:
                 continue
             exercises.append(Exercise(name=line, sets="", reps=""))
-        # normalize day numbering to start from zero
         try:
             day_index = str(int(day_num) - 1)
         except ValueError:
@@ -96,19 +94,3 @@ def parse_subscription_json(subscription_json: str) -> SubscriptionResponse | No
         return SubscriptionResponse.model_validate(data)
     except (json.JSONDecodeError, ValidationError):
         return None
-
-
-def extract_client_data(client: Client) -> str:
-    """Return JSON representation of ``client`` profile details."""
-
-    details = {
-        "name": client.name,
-        "gender": client.gender,
-        "born_in": client.born_in,
-        "weight": client.weight,
-        "health_notes": client.health_notes,
-        "workout_experience": client.workout_experience,
-        "workout_goals": client.workout_goals,
-    }
-    clean = {k: v for k, v in details.items() if v is not None}
-    return json.dumps(clean, ensure_ascii=False)

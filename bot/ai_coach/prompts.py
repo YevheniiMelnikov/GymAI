@@ -1,8 +1,11 @@
-from importlib import resources
+from pathlib import Path
+
+
+TEMPLATES_DIR = Path(__file__).with_name("prompt_templates")
 
 
 def _load_template(name: str) -> str:
-    return resources.files("ai_coach.prompt_templates").joinpath(name).read_text(encoding="utf-8")
+    return (TEMPLATES_DIR / name).read_text(encoding="utf-8")
 
 
 SYSTEM_PROMPT = _load_template("system_prompt.txt")

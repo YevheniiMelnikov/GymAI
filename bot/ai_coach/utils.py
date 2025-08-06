@@ -2,12 +2,13 @@ from decimal import Decimal
 import json
 from aiogram import Bot
 from aiogram.fsm.context import FSMContext
+from typing import Callable, Optional, TypeVar
 
 from bot.states import States
 
 from core.services.internal import APIService
 from config.app_settings import settings
-from ai_coach.prompts import (
+from .prompts import (
     WORKOUT_PLAN_PROMPT,
     PROGRAM_RESPONSE_TEMPLATE,
     SUBSCRIPTION_RESPONSE_TEMPLATE,
@@ -16,7 +17,7 @@ from ai_coach.prompts import (
     UPDATE_WORKOUT_PROMPT,
     INITIAL_PROMPT,
 )
-from ai_coach.utils.parsers import (
+from .parsers import (
     parse_program_text,
     parse_program_json,
     parse_subscription_json,
@@ -31,6 +32,8 @@ from bot.utils.workout_plans import _next_payment_date
 from bot.utils.chat import send_program, send_message
 from bot.texts.text_manager import msg_text
 from datetime import date
+
+T = TypeVar("T")
 
 
 def extract_client_data(client: Client) -> str:
@@ -96,11 +99,43 @@ def _normalise_program(raw: str) -> dict:
     return data
 
 
+async def _generate_workout(
+    client: Client,
+    lang: str,
+    request_context: str,
+    response_template: str,
+    parser: Callable[[str], Optional[T]],
+) -> tuple[str, Optional[T]]:
+    """Request workout plan from AI and parse result."""
+
+    profile_description = describe_client(client)
+    today = date.today().isoformat()
+    prompt = (
+        SYSTEM_PROMPT
+        + "\n\n"
+        + WORKOUT_PLAN_PROMPT.format(
+            client_profile=profile_description,
+            request_context=request_context,
+            language=lang,
+            current_date=today,
+            workout_rules=WORKOUT_RULES,
+            response_template=response_template,
+        )
+    )
+    raw = ""
+    dto: Optional[T] = None
+    for _ in range(settings.AI_GENERATION_RETRIES):
+        response = await APIService.ai_coach.ask(prompt, client_id=client.id, language=lang)
+        raw = response[0] if response else ""
+        dto = parser(raw)
+        if dto is not None:
+            break
+    return raw, dto
+
+
 async def generate_program(
     client: Client, lang: str, workout_type: str, wishes: str, state: FSMContext, bot: Bot
 ) -> None:
-    profile_description = describe_client(client)
-    today = date.today().isoformat()
     try:
         prev_program = await Cache.workout.get_latest_program(client.profile, use_fallback=False)
         previous_program = json.dumps([d.model_dump() for d in prev_program.exercises_by_day], ensure_ascii=False)
@@ -112,26 +147,13 @@ async def generate_program(
         f"The client requests a {workout_type} program. Additional wishes: {wishes}."
     )
 
-    prompt = (
-        SYSTEM_PROMPT
-        + "\n\n"
-        + WORKOUT_PLAN_PROMPT.format(
-            client_profile=profile_description,
-            request_context=request_context,
-            language=lang,
-            current_date=today,
-            workout_rules=WORKOUT_RULES,
-            response_template=PROGRAM_RESPONSE_TEMPLATE,
-        )
+    program_raw, program_dto = await _generate_workout(
+        client,
+        lang,
+        request_context,
+        PROGRAM_RESPONSE_TEMPLATE,
+        parse_program_json,
     )
-    program_raw = ""
-    program_dto = None
-    for _ in range(settings.AI_GENERATION_RETRIES):
-        response = await APIService.ai_coach.ask(prompt, client_id=client.id, language=lang)
-        program_raw = response[0] if response else ""
-        program_dto = parse_program_json(program_raw)
-        if program_dto is not None:
-            break
     if program_dto is not None:
         exercises = program_dto.days
         split_number = len(exercises)
@@ -192,34 +214,19 @@ async def generate_subscription(
     period: str,
     workout_days: list[str],
 ) -> None:
-    profile_description = describe_client(client)
-    today = date.today().isoformat()
     request_context = (
         f"The client requests a {workout_type} program for a {period} subscription.\n"
         f"Wishes: {wishes}.\n"
         f"Preferred workout days: {', '.join(workout_days)} (total {len(workout_days)} days per week)."
     )
 
-    prompt = (
-        SYSTEM_PROMPT
-        + "\n\n"
-        + WORKOUT_PLAN_PROMPT.format(
-            client_profile=profile_description,
-            request_context=request_context,
-            language=lang,
-            current_date=today,
-            workout_rules=WORKOUT_RULES,
-            response_template=SUBSCRIPTION_RESPONSE_TEMPLATE,
-        )
+    sub_raw, sub_dto = await _generate_workout(
+        client,
+        lang,
+        request_context,
+        SUBSCRIPTION_RESPONSE_TEMPLATE,
+        parse_subscription_json,
     )
-    sub_raw = ""
-    sub_dto = None
-    for _ in range(settings.AI_GENERATION_RETRIES):
-        response = await APIService.ai_coach.ask(prompt, client_id=client.id, language=lang)
-        sub_raw = response[0] if response else ""
-        sub_dto = parse_subscription_json(sub_raw)
-        if sub_dto is not None:
-            break
     exercises = sub_dto.exercises if sub_dto is not None else []
     sub_id = await APIService.workout.create_subscription(
         client_profile_id=client.id,

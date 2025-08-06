@@ -20,7 +20,7 @@ from bot.keyboards import (
 from bot.states import States
 from bot.texts.text_manager import msg_text
 from config.app_settings import settings
-from bot.utils.ai_services import assign_client
+from bot.ai_coach.utils import assign_client
 from core.cache import Cache
 from core.enums import CoachType
 from core.schemas import Coach, Client, Profile
@@ -48,7 +48,7 @@ from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
 from core.services import APIService, ProfileService
 from bot.keyboards import payment_kb
 from bot.utils.credits import available_packages
-from bot.utils.ai_services import generate_subscription, generate_program
+from bot.ai_coach.utils import generate_subscription, generate_program
 from bot.utils.credits import available_ai_services
 
 menu_router = Router()
