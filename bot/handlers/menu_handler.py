@@ -9,7 +9,6 @@ from contextlib import suppress
 from typing import cast
 from loguru import logger
 
-from ai_coach import get_ai_coach
 from bot.keyboards import (
     select_workout_kb,
     choose_coach_kb,
@@ -137,7 +136,7 @@ async def services_menu(callback_query: CallbackQuery, state: FSMContext, bot: B
         return
 
     if cb_data == "ai_coach":
-        coach = await get_ai_coach()
+        coach = await Cache.coach.get_ai_coach()
         if not coach:
             await callback_query.answer(msg_text("no_coaches", profile.language), show_alert=True)
             return
@@ -248,8 +247,12 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
     if any(coach.coach_type == CoachType.ai for coach in assigned_coaches):
         pass  # already assigned to AI
     else:
-        await assign_coach(await ai_coach.get_ai_coach(), client)
-        await assign_client(client, profile.language)
+        fetched = await Cache.coach.get_ai_coach()
+        if fetched:
+            await assign_coach(fetched, client)
+            await assign_client(client, profile.language)
+        else:
+            logger.error("AI coach not found when assigning to client")
 
     if service == "program":
         try:
@@ -402,7 +405,7 @@ async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext, bo
     if cb_data == "back":
         await show_main_menu(message, profile, state)
     elif cb_data == "ai_coach":
-        coach = await ai_coach.get_ai_coach()
+        coach = await Cache.coach.get_ai_coach()
         if not coach:
             await callback_query.answer(msg_text("no_coaches", profile.language), show_alert=True)
             return
