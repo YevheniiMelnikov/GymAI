@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Type
 
 from fastapi import FastAPI
 from fastapi.security import HTTPBasic
 from loguru import logger
 
+from ai_coach import set_ai_coach
 from ai_coach.api import lifespan
 from ai_coach.base_coach import BaseAICoach
 from ai_coach.base_knowledge_loader import KnowledgeLoader
@@ -37,15 +37,3 @@ async def init_ai_coach(ai_coach: type[BaseAICoach], knowledge_loader: Knowledge
 
 app = FastAPI(title="AI Coach", lifespan=lifespan)
 security = HTTPBasic()
-AI_COACH: Type[BaseAICoach] | None = None
-
-
-def set_ai_coach(coach: Type[BaseAICoach]) -> None:
-    global AI_COACH
-    AI_COACH = coach
-
-
-def get_ai_coach() -> Type[BaseAICoach]:
-    if AI_COACH is None:
-        raise RuntimeError("AI coach is not initialized")
-    return AI_COACH

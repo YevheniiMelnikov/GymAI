@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 from ai_coach.cognee_coach import CogneeCoach
 import ai_coach.cognee_coach as coach
-from ai_coach.main import coach_ready_event, init_ai_coach
+from ai_coach.application import coach_ready_event, init_ai_coach
 
 
 def test_reinit_on_failure(monkeypatch):

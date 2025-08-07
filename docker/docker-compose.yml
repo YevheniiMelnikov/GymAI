@@ -82,7 +82,7 @@ services:
       dockerfile: docker/Dockerfile
     container_name: bot
     env_file: ../.env
-    command: ["python", "-u", "/app/bot/main.py"]
+    command: ["python", "-u", "/app/bot/application.py"]
     ports: ["8080:8000"]
     volumes:
       - ../google_creds.json:/app/google_creds.json:ro

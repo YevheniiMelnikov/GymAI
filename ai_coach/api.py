@@ -7,7 +7,7 @@ from fastapi.security import HTTPBasicCredentials
 
 from ai_coach import GDriveDocumentLoader
 from ai_coach.cognee_coach import CogneeCoach
-from ai_coach.main import app, security, init_ai_coach
+from ai_coach.application import app, security, init_ai_coach
 from ai_coach.schemas import AskRequest, MessageRequest
 from config.app_settings import settings
 from core.tasks import refresh_external_knowledge

@@ -127,7 +127,7 @@ services:
 #      redis: {condition: service_healthy}
 #      db:    {condition: service_healthy}
 #    env_file: .env
-#    command: ["python", "-u", "/app/bot/main.py"]
+#    command: ["python", "-u", "/app/bot/application.py"]
 #    volumes:
 #      - ../google_creds.json:/app/google_creds.json:ro
 #      - ../dumps:/app/dumps
