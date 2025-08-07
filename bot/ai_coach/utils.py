@@ -26,6 +26,9 @@ from core.exceptions import ProgramNotFoundError
 from core.schemas import Client, Program, DayExercises
 from bot.utils.workout_plans import _next_payment_date
 from datetime import date
+from bot.texts.exercises import exercise_dict
+from bot.utils.other import short_url
+from core.services import gif_manager
 
 T = TypeVar("T")
 
@@ -80,6 +83,16 @@ async def assign_client(client: Client, lang: str) -> None:
         language=lang,
     )
     await APIService.ai_coach.ask(prompt, client_id=client.id)
+
+
+async def _attach_gifs_to_exercises(exercises: list[DayExercises]) -> None:
+    for day in exercises:
+        for exercise in day.exercises:
+            link = await gif_manager.find_gif(exercise.name, exercise_dict)
+            if link:
+                exercise.gif_link = await short_url(link)
+                gif_file_name = link.split("/")[-1]
+                await Cache.workout.cache_gif_filename(exercise.name, gif_file_name)
 
 
 def _normalise_program(raw: str, *, key: str = "days") -> dict:
@@ -194,6 +207,7 @@ async def generate_program(client: Client, lang: str, workout_type: str, wishes:
     if not exercises:
         logger.error("Program parsing produced no exercises")
         return [], program_raw
+    await _attach_gifs_to_exercises(exercises)
     saved = await APIService.workout.save_program(client.id, exercises, split_number, wishes)
     if saved:
         await _cache_program(client, program_raw, saved, workout_type, wishes)
@@ -233,6 +247,7 @@ async def generate_subscription(
     if not exercises:
         logger.error("Subscription parsing produced no exercises")
         return [], sub_raw
+    await _attach_gifs_to_exercises(exercises)
 
     sub_id = await APIService.workout.create_subscription(
         client_profile_id=client.id,
