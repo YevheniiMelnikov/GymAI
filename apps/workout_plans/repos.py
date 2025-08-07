@@ -67,15 +67,9 @@ class ProgramRepository:
             instance.save()  # type: ignore[attr-defined]
             program = cast(Program, instance)
         else:
-            existing = Program.objects.filter(client_profile=client_profile).first()
-            if existing is not None:
-                existing.exercises_by_day = exercises  # type: ignore[attr-defined]
-                existing.save()  # type: ignore[attr-defined]
-                program = cast(Program, existing)
-            else:
-                program = cast(
-                    Program, Program.objects.create(client_profile=client_profile, exercises_by_day=exercises)
-                )
+            program = cast(
+                Program, Program.objects.create(client_profile=client_profile, exercises_by_day=exercises)
+            )
 
         cache.delete_many(
             [
