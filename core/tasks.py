@@ -10,7 +10,7 @@ import asyncio
 from loguru import logger
 import httpx
 
-import ai_coach.api
+from core.services.internal.ai_coach_service import AiCoachService
 from config.app_settings import settings
 from core.cache import Cache
 from core.services import APIService
@@ -225,7 +225,7 @@ def refresh_external_knowledge(self):
     """Refresh external knowledge and rebuild Cognee index."""
     logger.info("refresh_external_knowledge triggered")
     try:
-        asyncio.run(ai_coach.api.refresh_knowledge())
+        asyncio.run(AiCoachService.refresh_knowledge())
     except Exception as exc:  # noqa: BLE001
         logger.exception(f"Knowledge refresh failed: {exc}")
         raise self.retry(exc=exc)
