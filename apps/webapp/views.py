@@ -1,7 +1,6 @@
 import hashlib
 import hmac
 import json
-import logging
 from urllib.parse import parse_qsl
 
 from django.http import JsonResponse
@@ -10,9 +9,7 @@ from django.shortcuts import render
 from config.app_settings import settings
 from core.cache import Cache
 from core.schemas import DayExercises
-
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 def _verify_init_data(init_data: str) -> dict:
@@ -46,13 +43,13 @@ def _format_full_program(exercises: list[DayExercises]) -> str:
 
 
 def program_page(request):
-    logger.debug("Webapp program page requested: path=%s", request.get_full_path())
+    logger.debug("Webapp program page requested: path={}", request.get_full_path())
     return render(request, "webapp/program.html")
 
 
 async def program_data(request):
     init_data = request.GET.get("init_data", "")
-    logger.debug("Webapp program data requested: init_data length=%d", len(init_data))
+    logger.debug("Webapp program data requested: init_data length={}", len(init_data))
     try:
         data = _verify_init_data(init_data)
     except Exception:

@@ -1,4 +1,3 @@
-import logging
 from urllib.parse import urlparse
 
 from aiogram.types import InlineKeyboardButton as KbBtn
@@ -9,9 +8,7 @@ from bot.buttons_builder import ButtonsBuilder
 from bot.texts.text_manager import btn_text
 from config.app_settings import settings
 from core.schemas import Exercise
-
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 def select_language_kb() -> KbMarkup:
@@ -287,7 +284,7 @@ def program_view_kb(lang: str) -> KbMarkup:
     parsed = urlparse(settings.WEBHOOK_HOST)
     base = f"{parsed.scheme or 'https'}://{parsed.netloc or parsed.path}"
     webapp_url = f"{base}/webapp/"
-    logger.debug("Constructed webapp url '%s' from WEBHOOK_HOST='%s'", webapp_url, settings.WEBHOOK_HOST)
+    logger.debug("Constructed webapp url '{}' from WEBHOOK_HOST='{}'", webapp_url, settings.WEBHOOK_HOST)
 
     buttons = [
         [
