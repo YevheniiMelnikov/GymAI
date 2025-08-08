@@ -1,5 +1,6 @@
 from aiogram.types import InlineKeyboardButton as KbBtn
 from aiogram.types import InlineKeyboardMarkup as KbMarkup, WebAppInfo
+from urllib.parse import urlparse
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.buttons_builder import ButtonsBuilder
@@ -288,7 +289,9 @@ def program_view_kb(lang: str) -> KbMarkup:
             KbBtn(
                 text=btn_text("open_webapp", lang),
                 web_app=WebAppInfo(
-                    url=f"{settings.WEBHOOK_HOST.rstrip('/')}/webapp/"
+                    url="{}/webapp/".format(
+                        "{}://{}".format(*urlparse(settings.WEBHOOK_HOST)[:2])
+                    )
                 ),
             )
         ],
