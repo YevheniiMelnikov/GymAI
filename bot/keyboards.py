@@ -1,10 +1,11 @@
 from aiogram.types import InlineKeyboardButton as KbBtn
-from aiogram.types import InlineKeyboardMarkup as KbMarkup
+from aiogram.types import InlineKeyboardMarkup as KbMarkup, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.buttons_builder import ButtonsBuilder
 from bot.texts.text_manager import btn_text
 from core.schemas import Exercise
+from config.app_settings import settings
 
 
 def select_language_kb() -> KbMarkup:
@@ -283,6 +284,14 @@ def program_view_kb(lang: str) -> KbMarkup:
             builder.add("forward", "next"),
         ],
         [builder.add("history", "history")],
+        [
+            KbBtn(
+                text=btn_text("open_webapp", lang),
+                web_app=WebAppInfo(
+                    url=f"{settings.WEBHOOK_HOST.rstrip('/')}/webapp/"
+                ),
+            )
+        ],
         [
             builder.add("quit", "quit"),
         ],

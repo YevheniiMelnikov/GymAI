@@ -29,6 +29,7 @@ INSTALLED_APPS = [
     "apps.profiles.apps.ProfilesConfig",
     "apps.payments.apps.PaymentsConfig",
     "apps.home.apps.HomeConfig",
+    "apps.webapp.apps.WebappConfig",
     "apps.workout_plans.apps.WorkoutPlansConfig",
     "rest_framework",
     "rest_framework_api_key",
