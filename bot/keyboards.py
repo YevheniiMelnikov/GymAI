@@ -281,14 +281,14 @@ def select_days_kb(lang: str, selected_days: list) -> KbMarkup:
 
 def program_view_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
-    parsed = urlparse(settings.WEBHOOK_HOST)
+    parsed = urlparse(settings.API_URL)
     host = parsed.netloc or parsed.path.split("/")[0]
     base = f"{parsed.scheme or 'https'}://{host}"
     webapp_url = f"{base}/webapp/"
     logger.debug(
-        "Constructed webapp url '{}' from WEBHOOK_HOST='{}'",
+        "Constructed webapp url '{}' from API_URL='{}'",
         webapp_url,
-        settings.WEBHOOK_HOST,
+        settings.API_URL,
     )
 
     buttons = [
