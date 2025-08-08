@@ -7,6 +7,7 @@ from urllib.parse import urljoin
 from loguru import logger
 
 from config.app_settings import settings
+from core.exceptions import UserServiceError
 from core.schemas import AiCoachAskRequest, AiCoachMessageRequest
 from .api_client import APIClient
 
@@ -63,6 +64,12 @@ class AiCoachService(APIClient):
             f"{settings.AI_COACH_REFRESH_USER}:{settings.AI_COACH_REFRESH_PASSWORD}".encode()
         ).decode()
         headers = {"Authorization": f"Basic {token}"}
-        status, _ = await cls._api_request("post", url, headers=headers, timeout=settings.AI_COACH_TIMEOUT)
+        try:
+            status, _ = await cls._api_request(
+                "post", url, headers=headers, timeout=settings.AI_COACH_TIMEOUT
+            )
+        except UserServiceError as exc:
+            logger.error(f"Knowledge refresh request failed: {exc}")
+            return
         if status != 200:
             logger.error(f"Knowledge refresh failed HTTP={status}")
