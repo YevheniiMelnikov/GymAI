@@ -1,6 +1,7 @@
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponseNotFound
 from django.urls import include, path
 from django.contrib import admin
+from loguru import logger
 
 from apps.payments.views import PaymentWebhookView
 
@@ -19,3 +20,11 @@ urlpatterns = [
     path("webapp/", include("apps.webapp.urls")),
     path("", include("apps.home.urls")),
 ]
+
+
+def not_found_view(request, exception):
+    logger.warning("Unhandled path 404: {}", request.get_full_path())
+    return HttpResponseNotFound()
+
+
+handler404 = not_found_view
