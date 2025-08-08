@@ -1,12 +1,17 @@
+import logging
+from urllib.parse import urlparse
+
 from aiogram.types import InlineKeyboardButton as KbBtn
 from aiogram.types import InlineKeyboardMarkup as KbMarkup, WebAppInfo
-from urllib.parse import urlparse
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.buttons_builder import ButtonsBuilder
 from bot.texts.text_manager import btn_text
-from core.schemas import Exercise
 from config.app_settings import settings
+from core.schemas import Exercise
+
+
+logger = logging.getLogger(__name__)
 
 
 def select_language_kb() -> KbMarkup:
@@ -279,6 +284,11 @@ def select_days_kb(lang: str, selected_days: list) -> KbMarkup:
 
 def program_view_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
+    parsed = urlparse(settings.WEBHOOK_HOST)
+    base = f"{parsed.scheme or 'https'}://{parsed.netloc or parsed.path}"
+    webapp_url = f"{base}/webapp/"
+    logger.debug("Constructed webapp url '%s' from WEBHOOK_HOST='%s'", webapp_url, settings.WEBHOOK_HOST)
+
     buttons = [
         [
             builder.add("back", "previous"),
@@ -288,16 +298,10 @@ def program_view_kb(lang: str) -> KbMarkup:
         [
             KbBtn(
                 text=btn_text("open_webapp", lang),
-                web_app=WebAppInfo(
-                    url="{}/webapp/".format(
-                        "{}://{}".format(*urlparse(settings.WEBHOOK_HOST)[:2])
-                    )
-                ),
+                web_app=WebAppInfo(url=webapp_url),
             )
         ],
-        [
-            builder.add("quit", "quit"),
-        ],
+        [builder.add("quit", "quit")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
