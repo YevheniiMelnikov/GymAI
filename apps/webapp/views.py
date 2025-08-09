@@ -66,6 +66,10 @@ def index(request: HttpRequest) -> HttpResponse:
     return render(request, "webapp/index.html")
 
 
+def test(request: HttpRequest) -> HttpResponse:
+    return HttpResponse("hello world")
+
+
 def ping(request: HttpRequest) -> HttpResponse:
     logger.info("Webapp ping: {} {}", request.method, request.get_full_path())
     return HttpResponse("ok")
