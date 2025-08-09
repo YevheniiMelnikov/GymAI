@@ -85,7 +85,7 @@ class APIClient:
                 )
                 if attempt == cls.max_retries:
                     raise UserServiceError(
-                        f"Request to {url} failed after {attempt} attempts: {e}"
+                        f"Request to {url} failed after {attempt} attempts: {type(e).__name__}: {e!r}"
                     ) from e
                 await asyncio.sleep(delay)
                 delay = min(delay * cls.backoff_factor, cls.max_delay)

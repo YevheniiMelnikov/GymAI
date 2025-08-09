@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     AI_GENERATION_RETRIES: int = 3
 
     KNOWLEDGE_REFRESH_INTERVAL: int = 60 * 60
-    AI_COACH_TIMEOUT: int = 60
+    AI_COACH_TIMEOUT: int = 120
 
     CACHE_TTL: int = 60 * 5  # Django cache TTL
     BACKUP_RETENTION_DAYS: int = 30  # Postgres/Redis backup retention
