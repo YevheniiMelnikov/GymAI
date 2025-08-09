@@ -35,9 +35,9 @@ class Settings(BaseSettings):
     DEFAULT_LANG: Annotated[str, Field(default="ua")]
     ADMIN_LANG: Annotated[str, Field(default="ru")]
     LOG_LEVEL: Annotated[str, Field(default="INFO")]
-    REDIS_URL: Annotated[str, Field(default="redis://127.0.0.1:6379")]
+    REDIS_URL: Annotated[str, Field(default="redis://redis:6379")]
 
-    BOT_INTERNAL_URL: Annotated[str, Field(default="http://localhost:8000/")]
+    BOT_INTERNAL_URL: Annotated[str, Field(default="http://api:8000/")]
     WEB_SERVER_HOST: Annotated[str, Field(default="0.0.0.0")]
 
     DB_PORT: Annotated[str, Field(default="5432")]
