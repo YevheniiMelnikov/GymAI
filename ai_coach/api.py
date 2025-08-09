@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import Depends, HTTPException, FastAPI
 from fastapi.security import HTTPBasicCredentials
+from loguru import logger
 
 from ai_coach import GDriveDocumentLoader
 from ai_coach.cognee_coach import CogneeCoach
@@ -15,14 +16,20 @@ from core.tasks import refresh_external_knowledge
 
 @app.post("/ask/", response_model=list[str] | None)
 async def ask(data: AskRequest) -> list[str] | None:
-    responses = await CogneeCoach.make_request(data.prompt, client_id=data.client_id)
-    await CogneeCoach.save_client_message(data.prompt, client_id=data.client_id)
-    await CogneeCoach.save_prompt(data.prompt, client_id=data.client_id)
-    if responses:
-        for r in responses:
-            await CogneeCoach.save_ai_message(r, client_id=data.client_id)
-            await CogneeCoach.save_prompt(r, client_id=data.client_id)
-    return responses
+    logger.debug("/ask received for client_id={}", data.client_id)
+    try:
+        responses = await CogneeCoach.make_request(data.prompt, client_id=data.client_id)
+        await CogneeCoach.save_client_message(data.prompt, client_id=data.client_id)
+        await CogneeCoach.save_prompt(data.prompt, client_id=data.client_id)
+        if responses:
+            for r in responses:
+                await CogneeCoach.save_ai_message(r, client_id=data.client_id)
+                await CogneeCoach.save_prompt(r, client_id=data.client_id)
+        logger.debug("/ask completed for client_id={} responses={}", data.client_id, responses)
+        return responses
+    except Exception as e:  # pragma: no cover - log unexpected errors
+        logger.exception("/ask failed: {}", e)
+        raise HTTPException(status_code=500, detail="AI coach error") from e
 
 
 @app.post("/messages/")

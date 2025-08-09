@@ -53,6 +53,7 @@ class APIClient:
 
         delay = cls.initial_delay
         data = cls._json_safe(data)
+        logger.debug(f"API request: {method.upper()} {url} payload={data}")
 
         for attempt in range(1, cls.max_retries + 1):
             try:
@@ -79,9 +80,13 @@ class APIClient:
                 return response.status_code, error_data
 
             except (httpx.HTTPStatusError, httpx.HTTPError) as e:
-                logger.warning(f"Attempt {attempt} failed: {e}. Retrying in {delay:.1f}s...")
+                logger.warning(
+                    f"Attempt {attempt} failed: {type(e).__name__}: {e!r}. Retrying in {delay:.1f}s..."
+                )
                 if attempt == cls.max_retries:
-                    raise UserServiceError(f"Request to {url} failed after {attempt} attempts: {e}") from e
+                    raise UserServiceError(
+                        f"Request to {url} failed after {attempt} attempts: {e}"
+                    ) from e
                 await asyncio.sleep(delay)
                 delay = min(delay * cls.backoff_factor, cls.max_delay)
 
