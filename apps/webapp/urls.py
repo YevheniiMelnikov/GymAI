@@ -5,5 +5,8 @@ from . import views
 
 urlpatterns = [
     path("api/program/", views.program_data, name="webapp-program-data"),
-    re_path(r"^(?:.*)/?$", TemplateView.as_view(template_name="webapp/index.html")),
+    re_path(
+        r"^(?!api/)(?:.*)/?$",
+        TemplateView.as_view(template_name="webapp/index.html"),
+    ),
 ]

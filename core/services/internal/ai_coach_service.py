@@ -73,6 +73,7 @@ class AiCoachService(APIClient):
             )
         except UserServiceError as exc:
             logger.error(f"Knowledge refresh request failed: {exc}")
-            return
+            raise
         if status != 200:
             logger.error(f"Knowledge refresh failed HTTP={status}")
+            raise UserServiceError(f"Knowledge refresh failed HTTP={status}")

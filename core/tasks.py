@@ -219,7 +219,13 @@ def send_workout_result(self, coach_profile_id: int, client_profile_id: int, tex
         raise self.retry(exc=exc)
 
 
-@shared_task(bind=True)  # pyre-ignore[not-callable]
+@shared_task(
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_backoff=180,
+    retry_jitter=True,
+    max_retries=3,
+)  # pyre-ignore[not-callable]
 async def refresh_external_knowledge(self):
     """Refresh external knowledge and rebuild Cognee index."""
     logger.info("refresh_external_knowledge triggered")
