@@ -1,6 +1,4 @@
 from __future__ import annotations
-
-
 from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -20,7 +18,6 @@ from bot.keyboards import (
 from bot.states import States
 from bot.texts.text_manager import msg_text
 from config.app_settings import settings
-from bot.ai_coach.utils import assign_client
 from core.cache import Cache
 from core.enums import CoachType
 from core.schemas import Coach, Client, Profile
@@ -250,7 +247,6 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
         fetched = await Cache.coach.get_ai_coach()
         if fetched:
             await assign_coach(fetched, client)
-            await assign_client(client, profile.language)
         else:
             logger.error("AI coach not found when assigning to client")
 

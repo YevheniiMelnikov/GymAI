@@ -11,7 +11,6 @@ from .prompts import (
     WORKOUT_RULES,
     SYSTEM_PROMPT,
     UPDATE_WORKOUT_PROMPT,
-    INITIAL_PROMPT,
 )
 from .parsers import (
     parse_program_text,
@@ -29,6 +28,7 @@ from datetime import date
 from bot.texts.exercises import exercise_dict
 from bot.utils.other import short_url
 from core.services import gif_manager
+from core.utils.idempotency import acquire_once
 
 T = TypeVar("T")
 
@@ -75,14 +75,6 @@ def describe_client(client: Client) -> str:
     if client.health_notes:
         parts.append(f"Health notes: {client.health_notes}")
     return "; ".join(parts)
-
-
-async def assign_client(client: Client, lang: str) -> None:
-    prompt = INITIAL_PROMPT.format(
-        client_data=extract_client_data(client),
-        language=lang,
-    )
-    await APIService.ai_coach.ask(prompt, client_id=client.id)
 
 
 async def _attach_gifs_to_exercises(exercises: list[DayExercises]) -> None:
@@ -148,6 +140,10 @@ async def _generate_workout(
     parser: Callable[[str], Optional[T]],
 ) -> tuple[str, Optional[T]]:
     """Request workout plan from AI and parse result."""
+
+    if not acquire_once(f"gen_program:{client.id}", 120):
+        logger.warning("Skip duplicate program generation for client_id={}", client.id)
+        return "", None
 
     profile_description = describe_client(client)
     today = date.today().isoformat()

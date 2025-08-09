@@ -1,6 +1,7 @@
-from django.http import JsonResponse, HttpResponseNotFound
+from django.http import JsonResponse, HttpResponseNotFound, HttpResponse
 from django.urls import include, path
 from django.contrib import admin
+from django.views.generic import RedirectView
 from loguru import logger
 
 from apps.payments.views import PaymentWebhookView
@@ -17,8 +18,19 @@ urlpatterns = [
     path("api/v1/", include("apps.profiles.urls")),
     path("api/v1/", include("apps.payments.urls")),
     path("api/v1/", include("apps.workout_plans.urls")),
+    path("webapp", RedirectView.as_view(url="/webapp/", permanent=False)),
     path("webapp/", include("apps.webapp.urls")),
     path("", include("apps.home.urls")),
+]
+
+
+def ping_webapp_view(request):
+    logger.info("Webapp hit: {} {}", request.method, request.get_full_path())
+    return HttpResponse("ok")
+
+
+urlpatterns += [
+    path("webapp/__ping__", ping_webapp_view),
 ]
 
 
