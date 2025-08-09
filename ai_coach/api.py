@@ -21,9 +21,7 @@ async def health() -> dict[str, str]:
 
 @app.post("/ask/", response_model=list[str] | None)
 async def ask(data: AskRequest) -> list[str] | None:
-    logger.debug(
-        "/ask received request_id={} client_id={}", data.request_id, data.client_id
-    )
+    logger.debug("/ask received request_id={} client_id={}", data.request_id, data.client_id)
     try:
         responses = await CogneeCoach.make_request(data.prompt, client_id=data.client_id)
         await CogneeCoach.save_client_message(data.prompt, client_id=data.client_id)

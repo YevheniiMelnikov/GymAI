@@ -179,9 +179,7 @@ async def generate_program(
     *,
     request_id: str,
 ) -> tuple[list[DayExercises], str]:
-    logger.debug(
-        "generate_program started request_id={} client_id={}", request_id, client.id
-    )
+    logger.debug("generate_program started request_id={} client_id={}", request_id, client.id)
     try:
         prev_program = await Cache.workout.get_latest_program(client.profile, use_fallback=False)
         previous_program = json.dumps([d.model_dump() for d in prev_program.exercises_by_day], ensure_ascii=False)

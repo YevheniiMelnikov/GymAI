@@ -119,9 +119,7 @@ def deactivate_expired_subscriptions(self):
             )
             await Cache.workout.update_subscription(sub.client_profile, {"enabled": False})
             await Cache.payment.reset_status(sub.client_profile, "subscription")
-            logger.info(
-                "Subscription {} deactivated for user {}", sub.id, sub.client_profile
-            )
+            logger.info("Subscription {} deactivated for user {}", sub.id, sub.client_profile)
 
     try:
         asyncio.run(_impl())
@@ -187,34 +185,22 @@ def charge_due_subscriptions(self):
                 await APIService.workout.update_subscription(
                     sub.id, {"enabled": False, "client_profile": sub.client_profile}
                 )
-                await Cache.workout.update_subscription(
-                    sub.client_profile, {"enabled": False}
-                )
+                await Cache.workout.update_subscription(sub.client_profile, {"enabled": False})
                 await Cache.payment.reset_status(sub.client_profile, "subscription")
                 continue
 
             await ProfileService.adjust_client_credits(client.profile, -required)
-            await Cache.client.update_client(
-                client.profile, {"credits": client.credits - required}
-            )
+            await Cache.client.update_client(client.profile, {"credits": client.credits - required})
             if client.assigned_to:
                 coach = await get_assigned_coach(client, coach_type=CoachType.human)
                 if coach:
-                    payout = Decimal(str(sub.price)).quantize(
-                        Decimal("0.01"), ROUND_HALF_UP
-                    )
+                    payout = Decimal(str(sub.price)).quantize(Decimal("0.01"), ROUND_HALF_UP)
                     await ProfileService.adjust_coach_payout_due(coach.profile, payout)
                     new_due = (coach.payout_due or Decimal("0")) + payout
-                    await Cache.coach.update_coach(
-                        coach.profile, {"payout_due": str(new_due)}
-                    )
+                    await Cache.coach.update_coach(coach.profile, {"payout_due": str(new_due)})
             next_date = _next_payment_date(getattr(sub, "period", "1m"))
-            await APIService.workout.update_subscription(
-                sub.id, {"payment_date": next_date}
-            )
-            await Cache.workout.update_subscription(
-                sub.client_profile, {"payment_date": next_date}
-            )
+            await APIService.workout.update_subscription(sub.id, {"payment_date": next_date})
+            await Cache.workout.update_subscription(sub.client_profile, {"payment_date": next_date})
 
     try:
         asyncio.run(_impl())
@@ -247,6 +233,7 @@ def export_coach_payouts(self):
 
 _CONNECT_TIMEOUT = 10.0
 _READ_TIMEOUT = 30.0
+
 
 @shared_task(
     bind=True,
@@ -309,9 +296,7 @@ def refresh_external_knowledge(self):
         for attempt in range(3):
             if await AiCoachService.health(timeout=3.0):
                 break
-            logger.warning(
-                "AI coach health check failed attempt %s", attempt + 1
-            )
+            logger.warning("AI coach health check failed attempt %s", attempt + 1)
             await asyncio.sleep(1)
         else:
             logger.warning("AI coach not ready, skipping refresh_external_knowledge")

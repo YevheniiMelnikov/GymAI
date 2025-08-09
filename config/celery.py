@@ -6,9 +6,8 @@ from config.app_settings import settings
 
 def knowledge_refresh_now() -> datetime:
     """Return current UTC time offset by the start delay."""
-    return datetime.utcnow() + timedelta(
-        seconds=settings.KNOWLEDGE_REFRESH_START_DELAY
-    )
+    return datetime.utcnow() + timedelta(seconds=settings.KNOWLEDGE_REFRESH_START_DELAY)
+
 
 celery_config = {
     "broker_url": settings.REDIS_URL,

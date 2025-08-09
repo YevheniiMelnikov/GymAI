@@ -281,9 +281,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
                 request_id=request_id,
             )
         except Exception as e:  # noqa: BLE001
-            logger.exception(
-                "Program generation failed: {} request_id={}", e, request_id
-            )
+            logger.exception("Program generation failed: {} request_id={}", e, request_id)
             await answer_msg(callback_query, msg_text("unexpected_error", profile.language))
             return
         if not exercises:

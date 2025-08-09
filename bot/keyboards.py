@@ -300,9 +300,7 @@ def program_view_kb(lang: str) -> KbMarkup:
             webapp_url,
             settings.WEBAPP_PUBLIC_URL,
         )
-        buttons.append(
-            [KbBtn(text=btn_text("open_webapp", lang), web_app=WebAppInfo(url=webapp_url))]
-        )
+        buttons.append([KbBtn(text=btn_text("open_webapp", lang), web_app=WebAppInfo(url=webapp_url))])
 
     buttons.append([builder.add("quit", "quit")])
     return KbMarkup(inline_keyboard=buttons, row_width=1)

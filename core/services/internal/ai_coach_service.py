@@ -34,9 +34,7 @@ class AiCoachService(APIClient):
             request_id=request_id,
         )
         headers = {"X-Request-ID": request_id} if request_id else None
-        logger.debug(
-            "AI coach ask request_id={} client_id={}", request_id, client_id
-        )
+        logger.debug("AI coach ask request_id={} client_id={}", request_id, client_id)
         status, data = await cls._api_request(
             "post", url, request.model_dump(), headers=headers, timeout=settings.AI_COACH_TIMEOUT
         )
@@ -79,9 +77,7 @@ class AiCoachService(APIClient):
         ).decode()
         headers = {"Authorization": f"Basic {token}"}
         try:
-            status, _ = await cls._api_request(
-                "post", url, headers=headers, timeout=settings.AI_COACH_TIMEOUT
-            )
+            status, _ = await cls._api_request("post", url, headers=headers, timeout=settings.AI_COACH_TIMEOUT)
         except UserServiceError as exc:
             logger.error(f"Knowledge refresh request failed: {exc}")
             raise

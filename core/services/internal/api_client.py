@@ -80,9 +80,7 @@ class APIClient:
                 return response.status_code, error_data
 
             except (httpx.HTTPStatusError, httpx.HTTPError) as e:
-                logger.warning(
-                    f"Attempt {attempt} failed: {type(e).__name__}: {e!r}. Retrying in {delay:.1f}s..."
-                )
+                logger.warning(f"Attempt {attempt} failed: {type(e).__name__}: {e!r}. Retrying in {delay:.1f}s...")
                 if attempt == cls.max_retries:
                     raise UserServiceError(
                         f"Request to {url} failed after {attempt} attempts: {type(e).__name__}: {e!r}"
