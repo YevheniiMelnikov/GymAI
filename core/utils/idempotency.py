@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import os
 from typing import Optional
 
 from loguru import logger
 from redis.asyncio import Redis, from_url
 from redis.exceptions import RedisError
+
+from config.app_settings import settings
 
 _redis: Optional[Redis] = None
 
@@ -13,7 +14,7 @@ _redis: Optional[Redis] = None
 async def _get_redis() -> Optional[Redis]:
     global _redis
     if _redis is None:
-        url = os.getenv("REDIS_URL")
+        url = settings.REDIS_URL
         if not url:
             logger.warning("REDIS_URL not set, idempotency disabled")
             return None

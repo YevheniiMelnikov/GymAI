@@ -42,6 +42,7 @@ async def start_web_app(app: web.Application) -> web.AppRunner:
 
 
 async def main() -> None:
+    logger.info("Using Redis URL {}", settings.REDIS_URL)
     if not await BaseCacheManager.healthcheck():
         raise SystemExit("Redis is not responding to ping — exiting")
 

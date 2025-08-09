@@ -281,11 +281,15 @@ def select_days_kb(lang: str, selected_days: list) -> KbMarkup:
 
 def program_view_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
-    source = settings.WEBAPP_PUBLIC_URL or settings.WEBHOOK_HOST
-    parsed = urlparse(source)
-    host = parsed.netloc or parsed.path.split("/")[0]
-    base = f"{parsed.scheme or 'https'}://{host}"
-    webapp_url = f"{base}/webapp/"
+    source = settings.WEBAPP_PUBLIC_URL
+    if not source:
+        logger.error("WEBAPP_PUBLIC_URL is not configured; disabling webapp button")
+        webapp_url = "#"
+    else:
+        parsed = urlparse(source)
+        host = parsed.netloc or parsed.path.split("/")[0]
+        base = f"{parsed.scheme or 'https'}://{host}"
+        webapp_url = f"{base}/webapp/"
     logger.debug(
         "Constructed webapp url '{}' from WEBAPP_PUBLIC_URL='{}'",
         webapp_url,

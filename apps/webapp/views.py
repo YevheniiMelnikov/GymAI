@@ -3,7 +3,8 @@ import hmac
 import json
 from urllib.parse import parse_qsl
 
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpRequest, HttpResponse
+from django.shortcuts import render
 
 from config.app_settings import settings
 from core.cache import Cache
@@ -58,3 +59,8 @@ async def program_data(request):
     except Exception:
         text = ""
     return JsonResponse({"program": text})
+
+
+def index(request: HttpRequest) -> HttpResponse:
+    logger.info("Webapp hit: {} {}", request.method, request.get_full_path())
+    return render(request, "webapp/index.html")
