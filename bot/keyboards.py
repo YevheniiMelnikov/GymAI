@@ -28,6 +28,15 @@ def client_menu_kb(lang: str) -> KbMarkup:
         [builder.add("services", "services")],
         [builder.add("feedback", "feedback")],
     ]
+    source = settings.WEBAPP_PUBLIC_URL
+    if not source:
+        logger.error("WEBAPP_PUBLIC_URL is not configured; webapp button hidden")
+    else:
+        parsed = urlparse(source)
+        host = parsed.netloc or parsed.path.split("/")[0]
+        base = f"{parsed.scheme or 'https'}://{host}"
+        webapp_url = f"{base}/webapp/test/"
+        buttons.append([KbBtn(text="webapp", web_app=WebAppInfo(url=webapp_url))])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
@@ -61,6 +70,15 @@ def coach_menu_kb(lang: str) -> KbMarkup:
         [builder.add("my_clients", "my_clients")],
         [builder.add("feedback", "feedback")],
     ]
+    source = settings.WEBAPP_PUBLIC_URL
+    if not source:
+        logger.error("WEBAPP_PUBLIC_URL is not configured; webapp button hidden")
+    else:
+        parsed = urlparse(source)
+        host = parsed.netloc or parsed.path.split("/")[0]
+        base = f"{parsed.scheme or 'https'}://{host}"
+        webapp_url = f"{base}/webapp/test/"
+        buttons.append([KbBtn(text="webapp", web_app=WebAppInfo(url=webapp_url))])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
