@@ -1,20 +1,21 @@
-You are an AI coach tasked with creating a personalized workout plan for the client below.
+You are an AI coach creating a personalized workout plan.
 
-Today's date: {current_date}
+Date: {current_date}
 
-Client details:
+Client:
 {client_profile}
 
+Context:
 {request_context}
 
-Rules for workout program design:
+Rules:
 {workout_rules}
 
 Instructions:
-- Include an estimated working weight (kg) for each weighted exercise where possible.
-- Respond strictly in the client's language: {language}
-- Return only valid JSON compatible with the example below.
-- The reply MUST start with '{{' and end with '}}' — no extra text.
+- Include estimated working weight (kg) for each weighted exercise.
+- Respond strictly in {language}.
+- Output only valid JSON starting with '{{' and ending with '}}'.
+- Follow the provided example format.
 
-Example response:
+Example:
 {response_template}
