@@ -25,11 +25,9 @@ async def ask(data: AskRequest) -> list[str] | None:
     try:
         responses = await CogneeCoach.make_request(data.prompt, client_id=data.client_id)
         await CogneeCoach.save_client_message(data.prompt, client_id=data.client_id)
-        await CogneeCoach.save_prompt(data.prompt, client_id=data.client_id)
         if responses:
             for r in responses:
                 await CogneeCoach.save_ai_message(r, client_id=data.client_id)
-                await CogneeCoach.save_prompt(r, client_id=data.client_id)
         logger.debug(
             "/ask completed request_id={} client_id={} responses={}",
             data.request_id,

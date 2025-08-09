@@ -295,7 +295,7 @@ async def process_workout_result(
     try:
         ctx = await APIService.ai_coach.get_client_context(client_id, "workout")
     except Exception:
-        ctx = {"messages": [], "prompts": []}
+        ctx = {"messages": []}
 
     prompt = (
         SYSTEM_PROMPT
@@ -303,7 +303,7 @@ async def process_workout_result(
         + UPDATE_WORKOUT_PROMPT.format(
             expected_workout=expected_workout_result.strip(),
             feedback=feedback.strip(),
-            context="\n".join(ctx["messages"] + ctx["prompts"]).strip(),
+            context="\n".join(ctx["messages"]).strip(),
             language=language,
         )
     )

@@ -1,114 +1,41 @@
-📐 RULES FOR WORKOUT PROGRAM DESIGN
-The workout plan must be tailored to the client's individual profile, taking into account their physical condition, goals, available equipment, preferences, and any limitations.
+📐 WORKOUT PROGRAM RULES
 
-1. Client-Specific Adaptation
-Always adapt the program based on:
+Tailor plans to the client’s condition, goals, equipment, preferences, and limitations.
 
-Age and biological stage (e.g., teenager, adult, senior)
+1. Adaptation
+Consider: age, experience, injuries/conditions, recovery capacity, session length/frequency, location/equipment.
 
-Training experience level (beginner, intermediate, advanced)
+2. Goals & Strategy
+Match goals to approach:
+- Fat loss: circuits, moderate rest
+- Muscle gain: hypertrophy focus, higher volume
+- Strength: lower reps, longer rest, compound lifts
+Use periodization when possible.
 
-Injury history or chronic conditions (e.g., back pain, joint issues, cardiovascular risk)
-
-Recovery capacity (e.g., sleep, stress, workload)
-
-Preferred workout duration and weekly frequency
-
-Available equipment and training location
-
-2. Goal-Oriented Planning
-Define clear goals:
-
-Fat loss, muscle gain, recomposition, strength, endurance, etc.
-
-Match training strategy to goals:
-
-Fat loss → circuit-style training, moderate rest
-
-Muscle gain → hypertrophy-focused, volume priority
-
-Strength → lower rep ranges, longer rest, compound lifts
-
-Periodize when applicable (e.g., 4-week blocks with progression or variation)
-
-3. Safety and Risk Management
-Avoid high-risk exercises for:
-
-Elderly clients (e.g., deep barbell squats without experience)
-
-Clients with joint issues (e.g., avoid overhead pressing if shoulder pain exists)
-
-Clients with cardiovascular risk (avoid high-intensity max-effort bursts unless cleared)
-
-Always warm up main joints and target muscles
-
-Limit eccentric overload in high-risk populations
+3. Safety
+Avoid high-risk lifts for vulnerable clients.
+Warm up joints/muscles; limit eccentric overload in high-risk groups.
 
 4. Exercise Selection
-Prioritize compound movements first (multi-joint exercises)
+Start with compounds; add isolation if time allows.
+Keep push/pull, hinge/squat, and core balanced.
+For beginners: stable movements first.
 
-Add isolation work only when appropriate and time allows
+5. Volume & Recovery
+Max 2 intense full-body days in a row.
+48h rest per muscle group before heavy reuse.
+Start conservatively; increase gradually.
+Low recovery → 2–3 full-body or upper/lower split.
 
-For beginners: stick to stable movements before adding complexity
-
-Respect movement pattern balance:
-
-Push vs Pull
-
-Hinge vs Squat
-
-Core inclusion in each session
-
-5. Volume and Recovery
-Avoid overtraining:
-
-No more than 2 consecutive days of intense full-body work
-
-At least 48h rest for a muscle group before heavy reuse
-
-Start conservatively with volume; increase as adaptation occurs
-
-For low recovery clients: prefer 2-3 full-body or upper/lower split
-
-6. Load Prescription
-Estimate initial working weights based on client history
-
-For bodyweight exercises, provide easier/harder alternatives
-
-Apply progressive overload:
-
-Increase weight, reps, or difficulty week to week
-
-Never max out unless specifically required and justified
+6. Load
+Estimate weights from history; give easier/harder alternatives.
+Progressively increase load/reps/difficulty.
+No max-out unless required.
 
 7. Session Structure
-Each session should follow a clear structure:
+Warm-up → main lifts → accessory → core/conditioning/mobility.
+Length 45–60 min unless specified.
 
-Warm-up
-
-Main lifts (compound, heavier focus)
-
-Accessory work (target weaknesses, hypertrophy)
-
-Core / conditioning / mobility
-
-Session length must match client capacity and goal (e.g., 45–60 min)
-
-8. Presentation & Output Format
-Use structured JSON or Markdown-compatible output
-
-Each exercise must include:
-
-name
-
-sets
-
-reps
-
-weight (or "Bodyweight" if relevant)
-
-drop_set: true/false (if needed)
-
-set_id (for grouping supersets/circuits)
-
-gif_link (optional, only if relevant and available)
+8. Output Format
+Each exercise: name, sets, reps, weight (or “Bodyweight”), drop_set, set_id, gif_link (optional).
+Use structured JSON or Markdown.

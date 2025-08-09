@@ -17,7 +17,7 @@ from cognee.modules.engine.operations.setup import setup as cognee_setup
 from ai_coach.base_coach import BaseAICoach
 from ai_coach.base_knowledge_loader import KnowledgeLoader
 from ai_coach.cognee_config import CogneeConfig
-from ai_coach.schemas import DataKind, MessageRole
+from ai_coach.schemas import MessageRole
 from ai_coach.hash_store import HashStore
 from ai_coach.lock_cache import LockCache
 from config.app_settings import settings
@@ -90,10 +90,10 @@ class CogneeCoach(BaseAICoach):
     @classmethod
     async def make_request(cls, prompt: str, client_id: int) -> list[str]:
         """
-        Perform a search in the client's prompt dataset without modifying or reindexing it.
+        Perform a search in the client's message dataset without modifying or reindexing it.
         """
         user = await cls._get_cognee_user()
-        ds_name = cls._dataset_name(client_id, DataKind.PROMPT)
+        ds_name = cls._dataset_name(client_id)
 
         try:
             return await cognee.search(prompt, datasets=[ds_name], user=user)
@@ -131,8 +131,8 @@ class CogneeCoach(BaseAICoach):
             await cognee.cognify(datasets=[dataset], user=user)
 
     @staticmethod
-    def _dataset_name(client_id: int, kind: DataKind) -> str:
-        return f"client_{client_id}_{kind.value}"
+    def _dataset_name(client_id: int) -> str:
+        return f"client_{client_id}_message"
 
     @classmethod
     async def _update_client_knowledge(
@@ -140,30 +140,25 @@ class CogneeCoach(BaseAICoach):
         text: str,
         client_id: int,
         *,
-        data_kind: DataKind = DataKind.MESSAGE,
-        role: MessageRole | None = None,
+        role: MessageRole,
     ) -> None:
         """
         Persist a text entry to the client's dataset and trigger indexing if new.
         """
         user = await cls._get_cognee_user()
-        ds_name = cls._dataset_name(client_id, data_kind)
-        if data_kind is DataKind.MESSAGE:
-            if role is None:
-                raise ValueError("role is required for message entries")
-            text = f"{role.value}: {text}"
+        ds_name = cls._dataset_name(client_id)
+        text = f"{role.value}: {text}"
         dataset, created = await cls.update_dataset(text, ds_name, user)
         if created:
             asyncio.create_task(cls._process_dataset(dataset, user))
 
     @classmethod
-    async def refresh_client_knowledge(cls, client_id: int, data_kind: Any = None) -> None:
+    async def refresh_client_knowledge(cls, client_id: int) -> None:
         """
         Manually force reindexing of a client's dataset.
         """
-        data_kind = data_kind or DataKind.PROMPT
         user = await cls._get_cognee_user()
-        dataset = cls._dataset_name(client_id, data_kind)
+        dataset = cls._dataset_name(client_id)
         logger.info(f"Reindexing dataset {dataset}")
         asyncio.create_task(cls._process_dataset(dataset, user))
 
@@ -172,41 +167,27 @@ class CogneeCoach(BaseAICoach):
         """
         Save a user message to the client's message dataset.
         """
-        await cls._update_client_knowledge(text, client_id, data_kind=DataKind.MESSAGE, role=MessageRole.CLIENT)
+        await cls._update_client_knowledge(text, client_id, role=MessageRole.CLIENT)
 
     @classmethod
     async def save_ai_message(cls, text: str, client_id: int) -> None:
         """
         Save an AI message to the client's message dataset.
         """
-        await cls._update_client_knowledge(text, client_id, data_kind=DataKind.MESSAGE, role=MessageRole.AI_COACH)
-
-    @classmethod
-    async def save_prompt(cls, text: str, client_id: int) -> None:
-        """
-        Save a prompt to the client's prompt dataset.
-        """
-        await cls._update_client_knowledge(text, client_id, data_kind=DataKind.PROMPT)
+        await cls._update_client_knowledge(text, client_id, role=MessageRole.AI_COACH)
 
     @classmethod
     async def get_client_context(cls, client_id: int, query: str) -> dict[str, list[str]]:
         """
-        Search client datasets (message and prompt) for relevant context.
+        Search client message dataset for relevant context.
         """
         user = await cls._get_cognee_user()
-        datasets = {
-            "messages": cls._dataset_name(client_id, DataKind.MESSAGE),
-            "prompts": cls._dataset_name(client_id, DataKind.PROMPT),
-        }
-        results: dict[str, list[str]] = {}
-
-        for kind, ds_name in datasets.items():
-            try:
-                results[kind] = await cognee.search(query, datasets=[ds_name], top_k=5, user=user)
-            except DatasetNotFoundError:
-                results[kind] = []
-            except Exception as e:  # pragma: no cover - best effort
-                logger.error(f"get_client_context failed on {kind}: {e}")
-                results[kind] = []
-
-        return results
+        ds_name = cls._dataset_name(client_id)
+        try:
+            messages = await cognee.search(query, datasets=[ds_name], top_k=5, user=user)
+        except DatasetNotFoundError:
+            messages = []
+        except Exception as e:  # pragma: no cover - best effort
+            logger.error(f"get_client_context failed: {e}")
+            messages = []
+        return {"messages": messages}

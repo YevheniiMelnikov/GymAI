@@ -104,11 +104,11 @@ verify that `REDIS_URL` points to your local Redis instance.
 ## AI Coach and knowledge base
 
 The project ships an AI coach backed by Cognee. Each client and chat is mapped to
-datasets named `client_<id>_prompt` and `client_<id>_message`. Chat entries are
-stored with a `user:` or `bot:` prefix so Cognee keeps the full dialog history,
-while prompts are saved separately. SHA‑256 hashes are cached in Redis with a
-TTL derived from `BACKUP_RETENTION_DAYS` to prevent repeat ingestion. New texts
-are ingested asynchronously and cognified before they are searchable.
+datasets named `client_<id>_message`. Chat entries are stored with a `user:` or
+`bot:` prefix so Cognee keeps the full dialog history. SHA‑256 hashes are
+cached in Redis with a TTL derived from `BACKUP_RETENTION_DAYS` to prevent
+repeat ingestion. New texts are ingested asynchronously and cognified before
+they are searchable.
 
 To refresh external knowledge (e.g. documents from Google Drive), Celery calls
 `refresh_external_knowledge` every `KNOWLEDGE_REFRESH_INTERVAL` seconds. The
