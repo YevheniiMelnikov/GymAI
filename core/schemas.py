@@ -160,6 +160,7 @@ class AiCoachAskRequest(BaseModel):
     prompt: str
     client_id: int
     language: str | None = None
+    request_id: str | None = None
 
 
 class AiCoachMessageRequest(BaseModel):

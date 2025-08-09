@@ -34,7 +34,7 @@ async def close_redis() -> None:
         _redis = None
 
 
-async def acquire_once(key: str, ttl: int = 120) -> bool:
+async def acquire_once(key: str, ttl: int = 300) -> bool:
     redis = await _get_redis()
     if redis is None:
         logger.warning("Idempotency skipped: redis unavailable")

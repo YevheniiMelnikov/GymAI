@@ -23,6 +23,7 @@ class AskRequest(BaseModel):
     prompt: str
     client_id: int
     language: str | None = None
+    request_id: str | None = None
 
 
 class MessageRequest(BaseModel):

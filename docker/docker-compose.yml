@@ -61,6 +61,7 @@ services:
     env_file: ../.env
     environment:
       RUN_MIGRATIONS: "true"
+      AI_COACH_URL: http://ai_coach:9000/
     command: >
       uvicorn config.asgi:application --host 0.0.0.0 --port 8000 --reload
     volumes:
@@ -103,6 +104,7 @@ services:
     env_file: ../.env
     environment:
       - COGNEE_DATA_ROOT=/app/.data_storage
+      - AI_COACH_URL=http://ai_coach:9000/
     entrypoint: /app/docker/entrypoint.sh
     command: celery -A config.celery:celery_app worker -l info -Q default,maintenance -P threads
     volumes:
@@ -130,6 +132,8 @@ services:
     command: "celery -A config.celery:celery_app beat -l info"
     volumes:
       - ../config:/app/config
+    environment:
+      - AI_COACH_URL=http://ai_coach:9000/
     depends_on:
       db:    { condition: service_healthy }
       redis: { condition: service_healthy }

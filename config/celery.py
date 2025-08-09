@@ -1,6 +1,6 @@
 from celery import Celery
-from datetime import timedelta
-from celery.schedules import crontab
+from datetime import timedelta, datetime
+from celery.schedules import crontab, schedule
 from config.app_settings import settings
 
 celery_config = {
@@ -53,7 +53,11 @@ celery_config = {
         },
         "refresh_external_knowledge": {
             "task": "core.tasks.refresh_external_knowledge",
-            "schedule": timedelta(seconds=settings.KNOWLEDGE_REFRESH_INTERVAL),
+            "schedule": schedule(
+                run_every=timedelta(seconds=settings.KNOWLEDGE_REFRESH_INTERVAL),
+                nowfun=lambda: datetime.utcnow()
+                + timedelta(seconds=settings.KNOWLEDGE_REFRESH_START_DELAY),
+            ),
             "options": {"queue": "maintenance"},
         },
         "prune_cognee": {

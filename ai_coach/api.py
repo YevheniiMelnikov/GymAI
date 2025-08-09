@@ -14,9 +14,16 @@ from config.app_settings import settings
 from core.tasks import refresh_external_knowledge
 
 
+@app.get("/health/")
+async def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
 @app.post("/ask/", response_model=list[str] | None)
 async def ask(data: AskRequest) -> list[str] | None:
-    logger.debug("/ask received for client_id={}", data.client_id)
+    logger.debug(
+        "/ask received request_id={} client_id={}", data.request_id, data.client_id
+    )
     try:
         responses = await CogneeCoach.make_request(data.prompt, client_id=data.client_id)
         await CogneeCoach.save_client_message(data.prompt, client_id=data.client_id)
@@ -25,7 +32,12 @@ async def ask(data: AskRequest) -> list[str] | None:
             for r in responses:
                 await CogneeCoach.save_ai_message(r, client_id=data.client_id)
                 await CogneeCoach.save_prompt(r, client_id=data.client_id)
-        logger.debug("/ask completed for client_id={} responses={}", data.client_id, responses)
+        logger.debug(
+            "/ask completed request_id={} client_id={} responses={}",
+            data.request_id,
+            data.client_id,
+            responses,
+        )
         return responses
     except Exception as e:  # pragma: no cover - log unexpected errors
         logger.exception("/ask failed: {}", e)

@@ -1,6 +1,7 @@
 from decimal import Decimal
 import json
 from typing import Callable, Optional, TypeVar
+from loguru import logger
 
 from core.services.internal import APIService
 from config.app_settings import settings
@@ -19,7 +20,6 @@ from .parsers import (
     extract_json,
     normalize_program_data,
 )
-from loguru import logger
 from core.cache import Cache
 from core.exceptions import ProgramNotFoundError
 from core.schemas import Client, Program, DayExercises
@@ -137,6 +137,7 @@ async def _generate_workout(
     request_context: str,
     response_template: str,
     parser: Callable[[str], Optional[T]],
+    request_id: str | None = None,
 ) -> tuple[str, Optional[T]]:
     """Request workout plan from AI and parse result."""
 
@@ -157,7 +158,12 @@ async def _generate_workout(
     raw = ""
     dto: Optional[T] = None
     for _ in range(settings.AI_GENERATION_RETRIES):
-        response = await APIService.ai_coach.ask(prompt, client_id=client.id, language=lang)
+        response = await APIService.ai_coach.ask(
+            prompt,
+            client_id=client.id,
+            language=lang,
+            request_id=request_id,
+        )
         raw = response[0] if response else ""
         dto = parser(raw)
         if dto is not None:
@@ -165,7 +171,17 @@ async def _generate_workout(
     return raw, dto
 
 
-async def generate_program(client: Client, lang: str, workout_type: str, wishes: str) -> tuple[list[DayExercises], str]:
+async def generate_program(
+    client: Client,
+    lang: str,
+    workout_type: str,
+    wishes: str,
+    *,
+    request_id: str,
+) -> tuple[list[DayExercises], str]:
+    logger.debug(
+        "generate_program started request_id={} client_id={}", request_id, client.id
+    )
     try:
         prev_program = await Cache.workout.get_latest_program(client.profile, use_fallback=False)
         previous_program = json.dumps([d.model_dump() for d in prev_program.exercises_by_day], ensure_ascii=False)
@@ -183,6 +199,7 @@ async def generate_program(client: Client, lang: str, workout_type: str, wishes:
         request_context,
         PROGRAM_RESPONSE_TEMPLATE,
         parse_program_json,
+        request_id=request_id,
     )
     if program_dto is not None:
         exercises = program_dto.days

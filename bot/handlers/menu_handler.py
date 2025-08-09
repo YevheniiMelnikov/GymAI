@@ -6,6 +6,7 @@ from aiogram.exceptions import TelegramBadRequest
 from contextlib import suppress
 from typing import cast
 from loguru import logger
+from uuid import uuid4
 
 from bot.keyboards import (
     select_workout_kb,
@@ -236,17 +237,23 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
         await del_msg(callback_query)
         return
 
-    ttl = 120
+    request_id = str(uuid4())
+    ttl = 300
     if service == "program":
         if not await acquire_once(f"gen_program:{client.id}", ttl):
             logger.warning(
-                "Duplicate program generation suppressed for client_id={}", client.id
+                "Duplicate program generation suppressed for client_id={} request_id={}",
+                client.id,
+                request_id,
             )
             await callback_query.answer("\u23f3")
             await del_msg(callback_query)
             return
         logger.info(
-            "Program generation started for client_id={} ttl={}", client.id, ttl
+            "Program generation started for client_id={} ttl={} request_id={}",
+            client.id,
+            ttl,
+            request_id,
         )
 
     await ProfileService.adjust_client_credits(profile.id, -required)
@@ -266,9 +273,17 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
 
     if service == "program":
         try:
-            exercises, program_raw = await generate_program(client, profile.language, workout_type, wishes)
+            exercises, program_raw = await generate_program(
+                client,
+                profile.language,
+                workout_type,
+                wishes,
+                request_id=request_id,
+            )
         except Exception as e:  # noqa: BLE001
-            logger.exception(f"Program generation failed: {e}")
+            logger.exception(
+                "Program generation failed: {} request_id={}", e, request_id
+            )
             await answer_msg(callback_query, msg_text("unexpected_error", profile.language))
             return
         if not exercises:

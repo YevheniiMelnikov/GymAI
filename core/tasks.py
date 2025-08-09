@@ -306,6 +306,16 @@ def refresh_external_knowledge(self):
     logger.info("refresh_external_knowledge triggered")
 
     async def _impl() -> None:
+        for attempt in range(3):
+            if await AiCoachService.health(timeout=3.0):
+                break
+            logger.warning(
+                "AI coach health check failed attempt %s", attempt + 1
+            )
+            await asyncio.sleep(1)
+        else:
+            logger.warning("AI coach not ready, skipping refresh_external_knowledge")
+            return
         await AiCoachService.refresh_knowledge()
 
     try:
