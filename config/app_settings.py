@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     DEFAULT_LANG: Annotated[str, Field(default="ua")]
     ADMIN_LANG: Annotated[str, Field(default="ru")]
     LOG_LEVEL: Annotated[str, Field(default="INFO")]
-    REDIS_URL: Annotated[str, Field(default="redis://redis:6379")]
+    REDIS_URL: Annotated[str, Field(default="redis://127.0.0.1:6379")]
 
     BOT_INTERNAL_URL: Annotated[str, Field(default="http://localhost:8000/")]
     WEB_SERVER_HOST: Annotated[str, Field(default="0.0.0.0")]
@@ -71,6 +71,7 @@ class Settings(BaseSettings):
     BOT_LINK: str
     WEBHOOK_HOST: str
     WEBHOOK_PORT: int
+    WEBAPP_PUBLIC_URL: str | None = None
 
     GOOGLE_APPLICATION_CREDENTIALS: str
     GDRIVE_FOLDER_ID: str | None = None
