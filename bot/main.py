@@ -6,6 +6,7 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 
 from loguru import logger
 from config.logger import configure_loguru
+from core.utils.idempotency import close_redis as close_idempotency
 
 from bot.handlers.internal import (
     internal_payment_handler,
@@ -29,6 +30,7 @@ configure_loguru()
 
 async def on_shutdown(bot: Bot) -> None:
     await bot.session.close()
+    await close_idempotency()
 
 
 async def start_web_app(app: web.Application) -> web.AppRunner:

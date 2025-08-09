@@ -28,7 +28,6 @@ from datetime import date
 from bot.texts.exercises import exercise_dict
 from bot.utils.other import short_url
 from core.services import gif_manager
-from core.utils.idempotency import acquire_once
 
 T = TypeVar("T")
 
@@ -140,10 +139,6 @@ async def _generate_workout(
     parser: Callable[[str], Optional[T]],
 ) -> tuple[str, Optional[T]]:
     """Request workout plan from AI and parse result."""
-
-    if not acquire_once(f"gen_program:{client.id}", 120):
-        logger.warning("Skip duplicate program generation for client_id={}", client.id)
-        return "", None
 
     profile_description = describe_client(client)
     today = date.today().isoformat()

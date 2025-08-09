@@ -48,6 +48,7 @@ from bot.utils.credits import available_packages
 from bot.ai_coach.utils import generate_subscription, generate_program
 from bot.utils.credits import available_ai_services
 from bot.utils.exercises import format_program
+from core.utils.idempotency import acquire_once
 
 menu_router = Router()
 
@@ -234,6 +235,19 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
         await show_main_menu(callback_query.message, profile, state)
         await del_msg(callback_query)
         return
+
+    ttl = 120
+    if service == "program":
+        if not await acquire_once(f"gen_program:{client.id}", ttl):
+            logger.warning(
+                "Duplicate program generation suppressed for client_id={}", client.id
+            )
+            await callback_query.answer("\u23f3")
+            await del_msg(callback_query)
+            return
+        logger.info(
+            "Program generation started for client_id={} ttl={}", client.id, ttl
+        )
 
     await ProfileService.adjust_client_credits(profile.id, -required)
     await Cache.client.update_client(client.profile, {"credits": client.credits - required})
