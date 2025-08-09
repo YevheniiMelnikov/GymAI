@@ -3,19 +3,34 @@ from pathlib import Path
 
 from config.app_settings import settings
 from config.logger import *
+from urllib.parse import urlparse
 
 # Following module relates strictly to Django
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = settings.SECRET_KEY
 DEBUG = os.environ.get("DEBUG_STATUS", "False").lower() == "true"
-ALLOWED_HOSTS = [
-    "localhost",
-    "127.0.0.1",
-    "achieve-together.org.ua",
-    "www.achieve-together.org.ua",
-    "api",
-]  # move to .env
+_parsed_api = urlparse(settings.API_URL)
+_parsed_webhook = urlparse(settings.WEBHOOK_HOST)
+ALLOWED_HOSTS = list(
+    {
+        "localhost",
+        "127.0.0.1",
+        "achieve-together.org.ua",
+        "www.achieve-together.org.ua",
+        "api",
+        _parsed_api.hostname,
+        _parsed_webhook.hostname,
+    }
+    - {None}
+)
+CSRF_TRUSTED_ORIGINS = [
+    f"{p.scheme}://{p.hostname}"
+    for p in (_parsed_api, _parsed_webhook)
+    if p.scheme and p.hostname
+]
+USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 ASGI_APPLICATION = "config.asgi.application"
 
 INSTALLED_APPS = [

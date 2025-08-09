@@ -4,7 +4,6 @@ import json
 from urllib.parse import parse_qsl
 
 from django.http import JsonResponse
-from django.shortcuts import render
 
 from config.app_settings import settings
 from core.cache import Cache
@@ -40,11 +39,6 @@ def _format_full_program(exercises: list[DayExercises]) -> str:
             lines.append(line)
         lines.append("")
     return "\n".join(lines).strip()
-
-
-def program_page(request):
-    logger.debug("Webapp program page requested: path={}", request.get_full_path())
-    return render(request, "webapp/program.html")
 
 
 async def program_data(request):
