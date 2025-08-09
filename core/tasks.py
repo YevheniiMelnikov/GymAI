@@ -76,7 +76,7 @@ def redis_backup(self):
 
     try:
         subprocess.run(
-            ["redis-cli", "--url", settings.REDIS_URL, "--rdb", tmp_path],
+            ["redis-cli", "-u", settings.REDIS_URL, "--rdb", tmp_path],
             check=True,
         )
         shutil.move(tmp_path, final_dst)

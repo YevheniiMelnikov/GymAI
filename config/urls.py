@@ -1,4 +1,4 @@
-from django.http import JsonResponse, HttpResponseNotFound, HttpResponse
+from django.http import JsonResponse, HttpResponseNotFound
 from django.urls import include, path
 from django.contrib import admin
 from django.views.generic import RedirectView
@@ -21,16 +21,6 @@ urlpatterns = [
     path("webapp", RedirectView.as_view(url="/webapp/", permanent=False)),
     path("webapp/", include("apps.webapp.urls")),
     path("", include("apps.home.urls")),
-]
-
-
-def ping_webapp_view(request):
-    logger.info("Webapp hit: {} {}", request.method, request.get_full_path())
-    return HttpResponse("ok")
-
-
-urlpatterns += [
-    path("webapp/__ping__", ping_webapp_view),
 ]
 
 

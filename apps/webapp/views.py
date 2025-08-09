@@ -64,3 +64,8 @@ async def program_data(request):
 def index(request: HttpRequest) -> HttpResponse:
     logger.info("Webapp hit: {} {}", request.method, request.get_full_path())
     return render(request, "webapp/index.html")
+
+
+def ping(request: HttpRequest) -> HttpResponse:
+    logger.info("Webapp ping: {} {}", request.method, request.get_full_path())
+    return HttpResponse("ok")
