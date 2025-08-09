@@ -3,6 +3,13 @@ from datetime import timedelta, datetime
 from celery.schedules import crontab, schedule
 from config.app_settings import settings
 
+
+def knowledge_refresh_now() -> datetime:
+    """Return current UTC time offset by the start delay."""
+    return datetime.utcnow() + timedelta(
+        seconds=settings.KNOWLEDGE_REFRESH_START_DELAY
+    )
+
 celery_config = {
     "broker_url": settings.REDIS_URL,
     "result_backend": settings.REDIS_URL,
@@ -55,8 +62,7 @@ celery_config = {
             "task": "core.tasks.refresh_external_knowledge",
             "schedule": schedule(
                 run_every=timedelta(seconds=settings.KNOWLEDGE_REFRESH_INTERVAL),
-                nowfun=lambda: datetime.utcnow()
-                + timedelta(seconds=settings.KNOWLEDGE_REFRESH_START_DELAY),
+                nowfun=knowledge_refresh_now,
             ),
             "options": {"queue": "maintenance"},
         },
