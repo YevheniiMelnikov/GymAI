@@ -75,7 +75,10 @@ def redis_backup(self):
     final_dst = os.path.join(_redis_dir, f"redis_backup_{ts}.rdb")
 
     try:
-        subprocess.run(["redis-cli", "-h", "redis", "--rdb", tmp_path], check=True)
+        subprocess.run(
+            ["redis-cli", "--url", settings.REDIS_URL, "--rdb", tmp_path],
+            check=True,
+        )
         shutil.move(tmp_path, final_dst)
         logger.info(f"Redis backup saved {final_dst}")
     finally:
@@ -234,7 +237,7 @@ def export_coach_payouts(self):
     headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
 
     try:
-        resp = httpx.post(url, headers=headers, timeout=5.0)
+        resp = httpx.post(url, headers=headers, timeout=15.0)
         resp.raise_for_status()
     except httpx.HTTPError as exc:
         logger.warning("Bot call failed for coach payouts: {}", exc)

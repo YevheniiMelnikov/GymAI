@@ -18,7 +18,7 @@ async def process_payment_webhook(
     headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
 
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(url, json=payload, headers=headers)
             resp.raise_for_status()
     except Exception as exc:
@@ -33,7 +33,7 @@ async def send_payment_message(self, client_profile_id: int, text: str) -> None:
     headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
 
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(url, json=payload, headers=headers)
             resp.raise_for_status()
     except Exception as exc:
@@ -50,7 +50,7 @@ async def send_client_request(
     headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
 
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(url, json=payload, headers=headers)
             resp.raise_for_status()
     except Exception as exc:
