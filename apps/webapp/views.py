@@ -67,7 +67,7 @@ def index(request: HttpRequest) -> HttpResponse:
 
 
 def test(request: HttpRequest) -> HttpResponse:
-    return HttpResponse("hello world")
+    return render(request, "webapp/test.html")
 
 
 def ping(request: HttpRequest) -> HttpResponse:
