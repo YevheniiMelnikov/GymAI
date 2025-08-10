@@ -72,7 +72,7 @@ class Settings(BaseSettings):
     BOT_LINK: str
     WEBHOOK_HOST: str
     WEBHOOK_PORT: int
-    WEBAPP_PUBLIC_URL: Annotated[str | None, Field(default="https://73f58980253a.ngrok-free.app")]
+    WEBAPP_PUBLIC_URL: Annotated[str | None, Field(default=None)]
 
     GOOGLE_APPLICATION_CREDENTIALS: str
     GDRIVE_FOLDER_ID: str | None = None
@@ -123,6 +123,10 @@ class Settings(BaseSettings):
         # WEBHOOK_URL
         if not self.WEBHOOK_URL:
             self.WEBHOOK_URL = f"{self.WEBHOOK_HOST}{self.WEBHOOK_PATH}"
+
+        # WEBAPP_PUBLIC_URL
+        if not self.WEBAPP_PUBLIC_URL:
+            self.WEBAPP_PUBLIC_URL = self.WEBHOOK_HOST
 
         # PAYMENT_CALLBACK_URL
         if not self.PAYMENT_CALLBACK_URL:

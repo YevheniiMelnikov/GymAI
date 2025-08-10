@@ -10,30 +10,25 @@ from urllib.parse import urlparse
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = settings.SECRET_KEY
 DEBUG = os.environ.get("DEBUG_STATUS", "False").lower() == "true"
-_api_raw = getattr(settings, "API_URL", "")
-_webhook_raw = getattr(settings, "WEBHOOK_HOST", "")
-_webapp_raw = getattr(settings, "WEBAPP_PUBLIC_URL", "")
-_parsed_api = urlparse(_api_raw) if _api_raw else None
-_parsed_webhook = urlparse(_webhook_raw) if _webhook_raw else None
-_parsed_webapp = urlparse(_webapp_raw) if _webapp_raw else None
+
+_parsed_urls = [
+    urlparse(settings.API_URL),
+    urlparse(settings.WEBHOOK_HOST),
+    urlparse(settings.WEBAPP_PUBLIC_URL),
+]
 _hosts = {
     "localhost",
     "127.0.0.1",
     "achieve-together.org.ua",
     "www.achieve-together.org.ua",
     "api",
+    *[p.hostname for p in _parsed_urls if p.hostname],
 }
-if _parsed_api and _parsed_api.hostname:
-    _hosts.add(_parsed_api.hostname)
-if _parsed_webhook and _parsed_webhook.hostname:
-    _hosts.add(_parsed_webhook.hostname)
-if _parsed_webapp and _parsed_webapp.hostname:
-    _hosts.add(_parsed_webapp.hostname)
 ALLOWED_HOSTS = list(_hosts)
 CSRF_TRUSTED_ORIGINS = [
-    f"{p.scheme}://{p.hostname}"
-    for p in (_parsed_api, _parsed_webhook, _parsed_webapp)
-    if p and p.scheme and p.hostname
+    f"{p.scheme}://{p.netloc}"
+    for p in _parsed_urls
+    if p.scheme and p.netloc
 ]
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

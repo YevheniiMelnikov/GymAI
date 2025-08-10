@@ -11,6 +11,11 @@ def beat_nowfun() -> datetime:
     return datetime.utcnow() + timedelta(seconds=settings.KNOWLEDGE_REFRESH_START_DELAY)
 
 
+def knowledge_refresh_now() -> datetime:
+    """Backward-compat alias for old pickled beat schedules."""
+    return beat_nowfun()
+
+
 celery_config = {
     "broker_url": settings.REDIS_URL,
     "result_backend": settings.REDIS_URL,
@@ -21,6 +26,7 @@ celery_config = {
     "worker_max_tasks_per_child": 100,
     "task_time_limit": 600,
     "worker_pool": "threads",
+    "beat_schedule_filename": "/app/celerybeat-schedule",
     "beat_schedule": {
         "pg_backup": {
             "task": "core.tasks.pg_backup",
