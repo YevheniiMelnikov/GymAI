@@ -10,6 +10,10 @@ from ai_coach.schemas import AskRequest, MessageRequest
 from config.app_settings import settings
 from core.tasks import refresh_external_knowledge
 
+from config.celery import celery_app as celery  # type: ignore
+
+celery.set_default()
+
 
 @app.get("/health/")
 async def health() -> dict[str, str]:
@@ -55,5 +59,10 @@ async def refresh_knowledge(credentials: HTTPBasicCredentials = Depends(security
         or credentials.password != settings.AI_COACH_REFRESH_PASSWORD
     ):
         raise HTTPException(status_code=401, detail="Unauthorized")
-    refresh_external_knowledge.delay()
-    return {"status": "scheduled"}
+
+    try:
+        refresh_external_knowledge.apply_async(queue="maintenance")
+        return {"status": "queued"}
+    except Exception as e:
+        logger.exception("Failed to enqueue refresh task: {}", e)
+        raise HTTPException(status_code=503, detail="Queue unavailable")

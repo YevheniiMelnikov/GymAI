@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Annotated
 
-from pydantic import Field, model_validator
+from pydantic import Field, model_validator, field_validator
 from pydantic_settings import BaseSettings
 from pathlib import Path
 
@@ -14,8 +15,6 @@ class Settings(BaseSettings):
     MIN_BIRTH_YEAR: int = 1940
     MAX_BIRTH_YEAR: int = 2020
     MAX_FILE_SIZE_MB: int = 10
-
-    SITE_NAME: str = "AchieveTogether"
 
     API_MAX_RETRIES: int = 3
     API_RETRY_INITIAL_DELAY: int = 1
@@ -53,6 +52,8 @@ class Settings(BaseSettings):
     API_KEY: str
     SECRET_KEY: str
     API_URL: str
+    ALLOWED_HOSTS: Annotated[list[str], Field(default=["localhost", "127.0.0.1"])]
+    SITE_NAME: str = "AchieveTogether"
 
     AI_COACH_REFRESH_USER: Annotated[str, Field(default="admin")]
     AI_COACH_REFRESH_PASSWORD: Annotated[str, Field(default="password")]
@@ -142,6 +143,22 @@ class Settings(BaseSettings):
     @property
     def VECTORDATABASE_URL(self) -> str:
         return f"postgresql+psycopg2://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+
+    @field_validator("ALLOWED_HOSTS", mode="before")
+    @classmethod
+    def _parse_allowed_hosts(cls, v):
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return ["localhost", "127.0.0.1"]
+        if isinstance(v, str):
+            s = v.strip()
+            try:
+                j = json.loads(s)
+                if isinstance(j, list):
+                    return [str(x).strip() for x in j if str(x).strip()]
+            except Exception:
+                pass
+            return [p.strip() for p in s.split(",") if p.strip()]
+        return v
 
 
 settings = Settings()  # noqa  # pyre-ignore[missing-argument]

@@ -27,18 +27,7 @@ _raw_urls = [
 ]
 _parsed_urls = [p for p in map(_parse_url, _raw_urls) if p and p.hostname]
 
-_hosts = {
-    "localhost",
-    "127.0.0.1",
-    "achieve-together.org.ua",
-    "www.achieve-together.org.ua",
-    "api",
-    *[p.hostname for p in _parsed_urls],
-}
-ALLOWED_HOSTS = list(_hosts)
-
 CSRF_TRUSTED_ORIGINS = [f"{p.scheme}://{p.netloc}" for p in _parsed_urls if p.scheme]
-
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 ASGI_APPLICATION = "config.asgi.application"
@@ -123,7 +112,7 @@ REST_FRAMEWORK = {
 
 DOMAIN = settings.API_URL
 SITE_NAME = settings.SITE_NAME
-
+ALLOWED_HOSTS = settings.ALLOWED_HOSTS
 CORS_ALLOW_ALL_ORIGINS = True  # TODO: remove in production
 
 REDIS_URL = settings.REDIS_URL

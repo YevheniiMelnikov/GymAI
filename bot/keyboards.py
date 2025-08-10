@@ -36,6 +36,7 @@ def client_menu_kb(lang: str) -> KbMarkup:
         host = parsed.netloc or parsed.path.split("/")[0]
         base = f"{parsed.scheme or 'https'}://{host}"
         webapp_url = f"{base}/webapp/test/"
+        print(webapp_url)
         buttons.append([KbBtn(text="webapp", web_app=WebAppInfo(url=webapp_url))])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
