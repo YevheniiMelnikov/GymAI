@@ -34,6 +34,9 @@ sys.modules.setdefault("google.oauth2", types.ModuleType("google.oauth2"))
 service_account = types.ModuleType("google.oauth2.service_account")
 service_account.Credentials = object
 sys.modules.setdefault("google.oauth2.service_account", service_account)
+oauth2_creds = types.ModuleType("google.oauth2.credentials")
+oauth2_creds.Credentials = object
+sys.modules.setdefault("google.oauth2.credentials", oauth2_creds)
 sys.modules.setdefault("googleapiclient", types.ModuleType("googleapiclient"))
 discovery_mod = types.ModuleType("googleapiclient.discovery")
 discovery_mod.build = lambda *a, **k: types.SimpleNamespace(files=lambda: None)
@@ -51,6 +54,17 @@ class DummyDownloader:
 
 http_mod.MediaIoBaseDownload = DummyDownloader
 sys.modules.setdefault("googleapiclient.http", http_mod)
+sys.modules.setdefault("google.cloud", types.ModuleType("google.cloud"))
+gcs_mod = types.ModuleType("google.cloud.storage")
+gcs_mod.Client = object
+sys.modules.setdefault("google.cloud.storage", gcs_mod)
+sys.modules.setdefault("google.auth", types.ModuleType("google.auth"))
+auth_exc = types.ModuleType("google.auth.exceptions")
+auth_exc.DefaultCredentialsError = Exception
+sys.modules.setdefault("google.auth.exceptions", auth_exc)
+auth_creds = types.ModuleType("google.auth.credentials")
+auth_creds.Credentials = object
+sys.modules.setdefault("google.auth.credentials", auth_creds)
 docx_mod = types.ModuleType("docx")
 
 
@@ -95,6 +109,13 @@ settings_stub = types.SimpleNamespace(
     GDRIVE_FOLDER_ID="folder",
     GOOGLE_APPLICATION_CREDENTIALS="/tmp/creds.json",
     REDIS_URL="redis://localhost:6379",
+    API_URL="http://localhost/",
+    API_KEY="test_api_key",
+    API_MAX_RETRIES=1,
+    API_RETRY_INITIAL_DELAY=0,
+    API_RETRY_BACKOFF_FACTOR=1,
+    API_RETRY_MAX_DELAY=0,
+    API_TIMEOUT=1,
 )
 sys.modules.setdefault("config.app_settings", types.ModuleType("config.app_settings"))
 sys.modules["config.app_settings"].settings = settings_stub

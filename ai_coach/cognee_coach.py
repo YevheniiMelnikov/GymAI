@@ -21,6 +21,8 @@ from ai_coach.schemas import MessageRole
 from ai_coach.hash_store import HashStore
 from ai_coach.lock_cache import LockCache
 from config.app_settings import settings
+from core.services import ProfileService
+from core.schemas import Client
 
 
 class CogneeCoach(BaseAICoach):
@@ -31,6 +33,9 @@ class CogneeCoach(BaseAICoach):
     _loader: Optional[KnowledgeLoader] = None
     _cognify_locks: LockCache = LockCache()
     _user: Optional[Any] = None
+
+    # shared dataset that stores common knowledge like Google Drive documents
+    GLOBAL_DATASET: str = "external_docs"
 
     @classmethod
     async def initialize(cls, knowledge_loader: KnowledgeLoader | None = None) -> None:
@@ -90,13 +95,14 @@ class CogneeCoach(BaseAICoach):
     @classmethod
     async def make_request(cls, prompt: str, client_id: int) -> list[str]:
         """
-        Perform a search in the client's message dataset without modifying or reindexing it.
+        Perform a search across the client's dataset and shared knowledge.
         """
         user = await cls._get_cognee_user()
-        ds_name = cls._dataset_name(client_id)
+        await cls._ensure_profile_indexed(client_id, user)
+        datasets = [cls._dataset_name(client_id), cls.GLOBAL_DATASET]
 
         try:
-            return await cognee.search(prompt, datasets=[ds_name], user=user)
+            return await cognee.search(prompt, datasets=datasets, user=user)
         except (PermissionDeniedError, DatasetNotFoundError) as e:
             logger.warning(f"Search issue for client {client_id}: {e}")
         except Exception as e:  # pragma: no cover - best effort
@@ -104,7 +110,12 @@ class CogneeCoach(BaseAICoach):
         return []
 
     @staticmethod
-    async def update_dataset(text: str, dataset: str, user: Any) -> Tuple[str, bool]:
+    async def update_dataset(
+        text: str,
+        dataset: str,
+        user: Any,
+        node_set: list[str] | None = None,
+    ) -> Tuple[str, bool]:
         """
         Add text to dataset if not already present.
         Returns (dataset_id, was_created).
@@ -117,7 +128,7 @@ class CogneeCoach(BaseAICoach):
         if await HashStore.contains(dataset, digest):
             return dataset, False
 
-        info = await cognee.add(text, dataset_name=dataset, user=user)
+        info = await cognee.add(text, dataset_name=dataset, user=user, node_set=node_set)
         await HashStore.add(dataset, digest)
         return getattr(info, "dataset_id", dataset), True
 
@@ -132,23 +143,53 @@ class CogneeCoach(BaseAICoach):
 
     @staticmethod
     def _dataset_name(client_id: int) -> str:
-        return f"client_{client_id}_message"
+        return f"client_{client_id}"
+
+    @staticmethod
+    def _client_profile_text(client: Client) -> str:
+        parts = []
+        if client.name:
+            parts.append(f"name: {client.name}")
+        if client.gender:
+            parts.append(f"gender: {client.gender}")
+        if client.born_in:
+            parts.append(f"born_in: {client.born_in}")
+        if client.weight:
+            parts.append(f"weight: {client.weight}")
+        if client.workout_experience:
+            parts.append(f"workout_experience: {client.workout_experience}")
+        if client.workout_goals:
+            parts.append(f"workout_goals: {client.workout_goals}")
+        if client.health_notes:
+            parts.append(f"health_notes: {client.health_notes}")
+        return "profile: " + "; ".join(parts)
 
     @classmethod
-    async def _update_client_knowledge(
+    async def _ensure_profile_indexed(cls, client_id: int, user: Any) -> None:
+        client = await ProfileService.get_client_by_profile_id(client_id)
+        if not client:
+            return
+        text = cls._client_profile_text(client)
+        dataset = cls._dataset_name(client_id)
+        dataset, created = await cls.update_dataset(text, dataset, user, node_set=["client_profile"])
+        if created:
+            await cls._process_dataset(dataset, user)
+
+    @classmethod
+    async def add_text(
         cls,
         text: str,
-        client_id: int,
         *,
-        role: MessageRole,
+        client_id: int | None,
+        role: MessageRole | None = None,
+        node_set: list[str] | None = None,
     ) -> None:
-        """
-        Persist a text entry to the client's dataset and trigger indexing if new.
-        """
+        """Add text to the appropriate dataset and trigger indexing if new."""
         user = await cls._get_cognee_user()
-        ds_name = cls._dataset_name(client_id)
-        text = f"{role.value}: {text}"
-        dataset, created = await cls.update_dataset(text, ds_name, user)
+        dataset = cls._dataset_name(client_id) if client_id is not None else cls.GLOBAL_DATASET
+        if role:
+            text = f"{role.value}: {text}"
+        dataset, created = await cls.update_dataset(text, dataset, user, node_set=node_set)
         if created:
             asyncio.create_task(cls._process_dataset(dataset, user))
 
@@ -167,14 +208,14 @@ class CogneeCoach(BaseAICoach):
         """
         Save a user message to the client's message dataset.
         """
-        await cls._update_client_knowledge(text, client_id, role=MessageRole.CLIENT)
+        await cls.add_text(text, client_id=client_id, role=MessageRole.CLIENT)
 
     @classmethod
     async def save_ai_message(cls, text: str, client_id: int) -> None:
         """
         Save an AI message to the client's message dataset.
         """
-        await cls._update_client_knowledge(text, client_id, role=MessageRole.AI_COACH)
+        await cls.add_text(text, client_id=client_id, role=MessageRole.AI_COACH)
 
     @classmethod
     async def get_client_context(cls, client_id: int, query: str) -> dict[str, list[str]]:
@@ -182,9 +223,10 @@ class CogneeCoach(BaseAICoach):
         Search client message dataset for relevant context.
         """
         user = await cls._get_cognee_user()
-        ds_name = cls._dataset_name(client_id)
+        await cls._ensure_profile_indexed(client_id, user)
+        datasets = [cls._dataset_name(client_id), cls.GLOBAL_DATASET]
         try:
-            messages = await cognee.search(query, datasets=[ds_name], top_k=5, user=user)
+            messages = await cognee.search(query, datasets=datasets, top_k=5, user=user)
         except DatasetNotFoundError:
             messages = []
         except Exception as e:  # pragma: no cover - best effort
