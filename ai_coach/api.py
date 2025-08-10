@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
-
-from fastapi import Depends, HTTPException, FastAPI
+from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBasicCredentials
 from loguru import logger
 
-from ai_coach import GDriveDocumentLoader
 from ai_coach.cognee_coach import CogneeCoach
-from ai_coach.application import app, security, init_ai_coach
+from ai_coach.application import app, security
 from ai_coach.schemas import AskRequest, MessageRequest
 from config.app_settings import settings
 from core.tasks import refresh_external_knowledge
@@ -60,9 +57,3 @@ async def refresh_knowledge(credentials: HTTPBasicCredentials = Depends(security
         raise HTTPException(status_code=401, detail="Unauthorized")
     refresh_external_knowledge.delay()
     return {"status": "scheduled"}
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    await init_ai_coach(CogneeCoach, GDriveDocumentLoader())
-    yield

@@ -25,6 +25,7 @@ services:
     ports: [ "9000:9000" ]
     environment:
       - COGNEE_DATA_ROOT=/app/.data_storage
+      - ENABLE_BACKEND_ACCESS_CONTROL=false
     command: uvicorn ai_coach.api:app --host 0.0.0.0 --port 9000
     volumes:
       - ../.data_storage:/app/.data_storage
@@ -119,6 +120,7 @@ services:
     restart: unless-stopped
     networks: [monitoring]
     dns:
+      - 127.0.0.11
       - 8.8.8.8
       - 1.1.1.1
 
@@ -141,6 +143,7 @@ services:
     restart: unless-stopped
     networks: [monitoring]
     dns:
+      - 127.0.0.11
       - 8.8.8.8
       - 1.1.1.1
 
