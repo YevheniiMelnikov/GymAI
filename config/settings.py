@@ -11,25 +11,34 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = settings.SECRET_KEY
 DEBUG = os.environ.get("DEBUG_STATUS", "False").lower() == "true"
 
-_parsed_urls = [
-    urlparse(settings.API_URL),
-    urlparse(settings.WEBHOOK_HOST),
-    urlparse(settings.WEBAPP_PUBLIC_URL),
+
+def _parse_url(u: str | None):
+    if not u:
+        return None
+    if "://" not in u:
+        u = f"https://{u}"
+    return urlparse(u)
+
+
+_raw_urls = [
+    getattr(settings, "API_URL", ""),
+    getattr(settings, "WEBHOOK_HOST", ""),
+    getattr(settings, "WEBAPP_PUBLIC_URL", ""),
 ]
+_parsed_urls = [p for p in map(_parse_url, _raw_urls) if p and p.hostname]
+
 _hosts = {
     "localhost",
     "127.0.0.1",
     "achieve-together.org.ua",
     "www.achieve-together.org.ua",
     "api",
-    *[p.hostname for p in _parsed_urls if p.hostname],
+    *[p.hostname for p in _parsed_urls],
 }
 ALLOWED_HOSTS = list(_hosts)
-CSRF_TRUSTED_ORIGINS = [
-    f"{p.scheme}://{p.netloc}"
-    for p in _parsed_urls
-    if p.scheme and p.netloc
-]
+
+CSRF_TRUSTED_ORIGINS = [f"{p.scheme}://{p.netloc}" for p in _parsed_urls if p.scheme]
+
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 ASGI_APPLICATION = "config.asgi.application"
@@ -93,7 +102,7 @@ DATABASES = {
     }
 }
 
-LANGUAGE_CODE = "EN"
+LANGUAGE_CODE = "en-us"
 TIME_ZONE = settings.TIME_ZONE
 USE_I18N = True
 USE_TZ = False
@@ -114,7 +123,8 @@ REST_FRAMEWORK = {
 
 DOMAIN = settings.API_URL
 SITE_NAME = settings.SITE_NAME
-CORS_ALLOWED_ORIGINS = ["*"]  # move to settings
+
+CORS_ALLOW_ALL_ORIGINS = True  # TODO: remove in production
 
 REDIS_URL = settings.REDIS_URL
 
