@@ -10,7 +10,10 @@
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script>
 const tg = window.Telegram.WebApp;
-fetch("/webapp/api/program/?init_data=" + encodeURIComponent(tg.initData))
+const params = new URLSearchParams(window.location.search);
+const type = params.get("type") || "program";
+const endpoint = type === "subscription" ? "/webapp/api/subscription/" : "/webapp/api/program/";
+fetch(endpoint + "?init_data=" + encodeURIComponent(tg.initData))
   .then(r => r.json())
   .then(data => {
     document.getElementById("content").innerText = data.program || "No program";
