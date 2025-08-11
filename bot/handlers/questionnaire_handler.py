@@ -441,7 +441,9 @@ async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> No
         if callback_query.message is not None:
             msg = await answer_msg(
                 cast(Message, callback_query.message),
-                msg_text("price_warning", profile.language or settings.DEFAULT_LANG),
+                msg_text("price_warning", profile.language or settings.DEFAULT_LANG).format(
+                    tg=settings.TG_SUPPORT_CONTACT
+                ),
             )
         if msg and callback_query.message:
             await state.update_data(price_warning_msg_ids=[msg.message_id], chat_id=callback_query.message.chat.id)

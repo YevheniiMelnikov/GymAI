@@ -286,7 +286,12 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
             await answer_msg(callback_query, msg_text("unexpected_error", profile.language))
             return
         if not exercises:
-            await answer_msg(callback_query, msg_text("ai_program_error", profile.language))
+            await answer_msg(
+                callback_query,
+                msg_text("ai_program_error", profile.language).format(
+                    tg=settings.TG_SUPPORT_CONTACT
+                ),
+            )
             await bot.send_message(
                 settings.ADMIN_ID,
                 f"AI program generation failed for client {client.id}\nRaw:\n{program_raw}",
@@ -353,7 +358,10 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     await show_main_menu(cast(Message, callback_query.message), profile, state)
     exercises, sub_raw = await generate_subscription(client, lang, workout_type, wishes, period, days)
     if not exercises:
-        await answer_msg(callback_query, msg_text("ai_program_error", lang))
+        await answer_msg(
+            callback_query,
+            msg_text("ai_program_error", lang).format(tg=settings.TG_SUPPORT_CONTACT),
+        )
         bot = cast(Bot, callback_query.bot)
         await bot.send_message(
             settings.ADMIN_ID,
