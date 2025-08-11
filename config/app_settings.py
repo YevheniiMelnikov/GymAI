@@ -6,11 +6,9 @@ from typing import Annotated
 
 from pydantic import Field, model_validator, field_validator
 from pydantic_settings import BaseSettings
-from pathlib import Path
 
 
 class Settings(BaseSettings):
-    BOT_PAYMENT_OPTIONS: str = str((Path(__file__).resolve().parents[1] / "bot" / "images"))
     PAYMENT_CHECK_INTERVAL: int = 60
     MIN_BIRTH_YEAR: int = 1940
     MAX_BIRTH_YEAR: int = 2020
@@ -90,6 +88,7 @@ class Settings(BaseSettings):
     PAYMENT_PRIVATE_KEY: str
     PAYMENT_PUB_KEY: str
     CHECKOUT_URL: str
+    BOT_PAYMENT_OPTIONS: Annotated[str, Field(default="bot/images")]
 
     WEBHOOK_PATH: Annotated[str, Field(default="/telegram/webhook")]
     WEBHOOK_URL: str | None = None
