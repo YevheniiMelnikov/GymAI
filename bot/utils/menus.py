@@ -13,8 +13,9 @@ from aiogram.types import CallbackQuery, InputMediaPhoto, Message, FSInputFile
 from pathlib import Path
 
 from bot import keyboards as kb
+from bot.keyboards import subscription_manage_kb, program_edit_kb, program_view_kb
 from bot.utils.profiles import fetch_user, answer_profile, get_assigned_coach
-from bot.keyboards import program_view_kb, subscription_manage_kb, program_edit_kb
+from bot.utils.webapp import get_webapp_url
 from bot.utils.credits import uah_to_credits, available_packages, available_ai_services
 from decimal import Decimal
 from bot.states import States
@@ -81,7 +82,7 @@ async def show_subscription_page(callback_query: CallbackQuery, state: FSMContex
                 price=subscription.price,
                 days=translated_week_days,
             ),
-            reply_markup=kb.show_subscriptions_kb(lang),
+            reply_markup=kb.show_subscriptions_kb(lang, get_webapp_url("subscription")),
         )
         await del_msg(message)
 
@@ -517,7 +518,7 @@ async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, 
     await answer_msg(
         message,
         msg_text("program_page", language).format(program=program, day=week_day),
-        reply_markup=kb.program_view_kb(language),
+        reply_markup=program_view_kb(language, get_webapp_url("program")),
         disable_web_page_preview=True,
     )
 
@@ -624,7 +625,7 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
     assert split_number is not None
 
     if data.get("client"):
-        reply_markup = program_view_kb(profile.language)
+        reply_markup = program_view_kb(profile.language, get_webapp_url("program"))
         state_to_set = States.program_view
     else:
         reply_markup = (

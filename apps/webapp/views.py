@@ -17,7 +17,9 @@ def _verify_init_data(init_data: str) -> dict:
     received_hash = data.pop("hash", None)
     check_string = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
     secret_key = hashlib.sha256(settings.BOT_TOKEN.encode()).digest()
-    calculated_hash = hmac.new(secret_key, check_string.encode(), hashlib.sha256).hexdigest()
+    calculated_hash = hmac.new(
+        secret_key, check_string.encode(), hashlib.sha256
+    ).hexdigest()
     if calculated_hash != received_hash:
         raise ValueError("Invalid init data")
     if "user" in data:
@@ -61,13 +63,30 @@ async def program_data(request):
     return JsonResponse({"program": text})
 
 
+async def subscription_data(request):
+    init_data = request.GET.get("init_data", "")
+    logger.debug(
+        "Webapp subscription data requested: init_data length={}", len(init_data)
+    )
+    try:
+        data = _verify_init_data(init_data)
+    except Exception:
+        return JsonResponse({"error": "unauthorized"}, status=403)
+
+    user = data.get("user", {})
+    tg_id = int(user.get("id", 0))
+    try:
+        profile = await Cache.profile.get_profile(tg_id)
+        subscription = await Cache.workout.get_latest_subscription(profile.id)
+        text = _format_full_program(subscription.exercises)
+    except Exception:
+        text = ""
+    return JsonResponse({"program": text})
+
+
 def index(request: HttpRequest) -> HttpResponse:
     logger.info("Webapp hit: {} {}", request.method, request.get_full_path())
     return render(request, "webapp/index.html")
-
-
-def test(request: HttpRequest) -> HttpResponse:
-    return render(request, "webapp/test.html")
 
 
 def ping(request: HttpRequest) -> HttpResponse:
