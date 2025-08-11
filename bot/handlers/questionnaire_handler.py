@@ -20,7 +20,7 @@ from bot.keyboards import (
 from bot.states import States
 from config.app_settings import settings
 from core.cache import Cache
-from core.enums import ClientStatus
+from core.enums import ClientStatus, Language
 from core.exceptions import ProfileNotFoundError, ClientNotFoundError
 from core.schemas import Profile, Client
 from core.services import APIService
@@ -50,7 +50,7 @@ async def select_language(callback_query: CallbackQuery, state: FSMContext, bot:
         if profile:
             await APIService.profile.update_profile(profile.id, {"language": lang})
             await Cache.profile.update_profile(callback_query.from_user.id, dict(language=lang))
-            profile.language = lang
+            profile.language = cast(Language, lang)
             message = callback_query.message
             if message is not None:
                 await show_main_menu(cast(Message, message), profile, state)
@@ -468,7 +468,7 @@ async def workout_type(callback_query: CallbackQuery, state: FSMContext):
         await state.update_data(
             workout_type=callback_query.data,
             chat_id=callback_query.message.chat.id,
-            message_ids=[wishes_msg.message_id],
+            message_ids=[wishes_msg.message_id] if wishes_msg else [],
         )
     await del_msg(cast(Message | CallbackQuery | None, callback_query))
 

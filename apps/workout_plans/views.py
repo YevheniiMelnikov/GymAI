@@ -28,7 +28,7 @@ def _parse_client_profile_id(client_id_str: Optional[str]) -> Optional[int]:
 @method_decorator(cache_page(60 * 5), name="list")
 class ProgramViewSet(ModelViewSet):
     queryset = ProgramRepository.base_qs()  # type: ignore[assignment]
-    serializer_class = ProgramSerializer
+    serializer_class = ProgramSerializer  # pyrefly: ignore[bad-override]
     permission_classes = [HasAPIKey]
 
     def get_queryset(self):
@@ -85,7 +85,7 @@ class ProgramViewSet(ModelViewSet):
 @method_decorator(cache_page(60 * 5), name="list")
 class SubscriptionViewSet(ModelViewSet):
     queryset = SubscriptionRepository.base_qs()  # type: ignore[assignment]
-    serializer_class = SubscriptionSerializer
+    serializer_class = SubscriptionSerializer  # pyrefly: ignore[bad-override]
     permission_classes = [HasAPIKey]
     filter_backends = [DjangoFilterBackend]  # type: ignore[assignment]
     filterset_fields = ["enabled", "payment_date"]
@@ -96,26 +96,26 @@ class SubscriptionViewSet(ModelViewSet):
         client_profile_id = _parse_client_profile_id(client_id_str)
         return SubscriptionRepository.filter_by_client(qs, client_profile_id)
 
-    def perform_create(self, serializer: serializers.BaseSerializer) -> None:  # pyre-ignore[bad-override]
+    def perform_create(self, serializer: serializers.BaseSerializer) -> None:  # pyrefly: ignore[bad-override]
         sub = serializer.save()
         cache.delete_many(
             [
                 "subscriptions:list",
-                f"subscriptions:list:client:{sub.client_profile_id}",  # pyre-ignore[missing-attribute]
+                f"subscriptions:list:client:{sub.client_profile_id}",  # pyrefly: ignore[missing-attribute]
             ]
         )
 
-    def perform_update(self, serializer: serializers.BaseSerializer) -> None:  # pyre-ignore[bad-override]
+    def perform_update(self, serializer: serializers.BaseSerializer) -> None:  # pyrefly: ignore[bad-override]
         sub = serializer.save()
         cache.delete_many(
             [
                 "subscriptions:list",
-                f"subscriptions:list:client:{sub.client_profile_id}",  # pyre-ignore[missing-attribute]
+                f"subscriptions:list:client:{sub.client_profile_id}",  # pyrefly: ignore[missing-attribute]
             ]
         )
 
-    def perform_destroy(self, instance: Subscription) -> None:  # pyre-ignore[bad-override]
-        client_profile_id = instance.client_profile_id  # pyre-ignore[missing-attribute]
+    def perform_destroy(self, instance: Subscription) -> None:  # pyrefly: ignore[bad-override]
+        client_profile_id = instance.client_profile_id  # pyrefly: ignore[missing-attribute]
         super().perform_destroy(instance)
         cache.delete_many(
             [

@@ -29,7 +29,7 @@ class _RedisFactory:
     async def aclose_all(cls) -> None:
         for k, c in list(cls._clients.items()):
             try:
-                await c.aclose()
+                await c.aclose()  # pyrefly: ignore[missing-attribute]
             finally:
                 cls._clients.pop(k, None)
 
@@ -75,11 +75,13 @@ class RedisLock:
             return False
         pipe.multi()
         pipe.pexpire(self.key, self.ttl_ms)
+        result = False
         try:
             res = await pipe.execute()
-            return bool(res and res[-1])
+            result = bool(res and res[-1])
         finally:
             await pipe.reset()
+        return result
 
     async def release(self) -> None:
         if not self._held:

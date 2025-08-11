@@ -127,7 +127,7 @@ async def services_menu(callback_query: CallbackQuery, state: FSMContext, bot: B
     cb_data = callback_query.data or ""
 
     if cb_data == "back" and isinstance(callback_query.message, Message):
-        await show_main_menu(callback_query.message, profile, state)
+        await show_main_menu(cast(Message, callback_query.message), profile, state)
         return
 
     if cb_data == "balance":
@@ -233,7 +233,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
     wishes = data.get("wishes", "")
 
     if callback_query.data == "no":
-        await show_main_menu(callback_query.message, profile, state)
+        await show_main_menu(cast(Message, callback_query.message), profile, state)
         await del_msg(callback_query)
         return
 
@@ -259,7 +259,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
     await ProfileService.adjust_client_credits(profile.id, -required)
     await Cache.client.update_client(client.profile, {"credits": client.credits - required})
     await answer_msg(callback_query, msg_text("request_in_progress", profile.language))
-    await show_main_menu(callback_query.message, profile, state)
+    await show_main_menu(cast(Message, callback_query.message), profile, state)
     bot = cast(Bot, callback_query.bot)
     assigned_coaches = [await Cache.coach.get_coach(coach_id) for coach_id in client.assigned_to]
     if any(coach.coach_type == CoachType.ai for coach in assigned_coaches):
@@ -321,7 +321,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
 async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     profile = Profile.model_validate(data.get("profile"))
-    lang = profile.language or settings.DEFAULT_LANGUAGE
+    lang = profile.language or settings.DEFAULT_LANG
     days: list[str] = data.get("workout_days", [])
 
     if callback_query.data != "complete":
@@ -349,7 +349,7 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     wishes = data.get("wishes", "")
     period = data.get("period", "1m")
     await answer_msg(callback_query, msg_text("request_in_progress", lang))
-    await show_main_menu(callback_query.message, profile, state)
+    await show_main_menu(cast(Message, callback_query.message), profile, state)
     exercises, sub_raw = await generate_subscription(client, lang, workout_type, wishes, period, days)
     if not exercises:
         await answer_msg(callback_query, msg_text("ai_program_error", lang))

@@ -5,10 +5,10 @@ from loguru import logger
 from config.app_settings import settings
 
 
-@shared_task(bind=True, max_retries=3, retry_backoff=30, retry_backoff_max=300)  # pyre-ignore[not-callable]
+@shared_task(bind=True, max_retries=3, retry_backoff=30, retry_backoff_max=300)  # pyrefly: ignore[not-callable]
 async def process_payment_webhook(
     self, order_id: str, status: str, err_description: str = ""
-) -> None:  # pyre-ignore[valid-type]
+) -> None:  # pyrefly: ignore[valid-type]
     url = f"{settings.BOT_INTERNAL_URL}/internal/payment/process/"
     payload = {
         "order_id": order_id,
@@ -26,8 +26,8 @@ async def process_payment_webhook(
         raise self.retry(exc=exc)
 
 
-@shared_task(bind=True, max_retries=3, retry_backoff=30, retry_backoff_max=300)  # pyre-ignore[not-callable]
-async def send_payment_message(self, client_profile_id: int, text: str) -> None:  # pyre-ignore[valid-type]
+@shared_task(bind=True, max_retries=3, retry_backoff=30, retry_backoff_max=300)  # pyrefly: ignore[not-callable]
+async def send_payment_message(self, client_profile_id: int, text: str) -> None:  # pyrefly: ignore[valid-type]
     url = f"{settings.BOT_INTERNAL_URL}/internal/payment/send_message/"
     payload = {"client_id": client_profile_id, "text": text}
     headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
@@ -41,10 +41,10 @@ async def send_payment_message(self, client_profile_id: int, text: str) -> None:
         raise self.retry(exc=exc)
 
 
-@shared_task(bind=True, max_retries=3, retry_backoff=30, retry_backoff_max=300)  # pyre-ignore[not-callable]
+@shared_task(bind=True, max_retries=3, retry_backoff=30, retry_backoff_max=300)  # pyrefly: ignore[not-callable]
 async def send_client_request(
     self, coach_profile_id: int, client_profile_id: int, data: dict
-) -> None:  # pyre-ignore[valid-type]
+) -> None:  # pyrefly: ignore[valid-type]
     url = f"{settings.BOT_INTERNAL_URL}/internal/payment/client_request/"
     payload = {"coach_id": coach_profile_id, "client_id": client_profile_id, "data": data}
     headers = {"Authorization": f"Api-Key {settings.API_KEY}"}

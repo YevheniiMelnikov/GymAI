@@ -223,7 +223,7 @@ async def confirm_service(callback_query: CallbackQuery, state: FSMContext) -> N
         await ProfileService.adjust_coach_payout_due(coach.profile, payout)
         new_due = (coach.payout_due or Decimal("0")) + payout
         await Cache.coach.update_coach(coach.profile, {"payout_due": str(new_due)})
-        send_client_request.delay(  # pyre-ignore[not-callable]
+        send_client_request.delay(  # pyrefly: ignore[not-callable]
             coach.profile,
             client.profile,
             {
@@ -234,5 +234,5 @@ async def confirm_service(callback_query: CallbackQuery, state: FSMContext) -> N
         )
         await callback_query.answer(msg_text("payment_success", profile.language), show_alert=True)
         if callback_query.message:
-            await show_main_menu(callback_query.message, profile, state)
+            await show_main_menu(cast(Message, callback_query.message), profile, state)
         await del_msg(callback_query)

@@ -161,4 +161,4 @@ class Settings(BaseSettings):
         return v
 
 
-settings = Settings()  # noqa  # pyre-ignore[missing-argument]
+settings = Settings()  # noqa  # pyrefly: ignore[missing-argument]

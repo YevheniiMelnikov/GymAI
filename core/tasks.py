@@ -47,7 +47,7 @@ os.makedirs(_redis_dir, exist_ok=True)
 os.environ["PGPASSWORD"] = settings.DB_PASSWORD
 
 
-@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyrefly: ignore[not-callable]
 def pg_backup(self):
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
     path = os.path.join(_pg_dir, f"{settings.DB_NAME}_backup_{ts}.dump")
@@ -73,7 +73,7 @@ def pg_backup(self):
         raise
 
 
-@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyrefly: ignore[not-callable]
 def redis_backup(self):
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
     tmp_path = f"/tmp/redis_backup_{ts}.rdb"
@@ -91,7 +91,7 @@ def redis_backup(self):
             os.remove(tmp_path)
 
 
-@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyre-ignore[not-callable]
+@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyrefly: ignore[not-callable]
 def cleanup_backups(self):
     cutoff = datetime.now() - timedelta(days=settings.BACKUP_RETENTION_DAYS)
     for root in (_pg_dir, _redis_dir):
@@ -110,7 +110,7 @@ def cleanup_backups(self):
     retry_backoff=180,
     retry_jitter=True,
     max_retries=3,
-)  # pyre-ignore[not-callable]
+)  # pyrefly: ignore[not-callable]
 def deactivate_expired_subscriptions(self):
     logger.info("deactivate_expired_subscriptions started")
 
@@ -143,7 +143,7 @@ def deactivate_expired_subscriptions(self):
     retry_backoff=180,
     retry_jitter=True,
     max_retries=3,
-)  # pyre-ignore[not-callable]
+)  # pyrefly: ignore[not-callable]
 def warn_low_credits(self):
     logger.info("warn_low_credits started")
 
@@ -158,7 +158,7 @@ def warn_low_credits(self):
             required = required_credits(Decimal(str(sub.price)))
             if client.credits < required:
                 lang = profile.language if profile else settings.DEFAULT_LANG
-                send_payment_message.delay(  # pyre-ignore[not-callable]
+                send_payment_message.delay(  # pyrefly: ignore[not-callable]
                     sub.client_profile,
                     msg_text("not_enough_credits", lang),
                 )
@@ -177,7 +177,7 @@ def warn_low_credits(self):
     retry_backoff=180,
     retry_jitter=True,
     max_retries=3,
-)  # pyre-ignore[not-callable]
+)  # pyrefly: ignore[not-callable]
 def charge_due_subscriptions(self):
     logger.info("charge_due_subscriptions started")
 
@@ -227,7 +227,7 @@ def charge_due_subscriptions(self):
     retry_backoff=180,
     retry_jitter=True,
     max_retries=3,
-)  # pyre-ignore[not-callable]
+)  # pyrefly: ignore[not-callable]
 def export_coach_payouts(self):
     logger.info("export_coach_payouts started")
     url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/export_coach_payouts/"
@@ -252,7 +252,7 @@ _READ_TIMEOUT = 30.0
     retry_backoff=180,
     retry_jitter=True,
     max_retries=3,
-)  # pyre-ignore[not-callable]
+)  # pyrefly: ignore[not-callable]
 def send_daily_survey(self):
     url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/send_daily_survey/"
     headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
@@ -272,7 +272,7 @@ def send_daily_survey(self):
     retry_backoff=180,
     retry_jitter=True,
     max_retries=3,
-)  # pyre-ignore[not-callable]
+)  # pyrefly: ignore[not-callable]
 def send_workout_result(self, coach_profile_id: int, client_profile_id: int, text: str) -> None:
     """Forward workout survey results to the appropriate recipient."""
     url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/send_workout_result/"
@@ -350,7 +350,7 @@ def refresh_external_knowledge(self):
     retry_backoff=180,
     retry_jitter=True,
     max_retries=3,
-)  # pyre-ignore[not-callable]
+)  # pyrefly: ignore[not-callable]
 def prune_cognee(self):
     """Remove cached Cognee data storage."""
     logger.info("prune_cognee started")

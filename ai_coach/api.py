@@ -61,7 +61,7 @@ async def refresh_knowledge(credentials: HTTPBasicCredentials = Depends(security
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     try:
-        refresh_external_knowledge.apply_async(queue="maintenance")
+        refresh_external_knowledge.apply_async(queue="maintenance")  # pyrefly: ignore[not-callable]
         return {"status": "queued"}
     except Exception as e:
         logger.exception("Failed to enqueue refresh task: {}", e)

@@ -28,7 +28,9 @@ class PaymentWebhookView(APIView):
     @staticmethod
     def _verify_signature(raw_data: str, signature: str) -> bool:
         lp = LiqPay(settings.PAYMENT_PUB_KEY, settings.PAYMENT_PRIVATE_KEY)
-        expected = lp.str_to_sign(f"{settings.PAYMENT_PRIVATE_KEY}{raw_data}{settings.PAYMENT_PRIVATE_KEY}")
+        expected = lp.str_to_sign(  # pyrefly: ignore[missing-attribute]
+            f"{settings.PAYMENT_PRIVATE_KEY}{raw_data}{settings.PAYMENT_PRIVATE_KEY}"
+        )
         return signature == expected
 
     @staticmethod
@@ -54,7 +56,7 @@ class PaymentWebhookView(APIView):
             if order_id:
                 cache.delete(f"payment:{order_id}")
 
-            process_payment_webhook.delay(
+            process_payment_webhook.delay(  # pyrefly: ignore[not-callable]
                 order_id=order_id,
                 status=payment_info.get("status"),
                 err_description=payment_info.get("err_description", ""),
@@ -69,7 +71,7 @@ class PaymentWebhookView(APIView):
 
 @method_decorator(cache_page(60 * 5), name="dispatch")
 class PaymentListView(generics.ListAPIView):
-    serializer_class = PaymentSerializer
+    serializer_class = PaymentSerializer  # pyrefly: ignore[bad-override]
     permission_classes = [HasAPIKey]
 
     def get_queryset(self):
@@ -82,26 +84,26 @@ class PaymentListView(generics.ListAPIView):
 
 
 class PaymentDetailView(generics.RetrieveUpdateAPIView):
-    serializer_class = PaymentSerializer
+    serializer_class = PaymentSerializer  # pyrefly: ignore[bad-override]
     permission_classes = [HasAPIKey]
 
     def get_queryset(self):
         return PaymentRepository.base_qs()
 
-    def perform_update(self, serializer: serializers.BaseSerializer) -> None:  # pyre-ignore[bad-override]
+    def perform_update(self, serializer: serializers.BaseSerializer) -> None:  # pyrefly: ignore[bad-override]
         instance: Payment = serializer.save()
         cache.delete(f"payment:{instance.id}")  # type: ignore[attr-defined]
         cache.delete_many(["payments:list"])
 
 
 class PaymentCreateView(generics.CreateAPIView):
-    serializer_class = PaymentSerializer
+    serializer_class = PaymentSerializer  # pyrefly: ignore[bad-override]
     permission_classes = [HasAPIKey]
 
     def get_queryset(self):
         return PaymentRepository.base_qs()
 
-    def perform_create(self, serializer: serializers.BaseSerializer) -> None:  # pyre-ignore[bad-override]
+    def perform_create(self, serializer: serializers.BaseSerializer) -> None:  # pyrefly: ignore[bad-override]
         payment: Payment = serializer.save()
         cache.delete_many(["payments:list"])
         logger.debug(f"Payment id={payment.id} created → list cache flushed")  # type: ignore[attr-defined]
