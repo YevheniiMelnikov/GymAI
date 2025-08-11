@@ -43,6 +43,7 @@ def test_empty_context_does_not_crash(monkeypatch):
     async def runner():
         CogneeCoach._user = SimpleNamespace(id="test-u")
         monkeypatch.setattr(CogneeCoach, "_ensure_config", lambda: None)
+        monkeypatch.setattr(CogneeCoach, "_ensure_profile_indexed", lambda *a, **k: None)
 
         calls: list[list[str]] = []
 
@@ -55,7 +56,7 @@ def test_empty_context_does_not_crash(monkeypatch):
         monkeypatch.setattr(coach.cognee, "search", fake_search)
 
         res = await CogneeCoach.get_client_context(client_id=42, query="hello")
-        assert calls == [["client_42_message"], ["client_42_prompt"]]
-        assert res == {"messages": [], "prompts": []}
+        assert calls == [["client_42", coach.CogneeCoach.GLOBAL_DATASET]]
+        assert res == {"messages": []}
 
     asyncio.run(runner())

@@ -1,14 +1,15 @@
-import json
 import hashlib
 import hmac
+import json
 from urllib.parse import parse_qsl
 
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.shortcuts import render
 
 from config.app_settings import settings
 from core.cache import Cache
 from core.schemas import DayExercises
+from loguru import logger
 
 
 def _verify_init_data(init_data: str) -> dict:
@@ -41,12 +42,9 @@ def _format_full_program(exercises: list[DayExercises]) -> str:
     return "\n".join(lines).strip()
 
 
-def program_page(request):
-    return render(request, "webapp/program.html")
-
-
 async def program_data(request):
     init_data = request.GET.get("init_data", "")
+    logger.debug("Webapp program data requested: init_data length={}", len(init_data))
     try:
         data = _verify_init_data(init_data)
     except Exception:
@@ -61,3 +59,17 @@ async def program_data(request):
     except Exception:
         text = ""
     return JsonResponse({"program": text})
+
+
+def index(request: HttpRequest) -> HttpResponse:
+    logger.info("Webapp hit: {} {}", request.method, request.get_full_path())
+    return render(request, "webapp/index.html")
+
+
+def test(request: HttpRequest) -> HttpResponse:
+    return render(request, "webapp/test.html")
+
+
+def ping(request: HttpRequest) -> HttpResponse:
+    logger.info("Webapp ping: {} {}", request.method, request.get_full_path())
+    return HttpResponse("ok")

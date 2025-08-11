@@ -1,6 +1,7 @@
 from decimal import Decimal
 import json
 from typing import Callable, Optional, TypeVar
+from loguru import logger
 
 from core.services.internal import APIService
 from config.app_settings import settings
@@ -11,7 +12,6 @@ from .prompts import (
     WORKOUT_RULES,
     SYSTEM_PROMPT,
     UPDATE_WORKOUT_PROMPT,
-    INITIAL_PROMPT,
 )
 from .parsers import (
     parse_program_text,
@@ -20,7 +20,6 @@ from .parsers import (
     extract_json,
     normalize_program_data,
 )
-from loguru import logger
 from core.cache import Cache
 from core.exceptions import ProgramNotFoundError
 from core.schemas import Client, Program, DayExercises
@@ -75,14 +74,6 @@ def describe_client(client: Client) -> str:
     if client.health_notes:
         parts.append(f"Health notes: {client.health_notes}")
     return "; ".join(parts)
-
-
-async def assign_client(client: Client, lang: str) -> None:
-    prompt = INITIAL_PROMPT.format(
-        client_data=extract_client_data(client),
-        language=lang,
-    )
-    await APIService.ai_coach.ask(prompt, client_id=client.id)
 
 
 async def _attach_gifs_to_exercises(exercises: list[DayExercises]) -> None:
@@ -146,6 +137,7 @@ async def _generate_workout(
     request_context: str,
     response_template: str,
     parser: Callable[[str], Optional[T]],
+    request_id: str | None = None,
 ) -> tuple[str, Optional[T]]:
     """Request workout plan from AI and parse result."""
 
@@ -166,7 +158,12 @@ async def _generate_workout(
     raw = ""
     dto: Optional[T] = None
     for _ in range(settings.AI_GENERATION_RETRIES):
-        response = await APIService.ai_coach.ask(prompt, client_id=client.id, language=lang)
+        response = await APIService.ai_coach.ask(
+            prompt,
+            client_id=client.id,
+            language=lang,
+            request_id=request_id,
+        )
         raw = response[0] if response else ""
         dto = parser(raw)
         if dto is not None:
@@ -174,7 +171,15 @@ async def _generate_workout(
     return raw, dto
 
 
-async def generate_program(client: Client, lang: str, workout_type: str, wishes: str) -> tuple[list[DayExercises], str]:
+async def generate_program(
+    client: Client,
+    lang: str,
+    workout_type: str,
+    wishes: str,
+    *,
+    request_id: str,
+) -> tuple[list[DayExercises], str]:
+    logger.debug("generate_program started request_id={} client_id={}", request_id, client.id)
     try:
         prev_program = await Cache.workout.get_latest_program(client.profile, use_fallback=False)
         previous_program = json.dumps([d.model_dump() for d in prev_program.exercises_by_day], ensure_ascii=False)
@@ -192,6 +197,7 @@ async def generate_program(client: Client, lang: str, workout_type: str, wishes:
         request_context,
         PROGRAM_RESPONSE_TEMPLATE,
         parse_program_json,
+        request_id=request_id,
     )
     if program_dto is not None:
         exercises = program_dto.days
@@ -289,7 +295,7 @@ async def process_workout_result(
     try:
         ctx = await APIService.ai_coach.get_client_context(client_id, "workout")
     except Exception:
-        ctx = {"messages": [], "prompts": []}
+        ctx = {"messages": []}
 
     prompt = (
         SYSTEM_PROMPT
@@ -297,7 +303,7 @@ async def process_workout_result(
         + UPDATE_WORKOUT_PROMPT.format(
             expected_workout=expected_workout_result.strip(),
             feedback=feedback.strip(),
-            context="\n".join(ctx["messages"] + ctx["prompts"]).strip(),
+            context="\n".join(ctx["messages"]).strip(),
             language=language,
         )
     )

@@ -1,6 +1,4 @@
 from __future__ import annotations
-
-
 from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -8,6 +6,7 @@ from aiogram.exceptions import TelegramBadRequest
 from contextlib import suppress
 from typing import cast
 from loguru import logger
+from uuid import uuid4
 
 from bot.keyboards import (
     select_workout_kb,
@@ -20,7 +19,6 @@ from bot.keyboards import (
 from bot.states import States
 from bot.texts.text_manager import msg_text
 from config.app_settings import settings
-from bot.ai_coach.utils import assign_client
 from core.cache import Cache
 from core.enums import CoachType
 from core.schemas import Coach, Client, Profile
@@ -51,6 +49,7 @@ from bot.utils.credits import available_packages
 from bot.ai_coach.utils import generate_subscription, generate_program
 from bot.utils.credits import available_ai_services
 from bot.utils.exercises import format_program
+from core.utils.idempotency import acquire_once
 
 menu_router = Router()
 
@@ -128,7 +127,7 @@ async def services_menu(callback_query: CallbackQuery, state: FSMContext, bot: B
     cb_data = callback_query.data or ""
 
     if cb_data == "back" and isinstance(callback_query.message, Message):
-        await show_main_menu(callback_query.message, profile, state)
+        await show_main_menu(cast(Message, callback_query.message), profile, state)
         return
 
     if cb_data == "balance":
@@ -234,14 +233,33 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
     wishes = data.get("wishes", "")
 
     if callback_query.data == "no":
-        await show_main_menu(callback_query.message, profile, state)
+        await show_main_menu(cast(Message, callback_query.message), profile, state)
         await del_msg(callback_query)
         return
+
+    request_id = str(uuid4())
+    ttl = 300
+    if service == "program":
+        if not await acquire_once(f"gen_program:{client.id}", ttl):
+            logger.warning(
+                "Duplicate program generation suppressed for client_id={} request_id={}",
+                client.id,
+                request_id,
+            )
+            await callback_query.answer("\u23f3")
+            await del_msg(callback_query)
+            return
+        logger.info(
+            "Program generation started for client_id={} ttl={} request_id={}",
+            client.id,
+            ttl,
+            request_id,
+        )
 
     await ProfileService.adjust_client_credits(profile.id, -required)
     await Cache.client.update_client(client.profile, {"credits": client.credits - required})
     await answer_msg(callback_query, msg_text("request_in_progress", profile.language))
-    await show_main_menu(callback_query.message, profile, state)
+    await show_main_menu(cast(Message, callback_query.message), profile, state)
     bot = cast(Bot, callback_query.bot)
     assigned_coaches = [await Cache.coach.get_coach(coach_id) for coach_id in client.assigned_to]
     if any(coach.coach_type == CoachType.ai for coach in assigned_coaches):
@@ -250,15 +268,20 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
         fetched = await Cache.coach.get_ai_coach()
         if fetched:
             await assign_coach(fetched, client)
-            await assign_client(client, profile.language)
         else:
             logger.error("AI coach not found when assigning to client")
 
     if service == "program":
         try:
-            exercises, program_raw = await generate_program(client, profile.language, workout_type, wishes)
+            exercises, program_raw = await generate_program(
+                client,
+                profile.language,
+                workout_type,
+                wishes,
+                request_id=request_id,
+            )
         except Exception as e:  # noqa: BLE001
-            logger.exception(f"Program generation failed: {e}")
+            logger.exception("Program generation failed: {} request_id={}", e, request_id)
             await answer_msg(callback_query, msg_text("unexpected_error", profile.language))
             return
         if not exercises:
@@ -298,7 +321,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
 async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     profile = Profile.model_validate(data.get("profile"))
-    lang = profile.language or settings.DEFAULT_LANGUAGE
+    lang = profile.language or settings.DEFAULT_LANG
     days: list[str] = data.get("workout_days", [])
 
     if callback_query.data != "complete":
@@ -326,7 +349,7 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     wishes = data.get("wishes", "")
     period = data.get("period", "1m")
     await answer_msg(callback_query, msg_text("request_in_progress", lang))
-    await show_main_menu(callback_query.message, profile, state)
+    await show_main_menu(cast(Message, callback_query.message), profile, state)
     exercises, sub_raw = await generate_subscription(client, lang, workout_type, wishes, period, days)
     if not exercises:
         await answer_msg(callback_query, msg_text("ai_program_error", lang))

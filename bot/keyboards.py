@@ -1,11 +1,14 @@
+from urllib.parse import urlparse
+
 from aiogram.types import InlineKeyboardButton as KbBtn
 from aiogram.types import InlineKeyboardMarkup as KbMarkup, WebAppInfo
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.buttons_builder import ButtonsBuilder
 from bot.texts.text_manager import btn_text
-from core.schemas import Exercise
 from config.app_settings import settings
+from core.schemas import Exercise
+from loguru import logger
 
 
 def select_language_kb() -> KbMarkup:
@@ -25,6 +28,16 @@ def client_menu_kb(lang: str) -> KbMarkup:
         [builder.add("services", "services")],
         [builder.add("feedback", "feedback")],
     ]
+    source = settings.WEBAPP_PUBLIC_URL
+    if not source:
+        logger.error("WEBAPP_PUBLIC_URL is not configured; webapp button hidden")
+    else:
+        parsed = urlparse(source)
+        host = parsed.netloc or parsed.path.split("/")[0]
+        base = f"{parsed.scheme or 'https'}://{host}"
+        webapp_url = f"{base}/webapp/test/"
+        print(webapp_url)
+        buttons.append([KbBtn(text="webapp", web_app=WebAppInfo(url=webapp_url))])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
@@ -58,6 +71,15 @@ def coach_menu_kb(lang: str) -> KbMarkup:
         [builder.add("my_clients", "my_clients")],
         [builder.add("feedback", "feedback")],
     ]
+    source = settings.WEBAPP_PUBLIC_URL
+    if not source:
+        logger.error("WEBAPP_PUBLIC_URL is not configured; webapp button hidden")
+    else:
+        parsed = urlparse(source)
+        host = parsed.netloc or parsed.path.split("/")[0]
+        base = f"{parsed.scheme or 'https'}://{host}"
+        webapp_url = f"{base}/webapp/test/"
+        buttons.append([KbBtn(text="webapp", web_app=WebAppInfo(url=webapp_url))])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
@@ -278,24 +300,28 @@ def select_days_kb(lang: str, selected_days: list) -> KbMarkup:
 
 def program_view_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
+    source = settings.WEBAPP_PUBLIC_URL
+
     buttons = [
-        [
-            builder.add("back", "previous"),
-            builder.add("forward", "next"),
-        ],
+        [builder.add("back", "previous"), builder.add("forward", "next")],
         [builder.add("history", "history")],
-        [
-            KbBtn(
-                text=btn_text("open_webapp", lang),
-                web_app=WebAppInfo(
-                    url=f"{settings.WEBHOOK_HOST.rstrip('/')}/webapp/"
-                ),
-            )
-        ],
-        [
-            builder.add("quit", "quit"),
-        ],
     ]
+
+    if not source:
+        logger.error("WEBAPP_PUBLIC_URL is not configured; webapp button hidden")
+    else:
+        parsed = urlparse(source)
+        host = parsed.netloc or parsed.path.split("/")[0]
+        base = f"{parsed.scheme or 'https'}://{host}"
+        webapp_url = f"{base}/webapp/"
+        logger.debug(
+            "Constructed webapp url '{}' from WEBAPP_PUBLIC_URL='{}'",
+            webapp_url,
+            settings.WEBAPP_PUBLIC_URL,
+        )
+        buttons.append([KbBtn(text=btn_text("open_webapp", lang), web_app=WebAppInfo(url=webapp_url))])
+
+    buttons.append([builder.add("quit", "quit")])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 

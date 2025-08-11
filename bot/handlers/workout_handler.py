@@ -77,7 +77,9 @@ async def program_type(callback_query: CallbackQuery, state: FSMContext):
         coach_id = coach.profile
         await state.update_data(recipient_id=coach_id, sender_name=client.name)
         await state.set_state(States.contact_coach)
-        await callback_query.message.answer(msg_text("enter_your_message", profile.language))
+        message = callback_query.message
+        if message is not None:
+            await message.answer(msg_text("enter_your_message", profile.language))
         await del_msg(cast(Message | CallbackQuery | None, callback_query))
     else:
         message = cast(Message, callback_query.message)
@@ -337,7 +339,7 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext,
         coach_profile = await APIService.profile.get_profile(coach.profile)
         coach_lang = cast(str, coach_profile.language)
 
-        send_workout_result.delay(  # pyre-ignore[not-callable]
+        send_workout_result.delay(  # pyrefly: ignore[not-callable]
             coach.profile,
             client.profile,
             msg_text("workout_completed", coach_lang).format(name=client.name, program=program),
@@ -366,7 +368,7 @@ async def workout_description(message: Message, state: FSMContext, bot: Bot):
     day_data = next((d for d in exercises if d.day == str(day_index)), None)
     program = await format_program(exercises, day_index) if day_data else ""
 
-    send_workout_result.delay(  # pyre-ignore[not-callable]
+    send_workout_result.delay(  # pyrefly: ignore[not-callable]
         coach.profile,
         client.profile,
         msg_text("workout_feedback", coach_lang).format(
@@ -565,7 +567,7 @@ async def view_program(callback_query: CallbackQuery, state: FSMContext) -> None
         await show_program_history(callback_query, profile, state)
         await callback_query.answer()
     elif callback_query.data == "quit":
-        await show_main_menu(callback_query.message, profile, state)
+        await show_main_menu(cast(Message, callback_query.message), profile, state)
         await del_msg(cast(Message | CallbackQuery | None, callback_query))
         await callback_query.answer()
     else:

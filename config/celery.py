@@ -1,7 +1,20 @@
 from celery import Celery
-from datetime import timedelta
-from celery.schedules import crontab
+from datetime import datetime, timedelta
+
+from celery.schedules import crontab, schedule
+
 from config.app_settings import settings
+
+
+def beat_nowfun() -> datetime:
+    """Return current UTC time offset by the knowledge refresh start delay."""
+    return datetime.utcnow() + timedelta(seconds=settings.KNOWLEDGE_REFRESH_START_DELAY)
+
+
+def knowledge_refresh_now() -> datetime:
+    """Backward-compat alias for old pickled beat schedules."""
+    return beat_nowfun()
+
 
 celery_config = {
     "broker_url": settings.REDIS_URL,
@@ -13,6 +26,7 @@ celery_config = {
     "worker_max_tasks_per_child": 100,
     "task_time_limit": 600,
     "worker_pool": "threads",
+    "beat_schedule_filename": "/app/celerybeat-schedule",
     "beat_schedule": {
         "pg_backup": {
             "task": "core.tasks.pg_backup",
@@ -53,7 +67,10 @@ celery_config = {
         },
         "refresh_external_knowledge": {
             "task": "core.tasks.refresh_external_knowledge",
-            "schedule": timedelta(seconds=settings.KNOWLEDGE_REFRESH_INTERVAL),
+            "schedule": schedule(
+                run_every=timedelta(seconds=settings.KNOWLEDGE_REFRESH_INTERVAL),
+                nowfun=beat_nowfun,
+            ),
             "options": {"queue": "maintenance"},
         },
         "prune_cognee": {

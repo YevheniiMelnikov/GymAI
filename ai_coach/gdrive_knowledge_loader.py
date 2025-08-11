@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import io
 from pathlib import Path
-from typing import Any, Final, Callable
+from typing import Any, Awaitable, Callable, Final
 
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
@@ -11,7 +11,6 @@ from googleapiclient.http import MediaIoBaseDownload
 from loguru import logger
 from docx import Document
 import fitz  # PyMuPDF
-import cognee
 
 from config.app_settings import settings
 from .base_knowledge_loader import KnowledgeLoader
@@ -24,9 +23,13 @@ CHUNK_SIZE: Final = 1 * 1024 * 1024  # 1MB per chunk when downloading
 class GDriveDocumentLoader(KnowledgeLoader):
     """Load documents from Google Drive into Cognee."""
 
-    folder_id: str = settings.GDRIVE_FOLDER_ID
+    folder_id: str | None = settings.GDRIVE_FOLDER_ID
     credentials_path: str | Path = settings.GOOGLE_APPLICATION_CREDENTIALS
     _files_service: Any | None = None
+    _add_text: Callable[..., Awaitable[None]]
+
+    def __init__(self, add_text: Callable[..., Awaitable[None]]) -> None:
+        self._add_text = add_text
 
     def _get_drive_files_service(self) -> Any:
         if self._files_service is None:
@@ -112,9 +115,9 @@ class GDriveDocumentLoader(KnowledgeLoader):
                         logger.debug(f"Skip {name}: empty after parsing")
                         continue
 
-                    await cognee.add(
+                    await self._add_text(
                         text,
-                        dataset_name="external_docs",
+                        client_id=None,
                         node_set=[f"gdrive:{name}"],
                     )
                 except Exception as exc:  # noqa: BLE001

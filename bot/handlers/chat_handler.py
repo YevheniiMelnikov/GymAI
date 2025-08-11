@@ -178,7 +178,7 @@ async def close_notification(callback_query: CallbackQuery, state: FSMContext) -
     if profile_dict:
         profile = Profile.model_validate(profile_dict)
         if callback_query.message and isinstance(callback_query.message, Message):
-            await show_main_menu(callback_query.message, profile, state)
+            await show_main_menu(cast(Message, callback_query.message), profile, state)
 
 
 @chat_router.callback_query()

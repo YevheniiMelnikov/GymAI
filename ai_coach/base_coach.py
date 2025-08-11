@@ -43,17 +43,9 @@ class BaseAICoach(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    async def save_prompt(cls, text: str, client_id: int) -> None:
-        """
-        Save an AI prompt associated with a client.
-        """
-        ...
-
-    @classmethod
-    @abc.abstractmethod
     async def get_client_context(cls, client_id: int, query: str) -> dict[str, list[str]]:
         """
-        Retrieve relevant context (e.g. messages, prompts) for a query.
+        Retrieve relevant context (e.g. chat messages) for a query.
         """
         ...
 
@@ -67,10 +59,10 @@ class BaseAICoach(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    async def refresh_client_knowledge(cls, client_id: int, data_kind: Any = None) -> None:
+    async def refresh_client_knowledge(cls, client_id: int) -> None:
         """
-        Force reindex of a client's dataset by type. Use this method when:
-        - bulk updates were applied to the dataset outside normal saving flow;
+        Force reindex of a client's dataset. Use this method when:
+        - bulk updates were applied outside the normal saving flow;
         - you suspect the index is out of sync with the underlying data;
         - admin tools or maintenance scripts require a full refresh.
 

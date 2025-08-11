@@ -95,7 +95,7 @@ class CogneeConfig:
             import cognee.infrastructure.files.utils as file_utils
 
             CogneeConfig._patch_graph_relationship_ledger(GraphRelationshipLedger)
-            CogneeConfig._patch_litellm_embedding_engine(LiteLLMEmbeddingEngine)
+            CogneeConfig._patch_litellm_embedding_engine(LiteLLMEmbeddingEngine)  # pyrefly: ignore[bad-argument-type]
             CogneeConfig._patch_generic_api_adapter(GenericAPIAdapter)
             CogneeConfig._patch_open_data_file(file_utils, orig_open_data_file, LocalFileStorage)
             CogneeConfig._patch_local_file_storage(LocalFileStorage, get_parsed_path)
@@ -106,7 +106,7 @@ class CogneeConfig:
     @staticmethod
     def _patch_graph_relationship_ledger(ledger_cls: Type) -> None:
         """Patch GraphRelationshipLedger to use UUID as default ID."""
-        ledger_cls.__table__.c.id.default = sa_schema.ColumnDefault(uuid4)
+        ledger_cls.__table__.c.id.default = sa_schema.ColumnDefault(uuid4)  # pyrefly: ignore[bad-argument-type]
 
     @staticmethod
     def _patch_litellm_embedding_engine(engine_cls: Type) -> None:
@@ -115,14 +115,14 @@ class CogneeConfig:
         async def patched_embedding(texts: list[str], model: str | None = None, **kwargs: Any) -> Any:
             from litellm import embedding
 
-            return await embedding(
+            return await embedding(  # pyrefly: ignore[async-error]
                 texts,
                 model=settings.EMBEDDING_MODEL,
                 api_key=settings.EMBEDDING_API_KEY,
                 base_url=settings.OPENAI_BASE_URL,
             )
 
-        engine_cls.get_embedding_fn = staticmethod(patched_embedding)
+        engine_cls.get_embedding_fn = staticmethod(patched_embedding)  # pyrefly: ignore[implicitly-defined-attribute]
 
     @staticmethod
     def _patch_generic_api_adapter(adapter_cls: Type) -> None:
@@ -135,7 +135,7 @@ class CogneeConfig:
             if isinstance(target, AsyncOpenAI):
                 target.default_headers.update({"HTTP-Referer": "https://gymbot.local", "X-Title": "GymBot"})
 
-        adapter_cls.__init__ = new_init
+        adapter_cls.__init__ = new_init  # pyrefly: ignore[implicitly-defined-attribute]
 
     @staticmethod
     def _patch_open_data_file(file_utils: Any, orig_open: Any, local_storage_cls: Type) -> None:
@@ -165,7 +165,7 @@ class CogneeConfig:
                 async with orig_open(file_path, mode=mode, encoding=encoding, **kwargs) as f:
                     yield f
 
-        file_utils.open_data_file = fixed_open_data_file
+        file_utils.open_data_file = fixed_open_data_file  # pyrefly: ignore[implicitly-defined-attribute]
 
     @staticmethod
     def _patch_local_file_storage(storage_cls: Type, get_parsed_path_fn: Any) -> None:
@@ -178,4 +178,4 @@ class CogneeConfig:
             self.storage_path = str(path)
             return orig_open(self, file_path, mode=mode, *args, **kwargs)
 
-        storage_cls.open = ensure_open
+        storage_cls.open = ensure_open  # pyrefly: ignore[implicitly-defined-attribute]

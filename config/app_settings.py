@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Annotated
 
-from pydantic import Field, model_validator
+from pydantic import Field, model_validator, field_validator
 from pydantic_settings import BaseSettings
 from pathlib import Path
 
@@ -15,8 +16,6 @@ class Settings(BaseSettings):
     MAX_BIRTH_YEAR: int = 2020
     MAX_FILE_SIZE_MB: int = 10
 
-    SITE_NAME: str = "AchieveTogether"
-
     API_MAX_RETRIES: int = 3
     API_RETRY_INITIAL_DELAY: int = 1
     API_RETRY_BACKOFF_FACTOR: int = 2
@@ -25,7 +24,8 @@ class Settings(BaseSettings):
     AI_GENERATION_RETRIES: int = 3
 
     KNOWLEDGE_REFRESH_INTERVAL: int = 60 * 60
-    AI_COACH_TIMEOUT: int = 60
+    KNOWLEDGE_REFRESH_START_DELAY: int = 180
+    AI_COACH_TIMEOUT: int = 120
 
     CACHE_TTL: int = 60 * 5  # Django cache TTL
     BACKUP_RETENTION_DAYS: int = 30  # Postgres/Redis backup retention
@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: Annotated[str, Field(default="INFO")]
     REDIS_URL: Annotated[str, Field(default="redis://redis:6379")]
 
-    BOT_INTERNAL_URL: Annotated[str, Field(default="http://localhost:8000/")]
+    BOT_INTERNAL_URL: Annotated[str, Field(default="http://bot:8000/")]
     WEB_SERVER_HOST: Annotated[str, Field(default="0.0.0.0")]
 
     DB_PORT: Annotated[str, Field(default="5432")]
@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     API_KEY: str
     SECRET_KEY: str
     API_URL: str
+    ALLOWED_HOSTS: Annotated[list[str], Field(default=["localhost", "127.0.0.1"])]
+    SITE_NAME: str = "AchieveTogether"
 
     AI_COACH_REFRESH_USER: Annotated[str, Field(default="admin")]
     AI_COACH_REFRESH_PASSWORD: Annotated[str, Field(default="password")]
@@ -71,6 +73,7 @@ class Settings(BaseSettings):
     BOT_LINK: str
     WEBHOOK_HOST: str
     WEBHOOK_PORT: int
+    WEBAPP_PUBLIC_URL: Annotated[str | None, Field(default=None)]
 
     GOOGLE_APPLICATION_CREDENTIALS: str
     GDRIVE_FOLDER_ID: str | None = None
@@ -122,6 +125,10 @@ class Settings(BaseSettings):
         if not self.WEBHOOK_URL:
             self.WEBHOOK_URL = f"{self.WEBHOOK_HOST}{self.WEBHOOK_PATH}"
 
+        # WEBAPP_PUBLIC_URL
+        if not self.WEBAPP_PUBLIC_URL:
+            self.WEBAPP_PUBLIC_URL = self.WEBHOOK_HOST
+
         # PAYMENT_CALLBACK_URL
         if not self.PAYMENT_CALLBACK_URL:
             self.PAYMENT_CALLBACK_URL = f"{self.WEBHOOK_HOST}/payment-webhook/"
@@ -137,5 +144,21 @@ class Settings(BaseSettings):
     def VECTORDATABASE_URL(self) -> str:
         return f"postgresql+psycopg2://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
+    @field_validator("ALLOWED_HOSTS", mode="before")
+    @classmethod
+    def _parse_allowed_hosts(cls, v):
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            return ["localhost", "127.0.0.1"]
+        if isinstance(v, str):
+            s = v.strip()
+            try:
+                j = json.loads(s)
+                if isinstance(j, list):
+                    return [str(x).strip() for x in j if str(x).strip()]
+            except Exception:
+                pass
+            return [p.strip() for p in s.split(",") if p.strip()]
+        return v
 
-settings = Settings()  # noqa  # pyre-ignore[missing-argument]
+
+settings = Settings()  # noqa  # pyrefly: ignore[missing-argument]

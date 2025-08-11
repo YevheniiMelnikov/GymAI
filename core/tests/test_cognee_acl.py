@@ -3,7 +3,6 @@ import asyncio
 
 import pytest
 
-
 import ai_coach.cognee_coach as coach
 
 
@@ -38,16 +37,17 @@ def test_case_success_create_and_search(monkeypatch):
 
         monkeypatch.setattr(coach.HashStore, "contains", fake_contains)
         monkeypatch.setattr(coach.HashStore, "add", fake_add_hash)
+        monkeypatch.setattr(coach.CogneeCoach, "_ensure_profile_indexed", lambda *a, **k: None)
 
-        await coach.CogneeCoach.save_prompt("hi", client_id=1)
+        await coach.CogneeCoach.save_client_message("hi", client_id=1)
         await asyncio.sleep(0)
-        await coach.CogneeCoach.refresh_client_knowledge(1, data_kind=coach.DataKind.PROMPT)
+        await coach.CogneeCoach.refresh_client_knowledge(1)
         await coach.CogneeCoach.make_request("hi", client_id=1)
 
-        assert calls["dataset_name"] == "client_1_prompt"
+        assert calls["dataset_name"] == "client_1"
         assert cognify_calls[0] == ["ds1"]
-        assert cognify_calls[1] == ["client_1_prompt"]
-        assert calls["search"] == ["client_1_prompt"]
+        assert cognify_calls[1] == ["client_1"]
+        assert calls["search"] == ["client_1", coach.CogneeCoach.GLOBAL_DATASET]
 
     asyncio.run(runner())
 
@@ -73,8 +73,8 @@ def test_case_conflict_existing_dataset(monkeypatch):
         monkeypatch.setattr(coach.HashStore, "contains", fake_contains)
 
         with pytest.raises(coach.PermissionDeniedError):
-            await coach.CogneeCoach.save_prompt("hello", client_id=2)
+            await coach.CogneeCoach.save_client_message("hello", client_id=2)
 
-        assert calls["dataset_names"] == ["client_2_prompt"]
+        assert calls["dataset_names"] == ["client_2"]
 
     asyncio.run(runner())

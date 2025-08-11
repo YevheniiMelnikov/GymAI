@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from redis.asyncio import Redis, from_url
+from redis.asyncio import Redis
 
 from config.app_settings import settings
 
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 class HashStore:
     """Persist SHA256 hashes for deduplication."""
 
-    redis: Redis = from_url(
+    redis: Redis = Redis.from_url(
         url=settings.REDIS_URL,
         db=2,
         encoding="utf-8",

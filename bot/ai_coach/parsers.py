@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from typing import Any, cast
 from pydantic import ValidationError
 
 from core.schemas import DayExercises, Exercise
@@ -40,15 +41,17 @@ def extract_json(text: str) -> str | None:
     return None
 
 
-def normalize_program_data(data: dict, *, key: str = "days") -> None:
+def normalize_program_data(data: dict[str, Any], *, key: str = "days") -> None:
     """Normalize day identifiers and exercise fields in program JSON."""
-    for day in data.get(key, []):
+    for day_raw in data.get(key, []):
+        day = cast(dict[str, Any], day_raw)
         day_val = str(day.get("day", ""))
         match = re.search(r"\d+", day_val)
         if match:
             day_num = int(match.group(0))
             day["day"] = str(day_num - 1)
-        for ex in day.get("exercises", []):
+        for ex_raw in day.get("exercises", []):
+            ex = cast(dict[str, Any], ex_raw)
             sets = ex.get("sets")
             ex["sets"] = str(sets) if sets is not None else ""
             reps = ex.get("reps")

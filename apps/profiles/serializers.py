@@ -5,7 +5,7 @@ from .models import Profile, ClientProfile, CoachProfile
 
 
 class ProfileSerializer(serializers.ModelSerializer):
-    class Meta:  # pyre-ignore[bad-override]
+    class Meta:  # pyrefly: ignore[bad-override]
         model = Profile
         fields = "__all__"
 
@@ -13,7 +13,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 class ClientProfileSerializer(serializers.ModelSerializer):
     profile_data = ProfileSerializer(source="profile", read_only=True)
 
-    class Meta:  # pyre-ignore[bad-override]
+    class Meta:  # pyrefly: ignore[bad-override]
         model = ClientProfile
         fields = "__all__"
 
@@ -36,6 +36,6 @@ class CoachProfileSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
 
-    class Meta:  # pyre-ignore[bad-override]
+    class Meta:  # pyrefly: ignore[bad-override]
         model = CoachProfile
         fields = "__all__"

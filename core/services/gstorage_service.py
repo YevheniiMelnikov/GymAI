@@ -111,5 +111,4 @@ class ExerciseGIFStorage(GCStorageService):
         except Exception as exc:
             logger.error(f"Failed to find gif for exercise {exercise}: {exc}")
 
-        logger.debug(f"No matching file found for exercise: {exercise}")
         return None
