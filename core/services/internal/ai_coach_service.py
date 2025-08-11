@@ -3,8 +3,6 @@ from __future__ import annotations
 import base64
 from enum import Enum
 from urllib.parse import urljoin
-
-import httpx
 from loguru import logger
 
 from config.app_settings import settings
@@ -88,8 +86,8 @@ class AiCoachService(APIClient):
     async def health(cls, timeout: float = 3.0) -> bool:
         url = urljoin(cls.base_url, "health/")
         try:
-            response = await cls.client.get(url, timeout=timeout)
-        except httpx.HTTPError as exc:
+            status, _ = await cls._api_request("get", url, timeout=timeout)
+        except UserServiceError as exc:
             logger.debug(f"AI coach health check failed: {exc}")
             return False
-        return response.status_code == 200
+        return status == 200

@@ -1,8 +1,7 @@
 from json import JSONDecodeError
 import asyncio
-from typing import Optional
+from typing import Optional, ClassVar
 from decimal import Decimal
-
 import httpx
 from loguru import logger
 
@@ -13,13 +12,37 @@ from config.app_settings import settings
 class APIClient:
     api_url = settings.API_URL
     api_key = settings.API_KEY
-    client = httpx.AsyncClient()
     use_default_auth = True
+
+    _clients: ClassVar[dict[int, httpx.AsyncClient]] = {}
 
     max_retries = settings.API_MAX_RETRIES
     initial_delay = settings.API_RETRY_INITIAL_DELAY
     backoff_factor = settings.API_RETRY_BACKOFF_FACTOR
     max_delay = settings.API_RETRY_MAX_DELAY
+
+    @classmethod
+    def _get_client(cls, timeout: int) -> httpx.AsyncClient:
+        """Return per-event-loop AsyncClient instance."""
+        loop = asyncio.get_running_loop()
+        key = id(loop)
+
+        client = cls._clients.get(key)
+        if client is None or client.is_closed:
+            client = httpx.AsyncClient(timeout=timeout)
+            cls._clients[key] = client
+        return client
+
+    @classmethod
+    async def aclose(cls) -> None:
+        """Close all cached clients."""
+        for key, client in list(cls._clients.items()):
+            try:
+                await client.aclose()
+            except Exception:
+                logger.exception("Failed to close httpx client for loop %s", key)
+            finally:
+                cls._clients.pop(key, None)
 
     @staticmethod
     def _json_safe(obj: Optional[dict]) -> Optional[dict]:
@@ -53,34 +76,41 @@ class APIClient:
 
         delay = cls.initial_delay
         data = cls._json_safe(data)
-        logger.debug(f"API request: {method.upper()} {url} payload={data}")
 
         for attempt in range(1, cls.max_retries + 1):
             try:
-                response = await cls.client.request(method, url, json=data, headers=headers, timeout=timeout)
+                client = cls._get_client(timeout)
+                resp = await client.request(method, url, json=data, headers=headers)
 
-                if response.is_success:
+                if resp.is_success:
+                    if resp.headers.get("content-type", "").startswith("application/json"):
+                        try:
+                            return resp.status_code, resp.json()
+                        except JSONDecodeError:
+                            logger.warning("Failed to decode JSON from response for %s", url)
+                            return resp.status_code, None
+                    return resp.status_code, None
+
+                error_data: Optional[dict]
+                if resp.headers.get("content-type", "").startswith("application/json"):
                     try:
-                        return response.status_code, response.json()
+                        error_data = resp.json()
                     except JSONDecodeError:
-                        logger.warning(f"Failed to decode JSON from response for {url}")
-                        return response.status_code, None
+                        error_data = {"error": resp.text}
+                else:
+                    error_data = {"error": resp.text}
 
-                try:
-                    error_data = response.json()
-                except JSONDecodeError:
-                    error_data = {"error": response.text}
+                if resp.status_code == 404:
+                    return resp.status_code, error_data
 
-                if response.status_code == 404:
-                    return response.status_code, error_data
+                logger.error("Request to %s failed with HTTP=%s, response: %s", url, resp.status_code, error_data)
 
-                logger.error(f"Request to {url} failed with HTTP={response.status_code}, response: {error_data}")
-                if response.status_code >= 500 or response.status_code == 429:
-                    raise httpx.HTTPStatusError("Retryable error", request=response.request, response=response)
-                return response.status_code, error_data
+                if resp.status_code >= 500 or resp.status_code == 429:
+                    raise httpx.HTTPStatusError("Retryable error", request=resp.request, response=resp)
+                return resp.status_code, error_data
 
             except (httpx.HTTPStatusError, httpx.HTTPError) as e:
-                logger.warning(f"Attempt {attempt} failed: {type(e).__name__}: {e!r}. Retrying in {delay:.1f}s...")
+                logger.warning("Attempt %s failed: %s: %r. Retrying in %.1fs...", attempt, type(e).__name__, e, delay)
                 if attempt == cls.max_retries:
                     raise UserServiceError(
                         f"Request to {url} failed after {attempt} attempts: {type(e).__name__}: {e!r}"

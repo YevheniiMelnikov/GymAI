@@ -23,13 +23,13 @@ tasks:
     env:
       DJANGO_SETTINGS_MODULE: config.settings
     cmds:
-      - uv run ruff check --fix --config=pyproject.toml
-      - uv run pyrefly check
+      - uv run --no-sync ruff check --fix --config=pyproject.toml
+      - uv run --no-sync pyrefly check
 
   format:
     desc: Format with Ruff
     cmds:
-      - uv run ruff format --config=pyproject.toml
+      - uv run --no-sync ruff format --config=pyproject.toml
 
   test:
     desc: Run tests

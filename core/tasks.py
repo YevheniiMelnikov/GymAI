@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import shutil
 import subprocess
@@ -20,6 +22,7 @@ from bot.utils.credits import required_credits
 from core.services import ProfileService
 from bot.utils.profiles import get_assigned_coach
 from core.enums import CoachType
+from core.utils.redis_lock import redis_try_lock, get_redis_client
 
 
 def _next_payment_date(period: str) -> str:
@@ -32,6 +35,8 @@ def _next_payment_date(period: str) -> str:
         next_date = today + relativedelta(months=+1)
     return next_date.isoformat()
 
+
+# ---------- Backups ----------
 
 _dumps_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dumps")
 _pg_dir = os.path.join(_dumps_dir, "postgres")
@@ -94,6 +99,9 @@ def cleanup_backups(self):
             if f.is_file() and datetime.fromtimestamp(f.stat().st_ctime) < cutoff:
                 os.remove(f.path)
                 logger.info(f"Deleted old backup {f.path}")
+
+
+# ---------- Billing ----------
 
 
 @shared_task(
@@ -210,6 +218,9 @@ def charge_due_subscriptions(self):
     logger.info("charge_due_subscriptions completed")
 
 
+# ---------- Bot calls ----------
+
+
 @shared_task(
     bind=True,
     autoretry_for=(httpx.HTTPError,),
@@ -264,7 +275,6 @@ def send_daily_survey(self):
 )  # pyre-ignore[not-callable]
 def send_workout_result(self, coach_profile_id: int, client_profile_id: int, text: str) -> None:
     """Forward workout survey results to the appropriate recipient."""
-
     url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/send_workout_result/"
     headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
     payload = {
@@ -281,34 +291,57 @@ def send_workout_result(self, coach_profile_id: int, client_profile_id: int, tex
         raise self.retry(exc=exc)
 
 
+# ---------- AI coach ----------
+
+
 @shared_task(
     bind=True,
     autoretry_for=(Exception,),
     retry_backoff=180,
     retry_jitter=True,
     max_retries=3,
-)  # pyre-ignore[not-callable]
+)
 def refresh_external_knowledge(self):
     """Refresh external knowledge and rebuild Cognee index."""
     logger.info("refresh_external_knowledge triggered")
 
+    async def _dedupe_window(window_s: int = 30) -> bool:
+        r = get_redis_client()
+        ok = await r.set("dedupe:refresh_external_knowledge", "1", nx=True, ex=window_s)
+        return bool(ok)
+
     async def _impl() -> None:
-        for attempt in range(3):
-            if await AiCoachService.health(timeout=3.0):
-                break
-            logger.warning("AI coach health check failed attempt %s", attempt + 1)
-            await asyncio.sleep(1)
-        else:
-            logger.warning("AI coach not ready, skipping refresh_external_knowledge")
+        if not await _dedupe_window(30):
+            logger.info("refresh_external_knowledge skipped: dedupe window active")
             return
-        await AiCoachService.refresh_knowledge()
+
+        async with redis_try_lock(
+            "locks:refresh_external_knowledge",
+            ttl_ms=180_000,
+            wait=False,
+        ) as got:
+            if not got:
+                logger.info("refresh_external_knowledge skipped: lock is held")
+                return
+
+            for attempt in range(3):
+                if await AiCoachService.health(timeout=3.0):
+                    break
+                logger.warning("AI coach health check failed attempt %s", attempt + 1)
+                await asyncio.sleep(1)
+            else:
+                logger.warning("AI coach not ready, skipping refresh_external_knowledge")
+                return
+
+            await AiCoachService.refresh_knowledge()
 
     try:
         asyncio.run(_impl())
     except Exception as exc:  # noqa: BLE001
         logger.error("refresh_external_knowledge failed: {}", exc)
         raise
-    logger.info("refresh_external_knowledge completed")
+    else:
+        logger.info("refresh_external_knowledge completed")
 
 
 @shared_task(
