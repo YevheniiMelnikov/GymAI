@@ -54,21 +54,21 @@ class ProfileAPIUpdate(APIView):
 
 
 class ProfileAPIDestroy(generics.RetrieveDestroyAPIView):
-    serializer_class = ProfileSerializer
+    serializer_class = ProfileSerializer  # pyrefly: ignore[bad-override]
     queryset = ProfileRepository.get_by_id  # type: ignore[assignment]
     permission_classes = [HasAPIKey]
 
 
 @method_decorator(cache_page(60), name="dispatch")
 class ProfileAPIList(generics.ListCreateAPIView):
-    serializer_class = ProfileSerializer
+    serializer_class = ProfileSerializer  # pyrefly: ignore[bad-override]
     queryset = ProfileRepository  # type: ignore[assignment]
     permission_classes = [HasAPIKey]
 
 
 @method_decorator(cache_page(60), name="dispatch")
 class CoachProfileList(generics.ListCreateAPIView):
-    serializer_class = CoachProfileSerializer
+    serializer_class = CoachProfileSerializer  # pyrefly: ignore[bad-override]
     permission_classes = [HasAPIKey]
 
     def get_queryset(self):
@@ -85,7 +85,7 @@ class CoachProfileList(generics.ListCreateAPIView):
 
 @method_decorator(cache_page(60), name="dispatch")
 class ClientProfileList(generics.ListCreateAPIView):
-    serializer_class = ClientProfileSerializer
+    serializer_class = ClientProfileSerializer  # pyrefly: ignore[bad-override]
     permission_classes = [HasAPIKey]
 
     def get_queryset(self):
@@ -101,7 +101,7 @@ class ClientProfileList(generics.ListCreateAPIView):
 
 
 class CoachProfileUpdate(generics.RetrieveUpdateAPIView):
-    serializer_class = CoachProfileSerializer
+    serializer_class = CoachProfileSerializer  # pyrefly: ignore[bad-override]
     permission_classes = [HasAPIKey]
 
     def get_object(self):
@@ -112,7 +112,7 @@ class CoachProfileUpdate(generics.RetrieveUpdateAPIView):
 
 
 class ClientProfileUpdate(generics.RetrieveUpdateAPIView):
-    serializer_class = ClientProfileSerializer
+    serializer_class = ClientProfileSerializer  # pyrefly: ignore[bad-override]
     permission_classes = [HasAPIKey]
 
     def get_object(self):

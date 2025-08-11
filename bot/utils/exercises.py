@@ -204,7 +204,7 @@ async def format_program(exercises: list[DayExercises], day: int) -> str:
     if not day_entry:
         return ""
 
-    program_lines = []
+    program_lines: list[str] = []
     for idx, exercise in enumerate(day_entry.exercises):
         line = f"{idx + 1}. {exercise.name} | {exercise.sets} x {exercise.reps}"
         if exercise.set_id is not None:

@@ -86,7 +86,7 @@ class AiCoachService(APIClient):
     async def health(cls, timeout: float = 3.0) -> bool:
         url = urljoin(cls.base_url, "health/")
         try:
-            status, _ = await cls._api_request("get", url, timeout=timeout)
+            status, _ = await cls._api_request("get", url, timeout=int(timeout))
         except UserServiceError as exc:
             logger.debug(f"AI coach health check failed: {exc}")
             return False

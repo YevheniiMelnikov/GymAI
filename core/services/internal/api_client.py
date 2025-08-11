@@ -1,6 +1,6 @@
 from json import JSONDecodeError
 import asyncio
-from typing import Optional, ClassVar
+from typing import Optional, ClassVar, Any
 from decimal import Decimal
 import httpx
 from loguru import logger
@@ -45,7 +45,7 @@ class APIClient:
                 cls._clients.pop(key, None)
 
     @staticmethod
-    def _json_safe(obj: Optional[dict]) -> Optional[dict]:
+    def _json_safe(obj: Optional[dict]) -> Any:
         """Convert Decimals in payload to primitive types for JSON."""
         if obj is None:
             return None

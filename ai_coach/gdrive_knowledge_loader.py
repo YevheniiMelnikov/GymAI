@@ -23,7 +23,7 @@ CHUNK_SIZE: Final = 1 * 1024 * 1024  # 1MB per chunk when downloading
 class GDriveDocumentLoader(KnowledgeLoader):
     """Load documents from Google Drive into Cognee."""
 
-    folder_id: str = settings.GDRIVE_FOLDER_ID
+    folder_id: str | None = settings.GDRIVE_FOLDER_ID
     credentials_path: str | Path = settings.GOOGLE_APPLICATION_CREDENTIALS
     _files_service: Any | None = None
     _add_text: Callable[..., Awaitable[None]]

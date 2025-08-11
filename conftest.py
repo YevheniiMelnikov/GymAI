@@ -1,3 +1,4 @@
+# pyrefly: ignore-file
 import os
 import sys
 import types

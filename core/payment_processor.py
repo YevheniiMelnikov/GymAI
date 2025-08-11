@@ -36,7 +36,7 @@ class PaymentProcessor:
                 await cls.cache.payment.set_status(client.id, payment.payment_type, PaymentStatus.SUCCESS)
                 profile = await cls.profile_service.get_profile(client.profile)
                 if profile:
-                    send_payment_message.delay(  # pyre-ignore[not-callable]
+                    send_payment_message.delay(  # pyrefly: ignore[not-callable]
                         client.id, msg_text("payment_success", profile.language)
                     )
                 await cls.process_credit_topup(client, payment.amount)
@@ -44,7 +44,7 @@ class PaymentProcessor:
                 await cls.cache.payment.set_status(client.id, payment.payment_type, PaymentStatus.FAILURE)
                 profile = await cls.profile_service.get_profile(client.profile)
                 if profile:
-                    send_payment_message.delay(  # pyre-ignore[not-callable]
+                    send_payment_message.delay(  # pyrefly: ignore[not-callable]
                         client.id,
                         msg_text("payment_failure", profile.language).format(
                             mail=settings.EMAIL, tg=settings.TG_SUPPORT_CONTACT
