@@ -21,7 +21,7 @@ from core.services import avatar_manager
 from bot.utils.exercises import edit_subscription_exercises
 from bot.utils.menus import show_main_menu, manage_subscription, show_exercises_menu, program_menu_pagination
 from bot.texts.text_manager import msg_text
-from bot.utils.other import del_msg, answer_msg
+from bot.utils.bot import del_msg, answer_msg
 
 chat_router = Router()
 

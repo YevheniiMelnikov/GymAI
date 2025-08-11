@@ -6,7 +6,7 @@ from aiogram.types import CallbackQuery, Message
 from loguru import logger
 
 from bot.utils.text import get_translated_week_day
-from bot.utils.other import delete_messages, answer_msg, del_msg
+from bot.utils.bot import del_msg, answer_msg, delete_messages
 from bot.keyboards import program_edit_kb, program_manage_kb
 from bot.states import States
 from bot.texts.text_manager import msg_text

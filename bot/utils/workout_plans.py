@@ -29,7 +29,7 @@ from bot.utils.profiles import get_assigned_coach
 from core.enums import CoachType
 from bot.utils.text import get_translated_week_day
 from bot.utils.exercises import format_program
-from bot.utils.other import delete_messages, del_msg, answer_msg
+from bot.utils.bot import del_msg, answer_msg, delete_messages
 from bot.keyboards import yes_no_kb
 from bot.utils.credits import required_credits
 from core.services import ProfileService

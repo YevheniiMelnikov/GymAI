@@ -41,7 +41,8 @@ from bot.utils.menus import (
 from bot.utils.menus import has_active_human_subscription
 from bot.utils.profiles import assign_coach, get_assigned_coach
 from bot.utils.workout_plans import manage_program, cancel_subscription
-from bot.utils.other import del_msg, generate_order_id, answer_msg
+from bot.utils.other import generate_order_id
+from bot.utils.bot import del_msg, answer_msg
 from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
 from core.services import APIService, ProfileService
 from bot.keyboards import payment_kb

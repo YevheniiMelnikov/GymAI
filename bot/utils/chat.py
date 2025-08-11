@@ -9,9 +9,8 @@ from aiogram.types import CallbackQuery, Message, FSInputFile, InputFile
 from pathlib import Path
 
 from bot.texts import msg_text
-from bot.utils.other import answer_msg
+from bot.utils.bot import answer_msg, get_webapp_url
 from bot.keyboards import new_coach_kb, incoming_request_kb, client_msg_bk, program_view_kb
-from bot.utils.web import get_webapp_url
 from bot.states import States
 from config.app_settings import settings
 from core.cache import Cache

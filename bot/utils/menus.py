@@ -15,7 +15,6 @@ from pathlib import Path
 from bot import keyboards as kb
 from bot.keyboards import subscription_manage_kb, program_edit_kb, program_view_kb
 from bot.utils.profiles import fetch_user, answer_profile, get_assigned_coach
-from bot.utils.web import get_webapp_url
 from bot.utils.credits import uah_to_credits, available_packages, available_ai_services
 from decimal import Decimal
 from bot.states import States
@@ -36,7 +35,7 @@ from bot.utils.text import (
 )
 from bot.utils.exercises import format_program, format_full_program
 from config.app_settings import settings
-from bot.utils.other import answer_msg, del_msg
+from bot.utils.bot import del_msg, answer_msg, get_webapp_url
 from core.services import avatar_manager
 from core.validators import validate_or_raise
 

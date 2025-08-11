@@ -31,7 +31,8 @@ from bot.utils.menus import show_main_menu, show_my_profile_menu, send_policy_co
 from bot.utils.profiles import update_profile_data, check_assigned_clients, get_assigned_coach
 from core.enums import CoachType
 from bot.utils.text import get_state_and_message
-from bot.utils.other import delete_messages, set_bot_commands, answer_msg, del_msg, parse_price
+from bot.utils.other import parse_price
+from bot.utils.bot import del_msg, answer_msg, delete_messages, set_bot_commands
 from bot.texts.text_manager import msg_text
 from core.services import avatar_manager
 from core.validators import is_valid_year

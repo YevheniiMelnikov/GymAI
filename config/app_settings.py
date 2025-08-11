@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     API_URL: str
     ALLOWED_HOSTS: Annotated[list[str], Field(default=["localhost", "127.0.0.1"])]
-    SITE_NAME: str = "AchieveTogether"
+    SITE_NAME: Annotated[str, Field(default="AchieveTogether")]
 
     AI_COACH_REFRESH_USER: Annotated[str, Field(default="admin")]
     AI_COACH_REFRESH_PASSWORD: Annotated[str, Field(default="password")]
@@ -91,7 +91,7 @@ class Settings(BaseSettings):
     PAYMENT_PUB_KEY: str
     CHECKOUT_URL: str
 
-    WEBHOOK_PATH: str | None = None
+    WEBHOOK_PATH: Annotated[str, Field(default="/telegram/webhook")]
     WEBHOOK_URL: str | None = None
     PAYMENT_CALLBACK_URL: str | None = None
 
@@ -117,10 +117,6 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _compute_derived_fields(self) -> "Settings":
-        # WEBHOOK_PATH
-        if not self.WEBHOOK_PATH:
-            self.WEBHOOK_PATH = f"/gym_bot/{self.BOT_TOKEN}"
-
         # WEBHOOK_URL
         if not self.WEBHOOK_URL:
             self.WEBHOOK_URL = f"{self.WEBHOOK_HOST}{self.WEBHOOK_PATH}"

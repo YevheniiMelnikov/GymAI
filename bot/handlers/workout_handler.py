@@ -40,10 +40,8 @@ from bot.utils.menus import has_active_human_subscription
 from bot.utils.profiles import get_assigned_coach
 from bot.utils.other import (
     short_url,
-    delete_messages,
-    answer_msg,
-    del_msg,
 )
+from bot.utils.bot import del_msg, answer_msg, delete_messages
 from bot.utils.workout_plans import reset_workout_plan, save_workout_plan, next_day_workout_plan
 from core.schemas import DayExercises, Profile, Program
 from bot.texts import msg_text, btn_text

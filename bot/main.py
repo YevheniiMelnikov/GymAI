@@ -13,11 +13,8 @@ from config.app_settings import settings
 from bot.middlewares import ProfileMiddleware
 from bot.handlers import configure_routers
 from core.cache.base import BaseCacheManager
-from bot.utils.other import set_bot_commands
+from bot.utils.bot import set_bot_commands
 from core.containers import App
-
-
-configure_loguru()
 
 
 async def on_shutdown(bot: Bot) -> None:
@@ -26,6 +23,8 @@ async def on_shutdown(bot: Bot) -> None:
 
 
 async def main() -> None:
+    configure_loguru()
+
     if not await BaseCacheManager.healthcheck():
         raise SystemExit("Redis is not responding to ping — exiting")
 

@@ -19,7 +19,7 @@ from core.exceptions import (
 )
 from core.services import APIService
 from bot.utils.chat import send_coach_request
-from bot.utils.other import delete_messages, del_msg, answer_msg
+from bot.utils.bot import del_msg, answer_msg, delete_messages
 from core.schemas import Client, Coach, Profile
 from bot.texts.text_manager import msg_text
 from core.services import avatar_manager

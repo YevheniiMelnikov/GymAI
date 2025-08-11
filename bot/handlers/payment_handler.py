@@ -8,7 +8,7 @@ from aiogram.types import CallbackQuery, Message
 
 from loguru import logger
 
-from bot.utils.other import del_msg, answer_msg
+from bot.utils.bot import del_msg, answer_msg
 from bot.keyboards import select_workout_kb, workout_type_kb
 from bot.utils.menus import has_active_human_subscription
 from bot.utils.profiles import get_assigned_coach
