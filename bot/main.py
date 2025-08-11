@@ -35,7 +35,10 @@ async def main() -> None:
 
     bot = container.bot()
     await bot.delete_webhook(drop_pending_updates=True)
-    await bot.set_webhook(url=settings.WEBHOOK_URL)
+    webhook_url = settings.WEBHOOK_URL
+    if webhook_url is None:
+        raise ValueError("WEBHOOK_URL must be set")
+    await bot.set_webhook(url=webhook_url)
     await set_bot_commands(bot)
 
     dp = Dispatcher(storage=RedisStorage.from_url(settings.REDIS_URL))

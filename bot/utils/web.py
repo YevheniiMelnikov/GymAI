@@ -14,10 +14,14 @@ from bot.handlers.internal import (
 from config.app_settings import settings
 
 
+async def ping_handler(_: web.Request) -> web.Response:
+    return web.json_response({"ok": True})
+
+
 async def setup_app(app: web.Application, bot: Bot, dp: Dispatcher) -> None:
     path = settings.WEBHOOK_PATH.rstrip("/")
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=path)
-    app.router.add_get("/__ping", lambda _: web.json_response({"ok": True}))
+    app.router.add_get("/__ping", ping_handler)
     app.router.add_post("/internal/payments/process/", internal_payment_handler)
     app.router.add_post("/internal/payments/send_message/", internal_send_payment_message)
     app.router.add_post("/internal/payments/client_request/", internal_client_request)
