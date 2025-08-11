@@ -17,9 +17,7 @@ def _verify_init_data(init_data: str) -> dict:
     received_hash = data.pop("hash", None)
     check_string = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
     secret_key = hashlib.sha256(settings.BOT_TOKEN.encode()).digest()
-    calculated_hash = hmac.new(
-        secret_key, check_string.encode(), hashlib.sha256
-    ).hexdigest()
+    calculated_hash = hmac.new(secret_key, check_string.encode(), hashlib.sha256).hexdigest()
     if calculated_hash != received_hash:
         raise ValueError("Invalid init data")
     if "user" in data:
@@ -65,9 +63,7 @@ async def program_data(request):
 
 async def subscription_data(request):
     init_data = request.GET.get("init_data", "")
-    logger.debug(
-        "Webapp subscription data requested: init_data length={}", len(init_data)
-    )
+    logger.debug("Webapp subscription data requested: init_data length={}", len(init_data))
     try:
         data = _verify_init_data(init_data)
     except Exception:

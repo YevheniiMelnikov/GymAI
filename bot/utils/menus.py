@@ -15,7 +15,7 @@ from pathlib import Path
 from bot import keyboards as kb
 from bot.keyboards import subscription_manage_kb, program_edit_kb, program_view_kb
 from bot.utils.profiles import fetch_user, answer_profile, get_assigned_coach
-from bot.utils.webapp import get_webapp_url
+from bot.utils.web import get_webapp_url
 from bot.utils.credits import uah_to_credits, available_packages, available_ai_services
 from decimal import Decimal
 from bot.states import States

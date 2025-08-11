@@ -284,9 +284,7 @@ def program_view_kb(lang: str, webapp_url: str | None = None) -> KbMarkup:
     ]
 
     if webapp_url:
-        buttons.append(
-            [KbBtn(text=btn_text("open_webapp", lang), web_app=WebAppInfo(url=webapp_url))]
-        )
+        buttons.append([KbBtn(text=btn_text("open_webapp", lang), web_app=WebAppInfo(url=webapp_url))])
 
     buttons.append([builder.add("quit", "quit")])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
@@ -374,9 +372,7 @@ def show_subscriptions_kb(lang: str, webapp_url: str | None = None) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons: list[list[KbBtn]] = []
     if webapp_url:
-        buttons.append(
-            [KbBtn(text=btn_text("open_webapp", lang), web_app=WebAppInfo(url=webapp_url))]
-        )
+        buttons.append([KbBtn(text=btn_text("open_webapp", lang), web_app=WebAppInfo(url=webapp_url))])
 
     buttons.extend(
         [
