@@ -3,11 +3,29 @@ import base64
 import json
 from decimal import Decimal
 from typing import Any
+import importlib.util
+from pathlib import Path
+import types
+import sys
 
 import pytest
 from django.conf import settings
 
-from core.services import LiqPayGateway, ParamValidationError
+pkg = types.ModuleType("core.services")
+pkg.__path__ = [str(Path(__file__).resolve().parents[1] / "services")]
+sys.modules.setdefault("core.services", pkg)
+pkg_payments = types.ModuleType("core.services.payments")
+pkg_payments.__path__ = [str(Path(__file__).resolve().parents[1] / "services" / "payments")]
+sys.modules.setdefault("core.services.payments", pkg_payments)
+
+spec = importlib.util.spec_from_file_location(
+    "liqpay", Path(__file__).resolve().parents[1] / "services" / "payments" / "liqpay.py"
+)
+liqpay_module = importlib.util.module_from_spec(spec)
+assert spec.loader is not None
+spec.loader.exec_module(liqpay_module)
+LiqPayGateway = liqpay_module.LiqPayGateway
+ParamValidationError = liqpay_module.ParamValidationError
 
 
 class DummyLiqPay:
@@ -41,10 +59,7 @@ class DummyLiqPay:
 
 @pytest.fixture(autouse=True)
 def patch_liqpay(monkeypatch):
-    monkeypatch.setattr(
-        "core.services.payments.liqpay.LiqPay",
-        DummyLiqPay,
-    )
+    monkeypatch.setattr(liqpay_module, "LiqPay", DummyLiqPay)
     settings.PAYMENT_CALLBACK_URL = "https://callback/"
     settings.CHECKOUT_URL = "https://checkout/"
     settings.BOT_LINK = "https://bot/"

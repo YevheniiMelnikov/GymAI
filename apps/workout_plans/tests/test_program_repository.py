@@ -22,12 +22,20 @@ def test_create_or_update_creates_multiple_programs(monkeypatch):
             return SimpleNamespace(first=lambda: existing[0] if existing else None)
 
         def create(self, **kwargs):
-            program = DummyProgram(kwargs["client_profile"], kwargs["exercises_by_day"], len(created) + 1)
+            program = DummyProgram(
+                kwargs["client_profile"], kwargs["exercises_by_day"], len(created) + 1
+            )
             created.append(program)
             return program
 
-    monkeypatch.setattr("apps.workout_plans.repos.Program.objects", DummyManager())
-    monkeypatch.setattr("apps.workout_plans.repos.cache.delete_many", lambda keys: None)
+    monkeypatch.setattr(
+        "apps.workout_plans.repos.Program.objects",
+        DummyManager(),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "apps.workout_plans.repos.cache.delete_many", lambda keys: None
+    )
 
     client = SimpleNamespace(id=1)
     first = ProgramRepository.create_or_update(client, {"day1": []})
@@ -44,8 +52,14 @@ def test_create_or_update_updates_existing_program(monkeypatch):
         def create(self, **kwargs):  # pragma: no cover - creation should not happen
             raise AssertionError("should not create when updating")
 
-    monkeypatch.setattr("apps.workout_plans.repos.Program.objects", DummyManager())
-    monkeypatch.setattr("apps.workout_plans.repos.cache.delete_many", lambda keys: None)
+    monkeypatch.setattr(
+        "apps.workout_plans.repos.Program.objects",
+        DummyManager(),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        "apps.workout_plans.repos.cache.delete_many", lambda keys: None
+    )
 
     client = SimpleNamespace(id=1)
     existing = DummyProgram(client, {"day1": []}, id=1)

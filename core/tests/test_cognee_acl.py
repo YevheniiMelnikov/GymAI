@@ -10,11 +10,10 @@ def test_case_success_create_and_search(monkeypatch):
     async def runner():
         user = SimpleNamespace(id="u1")
         monkeypatch.setattr(coach.CogneeCoach, "_user", user)
-        monkeypatch.setattr(coach.CogneeCoach, "_ensure_config", lambda: None)
         calls = {}
         cognify_calls: list[list[str]] = []
 
-        async def fake_add(prompt, dataset_name=None, user=None):
+        async def fake_add(prompt, dataset_name=None, user=None, node_set=None):
             calls["dataset_name"] = dataset_name
             return SimpleNamespace(dataset_id="ds1", permissions=["write"])
 
@@ -37,11 +36,15 @@ def test_case_success_create_and_search(monkeypatch):
 
         monkeypatch.setattr(coach.HashStore, "contains", fake_contains)
         monkeypatch.setattr(coach.HashStore, "add", fake_add_hash)
-        monkeypatch.setattr(coach.CogneeCoach, "_ensure_profile_indexed", lambda *a, **k: None)
+        async def fake_index(*a, **k):
+            pass
+
+        monkeypatch.setattr(coach.CogneeCoach, "_ensure_profile_indexed", fake_index)
 
         await coach.CogneeCoach.save_client_message("hi", client_id=1)
         await asyncio.sleep(0)
         await coach.CogneeCoach.refresh_client_knowledge(1)
+        await asyncio.sleep(0)
         await coach.CogneeCoach.make_request("hi", client_id=1)
 
         assert calls["dataset_name"] == "client_1"
@@ -56,10 +59,9 @@ def test_case_conflict_existing_dataset(monkeypatch):
     async def runner():
         user = SimpleNamespace(id="u2")
         monkeypatch.setattr(coach.CogneeCoach, "_user", user)
-        monkeypatch.setattr(coach.CogneeCoach, "_ensure_config", lambda: None)
         calls = {}
 
-        async def fake_add(prompt, dataset_name=None, user=None):
+        async def fake_add(prompt, dataset_name=None, user=None, node_set=None):
             calls.setdefault("dataset_names", []).append(dataset_name)
             raise coach.PermissionDeniedError("denied")
 

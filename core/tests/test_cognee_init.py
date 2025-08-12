@@ -17,7 +17,7 @@ def test_reinit_on_failure(monkeypatch):
             if called == 1:
                 raise RuntimeError("boom")
 
-        monkeypatch.setattr(CogneeCoach, "_ensure_config", broken)
+        monkeypatch.setattr(CogneeCoach, "initialize", broken)
         monkeypatch.setattr(CogneeCoach, "_user", None)
 
         async def fake_user():
@@ -30,9 +30,9 @@ def test_reinit_on_failure(monkeypatch):
             await init_ai_coach(CogneeCoach)
 
         async def ok(*args, **kwargs):
-            pass
+            CogneeCoach._user = SimpleNamespace(id="ok")
 
-        monkeypatch.setattr(CogneeCoach, "_ensure_config", ok)
+        monkeypatch.setattr(CogneeCoach, "initialize", ok)
         await init_ai_coach(CogneeCoach)
         assert CogneeCoach._user is not None
 
@@ -42,8 +42,11 @@ def test_reinit_on_failure(monkeypatch):
 def test_empty_context_does_not_crash(monkeypatch):
     async def runner():
         CogneeCoach._user = SimpleNamespace(id="test-u")
-        monkeypatch.setattr(CogneeCoach, "_ensure_config", lambda: None)
-        monkeypatch.setattr(CogneeCoach, "_ensure_profile_indexed", lambda *a, **k: None)
+
+        async def noop(*a, **k):
+            pass
+
+        monkeypatch.setattr(CogneeCoach, "_ensure_profile_indexed", noop)
 
         calls: list[list[str]] = []
 

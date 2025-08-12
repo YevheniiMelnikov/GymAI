@@ -1,13 +1,12 @@
+from core.services.payments.liqpay import LiqPay
 from apps.payments.views import PaymentWebhookView
-import pytest
-
-pytestmark = pytest.mark.skip(reason="liqpay library not installed")
 
 
 def test_verify_signature(monkeypatch):
-    def fake_str_to_sign(_data):
+    def fake_str_to_sign(data):
         return "sig"
 
-    monkeypatch.setattr("liqpay.LiqPay.str_to_sign", staticmethod(fake_str_to_sign))
+    monkeypatch.setattr(LiqPay, "str_to_sign", staticmethod(fake_str_to_sign), raising=False)
+
     assert PaymentWebhookView._verify_signature("data", "sig") is True
     assert PaymentWebhookView._verify_signature("data", "bad") is False

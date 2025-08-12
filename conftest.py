@@ -3,6 +3,9 @@
 import os
 import sys
 import types
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any
 
 os.environ["TIME_ZONE"] = "Europe/Kyiv"
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.test_settings")
@@ -20,18 +23,36 @@ modules = {
     "cognee.modules.users.methods.get_default_user": types.ModuleType("cognee.modules.users.methods.get_default_user"),
     "cognee.infrastructure.databases.exceptions": types.ModuleType("cognee.infrastructure.databases.exceptions"),
     "cognee.modules.engine.operations.setup": types.ModuleType("cognee.modules.engine.operations.setup"),
+    "cognee.base_config": types.ModuleType("cognee.base_config"),
+    "cognee.infrastructure": types.ModuleType("cognee.infrastructure"),
+    "cognee.infrastructure.files": types.ModuleType("cognee.infrastructure.files"),
 }
 modules["cognee.modules.data.exceptions"].DatasetNotFoundError = Exception
 modules["cognee.modules.users.exceptions.exceptions"].PermissionDeniedError = Exception
 modules["cognee.modules.users.methods.get_default_user"].get_default_user = lambda: None
 modules["cognee.infrastructure.databases.exceptions"].DatabaseNotCreatedError = Exception
 modules["cognee.modules.engine.operations.setup"].setup = lambda: None
+modules["cognee.base_config"].get_base_config = lambda: types.SimpleNamespace(data_root_directory=".")
+cognee_stub.base_config = modules["cognee.base_config"]
+files_utils_mod = types.ModuleType("cognee.infrastructure.files.utils")
+
+
+@asynccontextmanager
+async def open_data_file(uri: str, mode: str = "r"):
+    base = Path(modules["cognee.base_config"].get_base_config().data_root_directory)
+    name = uri.split("/")[-1].split("\\")[-1]
+    with open(base / name, mode) as f:
+        yield f
+
+
+files_utils_mod.open_data_file = open_data_file
+modules["cognee.infrastructure.files.utils"] = files_utils_mod
 
 for name, mod in modules.items():
     sys.modules.setdefault(name, mod)
 
 # Stub heavy optional dependencies used by ai_coach
-sys.modules.setdefault("google", types.ModuleType("google"))
+google_mod = sys.modules.setdefault("google", types.ModuleType("google"))
 sys.modules.setdefault("google.oauth2", types.ModuleType("google.oauth2"))
 service_account = types.ModuleType("google.oauth2.service_account")
 service_account.Credentials = object
@@ -56,9 +77,11 @@ class DummyDownloader:
 
 http_mod.MediaIoBaseDownload = DummyDownloader
 sys.modules.setdefault("googleapiclient.http", http_mod)
-sys.modules.setdefault("google.cloud", types.ModuleType("google.cloud"))
+google_cloud = sys.modules.setdefault("google.cloud", types.ModuleType("google.cloud"))
+google_mod.cloud = google_cloud
 gcs_mod = types.ModuleType("google.cloud.storage")
 gcs_mod.Client = object
+google_cloud.storage = gcs_mod
 sys.modules.setdefault("google.cloud.storage", gcs_mod)
 sys.modules.setdefault("google.auth", types.ModuleType("google.auth"))
 auth_exc = types.ModuleType("google.auth.exceptions")
@@ -67,6 +90,13 @@ sys.modules.setdefault("google.auth.exceptions", auth_exc)
 auth_creds = types.ModuleType("google.auth.credentials")
 auth_creds.Credentials = object
 sys.modules.setdefault("google.auth.credentials", auth_creds)
+gspread_mod = types.ModuleType("gspread")
+gspread_mod.Client = object
+gspread_mod.Worksheet = object
+gspread_mod.authorize = lambda *a, **k: gspread_mod.Client()
+gspread_mod.utils = types.SimpleNamespace(ValueInputOption=types.SimpleNamespace(user_entered="USER_ENTERED"))
+sys.modules.setdefault("gspread", gspread_mod)
+sys.modules.setdefault("gspread.utils", gspread_mod.utils)
 docx_mod = types.ModuleType("docx")
 
 
@@ -103,6 +133,8 @@ loguru_mod.logger = types.SimpleNamespace(
     trace=lambda *a, **k: None,
     warning=lambda *a, **k: None,
     error=lambda *a, **k: None,
+    exception=lambda *a, **k: None,
+    success=lambda *a, **k: None,
 )
 sys.modules.setdefault("loguru", loguru_mod)
 settings_stub = types.SimpleNamespace(
@@ -113,11 +145,23 @@ settings_stub = types.SimpleNamespace(
     REDIS_URL="redis://localhost:6379",
     API_URL="http://localhost/",
     API_KEY="test_api_key",
-    API_MAX_RETRIES=1,
+    API_MAX_RETRIES=2,
     API_RETRY_INITIAL_DELAY=0,
     API_RETRY_BACKOFF_FACTOR=1,
     API_RETRY_MAX_DELAY=0,
     API_TIMEOUT=1,
+    SPREADSHEET_ID="sheet",
+    SECRET_KEY="test",
+    DB_NAME="postgres",
+    DB_USER="postgres",
+    DB_PASSWORD="password",
+    DB_HOST="localhost",
+    DB_PORT="5432",
+    SITE_NAME="Test",
+    ALLOWED_HOSTS=["localhost"],
+    TIME_ZONE="Europe/Kyiv",
+    PAYMENT_PRIVATE_KEY="priv",
+    PAYMENT_PUB_KEY="pub",
 )
 sys.modules.setdefault("config.app_settings", types.ModuleType("config.app_settings"))
 sys.modules["config.app_settings"].settings = settings_stub
@@ -132,7 +176,19 @@ pydantic_mod.field_validator = lambda *a, **k: (lambda x: x)
 pydantic_mod.condecimal = lambda *a, **k: float
 pydantic_mod.ConfigDict = dict
 pydantic_mod.create_model = lambda name, **fields: type(name, (object,), fields)
+pydantic_mod.ValidationError = Exception
 sys.modules.setdefault("pydantic", pydantic_mod)
+core_mod = types.ModuleType("pydantic_core")
+core_mod.ValidationError = Exception
+sys.modules.setdefault("pydantic_core", core_mod)
+redis_mod = types.ModuleType("redis")
+redis_mod.exceptions = types.ModuleType("redis.exceptions")
+redis_mod.exceptions.RedisError = Exception
+sys.modules.setdefault("redis", redis_mod)
+sys.modules.setdefault("redis.exceptions", redis_mod.exceptions)
+yaml_mod = types.ModuleType("yaml")
+yaml_mod.safe_load = lambda *a, **k: {}
+sys.modules.setdefault("yaml", yaml_mod)
 crypto_mod = types.ModuleType("cryptography")
 crypto_mod.fernet = types.ModuleType("cryptography.fernet")
 crypto_mod.fernet.Fernet = object
@@ -149,6 +205,28 @@ redis_async_mod = types.ModuleType("redis.asyncio")
 
 
 class DummyRedis:
+    @classmethod
+    def from_url(cls, *a, **k):
+        return cls()
+
+    async def close(self):
+        pass
+
+    async def ping(self):
+        return True
+
+    async def hget(self, *a, **k):
+        return None
+
+    async def hset(self, *a, **k):
+        pass
+
+    async def hdel(self, *a, **k):
+        pass
+
+    async def hgetall(self, *a, **k):
+        return {}
+
     async def sadd(self, *a, **k):
         pass
 
@@ -156,10 +234,361 @@ class DummyRedis:
         return False
 
 
-redis_async_mod.Redis = type("Redis", (), {"from_url": lambda *a, **k: DummyRedis()})
+redis_async_mod.Redis = DummyRedis
+redis_async_mod.from_url = lambda *a, **k: DummyRedis()
 sys.modules.setdefault("redis.asyncio", redis_async_mod)
+httpx_mod = types.ModuleType("httpx")
 
-django = types.SimpleNamespace(setup=lambda: None)
+
+class HTTPError(Exception):
+    pass
+
+
+class HTTPStatusError(HTTPError):
+    def __init__(self, message: str, request: Any = None, response: Any = None):
+        super().__init__(message)
+        self.request = request
+        self.response = response
+
+
+class AsyncClient:
+    def __init__(self, *a, **k):
+        self.timeout = k.get("timeout")
+
+    async def request(self, *a, **k):
+        return types.SimpleNamespace(status_code=200, headers={}, json=lambda: {}, text="", is_success=True)
+
+    async def aclose(self):
+        pass
+
+
+class Request:
+    def __init__(self, *a, **k):
+        pass
+
+
+class Response:
+    pass
+
+
+class DecodingError(Exception):
+    pass
+
+
+httpx_mod.AsyncClient = AsyncClient
+httpx_mod.HTTPError = HTTPError
+httpx_mod.HTTPStatusError = HTTPStatusError
+httpx_mod.Request = Request
+httpx_mod.Response = Response
+httpx_mod.DecodingError = DecodingError
+sys.modules.setdefault("httpx", httpx_mod)
+
+aiogram_mod = types.ModuleType("aiogram")
+aiogram_mod.Bot = type("Bot", (), {})
+aiogram_mod.exceptions = types.SimpleNamespace(TelegramBadRequest=Exception)
+aiogram_mod.fsm = types.SimpleNamespace(
+    context=types.SimpleNamespace(FSMContext=type("FSMContext", (), {})),
+    state=types.SimpleNamespace(State=type("State", (), {}), StatesGroup=type("StatesGroup", (), {})),
+)
+aiogram_mod.types = types.SimpleNamespace(
+    Message=type("Message", (), {
+        "answer": lambda *a, **k: None,
+        "answer_photo": lambda *a, **k: None,
+        "answer_document": lambda *a, **k: None,
+        "answer_video": lambda *a, **k: None,
+    }),
+    CallbackQuery=type("CallbackQuery", (), {"answer": lambda *a, **k: None, "message": None}),
+    BotCommand=object,
+    InlineKeyboardButton=type("InlineKeyboardButton", (), {}),
+)
+sys.modules.setdefault("aiogram", aiogram_mod)
+sys.modules.setdefault("aiogram.exceptions", aiogram_mod.exceptions)
+sys.modules.setdefault("aiogram.fsm", aiogram_mod.fsm)
+sys.modules.setdefault("aiogram.fsm.context", aiogram_mod.fsm.context)
+sys.modules.setdefault("aiogram.fsm.state", aiogram_mod.fsm.state)
+sys.modules.setdefault("aiogram.types", aiogram_mod.types)
+sys.modules.setdefault("aiogram.client", types.ModuleType("aiogram.client"))
+client_default = types.ModuleType("aiogram.client.default")
+client_default.DefaultBotProperties = type("DefaultBotProperties", (), {})
+aiogram_mod.client = types.SimpleNamespace(default=client_default)
+sys.modules.setdefault("aiogram.client.default", client_default)
+django_mod = types.ModuleType("django")
+django_conf = types.ModuleType("django.conf")
+django_conf.settings = settings_stub
+django_mod.conf = django_conf
+django_mod.setup = lambda: None
+sys.modules.setdefault("django", django_mod)
+sys.modules.setdefault("django.conf", django_conf)
+
+bot_texts = types.ModuleType("bot.texts")
+bot_texts.TextManager = types.SimpleNamespace(messages={}, buttons={}, commands={})
+bot_texts.msg_text = lambda key, lang=None: key
+bot_texts.btn_text = lambda key, lang=None: key
+sys.modules.setdefault("bot.texts", bot_texts)
+sys.modules.setdefault("bot.texts.text_manager", bot_texts)
+resources_mod = types.ModuleType("bot.texts.resources")
+resources_mod.ButtonText = dict
+resources_mod.MessageText = dict
+sys.modules.setdefault("bot.texts.resources", resources_mod)
+
+di_mod = types.ModuleType("dependency_injector")
+di_wiring = types.ModuleType("dependency_injector.wiring")
+di_wiring.inject = lambda *a, **k: (lambda f: f)
+
+
+class Provide:
+    def __class_getitem__(cls, item):
+        return cls
+
+
+di_wiring.Provide = Provide
+di_mod.wiring = di_wiring
+sys.modules.setdefault("dependency_injector", di_mod)
+sys.modules.setdefault("dependency_injector.wiring", di_wiring)
+di_containers = types.ModuleType("dependency_injector.containers")
+di_containers.DeclarativeContainer = type("DeclarativeContainer", (), {})
+di_providers = types.ModuleType("dependency_injector.providers")
+di_providers.Factory = lambda *a, **k: None
+di_providers.Singleton = lambda *a, **k: None
+di_providers.Callable = lambda *a, **k: None
+di_providers.Configuration = lambda *a, **k: types.SimpleNamespace(bot_token="", parse_mode="")
+di_mod.containers = di_containers
+di_mod.providers = di_providers
+sys.modules.setdefault("dependency_injector.containers", di_containers)
+sys.modules.setdefault("dependency_injector.providers", di_providers)
+
+# Additional lightweight stubs for Django, FastAPI, and DRF components
+django_core = types.ModuleType("django.core")
+django_cache_mod = types.ModuleType("django.core.cache")
+
+
+class _Cache:
+    store: dict[str, Any] = {}
+
+    def get_or_set(self, key, default, timeout=None):
+        if key not in self.store:
+            self.store[key] = default()
+        return self.store[key]
+
+    def delete(self, key):
+        self.store.pop(key, None)
+
+    def delete_many(self, keys):
+        for k in keys:
+            self.delete(k)
+
+
+cache = _Cache()
+django_cache_mod.cache = cache
+sys.modules.setdefault("django.core", django_core)
+sys.modules.setdefault("django.core.cache", django_cache_mod)
+
+django_utils = types.ModuleType("django.utils")
+django_utils_decorators = types.ModuleType("django.utils.decorators")
+django_utils_decorators.method_decorator = lambda *a, **k: (lambda f: f)
+sys.modules.setdefault("django.utils", django_utils)
+sys.modules.setdefault("django.utils.decorators", django_utils_decorators)
+
+django_views = types.ModuleType("django.views")
+django_views_decorators = types.ModuleType("django.views.decorators")
+django_cache_page = types.ModuleType("django.views.decorators.cache")
+django_cache_page.cache_page = lambda *a, **k: (lambda f: f)
+sys.modules.setdefault("django.views", django_views)
+sys.modules.setdefault("django.views.decorators", django_views_decorators)
+sys.modules.setdefault("django.views.decorators.cache", django_cache_page)
+
+django_http = types.ModuleType("django.http")
+
+
+class HttpRequest:
+    method = "GET"
+    GET: dict[str, Any] = {}
+    POST: dict[str, Any] = {}
+
+
+django_http.HttpRequest = HttpRequest
+
+
+class JsonResponse(dict):
+    def __init__(self, data=None, status=200):
+        super().__init__(data or {})
+        self.status_code = status
+
+
+django_http.JsonResponse = JsonResponse
+sys.modules.setdefault("django.http", django_http)
+
+django_db = types.ModuleType("django.db")
+django_db_models = types.ModuleType("django.db.models")
+
+
+class QuerySet(list):
+    def filter(self, **kwargs):
+        return QuerySet([o for o in self if all(getattr(o, k) == v for k, v in kwargs.items())])
+
+    def values_list(self, field, flat=False):
+        return [getattr(o, field) for o in self]
+
+    def select_related(self, *a, **k):
+        return self
+
+    def all(self):  # pragma: no cover - mimic Django
+        return self
+
+
+django_db_models.QuerySet = QuerySet
+django_db_models.Model = object
+sys.modules.setdefault("django.db", django_db)
+sys.modules.setdefault("django.db.models", django_db_models)
+
+fastapi_mod = types.ModuleType("fastapi")
+
+
+class FastAPI:
+    def __init__(self, *a, **k):
+        pass
+
+
+fastapi_mod.FastAPI = FastAPI
+fastapi_security = types.ModuleType("fastapi.security")
+fastapi_security.HTTPBasic = object
+sys.modules.setdefault("fastapi", fastapi_mod)
+sys.modules.setdefault("fastapi.security", fastapi_security)
+
+rest_framework = types.ModuleType("rest_framework")
+rf_views = types.ModuleType("rest_framework.views")
+
+
+class APIView:
+    pass
+
+
+rf_views.APIView = APIView
+rf_generics = types.ModuleType("rest_framework.generics")
+
+
+class ListAPIView(APIView):
+    pass
+
+
+class RetrieveUpdateAPIView(APIView):
+    pass
+
+
+class CreateAPIView(APIView):
+    pass
+
+
+rf_generics.ListAPIView = ListAPIView
+rf_generics.RetrieveUpdateAPIView = RetrieveUpdateAPIView
+rf_generics.CreateAPIView = CreateAPIView
+rf_permissions = types.ModuleType("rest_framework.permissions")
+rf_permissions.AllowAny = object
+rf_serializers = types.ModuleType("rest_framework.serializers")
+rf_serializers.BaseSerializer = object
+rf_status = types.ModuleType("rest_framework.status")
+rf_status.HTTP_200_OK = 200
+rf_status.HTTP_400_BAD_REQUEST = 400
+rf_exceptions = types.ModuleType("rest_framework.exceptions")
+rf_exceptions.NotFound = Exception
+rest_framework.views = rf_views
+rest_framework.generics = rf_generics
+rest_framework.permissions = rf_permissions
+rest_framework.serializers = rf_serializers
+rest_framework.status = rf_status
+rest_framework.exceptions = rf_exceptions
+sys.modules.setdefault("rest_framework", rest_framework)
+sys.modules.setdefault("rest_framework.views", rf_views)
+sys.modules.setdefault("rest_framework.generics", rf_generics)
+sys.modules.setdefault("rest_framework.permissions", rf_permissions)
+sys.modules.setdefault("rest_framework.serializers", rf_serializers)
+sys.modules.setdefault("rest_framework.status", rf_status)
+sys.modules.setdefault("rest_framework.exceptions", rf_exceptions)
+
+rf_api_key = types.ModuleType("rest_framework_api_key")
+rf_api_key_perm = types.ModuleType("rest_framework_api_key.permissions")
+rf_api_key_perm.HasAPIKey = object
+rf_api_key.permissions = rf_api_key_perm
+sys.modules.setdefault("rest_framework_api_key", rf_api_key)
+sys.modules.setdefault("rest_framework_api_key.permissions", rf_api_key_perm)
+
+payments_models = types.ModuleType("apps.payments.models")
+
+
+class Payment:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+
+payments_models.Payment = Payment
+sys.modules.setdefault("apps.payments.models", payments_models)
+
+payments_repos = types.ModuleType("apps.payments.repos")
+
+
+class PaymentRepository:
+    @staticmethod
+    def base_qs():
+        return []
+
+    @staticmethod
+    def filter(qs, *, status=None, order_id=None):
+        return [
+            p
+            for p in qs
+            if (status is None or p.status == status)
+            and (order_id is None or p.order_id == order_id)
+        ]
+
+
+payments_repos.PaymentRepository = PaymentRepository
+sys.modules.setdefault("apps.payments.repos", payments_repos)
+
+payments_serializers = types.ModuleType("apps.payments.serializers")
+
+
+class PaymentSerializer:
+    pass
+
+
+payments_serializers.PaymentSerializer = PaymentSerializer
+sys.modules.setdefault("apps.payments.serializers", payments_serializers)
+
+payments_tasks = types.ModuleType("apps.payments.tasks")
+payments_tasks.process_payment_webhook = types.SimpleNamespace(delay=lambda **k: None)
+sys.modules.setdefault("apps.payments.tasks", payments_tasks)
+
+profiles_models = types.ModuleType("apps.profiles.models")
+
+
+class ClientProfile:
+    pass
+
+
+profiles_models.ClientProfile = ClientProfile
+sys.modules.setdefault("apps.profiles.models", profiles_models)
+
+workout_models = types.ModuleType("apps.workout_plans.models")
+
+
+class Program:
+    pass
+
+
+class Subscription:
+    pass
+
+
+workout_models.Program = Program
+workout_models.Subscription = Subscription
+sys.modules.setdefault("apps.workout_plans.models", workout_models)
+
+core_services_pkg = types.ModuleType("core.services")
+core_services_pkg.__path__ = [str(Path(__file__).resolve().parent / "core" / "services")]
+core_services_pkg.ProfileService = types.SimpleNamespace(
+    get_client_by_profile_id=lambda *_a, **_k: None
+)
+sys.modules.setdefault("core.services", core_services_pkg)
 
 env_defaults = {
     "API_KEY": "test_api_key",
@@ -185,5 +614,9 @@ env_defaults = {
 for key, value in env_defaults.items():
     os.environ.setdefault(key, value)
 
+django_mod.setup()
 
-django.setup()
+# Ensure Django's method_decorator is a no-op to avoid requiring dispatch
+from django.utils import decorators as _decorators  # noqa: E402
+
+_decorators.method_decorator = lambda *a, **k: (lambda f: f)
