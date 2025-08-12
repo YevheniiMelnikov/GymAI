@@ -1,7 +1,8 @@
+from __future__ import annotations
+
 import os
 
 from loguru import logger
-from aiogram.types import Message
 from google.cloud import storage
 from google.auth.exceptions import DefaultCredentialsError
 
@@ -34,9 +35,17 @@ class GCStorageService:
             return False
 
     @staticmethod
-    async def save_image(message: Message) -> str | None:
+    async def save_image(message) -> str | None:
+        """Save the last photo from an aiogram ``Message`` locally.
+
+        The import of ``aiogram`` is deferred so that test environments without
+        the dependency can still import this module.
+        """
+
         try:
-            if not message.photo:
+            from aiogram.types import Message as AiogramMessage  # type: ignore
+
+            if not isinstance(message, AiogramMessage) or not message.photo:
                 return None
             photo = message.photo[-1]
             file_id = photo.file_id
@@ -56,7 +65,7 @@ class GCStorageService:
             await message.delete()
             return local_file_path
 
-        except Exception as e:
+        except Exception as e:  # pragma: no cover - best effort
             logger.error(f"Error saving file: {e}")
             return None
 

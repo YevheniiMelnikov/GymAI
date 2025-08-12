@@ -3,12 +3,22 @@
 import os
 import sys
 import types
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlparse
 
 os.environ["TIME_ZONE"] = "Europe/Kyiv"
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.test_settings")
+django_settings = types.ModuleType("tests.django_settings")
+django_settings.SECRET_KEY = "test"
+django_settings.ALLOWED_HOSTS = []
+django_settings.DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}}
+sys.modules.setdefault("tests.django_settings", django_settings)
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "tests.django_settings")
 
 # Provide minimal stub for the external 'cognee' package
 cognee_stub = types.ModuleType("cognee")
+cognee_stub.__path__ = []  # mark as package so submodules can be imported
 cognee_stub.add = lambda *a, **k: None
 cognee_stub.cognify = lambda *a, **k: None
 cognee_stub.search = lambda *a, **k: []
@@ -30,9 +40,17 @@ modules["cognee.modules.engine.operations.setup"].setup = lambda: None
 for name, mod in modules.items():
     sys.modules.setdefault(name, mod)
 
+infrastructure_pkg = types.ModuleType("cognee.infrastructure")
+infrastructure_pkg.__path__ = []
+sys.modules.setdefault("cognee.infrastructure", infrastructure_pkg)
+
+files_pkg = types.ModuleType("cognee.infrastructure.files")
+files_pkg.__path__ = []
+sys.modules.setdefault("cognee.infrastructure.files", files_pkg)
+
 # Stub heavy optional dependencies used by ai_coach
-sys.modules.setdefault("google", types.ModuleType("google"))
-sys.modules.setdefault("google.oauth2", types.ModuleType("google.oauth2"))
+google_mod = sys.modules.setdefault("google", types.ModuleType("google"))
+google_mod.oauth2 = sys.modules.setdefault("google.oauth2", types.ModuleType("google.oauth2"))
 service_account = types.ModuleType("google.oauth2.service_account")
 service_account.Credentials = object
 sys.modules.setdefault("google.oauth2.service_account", service_account)
@@ -56,10 +74,43 @@ class DummyDownloader:
 
 http_mod.MediaIoBaseDownload = DummyDownloader
 sys.modules.setdefault("googleapiclient.http", http_mod)
-sys.modules.setdefault("google.cloud", types.ModuleType("google.cloud"))
+google_mod.cloud = sys.modules.setdefault("google.cloud", types.ModuleType("google.cloud"))
 gcs_mod = types.ModuleType("google.cloud.storage")
 gcs_mod.Client = object
 sys.modules.setdefault("google.cloud.storage", gcs_mod)
+google_mod.cloud.storage = gcs_mod
+aiogram_mod = types.ModuleType("aiogram")
+fsm_mod = types.ModuleType("aiogram.fsm")
+context_mod = types.ModuleType("aiogram.fsm.context")
+context_mod.FSMContext = object
+sys.modules.setdefault("aiogram", aiogram_mod)
+sys.modules.setdefault("aiogram.fsm", fsm_mod)
+sys.modules.setdefault("aiogram.fsm.context", context_mod)
+types_mod = types.ModuleType("aiogram.types")
+types_mod.CallbackQuery = object
+types_mod.Message = object
+aiogram_mod.types = types_mod
+sys.modules.setdefault("aiogram.types", types_mod)
+state_mod = types.ModuleType("aiogram.fsm.state")
+state_mod.State = object
+state_mod.StatesGroup = object
+fsm_mod.state = state_mod
+sys.modules.setdefault("aiogram.fsm.state", state_mod)
+services_mod = types.ModuleType("core.services")
+class _DummyProfileService:
+    async def get_client_by_profile_id(self, profile_id):
+        return None
+
+class _DummyWorkoutService:
+    async def get_latest_subscription(self, client_profile_id):
+        return None
+
+    async def get_latest_program(self, client_profile_id):
+        return None
+
+services_mod.ProfileService = _DummyProfileService
+services_mod.WorkoutService = _DummyWorkoutService
+sys.modules.setdefault("core.services", services_mod)
 sys.modules.setdefault("google.auth", types.ModuleType("google.auth"))
 auth_exc = types.ModuleType("google.auth.exceptions")
 auth_exc.DefaultCredentialsError = Exception
@@ -94,6 +145,31 @@ fitz_mod.open = lambda *a, **k: DummyPDF()
 sys.modules.setdefault("fitz", fitz_mod)
 sys.modules.setdefault("cognee.base_config", types.ModuleType("cognee.base_config"))
 sys.modules["cognee.base_config"].get_base_config = lambda: None
+cognee_stub.base_config = sys.modules["cognee.base_config"]
+from cognee.base_config import get_base_config
+file_utils_mod = types.ModuleType("cognee.infrastructure.files.utils")
+
+@asynccontextmanager
+async def _open_data_file(path: str, mode: str = "rb", encoding: str | None = None, **kwargs: Any):
+    if ":" in path and "\\" in path:
+        path = "file://" + path.replace("\\", "/")
+    if path.startswith("file://"):
+        parsed = urlparse(path)
+        p = (parsed.path or parsed.netloc).replace("\\", "/").lstrip("/")
+        if len(p) > 1 and p[1] == ":":
+            p = p[1:]
+        abs_path = Path(p).resolve()
+        if not abs_path.exists():
+            base = Path(sys.modules["cognee.base_config"].get_base_config().data_root_directory)
+            abs_path = base / abs_path.name
+        with open(abs_path, mode=mode, encoding=encoding, **kwargs) as f:
+            yield f
+    else:
+        with open(path, mode=mode, encoding=encoding, **kwargs) as f:
+            yield f
+
+file_utils_mod.open_data_file = _open_data_file
+sys.modules.setdefault("cognee.infrastructure.files.utils", file_utils_mod)
 sys.modules.setdefault("openai", types.ModuleType("openai"))
 sys.modules["openai"].AsyncOpenAI = object
 loguru_mod = types.ModuleType("loguru")
@@ -110,6 +186,7 @@ settings_stub = types.SimpleNamespace(
     LOG_LEVEL="INFO",
     GDRIVE_FOLDER_ID="folder",
     GOOGLE_APPLICATION_CREDENTIALS="/tmp/creds.json",
+    SPREADSHEET_ID="sheet",
     REDIS_URL="redis://localhost:6379",
     API_URL="http://localhost/",
     API_KEY="test_api_key",
@@ -125,14 +202,6 @@ logger_stub = types.ModuleType("config.logger")
 logger_stub.configure_loguru = lambda: None
 logger_stub.LOGGING = {}
 sys.modules.setdefault("config.logger", logger_stub)
-pydantic_mod = types.ModuleType("pydantic")
-pydantic_mod.BaseModel = object
-pydantic_mod.Field = lambda *a, **k: None
-pydantic_mod.field_validator = lambda *a, **k: (lambda x: x)
-pydantic_mod.condecimal = lambda *a, **k: float
-pydantic_mod.ConfigDict = dict
-pydantic_mod.create_model = lambda name, **fields: type(name, (object,), fields)
-sys.modules.setdefault("pydantic", pydantic_mod)
 crypto_mod = types.ModuleType("cryptography")
 crypto_mod.fernet = types.ModuleType("cryptography.fernet")
 crypto_mod.fernet.Fernet = object

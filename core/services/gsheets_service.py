@@ -1,9 +1,7 @@
+from __future__ import annotations
+
 from datetime import datetime
 from typing import List
-
-import gspread
-from google.oauth2.service_account import Credentials
-from gspread.utils import ValueInputOption
 
 from config.app_settings import settings
 
@@ -15,7 +13,18 @@ class GSheetsService:
     sheet_id = settings.SPREADSHEET_ID
 
     @classmethod
-    def _connect(cls) -> gspread.Client:
+    def _connect(cls):
+        """Create an authorised gspread client.
+
+        The heavy ``gspread`` and ``google.oauth2`` imports are performed lazily so
+        that test environments without these optional dependencies can import this
+        module without raising errors.  At runtime these packages are expected to
+        be available.
+        """
+
+        import gspread
+        from google.oauth2.service_account import Credentials
+
         creds = Credentials.from_service_account_file(
             cls.creds_path,
             scopes=[cls.SHEETS_SCOPE, cls.DRIVE_SCOPE],
@@ -23,7 +32,7 @@ class GSheetsService:
         return gspread.authorize(creds)
 
     @classmethod
-    def create_new_payment_sheet(cls, data: List[List[str]]) -> gspread.Worksheet:
+    def create_new_payment_sheet(cls, data: List[List[str]]):
         client = cls._connect()
         spreadsheet = client.open_by_key(cls.sheet_id)
 
@@ -32,9 +41,9 @@ class GSheetsService:
 
         worksheet.append_row(
             ["Имя", "Фамилия", "Номер карты", "Order ID", "Сумма к зачислению"],
-            value_input_option=ValueInputOption.user_entered,
+            value_input_option="USER_ENTERED",
         )
         if data:
-            worksheet.append_rows(data, value_input_option=ValueInputOption.user_entered)
+            worksheet.append_rows(data, value_input_option="USER_ENTERED")
 
         return worksheet
