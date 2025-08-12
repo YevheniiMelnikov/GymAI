@@ -1,19 +1,5 @@
 from typing import TypeVar, Type, cast
-# pydantic is optional during tests; provide a minimal stub if unavailable
-try:  # pragma: no cover
-    from pydantic import BaseModel, ValidationError
-except Exception:  # pragma: no cover
-    class ValidationError(Exception):
-        pass
-
-    class BaseModel:  # type: ignore[override]
-        def __init__(self, **data):
-            for k, v in data.items():
-                setattr(self, k, v)
-
-        @classmethod
-        def model_validate(cls, data: dict):
-            return cls(**data)
+from pydantic import BaseModel, ValidationError
 from loguru import logger
 
 from config.app_settings import settings

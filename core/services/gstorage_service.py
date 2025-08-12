@@ -5,6 +5,7 @@ import os
 from loguru import logger
 from google.cloud import storage
 from google.auth.exceptions import DefaultCredentialsError
+from aiogram.types import Message
 
 from config.app_settings import settings
 from core.cache import Cache
@@ -35,39 +36,26 @@ class GCStorageService:
             return False
 
     @staticmethod
-    async def save_image(message) -> str | None:
-        """Save the last photo from an aiogram ``Message`` locally.
-
-        The import of ``aiogram`` is deferred so that test environments without
-        the dependency can still import this module.
-        """
-
-        try:
-            from aiogram.types import Message as AiogramMessage  # type: ignore
-
-            if not isinstance(message, AiogramMessage) or not message.photo:
-                return None
-            photo = message.photo[-1]
-            file_id = photo.file_id
-
-            bot = message.bot
-            if bot is None:
-                return None
-
-            file = await bot.get_file(file_id)
-            if file.file_path is None:
-                return None
-
-            local_file_path = f"{file_id}.jpg"
-            await bot.download_file(file.file_path, destination=local_file_path)
-
-            logger.debug(f"File {file_id[:10]}...jpg successfully saved locally")
-            await message.delete()
-            return local_file_path
-
-        except Exception as e:  # pragma: no cover - best effort
-            logger.error(f"Error saving file: {e}")
+    async def save_image(message: Message) -> str | None:
+        if not message.photo:
             return None
+        photo = message.photo[-1]
+        file_id = photo.file_id
+
+        bot = message.bot
+        if bot is None:
+            return None
+
+        file = await bot.get_file(file_id)
+        if file.file_path is None:
+            return None
+
+        local_file_path = f"{file_id}.jpg"
+        await bot.download_file(file.file_path, destination=local_file_path)
+
+        logger.debug(f"File {file_id[:10]}...jpg successfully saved locally")
+        await message.delete()
+        return local_file_path
 
     @staticmethod
     def clean_up_file(file: str) -> None:

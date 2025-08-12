@@ -14,7 +14,6 @@ class APIClient:
     api_key = settings.API_KEY
     use_default_auth = True
 
-    client: ClassVar[Any | None] = None
     _clients: ClassVar[dict[int, httpx.AsyncClient]] = {}
 
     max_retries = settings.API_MAX_RETRIES
@@ -24,10 +23,7 @@ class APIClient:
 
     @classmethod
     def _get_client(cls, timeout: int) -> httpx.AsyncClient:
-        """Return a configured client, using a stub if provided for tests."""
-        if cls.client is not None:
-            return cls.client
-
+        """Return per-event-loop AsyncClient instance."""
         loop = asyncio.get_running_loop()
         key = id(loop)
 

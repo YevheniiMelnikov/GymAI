@@ -2,14 +2,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-# pydantic is optional for tests; provide a minimal stub if missing
-try:  # pragma: no cover - exercised indirectly in tests
-    from pydantic import BaseModel
-except Exception:  # pragma: no cover
-    class BaseModel:  # type: ignore[override]
-        def __init__(self, **data):
-            for k, v in data.items():
-                setattr(self, k, v)
+from pydantic import BaseModel
 
 
 class MessageRole(str, Enum):
