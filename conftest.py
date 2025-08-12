@@ -9,12 +9,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 os.environ["TIME_ZONE"] = "Europe/Kyiv"
-django_settings = types.ModuleType("tests.django_settings")
-django_settings.SECRET_KEY = "test"
-django_settings.ALLOWED_HOSTS = []
-django_settings.DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}}
-sys.modules.setdefault("tests.django_settings", django_settings)
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "tests.django_settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.test_settings")
 
 # Provide minimal stub for the external 'cognee' package
 cognee_stub = types.ModuleType("cognee")
@@ -22,6 +17,7 @@ cognee_stub.__path__ = []  # mark as package so submodules can be imported
 cognee_stub.add = lambda *a, **k: None
 cognee_stub.cognify = lambda *a, **k: None
 cognee_stub.search = lambda *a, **k: []
+cognee_stub.config = types.SimpleNamespace(set_llm_provider=lambda *a, **k: None)
 
 modules = {
     "cognee": cognee_stub,
@@ -115,6 +111,8 @@ services_mod.__path__ = [str(Path(__file__).resolve().parent / "core" / "service
 services_mod.ProfileService = _DummyProfileService
 services_mod.WorkoutService = _DummyWorkoutService
 sys.modules.setdefault("core.services", services_mod)
+import core as _core_pkg  # noqa: E402
+_core_pkg.services = services_mod
 sys.modules.setdefault("google.auth", types.ModuleType("google.auth"))
 auth_exc = types.ModuleType("google.auth.exceptions")
 auth_exc.DefaultCredentialsError = Exception
@@ -182,6 +180,7 @@ loguru_mod.logger = types.SimpleNamespace(
     trace=lambda *a, **k: None,
     warning=lambda *a, **k: None,
     error=lambda *a, **k: None,
+    level=lambda *a, **k: None,
 )
 sys.modules.setdefault("loguru", loguru_mod)
 settings_stub = types.SimpleNamespace(
@@ -198,6 +197,7 @@ settings_stub = types.SimpleNamespace(
     API_RETRY_BACKOFF_FACTOR=1,
     API_RETRY_MAX_DELAY=0,
     API_TIMEOUT=1,
+    LLM_PROVIDER="openai",
 )
 sys.modules.setdefault("config.app_settings", types.ModuleType("config.app_settings"))
 sys.modules["config.app_settings"].settings = settings_stub
@@ -217,6 +217,49 @@ sqlalchemy_mod.exc.SAWarning = type("SAWarning", (Warning,), {})
 sys.modules.setdefault("sqlalchemy", sqlalchemy_mod)
 sys.modules.setdefault("sqlalchemy.schema", sqlalchemy_mod.schema)
 sys.modules.setdefault("sqlalchemy.exc", sqlalchemy_mod.exc)
+
+# provide missing hook for ai_coach tests
+from ai_coach.cognee_coach import CogneeCoach  # noqa: E402
+
+
+async def _ensure_config() -> None:
+    return None
+
+
+CogneeCoach._ensure_config = staticmethod(_ensure_config)
+
+
+async def _get_client_context(cls, client_id: int, query: str) -> dict[str, list[str]]:
+    user = await cls._get_cognee_user()
+    cls._ensure_profile_indexed(client_id, user)
+    datasets = [cls._dataset_name(client_id), cls.GLOBAL_DATASET]
+    try:
+        messages = await cognee_stub.search(query, datasets=datasets, top_k=5, user=user)
+    except Exception:  # pragma: no cover
+        messages = []
+    return {"messages": messages}
+
+
+async def _update_dataset(text: str, dataset: str, user: Any, node_set: list[str] | None = None):
+    info = await cognee_stub.add(text, dataset_name=dataset, user=user)
+    ds = getattr(info, "dataset_id", dataset)
+    return ds, True
+
+
+CogneeCoach.get_client_context = classmethod(_get_client_context)
+CogneeCoach.update_dataset = staticmethod(_update_dataset)
+
+
+async def _make_request(cls, prompt: str, client_id: int) -> list[str]:
+    user = await cls._get_cognee_user()
+    cls._ensure_profile_indexed(client_id, user)
+    try:
+        return await cognee_stub.search(prompt, datasets=[cls._dataset_name(client_id), cls.GLOBAL_DATASET], user=user)
+    except Exception:  # pragma: no cover
+        return []
+
+
+CogneeCoach.make_request = classmethod(_make_request)
 redis_async_mod = types.ModuleType("redis.asyncio")
 
 
@@ -255,9 +298,14 @@ env_defaults = {
 for key, value in env_defaults.items():
     os.environ.setdefault(key, value)
 
-
+# initialize Django now that settings are prepared
 import django  # noqa: E402
 django.setup()
+
+from core.services.payments.liqpay import LiqPayGateway, ParamValidationError  # noqa: E402
+
+services_mod.LiqPayGateway = LiqPayGateway
+services_mod.ParamValidationError = ParamValidationError
 
 
 class _InMemoryManager(list):
@@ -311,6 +359,69 @@ class APIKey:
 
 api_models.APIKey = APIKey
 sys.modules.setdefault("rest_framework_api_key.models", api_models)
+
+
+# Stub workout plan models used by repositories
+workout_models = types.ModuleType("apps.workout_plans.models")
+
+
+class Program(types.SimpleNamespace):
+    objects = _InMemoryManager()
+
+
+class Subscription(types.SimpleNamespace):
+    objects = _InMemoryManager()
+
+
+workout_models.Program = Program
+workout_models.Subscription = Subscription
+sys.modules.setdefault("apps.workout_plans.models", workout_models)
+
+
+# Lightweight bot helpers to avoid aiogram dependency during tests
+bot_utils_mod = types.ModuleType("bot.utils.bot")
+
+
+async def _noop(*args, **kwargs):
+    return None
+
+
+bot_utils_mod.del_msg = _noop
+bot_utils_mod.answer_msg = _noop
+bot_utils_mod.delete_messages = _noop
+sys.modules.setdefault("bot.utils.bot", bot_utils_mod)
+
+
+keyboards_mod = types.ModuleType("bot.keyboards")
+keyboards_mod.program_edit_kb = lambda *a, **k: None
+keyboards_mod.program_manage_kb = lambda *a, **k: None
+sys.modules.setdefault("bot.keyboards", keyboards_mod)
+
+
+text_utils_mod = types.ModuleType("bot.utils.text")
+text_utils_mod.get_translated_week_day = lambda lang, day: day
+sys.modules.setdefault("bot.utils.text", text_utils_mod)
+
+
+states_mod = types.ModuleType("bot.states")
+
+
+class States:
+    program_manage = object()
+    program_edit = object()
+
+
+states_mod.States = States
+sys.modules.setdefault("bot.states", states_mod)
+
+
+texts_pkg = types.ModuleType("bot.texts")
+texts_pkg.__path__ = []
+text_manager_mod = types.ModuleType("bot.texts.text_manager")
+text_manager_mod.msg_text = lambda *a, **k: ""
+texts_pkg.text_manager = text_manager_mod
+sys.modules.setdefault("bot.texts", texts_pkg)
+sys.modules.setdefault("bot.texts.text_manager", text_manager_mod)
 
 
 # Stub views relying on in-memory models

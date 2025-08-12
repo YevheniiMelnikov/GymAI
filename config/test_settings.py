@@ -36,8 +36,6 @@ for key, value in env_defaults.items():
 
 os.environ["TIME_ZONE"] = "Europe/Kyiv"
 
-from .settings import *  # noqa
-
 TIME_ZONE = "Europe/Kyiv"
 
 INSTALLED_APPS = [
