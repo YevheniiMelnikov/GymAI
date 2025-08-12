@@ -59,14 +59,14 @@ edit:
   ua: "Редагувати ✏️"
 
 subscription:
-  eng: "Subscriptions 🧭"
-  ru: "Подписки 🧭"
-  ua: "Підписки 🧭"
+  eng: "Subscriptions 📅"
+  ru: "Подписки 📅"
+  ua: "Підписки 📅"
 
 program:
   eng: "Program 🏋️"
   ru: "Программа 🏋️"
-  ua: "Программа 🏋️"
+  ua: "Програма 🏋️"
 
 tariff_plans:
   eng: "Tariff plans 💳"
@@ -89,14 +89,14 @@ max_plan:
   ua: "Макс 🏆"
 
 subscription_1_month:
-  eng: "1 month subscription 🧭"
-  ru: "Подписка на 1 месяц 🧭"
-  ua: "Підписка на 1 місяць 🧭"
+  eng: "1 month subscription 📅"
+  ru: "Подписка на 1 месяц 📅"
+  ua: "Підписка на 1 місяць 📅"
 
 subscription_6_months:
-  eng: "6 months subscription 🧭"
-  ru: "Подписка на 6 месяцев 🧭"
-  ua: "Підписка на 6 місяців 🧭"
+  eng: "6 months subscription 📅"
+  ru: "Подписка на 6 месяцев 📅"
+  ua: "Підписка на 6 місяців 📅"
 
 ask_ai:
   eng: "Ask AI 💬"
@@ -389,11 +389,6 @@ new_program:
   ua: "Створити нову 🆕"
 
 history:
-  eng: "History 📑"
-  ru: "История 📑"
-  ua: "Історія 📑"
-
-open_webapp:
-  eng: "Open in app 🌐"
-  ru: "Открыть в приложении 🌐"
-  ua: "Відкрити у застосунку 🌐"
+  eng: "History 🗂"
+  ru: "История 🗂"
+  ua: "Історія 🗂"

@@ -234,7 +234,7 @@ class MessageText(AutoName):
     wait_for_verification = auto()
     not_verified = auto()
     gift = auto()
-    select_workout = auto()
+    select_service = auto()
     services_menu = auto()
     set_mode_on = auto()
     set_mode_off = auto()

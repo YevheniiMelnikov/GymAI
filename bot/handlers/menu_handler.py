@@ -9,7 +9,7 @@ from loguru import logger
 from uuid import uuid4
 
 from bot.keyboards import (
-    select_workout_kb,
+    select_service_kb,
     choose_coach_kb,
     select_days_kb,
     gift_kb,
@@ -38,7 +38,7 @@ from bot.utils.menus import (
     show_balance_menu,
     show_ai_services,
 )
-from bot.utils.menus import has_active_human_subscription
+from bot.utils.menus import has_human_coach_subscription
 from bot.utils.profiles import assign_coach, get_assigned_coach
 from bot.utils.workout_plans import manage_program, cancel_subscription
 from bot.utils.other import generate_order_id
@@ -288,9 +288,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
         if not exercises:
             await answer_msg(
                 callback_query,
-                msg_text("ai_program_error", profile.language).format(
-                    tg=settings.TG_SUPPORT_CONTACT
-                ),
+                msg_text("ai_program_error", profile.language).format(tg=settings.TG_SUPPORT_CONTACT),
             )
             await bot.send_message(
                 settings.ADMIN_ID,
@@ -627,11 +625,11 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
 
     if cb_data == "back":
         await callback_query.answer()
-        await state.set_state(States.select_workout)
-        contact = await has_active_human_subscription(profile.id)
+        await state.set_state(States.select_service)
+        has_coach: bool = await has_human_coach_subscription(profile.id)
         await message.answer(
-            msg_text("select_workout", profile.language),
-            reply_markup=select_workout_kb(profile.language, contact),
+            msg_text("select_service", profile.language),
+            reply_markup=select_service_kb(profile.language, has_coach),
         )
 
     elif cb_data == "change_days":

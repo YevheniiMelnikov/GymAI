@@ -182,13 +182,13 @@ def new_message_kb(lang: str, profile_id: int) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons)
 
 
-def select_workout_kb(lang: str, contact: bool = False) -> KbMarkup:
+def select_service_kb(lang: str, has_coach: bool = False) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
         [builder.add("subscription", "subscription")],
         [builder.add("program", "program")],
     ]
-    if contact:
+    if has_coach:
         buttons.append([builder.add("contact_coach", "contact")])
     buttons.append([builder.add("prev_menu", "back")])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
@@ -284,7 +284,7 @@ def program_view_kb(lang: str, webapp_url: str | None = None) -> KbMarkup:
     ]
 
     if webapp_url:
-        buttons.append([KbBtn(text=btn_text("open_webapp", lang), web_app=WebAppInfo(url=webapp_url))])
+        buttons.append([KbBtn(text=btn_text("view", lang), web_app=WebAppInfo(url=webapp_url))])
 
     buttons.append([builder.add("quit", "quit")])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
@@ -372,7 +372,7 @@ def show_subscriptions_kb(lang: str, webapp_url: str | None = None) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons: list[list[KbBtn]] = []
     if webapp_url:
-        buttons.append([KbBtn(text=btn_text("open_webapp", lang), web_app=WebAppInfo(url=webapp_url))])
+        buttons.append([KbBtn(text=btn_text("view", lang), web_app=WebAppInfo(url=webapp_url))])
 
     buttons.extend(
         [
@@ -444,7 +444,8 @@ def payment_kb(lang: str, link: str, service_type: str) -> KbMarkup:
 def program_action_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
-        [builder.add("view", "show_old"), builder.add("new_program", "new_program")],
+        [builder.add("view", "show_latest"), builder.add("new_program", "new_program")],
+        [builder.add("history", "history")],
         [builder.add("prev_menu", "back")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)

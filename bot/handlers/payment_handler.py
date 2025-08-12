@@ -9,8 +9,8 @@ from aiogram.types import CallbackQuery, Message
 from loguru import logger
 
 from bot.utils.bot import del_msg, answer_msg
-from bot.keyboards import select_workout_kb, workout_type_kb
-from bot.utils.menus import has_active_human_subscription
+from bot.keyboards import select_service_kb, workout_type_kb
+from bot.utils.menus import has_human_coach_subscription
 from bot.utils.profiles import get_assigned_coach
 from bot.states import States
 
@@ -56,12 +56,12 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     if callback_query.data == "back":
-        await state.set_state(States.select_workout)
-        contact = await has_active_human_subscription(profile.id)
+        await state.set_state(States.select_service)
+        has_coach: bool = await has_human_coach_subscription(profile.id)
         await answer_msg(
             msg_obj=callback_query,
-            text=msg_text("select_workout", profile.language),
-            reply_markup=select_workout_kb(profile.language, contact),
+            text=msg_text("select_service", profile.language),
+            reply_markup=select_service_kb(profile.language, has_coach),
         )
         await del_msg(cast(Message | CallbackQuery | None, callback_query))
         return

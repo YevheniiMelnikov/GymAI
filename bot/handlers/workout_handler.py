@@ -13,7 +13,7 @@ from bot.keyboards import (
     reps_number_kb,
     sets_number_kb,
     program_manage_kb,
-    select_workout_kb,
+    select_service_kb,
     workout_type_kb,
 )
 from bot.states import States
@@ -36,7 +36,7 @@ from bot.utils.menus import (
     subscription_history_pagination,
     show_subscription_page,
 )
-from bot.utils.menus import has_active_human_subscription
+from bot.utils.menus import has_human_coach_subscription
 from bot.utils.profiles import get_assigned_coach
 from bot.utils.other import (
     short_url,
@@ -51,8 +51,8 @@ from core.services import gif_manager
 workout_router = Router()
 
 
-@workout_router.callback_query(States.select_workout)
-async def program_type(callback_query: CallbackQuery, state: FSMContext):
+@workout_router.callback_query(States.select_service)
+async def select_service(callback_query: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     if callback_query.data == "subscription":
@@ -143,7 +143,7 @@ async def program_manage(callback_query: CallbackQuery, state: FSMContext, bot: 
 
 
 @workout_router.callback_query(States.program_action_choice)
-async def program_actions(callback_query: CallbackQuery, state: FSMContext) -> None:
+async def program_action_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     profile_data = data.get("profile")
     if not profile_data:
@@ -153,29 +153,32 @@ async def program_actions(callback_query: CallbackQuery, state: FSMContext) -> N
     if message is None or not isinstance(message, Message):
         return
     cb_data = callback_query.data or ""
+    has_coach: bool = await has_human_coach_subscription(profile.id)
 
     if cb_data == "back":
         await callback_query.answer()
-        await state.set_state(States.select_workout)
-        contact = await has_active_human_subscription(profile.id)
+        await state.set_state(States.select_service)
         await message.answer(
-            msg_text("select_workout", profile.language),
-            reply_markup=select_workout_kb(profile.language, contact),
+            msg_text("select_service", profile.language),
+            reply_markup=select_service_kb(profile.language, has_coach),
         )
-    elif cb_data == "show_old":
+
+    elif cb_data == "history":
+        await show_program_history(callback_query, profile, state)
+
+    elif cb_data == "show_latest":
         program_data = data.get("program")
         if not program_data:
             await callback_query.answer(msg_text("no_program", profile.language), show_alert=True)
-            await state.set_state(States.select_workout)
-            contact = await has_active_human_subscription(profile.id)
+            await state.set_state(States.select_service)
             await message.answer(
-                msg_text("select_workout", profile.language),
-                reply_markup=select_workout_kb(profile.language, contact),
+                msg_text("select_service", profile.language),
+                reply_markup=select_service_kb(profile.language, has_coach),
             )
         else:
             program = Program.model_validate(program_data)
             await state.update_data(
-                exercises=program.exercises_by_day,
+                exercises=[e.model_dump() for e in program.exercises_by_day],
                 days=list(range(program.split_number)),
                 split=program.split_number,
             )

@@ -71,7 +71,13 @@ ignore = ["F405", "F403"]
 combine-as-imports = true
 
 [tool.pyrefly]
-project_includes = ["."]
+project_includes = [
+    "ai_coach",
+    "apps",
+    "bot",
+    "core",
+    "config",
+]
 project_excludes = [
     ".git/**",
     "**/__pycache__/**",
@@ -79,8 +85,14 @@ project_excludes = [
     "**/templates/**",
     "**/migrations/**",
     "**/tests/**",
+    "**/.venv/**",
     "**/.venv*/**",
+    "**/venv/**",
     "**/venv*/**",
+    "**/site-packages/**",
+    "**/.ruff_cache/**",
+    "**/.mypy_cache/**",
+    "**/.pytest_cache/**",
 ]
 python_interpreter = ".venv/bin/python3"
 ignore_errors_in_generated_code = true

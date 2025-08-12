@@ -40,7 +40,7 @@ from core.services import avatar_manager
 from core.validators import validate_or_raise
 
 
-async def has_active_human_subscription(client_id: int) -> bool:
+async def has_human_coach_subscription(client_id: int) -> bool:
     try:
         subscription = await Cache.workout.get_latest_subscription(client_id)
     except SubscriptionNotFoundError:
@@ -259,7 +259,7 @@ async def show_coaches_menu(message: Message, coaches: list[Coach], bot: Bot, cu
         coach_photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{current_coach.profile_photo}"
     formatted_text = msg_text("coach_page", lang).format(**current_coach.model_dump(mode="json"))
 
-    if await has_active_human_subscription(profile.id):
+    if await has_human_coach_subscription(profile.id):
         formatted_text += "\n" + msg_text("coach_switch_warning", lang)
 
     try:
@@ -368,13 +368,13 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
             await state.update_data(chat_id=callback_query.from_user.id, message_ids=[msg.message_id])
         return
 
-    contact = await has_active_human_subscription(profile.id)
+    has_coach: bool = await has_human_coach_subscription(profile.id)
 
-    await state.set_state(States.select_workout)
+    await state.set_state(States.select_service)
     await answer_msg(
         message,
-        msg_text("select_workout", lang),
-        reply_markup=kb.select_workout_kb(lang, contact),
+        msg_text("select_service", lang),
+        reply_markup=kb.select_service_kb(lang, has_coach),
     )
 
     await del_msg(cast(Message | CallbackQuery | None, message))
@@ -511,7 +511,6 @@ async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, 
 
     message = cast(Message, callback_query.message)
     assert message
-
     language = cast(str, profile.language)
 
     await answer_msg(

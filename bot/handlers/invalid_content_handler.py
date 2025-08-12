@@ -25,7 +25,7 @@ HANDLED_STATES = [
     States.health_notes,
     States.name,
     States.payment_choice,
-    States.select_workout,
+    States.select_service,
     States.work_experience,
     States.additional_info,
     States.payment_details,

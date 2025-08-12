@@ -128,7 +128,7 @@ class WorkoutService(APIClient):
                 results = data.get("results", [])
             if isinstance(results, list):
                 if not results:
-                    logger.info(f"No subscription found for client_profile={client_profile_id}. HTTP={status}")
+                    logger.debug(f"No subscription found for client_profile={client_profile_id}. HTTP={status}")
                     return None
 
                 sorted_data = sorted(results, key=lambda s: s.get("updated_at", 0), reverse=True)
