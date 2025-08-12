@@ -1,6 +1,7 @@
 import os
 
 env_defaults = {
+    "SECRET_KEY": "test_secret_key",
     "API_KEY": "test_api_key",
     "API_URL": "http://localhost/",
     "BOT_TOKEN": "bot_token",
