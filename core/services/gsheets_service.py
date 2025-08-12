@@ -3,6 +3,7 @@ from typing import List
 
 import gspread
 from google.oauth2.service_account import Credentials
+from gspread.utils import ValueInputOption
 
 from config.app_settings import settings
 
@@ -14,12 +15,16 @@ class GSheetsService:
     sheet_id = settings.SPREADSHEET_ID
 
     @classmethod
-    def create_new_payment_sheet(cls, data: List[List[str]]):
+    def _connect(cls) -> gspread.Client:
         creds = Credentials.from_service_account_file(
             cls.creds_path,
             scopes=[cls.SHEETS_SCOPE, cls.DRIVE_SCOPE],
         )
-        client = gspread.authorize(creds)
+        return gspread.authorize(creds)
+
+    @classmethod
+    def create_new_payment_sheet(cls, data: List[List[str]]) -> gspread.Worksheet:
+        client = cls._connect()
         spreadsheet = client.open_by_key(cls.sheet_id)
 
         sheet_name = datetime.now().strftime("%Y-%m-%d")
@@ -27,9 +32,9 @@ class GSheetsService:
 
         worksheet.append_row(
             ["Имя", "Фамилия", "Номер карты", "Order ID", "Сумма к зачислению"],
-            value_input_option="USER_ENTERED",
+            value_input_option=ValueInputOption.user_entered,
         )
         if data:
-            worksheet.append_rows(data, value_input_option="USER_ENTERED")
+            worksheet.append_rows(data, value_input_option=ValueInputOption.user_entered)
 
         return worksheet

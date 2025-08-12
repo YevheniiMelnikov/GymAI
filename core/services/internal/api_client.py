@@ -83,16 +83,16 @@ class APIClient:
                 resp = await client.request(method, url, json=data, headers=headers)
 
                 if resp.is_success:
-                    content_type = getattr(resp, "headers", {}).get("content-type", "")
-                    try:
-                        if content_type.startswith("application/json") or not content_type:
+                    if resp.headers.get("content-type", "").startswith("application/json"):
+                        try:
                             return resp.status_code, resp.json()
-                    except JSONDecodeError:
-                        logger.warning("Failed to decode JSON from response for %s", url)
+                        except JSONDecodeError:
+                            logger.warning("Failed to decode JSON from response for %s", url)
+                            return resp.status_code, None
                     return resp.status_code, None
 
                 error_data: Optional[dict]
-                if getattr(resp, "headers", {}).get("content-type", "").startswith("application/json"):
+                if resp.headers.get("content-type", "").startswith("application/json"):
                     try:
                         error_data = resp.json()
                     except JSONDecodeError:

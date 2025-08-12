@@ -24,7 +24,6 @@ async def init_ai_coach(ai_coach: type[BaseAICoach], knowledge_loader: Knowledge
         return
 
     try:
-        await ai_coach._ensure_config()  # pyrefly: ignore[missing-attribute]
         await ai_coach.initialize(knowledge_loader)
     except Exception as e:  # pragma: no cover - best effort
         logger.error(f"AI coach init failed: {e}")

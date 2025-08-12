@@ -1,7 +1,6 @@
 import os
 
 env_defaults = {
-    "SECRET_KEY": "test_secret_key",
     "API_KEY": "test_api_key",
     "API_URL": "http://localhost/",
     "BOT_TOKEN": "bot_token",
@@ -36,21 +35,20 @@ for key, value in env_defaults.items():
 
 os.environ["TIME_ZONE"] = "Europe/Kyiv"
 
+from .settings import *  # noqa
+
 TIME_ZONE = "Europe/Kyiv"
 
-INSTALLED_APPS = [
-    "django.contrib.auth",
-    "django.contrib.contenttypes",
-    "django.contrib.sessions",
-    "rest_framework",
-]
-
-DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": ":memory:"}}
-
-MIDDLEWARE = []
-
-REST_FRAMEWORK = {
-    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.AllowAny"],
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.postgresql_psycopg2",
+        "NAME": os.getenv("DB_NAME", "postgres"),
+        "USER": os.getenv("DB_USER", "postgres"),
+        "PASSWORD": os.getenv("POSTGRES_PASSWORD", "password"),
+        "HOST": os.getenv("DB_HOST", "localhost"),
+        "PORT": os.getenv("DB_PORT", "5432"),
+        "TEST": {"NAME": "test_db"},
+    }
 }
 
 CACHES = {

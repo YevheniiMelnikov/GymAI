@@ -1,11 +1,9 @@
-from __future__ import annotations
-
 import os
 
 from loguru import logger
+from aiogram.types import Message
 from google.cloud import storage
 from google.auth.exceptions import DefaultCredentialsError
-from aiogram.types import Message
 
 from config.app_settings import settings
 from core.cache import Cache
@@ -37,25 +35,30 @@ class GCStorageService:
 
     @staticmethod
     async def save_image(message: Message) -> str | None:
-        if not message.photo:
+        try:
+            if not message.photo:
+                return None
+            photo = message.photo[-1]
+            file_id = photo.file_id
+
+            bot = message.bot
+            if bot is None:
+                return None
+
+            file = await bot.get_file(file_id)
+            if file.file_path is None:
+                return None
+
+            local_file_path = f"{file_id}.jpg"
+            await bot.download_file(file.file_path, destination=local_file_path)
+
+            logger.debug(f"File {file_id[:10]}...jpg successfully saved locally")
+            await message.delete()
+            return local_file_path
+
+        except Exception as e:
+            logger.error(f"Error saving file: {e}")
             return None
-        photo = message.photo[-1]
-        file_id = photo.file_id
-
-        bot = message.bot
-        if bot is None:
-            return None
-
-        file = await bot.get_file(file_id)
-        if file.file_path is None:
-            return None
-
-        local_file_path = f"{file_id}.jpg"
-        await bot.download_file(file.file_path, destination=local_file_path)
-
-        logger.debug(f"File {file_id[:10]}...jpg successfully saved locally")
-        await message.delete()
-        return local_file_path
 
     @staticmethod
     def clean_up_file(file: str) -> None:
