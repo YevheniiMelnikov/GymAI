@@ -3,15 +3,15 @@ import pytest
 from core.cache.base import BaseCacheManager
 from core.cache import Cache
 from core.enums import ClientStatus
+import asyncio
 
 
 @pytest.fixture(autouse=True)
-async def fake_redis(monkeypatch):
+def fake_redis(monkeypatch):
     yield
 
 
-@pytest.mark.asyncio
-async def test_update_client_uses_profile_key(monkeypatch):
+def test_update_client_uses_profile_key(monkeypatch):
     called = {}
 
     async def fake_update_json(key, field, updates):
@@ -24,15 +24,14 @@ async def test_update_client_uses_profile_key(monkeypatch):
     monkeypatch.setattr(BaseCacheManager, "set", fake_set)
 
     profile_id = 5
-    await Cache.client.update_client(profile_id, {"status": ClientStatus.default})
+    asyncio.run(Cache.client.update_client(profile_id, {"status": ClientStatus.default}))
     assert called.get("field") == str(profile_id)
 
 
-@pytest.mark.asyncio
-async def test_get_client_not_found(monkeypatch):
+def test_get_client_not_found(monkeypatch):
     async def fake_get(_: int):
         return None
 
     monkeypatch.setattr(Cache.client.service, "get_client_by_profile_id", fake_get)
     with pytest.raises(Exception):
-        await Cache.client.get_client(999)
+        asyncio.run(Cache.client.get_client(999))

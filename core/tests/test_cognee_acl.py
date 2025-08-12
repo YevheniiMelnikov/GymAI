@@ -13,6 +13,16 @@ def test_case_success_create_and_search(monkeypatch):
         monkeypatch.setattr(coach.CogneeCoach, "_ensure_config", lambda: None)
         calls = {}
         cognify_calls: list[list[str]] = []
+        tasks: list[asyncio.Task] = []
+
+        orig_create_task = asyncio.create_task
+
+        def track_task(coro):
+            task = orig_create_task(coro)
+            tasks.append(task)
+            return task
+
+        monkeypatch.setattr(asyncio, "create_task", track_task)
 
         async def fake_add(prompt, dataset_name=None, user=None):
             calls["dataset_name"] = dataset_name
@@ -40,8 +50,8 @@ def test_case_success_create_and_search(monkeypatch):
         monkeypatch.setattr(coach.CogneeCoach, "_ensure_profile_indexed", lambda *a, **k: None)
 
         await coach.CogneeCoach.save_client_message("hi", client_id=1)
-        await asyncio.sleep(0)
         await coach.CogneeCoach.refresh_client_knowledge(1)
+        await asyncio.gather(*tasks)
         await coach.CogneeCoach.make_request("hi", client_id=1)
 
         assert calls["dataset_name"] == "client_1"

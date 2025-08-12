@@ -41,6 +41,10 @@ class LiqPay:
         data = "".join(args).encode("utf-8")
         return base64.b64encode(hashlib.sha1(data).digest()).decode("ascii")
 
+    # Compatibility helper used by tests
+    def str_to_sign(self, data: str) -> str:  # pragma: no cover
+        return self._make_signature(data)
+
     def _prepare_params(self, params: dict | None) -> dict:
         params = deepcopy(params or {})
         params["public_key"] = self.public_key

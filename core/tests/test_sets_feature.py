@@ -1,7 +1,7 @@
-import pytest
 
 from bot.utils.exercises import create_exercise, format_program
 from core.schemas import DayExercises, Exercise
+import asyncio
 
 
 class DummyState:
@@ -15,59 +15,65 @@ class DummyState:
         return self.data
 
 
-@pytest.mark.asyncio
-async def test_create_exercise_with_set():
-    state = DummyState()
-    await state.update_data(day_index=0, set_id=1)
-    exercises: list[DayExercises] = []
-    exercise = await create_exercise(
-        {
-            "exercise_name": "Push Up",
-            "sets": "3",
-            "reps": "10",
-            "set_id": 1,
-        },
-        exercises,
-        state,
-        None,
-        False,
-    )
-    assert exercise.set_id == 1
-    assert exercises[0].exercises[0].set_id == 1
-
-
-@pytest.mark.asyncio
-async def test_format_program_with_set():
-    exercises = [
-        DayExercises(
-            day="0",
-            exercises=[
-                Exercise(name="Push", sets="3", reps="10", set_id=1),
-                Exercise(name="Pull", sets="3", reps="10", set_id=1),
-            ],
+def test_create_exercise_with_set():
+    async def runner():
+        state = DummyState()
+        await state.update_data(day_index=0, set_id=1)
+        exercises: list[DayExercises] = []
+        exercise = await create_exercise(
+            {
+                "exercise_name": "Push Up",
+                "sets": "3",
+                "reps": "10",
+                "set_id": 1,
+            },
+            exercises,
+            state,
+            None,
+            False,
         )
-    ]
-    formatted = await format_program(exercises, 0)
-    assert "Set 1" in formatted
+        assert exercise.set_id == 1
+        assert exercises[0].exercises[0].set_id == 1
+
+    asyncio.run(runner())
 
 
-@pytest.mark.asyncio
-async def test_create_exercise_with_dropset():
-    state = DummyState()
-    await state.update_data(day_index=0)
-    exercises: list[DayExercises] = []
-    exercise = await create_exercise(
-        {
-            "exercise_name": "Push",
-            "sets": "3",
-            "reps": "10",
-        },
-        exercises,
-        state,
-        None,
-        True,
-    )
-    assert exercise.drop_set is True
-    assert exercises[0].exercises[0].drop_set is True
-    formatted = await format_program(exercises, 0)
-    assert "Drop set" in formatted
+def test_format_program_with_set():
+    async def runner():
+        exercises = [
+            DayExercises(
+                day="0",
+                exercises=[
+                    Exercise(name="Push", sets="3", reps="10", set_id=1),
+                    Exercise(name="Pull", sets="3", reps="10", set_id=1),
+                ],
+            )
+        ]
+        formatted = await format_program(exercises, 0)
+        assert "Set 1" in formatted
+
+    asyncio.run(runner())
+
+
+def test_create_exercise_with_dropset():
+    async def runner():
+        state = DummyState()
+        await state.update_data(day_index=0)
+        exercises: list[DayExercises] = []
+        exercise = await create_exercise(
+            {
+                "exercise_name": "Push",
+                "sets": "3",
+                "reps": "10",
+            },
+            exercises,
+            state,
+            None,
+            True,
+        )
+        assert exercise.drop_set is True
+        assert exercises[0].exercises[0].drop_set is True
+        formatted = await format_program(exercises, 0)
+        assert "Drop set" in formatted
+
+    asyncio.run(runner())

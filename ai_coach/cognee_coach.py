@@ -201,7 +201,7 @@ class CogneeCoach(BaseAICoach):
         user = await cls._get_cognee_user()
         dataset = cls._dataset_name(client_id)
         logger.info(f"Reindexing dataset {dataset}")
-        await cls._process_dataset(dataset, user)
+        asyncio.create_task(cls._process_dataset(dataset, user))
 
     @classmethod
     async def save_client_message(cls, text: str, client_id: int) -> None:

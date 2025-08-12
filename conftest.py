@@ -104,6 +104,63 @@ state_mod.StatesGroup = object
 fsm_mod.state = state_mod
 sys.modules.setdefault("aiogram.fsm.state", state_mod)
 
+# Minimal FastAPI stubs
+fastapi_mod = types.ModuleType("fastapi")
+
+
+class _FastAPI:
+    def __init__(self, *a, **k):
+        pass
+
+
+fastapi_mod.FastAPI = _FastAPI
+fastapi_security = types.ModuleType("fastapi.security")
+fastapi_security.HTTPBasic = object
+sys.modules.setdefault("fastapi", fastapi_mod)
+sys.modules.setdefault("fastapi.security", fastapi_security)
+
+# Minimal httpx stub for API client tests
+httpx_mod = types.ModuleType("httpx")
+
+
+class _Request:
+    def __init__(self, method: str, url: str):
+        self.method = method
+        self.url = url
+
+
+class _Response:
+    pass
+
+
+class _HTTPError(Exception):
+    pass
+
+
+class _HTTPStatusError(_HTTPError):
+    def __init__(self, message: str, request: _Request, response: _Response):
+        super().__init__(message)
+        self.request = request
+        self.response = response
+
+
+class _DecodingError(Exception):
+    pass
+
+
+httpx_mod.Request = _Request
+httpx_mod.Response = _Response
+httpx_mod.HTTPStatusError = _HTTPStatusError
+httpx_mod.DecodingError = _DecodingError
+httpx_mod.HTTPError = _HTTPError
+class _AsyncClient:
+    async def request(self, *a, **k):
+        return _Response()
+
+
+httpx_mod.AsyncClient = _AsyncClient
+sys.modules.setdefault("httpx", httpx_mod)
+
 
 class _DummyProfileService:
     async def get_client_by_profile_id(self, profile_id):
@@ -341,6 +398,56 @@ sys.modules.setdefault("sqlalchemy", sqlalchemy_mod)
 sys.modules.setdefault("sqlalchemy.schema", sqlalchemy_mod.schema)
 sys.modules.setdefault("sqlalchemy.exc", sqlalchemy_mod.exc)
 
+# provide Redis stub before importing ai_coach modules
+redis_async_mod = types.ModuleType("redis.asyncio")
+
+
+class DummyRedis:
+    async def sadd(self, *a, **k):
+        pass
+
+    async def sismember(self, *a, **k):
+        return False
+
+
+redis_async_mod.Redis = type("Redis", (), {"from_url": lambda *a, **k: DummyRedis()})
+sys.modules.setdefault("redis.asyncio", redis_async_mod)
+redis_ex_mod = types.ModuleType("redis.exceptions")
+redis_ex_mod.RedisError = Exception
+sys.modules.setdefault("redis.exceptions", redis_ex_mod)
+
+# minimal Django settings module for payment service
+django_mod = types.ModuleType("django")
+django_conf = types.ModuleType("django.conf")
+django_conf.settings = types.SimpleNamespace(
+    PAYMENT_CALLBACK_URL="",
+    BOT_LINK="",
+    EMAIL="",
+    CHECKOUT_URL="",
+)
+django_mod.conf = django_conf
+sys.modules.setdefault("django", django_mod)
+sys.modules.setdefault("django.conf", django_conf)
+django_db_mod = types.ModuleType("django.db")
+django_db_models = types.ModuleType("django.db.models")
+django_db_models.QuerySet = list
+django_db_mod.models = django_db_models
+sys.modules.setdefault("django.db", django_db_mod)
+sys.modules.setdefault("django.db.models", django_db_models)
+cache_store: dict = {}
+django_core_cache = types.ModuleType("django.core.cache")
+django_core_cache.cache = types.SimpleNamespace(
+    get=lambda k, default=None: cache_store.get(k, default),
+    set=lambda k, v: cache_store.__setitem__(k, v),
+    get_or_set=lambda k, func, timeout=None: cache_store.setdefault(k, func()),
+    delete=lambda k: cache_store.pop(k, None),
+    delete_many=lambda keys: [cache_store.pop(k, None) for k in keys],
+)
+sys.modules.setdefault("django.core", types.ModuleType("django.core"))
+sys.modules.setdefault("django.core.cache", django_core_cache)
+django_test_mod = types.ModuleType("django.test")
+sys.modules.setdefault("django.test", django_test_mod)
+
 # provide missing hook for ai_coach tests
 from ai_coach.cognee_coach import CogneeCoach  # noqa: E402
 
@@ -383,19 +490,6 @@ async def _make_request(cls, prompt: str, client_id: int) -> list[str]:
 
 
 CogneeCoach.make_request = classmethod(_make_request)
-redis_async_mod = types.ModuleType("redis.asyncio")
-
-
-class DummyRedis:
-    async def sadd(self, *a, **k):
-        pass
-
-    async def sismember(self, *a, **k):
-        return False
-
-
-redis_async_mod.Redis = type("Redis", (), {"from_url": lambda *a, **k: DummyRedis()})
-sys.modules.setdefault("redis.asyncio", redis_async_mod)
 
 env_defaults = {
     "API_KEY": "test_api_key",
@@ -421,11 +515,8 @@ env_defaults = {
 for key, value in env_defaults.items():
     os.environ.setdefault(key, value)
 
-# initialize Django now that settings are prepared
-import django  # noqa: E402
-django.setup()
-
-from core.services.payments.liqpay import LiqPayGateway, ParamValidationError  # noqa: E402
+# initialize services after stubs are in place
+from core.services.payments.liqpay import LiqPay, LiqPayGateway, ParamValidationError  # noqa: E402
 
 services_mod.LiqPayGateway = LiqPayGateway
 services_mod.ParamValidationError = ParamValidationError
@@ -548,10 +639,60 @@ sys.modules.setdefault("bot.texts.text_manager", text_manager_mod)
 
 
 # Stub views relying on in-memory models
-from rest_framework.views import APIView  # noqa: E402
-from rest_framework.response import Response  # noqa: E402
-from rest_framework.permissions import AllowAny  # noqa: E402
-from django.http import JsonResponse, HttpRequest  # noqa: E402
+class Response(dict):
+    def __init__(self, data, status=200):
+        super().__init__(data)
+        self.data = data
+        self.status_code = status
+
+
+class APIView:
+    permission_classes = []
+
+    @classmethod
+    def as_view(cls):
+        def view(request, *args, **kwargs):
+            self = cls()
+            handler = getattr(self, request.method.lower())
+            return handler(request, *args, **kwargs)
+
+        return view
+
+
+class AllowAny:
+    pass
+
+
+class HttpRequest(types.SimpleNamespace):
+    pass
+
+
+def JsonResponse(data, status=200):
+    return types.SimpleNamespace(status_code=status, data=data)
+
+
+class APIRequestFactory:
+    def get(self, path, data=None, **extra):
+        return HttpRequest(method="GET", GET=data or {}, POST={}, **extra)
+
+    def post(self, path, data=None, **extra):
+        return HttpRequest(method="POST", POST=data or {}, GET={}, **extra)
+
+
+rf_test_mod = types.ModuleType("rest_framework.test")
+rf_test_mod.APIRequestFactory = APIRequestFactory
+sys.modules.setdefault("rest_framework.test", rf_test_mod)
+sys.modules.setdefault("rest_framework.views", types.ModuleType("rest_framework.views"))
+sys.modules.setdefault("rest_framework.response", types.ModuleType("rest_framework.response"))
+sys.modules.setdefault("rest_framework.permissions", types.ModuleType("rest_framework.permissions"))
+sys.modules.setdefault("rest_framework.exceptions", types.ModuleType("rest_framework.exceptions"))
+
+sys.modules["rest_framework.views"].APIView = APIView
+sys.modules["rest_framework.response"].Response = Response
+sys.modules["rest_framework.permissions"].AllowAny = AllowAny
+sys.modules["rest_framework.exceptions"].NotFound = type("NotFound", (Exception,), {})
+django_test_mod.RequestFactory = APIRequestFactory
+
 import json  # noqa: E402
 import base64  # noqa: E402
 
@@ -577,7 +718,9 @@ class PaymentWebhookView(APIView):
 
     @staticmethod
     def _verify_signature(raw_data: str, signature: str) -> bool:  # pragma: no cover - monkeypatched in tests
-        return True
+        lp = LiqPay("", "")
+        expected = lp.str_to_sign(f"{raw_data}")
+        return signature == expected
 
     @staticmethod
     def post(request: HttpRequest, *args, **kwargs) -> JsonResponse:
