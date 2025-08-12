@@ -4,6 +4,7 @@ import os
 import sys
 import types
 from contextlib import asynccontextmanager
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -17,7 +18,17 @@ cognee_stub.__path__ = []  # mark as package so submodules can be imported
 cognee_stub.add = lambda *a, **k: None
 cognee_stub.cognify = lambda *a, **k: None
 cognee_stub.search = lambda *a, **k: []
-cognee_stub.config = types.SimpleNamespace(set_llm_provider=lambda *a, **k: None)
+cognee_stub.config = types.SimpleNamespace(
+    set_llm_provider=lambda *a, **k: None,
+    set_llm_model=lambda *a, **k: None,
+    set_llm_api_key=lambda *a, **k: None,
+    set_llm_endpoint=lambda *a, **k: None,
+    set_vector_db_provider=lambda *a, **k: None,
+    set_vector_db_url=lambda *a, **k: None,
+    data_root_directory=lambda *a, **k: None,
+    set_graph_database_provider=lambda *a, **k: None,
+    set_relational_db_config=lambda *a, **k: None,
+)
 
 modules = {
     "cognee": cognee_stub,
@@ -113,6 +124,89 @@ services_mod.WorkoutService = _DummyWorkoutService
 sys.modules.setdefault("core.services", services_mod)
 import core as _core_pkg  # noqa: E402
 _core_pkg.services = services_mod
+
+schemas_mod = types.ModuleType("core.schemas")
+
+
+@dataclass
+class Exercise:
+    name: str
+    sets: str
+    reps: str
+    gif_link: str | None = None
+    weight: str | None = None
+    set_id: int | None = None
+    drop_set: bool = False
+
+
+@dataclass
+class DayExercises:
+    day: str
+    exercises: list[Exercise] = field(default_factory=list)
+
+    def model_dump(self) -> dict[str, Any]:
+        return {"day": self.day, "exercises": [e.__dict__ for e in self.exercises]}
+
+
+@dataclass
+class Client:
+    id: int
+    profile: int
+    name: str | None = None
+    gender: str | None = None
+    born_in: str | None = None
+    workout_experience: str | None = None
+    workout_goals: str | None = None
+    profile_photo: str | None = None
+    health_notes: str | None = None
+    weight: int | None = None
+    status: str | None = None
+    assigned_to: list[int] = field(default_factory=list)
+    credits: int = 0
+    profile_data: dict[str, Any] = field(default_factory=dict)
+
+
+schemas_mod.Exercise = Exercise
+schemas_mod.DayExercises = DayExercises
+schemas_mod.Client = Client
+@dataclass
+class Profile:
+    id: int
+
+
+@dataclass
+class Subscription:
+    workout_days: list[str] = field(default_factory=list)
+    exercises: list[DayExercises] = field(default_factory=list)
+
+    def model_dump(self) -> dict[str, Any]:
+        return {
+            "workout_days": self.workout_days,
+            "exercises": [de.model_dump() for de in self.exercises],
+        }
+
+
+@dataclass
+class Program:
+    client_profile: int = 0
+    exercises_by_day: list[DayExercises] = field(default_factory=list)
+    workout_days: list[str] = field(default_factory=list)
+    id: int = 0
+
+    def model_dump(self) -> dict[str, Any]:
+        return {
+            "client_profile": self.client_profile,
+            "exercises_by_day": [de.model_dump() for de in self.exercises_by_day],
+            "workout_days": self.workout_days,
+            "id": self.id,
+        }
+
+
+schemas_mod.Profile = Profile
+schemas_mod.Subscription = Subscription
+schemas_mod.Program = Program
+sys.modules.setdefault("core.schemas", schemas_mod)
+_core_pkg.schemas = schemas_mod
 sys.modules.setdefault("google.auth", types.ModuleType("google.auth"))
 auth_exc = types.ModuleType("google.auth.exceptions")
 auth_exc.DefaultCredentialsError = Exception
@@ -180,11 +274,21 @@ loguru_mod.logger = types.SimpleNamespace(
     trace=lambda *a, **k: None,
     warning=lambda *a, **k: None,
     error=lambda *a, **k: None,
+    success=lambda *a, **k: None,
+    exception=lambda *a, **k: None,
     level=lambda *a, **k: None,
 )
 sys.modules.setdefault("loguru", loguru_mod)
 settings_stub = types.SimpleNamespace(
     VECTORDATABASE_URL="sqlite://",
+    VECTORDATABASE_PROVIDER="sqlite",
+    GRAPH_DATABASE_PROVIDER="sqlite",
+    DB_HOST="localhost",
+    DB_PORT=5432,
+    DB_USER="user",
+    DB_PASSWORD="pass",
+    DB_NAME="db",
+    DB_PROVIDER="sqlite",
     LOG_LEVEL="INFO",
     GDRIVE_FOLDER_ID="folder",
     GOOGLE_APPLICATION_CREDENTIALS="/tmp/creds.json",
@@ -192,12 +296,18 @@ settings_stub = types.SimpleNamespace(
     REDIS_URL="redis://localhost:6379",
     API_URL="http://localhost/",
     API_KEY="test_api_key",
-    API_MAX_RETRIES=1,
+    API_MAX_RETRIES=2,
     API_RETRY_INITIAL_DELAY=0,
     API_RETRY_BACKOFF_FACTOR=1,
     API_RETRY_MAX_DELAY=0,
     API_TIMEOUT=1,
     LLM_PROVIDER="openai",
+    LLM_MODEL="gpt-3.5",
+    LLM_API_KEY="key",
+    LLM_API_URL="http://llm",
+    EMBEDDING_MODEL="embed",
+    EMBEDDING_API_KEY="embed_key",
+    OPENAI_BASE_URL="http://openai",
 )
 sys.modules.setdefault("config.app_settings", types.ModuleType("config.app_settings"))
 sys.modules["config.app_settings"].settings = settings_stub
@@ -207,7 +317,20 @@ logger_stub.LOGGING = {}
 sys.modules.setdefault("config.logger", logger_stub)
 crypto_mod = types.ModuleType("cryptography")
 crypto_mod.fernet = types.ModuleType("cryptography.fernet")
-crypto_mod.fernet.Fernet = object
+
+
+class _DummyFernet:
+    def __init__(self, key: bytes):
+        self.key = key
+
+    def encrypt(self, data: bytes) -> bytes:
+        return data[::-1]
+
+    def decrypt(self, token: bytes) -> bytes:
+        return token[::-1]
+
+
+crypto_mod.fernet.Fernet = _DummyFernet
 sys.modules.setdefault("cryptography", crypto_mod)
 sys.modules.setdefault("cryptography.fernet", crypto_mod.fernet)
 sqlalchemy_mod = types.ModuleType("sqlalchemy")

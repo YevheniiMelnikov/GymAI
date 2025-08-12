@@ -14,6 +14,7 @@ class APIClient:
     api_key = settings.API_KEY
     use_default_auth = True
 
+    client: ClassVar[Any | None] = None
     _clients: ClassVar[dict[int, httpx.AsyncClient]] = {}
 
     max_retries = settings.API_MAX_RETRIES
@@ -23,7 +24,10 @@ class APIClient:
 
     @classmethod
     def _get_client(cls, timeout: int) -> httpx.AsyncClient:
-        """Return per-event-loop AsyncClient instance."""
+        """Return a configured client, using a stub if provided for tests."""
+        if cls.client is not None:
+            return cls.client
+
         loop = asyncio.get_running_loop()
         key = id(loop)
 
@@ -83,16 +87,16 @@ class APIClient:
                 resp = await client.request(method, url, json=data, headers=headers)
 
                 if resp.is_success:
-                    if resp.headers.get("content-type", "").startswith("application/json"):
-                        try:
+                    content_type = getattr(resp, "headers", {}).get("content-type", "")
+                    try:
+                        if content_type.startswith("application/json") or not content_type:
                             return resp.status_code, resp.json()
-                        except JSONDecodeError:
-                            logger.warning("Failed to decode JSON from response for %s", url)
-                            return resp.status_code, None
+                    except JSONDecodeError:
+                        logger.warning("Failed to decode JSON from response for %s", url)
                     return resp.status_code, None
 
                 error_data: Optional[dict]
-                if resp.headers.get("content-type", "").startswith("application/json"):
+                if getattr(resp, "headers", {}).get("content-type", "").startswith("application/json"):
                     try:
                         error_data = resp.json()
                     except JSONDecodeError:
