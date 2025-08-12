@@ -41,9 +41,9 @@ class GSheetsService:
 
         worksheet.append_row(
             ["Имя", "Фамилия", "Номер карты", "Order ID", "Сумма к зачислению"],
-            value_input_option="USER_ENTERED",
+            value_input_option="USER_ENTERED",  # pyrefly: ignore[bad-argument-type]
         )
         if data:
-            worksheet.append_rows(data, value_input_option="USER_ENTERED")
+            worksheet.append_rows(data, value_input_option="USER_ENTERED")  # pyrefly: ignore[bad-argument-type]
 
         return worksheet

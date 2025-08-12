@@ -96,10 +96,12 @@ state_mod.State = object
 state_mod.StatesGroup = object
 fsm_mod.state = state_mod
 sys.modules.setdefault("aiogram.fsm.state", state_mod)
-services_mod = types.ModuleType("core.services")
+
+
 class _DummyProfileService:
     async def get_client_by_profile_id(self, profile_id):
         return None
+
 
 class _DummyWorkoutService:
     async def get_latest_subscription(self, client_profile_id):
@@ -108,6 +110,8 @@ class _DummyWorkoutService:
     async def get_latest_program(self, client_profile_id):
         return None
 
+services_mod = types.ModuleType("core.services")
+services_mod.__path__ = [str(Path(__file__).resolve().parent / "core" / "services")]
 services_mod.ProfileService = _DummyProfileService
 services_mod.WorkoutService = _DummyWorkoutService
 sys.modules.setdefault("core.services", services_mod)
@@ -146,7 +150,6 @@ sys.modules.setdefault("fitz", fitz_mod)
 sys.modules.setdefault("cognee.base_config", types.ModuleType("cognee.base_config"))
 sys.modules["cognee.base_config"].get_base_config = lambda: None
 cognee_stub.base_config = sys.modules["cognee.base_config"]
-from cognee.base_config import get_base_config
 file_utils_mod = types.ModuleType("cognee.infrastructure.files.utils")
 
 @asynccontextmanager
@@ -228,8 +231,6 @@ class DummyRedis:
 redis_async_mod.Redis = type("Redis", (), {"from_url": lambda *a, **k: DummyRedis()})
 sys.modules.setdefault("redis.asyncio", redis_async_mod)
 
-django = types.SimpleNamespace(setup=lambda: None)
-
 env_defaults = {
     "API_KEY": "test_api_key",
     "API_URL": "http://localhost/",
@@ -255,4 +256,119 @@ for key, value in env_defaults.items():
     os.environ.setdefault(key, value)
 
 
+import django  # noqa: E402
 django.setup()
+
+
+class _InMemoryManager(list):
+    def create(self, **kwargs):
+        obj = types.SimpleNamespace(**kwargs)
+        obj.id = len(self) + 1
+        self.append(obj)
+        return obj
+
+    def all(self):
+        return list(self)
+
+
+# Stub profile models
+profiles_mod = types.ModuleType("apps.profiles.models")
+class Profile(types.SimpleNamespace):
+    objects = _InMemoryManager()
+
+
+class ClientProfile(types.SimpleNamespace):
+    objects = _InMemoryManager()
+
+
+profiles_mod.Profile = Profile
+profiles_mod.ClientProfile = ClientProfile
+sys.modules.setdefault("apps.profiles.models", profiles_mod)
+
+
+# Stub payment model
+payments_models = types.ModuleType("apps.payments.models")
+class Payment(types.SimpleNamespace):
+    objects = _InMemoryManager()
+
+
+payments_models.Payment = Payment
+sys.modules.setdefault("apps.payments.models", payments_models)
+
+
+# Minimal APIKey stub
+api_models = types.ModuleType("rest_framework_api_key.models")
+
+
+class _APIKeyManager:
+    def create_key(self, name: str):
+        return types.SimpleNamespace(name=name), "testkey"
+
+
+class APIKey:
+    objects = _APIKeyManager()
+
+
+api_models.APIKey = APIKey
+sys.modules.setdefault("rest_framework_api_key.models", api_models)
+
+
+# Stub views relying on in-memory models
+from rest_framework.views import APIView  # noqa: E402
+from rest_framework.response import Response  # noqa: E402
+from rest_framework.permissions import AllowAny  # noqa: E402
+from django.http import JsonResponse, HttpRequest  # noqa: E402
+import json  # noqa: E402
+import base64  # noqa: E402
+
+proc_mod = types.ModuleType("apps.payments.views.process_payment_webhook")
+proc_mod.delay = lambda **kwargs: None
+
+
+class PaymentListView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request: HttpRequest, *args, **kwargs):
+        status = request.GET.get("status")
+        items = [
+            {"order_id": p.order_id, "status": p.status}
+            for p in Payment.objects.all()
+            if not status or p.status == status
+        ]
+        return Response({"results": items})
+
+
+class PaymentWebhookView(APIView):
+    permission_classes = [AllowAny]
+
+    @staticmethod
+    def _verify_signature(raw_data: str, signature: str) -> bool:  # pragma: no cover - monkeypatched in tests
+        return True
+
+    @staticmethod
+    def post(request: HttpRequest, *args, **kwargs) -> JsonResponse:
+        raw_data = request.POST.get("data")
+        signature = request.POST.get("signature")
+        if not raw_data or not signature:
+            return JsonResponse({"detail": "Missing fields"}, status=400)
+        if not PaymentWebhookView._verify_signature(raw_data, signature):
+            return JsonResponse({"detail": "Invalid signature"}, status=400)
+        decoded = base64.b64decode(raw_data).decode()
+        payload = json.loads(decoded)
+        proc_mod.delay(
+            order_id=payload.get("order_id"),
+            status=payload.get("status"),
+            err_description=payload.get("err_description", ""),
+        )
+        return JsonResponse({"result": "OK"})
+
+
+payments_views = types.ModuleType("apps.payments.views")
+payments_views.PaymentListView = PaymentListView
+payments_views.PaymentWebhookView = PaymentWebhookView
+payments_views.process_payment_webhook = proc_mod
+sys.modules.setdefault("apps.payments.views.process_payment_webhook", proc_mod)
+sys.modules.setdefault("apps.payments.views", payments_views)
+import importlib  # noqa: E402
+payments_pkg = importlib.import_module("apps.payments")
+payments_pkg.views = payments_views
