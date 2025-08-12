@@ -134,6 +134,7 @@ loguru_mod.logger = types.SimpleNamespace(
     warning=lambda *a, **k: None,
     error=lambda *a, **k: None,
     exception=lambda *a, **k: None,
+    success=lambda *a, **k: None,
 )
 sys.modules.setdefault("loguru", loguru_mod)
 settings_stub = types.SimpleNamespace(
@@ -150,6 +151,17 @@ settings_stub = types.SimpleNamespace(
     API_RETRY_MAX_DELAY=0,
     API_TIMEOUT=1,
     SPREADSHEET_ID="sheet",
+    SECRET_KEY="test",
+    DB_NAME="postgres",
+    DB_USER="postgres",
+    DB_PASSWORD="password",
+    DB_HOST="localhost",
+    DB_PORT="5432",
+    SITE_NAME="Test",
+    ALLOWED_HOSTS=["localhost"],
+    TIME_ZONE="Europe/Kyiv",
+    PAYMENT_PRIVATE_KEY="priv",
+    PAYMENT_PUB_KEY="pub",
 )
 sys.modules.setdefault("config.app_settings", types.ModuleType("config.app_settings"))
 sys.modules["config.app_settings"].settings = settings_stub
@@ -193,6 +205,10 @@ redis_async_mod = types.ModuleType("redis.asyncio")
 
 
 class DummyRedis:
+    @classmethod
+    def from_url(cls, *a, **k):
+        return cls()
+
     async def close(self):
         pass
 
@@ -340,6 +356,239 @@ di_mod.containers = di_containers
 di_mod.providers = di_providers
 sys.modules.setdefault("dependency_injector.containers", di_containers)
 sys.modules.setdefault("dependency_injector.providers", di_providers)
+
+# Additional lightweight stubs for Django, FastAPI, and DRF components
+django_core = types.ModuleType("django.core")
+django_cache_mod = types.ModuleType("django.core.cache")
+
+
+class _Cache:
+    store: dict[str, Any] = {}
+
+    def get_or_set(self, key, default, timeout=None):
+        if key not in self.store:
+            self.store[key] = default()
+        return self.store[key]
+
+    def delete(self, key):
+        self.store.pop(key, None)
+
+    def delete_many(self, keys):
+        for k in keys:
+            self.delete(k)
+
+
+cache = _Cache()
+django_cache_mod.cache = cache
+sys.modules.setdefault("django.core", django_core)
+sys.modules.setdefault("django.core.cache", django_cache_mod)
+
+django_utils = types.ModuleType("django.utils")
+django_utils_decorators = types.ModuleType("django.utils.decorators")
+django_utils_decorators.method_decorator = lambda *a, **k: (lambda f: f)
+sys.modules.setdefault("django.utils", django_utils)
+sys.modules.setdefault("django.utils.decorators", django_utils_decorators)
+
+django_views = types.ModuleType("django.views")
+django_views_decorators = types.ModuleType("django.views.decorators")
+django_cache_page = types.ModuleType("django.views.decorators.cache")
+django_cache_page.cache_page = lambda *a, **k: (lambda f: f)
+sys.modules.setdefault("django.views", django_views)
+sys.modules.setdefault("django.views.decorators", django_views_decorators)
+sys.modules.setdefault("django.views.decorators.cache", django_cache_page)
+
+django_http = types.ModuleType("django.http")
+
+
+class HttpRequest:
+    method = "GET"
+    GET: dict[str, Any] = {}
+    POST: dict[str, Any] = {}
+
+
+django_http.HttpRequest = HttpRequest
+
+
+class JsonResponse(dict):
+    def __init__(self, data=None, status=200):
+        super().__init__(data or {})
+        self.status_code = status
+
+
+django_http.JsonResponse = JsonResponse
+sys.modules.setdefault("django.http", django_http)
+
+django_db = types.ModuleType("django.db")
+django_db_models = types.ModuleType("django.db.models")
+
+
+class QuerySet(list):
+    def filter(self, **kwargs):
+        return QuerySet([o for o in self if all(getattr(o, k) == v for k, v in kwargs.items())])
+
+    def values_list(self, field, flat=False):
+        return [getattr(o, field) for o in self]
+
+    def select_related(self, *a, **k):
+        return self
+
+    def all(self):  # pragma: no cover - mimic Django
+        return self
+
+
+django_db_models.QuerySet = QuerySet
+django_db_models.Model = object
+sys.modules.setdefault("django.db", django_db)
+sys.modules.setdefault("django.db.models", django_db_models)
+
+fastapi_mod = types.ModuleType("fastapi")
+
+
+class FastAPI:
+    def __init__(self, *a, **k):
+        pass
+
+
+fastapi_mod.FastAPI = FastAPI
+fastapi_security = types.ModuleType("fastapi.security")
+fastapi_security.HTTPBasic = object
+sys.modules.setdefault("fastapi", fastapi_mod)
+sys.modules.setdefault("fastapi.security", fastapi_security)
+
+rest_framework = types.ModuleType("rest_framework")
+rf_views = types.ModuleType("rest_framework.views")
+
+
+class APIView:
+    pass
+
+
+rf_views.APIView = APIView
+rf_generics = types.ModuleType("rest_framework.generics")
+
+
+class ListAPIView(APIView):
+    pass
+
+
+class RetrieveUpdateAPIView(APIView):
+    pass
+
+
+class CreateAPIView(APIView):
+    pass
+
+
+rf_generics.ListAPIView = ListAPIView
+rf_generics.RetrieveUpdateAPIView = RetrieveUpdateAPIView
+rf_generics.CreateAPIView = CreateAPIView
+rf_permissions = types.ModuleType("rest_framework.permissions")
+rf_permissions.AllowAny = object
+rf_serializers = types.ModuleType("rest_framework.serializers")
+rf_serializers.BaseSerializer = object
+rf_status = types.ModuleType("rest_framework.status")
+rf_status.HTTP_200_OK = 200
+rf_status.HTTP_400_BAD_REQUEST = 400
+rf_exceptions = types.ModuleType("rest_framework.exceptions")
+rf_exceptions.NotFound = Exception
+rest_framework.views = rf_views
+rest_framework.generics = rf_generics
+rest_framework.permissions = rf_permissions
+rest_framework.serializers = rf_serializers
+rest_framework.status = rf_status
+rest_framework.exceptions = rf_exceptions
+sys.modules.setdefault("rest_framework", rest_framework)
+sys.modules.setdefault("rest_framework.views", rf_views)
+sys.modules.setdefault("rest_framework.generics", rf_generics)
+sys.modules.setdefault("rest_framework.permissions", rf_permissions)
+sys.modules.setdefault("rest_framework.serializers", rf_serializers)
+sys.modules.setdefault("rest_framework.status", rf_status)
+sys.modules.setdefault("rest_framework.exceptions", rf_exceptions)
+
+rf_api_key = types.ModuleType("rest_framework_api_key")
+rf_api_key_perm = types.ModuleType("rest_framework_api_key.permissions")
+rf_api_key_perm.HasAPIKey = object
+rf_api_key.permissions = rf_api_key_perm
+sys.modules.setdefault("rest_framework_api_key", rf_api_key)
+sys.modules.setdefault("rest_framework_api_key.permissions", rf_api_key_perm)
+
+payments_models = types.ModuleType("apps.payments.models")
+
+
+class Payment:
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+
+
+payments_models.Payment = Payment
+sys.modules.setdefault("apps.payments.models", payments_models)
+
+payments_repos = types.ModuleType("apps.payments.repos")
+
+
+class PaymentRepository:
+    @staticmethod
+    def base_qs():
+        return []
+
+    @staticmethod
+    def filter(qs, *, status=None, order_id=None):
+        return [
+            p
+            for p in qs
+            if (status is None or p.status == status)
+            and (order_id is None or p.order_id == order_id)
+        ]
+
+
+payments_repos.PaymentRepository = PaymentRepository
+sys.modules.setdefault("apps.payments.repos", payments_repos)
+
+payments_serializers = types.ModuleType("apps.payments.serializers")
+
+
+class PaymentSerializer:
+    pass
+
+
+payments_serializers.PaymentSerializer = PaymentSerializer
+sys.modules.setdefault("apps.payments.serializers", payments_serializers)
+
+payments_tasks = types.ModuleType("apps.payments.tasks")
+payments_tasks.process_payment_webhook = types.SimpleNamespace(delay=lambda **k: None)
+sys.modules.setdefault("apps.payments.tasks", payments_tasks)
+
+profiles_models = types.ModuleType("apps.profiles.models")
+
+
+class ClientProfile:
+    pass
+
+
+profiles_models.ClientProfile = ClientProfile
+sys.modules.setdefault("apps.profiles.models", profiles_models)
+
+workout_models = types.ModuleType("apps.workout_plans.models")
+
+
+class Program:
+    pass
+
+
+class Subscription:
+    pass
+
+
+workout_models.Program = Program
+workout_models.Subscription = Subscription
+sys.modules.setdefault("apps.workout_plans.models", workout_models)
+
+core_services_pkg = types.ModuleType("core.services")
+core_services_pkg.__path__ = [str(Path(__file__).resolve().parent / "core" / "services")]
+core_services_pkg.ProfileService = types.SimpleNamespace(
+    get_client_by_profile_id=lambda *_a, **_k: None
+)
+sys.modules.setdefault("core.services", core_services_pkg)
 
 env_defaults = {
     "API_KEY": "test_api_key",
