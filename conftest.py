@@ -615,3 +615,8 @@ for key, value in env_defaults.items():
     os.environ.setdefault(key, value)
 
 django_mod.setup()
+
+# Ensure Django's method_decorator is a no-op to avoid requiring dispatch
+from django.utils import decorators as _decorators  # noqa: E402
+
+_decorators.method_decorator = lambda *a, **k: (lambda f: f)
