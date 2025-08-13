@@ -13,9 +13,9 @@ class ProfileRepository:
     @staticmethod
     def get_model_by_id(profile_id: int) -> Profile:
         try:
-            profile = Profile.objects.get(pk=profile_id)
+            profile = Profile.objects.get(pk=profile_id)  # pyrefly: ignore[missing-attribute]
             return cast(Profile, profile)
-        except Profile.DoesNotExist:
+        except Profile.DoesNotExist:  # pyrefly: ignore[missing-attribute]
             raise NotFound(f"Profile pk={profile_id} not found")
 
     @staticmethod
@@ -42,9 +42,9 @@ class ProfileRepository:
     def get_by_telegram_id(tg_id: int) -> Profile:
         def fetch_profile() -> Dict[str, Any]:
             try:
-                instance = Profile.objects.get(tg_id=tg_id)
+                instance = Profile.objects.get(tg_id=tg_id)  # pyrefly: ignore[missing-attribute]
                 instance = cast(Profile, instance)
-            except Profile.DoesNotExist:
+            except Profile.DoesNotExist:  # pyrefly: ignore[missing-attribute]
                 raise NotFound(f"Profile with tg_id={tg_id} not found")
             return ProfileSerializer(instance).data
 
@@ -67,9 +67,9 @@ class CoachProfileRepository:
     @staticmethod
     def get(pk: int) -> CoachProfile:
         try:
-            coach_profile = CoachProfile.objects.get(pk=pk)
+            coach_profile = CoachProfile.objects.get(pk=pk)  # pyrefly: ignore[missing-attribute]
             coach_profile = cast(CoachProfile, coach_profile)
-        except CoachProfile.DoesNotExist:
+        except CoachProfile.DoesNotExist:  # pyrefly: ignore[missing-attribute]
             raise NotFound(f"CoachProfile pk={pk} not found")
         if coach_profile.profile.role != "coach":  # type: ignore[attr-defined]
             raise ValidationError("Underlying profile role is not 'coach'")
@@ -79,7 +79,7 @@ class CoachProfileRepository:
     def get_or_create_by_profile(profile: Profile) -> CoachProfile:
         if profile.role != "coach":
             raise ValidationError("Profile role is not 'coach'")
-        coach_profile, _ = CoachProfile.objects.get_or_create(profile=profile)
+        coach_profile, _ = CoachProfile.objects.get_or_create(profile=profile)  # pyrefly: ignore[missing-attribute]
         return cast(CoachProfile, coach_profile)
 
 
@@ -87,9 +87,9 @@ class ClientProfileRepository:
     @staticmethod
     def get(pk: int) -> ClientProfile:
         try:
-            client_profile = ClientProfile.objects.get(pk=pk)
+            client_profile = ClientProfile.objects.get(pk=pk)  # pyrefly: ignore[missing-attribute]
             client_profile = cast(ClientProfile, client_profile)
-        except ClientProfile.DoesNotExist:
+        except ClientProfile.DoesNotExist:  # pyrefly: ignore[missing-attribute]
             raise NotFound(f"ClientProfile pk={pk} not found")
         if client_profile.profile.role != "client":  # type: ignore[attr-defined]
             raise ValidationError("Underlying profile role is not 'client'")
@@ -99,5 +99,5 @@ class ClientProfileRepository:
     def get_or_create_by_profile(profile: Profile) -> ClientProfile:
         if profile.role != "client":
             raise ValidationError("Profile role is not 'client'")
-        client_profile, _ = ClientProfile.objects.get_or_create(profile=profile)
+        client_profile, _ = ClientProfile.objects.get_or_create(profile=profile)  # pyrefly: ignore[missing-attribute]
         return cast(ClientProfile, client_profile)

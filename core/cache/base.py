@@ -5,6 +5,7 @@ from typing import Any, ClassVar
 
 from loguru import logger
 from redis.asyncio import Redis, from_url
+from typing import Awaitable, cast
 from redis.exceptions import RedisError
 
 from config.app_settings import settings
@@ -45,7 +46,7 @@ class BaseCacheManager:
     @classmethod
     async def healthcheck(cls) -> bool:
         try:
-            return await cls.redis.ping()
+            return await cast(Awaitable[bool], cls.redis.ping())
         except Exception as e:
             logger.critical(f"Redis healthcheck failed: {e}")
             return False
@@ -53,7 +54,7 @@ class BaseCacheManager:
     @classmethod
     async def get(cls, key: str, field: str) -> str | None:
         try:
-            return await cls.redis.hget(cls._add_prefix(key), field)
+            return await cast(Awaitable[str | None], cls.redis.hget(cls._add_prefix(key), field))
         except RedisError as e:
             logger.error(f"Redis GET error [{key}:{field}]: {e}")
             return None
@@ -61,21 +62,21 @@ class BaseCacheManager:
     @classmethod
     async def set(cls, key: str, field: str, value: str) -> None:
         try:
-            await cls.redis.hset(cls._add_prefix(key), field, value)
+            await cast(Awaitable[int], cls.redis.hset(cls._add_prefix(key), field, value))
         except RedisError as e:
             logger.error(f"Redis SET error [{key}:{field}]: {e}")
 
     @classmethod
     async def delete(cls, key: str, field: str) -> None:
         try:
-            await cls.redis.hdel(cls._add_prefix(key), field)
+            await cast(Awaitable[int], cls.redis.hdel(cls._add_prefix(key), field))
         except RedisError as e:
             logger.error(f"Redis DELETE error [{key}:{field}]: {e}")
 
     @classmethod
     async def get_all(cls, key: str) -> dict[str, str]:
         try:
-            return await cls.redis.hgetall(cls._add_prefix(key))
+            return await cast(Awaitable[dict[str, str]], cls.redis.hgetall(cls._add_prefix(key)))
         except RedisError as e:
             logger.error(f"Redis HGETALL error [{key}]: {e}")
             return {}

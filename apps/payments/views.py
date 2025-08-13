@@ -23,7 +23,7 @@ from core.payment.providers.liqpay import LiqPay
 
 
 class PaymentWebhookView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [AllowAny]  # pyrefly: ignore[bad-override]
 
     @staticmethod
     def _verify_signature(raw_data: str, signature: str) -> bool:
@@ -36,17 +36,17 @@ class PaymentWebhookView(APIView):
     @staticmethod
     def post(request: HttpRequest, *args, **kwargs) -> JsonResponse:
         try:
-            raw_data = request.POST.get("data")
-            signature = request.POST.get("signature")
+            raw_data_val = request.POST.get("data")
+            signature_val = request.POST.get("signature")
 
-            if not raw_data or not signature:
+            if not isinstance(raw_data_val, str) or not isinstance(signature_val, str):
                 return JsonResponse({"detail": "Missing fields"}, status=status.HTTP_400_BAD_REQUEST)
 
-            if not PaymentWebhookView._verify_signature(raw_data, signature):
+            if not PaymentWebhookView._verify_signature(raw_data_val, signature_val):
                 return JsonResponse({"detail": "Invalid signature"}, status=status.HTTP_400_BAD_REQUEST)
 
             try:
-                decoded = base64.b64decode(raw_data).decode()
+                decoded = base64.b64decode(raw_data_val).decode()
                 payment_info: dict[str, Any] = json.loads(decoded)
             except Exception:
                 logger.warning("Failed to decode or parse payment data")
@@ -72,9 +72,9 @@ class PaymentWebhookView(APIView):
 @method_decorator(cache_page(60 * 5), name="dispatch")
 class PaymentListView(generics.ListAPIView):
     serializer_class = PaymentSerializer  # pyrefly: ignore[bad-override]
-    permission_classes = [HasAPIKey]
+    permission_classes = [HasAPIKey]  # pyrefly: ignore[bad-override]
 
-    def get_queryset(self):
+    def get_queryset(self):  # pyrefly: ignore[bad-override]
         qs = PaymentRepository.base_qs()
         return PaymentRepository.filter(
             qs,
@@ -85,9 +85,9 @@ class PaymentListView(generics.ListAPIView):
 
 class PaymentDetailView(generics.RetrieveUpdateAPIView):
     serializer_class = PaymentSerializer  # pyrefly: ignore[bad-override]
-    permission_classes = [HasAPIKey]
+    permission_classes = [HasAPIKey]  # pyrefly: ignore[bad-override]
 
-    def get_queryset(self):
+    def get_queryset(self):  # pyrefly: ignore[bad-override]
         return PaymentRepository.base_qs()
 
     def perform_update(self, serializer: serializers.BaseSerializer) -> None:  # pyrefly: ignore[bad-override]
@@ -98,9 +98,9 @@ class PaymentDetailView(generics.RetrieveUpdateAPIView):
 
 class PaymentCreateView(generics.CreateAPIView):
     serializer_class = PaymentSerializer  # pyrefly: ignore[bad-override]
-    permission_classes = [HasAPIKey]
+    permission_classes = [HasAPIKey]  # pyrefly: ignore[bad-override]
 
-    def get_queryset(self):
+    def get_queryset(self):  # pyrefly: ignore[bad-override]
         return PaymentRepository.base_qs()
 
     def perform_create(self, serializer: serializers.BaseSerializer) -> None:  # pyrefly: ignore[bad-override]

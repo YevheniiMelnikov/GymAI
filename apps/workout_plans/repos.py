@@ -20,11 +20,14 @@ class ProgramRepository:
         return f"program:list:{client_profile_id or 'all'}"
 
     @staticmethod
-    def base_qs() -> QuerySet[Program]:
-        return Program.objects.all().select_related("client_profile")  # type: ignore[return-value]
+    def base_qs() -> QuerySet[Program]:  # pyrefly: ignore[bad-specialization]
+        return Program.objects.all().select_related("client_profile")  # type: ignore[return-value,missing-attribute]
 
     @staticmethod
-    def filter_by_client(qs: QuerySet[Program], client_profile_id: Optional[int]) -> QuerySet[Program]:
+    def filter_by_client(
+        qs: QuerySet[Program],  # pyrefly: ignore[bad-specialization]
+        client_profile_id: Optional[int],
+    ) -> QuerySet[Program]:  # pyrefly: ignore[bad-specialization]
         if client_profile_id:
             key = ProgramRepository._list_key(client_profile_id)
             ids = cast(
@@ -35,7 +38,7 @@ class ProgramRepository:
                     settings.CACHE_TTL,
                 ),
             )
-            return cast(QuerySet[Program], Program.objects.filter(id__in=ids))
+            return cast(QuerySet[Program], Program.objects.filter(id__in=ids))  # pyrefly: ignore[bad-specialization]
 
         key = ProgramRepository._list_key()
         ids = cast(
@@ -46,14 +49,14 @@ class ProgramRepository:
                 settings.CACHE_TTL,
             ),
         )
-        return cast(QuerySet[Program], Program.objects.filter(id__in=ids))
+        return cast(QuerySet[Program], Program.objects.filter(id__in=ids))  # pyrefly: ignore[bad-specialization]
 
     @staticmethod
     def get_client(client_profile_id: int) -> ClientProfile:
         try:
-            client = ClientProfile.objects.get(pk=client_profile_id)
+            client = ClientProfile.objects.get(pk=client_profile_id)  # pyrefly: ignore[missing-attribute]
             return cast(ClientProfile, client)
-        except ClientProfile.DoesNotExist:
+        except ClientProfile.DoesNotExist:  # pyrefly: ignore[missing-attribute]
             raise NotFound(f"ClientProfile pk={client_profile_id} not found")
 
     @classmethod
@@ -81,11 +84,14 @@ class ProgramRepository:
 
 class SubscriptionRepository:
     @staticmethod
-    def base_qs() -> QuerySet[Subscription]:
-        return Subscription.objects.all().select_related("client_profile")  # type: ignore[return-value]
+    def base_qs() -> QuerySet[Subscription]:  # pyrefly: ignore[bad-specialization]
+        return Subscription.objects.all().select_related("client_profile")  # type: ignore[return-value,missing-attribute]
 
     @staticmethod
-    def filter_by_client(qs: QuerySet[Subscription], client_profile_id: Optional[int]) -> QuerySet[Subscription]:
+    def filter_by_client(
+        qs: QuerySet[Subscription],  # pyrefly: ignore[bad-specialization]
+        client_profile_id: Optional[int],
+    ) -> QuerySet[Subscription]:  # pyrefly: ignore[bad-specialization]
         if client_profile_id:
             return qs.filter(client_profile_id=client_profile_id)
         return qs

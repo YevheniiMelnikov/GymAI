@@ -3,27 +3,12 @@ import base64
 import json
 from decimal import Decimal
 from typing import Any
-import importlib.util
-from pathlib import Path
-import types
-import sys
 
 import pytest
 from django.conf import settings
 
-pkg = types.ModuleType("core.services")
-pkg.__path__ = [str(Path(__file__).resolve().parents[1] / "services")]
-sys.modules.setdefault("core.services", pkg)
-pkg_payments = types.ModuleType("core.services.payments")
-pkg_payments.__path__ = [str(Path(__file__).resolve().parents[1] / "services" / "payments")]
-sys.modules.setdefault("core.services.payments", pkg_payments)
+from core.payment.providers import liqpay as liqpay_module
 
-spec = importlib.util.spec_from_file_location(
-    "liqpay", Path(__file__).resolve().parents[1] / "services" / "payments" / "liqpay.py"
-)
-liqpay_module = importlib.util.module_from_spec(spec)
-assert spec.loader is not None
-spec.loader.exec_module(liqpay_module)
 LiqPayGateway = liqpay_module.LiqPayGateway
 ParamValidationError = liqpay_module.ParamValidationError
 
