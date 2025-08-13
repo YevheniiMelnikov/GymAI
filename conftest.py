@@ -190,6 +190,7 @@ sys.modules.setdefault("redis", redis_mod)
 sys.modules.setdefault("redis.exceptions", redis_mod.exceptions)
 yaml_mod = types.ModuleType("yaml")
 yaml_mod.safe_load = lambda *a, **k: {}
+yaml_mod.SafeLoader = object
 sys.modules.setdefault("yaml", yaml_mod)
 crypto_mod = types.ModuleType("cryptography")
 crypto_mod.fernet = types.ModuleType("cryptography.fernet")
@@ -239,51 +240,47 @@ class DummyRedis:
 redis_async_mod.Redis = DummyRedis
 redis_async_mod.from_url = lambda *a, **k: DummyRedis()
 sys.modules.setdefault("redis.asyncio", redis_async_mod)
-httpx_mod = types.ModuleType("httpx")
+try:
+    import httpx  # noqa: F401
+except Exception:  # pragma: no cover - fallback stub
+    httpx_mod = types.ModuleType("httpx")
 
-
-class HTTPError(Exception):
-    pass
-
-
-class HTTPStatusError(HTTPError):
-    def __init__(self, message: str, request: Any = None, response: Any = None):
-        super().__init__(message)
-        self.request = request
-        self.response = response
-
-
-class AsyncClient:
-    def __init__(self, *a, **k):
-        self.timeout = k.get("timeout")
-
-    async def request(self, *a, **k):
-        return types.SimpleNamespace(status_code=200, headers={}, json=lambda: {}, text="", is_success=True)
-
-    async def aclose(self):
+    class HTTPError(Exception):
         pass
 
+    class HTTPStatusError(HTTPError):
+        def __init__(self, message: str, request: Any = None, response: Any = None):
+            super().__init__(message)
+            self.request = request
+            self.response = response
 
-class Request:
-    def __init__(self, *a, **k):
+    class AsyncClient:
+        def __init__(self, *a, **k):
+            self.timeout = k.get("timeout")
+
+        async def request(self, *a, **k):
+            return types.SimpleNamespace(status_code=200, headers={}, json=lambda: {}, text="", is_success=True)
+
+        async def aclose(self):
+            pass
+
+    class Request:
+        def __init__(self, *a, **k):
+            pass
+
+    class Response:
         pass
 
+    class DecodingError(Exception):
+        pass
 
-class Response:
-    pass
-
-
-class DecodingError(Exception):
-    pass
-
-
-httpx_mod.AsyncClient = AsyncClient
-httpx_mod.HTTPError = HTTPError
-httpx_mod.HTTPStatusError = HTTPStatusError
-httpx_mod.Request = Request
-httpx_mod.Response = Response
-httpx_mod.DecodingError = DecodingError
-sys.modules.setdefault("httpx", httpx_mod)
+    httpx_mod.AsyncClient = AsyncClient
+    httpx_mod.HTTPError = HTTPError
+    httpx_mod.HTTPStatusError = HTTPStatusError
+    httpx_mod.Request = Request
+    httpx_mod.Response = Response
+    httpx_mod.DecodingError = DecodingError
+    sys.modules.setdefault("httpx", httpx_mod)
 
 aiogram_mod = types.ModuleType("aiogram")
 aiogram_mod.Bot = type("Bot", (), {})
@@ -306,18 +303,30 @@ aiogram_mod.types = types.SimpleNamespace(
     CallbackQuery=type("CallbackQuery", (), {"answer": lambda *a, **k: None, "message": None}),
     BotCommand=object,
     InlineKeyboardButton=type("InlineKeyboardButton", (), {}),
+    InlineKeyboardMarkup=type("InlineKeyboardMarkup", (), {}),
+    WebAppInfo=type("WebAppInfo", (), {}),
+    FSInputFile=object,
+    InputFile=object,
 )
+aiogram_mod.enums = types.SimpleNamespace(ParseMode=type("ParseMode", (), {}))
 sys.modules.setdefault("aiogram", aiogram_mod)
 sys.modules.setdefault("aiogram.exceptions", aiogram_mod.exceptions)
 sys.modules.setdefault("aiogram.fsm", aiogram_mod.fsm)
 sys.modules.setdefault("aiogram.fsm.context", aiogram_mod.fsm.context)
 sys.modules.setdefault("aiogram.fsm.state", aiogram_mod.fsm.state)
 sys.modules.setdefault("aiogram.types", aiogram_mod.types)
+sys.modules.setdefault("aiogram.enums", aiogram_mod.enums)
 sys.modules.setdefault("aiogram.client", types.ModuleType("aiogram.client"))
 client_default = types.ModuleType("aiogram.client.default")
 client_default.DefaultBotProperties = type("DefaultBotProperties", (), {})
 aiogram_mod.client = types.SimpleNamespace(default=client_default)
 sys.modules.setdefault("aiogram.client.default", client_default)
+aiogram_utils = types.ModuleType("aiogram.utils")
+keyboard_mod = types.ModuleType("aiogram.utils.keyboard")
+keyboard_mod.InlineKeyboardBuilder = type("InlineKeyboardBuilder", (), {})
+aiogram_utils.keyboard = keyboard_mod
+sys.modules.setdefault("aiogram.utils", aiogram_utils)
+sys.modules.setdefault("aiogram.utils.keyboard", keyboard_mod)
 django_mod = types.ModuleType("django")
 django_conf = types.ModuleType("django.conf")
 django_conf.settings = settings_stub
@@ -337,38 +346,37 @@ resources_mod.ButtonText = dict
 resources_mod.MessageText = dict
 sys.modules.setdefault("bot.texts.resources", resources_mod)
 
-di_mod = types.ModuleType("dependency_injector")
-di_wiring = types.ModuleType("dependency_injector.wiring")
-di_wiring.inject = lambda *a, **k: (lambda f: f)
+try:
+    import dependency_injector  # noqa: F401
+except Exception:  # pragma: no cover - fallback stubs
+    di_mod = types.ModuleType("dependency_injector")
+    di_wiring = types.ModuleType("dependency_injector.wiring")
+    di_wiring.inject = lambda *a, **k: (lambda f: f)
 
+    class Provide:
+        def __class_getitem__(cls, item):
+            return cls
 
-class Provide:
-    def __class_getitem__(cls, item):
-        return cls
+    di_wiring.Provide = Provide
+    di_mod.wiring = di_wiring
+    sys.modules.setdefault("dependency_injector", di_mod)
+    sys.modules.setdefault("dependency_injector.wiring", di_wiring)
+    di_containers = types.ModuleType("dependency_injector.containers")
+    di_containers.DeclarativeContainer = type("DeclarativeContainer", (), {})
+    di_providers = types.ModuleType("dependency_injector.providers")
 
+    def _provider(obj, *a, **k):  # pragma: no cover - simple stub
+        return lambda *args, **kwargs: obj
 
-di_wiring.Provide = Provide
-di_mod.wiring = di_wiring
-sys.modules.setdefault("dependency_injector", di_mod)
-sys.modules.setdefault("dependency_injector.wiring", di_wiring)
-di_containers = types.ModuleType("dependency_injector.containers")
-di_containers.DeclarativeContainer = type("DeclarativeContainer", (), {})
-di_providers = types.ModuleType("dependency_injector.providers")
-
-
-def _provider(obj, *a, **k):  # pragma: no cover - simple stub
-    return lambda *args, **kwargs: obj
-
-
-di_providers.Factory = _provider
-di_providers.Singleton = _provider
-di_providers.Callable = _provider
-di_providers.Resource = _provider
-di_providers.Configuration = lambda *a, **k: types.SimpleNamespace(bot_token="", parse_mode="")
-di_mod.containers = di_containers
-di_mod.providers = di_providers
-sys.modules.setdefault("dependency_injector.containers", di_containers)
-sys.modules.setdefault("dependency_injector.providers", di_providers)
+    di_providers.Factory = _provider
+    di_providers.Singleton = _provider
+    di_providers.Callable = _provider
+    di_providers.Resource = _provider
+    di_providers.Configuration = lambda *a, **k: types.SimpleNamespace(bot_token="", parse_mode="")
+    di_mod.containers = di_containers
+    di_mod.providers = di_providers
+    sys.modules.setdefault("dependency_injector.containers", di_containers)
+    sys.modules.setdefault("dependency_injector.providers", di_providers)
 
 # Additional lightweight stubs for Django, FastAPI, and DRF components
 django_core = types.ModuleType("django.core")
@@ -566,6 +574,7 @@ sys.modules.setdefault("apps.payments.serializers", payments_serializers)
 
 payments_tasks = types.ModuleType("apps.payments.tasks")
 payments_tasks.process_payment_webhook = types.SimpleNamespace(delay=lambda **k: None)
+payments_tasks.send_payment_message = types.SimpleNamespace(delay=lambda **k: None)
 sys.modules.setdefault("apps.payments.tasks", payments_tasks)
 
 profiles_models = types.ModuleType("apps.profiles.models")
@@ -577,6 +586,19 @@ class ClientProfile:
 
 profiles_models.ClientProfile = ClientProfile
 sys.modules.setdefault("apps.profiles.models", profiles_models)
+
+bot_utils_bot = types.ModuleType("bot.utils.bot")
+bot_utils_bot.answer_msg = lambda *a, **k: None
+bot_utils_bot.get_webapp_url = lambda *a, **k: ""
+sys.modules.setdefault("bot.utils.bot", bot_utils_bot)
+
+bot_utils_chat = types.ModuleType("bot.utils.chat")
+bot_utils_chat.send_coach_request = lambda *a, **k: None
+sys.modules.setdefault("bot.utils.chat", bot_utils_chat)
+
+bot_utils_profiles = types.ModuleType("bot.utils.profiles")
+bot_utils_profiles.get_assigned_coach = lambda *a, **k: None
+sys.modules.setdefault("bot.utils.profiles", bot_utils_profiles)
 
 workout_models = types.ModuleType("apps.workout_plans.models")
 
