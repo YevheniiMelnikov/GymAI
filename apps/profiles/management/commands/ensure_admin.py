@@ -12,12 +12,12 @@ class Command(BaseCommand):
     """Create default superuser if it doesn't exist."""
 
     @transaction.atomic
-    def handle(self, *args, **options):
+    def handle(self, *args, **options):  # pyrefly: ignore[bad-override]
         username = settings.DJANGO_ADMIN
         password = settings.DJANGO_PASSWORD
         User: Type[AbstractBaseUser] = get_user_model()
-        if not User.objects.filter(username=username).exists():
+        if not User.objects.filter(username=username).exists():  # pyrefly: ignore[missing-attribute]
             User.objects.create_superuser(username=username, password=password)  # type: ignore[attr-defined]
-            self.stdout.write(self.style.SUCCESS("Superuser created"))
+            self.stdout.write(self.style.SUCCESS("Superuser created"))  # pyrefly: ignore[missing-attribute]
         else:
             self.stdout.write("Superuser already exists")

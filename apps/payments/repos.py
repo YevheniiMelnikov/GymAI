@@ -17,15 +17,15 @@ class PaymentRepository:
         return f"payment:{pk}"
 
     @staticmethod
-    def base_qs() -> QuerySet[Payment]:
-        return Payment.objects.all()  # type: ignore[return-value]
+    def base_qs() -> QuerySet[Payment]:  # pyrefly: ignore[bad-specialization]
+        return Payment.objects.all()  # type: ignore[return-value,missing-attribute]
 
     @staticmethod
     def get_model(pk: int) -> Payment:
         try:
-            payment = Payment.objects.get(pk=pk)
+            payment = Payment.objects.get(pk=pk)  # pyrefly: ignore[missing-attribute]
             return cast(Payment, payment)
-        except Payment.DoesNotExist:
+        except Payment.DoesNotExist:  # pyrefly: ignore[missing-attribute]
             raise NotFound(f"Payment pk={pk} not found")
 
     @staticmethod
@@ -50,11 +50,11 @@ class PaymentRepository:
 
     @staticmethod
     def filter(
-        qs: QuerySet[Payment],
+        qs: QuerySet[Payment],  # pyrefly: ignore[bad-specialization]
         *,
         status: Optional[str] = None,
         order_id: Optional[str] = None,
-    ) -> QuerySet[Payment]:
+    ) -> QuerySet[Payment]:  # pyrefly: ignore[bad-specialization]
         if status:
             qs = qs.filter(status=status)
         if order_id:

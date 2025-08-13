@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 
+from typing import Awaitable, cast
 from redis.asyncio import Redis
 
 from config.app_settings import settings
@@ -27,7 +28,7 @@ class HashStore:
     @classmethod
     async def contains(cls, dataset: str, hash_value: str) -> bool:
         try:
-            return await cls.redis.sismember(cls._key(dataset), hash_value)
+            return bool(await cast(Awaitable[int], cls.redis.sismember(cls._key(dataset), hash_value)))
         except Exception as e:  # pragma: no cover - best effort
             logger.error(f"HashStore.contains error {dataset}: {e}")
             return False
@@ -36,7 +37,10 @@ class HashStore:
     async def add(cls, dataset: str, hash_value: str) -> None:
         try:
             key = cls._key(dataset)
-            await cls.redis.sadd(key, hash_value)
-            await cls.redis.expire(key, settings.BACKUP_RETENTION_DAYS * 24 * 60 * 60)
+            await cast(Awaitable[int], cls.redis.sadd(key, hash_value))
+            await cast(
+                Awaitable[int],
+                cls.redis.expire(key, settings.BACKUP_RETENTION_DAYS * 24 * 60 * 60),
+            )
         except Exception as e:  # pragma: no cover - best effort
             logger.error(f"HashStore.add error {dataset}: {e}")

@@ -25,7 +25,7 @@ from apps.profiles.repos import (
 
 
 class ProfileByTelegramIDView(APIView):
-    permission_classes = [HasAPIKey]
+    permission_classes = [HasAPIKey]  # pyrefly: ignore[bad-override]
     serializer_class = ProfileSerializer
 
     def get(self, request: Request, tg_id: int) -> Response:
@@ -35,7 +35,7 @@ class ProfileByTelegramIDView(APIView):
 
 class ProfileAPIUpdate(APIView):
     serializer_class = ProfileSerializer
-    permission_classes = [HasAPIKey]
+    permission_classes = [HasAPIKey]  # pyrefly: ignore[bad-override]
 
     def get(self, request: Request, profile_id: int) -> Response:
         profile = ProfileRepository.get_by_id(profile_id)
@@ -56,23 +56,23 @@ class ProfileAPIUpdate(APIView):
 class ProfileAPIDestroy(generics.RetrieveDestroyAPIView):
     serializer_class = ProfileSerializer  # pyrefly: ignore[bad-override]
     queryset = ProfileRepository.get_by_id  # type: ignore[assignment]
-    permission_classes = [HasAPIKey]
+    permission_classes = [HasAPIKey]  # pyrefly: ignore[bad-override]
 
 
 @method_decorator(cache_page(60), name="dispatch")
 class ProfileAPIList(generics.ListCreateAPIView):
     serializer_class = ProfileSerializer  # pyrefly: ignore[bad-override]
     queryset = ProfileRepository  # type: ignore[assignment]
-    permission_classes = [HasAPIKey]
+    permission_classes = [HasAPIKey]  # pyrefly: ignore[bad-override]
 
 
 @method_decorator(cache_page(60), name="dispatch")
 class CoachProfileList(generics.ListCreateAPIView):
     serializer_class = CoachProfileSerializer  # pyrefly: ignore[bad-override]
-    permission_classes = [HasAPIKey]
+    permission_classes = [HasAPIKey]  # pyrefly: ignore[bad-override]
 
     def get_queryset(self):
-        return CoachProfile.objects.all()
+        return CoachProfile.objects.all()  # pyrefly: ignore[missing-attribute]
 
     def perform_create(self, serializer: CoachProfileSerializer) -> None:  # type: ignore[override]
         raw_id: Any = self.request.data.get("profile")
@@ -86,10 +86,10 @@ class CoachProfileList(generics.ListCreateAPIView):
 @method_decorator(cache_page(60), name="dispatch")
 class ClientProfileList(generics.ListCreateAPIView):
     serializer_class = ClientProfileSerializer  # pyrefly: ignore[bad-override]
-    permission_classes = [HasAPIKey]
+    permission_classes = [HasAPIKey]  # pyrefly: ignore[bad-override]
 
     def get_queryset(self):
-        return ClientProfile.objects.all()
+        return ClientProfile.objects.all()  # pyrefly: ignore[missing-attribute]
 
     def perform_create(self, serializer: ClientProfileSerializer) -> None:  # type: ignore[override]
         raw_id: Any = self.request.data.get("profile")
@@ -102,7 +102,7 @@ class ClientProfileList(generics.ListCreateAPIView):
 
 class CoachProfileUpdate(generics.RetrieveUpdateAPIView):
     serializer_class = CoachProfileSerializer  # pyrefly: ignore[bad-override]
-    permission_classes = [HasAPIKey]
+    permission_classes = [HasAPIKey]  # pyrefly: ignore[bad-override]
 
     def get_object(self):
         if "pk" in self.kwargs:
@@ -113,7 +113,7 @@ class CoachProfileUpdate(generics.RetrieveUpdateAPIView):
 
 class ClientProfileUpdate(generics.RetrieveUpdateAPIView):
     serializer_class = ClientProfileSerializer  # pyrefly: ignore[bad-override]
-    permission_classes = [HasAPIKey]
+    permission_classes = [HasAPIKey]  # pyrefly: ignore[bad-override]
 
     def get_object(self):
         if "pk" in self.kwargs:
@@ -123,7 +123,7 @@ class ClientProfileUpdate(generics.RetrieveUpdateAPIView):
 
 
 class CoachProfileByProfile(APIView):
-    permission_classes = [HasAPIKey]
+    permission_classes = [HasAPIKey]  # pyrefly: ignore[bad-override]
     serializer_class = CoachProfileSerializer
 
     def get(self, request: Request, profile_id: int) -> Response:
@@ -132,7 +132,7 @@ class CoachProfileByProfile(APIView):
 
 
 class ClientProfileByProfile(APIView):
-    permission_classes = [HasAPIKey]
+    permission_classes = [HasAPIKey]  # pyrefly: ignore[bad-override]
     serializer_class = ClientProfileSerializer
 
     def get(self, request: Request, profile_id: int) -> Response:

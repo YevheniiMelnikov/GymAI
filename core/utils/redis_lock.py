@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
-from typing import ClassVar, Dict, AsyncIterator
+from typing import ClassVar, Dict, AsyncIterator, Awaitable, cast
 from uuid import uuid4
 
 from redis.asyncio import Redis
@@ -67,7 +67,7 @@ class RedisLock:
             return False
         # best-effort: extend TTL only if still owner
         pipe: Pipeline = self._client.pipeline()
-        pipe.watch(self.key)
+        await pipe.watch(self.key)
         cur = await self._client.get(self.key)
         if cur != self.token:
             await pipe.reset()
@@ -87,7 +87,7 @@ class RedisLock:
         if not self._held:
             return
         try:
-            await self._client.eval(_RELEASE_LUA, 1, self.key, self.token)
+            await cast(Awaitable[int], self._client.eval(_RELEASE_LUA, 1, self.key, self.token))
         finally:
             self._held = False
 

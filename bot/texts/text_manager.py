@@ -26,11 +26,11 @@ class TextManager:
             with open(path, "r", encoding="utf-8") as file:
                 data = yaml.safe_load(file)
                 if resource_type == "messages":
-                    cls.messages = data
+                    cls.messages = data  # pyrefly: ignore[bad-assignment]
                 elif resource_type == "buttons":
-                    cls.buttons = data
+                    cls.buttons = data  # pyrefly: ignore[bad-assignment]
                 elif resource_type == "commands":
-                    cls.commands = data
+                    cls.commands = data  # pyrefly: ignore[bad-assignment]
 
     @classmethod
     def get_message(cls, key: str, lang: str | None) -> str:

@@ -1,2 +1,15 @@
-# Backwards-compatibility package for legacy imports.
-# New code should use core.payment.providers.*
+from core.services.gstorage_service import GCStorageService, ExerciseGIFStorage
+from core.services.internal import APIService
+from core.services.internal.profile_service import ProfileService
+from core.services.internal.workout_service import WorkoutService
+
+avatar_manager = GCStorageService("coach_avatars")
+gif_manager = ExerciseGIFStorage("exercises_guide")
+
+__all__ = [
+    "avatar_manager",
+    "gif_manager",
+    "APIService",
+    "ProfileService",
+    "WorkoutService",
+]

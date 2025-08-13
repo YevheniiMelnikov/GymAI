@@ -29,9 +29,9 @@ def _parse_client_profile_id(client_id_str: Optional[str]) -> Optional[int]:
 class ProgramViewSet(ModelViewSet):
     queryset = ProgramRepository.base_qs()  # type: ignore[assignment]
     serializer_class = ProgramSerializer  # pyrefly: ignore[bad-override]
-    permission_classes = [HasAPIKey]
+    permission_classes = [HasAPIKey]  # pyrefly: ignore[bad-override]
 
-    def get_queryset(self):
+    def get_queryset(self):  # pyrefly: ignore[bad-override]
         qs = ProgramRepository.base_qs()
         client_id_str = self.request.query_params.get("client_profile")
         client_profile_id = _parse_client_profile_id(client_id_str)
@@ -86,11 +86,11 @@ class ProgramViewSet(ModelViewSet):
 class SubscriptionViewSet(ModelViewSet):
     queryset = SubscriptionRepository.base_qs()  # type: ignore[assignment]
     serializer_class = SubscriptionSerializer  # pyrefly: ignore[bad-override]
-    permission_classes = [HasAPIKey]
+    permission_classes = [HasAPIKey]  # pyrefly: ignore[bad-override]
     filter_backends = [DjangoFilterBackend]  # type: ignore[assignment]
     filterset_fields = ["enabled", "payment_date"]
 
-    def get_queryset(self):
+    def get_queryset(self):  # pyrefly: ignore[bad-override]
         qs = SubscriptionRepository.base_qs()
         client_id_str = self.request.query_params.get("client_profile")
         client_profile_id = _parse_client_profile_id(client_id_str)

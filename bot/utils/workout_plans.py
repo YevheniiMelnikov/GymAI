@@ -38,11 +38,11 @@ from bot.texts import msg_text, btn_text
 def _next_payment_date(period: str) -> str:
     today = date.today()
     if period == "14d":
-        next_date = today + timedelta(days=14)
+        next_date: date = today + timedelta(days=14)
     elif period == "6m":
-        next_date = today + relativedelta(months=+6)
+        next_date = cast(date, today + relativedelta(months=+6))
     else:
-        next_date = today + relativedelta(months=+1)
+        next_date = cast(date, today + relativedelta(months=+1))
     return next_date.strftime("%Y-%m-%d")
 
 

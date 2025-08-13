@@ -7,6 +7,7 @@ import asyncio
 from datetime import datetime, timedelta, date
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal, ROUND_HALF_UP
+from typing import cast
 
 from celery import shared_task
 from loguru import logger
@@ -26,11 +27,11 @@ from core.utils.redis_lock import redis_try_lock, get_redis_client
 def _next_payment_date(period: str) -> str:
     today = date.today()
     if period == "14d":
-        next_date = today + timedelta(days=14)
+        next_date: date = today + timedelta(days=14)
     elif period == "6m":
-        next_date = today + relativedelta(months=+6)
+        next_date = cast(date, today + relativedelta(months=+6))
     else:
-        next_date = today + relativedelta(months=+1)
+        next_date = cast(date, today + relativedelta(months=+1))
     return next_date.isoformat()
 
 
