@@ -6,15 +6,14 @@ from pydantic_core._pydantic_core import ValidationError
 from .base import BaseCacheManager
 from core.exceptions import ProfileNotFoundError
 from core.schemas import Profile
-from core.services import ProfileService
+from core.containers import get_container
 
 
 class ProfileCacheManager(BaseCacheManager):
-    service = ProfileService
-
     @classmethod
     async def _fetch_from_service(cls, cache_key: str, field: str, *, use_fallback: bool) -> Profile:
-        profile = await cls.service.get_profile_by_tg_id(int(field))
+        service = get_container().profile_service()
+        profile = await service.get_profile_by_tg_id(int(field))
         if profile is None:
             raise ProfileNotFoundError(int(field))
         return profile

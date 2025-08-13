@@ -18,10 +18,8 @@ from core.cache import Cache
 from core.cache.payment import PaymentCacheManager
 from core.enums import ClientStatus, PaymentStatus, CoachType
 from core.services import APIService
-from core.services.internal.payment_service import PaymentService
 from bot.utils.menus import show_main_menu, show_services_menu
 from core.schemas import Coach, Client
-from core.services import ProfileService
 from apps.payments.tasks import send_client_request
 from bot.utils.workout_plans import cache_program_data, process_new_subscription
 from bot.texts import msg_text, btn_text
@@ -190,7 +188,7 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
         await Cache.workout.update_program(client.profile, subscription_data)
 
     await PaymentCacheManager.set_status(client.profile, service_type, PaymentStatus.PENDING)
-    await PaymentService.create_payment(client.profile, service_type, order_id, amount)
+    await APIService.payment.create_payment(client.profile, service_type, order_id, amount)
     await callback_query.answer(msg_text("payment_in_progress", profile.language), show_alert=True)
 
     msg = callback_query.message
@@ -217,10 +215,10 @@ async def confirm_service(callback_query: CallbackQuery, state: FSMContext) -> N
         client = Client.model_validate(data.get("client"))
         required = int(data.get("required", 0))
         wishes = data.get("wishes", "")
-        await ProfileService.adjust_client_credits(profile.id, -required)
+        await APIService.profile.adjust_client_credits(profile.id, -required)
         await Cache.client.update_client(client.profile, {"credits": client.credits - required})
         payout = (coach.program_price or Decimal("0")).quantize(Decimal("0.01"), ROUND_HALF_UP)
-        await ProfileService.adjust_coach_payout_due(coach.profile, payout)
+        await APIService.profile.adjust_coach_payout_due(coach.profile, payout)
         new_due = (coach.payout_due or Decimal("0")) + payout
         await Cache.coach.update_coach(coach.profile, {"payout_due": str(new_due)})
         send_client_request.delay(  # pyrefly: ignore[not-callable]

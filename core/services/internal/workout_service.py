@@ -7,15 +7,15 @@ from loguru import logger
 from core.services.internal.api_client import APIClient
 from core.exceptions import UserServiceError
 from core.schemas import Program, DayExercises, Subscription
-from bot.utils.exercises import serialize_day_exercises
 
 
 class WorkoutService(APIClient):
-    @classmethod
     async def save_program(
-        cls, client_profile_id: int, exercises: list[DayExercises], split_number: int, wishes: str
+        self, client_profile_id: int, exercises: list[DayExercises], split_number: int, wishes: str
     ) -> Program:
-        url = urljoin(cls.api_url, "api/v1/programs/")
+        from bot.utils.exercises import serialize_day_exercises
+
+        url = urljoin(self.api_url, "api/v1/programs/")
 
         data = {
             "client_profile": client_profile_id,
@@ -25,8 +25,8 @@ class WorkoutService(APIClient):
         }
 
         try:
-            status_code, response = await cls._api_request(
-                "post", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"}
+            status_code, response = await self._api_request(
+                "post", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
             )
 
             if status_code not in {200, 201}:
@@ -48,16 +48,15 @@ class WorkoutService(APIClient):
             logger.error(f"Error while saving program for client_profile_id={client_profile_id}: {str(e)}")
             raise
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.exception(
                 f"Unexpected error while saving program for client_profile_id={client_profile_id}: {str(e)}"
             )
             raise UserServiceError(f"Unexpected error occurred while saving program: {str(e)}") from e
 
-    @classmethod
-    async def get_latest_program(cls, client_profile_id: int) -> Program | None:
-        url = urljoin(cls.api_url, f"api/v1/programs/?client_profile={client_profile_id}")
-        status, data = await cls._api_request("get", url, headers={"Authorization": f"Api-Key {cls.api_key}"})
+    async def get_latest_program(self, client_profile_id: int) -> Program | None:
+        url = urljoin(self.api_url, f"api/v1/programs/?client_profile={client_profile_id}")
+        status, data = await self._api_request("get", url, headers={"Authorization": f"Api-Key {self.api_key}"})
 
         if status == 200:
             results = data
@@ -74,18 +73,16 @@ class WorkoutService(APIClient):
         logger.warning(f"Program lookup failed for client_profile={client_profile_id}. HTTP={status}, Response: {data}")
         return None
 
-    @classmethod
-    async def update_program(cls, program_id: int, data: dict[str, Any]) -> None:
-        url = urljoin(cls.api_url, f"api/v1/programs/{program_id}/")
-        status_code, response = await cls._api_request(
-            "put", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"}
+    async def update_program(self, program_id: int, data: dict[str, Any]) -> None:
+        url = urljoin(self.api_url, f"api/v1/programs/{program_id}/")
+        status_code, response = await self._api_request(
+            "put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
-        if not status_code == 200:
+        if status_code != 200:
             logger.error(f"Failed to update program {program_id}. HTTP status: {status_code}, response: {response}")
 
-    @classmethod
     async def create_subscription(
-        cls,
+        self,
         client_profile_id: int,
         workout_days: list[str],
         wishes: str,
@@ -93,7 +90,7 @@ class WorkoutService(APIClient):
         period: str = "1m",
         exercises: list[dict] | None = None,
     ) -> int | None:
-        url = urljoin(cls.api_url, "api/v1/subscriptions/")
+        url = urljoin(self.api_url, "api/v1/subscriptions/")
         data = {
             "client_profile": client_profile_id,
             "enabled": False,
@@ -104,8 +101,8 @@ class WorkoutService(APIClient):
             "wishes": wishes,
             "exercises": exercises or [],
         }
-        status_code, response = await cls._api_request(
-            "post", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"}
+        status_code, response = await self._api_request(
+            "post", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
         if status_code == 201 and response:
             return response.get("id")
@@ -117,10 +114,9 @@ class WorkoutService(APIClient):
         )
         return None
 
-    @classmethod
-    async def get_latest_subscription(cls, client_profile_id: int) -> Subscription | None:
-        url = urljoin(cls.api_url, f"api/v1/subscriptions/?client_profile={client_profile_id}")
-        status, data = await cls._api_request("get", url, headers={"Authorization": f"Api-Key {cls.api_key}"})
+    async def get_latest_subscription(self, client_profile_id: int) -> Subscription | None:
+        url = urljoin(self.api_url, f"api/v1/subscriptions/?client_profile={client_profile_id}")
+        status, data = await self._api_request("get", url, headers={"Authorization": f"Api-Key {self.api_key}"})
 
         if status == 200:
             results = data
@@ -139,21 +135,19 @@ class WorkoutService(APIClient):
         )
         return None
 
-    @classmethod
-    async def update_subscription(cls, subscription_id: int, data: dict[str, Any]) -> None:
-        url = urljoin(cls.api_url, f"api/v1/subscriptions/{subscription_id}/")
-        status_code, response = await cls._api_request(
-            "put", url, data, headers={"Authorization": f"Api-Key {cls.api_key}"}
+    async def update_subscription(self, subscription_id: int, data: dict[str, Any]) -> None:
+        url = urljoin(self.api_url, f"api/v1/subscriptions/{subscription_id}/")
+        status_code, response = await self._api_request(
+            "put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
-        if not status_code == 200:
+        if status_code != 200:
             logger.error(
                 f"Failed to update subscription {subscription_id}. HTTP status: {status_code}, response: {response}"
             )
 
-    @classmethod
-    async def get_all_subscriptions(cls, client_profile_id: int) -> list[Subscription]:
-        url = urljoin(cls.api_url, f"api/v1/subscriptions/?client_profile={client_profile_id}")
-        status, data = await cls._api_request("get", url, headers={"Authorization": f"Api-Key {cls.api_key}"})
+    async def get_all_subscriptions(self, client_profile_id: int) -> list[Subscription]:
+        url = urljoin(self.api_url, f"api/v1/subscriptions/?client_profile={client_profile_id}")
+        status, data = await self._api_request("get", url, headers={"Authorization": f"Api-Key {self.api_key}"})
 
         if status == 200:
             results = data
@@ -164,7 +158,7 @@ class WorkoutService(APIClient):
                 for item in results:
                     try:
                         subscriptions.append(Subscription.model_validate(item))
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001
                         logger.warning(f"Skipping invalid subscription for client_profile_id={client_profile_id}: {e}")
                 return subscriptions
 
@@ -176,10 +170,9 @@ class WorkoutService(APIClient):
         )
         return []
 
-    @classmethod
-    async def get_all_programs(cls, client_profile_id: int) -> list[Program]:
-        url = urljoin(cls.api_url, f"api/v1/programs/?client_profile={client_profile_id}")
-        status, data = await cls._api_request("get", url, headers={"Authorization": f"Api-Key {cls.api_key}"})
+    async def get_all_programs(self, client_profile_id: int) -> list[Program]:
+        url = urljoin(self.api_url, f"api/v1/programs/?client_profile={client_profile_id}")
+        status, data = await self._api_request("get", url, headers={"Authorization": f"Api-Key {self.api_key}"})
 
         if status == 200:
             results = data
@@ -190,7 +183,7 @@ class WorkoutService(APIClient):
                 for item in results:
                     try:
                         programs.append(Program.model_validate(item))
-                    except Exception as e:
+                    except Exception as e:  # noqa: BLE001
                         logger.warning(f"Skipping invalid program for client_profile_id={client_profile_id}: {e}")
                 programs.sort(key=lambda p: p.created_at, reverse=True)
                 return programs

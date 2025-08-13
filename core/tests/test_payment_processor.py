@@ -21,6 +21,9 @@ sys.modules["config.app_settings"] = settings_mod
 sys.modules.setdefault("core.services", types.ModuleType("core.services"))
 sys.modules["core.services"].WorkoutService = object
 sys.modules["core.services"].ProfileService = object
+sys.modules["core.services"].APIService = types.SimpleNamespace(
+    payment=object(), profile=object(), workout=object(), ai_coach=object()
+)
 gsheets_mod = types.ModuleType("core.services.gsheets_service")
 gsheets_mod.GSheetsService = types.SimpleNamespace(create_new_payment_sheet=lambda *a, **k: None)
 sys.modules["core.services.gsheets_service"] = gsheets_mod

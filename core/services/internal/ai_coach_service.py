@@ -3,28 +3,30 @@ from __future__ import annotations
 import base64
 from enum import Enum
 from urllib.parse import urljoin
+
+import httpx
 from loguru import logger
 
-from config.app_settings import settings
 from core.exceptions import UserServiceError
 from core.schemas import AiCoachAskRequest, AiCoachMessageRequest
 from .api_client import APIClient
 
 
 class AiCoachService(APIClient):
-    base_url = settings.AI_COACH_URL
-    use_default_auth = False
+    def __init__(self, client: httpx.AsyncClient, settings) -> None:
+        super().__init__(client, settings)
+        self.base_url = settings.AI_COACH_URL
+        self.use_default_auth = False
 
-    @classmethod
     async def ask(
-        cls,
+        self,
         prompt: str,
         *,
         client_id: int,
         language: str | None = None,
         request_id: str | None = None,
     ) -> list[str] | None:
-        url = urljoin(cls.base_url, "ask/")
+        url = urljoin(self.base_url, "ask/")
         request = AiCoachAskRequest(
             prompt=prompt,
             client_id=client_id,
@@ -33,8 +35,8 @@ class AiCoachService(APIClient):
         )
         headers = {"X-Request-ID": request_id} if request_id else None
         logger.debug("AI coach ask request_id={} client_id={}", request_id, client_id)
-        status, data = await cls._api_request(
-            "post", url, request.model_dump(), headers=headers, timeout=settings.AI_COACH_TIMEOUT
+        status, data = await self._api_request(
+            "post", url, request.model_dump(), headers=headers, timeout=self.settings.AI_COACH_TIMEOUT
         )
         logger.debug(
             "AI coach ask response request_id={} HTTP={}: {}",
@@ -49,16 +51,14 @@ class AiCoachService(APIClient):
         logger.error(f"AI coach request failed HTTP={status}: {data}")
         return None
 
-    @classmethod
-    async def save_user_message(cls, text: str, client_id: int) -> None:
-        url = urljoin(cls.base_url, "messages/")
+    async def save_user_message(self, text: str, client_id: int) -> None:
+        url = urljoin(self.base_url, "messages/")
         request = AiCoachMessageRequest(text=text, client_id=client_id)
-        await cls._api_request("post", url, request.model_dump())
+        await self._api_request("post", url, request.model_dump())
 
-    @classmethod
-    async def get_client_context(cls, client_id: int, query: str) -> dict[str, list[str]]:
-        url = urljoin(cls.base_url, f"knowledge/?client_id={client_id}&query={query}")
-        status, data = await cls._api_request("get", url)
+    async def get_client_context(self, client_id: int, query: str) -> dict[str, list[str]]:
+        url = urljoin(self.base_url, f"knowledge/?client_id={client_id}&query={query}")
+        status, data = await self._api_request("get", url)
         if status == 200 and isinstance(data, dict):
             msgs = data.get("messages")
             if isinstance(msgs, list):
@@ -66,15 +66,14 @@ class AiCoachService(APIClient):
         logger.error(f"Failed to fetch knowledge HTTP={status}: {data}")
         return {"messages": []}
 
-    @classmethod
-    async def refresh_knowledge(cls) -> None:
-        url = urljoin(cls.base_url, "knowledge/refresh/")
+    async def refresh_knowledge(self) -> None:
+        url = urljoin(self.base_url, "knowledge/refresh/")
         token = base64.b64encode(
-            f"{settings.AI_COACH_REFRESH_USER}:{settings.AI_COACH_REFRESH_PASSWORD}".encode()
+            f"{self.settings.AI_COACH_REFRESH_USER}:{self.settings.AI_COACH_REFRESH_PASSWORD}".encode()
         ).decode()
         headers = {"Authorization": f"Basic {token}"}
         try:
-            status, _ = await cls._api_request("post", url, headers=headers, timeout=settings.AI_COACH_TIMEOUT)
+            status, _ = await self._api_request("post", url, headers=headers, timeout=self.settings.AI_COACH_TIMEOUT)
         except UserServiceError as exc:
             logger.error(f"Knowledge refresh request failed: {exc}")
             raise
@@ -82,11 +81,10 @@ class AiCoachService(APIClient):
             logger.error(f"Knowledge refresh failed HTTP={status}")
             raise UserServiceError(f"Knowledge refresh failed HTTP={status}")
 
-    @classmethod
-    async def health(cls, timeout: float = 3.0) -> bool:
-        url = urljoin(cls.base_url, "health/")
+    async def health(self, timeout: float = 3.0) -> bool:
+        url = urljoin(self.base_url, "health/")
         try:
-            status, _ = await cls._api_request("get", url, timeout=int(timeout))
+            status, _ = await self._api_request("get", url, timeout=int(timeout))
         except UserServiceError as exc:
             logger.debug(f"AI coach health check failed: {exc}")
             return False

@@ -110,9 +110,9 @@ async def get_client_page(
     params = client_params_map(lang_code)
     gender_key = (client.gender or "").strip().lower()
 
-    from core.services import ProfileService
+    from core.services import APIService
 
-    profile = await ProfileService.get_profile(client.profile)
+    profile = await APIService.profile.get_profile(client.profile)
     page = {
         "name": client.name,
         "gender": params.get(gender_key, ""),

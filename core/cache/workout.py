@@ -5,22 +5,21 @@ from loguru import logger
 from core.schemas import Subscription, Program
 from .base import BaseCacheManager
 from core.validators import validate_or_raise
-from core.services import WorkoutService
+from core.containers import get_container
 from core.exceptions import SubscriptionNotFoundError, ProgramNotFoundError
 
 
 class WorkoutCacheManager(BaseCacheManager):
-    service = WorkoutService
-
     @classmethod
     async def _fetch_from_service(cls, cache_key: str, field: str, *, use_fallback: bool) -> Subscription | Program:
         client_profile_id = int(field)
+        service = get_container().workout_service()
         if cache_key.endswith("subscriptions"):
-            subscription = await cls.service.get_latest_subscription(client_profile_id)
+            subscription = await service.get_latest_subscription(client_profile_id)
             if subscription is None:
                 raise SubscriptionNotFoundError(client_profile_id)
             return subscription
-        program = await cls.service.get_latest_program(client_profile_id)
+        program = await service.get_latest_program(client_profile_id)
         if program is None:
             raise ProgramNotFoundError(client_profile_id)
         return program
@@ -107,7 +106,8 @@ class WorkoutCacheManager(BaseCacheManager):
                 )
                 await cls.delete("workout_plans:subscriptions_history", str(client_profile_id))
 
-        subscriptions = await cls.service.get_all_subscriptions(client_profile_id)
+        service = get_container().workout_service()
+        subscriptions = await service.get_all_subscriptions(client_profile_id)
         await cls.set(
             "workout_plans:subscriptions_history",
             str(client_profile_id),
@@ -125,7 +125,8 @@ class WorkoutCacheManager(BaseCacheManager):
                 logger.debug(f"Corrupt programs history for client_profile_id={client_profile_id}: {e}")
                 await cls.delete("workout_plans:programs_history", str(client_profile_id))
 
-        programs = await cls.service.get_all_programs(client_profile_id)
+        service = get_container().workout_service()
+        programs = await service.get_all_programs(client_profile_id)
         await cls.set(
             "workout_plans:programs_history",
             str(client_profile_id),

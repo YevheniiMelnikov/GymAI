@@ -32,7 +32,6 @@ from bot.utils.exercises import format_program
 from bot.utils.bot import del_msg, answer_msg, delete_messages
 from bot.keyboards import yes_no_kb
 from bot.utils.credits import required_credits
-from core.services import ProfileService
 from bot.texts import msg_text, btn_text
 
 
@@ -400,10 +399,10 @@ async def process_new_subscription(
         await callback_query.answer(msg_text("unexpected_error", language), show_alert=True)
         return
 
-    await ProfileService.adjust_client_credits(profile.id, -required)
+    await APIService.profile.adjust_client_credits(profile.id, -required)
     await Cache.client.update_client(client.profile, {"credits": client.credits - required})
     payout = (coach.subscription_price or Decimal("0")).quantize(Decimal("0.01"), ROUND_HALF_UP)
-    await ProfileService.adjust_coach_payout_due(coach.profile, payout)
+    await APIService.profile.adjust_coach_payout_due(coach.profile, payout)
     await Cache.coach.update_coach(coach.profile, {"payout_due": str((coach.payout_due or Decimal("0")) + payout)})
     next_payment = _next_payment_date(period)
     await APIService.workout.update_subscription(sub_id, {"enabled": True, "payment_date": next_payment})
