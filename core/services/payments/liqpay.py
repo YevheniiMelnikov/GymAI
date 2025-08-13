@@ -1,9 +1,9 @@
-# Compatibility shim for moved module
-# Old path: core.services.payments.liqpay
-# New path: core.payment.providers.liqpay
+from core.payment.providers import liqpay as _providers
 
-from core.payment.providers.liqpay import (
-    LiqPay,  # noqa: F401
-    LiqPayGateway,  # noqa: F401
-    ParamValidationError,  # noqa: F401
-)
+LiqPay = _providers.LiqPay
+ParamValidationError = _providers.ParamValidationError
+
+
+class LiqPayGateway(_providers.LiqPayGateway):
+    def __init__(self, public_key: str, private_key: str) -> None:
+        self.client: _providers.LiqPay = LiqPay(public_key, private_key)
