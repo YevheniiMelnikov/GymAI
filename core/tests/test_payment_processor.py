@@ -15,7 +15,25 @@ sys.modules.setdefault(
     types.SimpleNamespace(msg_text=lambda *a, **k: ""),
 )
 settings_mod = types.ModuleType("config.app_settings")
-settings_mod.settings = types.SimpleNamespace(EMAIL="e", TG_SUPPORT_CONTACT="t")
+settings_mod.settings = types.SimpleNamespace(
+    EMAIL="e",
+    TG_SUPPORT_CONTACT="t",
+    API_TIMEOUT=1,
+    API_MAX_CONNECTIONS=1,
+    API_MAX_KEEPALIVE_CONNECTIONS=1,
+    API_URL="http://api",
+    API_KEY="k",
+    PAYMENT_PUB_KEY="p",
+    PAYMENT_PRIVATE_KEY="p",
+    API_MAX_RETRIES=1,
+    API_RETRY_INITIAL_DELAY=0,
+    API_RETRY_BACKOFF_FACTOR=1,
+    API_RETRY_MAX_DELAY=1,
+    AI_COACH_URL="http://ai",
+    AI_COACH_TIMEOUT=1,
+    AI_COACH_REFRESH_USER="u",
+    AI_COACH_REFRESH_PASSWORD="p",
+)
 sys.modules["config.app_settings"] = settings_mod
 
 sys.modules.setdefault("core.services", types.ModuleType("core.services"))
@@ -27,14 +45,11 @@ sys.modules["core.services"].APIService = types.SimpleNamespace(
 gsheets_mod = types.ModuleType("core.services.gsheets_service")
 gsheets_mod.GSheetsService = types.SimpleNamespace(create_new_payment_sheet=lambda *a, **k: None)
 sys.modules["core.services.gsheets_service"] = gsheets_mod
-payment_mod = types.ModuleType("core.services.internal.payment_service")
-payment_mod.PaymentService = type("PaymentService", (), {})
-sys.modules["core.services.internal.payment_service"] = payment_mod
 sys.modules.setdefault("bot.utils.profiles", types.ModuleType("bot.utils.profiles"))
 sys.modules["bot.utils.profiles"].get_assigned_coach = lambda *a, **k: None
 
 from core.enums import PaymentStatus
-from core.payment_processor import PaymentProcessor
+from core.payment import PaymentProcessor
 
 
 class DummyStrategy:

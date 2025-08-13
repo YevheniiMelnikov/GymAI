@@ -9,10 +9,8 @@ from dependency_injector import containers, providers
 
 from config.app_settings import settings
 from core.cache import Cache
-from core.payment.notifications import TaskPaymentNotifier
-from core.payment_processor import PaymentProcessor
+from core.payment import PaymentProcessor, PaymentService, TaskPaymentNotifier
 from core.services.internal.ai_coach_service import AiCoachService
-from core.services.internal.payment_service import PaymentService
 from core.services.internal.profile_service import ProfileService
 from core.services.internal.workout_service import WorkoutService
 from core.infra.payment_repository import HTTPPaymentRepository

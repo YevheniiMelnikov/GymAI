@@ -12,7 +12,6 @@ from celery import shared_task
 from loguru import logger
 import httpx
 
-from core.services.internal.ai_coach_service import AiCoachService
 from config.app_settings import settings
 from core.cache import Cache
 from core.services import APIService
@@ -324,15 +323,14 @@ def refresh_external_knowledge(self):
                 return
 
             for attempt in range(3):
-                if await AiCoachService.health(timeout=3.0):
+                if await APIService.ai_coach.health(timeout=3.0):
                     break
                 logger.warning("AI coach health check failed attempt %s", attempt + 1)
                 await asyncio.sleep(1)
             else:
                 logger.warning("AI coach not ready, skipping refresh_external_knowledge")
                 return
-
-            await AiCoachService.refresh_knowledge()
+            await APIService.ai_coach.refresh_knowledge()
 
     try:
         asyncio.run(_impl())
