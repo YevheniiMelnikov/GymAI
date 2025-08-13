@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import httpx
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
@@ -13,9 +15,11 @@ from core.services.internal.ai_coach_service import AiCoachService
 from core.services.internal.payment_service import PaymentService
 from core.services.internal.profile_service import ProfileService
 from core.services.internal.workout_service import WorkoutService
+from core.infra.payment_repository import HTTPPaymentRepository
+from core.infra.profile_repository import HTTPProfileRepository
 
 
-def build_http_client() -> httpx.AsyncClient:
+def build_http_client(**_: Any) -> httpx.AsyncClient:
     return httpx.AsyncClient(
         timeout=settings.API_TIMEOUT,
         limits=httpx.Limits(
@@ -34,8 +38,10 @@ class App(containers.DeclarativeContainer):
 
     http_client = providers.Resource(build_http_client, shutdown=close_http_client)
 
-    profile_service = providers.Factory(ProfileService, client=http_client, settings=settings)
-    payment_service = providers.Factory(PaymentService, client=http_client, settings=settings)
+    profile_repository = providers.Factory(HTTPProfileRepository, client=http_client, settings=settings)
+    payment_repository = providers.Factory(HTTPPaymentRepository, client=http_client, settings=settings)
+    profile_service = providers.Factory(ProfileService, repository=profile_repository)
+    payment_service = providers.Factory(PaymentService, repository=payment_repository, settings=settings)
     workout_service = providers.Factory(WorkoutService, client=http_client, settings=settings)
     ai_coach_service = providers.Factory(AiCoachService, client=http_client, settings=settings)
 

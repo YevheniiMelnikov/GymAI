@@ -1,7 +1,7 @@
 import json
 from json import JSONDecodeError
 from loguru import logger
-from pydantic_core._pydantic_core import ValidationError
+from pydantic import ValidationError
 
 from .base import BaseCacheManager
 from core.exceptions import ProfileNotFoundError

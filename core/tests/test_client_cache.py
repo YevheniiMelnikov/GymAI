@@ -1,8 +1,10 @@
 import asyncio
+import types
 import pytest
 
 from core.cache.base import BaseCacheManager
 from core.cache import Cache
+from core.cache.client_profile import ClientCacheManager
 from core.enums import ClientStatus
 
 
@@ -31,7 +33,11 @@ def test_get_client_not_found(monkeypatch):
         async def fake_get(_: int):
             return None
 
-        monkeypatch.setattr(Cache.client.service, "get_client_by_profile_id", fake_get)
+        monkeypatch.setattr(
+            ClientCacheManager,
+            "_service",
+            types.SimpleNamespace(get_client_by_profile_id=fake_get),
+        )
         with pytest.raises(Exception):
             await Cache.client.get_client(999)
 

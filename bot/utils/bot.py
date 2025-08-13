@@ -10,7 +10,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, BotCommand
 from dependency_injector.wiring import inject, Provide
 from loguru import logger
-from pydantic_core import ValidationError
+from pydantic import ValidationError
 
 from bot.texts import TextManager
 from config.app_settings import settings
