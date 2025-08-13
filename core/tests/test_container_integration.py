@@ -3,7 +3,7 @@ import pytest
 from core.containers import create_container, set_container
 from core.infra.payment_repository import HTTPPaymentRepository
 from core.infra.profile_repository import HTTPProfileRepository
-from core.payment_processor import PaymentProcessor
+from core.payment import PaymentProcessor
 
 
 @pytest.mark.asyncio

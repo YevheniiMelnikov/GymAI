@@ -6,19 +6,38 @@ GymBot is a Dockerized platform that connects a Telegram bot with a Django API. 
 
 ## Features
 
-- Django API with documentation and admin panel
+- Django API with admin panel
 - Telegram bot based on `aiogram`
-- Redis and PostgreSQL for data storage
+- Redis and PostgreSQL for data and caching
 - ASGI server (`uvicorn`)
 - Reverse proxy via Nginx with HTTPS
 - Ready for Docker deployment
 
 ---
 
+## Architecture overview
+
+Components:
+- API (Django ASGI, uvicorn) – business logic, admin, webapp, REST endpoints under `/api/v1/`.
+- Bot (aiogram + aiohttp) – webhook server, communicates with API and Redis.
+- AI Coach (FastAPI) – Cognee-powered retrieval + generation.
+- Celery + Beat – background jobs and schedules.
+- Redis – cache, queues, idempotency.
+- PostgreSQL (+pgvector) – relational storage and vector embeddings.
+- Nginx – reverse proxy and TLS termination.
+
+Key directories:
+- `apps/` – Django apps (profiles, payments, workout_plans, webapp, etc.).
+- `bot/` – Telegram bot handlers, texts, keyboards, middlewares, utilities.
+- `core/` – shared cache, services, schemas, enums, tasks.
+- `ai_coach/` – AI coach service and knowledge integrations.
+- `config/` – Django settings, URL routing, app settings.
+- `docker/` – Dockerfiles, compose files, Nginx and Redis configs.
+
 ## Requirements
 
 - Docker and Docker Compose
-- Python 3.13+ (for running without containers)
+- Python 3.12 (>=3.12,<3.13) for running without containers
 
 ---
 
@@ -46,8 +65,15 @@ GymBot is a Dockerized platform that connects a Telegram bot with a Django API. 
 
 ## Bot
 
-The bot runs in a separate container.
 Sources are located in `bot/` with the entrypoint `bot/main.py`.
+
+Local development options:
+- With Docker Compose (recommended for API/DB/Redis): `task localrun` starts Postgres, Redis, API and local Nginx on http://localhost:9090.
+- Run the bot locally from your IDE or terminal:
+  - Ensure Redis and API are up (via `task localrun`).
+  - Ensure your `.env` has WEBHOOK_HOST and WEBHOOK_PORT (e.g., WEBHOOK_HOST=http://localhost:9090, WEBHOOK_PORT=8001).
+  - Start the bot: `uv run python -m bot.main`.
+  - Local Nginx forwards webhooks to `host.docker.internal:8001` as configured in `docker/nginx.local.conf`.
 
 ---
 
@@ -55,9 +81,14 @@ Sources are located in `bot/` with the entrypoint `bot/main.py`.
 
 The Django API is served by `uvicorn`.
 
-- Admin panel: [http://localhost:8080/admin/](http://localhost:8080/admin/)
-- API schema: [http://localhost:8080/api/schema/swagger-ui/](http://localhost:8080/api/schema/swagger-ui/)
-- Healthcheck: [http://localhost:8000/health/](http://localhost:8000/health/)
+Local URLs:
+- Admin panel (via API directly): http://localhost:8000/admin/
+- Admin panel (via local Nginx proxy): http://localhost:9090/admin/
+- Healthcheck: http://localhost:8000/health/
+
+Production (behind Nginx):
+- Admin panel: https://<your-domain>/admin/
+- Healthcheck: https://<your-domain>/health/
 
 Use the credentials from `.env` (`DJANGO_ADMIN` / `DJANGO_PASSWORD`) to access the admin interface.
 
@@ -125,6 +156,18 @@ Other maintenance:
 
 ---
 
+## Database migrations
+
+Run inside Docker (API container):
+
+```bash
+task migrate
+```
+
+This will run makemigrations and migrate.
+
+---
+
 ## Tests
 
 Run tests with:
@@ -145,7 +188,7 @@ Common commands:
 | `run`      | Start all services with Docker               |
 | `localrun` | Local development environment                |
 | `test`     | Run tests                                     |
-| `lint`     | Lint the codebase (ruff + mypy)               |
+| `lint`     | Lint the codebase (ruff + pyrefly)             |
 | `format`   | Format the codebase                           |
 | `update`   | Update dependencies                           |
 | `pre-commit` | Run all pre-commit hooks                    |
@@ -188,10 +231,10 @@ task pre-commit
 docker compose -f docker/docker-compose.yml up -d --build
 ```
 
-Verify the API is available:
+Verify the service is available via Nginx:
 
 ```bash
-curl http://localhost:8000/health/
+curl http://localhost/health/
 ```
 
 ---
@@ -210,8 +253,28 @@ See `docker/nginx.conf` for configuration. Rebuild the image to apply changes:
 docker compose -f docker/docker-compose.yml up -d --build nginx
 ```
 
-## Global system prompt
+## Configuration (.env)
 
-The system instruction used by Cognee is loaded from `./ai_coach/global_system_prompt.txt`.
-This path is assigned to the `GRAPH_PROMPT_PATH` environment variable automatically on startup, but you can override it if needed.
-Make sure this file exists before starting the services.
+Create .env from .env.example and set the following minimum variables for development:
+
+Required:
+- SECRET_KEY – Django secret key
+- API_KEY – internal API key for bot/API communication
+- BOT_TOKEN – Telegram bot token
+- WEBHOOK_HOST – base URL for webhooks (e.g., http://localhost:9090 for local nginx)
+- WEBHOOK_PORT – port the bot’s aiohttp server listens on (e.g., 8001 when running locally)
+- BOT_LINK – public t.me link
+- API_URL – base URL of the Django API (e.g., http://api:8000/ in Docker, http://localhost:8000/ locally)
+- POSTGRES_PASSWORD – password for the DB user (used as DB_PASSWORD)
+- GOOGLE_APPLICATION_CREDENTIALS – path to Google service account JSON, default mounted at /app/google_creds.json
+- SPREADSHEET_ID – Google Sheets ID used by the app
+
+Common optional settings (sensible defaults exist):
+- REDIS_URL (default: redis://redis:6379)
+- ALLOWED_HOSTS (comma-separated or JSON list)
+- DJANGO_ADMIN / DJANGO_PASSWORD (admin credentials)
+- AI_COACH_URL (default: http://ai_coach:9000/)
+- KNOWLEDGE_REFRESH_INTERVAL, BACKUP_RETENTION_DAYS
+- PAYMENT_* (provider keys and callback URL)
+
+WEBHOOK_URL is auto-derived as `${WEBHOOK_HOST}${WEBHOOK_PATH}` unless explicitly set. See config/app_settings.py for all available options.

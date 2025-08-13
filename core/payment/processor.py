@@ -7,30 +7,31 @@ from typing import Dict
 
 from loguru import logger
 
-from core.cache import Cache
+from bot.utils.credits import available_packages, uah_to_credits
+from bot.utils.profiles import get_assigned_coach
 from core.enums import CoachType, PaymentStatus
 from core.exceptions import ClientNotFoundError
 from core.schemas import Client, Payment
+from core.services.gsheets_service import GSheetsService
 from core.services.internal.profile_service import ProfileService
 from core.services.internal.workout_service import WorkoutService
-from core.services.gsheets_service import GSheetsService
-from core.services.internal.payment_service import PaymentService
-from bot.utils.credits import available_packages, uah_to_credits
-from bot.utils.profiles import get_assigned_coach
-from core.payment.notifications import PaymentNotifier
-from core.payment.strategies import (
+
+from .notifications import PaymentNotifier
+from .service import PaymentService
+from .strategies import (
     ClosedPayment,
     FailurePayment,
     PaymentStrategy,
     PendingPayment,
     SuccessPayment,
 )
+from .types import CacheProtocol
 
 
 class PaymentProcessor:
     def __init__(
         self,
-        cache: Cache,
+        cache: CacheProtocol,
         payment_service: PaymentService,
         profile_service: ProfileService,
         workout_service: WorkoutService,

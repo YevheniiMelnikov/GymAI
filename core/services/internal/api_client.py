@@ -16,6 +16,10 @@ class APISettings(Protocol):
     API_RETRY_BACKOFF_FACTOR: float
     API_RETRY_MAX_DELAY: float
     API_TIMEOUT: int
+    AI_COACH_URL: str
+    AI_COACH_TIMEOUT: int
+    AI_COACH_REFRESH_USER: str
+    AI_COACH_REFRESH_PASSWORD: str
 
 
 class APIClient:

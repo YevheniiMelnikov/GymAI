@@ -5,11 +5,12 @@ from typing import Awaitable, Callable, Protocol
 
 from loguru import logger
 
-from core.cache import Cache
 from core.enums import PaymentStatus
 from core.schemas import Client, Payment
 from core.services import ProfileService
+
 from .notifications import PaymentNotifier
+from .types import CacheProtocol
 
 CreditTopupFunc = Callable[[Client, Decimal], Awaitable[None]]
 
@@ -21,7 +22,7 @@ class PaymentStrategy(Protocol):
 class SuccessPayment:
     def __init__(
         self,
-        cache: Cache,
+        cache: CacheProtocol,
         profile_service: ProfileService,
         credit_topup: CreditTopupFunc,
         notifier: PaymentNotifier,
@@ -47,7 +48,7 @@ class SuccessPayment:
 class FailurePayment:
     def __init__(
         self,
-        cache: Cache,
+        cache: CacheProtocol,
         profile_service: ProfileService,
         notifier: PaymentNotifier,
     ) -> None:
@@ -67,7 +68,7 @@ class FailurePayment:
 
 
 class ClosedPayment:
-    def __init__(self, cache: Cache) -> None:
+    def __init__(self, cache: CacheProtocol) -> None:
         self._cache = cache
 
     async def handle(self, payment: Payment, client: Client) -> None:

@@ -35,7 +35,9 @@ async def main() -> None:
     container.config.bot_token.from_value(settings.BOT_TOKEN)  # type: ignore[attr-defined]
     container.config.parse_mode.from_value("HTML")  # type: ignore[attr-defined]
     container.wire(modules=["bot.utils.other", "core.tasks"])
-    await container.init_resources()
+    init_result = container.init_resources()
+    if init_result is not None:
+        await init_result
 
     bot = container.bot()
     await bot.delete_webhook(drop_pending_updates=True)
@@ -65,7 +67,9 @@ async def main() -> None:
     finally:
         await runner.cleanup()
         dp.shutdown()
-        await container.shutdown_resources()
+        shutdown_result = container.shutdown_resources()
+        if shutdown_result is not None:
+            await shutdown_result
 
 
 if __name__ == "__main__":
