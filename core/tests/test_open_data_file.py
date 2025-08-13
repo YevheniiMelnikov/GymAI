@@ -1,6 +1,5 @@
 from types import SimpleNamespace
 
-import pytest
 
 from ai_coach.cognee_config import CogneeConfig
 from cognee.infrastructure.files import utils as file_utils

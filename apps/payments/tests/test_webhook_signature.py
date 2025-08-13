@@ -1,4 +1,4 @@
-from core.services.payments.liqpay import LiqPay
+from core.payment.providers.liqpay import LiqPay
 from apps.payments.views import PaymentWebhookView
 
 

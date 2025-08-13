@@ -82,9 +82,7 @@ def test_find_gif(monkeypatch: Any) -> None:
 
     from types import SimpleNamespace
 
-    dummy_cache = SimpleNamespace(
-        workout=SimpleNamespace(get_exercise_gif=fake_get, cache_gif_filename=fake_cache)
-    )
+    dummy_cache = SimpleNamespace(workout=SimpleNamespace(get_exercise_gif=fake_get, cache_gif_filename=fake_cache))
     monkeypatch.setattr(gs_store_module, "Cache", dummy_cache)
 
     url = asyncio.run(storage.find_gif("Push Up", {"pushup": ["Push Up"]}))

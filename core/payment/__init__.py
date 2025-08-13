@@ -1,5 +1,5 @@
 from .processor import PaymentProcessor
-from .service import PaymentService
+from core.services.internal.payment_service import PaymentService
 from .notifications import PaymentNotifier, TaskPaymentNotifier
 from .strategies import (
     PaymentStrategy,

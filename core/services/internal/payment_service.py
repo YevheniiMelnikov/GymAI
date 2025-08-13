@@ -5,8 +5,8 @@ from typing import Any
 
 from core.domain.payment_repository import PaymentRepository
 from core.schemas import Payment, Subscription
-from core.services.payments.liqpay import LiqPayGateway
-from core.services.payments.payment_gateway import PaymentGateway
+from core.payment.providers.liqpay import LiqPayGateway
+from core.payment.providers.payment_gateway import PaymentGateway
 
 
 class PaymentService:

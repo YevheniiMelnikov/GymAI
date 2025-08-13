@@ -1,20 +1,7 @@
-from __future__ import annotations
+# Compatibility shim for moved module
+# Old path: core.services.payments.payment_gateway
+# New path: core.payment.providers.payment_gateway
 
-from abc import ABC, abstractmethod
-from decimal import Decimal
-
-
-class PaymentGateway(ABC):
-    """Abstract payments gateway interface."""
-
-    @abstractmethod
-    async def get_payment_link(
-        self,
-        action: str,
-        amount: Decimal,
-        order_id: str,
-        payment_type: str,
-        client_id: int,
-    ) -> str:
-        """Return URL to perform the payments."""
-        ...
+from core.payment.providers.payment_gateway import (
+    PaymentGateway,  # noqa: F401
+)

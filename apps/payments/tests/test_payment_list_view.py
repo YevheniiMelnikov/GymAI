@@ -10,9 +10,7 @@ def test_payment_list_filters(monkeypatch):
         SimpleNamespace(status="pending", order_id="2"),
     ]
 
-    monkeypatch.setattr(
-        PaymentRepository, "base_qs", staticmethod(lambda: sample)
-    )
+    monkeypatch.setattr(PaymentRepository, "base_qs", staticmethod(lambda: sample))
 
     called = {}
 

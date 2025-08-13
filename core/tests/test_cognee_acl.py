@@ -36,6 +36,7 @@ def test_case_success_create_and_search(monkeypatch):
 
         monkeypatch.setattr(coach.HashStore, "contains", fake_contains)
         monkeypatch.setattr(coach.HashStore, "add", fake_add_hash)
+
         async def fake_index(*a, **k):
             pass
 

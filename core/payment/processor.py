@@ -17,7 +17,7 @@ from core.services.internal.profile_service import ProfileService
 from core.services.internal.workout_service import WorkoutService
 
 from .notifications import PaymentNotifier
-from .service import PaymentService
+from core.services.internal.payment_service import PaymentService
 from .strategies import (
     ClosedPayment,
     FailurePayment,

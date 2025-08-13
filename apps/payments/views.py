@@ -19,7 +19,7 @@ from apps.payments.repos import PaymentRepository
 from apps.payments.serializers import PaymentSerializer
 from apps.payments.tasks import process_payment_webhook
 from config.app_settings import settings
-from core.services.payments.liqpay import LiqPay
+from core.payment.providers.liqpay import LiqPay
 
 
 class PaymentWebhookView(APIView):
