@@ -3,6 +3,7 @@ import hashlib
 import json
 from copy import deepcopy
 from decimal import Decimal, ROUND_HALF_UP
+from typing import Any
 from urllib.parse import urlencode, urljoin
 
 from django.conf import settings
@@ -31,20 +32,37 @@ class LiqPay:
     ]
     SUPPORTED_CURRENCIES = ["EUR", "USD", "UAH"]
     SUPPORTED_LANGS = ["uk", "en"]
+    SUPPORTED_VERSION = "3"
 
     def __init__(self, public_key: str, private_key: str, host: str = "https://www.liqpay.ua/api/"):
         self.public_key = public_key
         self.private_key = private_key
         self.host = host
 
-    def _make_signature(self, *args) -> str:
+    def _make_signature(self, *args: str) -> str:
         data = "".join(args).encode("utf-8")
         return base64.b64encode(hashlib.sha1(data).digest()).decode("ascii")
 
-    def _prepare_params(self, params: dict | None) -> dict:
-        params = deepcopy(params or {})
-        params["public_key"] = self.public_key
-        return params
+    def _prepare_params(self, params: dict[str, Any] | None) -> dict[str, Any]:
+        prepared: dict[str, Any] = deepcopy(params or {})
+        prepared["public_key"] = self.public_key
+        required_fields: set[str] = {
+            "version",
+            "amount",
+            "currency",
+            "action",
+            "order_id",
+            "description",
+        }
+        missing: set[str] = required_fields - set(prepared)
+        if missing:
+            missing_fields = ", ".join(sorted(missing))
+            raise ParamValidationError(f"Missing required field(s): {missing_fields}")
+        if str(prepared["version"]) != self.SUPPORTED_VERSION:
+            raise ParamValidationError("Invalid version")
+        if prepared["currency"] not in self.SUPPORTED_CURRENCIES:
+            raise ParamValidationError("Invalid currency")
+        return prepared
 
     def get_data_end_signature(self, type: str, params: dict) -> tuple[str, str]:
         json_params = json.dumps(params, sort_keys=True)
@@ -68,13 +86,13 @@ class LiqPay:
     def data_to_sign(self, params: dict) -> str:
         return base64.b64encode(json.dumps(params, sort_keys=True).encode("utf-8")).decode("utf-8")
 
-    def decode_data_from_str(self, data: str, signature: str | None = None) -> dict:
-        decoded = base64.b64decode(data).decode("utf-8")
+    def decode_data_from_str(self, data: str, signature: str | None = None) -> dict[str, Any]:
+        decoded_json: str = base64.b64decode(data).decode("utf-8")
         if signature:
-            expected = self._make_signature(self.private_key, decoded, self.private_key)
+            expected: str = self._make_signature(self.private_key, data, self.private_key)
             if expected != signature:
                 raise ParamValidationError("Invalid signature")
-        return json.loads(decoded)
+        return json.loads(decoded_json)
 
 
 class LiqPayGateway(PaymentGateway):
@@ -89,7 +107,7 @@ class LiqPayGateway(PaymentGateway):
         payment_type: str,
         client_id: int,
     ) -> str:
-        params = {
+        params: dict[str, Any] = {
             "action": action,
             "amount": str(amount.quantize(Decimal("0.01"), ROUND_HALF_UP)),
             "currency": "UAH",
@@ -100,6 +118,7 @@ class LiqPayGateway(PaymentGateway):
             "result_url": settings.BOT_LINK,
             "rro_info": {"delivery_emails": [settings.EMAIL]},
         }
-        data = self.client.cnb_data(params)
-        signature = self.client.cnb_signature(params)
-        return urljoin(settings.CHECKOUT_URL, f"?{urlencode({'data': data, 'signature': signature})}")
+        data: str = self.client.cnb_data(params)
+        signature: str = self.client.cnb_signature(params)
+        checkout_url: str = str(settings.CHECKOUT_URL)
+        return urljoin(checkout_url, f"?{urlencode({'data': data, 'signature': signature})}")
