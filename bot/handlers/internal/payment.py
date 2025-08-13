@@ -1,7 +1,7 @@
 from aiohttp import web
 from loguru import logger
 
-from core.payment_processor import PaymentProcessor
+from core.payment_processor import payment_processor
 from core.cache import Cache
 from aiogram import Bot
 from bot.utils.chat import send_message, client_request
@@ -25,7 +25,7 @@ async def internal_payment_handler(request: web.Request) -> web.Response:
         return web.json_response({"detail": "Missing order_id or status"}, status=400)
 
     try:
-        await PaymentProcessor.handle_webhook_event(order_id, status_, err_description)
+        await payment_processor.handle_webhook_event(order_id, status_, err_description)
         return web.json_response({"result": "ok"})
     except Exception as e:
         logger.exception(f"Payment processing failed for {order_id}: {e}")
