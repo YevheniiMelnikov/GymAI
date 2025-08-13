@@ -14,7 +14,8 @@ from bot.middlewares import ProfileMiddleware
 from bot.handlers import configure_routers
 from core.cache.base import BaseCacheManager
 from bot.utils.bot import set_bot_commands
-from core.containers import App
+from core.containers import create_container, set_container, get_container
+from core.services.internal import APIService
 
 
 async def on_shutdown(bot: Bot) -> None:
@@ -28,10 +29,13 @@ async def main() -> None:
     if not await BaseCacheManager.healthcheck():
         raise SystemExit("Redis is not responding to ping — exiting")
 
-    container = App()
+    container = create_container()
+    set_container(container)
+    APIService.configure(get_container)
     container.config.bot_token.from_value(settings.BOT_TOKEN)  # type: ignore[attr-defined]
     container.config.parse_mode.from_value("HTML")  # type: ignore[attr-defined]
     container.wire(modules=["bot.utils.other", "core.tasks"])
+    await container.init_resources()
 
     bot = container.bot()
     await bot.delete_webhook(drop_pending_updates=True)
@@ -61,6 +65,7 @@ async def main() -> None:
     finally:
         await runner.cleanup()
         dp.shutdown()
+        await container.shutdown_resources()
 
 
 if __name__ == "__main__":

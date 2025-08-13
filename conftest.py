@@ -150,6 +150,8 @@ settings_stub = types.SimpleNamespace(
     API_RETRY_BACKOFF_FACTOR=1,
     API_RETRY_MAX_DELAY=0,
     API_TIMEOUT=1,
+    API_MAX_CONNECTIONS=100,
+    API_MAX_KEEPALIVE_CONNECTIONS=20,
     SPREADSHEET_ID="sheet",
     SECRET_KEY="test",
     DB_NAME="postgres",
@@ -291,12 +293,16 @@ aiogram_mod.fsm = types.SimpleNamespace(
     state=types.SimpleNamespace(State=type("State", (), {}), StatesGroup=type("StatesGroup", (), {})),
 )
 aiogram_mod.types = types.SimpleNamespace(
-    Message=type("Message", (), {
-        "answer": lambda *a, **k: None,
-        "answer_photo": lambda *a, **k: None,
-        "answer_document": lambda *a, **k: None,
-        "answer_video": lambda *a, **k: None,
-    }),
+    Message=type(
+        "Message",
+        (),
+        {
+            "answer": lambda *a, **k: None,
+            "answer_photo": lambda *a, **k: None,
+            "answer_document": lambda *a, **k: None,
+            "answer_video": lambda *a, **k: None,
+        },
+    ),
     CallbackQuery=type("CallbackQuery", (), {"answer": lambda *a, **k: None, "message": None}),
     BotCommand=object,
     InlineKeyboardButton=type("InlineKeyboardButton", (), {}),
@@ -348,9 +354,16 @@ sys.modules.setdefault("dependency_injector.wiring", di_wiring)
 di_containers = types.ModuleType("dependency_injector.containers")
 di_containers.DeclarativeContainer = type("DeclarativeContainer", (), {})
 di_providers = types.ModuleType("dependency_injector.providers")
-di_providers.Factory = lambda *a, **k: None
-di_providers.Singleton = lambda *a, **k: None
-di_providers.Callable = lambda *a, **k: None
+
+
+def _provider(obj, *a, **k):  # pragma: no cover - simple stub
+    return lambda *args, **kwargs: obj
+
+
+di_providers.Factory = _provider
+di_providers.Singleton = _provider
+di_providers.Callable = _provider
+di_providers.Resource = _provider
 di_providers.Configuration = lambda *a, **k: types.SimpleNamespace(bot_token="", parse_mode="")
 di_mod.containers = di_containers
 di_mod.providers = di_providers
@@ -534,10 +547,7 @@ class PaymentRepository:
     @staticmethod
     def filter(qs, *, status=None, order_id=None):
         return [
-            p
-            for p in qs
-            if (status is None or p.status == status)
-            and (order_id is None or p.order_id == order_id)
+            p for p in qs if (status is None or p.status == status) and (order_id is None or p.order_id == order_id)
         ]
 
 
@@ -585,8 +595,12 @@ sys.modules.setdefault("apps.workout_plans.models", workout_models)
 
 core_services_pkg = types.ModuleType("core.services")
 core_services_pkg.__path__ = [str(Path(__file__).resolve().parent / "core" / "services")]
-core_services_pkg.ProfileService = types.SimpleNamespace(
-    get_client_by_profile_id=lambda *_a, **_k: None
+core_services_pkg.ProfileService = types.SimpleNamespace(get_client_by_profile_id=lambda *_a, **_k: None)
+core_services_pkg.APIService = types.SimpleNamespace(
+    profile=types.SimpleNamespace(),
+    payment=types.SimpleNamespace(),
+    workout=types.SimpleNamespace(),
+    ai_coach=types.SimpleNamespace(),
 )
 sys.modules.setdefault("core.services", core_services_pkg)
 

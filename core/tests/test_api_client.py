@@ -1,8 +1,10 @@
 import httpx
 import pytest
 from unittest.mock import Mock
+import types
 import importlib.util
 from pathlib import Path
+
 
 from core.exceptions import UserServiceError
 
@@ -33,7 +35,19 @@ class DummyResponse:
         return self._json
 
 
-def test_api_request_success(monkeypatch):
+def _settings() -> types.SimpleNamespace:
+    return types.SimpleNamespace(
+        API_URL="http://api",
+        API_KEY="",
+        API_MAX_RETRIES=3,
+        API_RETRY_INITIAL_DELAY=0,
+        API_RETRY_BACKOFF_FACTOR=1,
+        API_RETRY_MAX_DELAY=0,
+        API_TIMEOUT=5,
+    )
+
+
+def test_api_request_success():
     import asyncio
 
     async def fake_request(*a, **kw):
@@ -43,13 +57,13 @@ def test_api_request_success(monkeypatch):
         async def request(self, *a, **kw):
             return await fake_request(*a, **kw)
 
-    monkeypatch.setattr(APIClient, "_get_client", classmethod(lambda cls, timeout: _Client()))
-    code, data = asyncio.run(APIClient._api_request("get", "http://x"))
+    api = APIClient(_Client(), _settings())
+    code, data = asyncio.run(api._api_request("get", "http://x"))
     assert code == 200
     assert data == {"ok": True}
 
 
-def test_api_request_retries(monkeypatch):
+def test_api_request_retries():
     import asyncio
 
     calls = []
@@ -66,14 +80,14 @@ def test_api_request_retries(monkeypatch):
         async def request(self, *a, **kw):
             return await fake_request(*a, **kw)
 
-    monkeypatch.setattr(APIClient, "_get_client", classmethod(lambda cls, timeout: _Client2()))
-    APIClient.max_retries = 2
-    code, _ = asyncio.run(APIClient._api_request("get", "http://x"))
+    api = APIClient(_Client2(), _settings())
+    api.max_retries = 2
+    code, _ = asyncio.run(api._api_request("get", "http://x"))
     assert len(calls) == 2
     assert code == 200
 
 
-def test_api_request_gives_up(monkeypatch):
+def test_api_request_gives_up():
     import asyncio
 
     async def fake_request(*a, **kw):
@@ -85,7 +99,7 @@ def test_api_request_gives_up(monkeypatch):
         async def request(self, *a, **kw):
             return await fake_request(*a, **kw)
 
-    monkeypatch.setattr(APIClient, "_get_client", classmethod(lambda cls, timeout: _Client3()))
-    APIClient.max_retries = 2
+    api = APIClient(_Client3(), _settings())
+    api.max_retries = 2
     with pytest.raises(UserServiceError):
-        asyncio.run(APIClient._api_request("get", "http://x"))
+        asyncio.run(api._api_request("get", "http://x"))

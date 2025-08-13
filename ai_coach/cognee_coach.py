@@ -21,7 +21,7 @@ from ai_coach.schemas import MessageRole
 from ai_coach.hash_store import HashStore
 from ai_coach.lock_cache import LockCache
 from config.app_settings import settings
-from core.services import ProfileService
+from core.services import APIService
 from core.schemas import Client
 
 
@@ -166,7 +166,7 @@ class CogneeCoach(BaseAICoach):
 
     @classmethod
     async def _ensure_profile_indexed(cls, client_id: int, user: Any) -> None:
-        client = await ProfileService.get_client_by_profile_id(client_id)
+        client = await APIService.profile.get_client_by_profile_id(client_id)
         if not client:
             return
         text = cls._client_profile_text(client)

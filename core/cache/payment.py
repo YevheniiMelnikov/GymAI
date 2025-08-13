@@ -4,18 +4,18 @@ import json
 
 from .base import BaseCacheManager
 from core.enums import PaymentStatus
-from core.services.internal.payment_service import PaymentService
+from core.containers import get_container
 from core.exceptions import PaymentNotFoundError
 
 
 class PaymentCacheManager(BaseCacheManager):
-    service = PaymentService
     _PREFIX = "workout_plans:payments"
 
     @classmethod
     async def _fetch_from_service(cls, cache_key: str, field: str, *, use_fallback: bool) -> PaymentStatus:
         service_type = cache_key.split(":")[-1]
-        payment = await cls.service.get_latest_payment(int(field), service_type)
+        service = get_container().payment_service()
+        payment = await service.get_latest_payment(int(field), service_type)
         if payment is None:
             raise PaymentNotFoundError(int(field))
         try:

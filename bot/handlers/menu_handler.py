@@ -44,7 +44,7 @@ from bot.utils.workout_plans import manage_program, cancel_subscription
 from bot.utils.other import generate_order_id
 from bot.utils.bot import del_msg, answer_msg
 from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
-from core.services import APIService, ProfileService
+from core.services import APIService
 from bot.keyboards import payment_kb
 from bot.utils.credits import available_packages
 from bot.ai_coach.utils import generate_subscription, generate_program
@@ -257,7 +257,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
             request_id,
         )
 
-    await ProfileService.adjust_client_credits(profile.id, -required)
+    await APIService.profile.adjust_client_credits(profile.id, -required)
     await Cache.client.update_client(client.profile, {"credits": client.credits - required})
     await answer_msg(callback_query, msg_text("request_in_progress", profile.language))
     await show_main_menu(cast(Message, callback_query.message), profile, state)

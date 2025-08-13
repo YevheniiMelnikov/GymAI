@@ -19,7 +19,6 @@ from core.services import APIService
 from bot.texts.text_manager import msg_text
 from apps.payments.tasks import send_payment_message
 from bot.utils.credits import required_credits
-from core.services import ProfileService
 from bot.utils.profiles import get_assigned_coach
 from core.enums import CoachType
 from core.utils.redis_lock import redis_try_lock, get_redis_client
@@ -154,7 +153,7 @@ def warn_low_credits(self):
             if not sub.client_profile:
                 continue
             client = await Cache.client.get_client(sub.client_profile)
-            profile = await ProfileService.get_profile(client.profile)
+            profile = await APIService.profile.get_profile(client.profile)
             required = required_credits(Decimal(str(sub.price)))
             if client.credits < required:
                 lang = profile.language if profile else settings.DEFAULT_LANG
@@ -197,13 +196,13 @@ def charge_due_subscriptions(self):
                 await Cache.payment.reset_status(sub.client_profile, "subscription")
                 continue
 
-            await ProfileService.adjust_client_credits(client.profile, -required)
+            await APIService.profile.adjust_client_credits(client.profile, -required)
             await Cache.client.update_client(client.profile, {"credits": client.credits - required})
             if client.assigned_to:
                 coach = await get_assigned_coach(client, coach_type=CoachType.human)
                 if coach:
                     payout = Decimal(str(sub.price)).quantize(Decimal("0.01"), ROUND_HALF_UP)
-                    await ProfileService.adjust_coach_payout_due(coach.profile, payout)
+                    await APIService.profile.adjust_coach_payout_due(coach.profile, payout)
                     new_due = (coach.payout_due or Decimal("0")) + payout
                     await Cache.coach.update_coach(coach.profile, {"payout_due": str(new_due)})
             next_date = _next_payment_date(getattr(sub, "period", "1m"))

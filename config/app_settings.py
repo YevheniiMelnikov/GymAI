@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     API_RETRY_BACKOFF_FACTOR: int = 2
     API_RETRY_MAX_DELAY: int = 10
     API_TIMEOUT: int = 10
+    API_MAX_CONNECTIONS: int = 100
+    API_MAX_KEEPALIVE_CONNECTIONS: int = 20
     AI_GENERATION_RETRIES: int = 3
 
     KNOWLEDGE_REFRESH_INTERVAL: int = 60 * 60

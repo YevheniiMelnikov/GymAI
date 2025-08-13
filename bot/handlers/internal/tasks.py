@@ -10,7 +10,7 @@ from bot.utils.profiles import get_clients_to_survey
 from config.app_settings import settings
 from bot.ai_coach.parsers import parse_program_text, parse_program_json
 from core.exceptions import SubscriptionNotFoundError
-from core.payment_processor import payment_processor
+from core.containers import get_container
 from core.cache import Cache
 from core.enums import CoachType
 from bot.utils.chat import send_message
@@ -57,7 +57,7 @@ async def internal_export_coach_payouts(request: web.Request) -> web.Response:
         return web.json_response({"detail": "Forbidden"}, status=403)
 
     try:
-        await payment_processor.export_coach_payouts()
+        await get_container().payment_processor().export_coach_payouts()
         return web.json_response({"result": "ok"})
     except Exception as e:
         logger.exception(f"Failed to export coach payouts: {e}")

@@ -11,12 +11,13 @@ from core.cache import Cache
 from core.enums import CoachType, PaymentStatus
 from core.exceptions import ClientNotFoundError
 from core.schemas import Client, Payment
-from core.services import ProfileService, WorkoutService
+from core.services.internal.profile_service import ProfileService
+from core.services.internal.workout_service import WorkoutService
 from core.services.gsheets_service import GSheetsService
 from core.services.internal.payment_service import PaymentService
 from bot.utils.credits import available_packages, uah_to_credits
 from bot.utils.profiles import get_assigned_coach
-from core.payment.notifications import PaymentNotifier, TaskPaymentNotifier
+from core.payment.notifications import PaymentNotifier
 from core.payment.strategies import (
     ClosedPayment,
     FailurePayment,
@@ -141,12 +142,3 @@ class PaymentProcessor:
                 logger.info(f"Payout sheet created: {len(payout_rows)} rows")
         except Exception as e:  # noqa: BLE001
             logger.exception(f"Failed batch payout: {e}")
-
-
-payment_processor = PaymentProcessor(
-    cache=Cache,
-    payment_service=PaymentService,
-    profile_service=ProfileService,
-    workout_service=WorkoutService,
-    notifier=TaskPaymentNotifier(),
-)

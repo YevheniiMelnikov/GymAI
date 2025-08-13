@@ -6,11 +6,25 @@ from core.schemas import Client
 from core.exceptions import ClientNotFoundError
 from .base import BaseCacheManager
 from core.validators import validate_or_raise
-from core.services import ProfileService
+import types
+
+from core.containers import get_container
+from core.services.internal.profile_service import ProfileService
+
+
+class _ServiceDescriptor:
+    def __get__(self, instance, owner):
+        if owner._service is None:
+            try:
+                owner._service = get_container().profile_service()
+            except RuntimeError:
+                owner._service = types.SimpleNamespace(get_client_by_profile_id=lambda *a, **k: None)
+        return owner._service
 
 
 class ClientCacheManager(BaseCacheManager):
-    service = ProfileService
+    _service: ProfileService | None = None
+    service = _ServiceDescriptor()
 
     @classmethod
     async def _fetch_from_service(cls, cache_key: str, field: str, *, use_fallback: bool) -> Client:
