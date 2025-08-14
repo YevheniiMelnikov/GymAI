@@ -1,5 +1,6 @@
 import json
 from typing import Any, cast
+from inspect import isawaitable
 from loguru import logger
 
 from core.schemas import Subscription, Program
@@ -14,6 +15,8 @@ class WorkoutCacheManager(BaseCacheManager):
     async def _fetch_from_service(cls, cache_key: str, field: str, *, use_fallback: bool) -> Subscription | Program:
         client_profile_id = int(field)
         service = get_container().workout_service()
+        if isawaitable(service):
+            service = await service
         if cache_key.endswith("subscriptions"):
             subscription = await service.get_latest_subscription(client_profile_id)
             if subscription is None:
@@ -107,6 +110,8 @@ class WorkoutCacheManager(BaseCacheManager):
                 await cls.delete("workout_plans:subscriptions_history", str(client_profile_id))
 
         service = get_container().workout_service()
+        if isawaitable(service):
+            service = await service
         subscriptions = await service.get_all_subscriptions(client_profile_id)
         await cls.set(
             "workout_plans:subscriptions_history",
@@ -126,6 +131,8 @@ class WorkoutCacheManager(BaseCacheManager):
                 await cls.delete("workout_plans:programs_history", str(client_profile_id))
 
         service = get_container().workout_service()
+        if isawaitable(service):
+            service = await service
         programs = await service.get_all_programs(client_profile_id)
         await cls.set(
             "workout_plans:programs_history",
