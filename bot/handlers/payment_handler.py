@@ -26,11 +26,27 @@ from bot.texts import msg_text, btn_text
 from core.schemas import Profile
 from core.exceptions import ClientNotFoundError, CoachNotFoundError
 
+
+class ClientNotAssignedError(Exception):
+    """Raised when client is not assigned to a coach."""
+
+
 payment_router = Router()
 
 
+async def _get_client_and_coach(profile_id: int) -> tuple[Client, Coach]:
+    """Return client with assigned human coach or raise an error."""
+    client = await Cache.client.get_client(profile_id)
+    if not client.assigned_to:
+        raise ClientNotAssignedError
+    coach = await get_assigned_coach(client, coach_type=CoachType.human)
+    if coach is None:
+        raise CoachNotFoundError
+    return client, coach
+
+
 @payment_router.callback_query(States.gift)
-async def get_the_gift(callback_query: CallbackQuery, state: FSMContext):
+async def get_the_gift(callback_query: CallbackQuery, state: FSMContext) -> None:
     if callback_query.data != "get":
         return
 
@@ -50,7 +66,7 @@ async def get_the_gift(callback_query: CallbackQuery, state: FSMContext):
 
 
 @payment_router.callback_query(States.payment_choice)
-async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
+async def payment_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     if callback_query.data == "back":
@@ -75,15 +91,10 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
     option = parts[1]
 
     try:
-        client = await Cache.client.get_client(profile.id)
-        if not client.assigned_to:
-            await callback_query.answer(msg_text("client_not_assigned_to_coach", profile.language), show_alert=True)
-            return
-        coach = await get_assigned_coach(client, coach_type=CoachType.human)
-        if coach is None:
-            await callback_query.answer(msg_text("coach_data_not_found_error", profile.language), show_alert=True)
-            return
-
+        client, coach = await _get_client_and_coach(profile.id)
+    except ClientNotAssignedError:
+        await callback_query.answer(msg_text("client_not_assigned_to_coach", profile.language), show_alert=True)
+        return
     except ClientNotFoundError:
         logger.warning(f"Client not found for profile {profile.id} in payment_choice.")
         await callback_query.answer(msg_text("client_data_not_found_error", profile.language), show_alert=True)
@@ -104,7 +115,7 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext):
 
 
 @payment_router.callback_query(States.handle_payment)
-async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
+async def handle_payment(callback_query: CallbackQuery, state: FSMContext) -> None:
     if not callback_query.data == "done":
         return
 
@@ -128,33 +139,17 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext):
         return
 
     try:
-        client = await Cache.client.get_client(profile.id)
-        if not client.assigned_to:
-            await callback_query.answer(
-                msg_text("client_not_assigned_to_coach", profile.language),
-                show_alert=True,
-            )
-            return
-        coach = await get_assigned_coach(client, coach_type=CoachType.human)
-        if coach is None:
-            await callback_query.answer(
-                msg_text("coach_data_not_found_error", profile.language),
-                show_alert=True,
-            )
-            return
+        client, coach = await _get_client_and_coach(profile.id)
+    except ClientNotAssignedError:
+        await callback_query.answer(msg_text("client_not_assigned_to_coach", profile.language), show_alert=True)
+        return
     except ClientNotFoundError:
         logger.warning(f"Client not found for profile {profile.id}")
-        await callback_query.answer(
-            msg_text("client_data_not_found_error", profile.language),
-            show_alert=True,
-        )
+        await callback_query.answer(msg_text("client_data_not_found_error", profile.language), show_alert=True)
         return
     except CoachNotFoundError:
         logger.warning(f"Coach not found for profile {profile.id}")
-        await callback_query.answer(
-            msg_text("coach_data_not_found_error", profile.language),
-            show_alert=True,
-        )
+        await callback_query.answer(msg_text("coach_data_not_found_error", profile.language), show_alert=True)
         return
 
     if service_type == "program":
