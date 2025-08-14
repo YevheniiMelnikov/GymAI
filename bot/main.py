@@ -13,7 +13,7 @@ from config.app_settings import settings
 from bot.middlewares import ProfileMiddleware
 from bot.handlers import configure_routers
 from core.cache.base import BaseCacheManager
-from bot.utils.bot import set_bot_commands
+from bot.utils.bot import set_bot_commands, build_ping_url, check_webhook_alive
 from core.containers import create_container, set_container, get_container
 from core.services.internal import APIService
 
@@ -57,6 +57,18 @@ async def main() -> None:
     app["bot"] = bot
     await setup_app(app, bot, dp)
     runner = await start_web_app(app)
+
+    # Webhook/HTTP server healthcheck
+    ping_url = build_ping_url(webhook_url, settings.WEBHOOK_PATH)
+    if not await check_webhook_alive(ping_url):
+        logger.critical("Webhook did not respond — stopping")
+        await runner.cleanup()
+        dp.shutdown()
+        shutdown_result = container.shutdown_resources()
+        if shutdown_result is not None:
+            await shutdown_result
+        raise SystemExit("Webhook healthcheck failed — exiting")
+
     logger.success("Bot started")
     stop_event = asyncio.Event()
 

@@ -11,12 +11,12 @@ from loguru import logger
 from bot.utils.bot import del_msg, answer_msg
 from bot.keyboards import select_service_kb, workout_type_kb
 from bot.utils.menus import has_human_coach_subscription
-from bot.utils.profiles import get_assigned_coach
+from bot.utils.profiles import _get_client_and_coach
 from bot.states import States
 
 from core.cache import Cache
 from core.cache.payment import PaymentCacheManager
-from core.enums import ClientStatus, PaymentStatus, CoachType
+from core.enums import ClientStatus, PaymentStatus
 from core.services import APIService
 from bot.utils.menus import show_main_menu, show_services_menu
 from core.schemas import Coach, Client
@@ -24,25 +24,9 @@ from apps.payments.tasks import send_client_request
 from bot.utils.workout_plans import cache_program_data, process_new_subscription
 from bot.texts import msg_text, btn_text
 from core.schemas import Profile
-from core.exceptions import ClientNotFoundError, CoachNotFoundError
-
-
-class ClientNotAssignedError(Exception):
-    """Raised when client is not assigned to a coach."""
-
+from core.exceptions import ClientNotFoundError, CoachNotFoundError, ClientNotAssignedError
 
 payment_router = Router()
-
-
-async def _get_client_and_coach(profile_id: int) -> tuple[Client, Coach]:
-    """Return client with assigned human coach or raise an error."""
-    client = await Cache.client.get_client(profile_id)
-    if not client.assigned_to:
-        raise ClientNotAssignedError
-    coach = await get_assigned_coach(client, coach_type=CoachType.human)
-    if coach is None:
-        raise CoachNotFoundError
-    return client, coach
 
 
 @payment_router.callback_query(States.gift)

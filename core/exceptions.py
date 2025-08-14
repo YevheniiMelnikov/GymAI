@@ -43,3 +43,7 @@ class PaymentNotFoundError(Exception):
     def __init__(self, profile_id: int):
         super().__init__(f"Payment not found for profile_id {profile_id}")
         self.profile_id = profile_id
+
+
+class ClientNotAssignedError(Exception):
+    """Raised when client is not assigned to a coach."""

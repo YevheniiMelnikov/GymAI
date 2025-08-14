@@ -16,6 +16,7 @@ from core.exceptions import (
     CoachNotFoundError,
     SubscriptionNotFoundError,
     ClientNotFoundError,
+    ClientNotAssignedError,
 )
 from core.services import APIService
 from bot.utils.chat import send_coach_request
@@ -251,3 +252,13 @@ async def get_clients_to_survey() -> list[Profile]:
         logger.error(f"Failed to load clients for survey: {e}")
 
     return clients_with_workout
+
+
+async def _get_client_and_coach(profile_id: int) -> tuple[Client, Coach]:
+    client = await Cache.client.get_client(profile_id)
+    if not client.assigned_to:
+        raise ClientNotAssignedError
+    coach = await get_assigned_coach(client, coach_type=CoachType.human)
+    if coach is None:
+        raise CoachNotFoundError
+    return client, coach
