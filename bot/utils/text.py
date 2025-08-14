@@ -85,20 +85,26 @@ def get_profile_attributes(role: str, user: Optional[Client | Coach], lang: str)
     }
 
 
+StateMessageKey = tuple[State, str]
+
+_STATE_MESSAGE_KEYS: dict[str, StateMessageKey] = {
+    "workout_experience": (States.workout_experience, "workout_experience"),
+    "workout_goals": (States.workout_goals, "workout_goals"),
+    "weight": (States.weight, "weight"),
+    "health_notes": (States.health_notes, "health_notes"),
+    "work_experience": (States.work_experience, "work_experience"),
+    "additional_info": (States.additional_info, "additional_info"),
+    "payment_details": (States.payment_details, "payment_details"),
+    "subscription_price": (States.subscription_price, "enter_subscription_price"),
+    "program_price": (States.program_price, "enter_program_price"),
+    "photo": (States.profile_photo, "upload_photo"),
+}
+
+
 def get_state_and_message(callback: str, lang: str) -> tuple[State, str]:
-    mapping: dict[str, tuple[State, str]] = {
-        "workout_experience": (States.workout_experience, msg_text("workout_experience", lang)),
-        "workout_goals": (States.workout_goals, msg_text("workout_goals", lang)),
-        "weight": (States.weight, msg_text("weight", lang)),
-        "health_notes": (States.health_notes, msg_text("health_notes", lang)),
-        "work_experience": (States.work_experience, msg_text("work_experience", lang)),
-        "additional_info": (States.additional_info, msg_text("additional_info", lang)),
-        "payment_details": (States.payment_details, msg_text("payment_details", lang)),
-        "subscription_price": (States.subscription_price, msg_text("enter_subscription_price", lang)),
-        "program_price": (States.program_price, msg_text("enter_program_price", lang)),
-        "photo": (States.profile_photo, msg_text("upload_photo", lang)),
-    }
-    return mapping.get(callback, (States.name, ""))
+    state, msg_key = _STATE_MESSAGE_KEYS.get(callback, (States.name, ""))
+    message = msg_text(msg_key, lang) if msg_key else ""
+    return state, message
 
 
 async def get_client_page(
