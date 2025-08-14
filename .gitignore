@@ -163,3 +163,4 @@ gym_bot.log
 staticfiles/
 **/celerybeat-schedule*
 /.data_storage
+/.junie

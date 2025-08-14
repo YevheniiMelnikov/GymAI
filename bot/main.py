@@ -2,13 +2,11 @@ import asyncio
 from aiohttp import web
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.redis import RedisStorage
-
 from loguru import logger
 
 from bot.utils.web import setup_app, start_web_app
 from config.logger import configure_loguru
 from core.utils.idempotency import close_redis as close_idempotency
-
 from config.app_settings import settings
 from bot.middlewares import ProfileMiddleware
 from bot.handlers import configure_routers
@@ -44,7 +42,11 @@ async def main() -> None:
     webhook_url = settings.WEBHOOK_URL
     if webhook_url is None:
         raise ValueError("WEBHOOK_URL must be set")
-    await bot.set_webhook(url=webhook_url)
+    await bot.set_webhook(
+        url=webhook_url,
+        secret_token=settings.SECRET_KEY,
+        allowed_updates=["message", "callback_query"],
+    )
     await set_bot_commands(bot)
 
     dp = Dispatcher(storage=RedisStorage.from_url(settings.REDIS_URL))
@@ -58,12 +60,11 @@ async def main() -> None:
     await setup_app(app, bot, dp)
     runner = await start_web_app(app)
 
-    # Webhook/HTTP server healthcheck
     ping_url = build_ping_url(webhook_url, settings.WEBHOOK_PATH)
     if not await check_webhook_alive(ping_url):
-        logger.critical("Webhook did not respond — stopping")
         await runner.cleanup()
-        dp.shutdown()
+        await dp.emit_shutdown(bot=bot)
+        await dp.storage.close()
         shutdown_result = container.shutdown_resources()
         if shutdown_result is not None:
             await shutdown_result
@@ -74,11 +75,10 @@ async def main() -> None:
 
     try:
         await stop_event.wait()
-    except Exception as e:
-        logger.critical(f"Bot encountered an error: {e}")
     finally:
         await runner.cleanup()
-        dp.shutdown()
+        await dp.emit_shutdown(bot=bot)
+        await dp.storage.close()
         shutdown_result = container.shutdown_resources()
         if shutdown_result is not None:
             await shutdown_result
