@@ -1,3 +1,5 @@
+from urllib.parse import urlsplit, urlunsplit
+
 from aiogram import Bot, Dispatcher
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
@@ -18,10 +20,16 @@ async def ping_handler(_: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+def build_ping_url(webhook_url: str, webhook_path: str) -> str:
+    s = urlsplit(webhook_url)
+    path = webhook_path.rstrip("/") + "/__ping"
+    return urlunsplit((s.scheme, s.netloc, path, "", ""))
+
+
 async def setup_app(app: web.Application, bot: Bot, dp: Dispatcher) -> None:
     path = settings.WEBHOOK_PATH.rstrip("/")
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=path)
-    app.router.add_get("/__ping", ping_handler)
+    app.router.add_get(f"/__ping/", ping_handler)
     app.router.add_post("/internal/payments/process/", internal_payment_handler)
     app.router.add_post("/internal/payments/send_message/", internal_send_payment_message)
     app.router.add_post("/internal/payments/client_request/", internal_client_request)

@@ -4,14 +4,14 @@ from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.redis import RedisStorage
 from loguru import logger
 
-from bot.utils.web import setup_app, start_web_app
+from bot.utils.web import setup_app, start_web_app, build_ping_url
 from config.logger import configure_loguru
 from core.utils.idempotency import close_redis as close_idempotency
 from config.app_settings import settings
 from bot.middlewares import ProfileMiddleware
 from bot.handlers import configure_routers
 from core.cache.base import BaseCacheManager
-from bot.utils.bot import set_bot_commands, build_ping_url, check_webhook_alive
+from bot.utils.bot import set_bot_commands, check_webhook_alive
 from core.containers import create_container, set_container, get_container
 from core.services.internal import APIService
 
@@ -60,7 +60,7 @@ async def main() -> None:
     await setup_app(app, bot, dp)
     runner = await start_web_app(app)
 
-    ping_url = build_ping_url(webhook_url, settings.WEBHOOK_PATH)
+    ping_url = build_ping_url(settings.WEBHOOK_URL, settings.WEBHOOK_PATH)
     if not await check_webhook_alive(ping_url):
         await runner.cleanup()
         await dp.emit_shutdown(bot=bot)

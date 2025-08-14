@@ -97,17 +97,6 @@ def get_webapp_url(page_type: str) -> str | None:
     return f"{base}/webapp/?type={page_type}"
 
 
-def build_ping_url(webhook_url: str, path: str) -> str:
-    url = webhook_url.rstrip("/")
-    p = path.rstrip("/")
-    if p and url.endswith(p):
-        base = url[: -len(p)]
-        base = base.rstrip("/")
-    else:
-        base = url
-    return f"{base}/__ping"
-
-
 async def check_webhook_alive(ping_url: str, timeout_seconds: float = 5.0) -> bool:
     try:
         timeout = ClientTimeout(total=timeout_seconds)
