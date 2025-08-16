@@ -48,7 +48,7 @@ async def setup_app(app: web.Application, bot: "Bot", dp: "Dispatcher") -> None:
 
 
 async def start_web_app(app: web.Application) -> web.AppRunner:
-    runner = web.AppRunner(app)
+    runner = web.AppRunner(app, access_log=None)
     await runner.setup()
     site = web.TCPSite(runner, host=settings.WEB_SERVER_HOST, port=settings.WEBHOOK_PORT)
     await site.start()

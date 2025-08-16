@@ -54,6 +54,7 @@ def _suppress_third_party_logs():
         "matplotlib": "ERROR",
         "urllib3": "WARNING",
         "asyncio": "WARNING",
+        "aiogram": "WARNING",
     }
 
     for logger_name, level in suppress_map.items():
