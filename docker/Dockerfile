@@ -14,20 +14,16 @@ ARG PG_MAJOR=17
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends gnupg curl ca-certificates; \
-    \
     CODENAME="$(. /etc/os-release && echo "$VERSION_CODENAME")"; \
-    echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt ${CODENAME}-pgdg main" \
-      > /etc/apt/sources.list.d/pgdg.list; \
+    echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt ${CODENAME}-pgdg main" > /etc/apt/sources.list.d/pgdg.list; \
     curl -sSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/pgdg.gpg; \
-    \
     apt-get update; \
     apt-get install -y --no-install-recommends \
         git gcc g++ build-essential \
-        libopenblas-dev liblapack-dev libatlas-base-dev \
+        libopenblas-dev liblapack-dev \
         libffi-dev libpq-dev \
         postgresql-client-${PG_MAJOR} \
         redis-tools; \
-    \
     apt-get purge -y --auto-remove gnupg; \
     rm -rf /var/lib/apt/lists/*
 
@@ -42,20 +38,18 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv pip install --system .
 
-# Create writable logs directory for Cognee
+# ─────────────────── logs dir for Cognee ──────────────────────
 RUN mkdir -p /usr/local/lib/python3.12/site-packages/logs \
     && chown appuser:appgroup /usr/local/lib/python3.12/site-packages/logs
 
 # ─────────────────────── project code ─────────────────────────
 COPY . .
-
 RUN chown -R appuser:appgroup /app
 USER appuser
 
 # ───────────────────────── entrypoint ─────────────────────────
 ENTRYPOINT ["/bin/sh", "-c"]
 CMD [ \
-  # → Alembic-миграции в Postgres 17 (URL берётся из env-файла)
   "alembic upgrade head && \
    python -u /app/bot/main.py" \
 ]

@@ -1,41 +1,64 @@
-# Python
+# VCS
+.git
+.git/*
+!.gitkeep
+.dumps/
+
+# Python bytecode & caches
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
 .mypy_cache/
 .pytest_cache/
+.ruff_cache/
 .coverage
 *.log
 
 # Virtualenvs
-.venv*
-env/
+.venv*/
+venv*/
+env*/
 site/
 .venv-win/
 
-# Dependency managers
-poetry.lock
-Pipfile.lock
-*.egg-info/
+# Node / frontend
+node_modules/
+*.tsbuildinfo
 dist/
 build/
 
-# Editor/IDE
-.vscode/
+# IDE / OS
 .idea/
-*.swp
-*.bak
+.vscode/
+.DS_Store
+Thumbs.db
+.junie/
 
-# Git
-.git/
-.gitignore
+# Data & artifacts
+data/
+datasets/
+downloads/
+.cache/
+.local/
+media/
+staticfiles/
+logs/
+tmp/
+tmp*/
+*.sqlite3
+*.db
+.redis/
 
-# Docker
-docker/Dockerfile
-docker/api.Dockerfile
-docker/docker-compose*.yml
-.dockerignore
-
-# Sensitive / local only
-.env
-google_creds.json
+# Project-specific large/ephemeral
+.data_storage/
+.notebooks/
 **/celerybeat-schedule*
+
+# Secrets
+.env
+.env.*
+google_creds.json
+
+# Docker context tuning
+# Do NOT ignore Dockerfiles or compose files; they must be sent with build context.

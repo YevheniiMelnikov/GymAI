@@ -60,7 +60,7 @@ async def main() -> None:
     await setup_app(app, bot, dp)
     runner = await start_web_app(app)
 
-    ping_url = build_ping_url(settings.WEBHOOK_URL, settings.WEBHOOK_PATH)
+    ping_url = build_ping_url(settings.WEBHOOK_URL)
     if not await check_webhook_alive(ping_url):
         await runner.cleanup()
         await dp.emit_shutdown(bot=bot)
