@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:17
+    image: pgvector/pgvector:pg17
     container_name: db
     env_file: ../.env
     command: ["postgres", "-c", "shared_preload_libraries=vector"]
@@ -116,7 +116,6 @@ services:
     depends_on:
       db:    { condition: service_healthy }
       redis: { condition: service_healthy }
-      bot: { condition: service_healthy }
     restart: unless-stopped
     networks: [monitoring]
     dns:
@@ -139,7 +138,6 @@ services:
     depends_on:
       db:    { condition: service_healthy }
       redis: { condition: service_healthy }
-      bot: { condition: service_healthy }
     restart: unless-stopped
     networks: [monitoring]
     dns:
