@@ -1,4 +1,13 @@
-FROM python:3.12-slim
+# --- web build ---
+FROM node:20-alpine AS webbuild
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY apps/webapp/frontend/ apps/webapp/frontend/
+RUN npm run build:webapp
+
+# --- python runtime ---
+FROM python:3.12-slim AS api
 
 ENV UV_CACHE_DIR=/root/.cache/uv
 ARG INSTALL_DEV=false
@@ -23,9 +32,12 @@ RUN if [ "$INSTALL_DEV" = "true" ]; then \
 RUN mkdir -p /usr/local/lib/python3.12/site-packages/logs \
     && chown 1000:1000 /usr/local/lib/python3.12/site-packages/logs
 
-COPY . /app
+COPY . .
+COPY --from=webbuild /app/apps/webapp/static/webapp.js apps/webapp/static/webapp.js
+RUN python manage.py collectstatic --noinput
 
 COPY docker/entrypoint.sh /app/docker/entrypoint.sh
 RUN chmod +x /app/docker/entrypoint.sh
 
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
+

@@ -11,6 +11,7 @@ async function loadProgram(): Promise<void> {
     return;
   }
   try {
+    console.log("endpoint=", endpoint, "initData.len=", initData.length);
     const response: Response = await fetch(
       `${endpoint}?init_data=${encodeURIComponent(initData)}`,
     );

@@ -11,6 +11,7 @@ async function loadProgram() {
         return;
     }
     try {
+        console.log("endpoint=", endpoint, "initData.len=", initData.length);
         const response = await fetch(`${endpoint}?init_data=${encodeURIComponent(initData)}`);
         if (response.status === 403) {
             content.innerText = "Unauthorized";
