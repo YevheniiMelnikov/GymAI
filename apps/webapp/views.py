@@ -2,6 +2,11 @@ from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.shortcuts import render
 
 from core.cache import Cache
+from core.exceptions import (
+    ProfileNotFoundError,
+    ProgramNotFoundError,
+    SubscriptionNotFoundError,
+)
 from core.schemas import DayExercises
 from loguru import logger
 from .utils import verify_init_data
@@ -24,41 +29,49 @@ def _format_full_program(exercises: list[DayExercises]) -> str:
     return "\n".join(lines).strip()
 
 
-async def program_data(request):
-    init_data = request.GET.get("init_data", "")
+async def program_data(request: HttpRequest) -> JsonResponse:
+    init_data: str = request.GET.get("init_data", "")
     logger.debug("Webapp program data requested: init_data length={}", len(init_data))
     try:
-        data = verify_init_data(init_data)
+        data: dict[str, object] = verify_init_data(init_data)
     except Exception:
         return JsonResponse({"error": "unauthorized"}, status=403)
 
-    user = data.get("user", {})
-    tg_id = int(user.get("id", 0))
+    user: dict[str, object] = data.get("user", {})  # type: ignore[arg-type]
+    tg_id: int = int(str(user.get("id", "0")))
     try:
         profile = await Cache.profile.get_profile(tg_id)
         program = await Cache.workout.get_latest_program(profile.id)
-        text = _format_full_program(program.exercises_by_day)
+    except (ProfileNotFoundError, ProgramNotFoundError):
+        logger.warning("Program not found for tg_id={}", tg_id)
+        return JsonResponse({"error": "not_found"}, status=404)
     except Exception:
-        text = ""
+        logger.exception("Failed to fetch program for tg_id={}", tg_id)
+        return JsonResponse({"error": "server_error"}, status=500)
+    text: str = _format_full_program(program.exercises_by_day)
     return JsonResponse({"program": text})
 
 
-async def subscription_data(request):
-    init_data = request.GET.get("init_data", "")
+async def subscription_data(request: HttpRequest) -> JsonResponse:
+    init_data: str = request.GET.get("init_data", "")
     logger.debug("Webapp subscription data requested: init_data length={}", len(init_data))
     try:
-        data = verify_init_data(init_data)
+        data: dict[str, object] = verify_init_data(init_data)
     except Exception:
         return JsonResponse({"error": "unauthorized"}, status=403)
 
-    user = data.get("user", {})
-    tg_id = int(user.get("id", 0))
+    user: dict[str, object] = data.get("user", {})  # type: ignore[arg-type]
+    tg_id: int = int(str(user.get("id", "0")))
     try:
         profile = await Cache.profile.get_profile(tg_id)
         subscription = await Cache.workout.get_latest_subscription(profile.id)
-        text = _format_full_program(subscription.exercises)
+    except (ProfileNotFoundError, SubscriptionNotFoundError):
+        logger.warning("Subscription not found for tg_id={}", tg_id)
+        return JsonResponse({"error": "not_found"}, status=404)
     except Exception:
-        text = ""
+        logger.exception("Failed to fetch subscription for tg_id={}", tg_id)
+        return JsonResponse({"error": "server_error"}, status=500)
+    text: str = _format_full_program(subscription.exercises)
     return JsonResponse({"program": text})
 
 
