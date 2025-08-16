@@ -30,7 +30,7 @@ def _format_full_program(exercises: list[DayExercises]) -> str:
 
 
 async def program_data(request: HttpRequest) -> JsonResponse:
-    init_data: str = request.GET.get("init_data", "")
+    init_data: str = str(request.GET.get("init_data", ""))
     logger.debug("Webapp program data requested: init_data length={}", len(init_data))
     try:
         data: dict[str, object] = verify_init_data(init_data)
@@ -53,7 +53,7 @@ async def program_data(request: HttpRequest) -> JsonResponse:
 
 
 async def subscription_data(request: HttpRequest) -> JsonResponse:
-    init_data: str = request.GET.get("init_data", "")
+    init_data: str = str(request.GET.get("init_data", ""))
     logger.debug("Webapp subscription data requested: init_data length={}", len(init_data))
     try:
         data: dict[str, object] = verify_init_data(init_data)
