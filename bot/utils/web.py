@@ -2,16 +2,6 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit, urlunsplit
 
 from aiohttp import web
-
-from bot.handlers.internal import (
-    internal_payment_handler,
-    internal_send_payment_message,
-    internal_client_request,
-    internal_send_daily_survey,
-    internal_send_workout_result,
-    internal_export_coach_payouts,
-    internal_prune_cognee,
-)
 from config.app_settings import settings
 
 if TYPE_CHECKING:
@@ -34,6 +24,15 @@ def build_ping_url(webhook_url: str | None) -> str:
 
 async def setup_app(app: web.Application, bot: "Bot", dp: "Dispatcher") -> None:
     from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+    from bot.handlers.internal import (
+        internal_payment_handler,
+        internal_send_payment_message,
+        internal_client_request,
+        internal_send_daily_survey,
+        internal_send_workout_result,
+        internal_export_coach_payouts,
+        internal_prune_cognee,
+    )
 
     path = settings.WEBHOOK_PATH.rstrip("/")
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=path)

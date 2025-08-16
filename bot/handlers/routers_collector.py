@@ -1,4 +1,9 @@
-from aiogram import Dispatcher
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from aiogram import Dispatcher, Router
+else:  # pragma: no cover - runtime imports
+    Dispatcher = Router = Any
 
 from bot.handlers.admin_handler import admin_router
 from bot.handlers.chat_handler import chat_router
@@ -10,8 +15,8 @@ from bot.handlers.questionnaire_handler import questionnaire_router
 from bot.handlers.workout_handler import workout_router
 
 
-def configure_routers(dp: Dispatcher) -> None:
-    routers = [
+def configure_routers(dp: "Dispatcher") -> None:
+    routers: list["Router"] = [
         admin_router,
         cmd_router,
         questionnaire_router,

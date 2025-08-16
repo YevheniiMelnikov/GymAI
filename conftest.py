@@ -164,6 +164,7 @@ settings_stub = types.SimpleNamespace(
     TIME_ZONE="Europe/Kyiv",
     PAYMENT_PRIVATE_KEY="priv",
     PAYMENT_PUB_KEY="pub",
+    WEBHOOK_PATH="/telegram/webhook",
 )
 sys.modules.setdefault("config.app_settings", types.ModuleType("config.app_settings"))
 sys.modules["config.app_settings"].settings = settings_stub
