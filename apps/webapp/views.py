@@ -1,28 +1,10 @@
-import hashlib
-import hmac
-import json
-from urllib.parse import parse_qsl
-
 from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.shortcuts import render
 
-from config.app_settings import settings
 from core.cache import Cache
 from core.schemas import DayExercises
 from loguru import logger
-
-
-def _verify_init_data(init_data: str) -> dict:
-    data = dict(parse_qsl(init_data, keep_blank_values=True))
-    received_hash = data.pop("hash", None)
-    check_string = "\n".join(f"{k}={v}" for k, v in sorted(data.items()))
-    secret_key = hashlib.sha256(settings.BOT_TOKEN.encode()).digest()
-    calculated_hash = hmac.new(secret_key, check_string.encode(), hashlib.sha256).hexdigest()
-    if calculated_hash != received_hash:
-        raise ValueError("Invalid init data")
-    if "user" in data:
-        data["user"] = json.loads(data["user"])
-    return data
+from .utils import verify_init_data
 
 
 def _format_full_program(exercises: list[DayExercises]) -> str:
@@ -46,7 +28,7 @@ async def program_data(request):
     init_data = request.GET.get("init_data", "")
     logger.debug("Webapp program data requested: init_data length={}", len(init_data))
     try:
-        data = _verify_init_data(init_data)
+        data = verify_init_data(init_data)
     except Exception:
         return JsonResponse({"error": "unauthorized"}, status=403)
 
@@ -65,7 +47,7 @@ async def subscription_data(request):
     init_data = request.GET.get("init_data", "")
     logger.debug("Webapp subscription data requested: init_data length={}", len(init_data))
     try:
-        data = _verify_init_data(init_data)
+        data = verify_init_data(init_data)
     except Exception:
         return JsonResponse({"error": "unauthorized"}, status=403)
 
