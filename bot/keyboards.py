@@ -284,6 +284,7 @@ def program_view_kb(lang: str, webapp_url: str | None = None) -> KbMarkup:
     ]
 
     if webapp_url:
+        print(webapp_url)
         buttons.append([KbBtn(text=btn_text("view", lang), web_app=WebAppInfo(url=webapp_url))])
 
     buttons.append([builder.add("quit", "quit")])
