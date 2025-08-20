@@ -3,14 +3,11 @@ from __future__ import annotations
 import logging
 import os
 import warnings
-from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, AsyncIterator, Type
-from urllib.parse import urlparse
+from typing import Any, Type
 from uuid import uuid4
 
 import cognee
-from cognee.base_config import get_base_config
 from loguru import logger
 from openai import AsyncOpenAI
 from sqlalchemy import schema as sa_schema
@@ -88,19 +85,12 @@ class CogneeConfig:
         """Apply custom patches to Cognee modules."""
         try:
             from cognee.infrastructure.databases.vector.embeddings import LiteLLMEmbeddingEngine
-            from cognee.infrastructure.files.storage.LocalFileStorage import LocalFileStorage, get_parsed_path
-            from cognee.infrastructure.files.utils import open_data_file as orig_open_data_file
             from cognee.modules.data.models.graph_relationship_ledger import GraphRelationshipLedger
-            from cognee.infrastructure.llm.structured_output_framework.litellm_instructor.llm.generic_llm_api.adapter import (  # noqa
-                GenericAPIAdapter,
-            )
-            import cognee.infrastructure.files.utils as file_utils
+            from cognee.infrastructure.llm.generic_llm_api.adapter import GenericAPIAdapter
 
             CogneeConfig._patch_graph_relationship_ledger(GraphRelationshipLedger)
             CogneeConfig._patch_litellm_embedding_engine(LiteLLMEmbeddingEngine)  # pyrefly: ignore[bad-argument-type]
             CogneeConfig._patch_generic_api_adapter(GenericAPIAdapter)
-            CogneeConfig._patch_open_data_file(file_utils, orig_open_data_file, LocalFileStorage)
-            CogneeConfig._patch_local_file_storage(LocalFileStorage, get_parsed_path)
 
         except Exception as e:
             logger.debug(f"Cognee patch failed: {e}")
@@ -138,46 +128,3 @@ class CogneeConfig:
                 target.default_headers.update({"HTTP-Referer": "https://gymbot.local", "X-Title": "GymBot"})
 
         adapter_cls.__init__ = new_init  # pyrefly: ignore[implicitly-defined-attribute]
-
-    @staticmethod
-    def _patch_open_data_file(file_utils: Any, orig_open: Any, local_storage_cls: Type) -> None:
-        """Patch open_data_file to handle Windows paths and file URIs robustly."""
-
-        @asynccontextmanager
-        async def fixed_open_data_file(
-            file_path: str, mode: str = "rb", encoding: str | None = None, **kwargs: Any
-        ) -> AsyncIterator[Any]:
-            if ":" in file_path and "\\" in file_path:
-                file_path = "file://" + file_path.replace("\\", "/")
-
-            if file_path.startswith("file://"):
-                parsed = urlparse(file_path)
-                path_str = (parsed.path or parsed.netloc).replace("\\", "/").lstrip("/")
-                if len(path_str) > 1 and path_str[1] == ":":  # Handle Windows drive letters
-                    path_str = path_str[1:]
-
-                abs_path = Path(path_str).resolve()
-                if not abs_path.exists():
-                    abs_path = Path(get_base_config().data_root_directory) / abs_path.name
-
-                storage = local_storage_cls(str(abs_path.parent))
-                with storage.open(abs_path.name, mode=mode, encoding=encoding, **kwargs) as f:
-                    yield f
-            else:
-                async with orig_open(file_path, mode=mode, encoding=encoding, **kwargs) as f:
-                    yield f
-
-        file_utils.open_data_file = fixed_open_data_file  # pyrefly: ignore[implicitly-defined-attribute]
-
-    @staticmethod
-    def _patch_local_file_storage(storage_cls: Type, get_parsed_path_fn: Any) -> None:
-        """Patch LocalFileStorage.open to ensure the storage directory exists."""
-        orig_open = storage_cls.open
-
-        def ensure_open(self: Any, file_path: str, mode: str = "rb", *args: Any, **kwargs: Any) -> Any:
-            path = Path(get_parsed_path_fn(self.storage_path)).resolve()
-            path.mkdir(parents=True, exist_ok=True)
-            self.storage_path = str(path)
-            return orig_open(self, file_path, mode=mode, *args, **kwargs)
-
-        storage_cls.open = ensure_open  # pyrefly: ignore[implicitly-defined-attribute]

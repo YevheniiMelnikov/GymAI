@@ -50,6 +50,7 @@ RUN --mount=type=cache,target=/root/.cache/uv bash -lc '\
 FROM py-base AS py-runtime
 COPY --from=deps-app /usr/local /usr/local
 COPY . /app
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
 
 FROM py-runtime AS api-runtime
@@ -59,4 +60,5 @@ ENTRYPOINT ["/app/docker/entrypoint.sh"]
 FROM py-base AS coach-runtime
 COPY --from=deps-coach /usr/local /usr/local
 COPY . /app
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 ENTRYPOINT ["/app/docker/entrypoint.sh"]

@@ -26,13 +26,14 @@ x-common-env: &common_env
 
 services:
   db:
-    image: postgres:17
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_DB: "${DB_NAME}"
       POSTGRES_USER: "${DB_USER}"
       POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
       POSTGRES_HOST: "${DB_HOST}"
       POSTGRES_PORT: "${DB_PORT}"
+    command: [ "postgres", "-c", "shared_preload_libraries=vector" ]
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -62,11 +63,26 @@ services:
         EXTRAS: ""
     <<: *common_env
     entrypoint: /app/docker/entrypoint.sh
-    command: gunicorn config.asgi:application --bind 0.0.0.0:8000 --workers 3
     environment:
       - RUN_MIGRATIONS=true
     ports:
       - "${HOST_API_PORT:-8000}:8000"
+    command: >
+      gunicorn config.asgi:application
+      --worker-class uvicorn.workers.UvicornWorker
+      --bind 0.0.0.0:8000
+      --workers 2
+      --timeout 60
+      --access-logfile -
+      --error-logfile -
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health/"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+    volumes:
+      - staticfiles:/app/staticfiles
     restart: unless-stopped
 
   celery_worker:

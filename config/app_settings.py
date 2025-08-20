@@ -73,7 +73,7 @@ class Settings(BaseSettings):
     BOT_TOKEN: str
     BOT_LINK: str
     WEBHOOK_HOST: str
-    WEBHOOK_PORT: int
+    HOST_NGINX_PORT: Annotated[str, Field(default="8000")]
     WEBAPP_PUBLIC_URL: Annotated[str | None, Field(default=None)]
 
     GOOGLE_APPLICATION_CREDENTIALS: str

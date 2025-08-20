@@ -6,7 +6,6 @@ env_defaults = {
     "BOT_TOKEN": "bot_token",
     "BOT_LINK": "http://bot",
     "WEBHOOK_HOST": "http://localhost",
-    "WEBHOOK_PORT": "8000",
     "GOOGLE_APPLICATION_CREDENTIALS": "/tmp/creds.json",
     "SPREADSHEET_ID": "sheet",
     "TG_SUPPORT_CONTACT": "@support",
