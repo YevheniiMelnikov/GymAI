@@ -1,55 +1,62 @@
-# ───────────────────────── base image ─────────────────────────
-FROM python:3.12-slim
+# syntax=docker/dockerfile:1.7
 
-# ───────────────────────── env vars ───────────────────────────
-ENV \
-  UV_CACHE_DIR=/root/.cache/uv \
-  PYTHONDONTWRITEBYTECODE=1 \
-  PYTHONUNBUFFERED=1 \
-  PYTHONPATH=/app:/app
-
-ARG PG_MAJOR=17
-
-# ─────────────────── system & build deps ──────────────────────
-RUN set -eux; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends gnupg curl ca-certificates; \
-    CODENAME="$(. /etc/os-release && echo "$VERSION_CODENAME")"; \
-    echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] https://apt.postgresql.org/pub/repos/apt ${CODENAME}-pgdg main" > /etc/apt/sources.list.d/pgdg.list; \
-    curl -sSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor -o /usr/share/keyrings/pgdg.gpg; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends \
-        git gcc g++ build-essential \
-        libopenblas-dev liblapack-dev \
-        libffi-dev libpq-dev \
-        postgresql-client-${PG_MAJOR} \
-        redis-tools; \
-    apt-get purge -y --auto-remove gnupg; \
-    rm -rf /var/lib/apt/lists/*
-
-# ──────────────────────── uv installer ────────────────────────
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-
-# ─────────────────────────── user ─────────────────────────────
-RUN groupadd -g 1000 appgroup && useradd -u 1000 -g appgroup -m appuser
-
-# ─────────────────────── Python deps ──────────────────────────
+FROM python:3.12-slim AS py-base
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    UV_SYSTEM_PYTHON=1
 WORKDIR /app
-COPY pyproject.toml uv.lock ./
-RUN uv pip install --system .
 
-# ─────────────────── logs dir for Cognee ──────────────────────
-RUN mkdir -p /usr/local/lib/python3.12/site-packages/logs \
-    && chown appuser:appgroup /usr/local/lib/python3.12/site-packages/logs
+FROM ghcr.io/astral-sh/uv:0.4.20 AS uvbin
 
-# ─────────────────────── project code ─────────────────────────
-COPY . .
-RUN chown -R appuser:appgroup /app
-USER appuser
+FROM node:20-alpine AS webbuild
+WORKDIR /app
+COPY package*.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci
+COPY apps/webapp/frontend/ apps/webapp/frontend/
+RUN npm run build:webapp
 
-# ───────────────────────── entrypoint ─────────────────────────
-ENTRYPOINT ["/bin/sh", "-c"]
-CMD [ \
-  "alembic upgrade head && \
-   python -u /app/bot/main.py" \
-]
+FROM py-base AS deps-app
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends curl libpq5 && rm -rf /var/lib/apt/lists/*
+COPY --from=uvbin /uv /usr/local/bin/uv
+ARG EXTRAS=""
+ARG INSTALL_DEV="false"
+COPY pyproject.toml ./
+RUN --mount=type=cache,target=/root/.cache/uv bash -lc '\
+    EXTLIST="$EXTRAS"; \
+    if [ "$INSTALL_DEV" = "true" ]; then \
+      if [ -n "$EXTLIST" ]; then EXTLIST="$EXTLIST,dev"; else EXTLIST="dev"; fi; \
+    fi; \
+    if [ -n "$EXTLIST" ]; then PKG=".[${EXTLIST}]"; else PKG="."; fi; \
+    uv pip install --system "$PKG" \
+  '
+
+FROM py-base AS deps-coach
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends git gcc g++ build-essential libpq-dev && rm -rf /var/lib/apt/lists/*
+COPY --from=uvbin /uv /usr/local/bin/uv
+ARG EXTRAS="coach"
+ARG INSTALL_DEV="false"
+COPY pyproject.toml ./
+RUN --mount=type=cache,target=/root/.cache/uv bash -lc '\
+    EXTLIST="$EXTRAS"; \
+    if [ "$INSTALL_DEV" = "true" ]; then EXTLIST="$EXTLIST,dev"; fi; \
+    uv pip install --system ".[$EXTLIST]" \
+  '
+
+FROM py-base AS py-runtime
+COPY --from=deps-app /usr/local /usr/local
+COPY . /app
+ENTRYPOINT ["/app/docker/entrypoint.sh"]
+
+FROM py-runtime AS api-runtime
+COPY --from=webbuild /app/apps/webapp/static /app/apps/webapp/static
+ENTRYPOINT ["/app/docker/entrypoint.sh"]
+
+FROM py-base AS coach-runtime
+COPY --from=deps-coach /usr/local /usr/local
+COPY . /app
+ENTRYPOINT ["/app/docker/entrypoint.sh"]

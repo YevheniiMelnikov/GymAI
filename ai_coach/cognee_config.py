@@ -90,8 +90,10 @@ class CogneeConfig:
             from cognee.infrastructure.databases.vector.embeddings import LiteLLMEmbeddingEngine
             from cognee.infrastructure.files.storage.LocalFileStorage import LocalFileStorage, get_parsed_path
             from cognee.infrastructure.files.utils import open_data_file as orig_open_data_file
-            from cognee.infrastructure.llm.generic_llm_api.adapter import GenericAPIAdapter
             from cognee.modules.data.models.graph_relationship_ledger import GraphRelationshipLedger
+            from cognee.infrastructure.llm.structured_output_framework.litellm_instructor.llm.generic_llm_api.adapter import (  # noqa
+                GenericAPIAdapter,
+            )
             import cognee.infrastructure.files.utils as file_utils
 
             CogneeConfig._patch_graph_relationship_ledger(GraphRelationshipLedger)

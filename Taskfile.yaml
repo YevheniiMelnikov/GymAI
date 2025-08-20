@@ -42,7 +42,7 @@ tasks:
     desc: Update dependencies (main + dev)
     cmds:
       - uv lock --upgrade
-      - uv sync --extra dev
+      - uv sync --all-extras
       - echo "✅ Dependencies updated"
 
   pre-commit:
