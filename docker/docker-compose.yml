@@ -77,9 +77,9 @@ services:
       --error-logfile -
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/health/"]
-      interval: 10s
+      interval: 60s
       timeout: 5s
-      retries: 6
+      retries: 5
       start_period: 30s
     volumes:
       - staticfiles:/app/staticfiles
