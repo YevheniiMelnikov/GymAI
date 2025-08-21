@@ -1,19 +1,27 @@
+import inspect
 import json
+from collections.abc import Awaitable
 from json import JSONDecodeError
+from typing import cast
+
 from loguru import logger
 from pydantic import ValidationError
 
 from .base import BaseCacheManager
+from core.containers import get_container
 from core.exceptions import ProfileNotFoundError
 from core.schemas import Profile
-from core.containers import get_container
+from core.services.internal.profile_service import ProfileService
 
 
 class ProfileCacheManager(BaseCacheManager):
     @classmethod
     async def _fetch_from_service(cls, cache_key: str, field: str, *, use_fallback: bool) -> Profile:
-        service = get_container().profile_service()
-        profile = await service.get_profile_by_tg_id(int(field))
+        service: ProfileService | Awaitable[ProfileService] = get_container().profile_service()
+        if inspect.isawaitable(service):
+            service = await cast(Awaitable[ProfileService], service)
+        profile_service: ProfileService = cast(ProfileService, service)
+        profile: Profile | None = await profile_service.get_profile_by_tg_id(int(field))
         if profile is None:
             raise ProfileNotFoundError(int(field))
         return profile
