@@ -58,6 +58,14 @@ class APIClient:
 
         return convert(obj)
 
+    def _build_url(self, path: str) -> str:
+        base = self.api_url
+        part = path.lstrip("/")
+        tail = base.split("://", 1)[-1]
+        if tail.endswith("/api") and part.startswith("api/"):
+            part = part[4:]
+        return f"{base}/{part}"
+
     async def _api_request(
         self,
         method: str,

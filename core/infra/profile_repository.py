@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from decimal import Decimal
 from typing import Any
-from urllib.parse import urljoin
-
 import httpx
 from loguru import logger
 
@@ -26,7 +24,7 @@ class HTTPProfileRepository(APIClient):
         return Profile(**data)
 
     async def get_profile(self, profile_id: int) -> Profile | None:
-        url = urljoin(self.api_url, f"api/v1/profiles/{profile_id}/")
+        url = self._build_url(f"api/v1/profiles/{profile_id}/")
         status, data = await self._api_request("get", url, headers={"Authorization": f"Api-Key {self.api_key}"})
         if status == 200 and data:
             return self._parse_profile(data)
@@ -34,14 +32,14 @@ class HTTPProfileRepository(APIClient):
         return None
 
     async def get_profile_by_tg_id(self, tg_id: int) -> Profile | None:
-        url = urljoin(self.api_url, f"api/v1/profiles/tg/{tg_id}/")
+        url = self._build_url(f"api/v1/profiles/tg/{tg_id}/")
         status, data = await self._api_request("get", url, headers={"Authorization": f"Api-Key {self.api_key}"})
         if status == 200 and data:
             return self._parse_profile(data)
         return None
 
     async def create_profile(self, tg_id: int, role: str, language: str) -> Profile | None:
-        url = urljoin(self.api_url, "api/v1/profiles/")
+        url = self._build_url("api/v1/profiles/")
         payload = {"tg_id": tg_id, "role": role, "language": language}
         status_code, data = await self._api_request(
             "post", url, payload, headers={"Authorization": f"Api-Key {self.api_key}"}
@@ -49,11 +47,11 @@ class HTTPProfileRepository(APIClient):
         if status_code == 201 and data:
             logger.info(f"Profile created tg_id={tg_id}")
             return self._parse_profile(data)
-        logger.error(f"Failed to create profile tg_id={tg_id}. HTTP={status_code}")
+        logger.error(f"Failed to create profile tg_id={tg_id} url={url}. HTTP={status_code}")
         return None
 
     async def delete_profile(self, profile_id: int, token: str | None = None) -> bool:
-        url = urljoin(self.api_url, f"api/v1/profiles/{profile_id}/delete/")
+        url = self._build_url(f"api/v1/profiles/{profile_id}/delete/")
         headers = {"Authorization": f"Token {token}"} if token else {}
         status_code, _ = await self._api_request("delete", url, headers=headers)
         if status_code == 204:
@@ -66,7 +64,7 @@ class HTTPProfileRepository(APIClient):
         return False
 
     async def update_profile(self, profile_id: int, data: dict[str, Any]) -> bool:
-        url = urljoin(self.api_url, f"api/v1/profiles/{profile_id}/")
+        url = self._build_url(f"api/v1/profiles/{profile_id}/")
         status, _ = await self._api_request("put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"})
         if status in (200, 204):
             logger.info(f"Profile id={profile_id} updated")
@@ -75,7 +73,7 @@ class HTTPProfileRepository(APIClient):
         return False
 
     async def create_client_profile(self, profile_id: int, data: dict[str, Any] | None = None) -> Client | None:
-        url = urljoin(self.api_url, "api/v1/client-profiles/")
+        url = self._build_url("api/v1/client-profiles/")
         payload: dict[str, Any] = {"profile": profile_id}
         if data:
             payload.update(data)
@@ -89,7 +87,7 @@ class HTTPProfileRepository(APIClient):
         return None
 
     async def update_client_profile(self, client_profile_id: int, data: dict[str, Any]) -> bool:
-        url = urljoin(self.api_url, f"api/v1/client-profiles/pk/{client_profile_id}/")
+        url = self._build_url(f"api/v1/client-profiles/pk/{client_profile_id}/")
         data = {k: v for k, v in data.items() if k != "profile"}
         status, _ = await self._api_request("patch", url, data, headers={"Authorization": f"Api-Key {self.api_key}"})
         if status in (200, 204):
@@ -118,7 +116,7 @@ class HTTPProfileRepository(APIClient):
         return await self.update_coach_profile(coach.id, {"payout_due": str(new_due)})
 
     async def create_coach_profile(self, profile_id: int, data: dict[str, Any] | None = None) -> Coach | None:
-        url = urljoin(self.api_url, "api/v1/coach-profiles/")
+        url = self._build_url("api/v1/coach-profiles/")
         payload: dict[str, Any] = {"profile": profile_id}
         if data:
             data.pop("profile", None)
@@ -139,7 +137,7 @@ class HTTPProfileRepository(APIClient):
         return None
 
     async def update_coach_profile(self, coach_id: int, data: dict[str, Any]) -> bool:
-        url = urljoin(self.api_url, f"api/v1/coach-profiles/pk/{coach_id}/")
+        url = self._build_url(f"api/v1/coach-profiles/pk/{coach_id}/")
 
         for price_field in ("program_price", "subscription_price"):
             if price_field in data and isinstance(data[price_field], Decimal):
@@ -155,7 +153,7 @@ class HTTPProfileRepository(APIClient):
         return False
 
     async def _get_by_profile(self, tail: str, model):
-        url = urljoin(self.api_url, tail)
+        url = self._build_url(tail)
         status, data = await self._api_request("get", url, headers={"Authorization": f"Api-Key {self.api_key}"})
         if status == 200 and data:
             return model.model_validate(data)
@@ -176,7 +174,7 @@ class HTTPProfileRepository(APIClient):
         return await self.get_coach_by_profile_id(profile.id) if profile else None
 
     async def list_coach_profiles(self) -> list[Coach]:
-        url = urljoin(self.api_url, "api/v1/coach-profiles/")
+        url = self._build_url("api/v1/coach-profiles/")
         status, data = await self._api_request(
             "get",
             url,
