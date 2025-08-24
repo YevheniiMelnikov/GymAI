@@ -52,7 +52,9 @@ class Settings(BaseSettings):
 
     API_KEY: str
     SECRET_KEY: str
-    API_URL: str
+    API_HOST: Annotated[str, Field(default="http://127.0.0.1")]
+    HOST_API_PORT: Annotated[str, Field(default="8000")]
+    API_URL: Annotated[str | None, Field(default=None)]
     ALLOWED_HOSTS: Annotated[list[str], Field(default=["localhost", "127.0.0.1"])]
     SITE_NAME: Annotated[str, Field(default="AchieveTogether")]
 
@@ -100,17 +102,16 @@ class Settings(BaseSettings):
     WEBHOOK_URL: str | None = None
     PAYMENT_CALLBACK_URL: str | None = None
 
-    # PRICING
     PACKAGE_START_CREDITS: int = 500
-    PACKAGE_START_PRICE: Decimal = Decimal("250")  # UAH
+    PACKAGE_START_PRICE: Decimal = Decimal("250")
     PACKAGE_OPTIMUM_CREDITS: int = 1200
-    PACKAGE_OPTIMUM_PRICE: Decimal = Decimal("500")  # UAH
+    PACKAGE_OPTIMUM_PRICE: Decimal = Decimal("500")
     PACKAGE_MAX_CREDITS: int = 6200
-    PACKAGE_MAX_PRICE: Decimal = Decimal("2300")  # UAH
+    PACKAGE_MAX_PRICE: Decimal = Decimal("2300")
 
     AI_PROGRAM_PRICE: Decimal = Decimal("350")
-    REGULAR_AI_SUBSCRIPTION_PRICE: Decimal = Decimal("450")  # 1 month
-    LARGE_AI_SUBSCRIPTION_PRICE: Decimal = Decimal("2000")  # 6 months
+    REGULAR_AI_SUBSCRIPTION_PRICE: Decimal = Decimal("450")
+    LARGE_AI_SUBSCRIPTION_PRICE: Decimal = Decimal("2000")
     ASK_AI_PRICE: Decimal = Decimal("10")
 
     model_config = {
@@ -133,7 +134,9 @@ class Settings(BaseSettings):
         # PAYMENT_CALLBACK_URL
         if not self.PAYMENT_CALLBACK_URL:
             self.PAYMENT_CALLBACK_URL = f"{self.WEBHOOK_HOST}/payment-webhook/"
-
+        if not self.API_URL:
+            base = str(self.API_HOST).rstrip("/")
+            self.API_URL = f"{base}:{self.HOST_API_PORT}/"
         return self
 
     @property
