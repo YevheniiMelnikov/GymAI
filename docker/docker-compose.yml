@@ -157,6 +157,13 @@ services:
     <<: *common_env
     entrypoint: /app/docker/entrypoint.sh
     command: python -m bot.main
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      ai_coach:
+        condition: service_healthy
     restart: unless-stopped
 
   nginx:
