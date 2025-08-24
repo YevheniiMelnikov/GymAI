@@ -26,7 +26,7 @@ class APIClient:
     def __init__(self, client: httpx.AsyncClient, settings: APISettings) -> None:
         self.client = client
         self.settings = settings
-        self.api_url = settings.API_URL
+        self.api_url = settings.API_URL.rstrip("/")
         self.api_key = settings.API_KEY
         self.use_default_auth = True
         self.max_retries = settings.API_MAX_RETRIES
@@ -57,6 +57,14 @@ class APIClient:
             return value
 
         return convert(obj)
+
+    def _build_url(self, path: str) -> str:
+        base = self.api_url
+        part = path.lstrip("/")
+        tail = base.split("://", 1)[-1]
+        if tail.endswith("/api") and part.startswith("api/"):
+            part = part[4:]
+        return f"{base}/{part}"
 
     async def _api_request(
         self,

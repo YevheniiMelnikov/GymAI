@@ -52,3 +52,25 @@ async def test_get_profile_not_found(monkeypatch):
     monkeypatch.setattr(repo, "_api_request", fake_request)
     profile = await repo.get_profile(1)
     assert profile is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("api_url", "expected"),
+    [
+        ("http://api/", "http://api/api/v1/profiles/"),
+        ("http://api/api/", "http://api/api/v1/profiles/"),
+    ],
+)
+async def test_create_profile_url(monkeypatch, api_url: str, expected: str):
+    settings = _settings()
+    settings.API_URL = api_url
+    repo = HTTPProfileRepository(_Client(), settings)  # pyrefly: ignore[bad-argument-type]
+
+    async def fake_request(method, url, data=None, headers=None):
+        assert url == expected
+        return 404, None
+
+    monkeypatch.setattr(repo, "_api_request", fake_request)
+    profile = await repo.create_profile(1, "user", "eng")
+    assert profile is None

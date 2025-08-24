@@ -75,6 +75,8 @@ class Settings(BaseSettings):
     WEBHOOK_HOST: str
     HOST_NGINX_PORT: Annotated[str, Field(default="8000")]
     WEBAPP_PUBLIC_URL: Annotated[str | None, Field(default=None)]
+    WEB_SERVER_HOST: Annotated[str, Field(default="0.0.0.0")]
+    BOT_PORT: Annotated[int, Field(default=8088)]
 
     GOOGLE_APPLICATION_CREDENTIALS: str
     GDRIVE_FOLDER_ID: str | None = None
