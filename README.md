@@ -75,7 +75,7 @@ Local development options:
 * Run the bot locally from your IDE or terminal:
 
   * Ensure Redis and API are up (via `task localrun`).
-  * Ensure your `docker/.env` has WEBHOOK\_HOST and WEBHOOK\_PORT (e.g., WEBHOOK\_HOST=[http://localhost:9090](http://localhost:9090), WEBHOOK\_PORT=8001).
+  * Ensure your `docker/.env` has WEBHOOK\_HOST and WEBHOOK\_PORT (e.g., WEBHOOK\_HOST=[http://localhost:9090](http://localhost:9090), WEBHOOK\_PORT=8080).
   * Start the bot: `uv run python -m bot.main`.
   * Local Nginx forwards webhooks to `host.docker.internal:8088` as configured in `docker/nginx.local.conf`.
 

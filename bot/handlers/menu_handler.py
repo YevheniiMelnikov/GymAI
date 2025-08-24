@@ -239,21 +239,21 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
         return
 
     request_id = str(uuid4())
-    ttl = 300
+
     if service == "program":
-        if not await acquire_once(f"gen_program:{client.id}", ttl):
+        if not await acquire_once(f"gen_program:{client.id}", settings.LLM_COOLDOWN):
             logger.warning(
                 "Duplicate program generation suppressed for client_id={} request_id={}",
                 client.id,
                 request_id,
             )
-            await callback_query.answer("\u23f3")
             await del_msg(callback_query)
             return
-        logger.info(
+
+        logger.debug(
             "Program generation started for client_id={} ttl={} request_id={}",
             client.id,
-            ttl,
+            settings.LLM_COOLDOWN,
             request_id,
         )
 

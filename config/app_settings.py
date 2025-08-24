@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     LLM_API_KEY: Annotated[str, Field(default="")]
     LLM_MODEL: Annotated[str, Field(default="gpt-4o")]
     LLM_PROVIDER: Annotated[str, Field(default="custom")]
+    LLM_COOLDOWN: Annotated[int, Field(default=60)]
 
     EMBEDDING_MODEL: Annotated[str, Field(default="openai/text-embedding-3-large")]
     EMBEDDING_PROVIDER: Annotated[str, Field(default="openai")]
