@@ -77,7 +77,7 @@ Local development options:
   * Ensure Redis and API are up (via `task localrun`).
   * Ensure your `docker/.env` has WEBHOOK\_HOST and WEBHOOK\_PORT (e.g., WEBHOOK\_HOST=[http://localhost:9090](http://localhost:9090), WEBHOOK\_PORT=8001).
   * Start the bot: `uv run python -m bot.main`.
-  * Local Nginx forwards webhooks to `host.docker.internal:8001` as configured in `docker/nginx.local.conf`.
+  * Local Nginx forwards webhooks to `host.docker.internal:8088` as configured in `docker/nginx.local.conf`.
 
 ---
 
@@ -269,7 +269,7 @@ Required:
 * API\_KEY – internal API key for bot/API communication
 * BOT\_TOKEN – Telegram bot token
 * WEBHOOK\_HOST – base URL for webhooks (e.g., [http://localhost:9090](http://localhost:9090) for local nginx)
-* WEBHOOK\_PORT – port the bot’s aiohttp server listens on (e.g., 8001 when running locally)
+* WEBHOOK\_PORT – port the bot’s aiohttp server listens on (e.g., 8088 when running locally)
 * BOT\_LINK – public t.me link
 * API\_URL – base URL of the Django API (e.g., [http://api:8000/](http://api:8000/) in Docker, [http://localhost:8000/](http://localhost:8000/) locally)
 * POSTGRES\_PASSWORD – password for the DB user (used as DB\_PASSWORD)
