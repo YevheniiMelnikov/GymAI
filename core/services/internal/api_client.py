@@ -91,7 +91,7 @@ class APIClient:
                         try:
                             return resp.status_code, resp.json()
                         except JSONDecodeError:
-                            logger.warning("Failed to decode JSON from response for %s", url)
+                            logger.warning(f"Failed to decode JSON from response for {url}")
                             return resp.status_code, None
                     return resp.status_code, None
 
@@ -107,20 +107,19 @@ class APIClient:
                 if resp.status_code == 404:
                     return resp.status_code, error_data
 
-                logger.error("Request to %s failed with HTTP=%s, response: %s", url, resp.status_code, error_data)
+                if resp.status_code == 403:
+                    logger.error(
+                        f"Request to {url} failed with HTTP=403 Forbidden. Verify API key. Response: {error_data}"
+                    )
+                else:
+                    logger.error(f"Request to {url} failed with HTTP={resp.status_code}, response: {error_data}")
 
                 if resp.status_code >= 500 or resp.status_code == 429:
                     raise httpx.HTTPStatusError("Retryable error", request=resp.request, response=resp)
                 return resp.status_code, error_data
 
             except (httpx.HTTPStatusError, httpx.HTTPError) as e:
-                logger.warning(
-                    "Attempt %s failed: %s: %r. Retrying in %.1fs...",
-                    attempt,
-                    type(e).__name__,
-                    e,
-                    delay,
-                )
+                logger.warning(f"Attempt {attempt} failed: {type(e).__name__}: {e!r}. Retrying in {delay:.1f}s...")
                 if attempt == self.max_retries:
                     raise UserServiceError(
                         f"Request to {url} failed after {attempt} attempts: {type(e).__name__}: {e!r}"

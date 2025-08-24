@@ -523,14 +523,14 @@ async def paginate_coaches(cbq: CallbackQuery, state: FSMContext, bot: Bot) -> N
 
         selected_coach = next((c for c in coaches if c.id == coach_id), None)
         if selected_coach is None:
-            logger.warning("Coach not found for id %s", coach_id)
+            logger.warning(f"Coach not found for id {coach_id}")
             await message.answer(msg_text("unexpected_error", profile.language))
             return
 
         try:
             client = await Cache.client.get_client(profile.id)
         except ClientNotFoundError:
-            logger.warning("Client not found for profile_id %s", profile.id)
+            logger.warning(f"Client not found for profile_id {profile.id}")
             await message.answer(msg_text("unexpected_error", profile.language))
             return
 

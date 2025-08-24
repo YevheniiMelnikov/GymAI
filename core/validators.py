@@ -1,21 +1,22 @@
-from typing import TypeVar, Type, cast
+from typing import Any, TypeVar, cast
 from pydantic import BaseModel, ValidationError
 from loguru import logger
 
 from config.app_settings import settings
 from core.exceptions import UserServiceError
 
-T = TypeVar("T", bound=BaseModel)
+ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
-def validate_or_raise(data: dict, model_cls: Type[T], context: str = "") -> T:
+def validate_or_raise(data: dict[str, Any], model_cls: type[ModelT], context: str = "") -> ModelT:
     try:
-        validated = model_cls.model_validate(data)
-        return cast(T, validated)
+        return model_cls.model_validate(data)
     except ValidationError as e:
-        msg = f"Validation failed for {model_cls.__name__}{' in ' + context if context else ''}: {e}"
+        name = cast(str, getattr(model_cls, "__name__", model_cls.__class__.__name__))
+        context_text = f" in {context}" if context else ""
+        msg = f"Validation failed for {name}{context_text}: {e}"
         logger.error(msg)
-        raise UserServiceError(message=f"Invalid {model_cls.__name__} data", code=500, details=msg)
+        raise UserServiceError(message=f"Invalid {name} data", code=500, details=msg)
 
 
 def is_valid_year(text: str) -> bool:

@@ -102,11 +102,7 @@ class WorkoutCacheManager(BaseCacheManager):
                     validate_or_raise(cast(dict, item), Subscription, context=str(client_profile_id)) for item in raw
                 ]
             except Exception as e:
-                logger.debug(
-                    "Corrupt subscriptions history for client_profile_id=%s: %s",
-                    client_profile_id,
-                    e,
-                )
+                logger.debug(f"Corrupt subscriptions history for client_profile_id={client_profile_id}: {e}")
                 await cls.delete("workout_plans:subscriptions_history", str(client_profile_id))
 
         service = get_container().workout_service()
