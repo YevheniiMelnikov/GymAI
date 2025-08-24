@@ -21,6 +21,7 @@ from ai_coach.schemas import MessageRole
 from ai_coach.hash_store import HashStore
 from ai_coach.lock_cache import LockCache
 from config.app_settings import settings
+from core.exceptions import UserServiceError
 from core.services import APIService
 from core.schemas import Client
 
@@ -166,7 +167,11 @@ class CogneeCoach(BaseAICoach):
 
     @classmethod
     async def _ensure_profile_indexed(cls, client_id: int, user: Any) -> None:
-        client = await APIService.profile.get_client_by_profile_id(client_id)
+        try:
+            client = await APIService.profile.get_client_by_profile_id(client_id)
+        except UserServiceError as e:
+            logger.warning(f"Failed to fetch client profile id={client_id}: {e}")
+            return
         if not client:
             return
         text = cls._client_profile_text(client)
