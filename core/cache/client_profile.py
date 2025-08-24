@@ -1,6 +1,6 @@
 import json
 from loguru import logger
-from typing import Any
+from typing import Any, ClassVar
 
 from core.schemas import Client
 from core.exceptions import ClientNotFoundError
@@ -10,9 +10,11 @@ from core.services import APIService
 
 
 class ClientCacheManager(BaseCacheManager):
+    _service: ClassVar[Any] = APIService.profile
+
     @classmethod
     async def _fetch_from_service(cls, cache_key: str, field: str, *, use_fallback: bool) -> Client:
-        client = await APIService.profile.get_client_by_profile_id(int(field))
+        client = await cls._service.get_client_by_profile_id(int(field))
         if client is None:
             raise ClientNotFoundError(int(field))
         return client

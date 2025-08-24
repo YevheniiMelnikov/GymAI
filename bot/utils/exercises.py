@@ -66,8 +66,7 @@ async def save_exercise(
                 split_number = program.split_number
             except ProgramNotFoundError:
                 logger.warning(
-                    "Program not found for client %s in save_exercise, defaulting split_number to 1.",
-                    profile_id,
+                    f"Program not found for client {profile_id} in save_exercise, defaulting split_number to 1."
                 )
                 split_number = 1
 

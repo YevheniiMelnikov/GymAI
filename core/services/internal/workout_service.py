@@ -107,10 +107,8 @@ class WorkoutService(APIClient):
         if status_code == 201 and response:
             return response.get("id")
         logger.error(
-            "Failed to create subscription for profile %s. HTTP status: %s, response: %s",
-            client_profile_id,
-            status_code,
-            response,
+            f"Failed to create subscription for profile {client_profile_id}. "
+            f"HTTP status: {status_code}, response: {response}"
         )
         return None
 
@@ -163,10 +161,8 @@ class WorkoutService(APIClient):
                 return subscriptions
 
         logger.error(
-            "Failed to retrieve subscriptions for client_profile_id=%s. HTTP=%s, Response: %s",
-            client_profile_id,
-            status,
-            data,
+            f"Failed to retrieve subscriptions for client_profile_id={client_profile_id}. "
+            f"HTTP={status}, Response: {data}"
         )
         return []
 
@@ -189,9 +185,6 @@ class WorkoutService(APIClient):
                 return programs
 
         logger.error(
-            "Failed to retrieve programs for client_profile_id=%s. HTTP=%s, Response: %s",
-            client_profile_id,
-            status,
-            data,
+            f"Failed to retrieve programs for client_profile_id={client_profile_id}. HTTP={status}, Response: {data}"
         )
         return []

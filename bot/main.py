@@ -81,7 +81,7 @@ async def main() -> None:
         stop_event = asyncio.Event()
         loop = asyncio.get_running_loop()
         for s in (signal.SIGINT, signal.SIGTERM):
-            loop.add_signal_handler(s, stop_event.set)
+            loop.add_signal_handler(s, lambda *_: stop_event.set())
         await stop_event.wait()
     finally:
         if not cleaned:

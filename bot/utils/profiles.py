@@ -178,26 +178,38 @@ async def answer_profile(cbq: CallbackQuery, profile: Profile, user: Coach | Cli
             if file_path.exists():
                 avatar = FSInputFile(file_path)
                 try:
-                    await message.answer_photo(avatar, text, reply_markup=profile_menu_kb(profile.language))
+                    await message.answer_photo(
+                        avatar,
+                        caption=text,
+                        reply_markup=profile_menu_kb(profile.language),
+                    )
                     return
                 except TelegramBadRequest:
                     logger.warning("Photo not found for AI coach")
         else:
             photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{user.profile_photo}"
             try:
-                await message.answer_photo(photo_url, text, reply_markup=profile_menu_kb(profile.language))
+                await message.answer_photo(
+                    photo_url,
+                    caption=text,
+                    reply_markup=profile_menu_kb(profile.language),
+                )
                 return
             except TelegramBadRequest:
-                logger.warning("Photo not found for coach %s", profile.id)
+                logger.warning(f"Photo not found for coach {profile.id}")
 
     if profile.role == "client" and isinstance(user, Client):
         if user.profile_photo:
             photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{user.profile_photo}"
             try:
-                await message.answer_photo(photo_url, text, reply_markup=profile_menu_kb(profile.language))
+                await message.answer_photo(
+                    photo_url,
+                    caption=text,
+                    reply_markup=profile_menu_kb(profile.language),
+                )
                 return
             except TelegramBadRequest:
-                logger.warning("Photo not found for client %s", profile.id)
+                logger.warning(f"Photo not found for client {profile.id}")
 
         avatar_name = "male.png" if user.gender != "female" else "female.png"
         file_path = Path(__file__).resolve().parent.parent / "images" / avatar_name
@@ -205,12 +217,16 @@ async def answer_profile(cbq: CallbackQuery, profile: Profile, user: Coach | Cli
         if file_path.exists():
             avatar_file = FSInputFile(file_path)
             try:
-                await message.answer_photo(avatar_file, text, reply_markup=profile_menu_kb(profile.language))
+                await message.answer_photo(
+                    avatar_file,
+                    caption=text,
+                    reply_markup=profile_menu_kb(profile.language),
+                )
                 return
             except TelegramBadRequest as e:
-                logger.warning("Failed to send default avatar for client %s: %s", profile.id, e)
+                logger.warning(f"Failed to send default avatar for client {profile.id}: {e}")
         else:
-            logger.error("Default avatar file not found: %s", file_path)
+            logger.error(f"Default avatar file not found: {file_path}")
 
     await message.answer(text, reply_markup=profile_menu_kb(profile.language))
 

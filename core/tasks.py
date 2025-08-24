@@ -326,7 +326,7 @@ def refresh_external_knowledge(self):
             for attempt in range(3):
                 if await APIService.ai_coach.health(timeout=3.0):
                     break
-                logger.warning("AI coach health check failed attempt %s", attempt + 1)
+                logger.warning(f"AI coach health check failed attempt {attempt + 1}")
                 await asyncio.sleep(1)
             else:
                 logger.warning("AI coach not ready, skipping refresh_external_knowledge")
@@ -336,7 +336,7 @@ def refresh_external_knowledge(self):
     try:
         asyncio.run(_impl())
     except Exception as exc:  # noqa: BLE001
-        logger.error("refresh_external_knowledge failed: {}", exc)
+        logger.error(f"refresh_external_knowledge failed: {exc}")
         raise
     else:
         logger.info("refresh_external_knowledge completed")
