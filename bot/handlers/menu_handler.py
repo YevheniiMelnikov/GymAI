@@ -543,11 +543,11 @@ async def paginate_coaches(cbq: CallbackQuery, state: FSMContext, bot: Bot) -> N
 
         if client.assigned_to:
             try:
-                subscription = await Cache.workout.get_latest_subscription(profile.id)
+                subscription = await Cache.workout.get_latest_subscription(client.id)
             except SubscriptionNotFoundError:
                 subscription = None
             if subscription and subscription.enabled:
-                await cancel_subscription(profile.id, subscription.id)
+                await cancel_subscription(client.id, subscription.id)
 
         await assign_coach(selected_coach, client)
         await cbq.answer(msg_text("saved", profile.language))
@@ -661,18 +661,18 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
 
         if not callback_query.from_user:
             return
-        subscription = await Cache.workout.get_latest_subscription(profile.id)
+        subscription = await Cache.workout.get_latest_subscription(client.id)
         if subscription is None:
             return
 
-        await cancel_subscription(profile.id, subscription.id)
+        await cancel_subscription(client.id, subscription.id)
         logger.info(f"Subscription for client_id {client.id} deactivated")
         await show_main_menu(message, profile, state)
 
     else:
         await callback_query.answer()
         try:
-            subscription = await Cache.workout.get_latest_subscription(profile.id)
+            subscription = await Cache.workout.get_latest_subscription(client.id)
         except SubscriptionNotFoundError:
             logger.warning(f"Subscription not found for client_id {client.id}")
             await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)

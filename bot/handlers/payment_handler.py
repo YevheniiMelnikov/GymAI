@@ -137,7 +137,7 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext) -> No
         return
 
     if service_type == "program":
-        await cache_program_data(data, client.profile)
+        await cache_program_data(data, client.id)
     else:
         price = coach.subscription_price or Decimal("0")
         period_map = {
@@ -159,12 +159,12 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext) -> No
             "enabled": False,
             "price": price,
             "period": period,
-            "client_profile": client.profile,
+            "client_profile": client.id,
             "workout_days": data.get("workout_days", []),
             "workout_type": data.get("workout_type"),
             "wishes": wishes,
         }
-        await Cache.workout.update_program(client.profile, subscription_data)
+        await Cache.workout.update_subscription(client.id, subscription_data)
 
     await PaymentCacheManager.set_status(client.profile, service_type, PaymentStatus.PENDING)
     await APIService.payment.create_payment(client.profile, service_type, order_id, amount)

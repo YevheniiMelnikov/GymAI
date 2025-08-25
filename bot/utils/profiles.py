@@ -241,8 +241,8 @@ async def get_clients_to_survey() -> list[Profile]:
         for profile_id_str in raw_clients:
             try:
                 profile_id = int(profile_id_str)
-
-                subscription = await Cache.workout.get_latest_subscription(profile_id)
+                client = await Cache.client.get_client(profile_id)
+                subscription = await Cache.workout.get_latest_subscription(client.id)
                 if not subscription:
                     continue
 
@@ -255,7 +255,6 @@ async def get_clients_to_survey() -> list[Profile]:
                     and subscription.exercises
                     and yesterday in [day.lower() for day in subscription.workout_days]
                 ):
-                    client = await Cache.client.get_client(profile_id)
                     profile = await APIService.profile.get_profile(client.profile)
                     if profile is not None:
                         clients_with_workout.append(profile)

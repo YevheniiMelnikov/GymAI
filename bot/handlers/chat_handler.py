@@ -126,7 +126,8 @@ async def have_you_trained(callback_query: CallbackQuery, state: FSMContext) -> 
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     assert profile is not None
-    subscription = await Cache.workout.get_latest_subscription(profile.id)
+    client = await Cache.client.get_client(profile.id)
+    subscription = await Cache.workout.get_latest_subscription(client.id)
     assert subscription is not None
 
     data_str = cast(str, callback_query.data)
@@ -189,7 +190,8 @@ async def subscription_view(callback_query: CallbackQuery, state: FSMContext) ->
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     assert profile is not None
-    subscription = await Cache.workout.get_latest_subscription(profile.id)
+    client = await Cache.client.get_client(profile.id)
+    subscription = await Cache.workout.get_latest_subscription(client.id)
     assert subscription is not None
 
     await state.update_data(
@@ -245,10 +247,10 @@ async def navigate_days(callback_query: CallbackQuery, state: FSMContext) -> Non
     profile = Profile.model_validate(data["profile"])
     assert profile is not None
     client = await Cache.client.get_client(profile.id)
-    program = await Cache.workout.get_latest_program(client.profile)
+    program = await Cache.workout.get_latest_program(client.id)
 
     if data.get("subscription"):
-        subscription = await Cache.workout.get_latest_subscription(client.profile)
+        subscription = await Cache.workout.get_latest_subscription(client.id)
         assert subscription is not None
         split_number = len(subscription.workout_days)
         exercises = subscription.exercises
