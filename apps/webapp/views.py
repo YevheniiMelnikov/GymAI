@@ -8,29 +8,12 @@ from core.exceptions import (
     SubscriptionNotFoundError,
     ClientNotFoundError,
 )
-from core.schemas import DayExercises
 from loguru import logger
-from .utils import verify_init_data
-
-
-def _format_full_program(exercises: list[DayExercises]) -> str:
-    lines: list[str] = []
-    for day in sorted(exercises, key=lambda d: int(d.day)):
-        lines.append(f"Day {day.day}")
-        for idx, ex in enumerate(day.exercises):
-            line = f"{idx + 1}. {ex.name} | {ex.sets} x {ex.reps}"
-            if ex.weight:
-                line += f" | {ex.weight} kg"
-            if ex.set_id is not None:
-                line += f" | Set {ex.set_id}"
-            if ex.drop_set:
-                line += " | Drop set"
-            lines.append(line)
-        lines.append("")
-    return "\n".join(lines).strip()
+from .utils import verify_init_data, _format_full_program, ensure_container_ready
 
 
 async def program_data(request: HttpRequest) -> JsonResponse:
+    await ensure_container_ready()
     init_data: str = str(request.GET.get("init_data", ""))
     logger.debug("Webapp program data requested: init_data length={}", len(init_data))
     try:
@@ -60,6 +43,7 @@ async def program_data(request: HttpRequest) -> JsonResponse:
 
 
 async def subscription_data(request: HttpRequest) -> JsonResponse:
+    await ensure_container_ready()
     init_data: str = str(request.GET.get("init_data", ""))
     logger.debug("Webapp subscription data requested: init_data length={}", len(init_data))
     try:

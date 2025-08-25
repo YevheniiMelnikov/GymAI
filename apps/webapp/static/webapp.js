@@ -1,8 +1,6 @@
-/* static/webapp/webapp.js */
 (function () {
   const tg = (typeof window !== "undefined" && window.Telegram && window.Telegram.WebApp) || undefined;
 
-  // Только реальный Telegram WebApp. Без него — не работаем.
   const initData = tg?.initData || "";
   const content = document.getElementById("content");
 
@@ -23,7 +21,6 @@
   (async function loadProgram() {
     try {
       const q = new URLSearchParams();
-      // НИКАКОГО params.get('init_data') и никакого encodeURIComponent(initData)
       q.set("init_data", initData);
 
       console.log("endpoint=", endpoint, "initData.len=", initData.length);

@@ -1,4 +1,4 @@
-# apps/webapp/utils.py
+import asyncio
 import hashlib
 import hmac
 import json
@@ -8,28 +8,29 @@ from urllib.parse import parse_qsl, unquote_plus
 from config.app_settings import settings
 from loguru import logger
 
+from core.containers import get_container
+from core.schemas import DayExercises
+
+
+async def ensure_container_ready() -> None:
+    container = get_container()
+    if hasattr(container, "init_resources"):
+        maybe = container.init_resources()
+        if asyncio.iscoroutine(maybe):
+            await maybe
+
 
 def _hash_webapp(token: str, check_string: str) -> str:
-    """Новая схема (WebApp): secret = HMAC_SHA256(b"WebAppData", token)"""
     secret = hmac.new(b"WebAppData", token.encode("utf-8"), hashlib.sha256).digest()
     return hmac.new(secret, check_string.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def _hash_legacy(token: str, check_string: str) -> str:
-    """Старая схема (Login/часть клиентов): secret = SHA256(token)"""
     secret = hashlib.sha256(token.encode("utf-8")).digest()
     return hmac.new(secret, check_string.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def verify_init_data(init_data: str) -> dict[str, object]:
-    """
-    Проверка подписи Telegram WebApp initData.
-    ВАЖНО: в data_check_string должны входить все пары k=v, кроме 'hash'.
-           'signature' оставляем, если она присутствует.
-    Поддерживаем обе схемы:
-      1) Новая  — secret = HMAC_SHA256(b"WebAppData", bot_token)
-      2) Старая — secret = SHA256(bot_token)
-    """
     decoded = unquote_plus(init_data)
     items = dict(parse_qsl(decoded, keep_blank_values=True))
 
@@ -37,12 +38,8 @@ def verify_init_data(init_data: str) -> dict[str, object]:
     if not received_hash:
         raise ValueError("Invalid init data")
 
-    # НЕ удаляем 'signature' — она должна участвовать в подписи, если присутствует
     signature = items.get("signature")
-
-    # Строка для подписи: сортируем все оставшиеся пары (включая signature, user и т.п.)
     check_string = "\n".join(f"{k}={v}" for k, v in sorted(items.items()))
-
     token: str = settings.BOT_TOKEN or ""
     if not token:
         raise ValueError("Invalid init data")
@@ -78,7 +75,6 @@ def verify_init_data(init_data: str) -> dict[str, object]:
         )
         raise ValueError("Invalid init data")
 
-    # Сформируем результирующий словарь, аккуратно парсим JSON-поля
     result: dict[str, object] = {}
     for k, v in items.items():
         if k in {"user", "chat", "receiver"}:
@@ -97,3 +93,20 @@ def verify_init_data(init_data: str) -> dict[str, object]:
         (result.get("user") or {}).get("id") if isinstance(result.get("user"), dict) else None,
     )
     return cast(dict[str, object], result)
+
+
+def _format_full_program(exercises: list[DayExercises]) -> str:
+    lines: list[str] = []
+    for day in sorted(exercises, key=lambda d: int(d.day)):
+        lines.append(f"Day {day.day}")
+        for idx, ex in enumerate(day.exercises):
+            line = f"{idx + 1}. {ex.name} | {ex.sets} x {ex.reps}"
+            if ex.weight:
+                line += f" | {ex.weight} kg"
+            if ex.set_id is not None:
+                line += f" | Set {ex.set_id}"
+            if ex.drop_set:
+                line += " | Drop set"
+            lines.append(line)
+        lines.append("")
+    return "\n".join(lines).strip()
