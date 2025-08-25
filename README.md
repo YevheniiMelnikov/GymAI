@@ -1,6 +1,6 @@
 # GymBot
 
-GymBot is a Dockerized platform that connects a Telegram bot with a Django API. The project relies on Uvicorn, Redis and PostgreSQL and uses `uv` and `Taskfile` for dependency management and common tasks.
+GymBot is a Dockerized platform that includes a Telegram bot (aiogram), API (Django) and AI coach (FastAPI). The project relies on Uvicorn, Redis, and PostgreSQL and uses `uv` and `Taskfile` for dependency management and common tasks.
 
 ---
 
@@ -15,31 +15,33 @@ GymBot is a Dockerized platform that connects a Telegram bot with a Django API. 
 
 ---
 
-## Architecture overview
+## Architecture Overview
 
-Components:
+**Components**
 
-* API (Django ASGI, uvicorn) – business logic, admin, webapp, REST endpoints under `/api/v1/`.
-* Bot (aiogram + aiohttp) – webhook server, communicates with API and Redis.
-* AI Coach (FastAPI) – Cognee-powered retrieval + generation.
-* Celery + Beat – background jobs and schedules.
-* Redis – cache, queues, idempotency.
-* PostgreSQL (+pgvector) – relational storage and vector embeddings.
-* Nginx – reverse proxy and TLS termination.
+* **API** (Django ASGI, Uvicorn) – business logic, admin, webapp, REST endpoints under `/api/v1/`.
+* **Bot** (aiogram + aiohttp) – webhook server, communicates with API and Redis.
+* **AI Coach** (FastAPI) – Cognee-powered retrieval + generation.
+* **Celery + Beat** – background jobs and schedules.
+* **Redis** – cache, queues, idempotency.
+* **PostgreSQL (+pgvector)** – relational storage and vector embeddings.
+* **Nginx** – reverse proxy and TLS termination.
 
-Key directories:
+**Key directories**
 
-* `apps/` – Django apps (profiles, payments, workout\_plans, webapp, etc.).
-* `bot/` – Telegram bot handlers, texts, keyboards, middlewares, utilities.
-* `core/` – shared cache, services, schemas, enums, tasks.
-* `ai_coach/` – AI coach service and knowledge integrations.
-* `config/` – Django settings, URL routing, app settings.
-* `docker/` – Dockerfiles, compose files, Nginx and Redis configs, environment files.
+* `apps/` – Django apps (profiles, payments, workout\_plans, webapp, etc.)
+* `bot/` – Telegram bot handlers, texts, keyboards, middlewares, utilities
+* `core/` – shared cache, services, schemas, enums, tasks
+* `ai_coach/` – AI coach service and knowledge integrations
+* `config/` – Django settings, URL routing, app settings
+* `docker/` – Dockerfiles, compose files, Nginx and Redis configs, environment files
+
+---
 
 ## Requirements
 
 * Docker and Docker Compose
-* Python 3.12 (>=3.12,<3.13) for running without containers
+* Python 3.12 (>=3.12, <3.13) for running without containers
 
 ---
 
@@ -51,7 +53,12 @@ Key directories:
    cp docker/.env.example docker/.env
    ```
 
-2. Build and run the services:
+2. Place Google service account credentials at the project root:
+
+   * Put `google_creds.json` in the repository root (same level as `docker/`).
+   * The file will be bind-mounted into containers at `/app/google_creds.json` and referenced via `GOOGLE_APPLICATION_CREDENTIALS`.
+
+3. Build and run the services:
 
    ```bash
    task run
@@ -71,11 +78,10 @@ Sources are located in `bot/` with the entrypoint `bot/main.py`.
 
 Local development options:
 
-* With Docker Compose (recommended for API/DB/Redis): `task localrun` starts Postgres, Redis, API and local Nginx on [http://localhost:9090](http://localhost:9090).
+* With Docker Compose (recommended for API/DB/Redis): `task localrun` starts Postgres, Redis, API, and local Nginx on [http://localhost:9090](http://localhost:9090).
 * Run the bot locally from your IDE or terminal:
 
   * Ensure Redis and API are up (via `task localrun`).
-  * Ensure your `docker/.env` has WEBHOOK\_HOST and WEBHOOK\_PORT (e.g., WEBHOOK\_HOST=[http://localhost:9090](http://localhost:9090), WEBHOOK\_PORT=8080).
   * Start the bot: `uv run python -m bot.main`.
   * Local Nginx forwards webhooks to `host.docker.internal:8088` as configured in `docker/nginx.local.conf`.
 
@@ -85,16 +91,16 @@ Local development options:
 
 The Django API is served by `uvicorn`.
 
-Local URLs:
+**Local URLs**
 
 * Admin panel (via API directly): [http://localhost:8000/admin/](http://localhost:8000/admin/)
 * Admin panel (via local Nginx proxy): [http://localhost:9090/admin/](http://localhost:9090/admin/)
 * Healthcheck: [http://localhost:8000/health/](http://localhost:8000/health/)
 
-Production (behind Nginx):
+**Production (behind Nginx)**
 
-* Admin panel: https\://<your-domain>/admin/
-* Healthcheck: https\://<your-domain>/health/
+* Admin panel: `https://<your-domain>/admin/`
+* Healthcheck: `https://<your-domain>/health/`
 
 Use the credentials from `docker/.env` (`DJANGO_ADMIN` / `DJANGO_PASSWORD`) to access the admin interface.
 
@@ -108,19 +114,14 @@ Redis runs with `appendonly.aof` and LRU eviction. Configuration is stored in `d
 
 ## Celery
 
-Background tasks are processed by Celery workers. Docker Compose includes two
-services (`celery` and `beat`) for this purpose. When running the worker outside
-of Docker make sure Redis is reachable and update the `REDIS_URL` in your `docker/.env`
-file accordingly. You may also need to set `BOT_INTERNAL_URL` so Celery can
-reach the bot API.
+Background tasks are processed by Celery workers. Docker Compose includes two services (`celery` and `beat`) for this purpose. When running the worker outside of Docker make sure Redis is reachable and update the `REDIS_URL` in your `docker/.env` file accordingly. You may also need to set `BOT_INTERNAL_URL` so Celery can reach the bot API.
 
 ```bash
 PYTHONPATH=. celery -A config.celery:celery_app worker \
     -l info -Q default,maintenance -P threads
 ```
 
-If Celery prints connection errors such as `Error -2 connecting to redis:6379`,
-verify that `REDIS_URL` points to your local Redis instance.
+If Celery prints connection errors such as `Error -2 connecting to redis:6379`, verify that `REDIS_URL` points to your local Redis instance.
 
 ### Scheduled tasks
 
@@ -138,31 +139,24 @@ verify that `REDIS_URL` points to your local Redis instance.
 
 ---
 
-## AI Coach and knowledge base
+## AI Coach and Knowledge Base
 
-The project ships an AI coach backed by Cognee. Each client and chat is mapped to
-datasets named `client_<id>_message`. Chat entries are stored with a `user:` or
-`bot:` prefix so Cognee keeps the full dialog history. SHA‑256 hashes are
-cached in Redis with a TTL derived from `BACKUP_RETENTION_DAYS` to prevent
-repeat ingestion. New texts are ingested asynchronously and cognified before
-they are searchable.
+The project ships an AI coach backed by Cognee. Each client and chat is mapped to datasets named `client_<id>_message`. Chat entries are stored with a `user:` or `bot:` prefix so Cognee keeps the full dialog history. SHA‑256 hashes are cached in Redis with a TTL derived from `BACKUP_RETENTION_DAYS` to prevent repeat ingestion. New texts are ingested asynchronously and cognified before they are searchable.
 
-To refresh external knowledge (e.g. documents from Google Drive), Celery calls
-`refresh_external_knowledge` every `KNOWLEDGE_REFRESH_INTERVAL` seconds. The
-task invokes `CogneeCoach.refresh_knowledge_base` under basic authentication.
+To refresh external knowledge (e.g., documents from Google Drive), Celery calls `refresh_external_knowledge` every `KNOWLEDGE_REFRESH_INTERVAL` seconds. The task invokes `CogneeCoach.refresh_knowledge_base` under basic authentication.
 
-Key settings:
+**Key settings**
 
 * `KNOWLEDGE_REFRESH_INTERVAL` – periodic rebuild interval in seconds
 * `AI_COACH_TIMEOUT` – timeout for HTTP calls to the AI coach
 
-Other maintenance:
+**Other maintenance**
 
 * `BACKUP_RETENTION_DAYS` – retention period for Postgres and Redis backups
 
 ---
 
-## Database migrations
+## Database Migrations
 
 Run inside Docker (API container):
 
@@ -170,7 +164,7 @@ Run inside Docker (API container):
 task migrate
 ```
 
-This will run makemigrations and migrate.
+This will run `makemigrations` and `migrate`.
 
 ---
 
@@ -184,10 +178,11 @@ uv run pytest -q
 
 ---
 
-## Taskfile commands
+## Taskfile Commands
 
 The project includes a [Taskfile](https://taskfile.dev/) for convenience.
-Common commands:
+
+**Common commands**
 
 | Command      | Description                        |
 | ------------ | ---------------------------------- |
@@ -209,7 +204,7 @@ task lint
 
 ## Pre-Commit
 
-Installed hooks:
+**Installed hooks**
 
 * `ruff` for formatting and linting
 * `mypy` for static type checking
@@ -217,13 +212,13 @@ Installed hooks:
 * `uv-lock` to check the lock file
 * Basic hooks: `check-yaml`, `trailing-whitespace`, `end-of-file-fixer`
 
-Install hooks:
+**Install hooks**
 
 ```bash
 uv run pre-commit install
 ```
 
-Run them manually:
+**Run manually**
 
 ```bash
 task pre-commit
@@ -231,7 +226,7 @@ task pre-commit
 
 ---
 
-## Production deployment
+## Production Deployment
 
 ```bash
 docker compose -f docker/docker-compose.yml up -d --build
@@ -259,30 +254,31 @@ See `docker/nginx.conf` for configuration. Rebuild the image to apply changes:
 docker compose -f docker/docker-compose.yml up -d --build nginx
 ```
 
+---
+
 ## Configuration (docker/.env)
 
 Create `docker/.env` from `docker/.env.example` and set the following minimum variables for development:
 
-Required:
+**Required**
 
-* SECRET\_KEY – Django secret key
-* API\_KEY – internal API key for bot/API communication
-* BOT\_TOKEN – Telegram bot token
-* WEBHOOK\_HOST – base URL for webhooks (e.g., [http://localhost:9090](http://localhost:9090) for local nginx)
-* WEBHOOK\_PORT – port the bot’s aiohttp server listens on (e.g., 8088 when running locally)
-* BOT\_LINK – public t.me link
-* API\_URL – base URL of the Django API (e.g., [http://api:8000/](http://api:8000/) in Docker, [http://localhost:8000/](http://localhost:8000/) locally)
-* POSTGRES\_PASSWORD – password for the DB user (used as DB\_PASSWORD)
-* GOOGLE\_APPLICATION\_CREDENTIALS – path to Google service account JSON, default mounted at /app/google\_creds.json
-* SPREADSHEET\_ID – Google Sheets ID used by the app
+* `SECRET_KEY` – Django secret key
+* `API_KEY` – internal API key for bot/API communication
+* `BOT_TOKEN` – Telegram bot token
+* `WEBHOOK_HOST` – base URL for webhooks (e.g., `http://localhost:9090` for local Nginx)
+* `BOT_LINK` – public t.me link
+* `API_URL` – base URL of the Django API (e.g., `http://api:8000/` in Docker, `http://localhost:8000/` locally)
+* `SPREADSHEET_ID` – Google Sheets ID used by the app
 
-Common optional settings (sensible defaults exist):
+> **Important:** To enable Google services (Sheets/Drive/Docs), you **must** place a file named `google_creds.json` at the **project root**. This file is bind-mounted into containers at `/app/google_creds.json` and should be referenced by `GOOGLE_APPLICATION_CREDENTIALS`.
 
-* REDIS\_URL (default: redis\://redis:6379)
-* ALLOWED\_HOSTS (comma-separated or JSON list)
-* DJANGO\_ADMIN / DJANGO\_PASSWORD (admin credentials)
-* AI\_COACH\_URL (default: http\://ai\_coach:9000/)
-* KNOWLEDGE\_REFRESH\_INTERVAL, BACKUP\_RETENTION\_DAYS
-* PAYMENT\_\* (provider keys and callback URL)
+**Common optional settings (sensible defaults exist)**
 
-WEBHOOK\_URL is auto-derived as `${WEBHOOK_HOST}${WEBHOOK_PATH}` unless explicitly set. See config/app\_settings.py for all available options.
+* `REDIS_URL` (default: `redis://redis:6379`)
+* `ALLOWED_HOSTS` (comma-separated or JSON list)
+* `DJANGO_ADMIN` / `DJANGO_PASSWORD` (admin credentials)
+* `AI_COACH_URL` (default: `http://ai_coach:9000/`)
+* `KNOWLEDGE_REFRESH_INTERVAL`, `BACKUP_RETENTION_DAYS`
+* `PAYMENT_*` (provider keys and callback URL)
+
+`WEBHOOK_URL` is auto-derived as `${WEBHOOK_HOST}${WEBHOOK_PATH}` unless explicitly set. See `config/app_settings.py` for all available options.

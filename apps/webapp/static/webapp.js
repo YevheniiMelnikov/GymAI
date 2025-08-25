@@ -1,41 +1,56 @@
-var _a, _b;
-const tg = (_a = window === null || window === void 0 ? void 0 : window.Telegram) === null || _a === void 0 ? void 0 : _a.WebApp;
-const params = new URLSearchParams(window.location.search);
-const type = (_b = params.get("type")) !== null && _b !== void 0 ? _b : "program";
-const endpoint = type === "subscription" ? "/webapp/api/subscription/" : "/webapp/api/program/";
-const initData = (tg === null || tg === void 0 ? void 0 : tg.initData) || params.get("init_data") || "";
-async function loadProgram() {
-    var _a;
-    const content = document.getElementById("content");
-    if (!content) {
-        return;
-    }
+/* static/webapp/webapp.js */
+(function () {
+  const tg = (typeof window !== "undefined" && window.Telegram && window.Telegram.WebApp) || undefined;
+
+  // Только реальный Telegram WebApp. Без него — не работаем.
+  const initData = tg?.initData || "";
+  const content = document.getElementById("content");
+
+  function setText(txt) {
+    if (content) content.innerText = txt;
+  }
+
+  if (!initData) {
+    setText("Open this page from Telegram.");
+    console.error("No Telegram WebApp context: Telegram.WebApp.initData is empty.");
+    return;
+  }
+
+  const params = new URLSearchParams(window.location.search);
+  const type = params.get("type") ?? "program";
+  const endpoint = type === "subscription" ? "/webapp/api/subscription/" : "/webapp/api/program/";
+
+  (async function loadProgram() {
     try {
-        console.log("endpoint=", endpoint, "initData.len=", initData.length);
-        const response = await fetch(`${endpoint}?init_data=${encodeURIComponent(initData)}`);
-        console.log("response.status=", response.status);
-        if (response.status === 403) {
-            const body = await response.text();
-            console.error("Unauthorized response", body);
-            content.innerText = "Unauthorized";
-            return;
-        }
-        if (response.status === 404) {
-            content.innerText = "No program found";
-            return;
-        }
-        if (response.status >= 500) {
-            const body = await response.text();
-            console.error("Server error", body);
-            content.innerText = "Server error";
-            return;
-        }
-        const data = await response.json();
-        content.innerText = (_a = data.program) !== null && _a !== void 0 ? _a : "";
+      const q = new URLSearchParams();
+      // НИКАКОГО params.get('init_data') и никакого encodeURIComponent(initData)
+      q.set("init_data", initData);
+
+      console.log("endpoint=", endpoint, "initData.len=", initData.length);
+      const response = await fetch(`${endpoint}?${q.toString()}`);
+      console.log("response.status=", response.status);
+
+      if (response.status === 403) {
+        const body = await response.text();
+        console.error("Unauthorized response", body);
+        setText("Unauthorized");
+        return;
+      }
+      if (response.status === 404) {
+        setText("No program found");
+        return;
+      }
+      if (response.status >= 500) {
+        const body = await response.text();
+        console.error("Server error", body);
+        setText("Server error");
+        return;
+      }
+      const data = await response.json();
+      setText(data.program ?? "");
+    } catch (err) {
+      console.error("Failed to load program", err);
+      setText("Server error");
     }
-    catch (err) {
-        console.error("Failed to load program", err);
-        content.innerText = "Server error";
-    }
-}
-void loadProgram();
+  })();
+})();

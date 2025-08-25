@@ -43,7 +43,6 @@ _redis_dir = os.path.join(_dumps_dir, "redis")
 
 os.makedirs(_pg_dir, exist_ok=True)
 os.makedirs(_redis_dir, exist_ok=True)
-os.environ["PGPASSWORD"] = settings.DB_PASSWORD
 
 
 @shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyrefly: ignore[not-callable]
