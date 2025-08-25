@@ -35,7 +35,12 @@ async def program_data(request: HttpRequest) -> JsonResponse:
     logger.debug("Webapp program data requested: init_data length={}", len(init_data))
     try:
         data: dict[str, object] = verify_init_data(init_data)
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "Init data verification failed: {} | length={}",
+            exc,
+            len(init_data),
+        )
         return JsonResponse({"error": "unauthorized"}, status=403)
 
     user: dict[str, object] = data.get("user", {})  # type: ignore[arg-type]
@@ -59,7 +64,12 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
     logger.debug("Webapp subscription data requested: init_data length={}", len(init_data))
     try:
         data: dict[str, object] = verify_init_data(init_data)
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "Init data verification failed: {} | length={}",
+            exc,
+            len(init_data),
+        )
         return JsonResponse({"error": "unauthorized"}, status=403)
 
     user: dict[str, object] = data.get("user", {})  # type: ignore[arg-type]

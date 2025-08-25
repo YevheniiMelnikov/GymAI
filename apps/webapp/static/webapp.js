@@ -13,7 +13,10 @@ async function loadProgram() {
     try {
         console.log("endpoint=", endpoint, "initData.len=", initData.length);
         const response = await fetch(`${endpoint}?init_data=${encodeURIComponent(initData)}`);
+        console.log("response.status=", response.status);
         if (response.status === 403) {
+            const body = await response.text();
+            console.error("Unauthorized response", body);
             content.innerText = "Unauthorized";
             return;
         }
@@ -22,13 +25,16 @@ async function loadProgram() {
             return;
         }
         if (response.status >= 500) {
+            const body = await response.text();
+            console.error("Server error", body);
             content.innerText = "Server error";
             return;
         }
         const data = await response.json();
         content.innerText = (_a = data.program) !== null && _a !== void 0 ? _a : "";
     }
-    catch (_b) {
+    catch (err) {
+        console.error("Failed to load program", err);
         content.innerText = "Server error";
     }
 }

@@ -15,7 +15,10 @@ async function loadProgram(): Promise<void> {
     const response: Response = await fetch(
       `${endpoint}?init_data=${encodeURIComponent(initData)}`,
     );
+    console.log("response.status=", response.status);
     if (response.status === 403) {
+      const body: string = await response.text();
+      console.error("Unauthorized response", body);
       content.innerText = "Unauthorized";
       return;
     }
@@ -24,12 +27,15 @@ async function loadProgram(): Promise<void> {
       return;
     }
     if (response.status >= 500) {
+      const body: string = await response.text();
+      console.error("Server error", body);
       content.innerText = "Server error";
       return;
     }
     const data: { program?: string } = await response.json();
     content.innerText = data.program ?? "";
-  } catch {
+  } catch (err) {
+    console.error("Failed to load program", err);
     content.innerText = "Server error";
   }
 }
