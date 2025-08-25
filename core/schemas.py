@@ -116,6 +116,14 @@ class Program(BaseModel):
         except Exception:
             return 0.0
 
+    @field_validator("split_number", mode="before")
+    def _set_split_number(cls, v: Any, info: Any) -> int:
+        if v is None:
+            data = getattr(info, "data", {}) or {}
+            days: list[Any] = data.get("exercises_by_day", [])
+            return len(days)
+        return int(v)
+
 
 class Subscription(BaseModel):
     id: int
