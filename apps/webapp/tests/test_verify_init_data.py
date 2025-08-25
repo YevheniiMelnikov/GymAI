@@ -28,6 +28,17 @@ def test_verify_init_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
     assert data["user"]["id"] == 1
 
 
+def test_verify_init_data_with_signature(monkeypatch: pytest.MonkeyPatch) -> None:
+    token: str = "TOKEN"
+    monkeypatch.setattr(settings, "BOT_TOKEN", token, raising=False)
+    payload: dict[str, str] = {"auth_date": "0", "user": json.dumps({"id": 1})}
+    init_data: str = _build_init_data(payload, token) + "&signature=dummy"
+    data: dict[str, object] = verify_init_data(init_data)
+    assert data["auth_date"] == "0"
+    assert isinstance(data["user"], dict)
+    assert data["user"]["id"] == 1
+
+
 def test_verify_init_data_invalid(monkeypatch: pytest.MonkeyPatch) -> None:
     token: str = "TOKEN"
     monkeypatch.setattr(settings, "BOT_TOKEN", token, raising=False)
