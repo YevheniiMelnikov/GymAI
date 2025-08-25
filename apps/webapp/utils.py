@@ -11,6 +11,7 @@ from loguru import logger
 def verify_init_data(init_data: str) -> dict[str, object]:
     data: dict[str, str] = dict(parse_qsl(init_data, keep_blank_values=True))
     received_hash: str | None = data.pop("hash", None)
+    signature: str | None = data.pop("signature", None)
     token: str = settings.BOT_TOKEN or ""
     if not token:
         logger.error("BOT_TOKEN is not configured")
@@ -21,6 +22,8 @@ def verify_init_data(init_data: str) -> dict[str, object]:
     if calculated_hash != received_hash:
         logger.debug("Init data hash mismatch")
         raise ValueError("Invalid init data")
+    if signature:
+        data["signature"] = signature
     if "user" in data:
         data["user"] = json.loads(data["user"])
     return cast(dict[str, object], data)

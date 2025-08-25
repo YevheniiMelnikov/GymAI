@@ -10,7 +10,8 @@ from config.app_settings import settings
 
 
 def _build_init_data(payload: dict[str, str], token: str) -> str:
-    check_string: str = "\n".join(f"{k}={v}" for k, v in sorted(payload.items()))
+    payload_to_sign: dict[str, str] = {k: v for k, v in payload.items() if k != "signature"}
+    check_string: str = "\n".join(f"{k}={v}" for k, v in sorted(payload_to_sign.items()))
     secret_key: bytes = hashlib.sha256(token.encode()).digest()
     hash_value: str = hmac.new(secret_key, check_string.encode(), hashlib.sha256).hexdigest()
     body: str = "&".join(f"{k}={quote(v, safe='')}" for k, v in payload.items())
