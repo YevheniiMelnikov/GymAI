@@ -96,10 +96,16 @@ class Program(BaseModel):
     client_profile: int
     exercises_by_day: list[DayExercises] = Field(default_factory=list)
     created_at: float
-    split_number: int
-    workout_type: str
-    wishes: str
+    split_number: int | None = None
+    workout_type: str | None = None
+    wishes: str | None = None
     model_config = ConfigDict(extra="ignore")
+
+    @field_validator("client_profile", mode="before")
+    def _normalize_client_profile(cls, v: Any) -> int:
+        if isinstance(v, dict):
+            return int(v.get("id", 0))
+        return int(v)
 
     @field_validator("created_at", mode="before")
     def _normalize_created_at(cls, v: Any) -> float:

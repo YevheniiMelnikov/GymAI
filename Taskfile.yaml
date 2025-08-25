@@ -62,17 +62,20 @@ tasks:
     dotenv: ['.env']
     cmds:
       - |
+        set -euo pipefail
         echo "Flushing Redis..."
         for i in $(seq 0 15); do
-          docker exec redis redis-cli -n $i FLUSHDB 1>/dev/null
+          docker exec redis redis-cli -n "$i" FLUSHDB >/dev/null
         done
         echo "Redis ✅"
       - |
+        set -euo pipefail
         echo "Truncating PostgreSQL tables..."
-        docker exec db psql -U $DB_USER -d $DB_NAME -t -q -c "
-        DO \$\$
-        DECLARE
-          r RECORD;
+        DB_USER_RESOLVED="${DB_USER:-${POSTGRES_USER:-postgres}}"
+        DB_NAME_RESOLVED="${DB_NAME:-${POSTGRES_DB:-$DB_USER_RESOLVED}}"
+        docker exec db psql -U "$DB_USER_RESOLVED" -d "$DB_NAME_RESOLVED" -t -q -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
+        DO $$
+        DECLARE r RECORD;
         BEGIN
           FOR r IN (
             SELECT tablename
@@ -82,10 +85,9 @@ tasks:
               AND tablename NOT ILIKE 'auth_%'
               AND tablename NOT ILIKE 'rest_framework_api_key_%'
           ) LOOP
-            RAISE NOTICE '  truncating %', r.tablename;  -- опционально, для отладки
             EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' CASCADE';
           END LOOP;
         END
-        \$\$;
-        " 1>/dev/null
+        $$;
+SQL
         echo "PostgreSQL ✅"
