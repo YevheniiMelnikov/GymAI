@@ -10,7 +10,7 @@ x-common-env: &common_env
     REDIS_URL: "${REDIS_URL}"
     POSTGRES_DB: "${DB_NAME}"
     POSTGRES_USER: "${DB_USER}"
-    POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+    POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:- password}"
     POSTGRES_HOST: "${DB_HOST}"
     POSTGRES_PORT: "${DB_PORT}"
     AI_COACH_URL: "${AI_COACH_URL}"
@@ -30,7 +30,7 @@ services:
     environment:
       POSTGRES_DB: "${DB_NAME}"
       POSTGRES_USER: "${DB_USER}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:- password}"
       POSTGRES_HOST: "${DB_HOST}"
       POSTGRES_PORT: "${DB_PORT}"
     command: [ "postgres", "-c", "shared_preload_libraries=vector" ]
@@ -64,7 +64,8 @@ services:
     <<: *common_env
     entrypoint: /app/docker/entrypoint.sh
     environment:
-      - RUN_MIGRATIONS=true
+      GOOGLE_APPLICATION_CREDENTIALS: "/app/google_creds.json"
+      RUN_MIGRATIONS: true
     ports:
       - "${HOST_API_PORT:-8000}:8000"
     command: >
@@ -131,7 +132,7 @@ services:
       PGPORT: ${DB_PORT}
       PGDATABASE: ${DB_NAME}
       PGUSER: ${DB_USER}
-      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGPASSWORD: ${POSTGRES_PASSWORD:- password}
     env_file:
       - .env
     entrypoint: /app/docker/entrypoint.sh
@@ -156,6 +157,8 @@ services:
         EXTRAS: ""
     <<: *common_env
     entrypoint: /app/docker/entrypoint.sh
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: "/app/google_creds.json"
     command: python -m bot.main
     depends_on:
       redis:

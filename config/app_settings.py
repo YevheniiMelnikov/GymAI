@@ -29,7 +29,7 @@ class Settings(BaseSettings):
 
     CACHE_TTL: int = 60 * 5  # Django cache TTL
     BACKUP_RETENTION_DAYS: int = 30  # Postgres/Redis backup retention
-    STATIC_VERSION: int = 0
+    STATIC_VERSION: int = 1
 
     TIME_ZONE: Annotated[str, Field(default="Europe/Kyiv")]
     DEFAULT_LANG: Annotated[str, Field(default="ua")]
@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     DB_PORT: Annotated[str, Field(default="5432")]
     DB_NAME: Annotated[str, Field(default="postgres")]
     DB_USER: Annotated[str, Field(default="postgres")]
-    DB_PASSWORD: Annotated[str, Field(alias="POSTGRES_PASSWORD")]
+    DB_PASSWORD: Annotated[str, Field(alias="POSTGRES_PASSWORD", default="password")]
     DB_HOST: Annotated[str, Field(default="db")]
     DB_PROVIDER: Annotated[str, Field(default="postgres")]
     VECTORDATABASE_PROVIDER: Annotated[str, Field(default="pgvector")]
@@ -81,7 +81,7 @@ class Settings(BaseSettings):
     WEB_SERVER_HOST: Annotated[str, Field(default="0.0.0.0")]
     BOT_PORT: Annotated[int, Field(default=8088)]
 
-    GOOGLE_APPLICATION_CREDENTIALS: str
+    GOOGLE_APPLICATION_CREDENTIALS: Annotated[str, Field(default="google_creds.json")]
     GDRIVE_FOLDER_ID: str | None = None
     SPREADSHEET_ID: str
     TG_SUPPORT_CONTACT: str
