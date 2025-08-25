@@ -452,6 +452,7 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
         await state.set_state(States.program_action_choice)
         await del_msg(cast(Message | CallbackQuery | None, message))
     else:
+        await callback_query.answer(msg_text("no_program", profile.language), show_alert=True)
         await show_program_promo_page(callback_query, profile, state)
 
 
