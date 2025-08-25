@@ -9,7 +9,7 @@ from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, InputMediaPhoto, Message, FSInputFile
+from aiogram.types import CallbackQuery, Message, FSInputFile
 from pathlib import Path
 
 from bot import keyboards as kb
@@ -40,19 +40,21 @@ from core.services import avatar_manager
 from core.validators import validate_or_raise
 
 
-async def has_human_coach_subscription(client_id: int) -> bool:
+async def has_human_coach_subscription(profile_id: int) -> bool:
     try:
-        subscription = await Cache.workout.get_latest_subscription(client_id)
+        client = await Cache.client.get_client(profile_id)
+    except ClientNotFoundError:
+        return False
+
+    try:
+        subscription = await Cache.workout.get_latest_subscription(client.id)
     except SubscriptionNotFoundError:
         return False
 
-    if not subscription or not subscription.enabled:
+    if not subscription or not subscription.enabled or not client.assigned_to:
         return False
 
     try:
-        client = await Cache.client.get_client(client_id)
-        if not client.assigned_to:
-            return False
         coach = await get_assigned_coach(client, coach_type=CoachType.human)
         return coach is not None
     except Exception:
@@ -223,7 +225,7 @@ async def show_clients(message: Message, clients: list[Client], state: FSMContex
     current_index %= len(clients)
     current_client = clients[current_index]
     try:
-        subscription = await Cache.workout.get_latest_subscription(current_client.profile)
+        subscription = await Cache.workout.get_latest_subscription(current_client.id)
     except SubscriptionNotFoundError:
         subscription = None
 
@@ -261,6 +263,8 @@ async def show_coaches_menu(message: Message, coaches: list[Coach], bot: Bot, cu
 
     if await has_human_coach_subscription(profile.id):
         formatted_text += "\n" + msg_text("coach_switch_warning", lang)
+
+    from aiogram.types import InputMediaPhoto
 
     try:
         media = InputMediaPhoto(media=coach_photo_url)
@@ -385,15 +389,15 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
     message = cast(Message, callback_query.message)
     assert message
 
+    client_profile = await Cache.client.get_client(profile.id)
     try:
-        subscription = await Cache.workout.get_latest_subscription(profile.id)
+        subscription = await Cache.workout.get_latest_subscription(client_profile.id)
     except SubscriptionNotFoundError:
         subscription = None
 
     if not subscription or not subscription.enabled:
         file_path = Path(settings.BOT_PAYMENT_OPTIONS) / f"subscription_{language}.jpeg"
         subscription_img = FSInputFile(file_path)
-        client_profile = await Cache.client.get_client(profile.id)
         if not client_profile.assigned_to:
             await callback_query.answer(msg_text("client_not_assigned_to_coach", language), show_alert=True)
             return
@@ -430,7 +434,7 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
     client = await Cache.client.get_client(profile.id)
 
     try:
-        program = await Cache.workout.get_latest_program(client.profile)
+        program = await Cache.workout.get_latest_program(client.id)
     except ProgramNotFoundError:
         program = None
 
@@ -448,6 +452,7 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
         await state.set_state(States.program_action_choice)
         await del_msg(cast(Message | CallbackQuery | None, message))
     else:
+        await callback_query.answer(msg_text("no_program", profile.language), show_alert=True)
         await show_program_promo_page(callback_query, profile, state)
 
 
@@ -527,7 +532,8 @@ async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, 
 
 async def manage_subscription(callback_query: CallbackQuery, lang: str, profile_id: str, state: FSMContext) -> None:
     await state.clear()
-    subscription = await Cache.workout.get_latest_subscription(int(profile_id))
+    client = await Cache.client.get_client(int(profile_id))
+    subscription = await Cache.workout.get_latest_subscription(client.id)
     assert subscription
     message = cast(Message, callback_query.message)
     assert message

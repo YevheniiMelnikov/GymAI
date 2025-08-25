@@ -6,6 +6,7 @@ from core.exceptions import (
     ProfileNotFoundError,
     ProgramNotFoundError,
     SubscriptionNotFoundError,
+    ClientNotFoundError,
 )
 from core.schemas import DayExercises
 from loguru import logger
@@ -41,8 +42,9 @@ async def program_data(request: HttpRequest) -> JsonResponse:
     tg_id: int = int(str(user.get("id", "0")))
     try:
         profile = await Cache.profile.get_profile(tg_id)
-        program = await Cache.workout.get_latest_program(profile.id)
-    except (ProfileNotFoundError, ProgramNotFoundError):
+        client = await Cache.client.get_client(profile.id)
+        program = await Cache.workout.get_latest_program(client.id)
+    except (ProfileNotFoundError, ClientNotFoundError, ProgramNotFoundError):
         logger.warning("Program not found for tg_id={}", tg_id)
         return JsonResponse({"error": "not_found"}, status=404)
     except Exception:
@@ -64,8 +66,9 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
     tg_id: int = int(str(user.get("id", "0")))
     try:
         profile = await Cache.profile.get_profile(tg_id)
-        subscription = await Cache.workout.get_latest_subscription(profile.id)
-    except (ProfileNotFoundError, SubscriptionNotFoundError):
+        client = await Cache.client.get_client(profile.id)
+        subscription = await Cache.workout.get_latest_subscription(client.id)
+    except (ProfileNotFoundError, ClientNotFoundError, SubscriptionNotFoundError):
         logger.warning("Subscription not found for tg_id={}", tg_id)
         return JsonResponse({"error": "not_found"}, status=404)
     except Exception:
