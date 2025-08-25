@@ -10,11 +10,11 @@ WORKDIR /app
 FROM ghcr.io/astral-sh/uv:0.4.20 AS uvbin
 
 FROM node:20-alpine AS webbuild
-WORKDIR /app
-COPY package*.json ./
+WORKDIR /app/apps/webapp
+COPY apps/webapp/package*.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
-COPY apps/webapp/frontend/ apps/webapp/frontend/
-RUN npm run build:webapp
+COPY apps/webapp/frontend ./frontend
+RUN npm run build
 
 FROM py-base AS deps-app
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
