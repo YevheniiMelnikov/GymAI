@@ -1,0 +1,9 @@
+{
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  },
+  "scripts": {
+    "build:webapp": "tsc apps/webapp/frontend/webapp.ts --target ES2017 --outDir apps/webapp/static"
+  }
+}
+

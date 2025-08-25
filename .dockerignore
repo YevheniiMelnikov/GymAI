@@ -1,64 +1,52 @@
-# VCS
+.dockerignore
 .git
-.git/*
-!.gitkeep
-.dumps/
+.git/**
+docker/.env
+docker/.env.example
+docker/.env
 
-# Python bytecode & caches
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
-.mypy_cache/
-.pytest_cache/
-.ruff_cache/
-.coverage
+*.so
 *.log
+*.swp
+*.tmp
+*.db
+*.sqlite3
 
-# Virtualenvs
-.venv*/
-venv*/
-env*/
-site/
-.venv-win/
-
-# Node / frontend
-node_modules/
-*.tsbuildinfo
+.vscode/
+.idea/
+.venv/
+.venv-*/
+venv/
+env/
 dist/
 build/
+*.egg-info/
+site-packages/
 
-# IDE / OS
-.idea/
-.vscode/
-.DS_Store
-Thumbs.db
-.junie/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+coverage.xml
+htmlcov/
 
-# Data & artifacts
-data/
-datasets/
-downloads/
+node_modules/
+apps/webapp/frontend/node_modules/
+apps/webapp/frontend/.cache/
+apps/webapp/static/**
+
+.dask-worker-space/
 .cache/
-.local/
-media/
-staticfiles/
-logs/
-tmp/
-tmp*/
-*.sqlite3
-*.db
-.redis/
-
-# Project-specific large/ephemeral
+.config/
 .data_storage/
-.notebooks/
-**/celerybeat-schedule*
+dumps/
+dumps/**
 
-# Secrets
-.env
-.env.*
+staticfiles/
+media/
 google_creds.json
 
-# Docker context tuning
-# Do NOT ignore Dockerfiles or compose files; they must be sent with build context.
+docker/nginx.local.conf

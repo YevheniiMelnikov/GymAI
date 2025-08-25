@@ -96,10 +96,16 @@ class Program(BaseModel):
     client_profile: int
     exercises_by_day: list[DayExercises] = Field(default_factory=list)
     created_at: float
-    split_number: int
-    workout_type: str
-    wishes: str
+    split_number: int | None = None
+    workout_type: str | None = None
+    wishes: str | None = None
     model_config = ConfigDict(extra="ignore")
+
+    @field_validator("client_profile", mode="before")
+    def _normalize_client_profile(cls, v: Any) -> int:
+        if isinstance(v, dict):
+            return int(v.get("id", 0))
+        return int(v)
 
     @field_validator("created_at", mode="before")
     def _normalize_created_at(cls, v: Any) -> float:
@@ -109,6 +115,14 @@ class Program(BaseModel):
             return datetime.fromisoformat(str(v)).timestamp()
         except Exception:
             return 0.0
+
+    @field_validator("split_number", mode="before")
+    def _set_split_number(cls, v: Any, info: Any) -> int:
+        if v is None:
+            data = getattr(info, "data", {}) or {}
+            days: list[Any] = data.get("exercises_by_day", [])
+            return len(days)
+        return int(v)
 
 
 class Subscription(BaseModel):

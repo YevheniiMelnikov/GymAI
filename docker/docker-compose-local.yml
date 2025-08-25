@@ -1,158 +1,181 @@
+# Uncomment 'bot' service if you're running inside Docker. It's commented to allow running the Python
+
+x-app-image: &app_image gymbot-app:local
+x-coach-image: &coach_image gymbot-coach:local
+x-common-env: &common_env
+  environment:
+    PYTHONPATH: /app
+    DJANGO_SETTINGS_MODULE: config.settings
+    PYTHONUNBUFFERED: "1"
+    PYTHONDONTWRITEBYTECODE: "1"
+    REDIS_URL: "${REDIS_URL}"
+    POSTGRES_DB: "${DB_NAME}"
+    POSTGRES_USER: "${DB_USER}"
+    POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:- password}"
+    POSTGRES_HOST: "${DB_HOST}"
+    POSTGRES_PORT: "${DB_PORT}"
+    AI_COACH_URL: "${AI_COACH_URL}"
+  env_file:
+    - .env
+  volumes:
+    - ../:/app
+    - staticfiles:/app/staticfiles
+  depends_on:
+    redis:
+      condition: service_healthy
+    db:
+      condition: service_healthy
+
 services:
+#    bot:
+#      image: *app_image
+#      build:
+#        context: ..
+#        dockerfile: docker/Dockerfile
+#        target: py-runtime
+#        args:
+#          INSTALL_DEV: "true"
+#          EXTRAS: ""
+#      container_name: bot
+#      environment:
+#        GOOGLE_APPLICATION_CREDENTIALS: "/app/google_creds.json"
+#      <<: *common_env
+#      entrypoint: /app/docker/entrypoint.sh
+#      command: python -m bot.main
+#      restart: unless-stopped
+
   db:
     image: pgvector/pgvector:pg17
     container_name: db
-    env_file: ../.env
-    command: ["postgres", "-c", "shared_preload_libraries=vector"]
-    ports: ["15432:5432"]
+    environment:
+      POSTGRES_DB: "${DB_NAME}"
+      POSTGRES_USER: "${DB_USER}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:- password}"
+      POSTGRES_HOST: "${DB_HOST}"
+      POSTGRES_PORT: "${DB_PORT}"
+    command: [ "postgres", "-c", "shared_preload_libraries=vector" ]
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./init_pgvector.sql:/docker-entrypoint-initdb.d/init_pgvector.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    ports:
+      - "${HOST_PG_PORT:-5432}:5432"
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "${HOST_REDIS_PORT:-6379}:6379"
+
+  api:
+    image: *app_image
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: api-runtime
+      args:
+        INSTALL_DEV: "true"
+        EXTRAS: ""
+    container_name: api
+    <<: *common_env
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: "/app/google_creds.json"
+      RUN_MIGRATIONS: true
+    entrypoint: /app/docker/entrypoint.sh
+    command: >
+      gunicorn config.asgi:application
+      --worker-class uvicorn.workers.UvicornWorker
+      --bind 0.0.0.0:8000
+      --workers 2
+      --timeout 60
+      --access-logfile -
+      --error-logfile -
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health/"]
+      interval: 60s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    volumes:
+      - ../:/app
+      - staticfiles:/app/staticfiles
+    ports:
+      - "${HOST_API_PORT:-8000}:8000"
+
+  celery_worker:
+    image: *app_image
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: py-runtime
+      args:
+        INSTALL_DEV: "true"
+        EXTRAS: ""
+    container_name: celery_worker
+    <<: *common_env
+    entrypoint: /app/docker/entrypoint.sh
+    command: celery -A config.celery:celery_app worker -l info -Q default,maintenance -P threads
     restart: unless-stopped
 
   ai_coach:
+    image: *coach_image
     build:
       context: ..
-      dockerfile: docker/coach.Dockerfile
+      dockerfile: docker/Dockerfile
+      target: coach-runtime
+      args:
+        INSTALL_DEV: "true"
+        EXTRAS: "coach"
     container_name: ai_coach
-    ports: ["9000:9000"]
+    <<: *common_env
     environment:
-      - COGNEE_DATA_ROOT=/app/.data_storage
-      - ENABLE_BACKEND_ACCESS_CONTROL=false
-    env_file: ../.env
-    command: uvicorn ai_coach.api:app --host 0.0.0.0 --port 9000
-    volumes:
-      - ../.data_storage:/app/.data_storage
-      - ../config:/app/config
-      - ../google_creds.json:/app/google_creds.json:ro
-
-    depends_on:
-      db: { condition: service_healthy }
-      redis: { condition: service_healthy }
-    restart: unless-stopped
-
-  redis:
-    image: redis:7.4.2
-    container_name: redis
-    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
-    ports: ["16379:6379"]
-    volumes:
-      - redisdata:/data
-      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    restart: unless-stopped
-
-  api:
-    build:
-      context: ..
-      dockerfile: docker/api.Dockerfile
-      args: { INSTALL_DEV: "true" }
-    container_name: api
-    env_file: ../.env
+      PYTHONUNBUFFERED: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
+      REDIS_URL: "${REDIS_URL}"
+      PGHOST: ${DB_HOST}
+      PGPORT: ${DB_PORT}
+      PGDATABASE: ${DB_NAME}
+      PGUSER: ${DB_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD:- password}
+    env_file:
+      - .env
     volumes:
       - ../:/app
-      - ../config:/app/config
-    environment:
-      RUN_MIGRATIONS: "true"
-      AI_COACH_URL: http://ai_coach:9000/
-    command: >
-      uvicorn config.asgi:application --host 0.0.0.0 --port 8000
     depends_on:
-      db:    { condition: service_healthy }
-      redis: { condition: service_healthy }
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
-      interval: 60s
-      timeout: 5s
-      retries: 3
-    restart: unless-stopped
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    entrypoint: /app/docker/entrypoint.sh
+    command: bash -lc "python -c 'import asyncio; from cognee.modules.engine.operations.setup import setup; asyncio.run(setup())' && uvicorn ai_coach.api:app --host 0.0.0.0 --port 9000"
+    ports:
+      - "${HOST_COACH_PORT:-9000}:9000"
 
   nginx:
-    image: nginx:latest
+    image: nginx:alpine
     container_name: nginx
-    ports:
-      - "8000:80"
+    restart: unless-stopped
     volumes:
       - ./nginx.local.conf:/etc/nginx/conf.d/default.conf:ro
-      - ../static:/app/staticfiles:ro
-    depends_on:
-      api: { condition: service_started }
+      - staticfiles:/app/staticfiles:ro
+    ports:
+      - "${HOST_NGINX_PORT:-80}:80"
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    restart: unless-stopped
-
-  celery:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    container_name: celery_worker
-    env_file: ../.env
-    environment:
-      - COGNEE_DATA_ROOT=/app/.data_storage
-      - AI_COACH_URL=http://ai_coach:9000/
-    entrypoint: /app/docker/entrypoint.sh
-    command: celery -A config.celery:celery_app worker -l info -Q default,maintenance -P threads
-    volumes:
-      - ../:/app
-      - ../config:/app/config
-      - redisdata:/app/redis/data:ro
     depends_on:
-      db: { condition: service_healthy }
-      redis: { condition: service_healthy }
-    dns:
-      - 8.8.8.8
-      - 1.1.1.1
-    restart: unless-stopped
-
-  beat:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    container_name: celery_beat
-    env_file: ../.env
-    entrypoint: /app/docker/entrypoint.sh
-    command: celery -A config.celery:celery_app beat -l info
-    volumes:
-      - ../:/app
-      - ../config:/app/config
-    environment:
-      - AI_COACH_URL=http://ai_coach:9000/
-    depends_on:
-      db: { condition: service_healthy }
-      redis: { condition: service_healthy }
-    dns:
-      - 8.8.8.8
-      - 1.1.1.1
-    restart: unless-stopped
-
-# Uncomment 'bot' when fully running inside Docker. It's commented to allow running the Python process directly from the IDE
-
-#  bot:
-#    container_name: bot
-#    build:
-#      context: ..
-#      dockerfile: docker/Dockerfile
-#    depends_on:
-#      redis: {condition: service_healthy}
-#      db:    {condition: service_healthy}
-#    env_file: .env
-#    command: ["python", "-u", "/app/bot/application.py"]
-#    volumes:
-#      - ../google_creds.json:/app/google_creds.json:ro
-#      - ../dumps:/app/dumps
-#      - ../config:/app/config
-#    ports: ["8080:8080"]
-#    restart: unless-stopped
+      api:
+        condition: service_started
 
 volumes:
   pgdata:
-  redisdata:
+  staticfiles:

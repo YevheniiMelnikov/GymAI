@@ -1,4 +1,5 @@
 import asyncio
+import signal
 from aiohttp import web
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.redis import RedisStorage
@@ -58,30 +59,39 @@ async def main() -> None:
     app = web.Application()
     app["bot"] = bot
     await setup_app(app, bot, dp)
-    runner = await start_web_app(app)
 
-    ping_url = build_ping_url(settings.WEBHOOK_URL)
-    if not await check_webhook_alive(ping_url):
-        await runner.cleanup()
-        await dp.emit_shutdown(bot=bot)
-        await dp.storage.close()
-        shutdown_result = container.shutdown_resources()
-        if shutdown_result is not None:
-            await shutdown_result
-        raise SystemExit("Webhook healthcheck failed — exiting")
-
-    logger.success("Bot started")
-    stop_event = asyncio.Event()
-
+    runner = None
+    cleaned = False
     try:
+        runner = await start_web_app(app)
+
+        ping_url = build_ping_url(settings.WEBHOOK_URL)
+        if not await check_webhook_alive(ping_url):
+            if runner is not None:
+                await runner.cleanup()
+            await dp.emit_shutdown(bot=bot)
+            await dp.storage.close()
+            shutdown_result = container.shutdown_resources()
+            if shutdown_result is not None:
+                await shutdown_result
+            cleaned = True
+            raise SystemExit("Webhook healthcheck failed — exiting")
+
+        logger.success("Bot started")
+        stop_event = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        for s in (signal.SIGINT, signal.SIGTERM):
+            loop.add_signal_handler(s, lambda *_: stop_event.set())
         await stop_event.wait()
     finally:
-        await runner.cleanup()
-        await dp.emit_shutdown(bot=bot)
-        await dp.storage.close()
-        shutdown_result = container.shutdown_resources()
-        if shutdown_result is not None:
-            await shutdown_result
+        if not cleaned:
+            if runner is not None:
+                await runner.cleanup()
+            await dp.emit_shutdown(bot=bot)
+            await dp.storage.close()
+            shutdown_result = container.shutdown_resources()
+            if shutdown_result is not None:
+                await shutdown_result
 
 
 if __name__ == "__main__":

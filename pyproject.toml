@@ -7,57 +7,98 @@ readme = "README.md"
 requires-python = ">=3.12,<3.13"
 
 dependencies = [
-    "uvicorn>=0.34.2",
-    "aiohttp>=3.10.5",
+    "django>=5.2",
+    "djangorestframework>=3.16",
+    "djangorestframework-api-key>=3.0.0",
+    "django-filter>=25.0",
+    "django-redis>=6",
+    "django-unfold>=0.59.0",
+    "gunicorn>=21.2",
+    "psycopg2-binary>=2.9",
+    "sqlalchemy>=2.0",
+    "redis>=5",
+    "asyncpg>=0.30.0",
+    "celery>=5.3",
+    "structlog>=24.1",
     "loguru>=0.7.2",
+    "python-dateutil>=2.9.0.post0",
+    "python-dotenv>=1.0",
     "pyyaml>=6.0.2",
+    "orjson>=3.9",
+    "uvicorn>=0.35.0",
+    "fastapi>=0.115.0",
     "httpx>=0.28.1",
-    "redis>=5.2.1",
+    "aiohttp>=3.10.5",
+    "aiogram>=3.17.0",
+    "cryptography>=44.0.0",
+    "pydantic>=2",
+    "pydantic-settings>=2",
     "google-cloud-storage>=3.1.0",
     "google-api-python-client>=2.126.0",
-    "python-dateutil>=2.9.0.post0",
-    "aiogram>=3.17.0",
-    "djangorestframework>=3.15.2",
-    "djangorestframework-api-key>=3.0.0",
-    "cryptography>=44.0.0",
-    "django-filter==25.1",
-    "gspread>=6.2.0",
     "google-auth>=2.37.0",
-    "django>=5.2",
-    "celery>=5.5.2",
-    "django-redis>=5.4.0",
+    "gspread>=6.2.0",
     "dependency-injector>=4.47.1",
-    "pydantic-settings>=2.9.1",
-    "django-unfold>=0.59.0",
-    "cognee>=0.2.0",
-    "PyMuPDF>=1.23.22",
     "python-docx>=1.1.0",
-    "psycopg2-binary>=2.9.10",
-    "numpy==1.26.4",
-    "matplotlib>=3.8.3",
-    "asyncpg>=0.30.0",
-    "pgvector>=0.3.5",
-    "fastapi>=0.116.1",
-    "onnxruntime>=1.22.1",
 ]
 
 [project.optional-dependencies]
+coach = [  # TODO: UPDATE
+  "cognee==0.2.0",
+  "PyMuPDF==1.23.22",
+  "pgvector==0.3.5",
+  "dlt[postgres]>=1.15,<2.0"
+]
+
 dev = [
+    "pytest>=8",
+    "pytest-django>=4.8",
+    "pytest-asyncio>=0.23",
     "ruff>=0.11.2",
-    "pytest>=8.3.5",
+    "mypy>=1.10",
     "pre-commit>=4.2.0",
-    "types-python-dateutil",
+    "types-requests",
     "types-redis",
-    "pyrefly>=0.16.2",
+    "types-PyYAML",
+    "types-python-dateutil",
     "django-stubs>=4.2.7",
     "djangorestframework-stubs>=3.14.5",
-    "mypy-extensions>=1.0.0",
-    "types-PyYAML>=6.0.12.20240311",
+    "pyrefly>=0.16.2",
     "factory-boy==3.3.0",
-    "pytest-django==4.8.0",
-    "pytest-asyncio>=0.23",
     "bump-my-version>=1.2.0",
 ]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+zip-safe = false
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+  "apps*",
+  "bot*",
+  "core*",
+  "config*",
+  "ai_coach*",
+]
+exclude = [
+  "docker*",
+  "dumps*",
+  "static*",
+  "staticfiles*",
+  "tests*",
+  "nginx*",
+  "migrations*",
+  "scripts*",
+  "data*",
+  "docs*",
+  "redis*",
+]
+
+[tool.setuptools.package-data]
+"*" = ["**/templates/**", "**/static/**"]
 
 [tool.ruff]
 line-length = 120

@@ -115,7 +115,7 @@ async def _cache_program(
     program_dict.update(
         {
             "id": saved.id,
-            "client_profile": client.profile,
+            "client_profile": client.id,
             "created_at": saved.created_at,
             "split_number": len(program_dict.get("days", [])),
             "workout_type": workout_type,
@@ -127,7 +127,7 @@ async def _cache_program(
     if "days" in program_dict and "exercises_by_day" not in program_dict:
         program_dict["exercises_by_day"] = program_dict.pop("days")
 
-    await Cache.workout.save_program(client.profile, program_dict)
+    await Cache.workout.save_program(client.id, program_dict)
     logger.info(f"Program generated for client_id={client.id}")
 
 
@@ -181,7 +181,7 @@ async def generate_program(
 ) -> tuple[list[DayExercises], str]:
     logger.debug("generate_program started request_id={} client_id={}", request_id, client.id)
     try:
-        prev_program = await Cache.workout.get_latest_program(client.profile, use_fallback=False)
+        prev_program = await Cache.workout.get_latest_program(client.id, use_fallback=False)
         previous_program = json.dumps([d.model_dump() for d in prev_program.exercises_by_day], ensure_ascii=False)
     except ProgramNotFoundError:
         previous_program = "[]"

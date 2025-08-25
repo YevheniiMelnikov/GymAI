@@ -308,8 +308,8 @@ async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMCon
             exercises_to_modify: list[DayExercises] = subscription.exercises
         except SubscriptionNotFoundError:
             logger.info(
-                "Subscription not found for client_id=%s in set_exercise_weight – starting with empty exercises list.",
-                profile_id,
+                f"Subscription not found for client_id={profile_id} "
+                "in set_exercise_weight – starting with empty exercises list."
             )
             exercises_to_modify = []
     else:
@@ -606,7 +606,10 @@ async def program_history_nav(callback_query: CallbackQuery, state: FSMContext) 
 async def subscription_history_nav(callback_query: CallbackQuery, state: FSMContext) -> None:
     cb_data = callback_query.data or ""
     if cb_data == "back":
-        subscription = await Cache.workout.get_latest_subscription(callback_query.from_user.id)
+        data = await state.get_data()
+        profile = Profile.model_validate(data.get("profile"))
+        client = await Cache.client.get_client(profile.id)
+        subscription = await Cache.workout.get_latest_subscription(client.id)
         await show_subscription_page(callback_query, state, subscription)
         return
 

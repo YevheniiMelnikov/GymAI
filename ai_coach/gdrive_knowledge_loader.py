@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import io
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Final
+from typing import Any, Awaitable, Callable, Final, cast
 
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
@@ -57,7 +57,7 @@ class GDriveDocumentLoader(KnowledgeLoader):
     @staticmethod
     def _parse_pdf(data: bytes) -> str:
         with fitz.open(stream=data, filetype="pdf") as doc:
-            return "\n".join(page.get_text("text") for page in doc)
+            return "\n".join(cast(Any, page).get_text("text") for page in doc)
 
     @staticmethod
     def _parse_docx(data: bytes) -> str:

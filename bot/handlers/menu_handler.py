@@ -239,21 +239,21 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
         return
 
     request_id = str(uuid4())
-    ttl = 300
+
     if service == "program":
-        if not await acquire_once(f"gen_program:{client.id}", ttl):
+        if not await acquire_once(f"gen_program:{client.id}", settings.LLM_COOLDOWN):
             logger.warning(
                 "Duplicate program generation suppressed for client_id={} request_id={}",
                 client.id,
                 request_id,
             )
-            await callback_query.answer("\u23f3")
             await del_msg(callback_query)
             return
-        logger.info(
+
+        logger.debug(
             "Program generation started for client_id={} ttl={} request_id={}",
             client.id,
-            ttl,
+            settings.LLM_COOLDOWN,
             request_id,
         )
 
@@ -523,14 +523,14 @@ async def paginate_coaches(cbq: CallbackQuery, state: FSMContext, bot: Bot) -> N
 
         selected_coach = next((c for c in coaches if c.id == coach_id), None)
         if selected_coach is None:
-            logger.warning("Coach not found for id %s", coach_id)
+            logger.warning(f"Coach not found for id {coach_id}")
             await message.answer(msg_text("unexpected_error", profile.language))
             return
 
         try:
             client = await Cache.client.get_client(profile.id)
         except ClientNotFoundError:
-            logger.warning("Client not found for profile_id %s", profile.id)
+            logger.warning(f"Client not found for profile_id {profile.id}")
             await message.answer(msg_text("unexpected_error", profile.language))
             return
 
@@ -543,11 +543,11 @@ async def paginate_coaches(cbq: CallbackQuery, state: FSMContext, bot: Bot) -> N
 
         if client.assigned_to:
             try:
-                subscription = await Cache.workout.get_latest_subscription(profile.id)
+                subscription = await Cache.workout.get_latest_subscription(client.id)
             except SubscriptionNotFoundError:
                 subscription = None
             if subscription and subscription.enabled:
-                await cancel_subscription(profile.id, subscription.id)
+                await cancel_subscription(client.id, subscription.id)
 
         await assign_coach(selected_coach, client)
         await cbq.answer(msg_text("saved", profile.language))
@@ -661,18 +661,18 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
 
         if not callback_query.from_user:
             return
-        subscription = await Cache.workout.get_latest_subscription(profile.id)
+        subscription = await Cache.workout.get_latest_subscription(client.id)
         if subscription is None:
             return
 
-        await cancel_subscription(profile.id, subscription.id)
+        await cancel_subscription(client.id, subscription.id)
         logger.info(f"Subscription for client_id {client.id} deactivated")
         await show_main_menu(message, profile, state)
 
     else:
         await callback_query.answer()
         try:
-            subscription = await Cache.workout.get_latest_subscription(profile.id)
+            subscription = await Cache.workout.get_latest_subscription(client.id)
         except SubscriptionNotFoundError:
             logger.warning(f"Subscription not found for client_id {client.id}")
             await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)

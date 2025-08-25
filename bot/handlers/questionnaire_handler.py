@@ -606,10 +606,10 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
 
     await state.update_data(workout_days=days)
     if data.get("edit_mode"):
-        subscription = await Cache.workout.get_latest_subscription(client.profile)
+        subscription = await Cache.workout.get_latest_subscription(client.id)
 
         if subscription and len(subscription.workout_days) == len(days):
-            await edit_subscription_days(callback_query, days, client.profile, state, subscription)
+            await edit_subscription_days(callback_query, days, client.id, state, subscription)
             return
 
         if isinstance(callback_query.message, Message):

@@ -10,7 +10,7 @@ from core.encryptor import Encryptor
 from core.exceptions import CoachNotFoundError
 from core.validators import validate_or_raise
 from .base import BaseCacheManager
-from core.containers import get_container
+from core.services import APIService
 
 
 class CoachCacheManager(BaseCacheManager):
@@ -18,8 +18,7 @@ class CoachCacheManager(BaseCacheManager):
 
     @classmethod
     async def _fetch_from_service(cls, cache_key: str, field: str, *, use_fallback: bool) -> Coach:
-        service = get_container().profile_service()
-        coach = await service.get_coach_by_profile_id(int(field))
+        coach = await APIService.profile.get_coach_by_profile_id(int(field))
         if coach is None:
             raise CoachNotFoundError(int(field))
         return coach
@@ -48,8 +47,7 @@ class CoachCacheManager(BaseCacheManager):
         try:
             all_coaches = await cls.get_all("coaches")
             if not all_coaches:
-                service = get_container().profile_service()
-                coaches = await service.list_coach_profiles()
+                coaches = await APIService.profile.list_coach_profiles()
                 for coach in coaches:
                     await cls.save_coach(coach.profile, coach.model_dump())
                 all_coaches = await cls.get_all("coaches")
@@ -78,8 +76,7 @@ class CoachCacheManager(BaseCacheManager):
         try:
             existing = await cls.get_json("coaches", str(profile_id))
             if not existing:
-                service = get_container().profile_service()
-                coach = await service.get_coach_by_profile_id(profile_id)
+                coach = await APIService.profile.get_coach_by_profile_id(profile_id)
                 if coach is None:
                     raise CoachNotFoundError(profile_id)
                 existing = coach.model_dump()

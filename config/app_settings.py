@@ -29,6 +29,7 @@ class Settings(BaseSettings):
 
     CACHE_TTL: int = 60 * 5  # Django cache TTL
     BACKUP_RETENTION_DAYS: int = 30  # Postgres/Redis backup retention
+    STATIC_VERSION: int = 1
 
     TIME_ZONE: Annotated[str, Field(default="Europe/Kyiv")]
     DEFAULT_LANG: Annotated[str, Field(default="ua")]
@@ -42,7 +43,7 @@ class Settings(BaseSettings):
     DB_PORT: Annotated[str, Field(default="5432")]
     DB_NAME: Annotated[str, Field(default="postgres")]
     DB_USER: Annotated[str, Field(default="postgres")]
-    DB_PASSWORD: Annotated[str, Field(alias="POSTGRES_PASSWORD")]
+    DB_PASSWORD: Annotated[str, Field(alias="POSTGRES_PASSWORD", default="password")]
     DB_HOST: Annotated[str, Field(default="db")]
     DB_PROVIDER: Annotated[str, Field(default="postgres")]
     VECTORDATABASE_PROVIDER: Annotated[str, Field(default="pgvector")]
@@ -51,7 +52,9 @@ class Settings(BaseSettings):
 
     API_KEY: str
     SECRET_KEY: str
-    API_URL: str
+    API_HOST: Annotated[str, Field(default="http://127.0.0.1")]
+    HOST_API_PORT: Annotated[str, Field(default="8000")]
+    API_URL: Annotated[str | None, Field(default=None)]
     ALLOWED_HOSTS: Annotated[list[str], Field(default=["localhost", "127.0.0.1"])]
     SITE_NAME: Annotated[str, Field(default="AchieveTogether")]
 
@@ -64,6 +67,7 @@ class Settings(BaseSettings):
     LLM_API_KEY: Annotated[str, Field(default="")]
     LLM_MODEL: Annotated[str, Field(default="gpt-4o")]
     LLM_PROVIDER: Annotated[str, Field(default="custom")]
+    LLM_COOLDOWN: Annotated[int, Field(default=60)]
 
     EMBEDDING_MODEL: Annotated[str, Field(default="openai/text-embedding-3-large")]
     EMBEDDING_PROVIDER: Annotated[str, Field(default="openai")]
@@ -72,10 +76,12 @@ class Settings(BaseSettings):
     BOT_TOKEN: str
     BOT_LINK: str
     WEBHOOK_HOST: str
-    WEBHOOK_PORT: int
+    HOST_NGINX_PORT: Annotated[str, Field(default="8000")]
     WEBAPP_PUBLIC_URL: Annotated[str | None, Field(default=None)]
+    WEB_SERVER_HOST: Annotated[str, Field(default="0.0.0.0")]
+    BOT_PORT: Annotated[int, Field(default=8088)]
 
-    GOOGLE_APPLICATION_CREDENTIALS: str
+    GOOGLE_APPLICATION_CREDENTIALS: Annotated[str, Field(default="google_creds.json")]
     GDRIVE_FOLDER_ID: str | None = None
     SPREADSHEET_ID: str
     TG_SUPPORT_CONTACT: str
@@ -96,17 +102,16 @@ class Settings(BaseSettings):
     WEBHOOK_URL: str | None = None
     PAYMENT_CALLBACK_URL: str | None = None
 
-    # PRICING
     PACKAGE_START_CREDITS: int = 500
-    PACKAGE_START_PRICE: Decimal = Decimal("250")  # UAH
+    PACKAGE_START_PRICE: Decimal = Decimal("250")
     PACKAGE_OPTIMUM_CREDITS: int = 1200
-    PACKAGE_OPTIMUM_PRICE: Decimal = Decimal("500")  # UAH
+    PACKAGE_OPTIMUM_PRICE: Decimal = Decimal("500")
     PACKAGE_MAX_CREDITS: int = 6200
-    PACKAGE_MAX_PRICE: Decimal = Decimal("2300")  # UAH
+    PACKAGE_MAX_PRICE: Decimal = Decimal("2300")
 
     AI_PROGRAM_PRICE: Decimal = Decimal("350")
-    REGULAR_AI_SUBSCRIPTION_PRICE: Decimal = Decimal("450")  # 1 month
-    LARGE_AI_SUBSCRIPTION_PRICE: Decimal = Decimal("2000")  # 6 months
+    REGULAR_AI_SUBSCRIPTION_PRICE: Decimal = Decimal("450")
+    LARGE_AI_SUBSCRIPTION_PRICE: Decimal = Decimal("2000")
     ASK_AI_PRICE: Decimal = Decimal("10")
 
     model_config = {
@@ -129,7 +134,9 @@ class Settings(BaseSettings):
         # PAYMENT_CALLBACK_URL
         if not self.PAYMENT_CALLBACK_URL:
             self.PAYMENT_CALLBACK_URL = f"{self.WEBHOOK_HOST}/payment-webhook/"
-
+        if not self.API_URL:
+            base = str(self.API_HOST).rstrip("/")
+            self.API_URL = f"{base}:{self.HOST_API_PORT}/"
         return self
 
     @property
