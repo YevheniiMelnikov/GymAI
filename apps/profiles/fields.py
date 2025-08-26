@@ -1,7 +1,7 @@
 from django.db.models import CharField
 from django.utils.translation import gettext_lazy as _
 
-from core.encryptor import Encryptor
+from core.utils.encryptor import Encryptor
 
 
 class EncryptedField(CharField):

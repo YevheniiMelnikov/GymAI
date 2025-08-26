@@ -5,7 +5,7 @@ from loguru import logger
 
 from core.schemas import Subscription, Program
 from .base import BaseCacheManager
-from core.validators import validate_or_raise
+from core.utils.validators import validate_or_raise
 from core.containers import get_container
 from core.exceptions import SubscriptionNotFoundError, ProgramNotFoundError
 

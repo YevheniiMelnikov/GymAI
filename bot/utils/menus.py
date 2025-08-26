@@ -32,7 +32,7 @@ from bot.utils.exercises import format_program, format_full_program
 from config.app_settings import settings
 from bot.utils.bot import del_msg, answer_msg, get_webapp_url
 from core.services import avatar_manager
-from core.validators import validate_or_raise
+from core.utils.validators import validate_or_raise
 
 
 async def has_human_coach_subscription(profile_id: int) -> bool:

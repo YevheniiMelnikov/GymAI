@@ -6,9 +6,9 @@ from loguru import logger
 
 from core.schemas import Coach
 from core.enums import CoachType
-from core.encryptor import Encryptor
+from core.utils.encryptor import Encryptor
 from core.exceptions import CoachNotFoundError
-from core.validators import validate_or_raise
+from core.utils.validators import validate_or_raise
 from .base import BaseCacheManager
 from core.services import APIService
 

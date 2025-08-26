@@ -35,7 +35,7 @@ from bot.utils.other import parse_price
 from bot.utils.bot import del_msg, answer_msg, delete_messages, set_bot_commands
 from bot.texts.text_manager import msg_text
 from core.services import avatar_manager
-from core.validators import is_valid_year
+from core.utils.validators import is_valid_year
 
 questionnaire_router = Router()
 

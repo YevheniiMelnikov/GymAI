@@ -5,7 +5,7 @@ from typing import Any, ClassVar
 from core.schemas import Client
 from core.exceptions import ClientNotFoundError
 from .base import BaseCacheManager
-from core.validators import validate_or_raise
+from core.utils.validators import validate_or_raise
 from core.services import APIService
 
 
