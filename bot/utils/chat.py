@@ -9,7 +9,7 @@ from aiogram.types import CallbackQuery, Message, FSInputFile, InputFile
 from pathlib import Path
 
 from bot.texts import msg_text
-from bot.utils.bot import answer_msg, get_webapp_url
+from bot.utils.bot import answer_msg, get_webapp_url, del_msg
 from bot.keyboards import new_coach_kb, incoming_request_kb, client_msg_bk, program_view_kb
 from bot.states import States
 from config.app_settings import settings
@@ -18,6 +18,7 @@ from core.schemas import Coach, Profile, Client
 from core.enums import CoachType
 from core.services import APIService
 from bot.utils.text import format_new_client_message, get_client_page, get_workout_types
+from bot.utils.profiles import get_assigned_coach
 from core.services import avatar_manager
 
 
@@ -151,6 +152,27 @@ async def send_coach_request(
         ),
         reply_markup=new_coach_kb(profile.id),
     )
+
+
+async def contact_coach(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+    try:
+        client = await Cache.client.get_client(profile.id)
+    except Exception:
+        await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
+        return
+    if not client.assigned_to:
+        await callback_query.answer(msg_text("client_not_assigned_to_coach", profile.language), show_alert=True)
+        return
+    coach = await get_assigned_coach(client, coach_type=CoachType.human)
+    if coach is None:
+        await callback_query.answer(msg_text("client_not_assigned_to_coach", profile.language), show_alert=True)
+        return
+    await state.update_data(recipient_id=coach.profile, sender_name=client.name)
+    await state.set_state(States.contact_coach)
+    message = callback_query.message
+    if message is not None:
+        await message.answer(msg_text("enter_your_message", profile.language))
+    await del_msg(cast(Message | CallbackQuery | None, callback_query))
 
 
 async def contact_client(callback_query: CallbackQuery, profile: Profile, profile_id: str, state: FSMContext) -> None:

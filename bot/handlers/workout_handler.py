@@ -21,7 +21,7 @@ from bot.texts.exercises import exercise_dict
 from core.cache import Cache
 from core.enums import ClientStatus, CoachType
 from core.services import APIService
-from bot.utils.chat import send_message
+from bot.utils.chat import contact_coach, send_message
 from core.tasks import send_workout_result
 from bot.utils.exercises import update_exercise_data, save_exercise, format_program, create_exercise
 from bot.utils.menus import (
@@ -43,9 +43,9 @@ from bot.utils.other import (
 )
 from bot.utils.bot import del_msg, answer_msg, delete_messages
 from bot.utils.workout_plans import reset_workout_plan, save_workout_plan, next_day_workout_plan
-from core.schemas import DayExercises, Profile, Program
+from core.schemas import DayExercises, Profile
 from bot.texts import msg_text, btn_text
-from core.exceptions import SubscriptionNotFoundError, ProgramNotFoundError
+from core.exceptions import SubscriptionNotFoundError
 from core.services import gif_manager
 
 workout_router = Router()
@@ -60,25 +60,7 @@ async def select_service(callback_query: CallbackQuery, state: FSMContext):
     elif callback_query.data == "program":
         await show_my_program_menu(callback_query, profile, state)
     elif callback_query.data == "contact":
-        try:
-            client = await Cache.client.get_client(profile.id)
-        except Exception:
-            await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
-            return
-        if not client.assigned_to:
-            await callback_query.answer(msg_text("client_not_assigned_to_coach", profile.language), show_alert=True)
-            return
-        coach = await get_assigned_coach(client, coach_type=CoachType.human)
-        if coach is None:
-            await callback_query.answer(msg_text("client_not_assigned_to_coach", profile.language), show_alert=True)
-            return
-        coach_id = coach.profile
-        await state.update_data(recipient_id=coach_id, sender_name=client.name)
-        await state.set_state(States.contact_coach)
-        message = callback_query.message
-        if message is not None:
-            await message.answer(msg_text("enter_your_message", profile.language))
-        await del_msg(cast(Message | CallbackQuery | None, callback_query))
+        await contact_coach(callback_query, profile, state)
     else:
         message = cast(Message, callback_query.message)
         assert message is not None
