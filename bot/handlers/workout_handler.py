@@ -45,7 +45,7 @@ from bot.utils.bot import del_msg, answer_msg, delete_messages
 from bot.utils.workout_plans import reset_workout_plan, save_workout_plan, next_day_workout_plan
 from core.schemas import DayExercises, Profile, Program
 from bot.texts import msg_text, btn_text
-from core.exceptions import SubscriptionNotFoundError
+from core.exceptions import SubscriptionNotFoundError, ProgramNotFoundError
 from core.services import gif_manager
 
 workout_router = Router()
@@ -162,28 +162,6 @@ async def program_action_choice(callback_query: CallbackQuery, state: FSMContext
             msg_text("select_service", profile.language),
             reply_markup=select_service_kb(profile.language, has_coach),
         )
-
-    elif cb_data == "history":
-        await show_program_history(callback_query, profile, state)
-
-    elif cb_data == "show_latest":
-        program_data = data.get("program")
-        if not program_data:
-            await callback_query.answer(msg_text("no_program", profile.language), show_alert=True)
-            await state.set_state(States.select_service)
-            await message.answer(
-                msg_text("select_service", profile.language),
-                reply_markup=select_service_kb(profile.language, has_coach),
-            )
-        else:
-            program = Program.model_validate(program_data)
-            await state.update_data(
-                exercises=[e.model_dump() for e in program.exercises_by_day],
-                days=list(range(program.split_number)),
-                split=program.split_number,
-            )
-            await show_exercises_menu(callback_query, state, profile)
-            return
 
     elif cb_data == "new_program":
         await callback_query.answer()

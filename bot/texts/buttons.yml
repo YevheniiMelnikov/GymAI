@@ -64,9 +64,9 @@ subscription:
   ua: "Підписки 📅"
 
 program:
-  eng: "Program 🏋️"
-  ru: "Программа 🏋️"
-  ua: "Програма 🏋️"
+  eng: "Programs 🏋️"
+  ru: "Программы 🏋️"
+  ua: "Програми 🏋️"
 
 tariff_plans:
   eng: "Tariff plans 💳"

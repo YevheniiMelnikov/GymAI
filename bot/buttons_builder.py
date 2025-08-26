@@ -1,7 +1,7 @@
 import html
 import re
 
-from aiogram.types import InlineKeyboardButton
+from aiogram.types import InlineKeyboardButton, WebAppInfo
 
 from bot.texts.text_manager import btn_text
 
@@ -15,9 +15,13 @@ class ButtonsBuilder:
         text = re.sub(r'<tg-emoji emoji-id="([^"]+)">([^<]+)</tg-emoji>', r"\2", text)
         return text
 
-    def add(self, text_key: str, callback: str, **format_args) -> InlineKeyboardButton:
+    def add(
+        self, text_key: str, callback: str | None = None, webapp_url: str | None = None, **format_args
+    ) -> InlineKeyboardButton:
         text = btn_text(text_key, lang=self.lang).format(**format_args)
         formatted_text = self._replace_emoji_tags(html.unescape(text))
+        if webapp_url:
+            return InlineKeyboardButton(text=formatted_text, web_app=WebAppInfo(url=webapp_url))
         return InlineKeyboardButton(text=formatted_text, callback_data=callback)
 
     def create_toggle(

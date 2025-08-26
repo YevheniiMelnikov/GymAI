@@ -441,11 +441,10 @@ def payment_kb(lang: str, link: str, service_type: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons)
 
 
-def program_action_kb(lang: str) -> KbMarkup:
+def program_action_kb(lang: str, webapp_url: str | None = None) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
-        [builder.add("view", "show_latest"), builder.add("new_program", "new_program")],
-        [builder.add("history", "history")],
+        [builder.add("view", webapp_url=webapp_url), builder.add("new_program", "new_program")],
         [builder.add("prev_menu", "back")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)

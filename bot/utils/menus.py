@@ -21,12 +21,7 @@ from bot.states import States
 from bot.texts import msg_text
 from core.cache import Cache
 from core.enums import ClientStatus, CoachType
-from core.exceptions import (
-    ClientNotFoundError,
-    CoachNotFoundError,
-    SubscriptionNotFoundError,
-    ProgramNotFoundError,
-)
+from core.exceptions import ClientNotFoundError, CoachNotFoundError, SubscriptionNotFoundError
 from core.schemas import Client, Coach, Profile, Subscription, Program, DayExercises
 from bot.utils.text import (
     get_client_page,
@@ -431,32 +426,19 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
 async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
     message = cast(Message, callback_query.message)
     assert message
-    client = await Cache.client.get_client(profile.id)
 
-    try:
-        program = await Cache.workout.get_latest_program(client.id)
-    except ProgramNotFoundError:
-        program = None
-
-    if program:
-        if not program.exercises_by_day:
-            await callback_query.answer(msg_text("program_not_ready", profile.language), show_alert=True)
-            return
-
-        await answer_msg(
-            message,
-            msg_text("select_action", profile.language),
-            reply_markup=kb.program_action_kb(profile.language),
-        )
-        await state.update_data(program=program.model_dump())
-        await state.set_state(States.program_action_choice)
-        await del_msg(cast(Message | CallbackQuery | None, message))
-    else:
-        await callback_query.answer(msg_text("no_program", profile.language), show_alert=True)
-        await show_program_promo_page(callback_query, profile, state)
+    await answer_msg(
+        message,
+        msg_text("select_action", profile.language),
+        reply_markup=kb.program_action_kb(profile.language, get_webapp_url("program")),
+    )
+    await state.set_state(States.program_action_choice)
+    await del_msg(cast(Message | CallbackQuery | None, message))
 
 
-async def show_program_promo_page(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+async def show_program_promo_page(
+    callback_query: CallbackQuery, profile: Profile, state: FSMContext
+) -> None:  # TODO: MOVE TO 'NEW PROGRAM' SELECTION
     client_profile = await Cache.client.get_client(profile.id)
     language = cast(str, profile.language)
 
@@ -672,7 +654,7 @@ async def show_program_history(
     profile: Profile,
     state: FSMContext,
     index: int = 0,
-) -> None:
+) -> None:  # TODO: remove
     programs = await Cache.workout.get_all_programs(profile.id)
     if not programs:
         await callback_query.answer(msg_text("no_program", profile.language), show_alert=True)
