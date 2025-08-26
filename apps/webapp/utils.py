@@ -87,10 +87,12 @@ def verify_init_data(init_data: str) -> dict[str, object]:
     if signature is not None:
         result["signature"] = signature
 
+    user = result.get("user")
+    user_id = user.get("id") if isinstance(user, dict) else None
     logger.debug(
         "verify_init_data ok (scheme={}) for user_id={}",
         "new" if ok_new else "old",
-        (result.get("user") or {}).get("id") if isinstance(result.get("user"), dict) else None,
+        user_id,
     )
     return cast(dict[str, object], result)
 
