@@ -138,6 +138,14 @@ class WorkoutCacheManager(BaseCacheManager):
         return programs
 
     @classmethod
+    async def get_program_by_id(cls, client_profile_id: int, program_id: int) -> Program:
+        programs = await cls.get_all_programs(client_profile_id)
+        for program in programs:
+            if program.id == program_id:
+                return program
+        raise ProgramNotFoundError(client_profile_id)
+
+    @classmethod
     async def cache_gif_filename(cls, exercise_name: str, filename: str) -> None:
         try:
             if exercise_name and filename:
