@@ -5,6 +5,7 @@ const content = document.getElementById("content");
 const dateEl = document.getElementById("program-date");
 const originEl = document.getElementById("program-origin");
 const controls = document.getElementById("controls");
+const historyBtn = document.getElementById("history-btn");
 
 function setText(txt: string): void {
   if (content) {
@@ -25,6 +26,8 @@ function goToHistory(): void {
   q.set("page", "history");
   window.location.search = q.toString();
 }
+
+historyBtn?.addEventListener("click", goToHistory);
 
 async function loadProgram(programId?: string | null): Promise<void> {
   try {
@@ -51,18 +54,15 @@ async function loadProgram(programId?: string | null): Promise<void> {
       return;
     }
     if (dateEl && typeof data.created_at === "number") {
-      dateEl.textContent = formatDate(data.created_at);
+      dateEl.textContent = `Created: ${formatDate(data.created_at)}`;
     }
     if (originEl) {
       originEl.textContent = data.coach_type === "ai_coach" ? "AI" : "";
       originEl.style.color = data.coach_type === "ai_coach" ? "purple" : "";
     }
     setText(data.program || "");
-    if (controls) {
-      const btn = document.createElement("button");
-      btn.textContent = "History";
-      btn.addEventListener("click", goToHistory);
-      controls.appendChild(btn);
+    if (historyBtn) {
+      historyBtn.style.display = "block";
     }
   } catch (err) {
     console.error("Failed to load program", err);
@@ -78,6 +78,9 @@ interface HistoryItem {
 
 async function loadHistory(): Promise<void> {
   try {
+    if (historyBtn) {
+      historyBtn.style.display = "none";
+    }
     const q = new URLSearchParams();
     q.set("init_data", initData);
     const resp = await fetch(`/webapp/api/programs/?${q.toString()}`);

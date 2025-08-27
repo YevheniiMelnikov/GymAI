@@ -5,6 +5,7 @@ const content = document.getElementById("content");
 const dateEl = document.getElementById("program-date");
 const originEl = document.getElementById("program-origin");
 const controls = document.getElementById("controls");
+const historyBtn = document.getElementById("history-btn");
 function setText(txt) {
     if (content) {
         content.textContent = txt;
@@ -20,6 +21,7 @@ function goToHistory() {
     q.set("page", "history");
     window.location.search = q.toString();
 }
+historyBtn === null || historyBtn === void 0 ? void 0 : historyBtn.addEventListener("click", goToHistory);
 async function loadProgram(programId) {
     try {
         const q = new URLSearchParams();
@@ -45,17 +47,14 @@ async function loadProgram(programId) {
             return;
         }
         if (dateEl && typeof data.created_at === "number")
-            dateEl.textContent = formatDate(data.created_at);
+            dateEl.textContent = `Created: ${formatDate(data.created_at)}`;
         if (originEl) {
             originEl.textContent = data.coach_type === "ai_coach" ? "AI" : "";
             originEl.style.color = data.coach_type === "ai_coach" ? "purple" : "";
         }
         setText((data === null || data === void 0 ? void 0 : data.program) || "");
-        if (controls) {
-            const btn = document.createElement("button");
-            btn.textContent = "History";
-            btn.addEventListener("click", goToHistory);
-            controls.appendChild(btn);
+        if (historyBtn) {
+            historyBtn.style.display = "block";
         }
     }
     catch (err) {
@@ -65,6 +64,9 @@ async function loadProgram(programId) {
 }
 async function loadHistory() {
     try {
+        if (historyBtn) {
+            historyBtn.style.display = "none";
+        }
         const q = new URLSearchParams();
         q.set("init_data", initData);
         const resp = await fetch(`/webapp/api/programs/?${q.toString()}`);
