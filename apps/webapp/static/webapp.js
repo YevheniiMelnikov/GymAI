@@ -5,7 +5,6 @@ const content = document.getElementById("content");
 const dateEl = document.getElementById("program-date");
 const originEl = document.getElementById("program-origin");
 const controls = document.getElementById("controls");
-const historyBtn = document.getElementById("history-btn");
 function setText(txt) {
     if (content) {
         content.textContent = txt;
@@ -15,13 +14,21 @@ function formatDate(ts) {
     const d = new Date(ts * 1000);
     return d.toLocaleDateString();
 }
-historyBtn === null || historyBtn === void 0 ? void 0 : historyBtn.addEventListener("click", () => {
-    const url = new URL(window.location.toString());
-    url.searchParams.set("page", "history");
-    url.searchParams.delete("program_id");
-    window.history.pushState({}, "", url);
-    void loadHistory();
-});
+function renderProgramControls() {
+    if (!controls)
+        return;
+    controls.innerHTML = "";
+    const btn = document.createElement("button");
+    btn.textContent = "History";
+    btn.addEventListener("click", () => {
+        const url = new URL(window.location.toString());
+        url.searchParams.set("page", "history");
+        url.searchParams.delete("program_id");
+        window.history.pushState({}, "", url);
+        void loadHistory();
+    });
+    controls.appendChild(btn);
+}
 async function loadProgram(programId) {
     try {
         const q = new URLSearchParams();
@@ -47,12 +54,8 @@ async function loadProgram(programId) {
             return;
         }
         if (dateEl) {
-            if (typeof data.created_at === "number") {
-                dateEl.textContent = `Created: ${formatDate(data.created_at)}`;
-            }
-            else {
-                dateEl.textContent = "";
-            }
+            const ts = Number(data.created_at);
+            dateEl.textContent = Number.isFinite(ts) ? `Created: ${formatDate(ts)}` : "";
         }
         if (originEl) {
             if (data.coach_type === "ai_coach") {
@@ -65,9 +68,7 @@ async function loadProgram(programId) {
             }
         }
         setText(data.program || "");
-        if (historyBtn) {
-            historyBtn.style.display = "block";
-        }
+        renderProgramControls();
         const url = new URL(window.location.toString());
         url.searchParams.delete("page");
         if (programId) {
@@ -85,9 +86,6 @@ async function loadProgram(programId) {
 }
 async function loadHistory() {
     try {
-        if (historyBtn) {
-            historyBtn.style.display = "none";
-        }
         if (dateEl)
             dateEl.textContent = "";
         if (originEl) {

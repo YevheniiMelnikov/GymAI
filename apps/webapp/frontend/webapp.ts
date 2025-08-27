@@ -5,7 +5,6 @@ const content = document.getElementById("content");
 const dateEl = document.getElementById("program-date");
 const originEl = document.getElementById("program-origin");
 const controls = document.getElementById("controls");
-const historyBtn = document.getElementById("history-btn");
 
 function setText(txt: string): void {
   if (content) {
@@ -20,13 +19,20 @@ function formatDate(ts: number): string {
 
 type CoachType = "human" | "ai_coach";
 
-historyBtn?.addEventListener("click", () => {
-  const url = new URL(window.location.toString());
-  url.searchParams.set("page", "history");
-  url.searchParams.delete("program_id");
-  window.history.pushState({}, "", url);
-  void loadHistory();
-});
+function renderProgramControls(): void {
+  if (!controls) return;
+  controls.innerHTML = "";
+  const btn = document.createElement("button");
+  btn.textContent = "History";
+  btn.addEventListener("click", () => {
+    const url = new URL(window.location.toString());
+    url.searchParams.set("page", "history");
+    url.searchParams.delete("program_id");
+    window.history.pushState({}, "", url);
+    void loadHistory();
+  });
+  controls.appendChild(btn);
+}
 
 async function loadProgram(programId?: string | null): Promise<void> {
   try {
@@ -46,18 +52,15 @@ async function loadProgram(programId?: string | null): Promise<void> {
       setText("Server error");
       return;
     }
-    const data: { program?: string; created_at?: number; coach_type?: CoachType; error?: string } =
+    const data: { program?: string; created_at?: number | string; coach_type?: CoachType; error?: string } =
       await resp.json();
     if (data.error === "service_unavailable") {
       setText("Service temporarily unavailable");
       return;
     }
     if (dateEl) {
-      if (typeof data.created_at === "number") {
-        dateEl.textContent = `Created: ${formatDate(data.created_at)}`;
-      } else {
-        dateEl.textContent = "";
-      }
+      const ts = Number(data.created_at);
+      dateEl.textContent = Number.isFinite(ts) ? `Created: ${formatDate(ts)}` : "";
     }
     if (originEl) {
       if (data.coach_type === "ai_coach") {
@@ -69,9 +72,7 @@ async function loadProgram(programId?: string | null): Promise<void> {
       }
     }
     setText(data.program || "");
-    if (historyBtn) {
-      historyBtn.style.display = "block";
-    }
+    renderProgramControls();
     const url = new URL(window.location.toString());
     url.searchParams.delete("page");
     if (programId) {
@@ -94,9 +95,6 @@ interface HistoryItem {
 
 async function loadHistory(): Promise<void> {
   try {
-    if (historyBtn) {
-      historyBtn.style.display = "none";
-    }
     if (dateEl) dateEl.textContent = "";
     if (originEl) {
       originEl.textContent = "";
