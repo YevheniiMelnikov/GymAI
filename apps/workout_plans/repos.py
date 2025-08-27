@@ -81,6 +81,18 @@ class ProgramRepository:
         )
         return program
 
+    @staticmethod
+    def get_latest(client_profile_id: int) -> Program | None:
+        return ProgramRepository.base_qs().filter(client_profile_id=client_profile_id).order_by("-created_at").first()
+
+    @staticmethod
+    def get_all(client_profile_id: int) -> list[Program]:
+        return list(ProgramRepository.base_qs().filter(client_profile_id=client_profile_id).order_by("-created_at"))
+
+    @staticmethod
+    def get_by_id(client_profile_id: int, program_id: int) -> Program | None:
+        return ProgramRepository.base_qs().filter(client_profile_id=client_profile_id, id=program_id).first()
+
 
 class SubscriptionRepository:
     @staticmethod
@@ -95,3 +107,15 @@ class SubscriptionRepository:
         if client_profile_id:
             return qs.filter(client_profile_id=client_profile_id)
         return qs
+
+    @staticmethod
+    def get_latest(client_profile_id: int) -> Subscription | None:
+        return (
+            SubscriptionRepository.base_qs().filter(client_profile_id=client_profile_id).order_by("-updated_at").first()
+        )
+
+    @staticmethod
+    def get_all(client_profile_id: int) -> list[Subscription]:
+        return list(
+            SubscriptionRepository.base_qs().filter(client_profile_id=client_profile_id).order_by("-updated_at")
+        )
