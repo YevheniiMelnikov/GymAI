@@ -19,7 +19,6 @@ from core.exceptions import (
     ClientNotAssignedError,
 )
 from core.services import APIService
-from bot.utils.chat import send_coach_request
 from bot.utils.bot import del_msg, answer_msg, delete_messages
 from core.schemas import Client, Coach, Profile
 from bot.texts.text_manager import msg_text
@@ -61,6 +60,8 @@ async def update_profile_data(message: Message, state: FSMContext, role: str, bo
                     await answer_msg(
                         message, msg_text("wait_for_verification", data.get("lang", settings.DEFAULT_LANG))
                     )
+                    from bot.utils.chat import send_coach_request
+
                     await send_coach_request(message.from_user.id, profile, data, bot)
                     coach = await APIService.profile.create_coach_profile(profile.id, user_data)
                     if coach is not None:
