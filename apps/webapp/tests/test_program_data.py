@@ -6,7 +6,7 @@ import pytest
 from django.http import HttpRequest, JsonResponse
 
 from core.cache import Cache
-from core.exceptions import ProfileNotFoundError
+from core.exceptions import ProfileNotFoundError, UserServiceError
 from core.enums import CoachType
 
 django_http = sys.modules["django.http"]
@@ -26,6 +26,7 @@ async def test_program_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
     monkeypatch.setattr(Cache.profile, "get_profile", mock_get_profile)
+    monkeypatch.setattr(Cache.client, "get_client", lambda _id, *, use_fallback=True: SimpleNamespace(id=1))
     monkeypatch.setattr(Cache.workout, "get_latest_program", mock_get_program)
 
     request: HttpRequest = HttpRequest()
@@ -49,6 +50,7 @@ async def test_program_data_with_id(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
     monkeypatch.setattr(Cache.profile, "get_profile", mock_get_profile)
+    monkeypatch.setattr(Cache.client, "get_client", lambda _id, *, use_fallback=True: SimpleNamespace(id=1))
     monkeypatch.setattr(Cache.workout, "get_program_by_id", mock_get_program_by_id)
 
     request: HttpRequest = HttpRequest()
@@ -90,6 +92,27 @@ async def test_program_data_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
 
     response: JsonResponse = await views.program_data(request)
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_program_data_service_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def mock_get_profile(tg_id: int, *, use_fallback: bool = True) -> SimpleNamespace:
+        return SimpleNamespace(id=1)
+
+    async def mock_get_program(profile_id: int, *, use_fallback: bool = True) -> SimpleNamespace:
+        raise UserServiceError("down")
+
+    monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
+    monkeypatch.setattr(Cache.profile, "get_profile", mock_get_profile)
+    monkeypatch.setattr(Cache.client, "get_client", lambda _id, *, use_fallback=True: SimpleNamespace(id=1))
+    monkeypatch.setattr(Cache.workout, "get_latest_program", mock_get_program)
+
+    request: HttpRequest = HttpRequest()
+    request.method = "GET"
+    request.GET = {"init_data": "data"}
+
+    response: JsonResponse = await views.program_data(request)
+    assert response.status_code == 503
 
 
 @pytest.mark.asyncio

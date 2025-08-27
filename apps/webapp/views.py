@@ -7,6 +7,7 @@ from core.exceptions import (
     ProgramNotFoundError,
     SubscriptionNotFoundError,
     ClientNotFoundError,
+    UserServiceError,
 )
 from loguru import logger
 from .utils import verify_init_data, _format_full_program, ensure_container_ready
@@ -39,6 +40,9 @@ async def program_data(request: HttpRequest) -> JsonResponse:
     except (ProfileNotFoundError, ClientNotFoundError, ProgramNotFoundError):
         logger.warning("Program not found for tg_id={}", tg_id)
         return JsonResponse({"error": "not_found"}, status=404)
+    except UserServiceError as exc:
+        logger.error("Workout service error for tg_id={}: {}", tg_id, exc)
+        return JsonResponse({"error": "service_unavailable"}, status=503)
     except Exception:
         logger.exception("Failed to fetch program for tg_id={}", tg_id)
         return JsonResponse({"error": "server_error"}, status=500)
@@ -75,6 +79,9 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
     except (ProfileNotFoundError, ClientNotFoundError, ProgramNotFoundError):
         logger.warning("Programs not found for tg_id={}", tg_id)
         return JsonResponse({"error": "not_found"}, status=404)
+    except UserServiceError as exc:
+        logger.error("Workout service error for tg_id={}: {}", tg_id, exc)
+        return JsonResponse({"error": "service_unavailable"}, status=503)
     except Exception:
         logger.exception("Failed to fetch programs for tg_id={}", tg_id)
         return JsonResponse({"error": "server_error"}, status=500)
@@ -105,6 +112,9 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
     except (ProfileNotFoundError, ClientNotFoundError, SubscriptionNotFoundError):
         logger.warning("Subscription not found for tg_id={}", tg_id)
         return JsonResponse({"error": "not_found"}, status=404)
+    except UserServiceError as exc:
+        logger.error("Workout service error for tg_id={}: {}", tg_id, exc)
+        return JsonResponse({"error": "service_unavailable"}, status=503)
     except Exception:
         logger.exception("Failed to fetch subscription for tg_id={}", tg_id)
         return JsonResponse({"error": "server_error"}, status=500)
