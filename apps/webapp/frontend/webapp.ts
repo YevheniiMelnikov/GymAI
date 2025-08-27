@@ -3,6 +3,7 @@ const tg: { initData?: string } | undefined = (window as any)?.Telegram?.WebApp;
 const initData: string = tg?.initData || "";
 const content = document.getElementById("content");
 const dateEl = document.getElementById("program-date");
+const originEl = document.getElementById("program-origin");
 const controls = document.getElementById("controls");
 
 function setText(txt: string): void {
@@ -16,6 +17,8 @@ function formatDate(ts: number): string {
   const d = new Date(ts * 1000);
   return d.toLocaleDateString();
 }
+
+type CoachType = "human" | "ai_coach";
 
 function goToHistory(): void {
   const q = new URLSearchParams();
@@ -41,8 +44,12 @@ async function loadProgram(programId?: string | null): Promise<void> {
       setText("Server error");
       return;
     }
-    const data: { program: string; created_at: number } = await resp.json();
+    const data: { program: string; created_at: number; coach_type: CoachType } = await resp.json();
     if (dateEl) dateEl.textContent = formatDate(data.created_at);
+    if (originEl) {
+      originEl.textContent = data.coach_type === "ai_coach" ? "AI" : "";
+      originEl.style.color = data.coach_type === "ai_coach" ? "purple" : "";
+    }
     setText(data.program);
     if (controls) {
       const btn = document.createElement("button");
@@ -54,6 +61,12 @@ async function loadProgram(programId?: string | null): Promise<void> {
     console.error("Failed to load program", err);
     setText("Server error");
   }
+}
+
+interface HistoryItem {
+  id: number;
+  created_at: number;
+  coach_type: CoachType;
 }
 
 async function loadHistory(): Promise<void> {
@@ -73,21 +86,35 @@ async function loadHistory(): Promise<void> {
       setText("Server error");
       return;
     }
-    const data: { programs: { id: number; created_at: number }[] } = await resp.json();
+    const data: { programs: HistoryItem[] } = await resp.json();
     if (!content) return;
     content.innerHTML = "";
     const list = document.createElement("ul");
+    let sortBy: "date" | "origin" = "date";
     let asc = false;
     function render(): void {
       list.innerHTML = "";
       const items = [...data.programs];
-      items.sort((a, b) => (asc ? a.created_at - b.created_at : b.created_at - a.created_at));
+      items.sort((a, b) => {
+        if (sortBy === "origin") {
+          const av = a.coach_type === "ai_coach" ? 1 : 0;
+          const bv = b.coach_type === "ai_coach" ? 1 : 0;
+          return asc ? av - bv : bv - av;
+        }
+        return asc ? a.created_at - b.created_at : b.created_at - a.created_at;
+      });
       for (const p of items) {
         const li = document.createElement("li");
         const link = document.createElement("a");
         link.textContent = formatDate(p.created_at);
         link.href = `?program_id=${p.id}`;
         li.appendChild(link);
+        if (p.coach_type === "ai_coach") {
+          const badge = document.createElement("span");
+          badge.textContent = " AI";
+          badge.style.color = "purple";
+          li.appendChild(badge);
+        }
         list.appendChild(li);
       }
     }
@@ -95,14 +122,29 @@ async function loadHistory(): Promise<void> {
     content.appendChild(list);
     if (controls) {
       controls.innerHTML = "";
-      const sortBtn = document.createElement("button");
-      sortBtn.textContent = "Sort: Newest";
-      sortBtn.addEventListener("click", () => {
+      const orderBtn = document.createElement("button");
+      const modeBtn = document.createElement("button");
+      function updateButtons(): void {
+        modeBtn.textContent = sortBy === "date" ? "Sort by: Date" : "Sort by: Origin";
+        if (sortBy === "date") {
+          orderBtn.textContent = asc ? "Order: Oldest" : "Order: Newest";
+        } else {
+          orderBtn.textContent = asc ? "Order: Human First" : "Order: AI First";
+        }
+      }
+      orderBtn.addEventListener("click", () => {
         asc = !asc;
-        sortBtn.textContent = asc ? "Sort: Oldest" : "Sort: Newest";
+        updateButtons();
         render();
       });
-      controls.appendChild(sortBtn);
+      modeBtn.addEventListener("click", () => {
+        sortBy = sortBy === "date" ? "origin" : "date";
+        updateButtons();
+        render();
+      });
+      updateButtons();
+      controls.appendChild(modeBtn);
+      controls.appendChild(orderBtn);
     }
   } catch (err) {
     console.error("Failed to load history", err);

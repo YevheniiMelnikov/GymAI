@@ -43,7 +43,13 @@ async def program_data(request: HttpRequest) -> JsonResponse:
         logger.exception("Failed to fetch program for tg_id={}", tg_id)
         return JsonResponse({"error": "server_error"}, status=500)
     text: str = _format_full_program(program.exercises_by_day)
-    return JsonResponse({"program": text, "created_at": program.created_at})
+    return JsonResponse(
+        {
+            "program": text,
+            "created_at": program.created_at,
+            "coach_type": program.coach_type,
+        }
+    )
 
 
 async def programs_history(request: HttpRequest) -> JsonResponse:
@@ -72,7 +78,7 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
     except Exception:
         logger.exception("Failed to fetch programs for tg_id={}", tg_id)
         return JsonResponse({"error": "server_error"}, status=500)
-    items = [{"id": p.id, "created_at": p.created_at} for p in programs]
+    items = [{"id": p.id, "created_at": p.created_at, "coach_type": p.coach_type} for p in programs]
     return JsonResponse({"programs": items})
 
 

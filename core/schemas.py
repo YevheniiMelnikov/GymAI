@@ -99,6 +99,7 @@ class Program(BaseModel):
     split_number: int | None = None
     workout_type: str | None = None
     wishes: str | None = None
+    coach_type: CoachType = CoachType.human
     model_config = ConfigDict(extra="ignore")
 
     @field_validator("client_profile", mode="before")
@@ -123,6 +124,19 @@ class Program(BaseModel):
             days: list[Any] = data.get("exercises_by_day", [])
             return len(days)
         return int(v)
+
+    @field_validator("coach_type", mode="before")
+    def _normalize_coach_type(cls, v: Any) -> CoachType:
+        if isinstance(v, dict):
+            v = v.get("coach_type")
+        if isinstance(v, str):
+            try:
+                return CoachType(v)
+            except ValueError:
+                return CoachType.human
+        if isinstance(v, CoachType):
+            return v
+        return CoachType.human
 
 
 class Subscription(BaseModel):

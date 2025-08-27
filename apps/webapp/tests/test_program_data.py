@@ -7,6 +7,7 @@ from django.http import HttpRequest, JsonResponse
 
 from core.cache import Cache
 from core.exceptions import ProfileNotFoundError
+from core.enums import CoachType
 
 django_http = sys.modules["django.http"]
 django_http.HttpResponse = object  # type: ignore[attr-defined]
@@ -21,7 +22,7 @@ async def test_program_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
         return SimpleNamespace(id=1)
 
     async def mock_get_program(profile_id: int, *, use_fallback: bool = True) -> SimpleNamespace:
-        return SimpleNamespace(exercises_by_day=[], created_at=1.0)
+        return SimpleNamespace(exercises_by_day=[], created_at=1.0, coach_type=CoachType.human)
 
     monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
     monkeypatch.setattr(Cache.profile, "get_profile", mock_get_profile)
@@ -35,6 +36,7 @@ async def test_program_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
     assert response.status_code == 200
     assert response["program"] == ""
     assert response["created_at"] == 1.0
+    assert response["coach_type"] == CoachType.human
 
 
 @pytest.mark.asyncio
@@ -43,7 +45,7 @@ async def test_program_data_with_id(monkeypatch: pytest.MonkeyPatch) -> None:
         return SimpleNamespace(id=1)
 
     async def mock_get_program_by_id(profile_id: int, program_id: int) -> SimpleNamespace:
-        return SimpleNamespace(exercises_by_day=[], created_at=2.0)
+        return SimpleNamespace(exercises_by_day=[], created_at=2.0, coach_type=CoachType.human)
 
     monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
     monkeypatch.setattr(Cache.profile, "get_profile", mock_get_profile)
@@ -56,6 +58,7 @@ async def test_program_data_with_id(monkeypatch: pytest.MonkeyPatch) -> None:
     response: JsonResponse = await views.program_data(request)
     assert response.status_code == 200
     assert response["created_at"] == 2.0
+    assert response["coach_type"] == CoachType.human
 
 
 @pytest.mark.asyncio

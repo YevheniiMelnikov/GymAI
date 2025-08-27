@@ -3,6 +3,7 @@ const tg = (_a = window === null || window === void 0 ? void 0 : window.Telegram
 const initData = (tg === null || tg === void 0 ? void 0 : tg.initData) || "";
 const content = document.getElementById("content");
 const dateEl = document.getElementById("program-date");
+const originEl = document.getElementById("program-origin");
 const controls = document.getElementById("controls");
 function setText(txt) {
     if (content) {
@@ -41,6 +42,10 @@ async function loadProgram(programId) {
         const data = await resp.json();
         if (dateEl)
             dateEl.textContent = formatDate(data.created_at);
+        if (originEl) {
+            originEl.textContent = data.coach_type === "ai_coach" ? "AI" : "";
+            originEl.style.color = data.coach_type === "ai_coach" ? "purple" : "";
+        }
         setText(data.program);
         if (controls) {
             const btn = document.createElement("button");
@@ -76,17 +81,31 @@ async function loadHistory() {
             return;
         content.innerHTML = "";
         const list = document.createElement("ul");
+        let sortBy = "date";
         let asc = false;
         function render() {
             list.innerHTML = "";
             const items = [...data.programs];
-            items.sort((a, b) => (asc ? a.created_at - b.created_at : b.created_at - a.created_at));
+            items.sort((a, b) => {
+                if (sortBy === "origin") {
+                    const av = a.coach_type === "ai_coach" ? 1 : 0;
+                    const bv = b.coach_type === "ai_coach" ? 1 : 0;
+                    return asc ? av - bv : bv - av;
+                }
+                return asc ? a.created_at - b.created_at : b.created_at - a.created_at;
+            });
             for (const p of items) {
                 const li = document.createElement("li");
                 const link = document.createElement("a");
                 link.textContent = formatDate(p.created_at);
                 link.href = `?program_id=${p.id}`;
                 li.appendChild(link);
+                if (p.coach_type === "ai_coach") {
+                    const badge = document.createElement("span");
+                    badge.textContent = " AI";
+                    badge.style.color = "purple";
+                    li.appendChild(badge);
+                }
                 list.appendChild(li);
             }
         }
@@ -94,14 +113,30 @@ async function loadHistory() {
         content.appendChild(list);
         if (controls) {
             controls.innerHTML = "";
-            const sortBtn = document.createElement("button");
-            sortBtn.textContent = "Sort: Newest";
-            sortBtn.addEventListener("click", () => {
+            const orderBtn = document.createElement("button");
+            const modeBtn = document.createElement("button");
+            function updateButtons() {
+                modeBtn.textContent = sortBy === "date" ? "Sort by: Date" : "Sort by: Origin";
+                if (sortBy === "date") {
+                    orderBtn.textContent = asc ? "Order: Oldest" : "Order: Newest";
+                }
+                else {
+                    orderBtn.textContent = asc ? "Order: Human First" : "Order: AI First";
+                }
+            }
+            orderBtn.addEventListener("click", () => {
                 asc = !asc;
-                sortBtn.textContent = asc ? "Sort: Oldest" : "Sort: Newest";
+                updateButtons();
                 render();
             });
-            controls.appendChild(sortBtn);
+            modeBtn.addEventListener("click", () => {
+                sortBy = sortBy === "date" ? "origin" : "date";
+                updateButtons();
+                render();
+            });
+            updateButtons();
+            controls.appendChild(modeBtn);
+            controls.appendChild(orderBtn);
         }
     }
     catch (err) {
