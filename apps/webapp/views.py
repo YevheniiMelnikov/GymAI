@@ -1,15 +1,13 @@
 from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.shortcuts import render
 
-from core.cache import Cache
-from core.exceptions import (
-    ProfileNotFoundError,
-    ProgramNotFoundError,
-    SubscriptionNotFoundError,
-    ClientNotFoundError,
-    UserServiceError,
-)
+from asgiref.sync import sync_to_async
 from loguru import logger
+from rest_framework.exceptions import NotFound
+
+from apps.profiles.repos import ProfileRepository, ClientProfileRepository
+from apps.workout_plans.repos import ProgramRepository, SubscriptionRepository
+from core.schemas import DayExercises
 from .utils import verify_init_data, _format_full_program, ensure_container_ready
 
 
@@ -31,27 +29,27 @@ async def program_data(request: HttpRequest) -> JsonResponse:
     tg_id: int = int(str(user.get("id", "0")))
     program_id: str | None = request.GET.get("program_id")
     try:
-        profile = await Cache.profile.get_profile(tg_id)
-        client = await Cache.client.get_client(profile.id)
+        profile = await sync_to_async(ProfileRepository.get_by_telegram_id)(tg_id)
+        client = await sync_to_async(ClientProfileRepository.get)(profile.id)
         if program_id is not None:
-            program = await Cache.workout.get_program_by_id(client.id, int(program_id))
+            program_obj = await sync_to_async(ProgramRepository.get_by_id)(client.id, int(program_id))
         else:
-            program = await Cache.workout.get_latest_program(client.id)
-    except (ProfileNotFoundError, ClientNotFoundError, ProgramNotFoundError):
+            program_obj = await sync_to_async(ProgramRepository.get_latest)(client.id)
+        if program_obj is None:
+            raise NotFound
+    except NotFound:
         logger.warning("Program not found for tg_id={}", tg_id)
         return JsonResponse({"error": "not_found"}, status=404)
-    except UserServiceError as exc:
-        logger.warning("Workout service unavailable for tg_id={}: {}", tg_id, exc)
-        return JsonResponse({"error": "service_unavailable"}, status=200)
     except Exception:
         logger.exception("Failed to fetch program for tg_id={}", tg_id)
         return JsonResponse({"error": "server_error"}, status=500)
-    text: str = _format_full_program(program.exercises_by_day)
+    exercises = [DayExercises.model_validate(e) for e in program_obj.exercises_by_day or []]
+    text: str = _format_full_program(exercises)
     return JsonResponse(
         {
             "program": text,
-            "created_at": program.created_at,
-            "coach_type": program.coach_type,
+            "created_at": program_obj.created_at.timestamp(),
+            "coach_type": program_obj.coach_type,
         }
     )
 
@@ -73,19 +71,16 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
     user: dict[str, object] = data.get("user", {})  # type: ignore[arg-type]
     tg_id: int = int(str(user.get("id", "0")))
     try:
-        profile = await Cache.profile.get_profile(tg_id)
-        client = await Cache.client.get_client(profile.id)
-        programs = await Cache.workout.get_all_programs(client.id)
-    except (ProfileNotFoundError, ClientNotFoundError, ProgramNotFoundError):
+        profile = await sync_to_async(ProfileRepository.get_by_telegram_id)(tg_id)
+        client = await sync_to_async(ClientProfileRepository.get)(profile.id)
+        programs = await sync_to_async(ProgramRepository.get_all)(client.id)
+    except NotFound:
         logger.warning("Programs not found for tg_id={}", tg_id)
         return JsonResponse({"error": "not_found"}, status=404)
-    except UserServiceError as exc:
-        logger.warning("Workout service unavailable for tg_id={}: {}", tg_id, exc)
-        return JsonResponse({"error": "service_unavailable"}, status=200)
     except Exception:
         logger.exception("Failed to fetch programs for tg_id={}", tg_id)
         return JsonResponse({"error": "server_error"}, status=500)
-    items = [{"id": p.id, "created_at": p.created_at, "coach_type": p.coach_type} for p in programs]
+    items = [{"id": p.id, "created_at": p.created_at.timestamp(), "coach_type": p.coach_type} for p in programs]
     return JsonResponse({"programs": items})
 
 
@@ -106,19 +101,19 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
     user: dict[str, object] = data.get("user", {})  # type: ignore[arg-type]
     tg_id: int = int(str(user.get("id", "0")))
     try:
-        profile = await Cache.profile.get_profile(tg_id)
-        client = await Cache.client.get_client(profile.id)
-        subscription = await Cache.workout.get_latest_subscription(client.id)
-    except (ProfileNotFoundError, ClientNotFoundError, SubscriptionNotFoundError):
+        profile = await sync_to_async(ProfileRepository.get_by_telegram_id)(tg_id)
+        client = await sync_to_async(ClientProfileRepository.get)(profile.id)
+        subscription = await sync_to_async(SubscriptionRepository.get_latest)(client.id)
+        if subscription is None:
+            raise NotFound
+    except NotFound:
         logger.warning("Subscription not found for tg_id={}", tg_id)
         return JsonResponse({"error": "not_found"}, status=404)
-    except UserServiceError as exc:
-        logger.warning("Workout service unavailable for tg_id={}: {}", tg_id, exc)
-        return JsonResponse({"error": "service_unavailable"}, status=200)
     except Exception:
         logger.exception("Failed to fetch subscription for tg_id={}", tg_id)
         return JsonResponse({"error": "server_error"}, status=500)
-    text: str = _format_full_program(subscription.exercises)
+    exercises = [DayExercises.model_validate(e) for e in subscription.exercises or []]
+    text: str = _format_full_program(exercises)
     return JsonResponse({"program": text})
 
 

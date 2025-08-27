@@ -1,13 +1,9 @@
 import sys
-import json
 from importlib import import_module
 from types import SimpleNamespace
 
 import pytest
 from django.http import HttpRequest, JsonResponse
-
-from core.cache import Cache
-from core.exceptions import UserServiceError
 
 
 django_http = sys.modules["django.http"]
@@ -19,19 +15,22 @@ views = import_module("apps.webapp.views")
 
 @pytest.mark.asyncio
 async def test_subscription_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def mock_get_profile(tg_id: int, *, use_fallback: bool = True) -> SimpleNamespace:
-        return SimpleNamespace(id=1)
-
-    async def mock_get_client(profile_id: int, *, use_fallback: bool = True) -> SimpleNamespace:
-        return SimpleNamespace(id=1)
-
-    async def mock_get_subscription(client_id: int, *, use_fallback: bool = True) -> SimpleNamespace:
-        return SimpleNamespace(exercises=[])
-
     monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
-    monkeypatch.setattr(Cache.profile, "get_profile", mock_get_profile)
-    monkeypatch.setattr(Cache.client, "get_client", mock_get_client)
-    monkeypatch.setattr(Cache.workout, "get_latest_subscription", mock_get_subscription)
+    monkeypatch.setattr(
+        views.ProfileRepository,
+        "get_by_telegram_id",
+        lambda _tg_id: SimpleNamespace(id=1),
+    )
+    monkeypatch.setattr(
+        views.ClientProfileRepository,
+        "get",
+        lambda _id: SimpleNamespace(id=1),
+    )
+    monkeypatch.setattr(
+        views.SubscriptionRepository,
+        "get_latest",
+        lambda _id: SimpleNamespace(exercises=[]),
+    )
 
     request: HttpRequest = HttpRequest()
     request.method = "GET"
@@ -43,25 +42,44 @@ async def test_subscription_data_success(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 @pytest.mark.asyncio
-async def test_subscription_data_service_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def mock_get_profile(tg_id: int, *, use_fallback: bool = True) -> SimpleNamespace:
-        return SimpleNamespace(id=1)
-
-    async def mock_get_client(profile_id: int, *, use_fallback: bool = True) -> SimpleNamespace:
-        return SimpleNamespace(id=1)
-
-    async def mock_get_subscription(client_id: int, *, use_fallback: bool = True) -> SimpleNamespace:
-        raise UserServiceError("down")
-
+async def test_subscription_data_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
-    monkeypatch.setattr(Cache.profile, "get_profile", mock_get_profile)
-    monkeypatch.setattr(Cache.client, "get_client", mock_get_client)
-    monkeypatch.setattr(Cache.workout, "get_latest_subscription", mock_get_subscription)
+    monkeypatch.setattr(
+        views.ProfileRepository,
+        "get_by_telegram_id",
+        lambda _tg_id: SimpleNamespace(id=1),
+    )
+    monkeypatch.setattr(
+        views.ClientProfileRepository,
+        "get",
+        lambda _id: SimpleNamespace(id=1),
+    )
+    monkeypatch.setattr(
+        views.SubscriptionRepository,
+        "get_latest",
+        lambda _id: None,
+    )
 
     request: HttpRequest = HttpRequest()
     request.method = "GET"
     request.GET = {"init_data": "data"}
 
     response: JsonResponse = await views.subscription_data(request)
-    assert response.status_code == 200
-    assert json.loads(response.content) == {"error": "service_unavailable"}
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_subscription_data_server_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
+    monkeypatch.setattr(
+        views.ProfileRepository,
+        "get_by_telegram_id",
+        lambda _tg_id: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
+
+    request: HttpRequest = HttpRequest()
+    request.method = "GET"
+    request.GET = {"init_data": "data"}
+
+    response: JsonResponse = await views.subscription_data(request)
+    assert response.status_code == 500

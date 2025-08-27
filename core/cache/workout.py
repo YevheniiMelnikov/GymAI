@@ -1,36 +1,31 @@
 import json
 from typing import Any, cast
+from inspect import isawaitable
 from loguru import logger
-from asgiref.sync import sync_to_async
-from django.forms.models import model_to_dict
 
 from core.schemas import Subscription, Program
 from .base import BaseCacheManager
 from core.utils.validators import validate_or_raise
-from core.exceptions import UserServiceError, SubscriptionNotFoundError, ProgramNotFoundError
-from apps.workout_plans.repos import ProgramRepository, SubscriptionRepository
+from core.containers import get_container
+from core.exceptions import SubscriptionNotFoundError, ProgramNotFoundError
 
 
 class WorkoutCacheManager(BaseCacheManager):
     @classmethod
     async def _fetch_from_service(cls, cache_key: str, field: str, *, use_fallback: bool) -> Subscription | Program:
         client_profile_id = int(field)
+        service = get_container().workout_service()
+        if isawaitable(service):
+            service = await service
         if cache_key.endswith("subscriptions"):
-            sub_obj = await sync_to_async(SubscriptionRepository.get_latest)(client_profile_id)
-            if sub_obj is None:
+            subscription = await service.get_latest_subscription(client_profile_id)
+            if subscription is None:
                 raise SubscriptionNotFoundError(client_profile_id)
-            sub_dict: dict[str, Any] = model_to_dict(sub_obj)
-            sub_dict["client_profile"] = sub_obj.client_profile_id
-            sub_dict.setdefault("workout_type", "")
-            return validate_or_raise(sub_dict, Subscription, context=str(client_profile_id))
-
-        program_obj = await sync_to_async(ProgramRepository.get_latest)(client_profile_id)
-        if program_obj is None:
+            return subscription
+        program = await service.get_latest_program(client_profile_id)
+        if program is None:
             raise ProgramNotFoundError(client_profile_id)
-        prog_dict: dict[str, Any] = model_to_dict(program_obj)
-        prog_dict["client_profile"] = program_obj.client_profile_id
-        prog_dict["created_at"] = program_obj.created_at.timestamp()
-        return validate_or_raise(prog_dict, Program, context=str(client_profile_id))
+        return program
 
     @classmethod
     def _validate_data(cls, raw: str, cache_key: str, field: str) -> Subscription | Program:
@@ -92,28 +87,11 @@ class WorkoutCacheManager(BaseCacheManager):
 
     @classmethod
     async def get_latest_program(cls, client_profile_id: int, *, use_fallback: bool = True) -> Program:
-        try:
-            return await cls.get_or_fetch(
-                "workout_plans:programs",
-                str(client_profile_id),
-                use_fallback=use_fallback,
-            )
-        except UserServiceError:
-            if not use_fallback:
-                raise
-            raw_history = await cls.get_json("workout_plans:programs_history", str(client_profile_id))
-            if raw_history:
-                try:
-                    programs = [
-                        validate_or_raise(cast(dict, item), Program, context=str(client_profile_id))
-                        for item in raw_history
-                    ]
-                    programs.sort(key=lambda p: p.created_at, reverse=True)
-                    return programs[0]
-                except Exception as e:  # pragma: no cover - cache corruption
-                    logger.debug(f"Corrupt programs history for client_profile_id={client_profile_id}: {e}")
-                    await cls.delete("workout_plans:programs_history", str(client_profile_id))
-            raise
+        return await cls.get_or_fetch(
+            "workout_plans:programs",
+            str(client_profile_id),
+            use_fallback=use_fallback,
+        )
 
     @classmethod
     async def get_all_subscriptions(cls, client_profile_id: int) -> list[Subscription]:
@@ -127,20 +105,16 @@ class WorkoutCacheManager(BaseCacheManager):
                 logger.debug(f"Corrupt subscriptions history for client_profile_id={client_profile_id}: {e}")
                 await cls.delete("workout_plans:subscriptions_history", str(client_profile_id))
 
-        subs = await sync_to_async(SubscriptionRepository.get_all)(client_profile_id)
-        data = []
-        for item in subs:
-            item_dict = model_to_dict(item)
-            item_dict["client_profile"] = item.client_profile_id
-            item_dict.setdefault("workout_type", "")
-            data.append(validate_or_raise(item_dict, Subscription, context=str(client_profile_id)))
-
+        service = get_container().workout_service()
+        if isawaitable(service):
+            service = await service
+        subscriptions = await service.get_all_subscriptions(client_profile_id)
         await cls.set(
             "workout_plans:subscriptions_history",
             str(client_profile_id),
-            json.dumps([d.model_dump() for d in data]),
+            json.dumps([s.model_dump() for s in subscriptions]),
         )
-        return data
+        return subscriptions
 
     @classmethod
     async def get_all_programs(cls, client_profile_id: int) -> list[Program]:
@@ -152,28 +126,16 @@ class WorkoutCacheManager(BaseCacheManager):
                 logger.debug(f"Corrupt programs history for client_profile_id={client_profile_id}: {e}")
                 await cls.delete("workout_plans:programs_history", str(client_profile_id))
 
-        prog_objs = await sync_to_async(ProgramRepository.get_all)(client_profile_id)
-        programs: list[Program] = []
-        for item in prog_objs:
-            item_dict = model_to_dict(item)
-            item_dict["client_profile"] = item.client_profile_id
-            item_dict["created_at"] = item.created_at.timestamp()
-            programs.append(validate_or_raise(item_dict, Program, context=str(client_profile_id)))
-
+        service = get_container().workout_service()
+        if isawaitable(service):
+            service = await service
+        programs = await service.get_all_programs(client_profile_id)
         await cls.set(
             "workout_plans:programs_history",
             str(client_profile_id),
             json.dumps([p.model_dump() for p in programs]),
         )
         return programs
-
-    @classmethod
-    async def get_program_by_id(cls, client_profile_id: int, program_id: int) -> Program:
-        programs = await cls.get_all_programs(client_profile_id)
-        for program in programs:
-            if program.id == program_id:
-                return program
-        raise ProgramNotFoundError(client_profile_id)
 
     @classmethod
     async def cache_gif_filename(cls, exercise_name: str, filename: str) -> None:
