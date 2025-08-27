@@ -1,0 +1,37 @@
+body {
+  background-color: #ffffff;
+  color: #222;
+  font-family: sans-serif;
+  margin: 0;
+  padding: 1rem;
+}
+
+#program-date {
+  margin-bottom: 0.25rem;
+  font-size: 0.9rem;
+}
+
+#program-origin {
+  margin-bottom: 1rem;
+}
+
+#content {
+  white-space: pre-wrap;
+}
+
+#controls {
+  margin-top: 1rem;
+}
+
+button {
+  margin-right: 0.5rem;
+}
+
+#history-btn {
+  display: none;
+}
+
+.ai-label {
+  color: purple;
+  font-weight: bold;
+}

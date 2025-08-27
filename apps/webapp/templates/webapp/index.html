@@ -5,6 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Program</title>
+    <link rel="stylesheet" href="{% static 'webapp.css' %}?v={{ settings.STATIC_VERSION|default:0 }}" />
 </head>
 <body>
 <div id="program-date"></div>

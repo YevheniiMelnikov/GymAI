@@ -10,7 +10,6 @@ const historyBtn = document.getElementById("history-btn");
 function setText(txt: string): void {
   if (content) {
     content.textContent = txt;
-    (content as HTMLElement).style.whiteSpace = "pre-wrap";
   }
 }
 
@@ -21,13 +20,13 @@ function formatDate(ts: number): string {
 
 type CoachType = "human" | "ai_coach";
 
-function goToHistory(): void {
-  const q = new URLSearchParams();
-  q.set("page", "history");
-  window.location.search = q.toString();
-}
-
-historyBtn?.addEventListener("click", goToHistory);
+historyBtn?.addEventListener("click", () => {
+  const url = new URL(window.location.toString());
+  url.searchParams.set("page", "history");
+  url.searchParams.delete("program_id");
+  window.history.pushState({}, "", url);
+  void loadHistory();
+});
 
 async function loadProgram(programId?: string | null): Promise<void> {
   try {
@@ -53,17 +52,34 @@ async function loadProgram(programId?: string | null): Promise<void> {
       setText("Service temporarily unavailable");
       return;
     }
-    if (dateEl && typeof data.created_at === "number") {
-      dateEl.textContent = `Created: ${formatDate(data.created_at)}`;
+    if (dateEl) {
+      if (typeof data.created_at === "number") {
+        dateEl.textContent = `Created: ${formatDate(data.created_at)}`;
+      } else {
+        dateEl.textContent = "";
+      }
     }
     if (originEl) {
-      originEl.textContent = data.coach_type === "ai_coach" ? "AI" : "";
-      originEl.style.color = data.coach_type === "ai_coach" ? "purple" : "";
+      if (data.coach_type === "ai_coach") {
+        originEl.textContent = "AI";
+        originEl.className = "ai-label";
+      } else {
+        originEl.textContent = "";
+        originEl.className = "";
+      }
     }
     setText(data.program || "");
     if (historyBtn) {
       historyBtn.style.display = "block";
     }
+    const url = new URL(window.location.toString());
+    url.searchParams.delete("page");
+    if (programId) {
+      url.searchParams.set("program_id", programId);
+    } else {
+      url.searchParams.delete("program_id");
+    }
+    window.history.replaceState({}, "", url);
   } catch (err) {
     console.error("Failed to load program", err);
     setText("Server error");
@@ -80,6 +96,11 @@ async function loadHistory(): Promise<void> {
   try {
     if (historyBtn) {
       historyBtn.style.display = "none";
+    }
+    if (dateEl) dateEl.textContent = "";
+    if (originEl) {
+      originEl.textContent = "";
+      originEl.className = "";
     }
     const q = new URLSearchParams();
     q.set("init_data", initData);
@@ -125,12 +146,20 @@ async function loadHistory(): Promise<void> {
         const li = document.createElement("li");
         const link = document.createElement("a");
         link.textContent = formatDate(p.created_at);
-        link.href = `?program_id=${p.id}`;
+        link.href = "#";
+        link.addEventListener("click", (e) => {
+          e.preventDefault();
+          const url = new URL(window.location.toString());
+          url.searchParams.delete("page");
+          url.searchParams.set("program_id", String(p.id));
+          window.history.pushState({}, "", url);
+          void loadProgram(String(p.id));
+        });
         li.appendChild(link);
         if (p.coach_type === "ai_coach") {
           const badge = document.createElement("span");
           badge.textContent = " AI";
-          badge.style.color = "purple";
+          badge.className = "ai-label";
           li.appendChild(badge);
         }
         list.appendChild(li);
