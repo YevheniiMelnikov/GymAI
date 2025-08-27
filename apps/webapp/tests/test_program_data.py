@@ -46,7 +46,7 @@ async def test_program_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
     response: JsonResponse = await views.program_data(request)
     assert response.status_code == 200
     assert response["program"] == ""
-    assert response["created_at"] == 1.0
+    assert response["created_at"] == 1
     assert response["coach_type"] == CoachType.human
 
 
@@ -79,7 +79,7 @@ async def test_program_data_with_id(monkeypatch: pytest.MonkeyPatch) -> None:
 
     response: JsonResponse = await views.program_data(request)
     assert response.status_code == 200
-    assert response["created_at"] == 2.0
+    assert response["created_at"] == 2
     assert response["coach_type"] == CoachType.human
 
 

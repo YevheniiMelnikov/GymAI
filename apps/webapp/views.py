@@ -61,7 +61,7 @@ async def program_data(request: HttpRequest) -> JsonResponse:
     return JsonResponse(
         {
             "program": text,
-            "created_at": program_obj.created_at.timestamp(),
+            "created_at": int(program_obj.created_at.timestamp()),
             "coach_type": program_obj.coach_type,
         }
     )
@@ -102,7 +102,7 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
         logger.exception("Failed to fetch programs for tg_id={}", tg_id)
         return JsonResponse({"error": "server_error"}, status=500)
 
-    items = [{"id": p.id, "created_at": p.created_at.timestamp(), "coach_type": p.coach_type} for p in programs]
+    items = [{"id": p.id, "created_at": int(p.created_at.timestamp()), "coach_type": p.coach_type} for p in programs]
     return JsonResponse({"programs": items})
 
 

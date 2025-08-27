@@ -100,7 +100,7 @@ def verify_init_data(init_data: str) -> dict[str, object]:
 def _format_full_program(exercises: list[DayExercises]) -> str:
     lines: list[str] = []
     for day in sorted(exercises, key=lambda d: int(d.day)):
-        lines.append(f"Day {day.day}")
+        lines.append(f"Day {int(day.day) + 1}")
         for idx, ex in enumerate(day.exercises):
             line = f"{idx + 1}. {ex.name} | {ex.sets} x {ex.reps}"
             if ex.weight:

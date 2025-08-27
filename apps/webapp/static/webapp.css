@@ -27,10 +27,6 @@ button {
   margin-right: 0.5rem;
 }
 
-#history-btn {
-  display: none;
-}
-
 .ai-label {
   color: purple;
   font-weight: bold;

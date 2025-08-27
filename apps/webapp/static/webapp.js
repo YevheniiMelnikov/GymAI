@@ -15,14 +15,13 @@ function formatDate(ts) {
     const d = new Date(ts * 1000);
     return d.toLocaleDateString();
 }
-function goToHistory() {
+historyBtn === null || historyBtn === void 0 ? void 0 : historyBtn.addEventListener("click", () => {
     const url = new URL(window.location.toString());
     url.searchParams.set("page", "history");
     url.searchParams.delete("program_id");
     window.history.pushState({}, "", url);
     void loadHistory();
-}
-historyBtn === null || historyBtn === void 0 ? void 0 : historyBtn.addEventListener("click", goToHistory);
+});
 async function loadProgram(programId) {
     try {
         const q = new URLSearchParams();
@@ -65,7 +64,7 @@ async function loadProgram(programId) {
                 originEl.className = "";
             }
         }
-        setText((data === null || data === void 0 ? void 0 : data.program) || "");
+        setText(data.program || "");
         if (historyBtn) {
             historyBtn.style.display = "block";
         }
@@ -115,7 +114,7 @@ async function loadHistory() {
             setText("Service temporarily unavailable");
             return;
         }
-        if (!(data === null || data === void 0 ? void 0 : data.programs)) {
+        if (!data.programs) {
             setText("No programs found");
             return;
         }
