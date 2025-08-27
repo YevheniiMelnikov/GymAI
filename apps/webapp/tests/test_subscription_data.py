@@ -23,7 +23,7 @@ async def test_subscription_data_success(monkeypatch: pytest.MonkeyPatch) -> Non
     )
     monkeypatch.setattr(
         views.ClientProfileRepository,
-        "get",
+        "get_by_profile_id",
         lambda _id: SimpleNamespace(id=1),
     )
     monkeypatch.setattr(
@@ -51,7 +51,7 @@ async def test_subscription_data_not_found(monkeypatch: pytest.MonkeyPatch) -> N
     )
     monkeypatch.setattr(
         views.ClientProfileRepository,
-        "get",
+        "get_by_profile_id",
         lambda _id: SimpleNamespace(id=1),
     )
     monkeypatch.setattr(

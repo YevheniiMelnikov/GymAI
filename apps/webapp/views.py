@@ -38,7 +38,7 @@ async def program_data(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"error": "not_found"}, status=404)
 
     try:
-        client: ClientProfile = await sync_to_async(ClientProfileRepository.get)(profile.id)
+        client: ClientProfile = await sync_to_async(ClientProfileRepository.get_by_profile_id)(profile.id)
     except NotFound:
         logger.warning("Client profile not found for profile_id={}", profile.id)
         return JsonResponse({"error": "not_found"}, status=404)
@@ -91,7 +91,7 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"error": "not_found"}, status=404)
 
     try:
-        client: ClientProfile = await sync_to_async(ClientProfileRepository.get)(profile.id)
+        client: ClientProfile = await sync_to_async(ClientProfileRepository.get_by_profile_id)(profile.id)
     except NotFound:
         logger.warning("Client profile not found for profile_id={}", profile.id)
         return JsonResponse({"error": "not_found"}, status=404)
@@ -130,7 +130,7 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"error": "not_found"}, status=404)
 
     try:
-        client: ClientProfile = await sync_to_async(ClientProfileRepository.get)(profile.id)
+        client: ClientProfile = await sync_to_async(ClientProfileRepository.get_by_profile_id)(profile.id)
     except NotFound:
         logger.warning("Client profile not found for profile_id={}", profile.id)
         return JsonResponse({"error": "not_found"}, status=404)

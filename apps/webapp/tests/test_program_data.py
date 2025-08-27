@@ -26,7 +26,7 @@ async def test_program_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr(
         views.ClientProfileRepository,
-        "get",
+        "get_by_profile_id",
         lambda _id: SimpleNamespace(id=1),
     )
     monkeypatch.setattr(
@@ -60,7 +60,7 @@ async def test_program_data_with_id(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr(
         views.ClientProfileRepository,
-        "get",
+        "get_by_profile_id",
         lambda _id: SimpleNamespace(id=1),
     )
     monkeypatch.setattr(
