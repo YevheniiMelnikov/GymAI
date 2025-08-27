@@ -1,4 +1,5 @@
 import sys
+import json
 from importlib import import_module
 from types import SimpleNamespace
 
@@ -62,4 +63,5 @@ async def test_subscription_data_service_unavailable(monkeypatch: pytest.MonkeyP
     request.GET = {"init_data": "data"}
 
     response: JsonResponse = await views.subscription_data(request)
-    assert response.status_code == 503
+    assert response.status_code == 200
+    assert json.loads(response.content) == {"error": "service_unavailable"}

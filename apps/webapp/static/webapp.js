@@ -40,13 +40,17 @@ async function loadProgram(programId) {
             return;
         }
         const data = await resp.json();
-        if (dateEl)
+        if (data.error === "service_unavailable") {
+            setText("Service temporarily unavailable");
+            return;
+        }
+        if (dateEl && typeof data.created_at === "number")
             dateEl.textContent = formatDate(data.created_at);
         if (originEl) {
             originEl.textContent = data.coach_type === "ai_coach" ? "AI" : "";
             originEl.style.color = data.coach_type === "ai_coach" ? "purple" : "";
         }
-        setText(data.program);
+        setText((data === null || data === void 0 ? void 0 : data.program) || "");
         if (controls) {
             const btn = document.createElement("button");
             btn.textContent = "History";
@@ -77,6 +81,14 @@ async function loadHistory() {
             return;
         }
         const data = await resp.json();
+        if (data.error === "service_unavailable") {
+            setText("Service temporarily unavailable");
+            return;
+        }
+        if (!(data === null || data === void 0 ? void 0 : data.programs)) {
+            setText("No programs found");
+            return;
+        }
         if (!content)
             return;
         content.innerHTML = "";

@@ -1,4 +1,5 @@
 import sys
+import json
 from importlib import import_module
 from types import SimpleNamespace
 
@@ -112,7 +113,8 @@ async def test_program_data_service_unavailable(monkeypatch: pytest.MonkeyPatch)
     request.GET = {"init_data": "data"}
 
     response: JsonResponse = await views.program_data(request)
-    assert response.status_code == 503
+    assert response.status_code == 200
+    assert json.loads(response.content) == {"error": "service_unavailable"}
 
 
 @pytest.mark.asyncio

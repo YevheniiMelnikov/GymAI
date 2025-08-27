@@ -44,13 +44,20 @@ async function loadProgram(programId?: string | null): Promise<void> {
       setText("Server error");
       return;
     }
-    const data: { program: string; created_at: number; coach_type: CoachType } = await resp.json();
-    if (dateEl) dateEl.textContent = formatDate(data.created_at);
+    const data: { program?: string; created_at?: number; coach_type?: CoachType; error?: string } =
+      await resp.json();
+    if (data.error === "service_unavailable") {
+      setText("Service temporarily unavailable");
+      return;
+    }
+    if (dateEl && typeof data.created_at === "number") {
+      dateEl.textContent = formatDate(data.created_at);
+    }
     if (originEl) {
       originEl.textContent = data.coach_type === "ai_coach" ? "AI" : "";
       originEl.style.color = data.coach_type === "ai_coach" ? "purple" : "";
     }
-    setText(data.program);
+    setText(data.program || "");
     if (controls) {
       const btn = document.createElement("button");
       btn.textContent = "History";
@@ -86,7 +93,15 @@ async function loadHistory(): Promise<void> {
       setText("Server error");
       return;
     }
-    const data: { programs: HistoryItem[] } = await resp.json();
+    const data: { programs?: HistoryItem[]; error?: string } = await resp.json();
+    if (data.error === "service_unavailable") {
+      setText("Service temporarily unavailable");
+      return;
+    }
+    if (!data.programs) {
+      setText("No programs found");
+      return;
+    }
     if (!content) return;
     content.innerHTML = "";
     const list = document.createElement("ul");
