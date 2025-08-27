@@ -41,7 +41,7 @@ async def program_data(request: HttpRequest) -> JsonResponse:
         logger.warning("Program not found for tg_id={}", tg_id)
         return JsonResponse({"error": "not_found"}, status=404)
     except UserServiceError as exc:
-        logger.error("Workout service error for tg_id={}: {}", tg_id, exc)
+        logger.warning("Workout service unavailable for tg_id={}: {}", tg_id, exc)
         return JsonResponse({"error": "service_unavailable"}, status=200)
     except Exception:
         logger.exception("Failed to fetch program for tg_id={}", tg_id)
@@ -80,7 +80,7 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
         logger.warning("Programs not found for tg_id={}", tg_id)
         return JsonResponse({"error": "not_found"}, status=404)
     except UserServiceError as exc:
-        logger.error("Workout service error for tg_id={}: {}", tg_id, exc)
+        logger.warning("Workout service unavailable for tg_id={}: {}", tg_id, exc)
         return JsonResponse({"error": "service_unavailable"}, status=200)
     except Exception:
         logger.exception("Failed to fetch programs for tg_id={}", tg_id)
@@ -113,7 +113,7 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
         logger.warning("Subscription not found for tg_id={}", tg_id)
         return JsonResponse({"error": "not_found"}, status=404)
     except UserServiceError as exc:
-        logger.error("Workout service error for tg_id={}: {}", tg_id, exc)
+        logger.warning("Workout service unavailable for tg_id={}: {}", tg_id, exc)
         return JsonResponse({"error": "service_unavailable"}, status=200)
     except Exception:
         logger.exception("Failed to fetch subscription for tg_id={}", tg_id)

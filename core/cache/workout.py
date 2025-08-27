@@ -7,7 +7,7 @@ from core.schemas import Subscription, Program
 from .base import BaseCacheManager
 from core.utils.validators import validate_or_raise
 from core.containers import get_container
-from core.exceptions import SubscriptionNotFoundError, ProgramNotFoundError
+from core.exceptions import UserServiceError, SubscriptionNotFoundError, ProgramNotFoundError
 
 
 class WorkoutCacheManager(BaseCacheManager):
@@ -87,11 +87,28 @@ class WorkoutCacheManager(BaseCacheManager):
 
     @classmethod
     async def get_latest_program(cls, client_profile_id: int, *, use_fallback: bool = True) -> Program:
-        return await cls.get_or_fetch(
-            "workout_plans:programs",
-            str(client_profile_id),
-            use_fallback=use_fallback,
-        )
+        try:
+            return await cls.get_or_fetch(
+                "workout_plans:programs",
+                str(client_profile_id),
+                use_fallback=use_fallback,
+            )
+        except UserServiceError:
+            if not use_fallback:
+                raise
+            raw_history = await cls.get_json("workout_plans:programs_history", str(client_profile_id))
+            if raw_history:
+                try:
+                    programs = [
+                        validate_or_raise(cast(dict, item), Program, context=str(client_profile_id))
+                        for item in raw_history
+                    ]
+                    programs.sort(key=lambda p: p.created_at, reverse=True)
+                    return programs[0]
+                except Exception as e:  # pragma: no cover - cache corruption
+                    logger.debug(f"Corrupt programs history for client_profile_id={client_profile_id}: {e}")
+                    await cls.delete("workout_plans:programs_history", str(client_profile_id))
+            raise
 
     @classmethod
     async def get_all_subscriptions(cls, client_profile_id: int) -> list[Subscription]:
