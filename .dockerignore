@@ -38,7 +38,7 @@ node_modules/
 apps/webapp/frontend/node_modules/
 apps/webapp/frontend/.cache/
 apps/webapp/static/js/
-apps/webapp/static/css/
+# keep CSS in context so styles are copied into the image
 !apps/webapp/static/i18n/
 !apps/webapp/static/i18n/*.json
 

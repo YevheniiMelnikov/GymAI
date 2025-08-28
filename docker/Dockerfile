@@ -14,6 +14,7 @@ WORKDIR /app/apps/webapp
 COPY apps/webapp/package*.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
 COPY apps/webapp/frontend ./frontend
+COPY apps/webapp/static ./static
 RUN npm run build \
  && echo "== build output in ./static ==" \
  && ls -la ./static ./static/js || true \
@@ -55,7 +56,9 @@ COPY --from=deps-app /usr/local /usr/local
 COPY . /app
 RUN chmod 0755 /app/docker/entrypoint.sh \
  && sed -i 's/\r$//' /app/docker/entrypoint.sh \
- && apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+ && apt-get update \
+ && apt-get install -y --no-install-recommends curl libpq5 \
+ && rm -rf /var/lib/apt/lists/*
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
 
 FROM py-runtime AS api-runtime
@@ -67,5 +70,7 @@ COPY --from=deps-coach /usr/local /usr/local
 COPY . /app
 RUN chmod 0755 /app/docker/entrypoint.sh \
  && sed -i 's/\r$//' /app/docker/entrypoint.sh \
- && apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+ && apt-get update \
+ && apt-get install -y --no-install-recommends curl libpq5 \
+ && rm -rf /var/lib/apt/lists/*
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
