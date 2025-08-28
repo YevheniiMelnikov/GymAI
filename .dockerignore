@@ -37,7 +37,10 @@ htmlcov/
 node_modules/
 apps/webapp/frontend/node_modules/
 apps/webapp/frontend/.cache/
-apps/webapp/static/**
+apps/webapp/static/js/
+apps/webapp/static/css/
+!apps/webapp/static/i18n/
+!apps/webapp/static/i18n/*.json
 
 .dask-worker-space/
 .cache/
