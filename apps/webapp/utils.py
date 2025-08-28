@@ -2,7 +2,7 @@ import asyncio
 import hashlib
 import hmac
 import json
-from typing import cast
+from typing import Any, cast
 from urllib.parse import parse_qsl, unquote_plus
 
 from config.app_settings import settings
@@ -97,10 +97,18 @@ def verify_init_data(init_data: str) -> dict[str, object]:
     return cast(dict[str, object], result)
 
 
+def normalize_day_exercises(raw: Any) -> list[dict[str, Any]]:
+    if isinstance(raw, dict):
+        return [{"day": str(k), "exercises": v} for k, v in sorted(raw.items(), key=lambda kv: int(str(kv[0])))]
+    if isinstance(raw, list):
+        return raw
+    return []
+
+
 def _format_full_program(exercises: list[DayExercises]) -> str:
     lines: list[str] = []
     for day in sorted(exercises, key=lambda d: int(d.day)):
-        lines.append(f"Day {day.day}")
+        lines.append(f"Day {int(day.day) + 1}")
         for idx, ex in enumerate(day.exercises):
             line = f"{idx + 1}. {ex.name} | {ex.sets} x {ex.reps}"
             if ex.weight:

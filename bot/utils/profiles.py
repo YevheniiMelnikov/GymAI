@@ -19,7 +19,6 @@ from core.exceptions import (
     ClientNotAssignedError,
 )
 from core.services import APIService
-from bot.utils.chat import send_coach_request
 from bot.utils.bot import del_msg, answer_msg, delete_messages
 from core.schemas import Client, Coach, Profile
 from bot.texts.text_manager import msg_text
@@ -61,6 +60,8 @@ async def update_profile_data(message: Message, state: FSMContext, role: str, bo
                     await answer_msg(
                         message, msg_text("wait_for_verification", data.get("lang", settings.DEFAULT_LANG))
                     )
+                    from bot.utils.chat import send_coach_request
+
                     await send_coach_request(message.from_user.id, profile, data, bot)
                     coach = await APIService.profile.create_coach_profile(profile.id, user_data)
                     if coach is not None:
@@ -173,7 +174,7 @@ async def answer_profile(cbq: CallbackQuery, profile: Profile, user: Coach | Cli
         return
 
     if profile.role == "coach" and isinstance(user, Coach):
-        if user.coach_type == CoachType.ai or not user.profile_photo:
+        if user.coach_type == CoachType.ai_coach or not user.profile_photo:
             file_path = Path(__file__).resolve().parent.parent / "images" / "ai_coach.png"
             if file_path.exists():
                 avatar = FSInputFile(file_path)

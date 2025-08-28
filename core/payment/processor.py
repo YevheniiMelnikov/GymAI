@@ -81,7 +81,7 @@ class PaymentProcessor:
             if not coach:
                 logger.error(f"Coach not found for payment {payment.order_id}")
                 return None
-            if coach.coach_type == CoachType.ai:
+            if coach.coach_type == CoachType.ai_coach:
                 logger.info(f"Skip AI coach {coach.id} for payment {payment.order_id}")
                 return None
             amount = payment.amount.quantize(Decimal("0.01"), ROUND_HALF_UP)
@@ -122,7 +122,7 @@ class PaymentProcessor:
             coaches = await self.profile_service.list_coach_profiles()
             payout_rows = []
             for coach in coaches:
-                if coach.coach_type == CoachType.ai:
+                if coach.coach_type == CoachType.ai_coach:
                     continue
                 amount = (coach.payout_due or Decimal("0")).quantize(Decimal("0.01"), ROUND_HALF_UP)
                 if amount <= 0:

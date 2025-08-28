@@ -1,12 +1,13 @@
 import sys
 from importlib import import_module
 from types import SimpleNamespace
+from datetime import datetime
 
 import pytest
 from django.http import HttpRequest, JsonResponse
 
-from core.cache import Cache
-from core.exceptions import ProfileNotFoundError
+from rest_framework.exceptions import NotFound
+from core.enums import CoachType
 
 django_http = sys.modules["django.http"]
 django_http.HttpResponse = object  # type: ignore[attr-defined]
@@ -17,15 +18,26 @@ views = import_module("apps.webapp.views")
 
 @pytest.mark.asyncio
 async def test_program_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def mock_get_profile(tg_id: int, *, use_fallback: bool = True) -> SimpleNamespace:
-        return SimpleNamespace(id=1)
-
-    async def mock_get_program(profile_id: int, *, use_fallback: bool = True) -> SimpleNamespace:
-        return SimpleNamespace(exercises_by_day=[])
-
     monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
-    monkeypatch.setattr(Cache.profile, "get_profile", mock_get_profile)
-    monkeypatch.setattr(Cache.workout, "get_latest_program", mock_get_program)
+    monkeypatch.setattr(
+        views.ProfileRepository,
+        "get_by_telegram_id",
+        lambda _tg_id: SimpleNamespace(id=1),
+    )
+    monkeypatch.setattr(
+        views.ClientProfileRepository,
+        "get_by_profile_id",
+        lambda _id: SimpleNamespace(id=1),
+    )
+    monkeypatch.setattr(
+        views.ProgramRepository,
+        "get_latest",
+        lambda _id: SimpleNamespace(
+            exercises_by_day=[],
+            created_at=datetime.fromtimestamp(1),
+            coach_type=CoachType.human,
+        ),
+    )
 
     request: HttpRequest = HttpRequest()
     request.method = "GET"
@@ -34,6 +46,53 @@ async def test_program_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
     response: JsonResponse = await views.program_data(request)
     assert response.status_code == 200
     assert response["program"] == ""
+    assert response["created_at"] == 1
+    assert response["coach_type"] == CoachType.human
+
+
+@pytest.mark.asyncio
+async def test_program_data_with_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
+    monkeypatch.setattr(
+        views.ProfileRepository,
+        "get_by_telegram_id",
+        lambda _tg_id: SimpleNamespace(id=1),
+    )
+    monkeypatch.setattr(
+        views.ClientProfileRepository,
+        "get_by_profile_id",
+        lambda _id: SimpleNamespace(id=1),
+    )
+    monkeypatch.setattr(
+        views.ProgramRepository,
+        "get_by_id",
+        lambda _cid, _pid: SimpleNamespace(
+            exercises_by_day=[],
+            created_at=datetime.fromtimestamp(2),
+            coach_type=CoachType.human,
+        ),
+    )
+
+    request: HttpRequest = HttpRequest()
+    request.method = "GET"
+    request.GET = {"init_data": "data", "program_id": "5"}
+
+    response: JsonResponse = await views.program_data(request)
+    assert response.status_code == 200
+    assert response["created_at"] == 2
+    assert response["coach_type"] == CoachType.human
+
+
+@pytest.mark.asyncio
+async def test_program_data_bad_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
+
+    request: HttpRequest = HttpRequest()
+    request.method = "GET"
+    request.GET = {"init_data": "data", "program_id": "bad"}
+
+    response: JsonResponse = await views.program_data(request)
+    assert response.status_code == 400
 
 
 @pytest.mark.asyncio
@@ -53,11 +112,12 @@ async def test_program_data_unauthorized(monkeypatch: pytest.MonkeyPatch) -> Non
 
 @pytest.mark.asyncio
 async def test_program_data_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def mock_get_profile(tg_id: int, *, use_fallback: bool = True) -> SimpleNamespace:
-        raise ProfileNotFoundError(tg_id)
-
     monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
-    monkeypatch.setattr(Cache.profile, "get_profile", mock_get_profile)
+    monkeypatch.setattr(
+        views.ProfileRepository,
+        "get_by_telegram_id",
+        lambda _tg_id: (_ for _ in ()).throw(NotFound("missing")),
+    )
 
     request: HttpRequest = HttpRequest()
     request.method = "GET"
@@ -69,11 +129,12 @@ async def test_program_data_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.asyncio
 async def test_program_data_server_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def mock_get_profile(tg_id: int, *, use_fallback: bool = True) -> SimpleNamespace:
-        raise RuntimeError("boom")
-
     monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
-    monkeypatch.setattr(Cache.profile, "get_profile", mock_get_profile)
+    monkeypatch.setattr(
+        views.ProfileRepository,
+        "get_by_telegram_id",
+        lambda _tg_id: (_ for _ in ()).throw(RuntimeError("boom")),
+    )
 
     request: HttpRequest = HttpRequest()
     request.method = "GET"

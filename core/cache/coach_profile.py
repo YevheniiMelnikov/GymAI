@@ -55,7 +55,7 @@ class CoachCacheManager(BaseCacheManager):
             for v in all_coaches.values():
                 coach_dict = json.loads(v)
                 coach = validate_or_raise(coach_dict, Coach, context=f"id={coach_dict.get('id')}")
-                if coach.verified and (include_ai or coach.coach_type != CoachType.ai):
+                if coach.verified and (include_ai or coach.coach_type != CoachType.ai_coach):
                     coaches_data.append(coach)
             random.shuffle(coaches_data)
             return coaches_data
@@ -67,7 +67,7 @@ class CoachCacheManager(BaseCacheManager):
     async def get_ai_coach(cls) -> Coach | None:
         coaches = await cls.get_coaches(include_ai=True)
         for coach in coaches:
-            if coach.coach_type == CoachType.ai:
+            if coach.coach_type == CoachType.ai_coach:
                 return coach
         return None
 

@@ -96,6 +96,17 @@ class ClientProfileRepository:
         return client_profile
 
     @staticmethod
+    def get_by_profile_id(profile_id: int) -> ClientProfile:
+        try:
+            client_profile = ClientProfile.objects.get(profile_id=profile_id)  # pyrefly: ignore[missing-attribute]
+            client_profile = cast(ClientProfile, client_profile)
+        except ClientProfile.DoesNotExist:  # pyrefly: ignore[missing-attribute]
+            raise NotFound(f"ClientProfile for profile_id={profile_id} not found")
+        if client_profile.profile.role != "client":  # type: ignore[attr-defined]
+            raise ValidationError("Underlying profile role is not 'client'")
+        return client_profile
+
+    @staticmethod
     def get_or_create_by_profile(profile: Profile) -> ClientProfile:
         if profile.role != "client":
             raise ValidationError("Profile role is not 'client'")
