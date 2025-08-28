@@ -3,9 +3,9 @@
     "esbuild": "^0.23.0",
     "typescript": "^5.5.4"
   },
-    "scripts": {
-      "typecheck": "tsc --noEmit -p frontend/tsconfig.json",
-      "build": "npm run typecheck && esbuild frontend/src/index.ts --bundle --splitting --format=esm --minify --sourcemap --outdir=static/js",
-      "watch": "esbuild frontend/src/index.ts --bundle --splitting --format=esm --sourcemap --outdir=static/js --watch"
-    }
+  "scripts": {
+    "typecheck": "tsc --noEmit -p frontend/tsconfig.json",
+    "build": "npm run typecheck && esbuild frontend/src/index.ts --bundle --splitting --format=esm --minify --sourcemap --outdir=static/js",
+    "watch": "esbuild frontend/src/index.ts --bundle --splitting --format=esm --sourcemap --outdir=static/js --watch"
   }
+}
