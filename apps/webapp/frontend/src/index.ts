@@ -7,18 +7,24 @@ const tg = Telegram?.WebApp;
 const initData: string = tg?.initData || '';
 
 async function route(): Promise<void> {
-  const { route, id, type } = getRoute();
-  if (route === 'history') {
-    const { renderHistory } = await import('./views/history.js');
+  const info = getRoute();
+  if (info.route === 'history') {
+    const { renderHistory } = await import('./views/history');
     await renderHistory();
     return;
   }
-  const { renderProgramView } = await import('./views/program_view.js');
-  await renderProgramView(id, type);
+  const { renderProgramView } = await import('./views/program_view');
+  await renderProgramView(info.id, info.type);
 }
 
 void (async () => {
-  await applyLang('eng');
+  const initialLang = (
+    Telegram?.WebApp?.initDataUnsafe?.user?.language_code ?? 'en'
+  ).replace('ua', 'uk');
+  await applyLang(initialLang);
+  try {
+    (Telegram?.WebApp)?.ready?.();
+  } catch {}
   if (!initData) {
     const content = document.getElementById('content');
     if (content) content.textContent = t('open_from_telegram');
