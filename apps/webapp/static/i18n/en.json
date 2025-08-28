@@ -1,0 +1,15 @@
+{
+  "history": "History",
+  "created": "Created",
+  "ai_label": "AI",
+  "service_unavailable": "Service temporarily unavailable",
+  "unauthorized": "Unauthorized",
+  "not_found": "Not found",
+  "server_error": "Server error",
+  "unexpected_error": "Unexpected error",
+  "no_programs": "No programs found",
+  "sort_newest": "Sort: Newest",
+  "sort_oldest": "Sort: Oldest",
+  "show_ai": "Show AI workout plans",
+  "open_from_telegram": "Open this page from Telegram."
+}

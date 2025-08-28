@@ -1,9 +1,10 @@
 {
   "devDependencies": {
+    "esbuild": "^0.23.0",
     "typescript": "^5.5.4"
   },
   "scripts": {
-    "build": "tsc ./frontend/webapp.ts --target ES2019 --module ES2020 --moduleResolution Node --lib ES2019,DOM,DOM.Iterable --outDir ./static --sourceMap --skipLibCheck --removeComments",
-    "watch": "tsc ./frontend/webapp.ts --target ES2019 --module ES2020 --moduleResolution Node --lib ES2019,DOM,DOM.Iterable --outDir ./static --sourceMap --skipLibCheck --removeComments -w"
+    "build": "esbuild frontend/webapp.ts --bundle --minify --sourcemap --outfile=static/webapp.js",
+    "watch": "esbuild frontend/webapp.ts --bundle --sourcemap --outfile=static/webapp.js --watch"
   }
 }

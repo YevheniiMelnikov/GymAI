@@ -19,7 +19,7 @@ async def test_subscription_data_success(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr(
         views.ProfileRepository,
         "get_by_telegram_id",
-        lambda _tg_id: SimpleNamespace(id=1),
+        lambda _tg_id: SimpleNamespace(id=1, language="eng"),
     )
     monkeypatch.setattr(
         views.ClientProfileRepository,
@@ -39,6 +39,7 @@ async def test_subscription_data_success(monkeypatch: pytest.MonkeyPatch) -> Non
     response: JsonResponse = await views.subscription_data(request)
     assert response.status_code == 200
     assert response["program"] == ""
+    assert response["language"] == "eng"
 
 
 @pytest.mark.asyncio

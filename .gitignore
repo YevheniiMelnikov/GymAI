@@ -166,3 +166,7 @@ staticfiles/
 /.junie
 # Node
 **/node_modules/
+
+# Webapp build outputs
+apps/webapp/static/webapp.js
+apps/webapp/static/webapp.js.map

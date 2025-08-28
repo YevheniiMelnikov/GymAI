@@ -24,18 +24,22 @@ from .utils import (
 )
 
 
-async def _auth_and_get_client(request: HttpRequest) -> Tuple[ClientProfile | None, JsonResponse | None, int]:
+async def _auth_and_get_client(
+    request: HttpRequest,
+) -> Tuple[ClientProfile | None, str, JsonResponse | None, int]:
     """
     Verify Telegram init_data, resolve tg_id -> Profile -> ClientProfile.
-    Returns (client | None, error_response | None, tg_id).
+
+    Returns (client | None, language, error_response | None, tg_id).
     """
     init_data: str = str(request.GET.get("init_data", ""))
     logger.debug("Webapp request: init_data length={}", len(init_data))
+    lang: str = "eng"
     try:
         data: dict[str, Any] = verify_init_data(init_data)
     except Exception as exc:
         logger.warning("Init data verification failed: {} | length={}", exc, len(init_data))
-        return None, JsonResponse({"error": "unauthorized"}, status=403), 0
+        return None, lang, JsonResponse({"error": "unauthorized"}, status=403), 0
 
     user: dict[str, Any] = data.get("user", {})  # type: ignore[arg-type]
     tg_id: int = int(str(user.get("id", "0")))
@@ -44,15 +48,16 @@ async def _auth_and_get_client(request: HttpRequest) -> Tuple[ClientProfile | No
         profile: Profile = await sync_to_async(ProfileRepository.get_by_telegram_id)(tg_id)
     except NotFound:
         logger.warning("Profile not found for tg_id={}", tg_id)
-        return None, JsonResponse({"error": "not_found"}, status=404), tg_id
+        return None, lang, JsonResponse({"error": "not_found"}, status=404), tg_id
 
+    lang = str(getattr(profile, "language", "eng") or "eng")
     try:
         client: ClientProfile = await sync_to_async(ClientProfileRepository.get_by_profile_id)(int(profile.pk))
     except NotFound:
         logger.warning("Client profile not found for profile_id={}", profile.pk)
-        return None, JsonResponse({"error": "not_found"}, status=404), tg_id
+        return None, lang, JsonResponse({"error": "not_found"}, status=404), tg_id
 
-    return client, None, tg_id
+    return client, lang, None, tg_id
 
 
 def _parse_program_id(request: HttpRequest) -> Tuple[int | None, JsonResponse | None]:
@@ -77,7 +82,7 @@ def _format_program_text(raw_exercises: Any) -> str:
 async def program_data(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
-    client, auth_error, _tg = await _auth_and_get_client(request)
+    client, lang, auth_error, _tg = await _auth_and_get_client(request)
     if auth_error:
         return auth_error
     assert client is not None
@@ -105,6 +110,7 @@ async def program_data(request: HttpRequest) -> JsonResponse:
             "program": text,
             "created_at": int(cast(datetime, program_obj.created_at).timestamp()),
             "coach_type": program_obj.coach_type,
+            "language": lang,
         }
     )
 
@@ -114,7 +120,7 @@ async def program_data(request: HttpRequest) -> JsonResponse:
 async def programs_history(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
-    client, auth_error, tg_id = await _auth_and_get_client(request)
+    client, lang, auth_error, tg_id = await _auth_and_get_client(request)
     if auth_error:
         return auth_error
     assert client is not None
@@ -133,7 +139,7 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
         }
         for p in programs
     ]
-    return JsonResponse({"programs": items})
+    return JsonResponse({"programs": items, "language": lang})
 
 
 # type checking of async views with require_GET is not supported by stubs
@@ -141,7 +147,7 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
 async def subscription_data(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
-    client, auth_error, _tg = await _auth_and_get_client(request)
+    client, lang, auth_error, _tg = await _auth_and_get_client(request)
     if auth_error:
         return auth_error
     assert client is not None
@@ -152,7 +158,7 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"error": "not_found"}, status=404)
 
     text: str = _format_program_text(subscription.exercises)
-    return JsonResponse({"program": text})
+    return JsonResponse({"program": text, "language": lang})
 
 
 def index(request: HttpRequest) -> HttpResponse:
