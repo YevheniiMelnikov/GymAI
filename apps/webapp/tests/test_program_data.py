@@ -84,6 +84,18 @@ async def test_program_data_with_id(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_program_data_bad_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
+
+    request: HttpRequest = HttpRequest()
+    request.method = "GET"
+    request.GET = {"init_data": "data", "program_id": "bad"}
+
+    response: JsonResponse = await views.program_data(request)
+    assert response.status_code == 400
+
+
+@pytest.mark.asyncio
 async def test_program_data_unauthorized(monkeypatch: pytest.MonkeyPatch) -> None:
     def raise_error(_d: str) -> dict[str, object]:
         raise ValueError

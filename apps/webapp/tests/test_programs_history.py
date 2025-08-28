@@ -31,7 +31,7 @@ async def test_programs_history_success(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(
         views.ProgramRepository,
         "get_all",
-        lambda _id: [SimpleNamespace(id=1, created_at=datetime.fromtimestamp(1), coach_type=CoachType.ai)],
+        lambda _id: [SimpleNamespace(id=1, created_at=datetime.fromtimestamp(1), coach_type=CoachType.ai_coach)],
     )
 
     request: HttpRequest = HttpRequest()
@@ -41,7 +41,7 @@ async def test_programs_history_success(monkeypatch: pytest.MonkeyPatch) -> None
     response: JsonResponse = await views.programs_history(request)
     assert response.status_code == 200
     assert response["programs"][0]["id"] == 1
-    assert response["programs"][0]["coach_type"] == CoachType.ai
+    assert response["programs"][0]["coach_type"] == CoachType.ai_coach
 
 
 @pytest.mark.asyncio

@@ -34,7 +34,7 @@ async def send_message(
     avatar_url: str | FSInputFile | None = None,
 ) -> None:
     # AI COACH FLOW
-    if isinstance(recipient, Coach) and recipient.coach_type == CoachType.ai:
+    if isinstance(recipient, Coach) and recipient.coach_type == CoachType.ai_coach:
         sender_id: int | None = None
         if state:
             data = await state.get_data()

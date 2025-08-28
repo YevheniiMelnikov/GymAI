@@ -24,6 +24,7 @@ function renderProgramControls() {
         const url = new URL(window.location.toString());
         url.searchParams.set("page", "history");
         url.searchParams.delete("program_id");
+        url.searchParams.delete("type");
         window.history.pushState({}, "", url);
         void loadHistory();
     });
@@ -93,6 +94,7 @@ async function loadProgram(programId) {
         else {
             url.searchParams.delete("program_id");
         }
+        url.searchParams.delete("type");
         window.history.replaceState({}, "", url);
     }
 }
@@ -124,7 +126,7 @@ async function loadHistory() {
             setText("Service temporarily unavailable");
             return;
         }
-        if (!data.programs) {
+        if (!data.programs || data.programs.length === 0) {
             setText("No programs found");
             return;
         }
@@ -156,6 +158,7 @@ async function loadHistory() {
                     const url = new URL(window.location.toString());
                     url.searchParams.delete("page");
                     url.searchParams.set("program_id", String(p.id));
+                    url.searchParams.delete("type");
                     window.history.pushState({}, "", url);
                     void loadProgram(String(p.id));
                 });
@@ -204,14 +207,62 @@ async function loadHistory() {
         setText("Server error");
     }
 }
+async function loadSubscription() {
+    let message = null;
+    try {
+        if (dateEl)
+            dateEl.textContent = "";
+        if (originEl) {
+            originEl.textContent = "";
+            originEl.className = "";
+        }
+        const q = new URLSearchParams();
+        q.set("init_data", initData);
+        const resp = await fetch(`/webapp/api/subscription/?${q.toString()}`);
+        if (resp.status === 403) {
+            message = "Unauthorized";
+        }
+        else if (resp.status === 404) {
+            message = "No subscription found";
+        }
+        else if (resp.status >= 500) {
+            message = "Server error";
+        }
+        else {
+            const data = await resp.json();
+            if (data.error === "service_unavailable") {
+                message = "Service temporarily unavailable";
+            }
+            else {
+                setText(data.program || "");
+            }
+        }
+    }
+    catch (err) {
+        console.error("Failed to load subscription", err);
+        message = "Server error";
+    }
+    finally {
+        if (message)
+            setText(message);
+        renderProgramControls();
+        const url = new URL(window.location.toString());
+        url.searchParams.set("type", "subscription");
+        window.history.replaceState({}, "", url);
+    }
+}
 if (!initData) {
     setText("Open this page from Telegram.");
     console.error("No Telegram WebApp context: Telegram.WebApp.initData is empty.");
 }
 else {
     const params = new URLSearchParams(window.location.search);
+    const type = params.get("type");
     const page = (_b = params.get("page")) !== null && _b !== void 0 ? _b : "program";
-    if (page === "history") {
+    if (type === "subscription") {
+        void loadSubscription();
+    }
+    else if (page === "history") {
         void loadHistory();
     }
     else {
@@ -221,8 +272,12 @@ else {
     window.addEventListener("popstate", () => {
         var _a;
         const p = new URLSearchParams(window.location.search);
+        const typeP = p.get("type");
         const view = (_a = p.get("page")) !== null && _a !== void 0 ? _a : "program";
-        if (view === "history") {
+        if (typeP === "subscription") {
+            void loadSubscription();
+        }
+        else if (view === "history") {
             void loadHistory();
         }
         else {

@@ -88,7 +88,7 @@ async def internal_send_workout_result(request: web.Request) -> web.Response:
     if not coach:
         return web.json_response({"detail": "Coach not found"}, status=404)
 
-    if coach.coach_type == CoachType.ai:
+    if coach.coach_type == CoachType.ai_coach:
         await APIService.ai_coach.save_client_message(  # pyrefly: ignore[missing-attribute]
             str(client_workout_feedback), client_id=int(client_id)
         )

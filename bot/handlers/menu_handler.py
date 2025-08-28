@@ -263,7 +263,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
     await show_main_menu(cast(Message, callback_query.message), profile, state)
     bot = cast(Bot, callback_query.bot)
     assigned_coaches = [await Cache.coach.get_coach(coach_id) for coach_id in client.assigned_to]
-    if any(coach.coach_type == CoachType.ai for coach in assigned_coaches):
+    if any(coach.coach_type == CoachType.ai_coach for coach in assigned_coaches):
         pass  # already assigned to AI
     else:
         fetched = await Cache.coach.get_ai_coach()

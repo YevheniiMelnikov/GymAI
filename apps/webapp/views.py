@@ -10,7 +10,12 @@ from apps.profiles.repos import ClientProfileRepository, ProfileRepository
 from apps.workout_plans.models import Program, Subscription
 from apps.workout_plans.repos import ProgramRepository, SubscriptionRepository
 from core.schemas import DayExercises
-from .utils import verify_init_data, _format_full_program, ensure_container_ready
+from .utils import (
+    verify_init_data,
+    _format_full_program,
+    ensure_container_ready,
+    normalize_day_exercises,
+)
 
 
 async def program_data(request: HttpRequest) -> JsonResponse:
@@ -29,7 +34,14 @@ async def program_data(request: HttpRequest) -> JsonResponse:
 
     user: dict[str, object] = data.get("user", {})  # type: ignore[arg-type]
     tg_id: int = int(str(user.get("id", "0")))
-    program_id: str | None = request.GET.get("program_id")
+    program_id_raw: str | None = request.GET.get("program_id")
+    program_id: int | None = None
+    if program_id_raw:
+        try:
+            program_id = int(program_id_raw)
+        except ValueError:
+            logger.warning("Invalid program_id={}", program_id_raw)
+            return JsonResponse({"error": "bad_request"}, status=400)
 
     try:
         profile: Profile = await sync_to_async(ProfileRepository.get_by_telegram_id)(tg_id)
@@ -44,7 +56,7 @@ async def program_data(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"error": "not_found"}, status=404)
 
     if program_id is not None:
-        program_obj: Program | None = await sync_to_async(ProgramRepository.get_by_id)(client.id, int(program_id))
+        program_obj: Program | None = await sync_to_async(ProgramRepository.get_by_id)(client.id, program_id)
     else:
         program_obj = await sync_to_async(ProgramRepository.get_latest)(client.id)
 
@@ -56,7 +68,8 @@ async def program_data(request: HttpRequest) -> JsonResponse:
         )
         return JsonResponse({"error": "not_found"}, status=404)
 
-    exercises = [DayExercises.model_validate(e) for e in program_obj.exercises_by_day or []]
+    raw = normalize_day_exercises(program_obj.exercises_by_day)
+    exercises = [DayExercises.model_validate(e) for e in raw]
     text: str = _format_full_program(exercises)
     return JsonResponse(
         {
@@ -140,7 +153,8 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
         logger.warning("Subscription not found for client_profile_id={}", client.id)
         return JsonResponse({"error": "not_found"}, status=404)
 
-    exercises = [DayExercises.model_validate(e) for e in subscription.exercises or []]
+    raw = normalize_day_exercises(subscription.exercises)
+    exercises = [DayExercises.model_validate(e) for e in raw]
     text: str = _format_full_program(exercises)
     return JsonResponse({"program": text})
 

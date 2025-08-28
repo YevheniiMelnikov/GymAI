@@ -249,7 +249,7 @@ async def show_coaches_menu(message: Message, coaches: list[Coach], bot: Bot, cu
     current_index %= len(coaches)
     current_coach = coaches[current_index]
     coach_photo_url: str | FSInputFile
-    if current_coach.coach_type == CoachType.ai or not current_coach.profile_photo:
+    if current_coach.coach_type == CoachType.ai_coach or not current_coach.profile_photo:
         file_path = Path(__file__).resolve().parent.parent / "images" / "ai_coach.png"
         coach_photo_url = FSInputFile(file_path)
     else:

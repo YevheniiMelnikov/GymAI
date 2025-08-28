@@ -174,7 +174,7 @@ async def answer_profile(cbq: CallbackQuery, profile: Profile, user: Coach | Cli
         return
 
     if profile.role == "coach" and isinstance(user, Coach):
-        if user.coach_type == CoachType.ai or not user.profile_photo:
+        if user.coach_type == CoachType.ai_coach or not user.profile_photo:
             file_path = Path(__file__).resolve().parent.parent / "images" / "ai_coach.png"
             if file_path.exists():
                 avatar = FSInputFile(file_path)
