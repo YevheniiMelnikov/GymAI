@@ -57,13 +57,14 @@ async def save_exercise(
         split_number = len(days)
     else:
         day_label = day_index + 1
-        split_number = data.get("split") or 0
+        split_raw = cast(int | None, data.get("split"))
+        split_number: int = int(split_raw or 0)
         if not split_number:
             try:
                 from core.cache import Cache
 
                 program = await Cache.workout.get_latest_program(profile_id)
-                split_number = program.split_number
+                split_number = int(program.split_number or 1)
             except ProgramNotFoundError:
                 logger.warning(
                     f"Program not found for client {profile_id} in save_exercise, defaulting split_number to 1."
@@ -144,7 +145,8 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
         await callback_query.answer(msg_text("error_generic", settings.DEFAULT_LANG), show_alert=True)
         return
 
-    parts = cast(str, callback_query.data).split("_")
+    data_str: str = callback_query.data or ""
+    parts = data_str.split("_")
     profile_id = int(parts[1])
     day = parts[2]
 
