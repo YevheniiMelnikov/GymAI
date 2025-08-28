@@ -16,8 +16,8 @@ RUN --mount=type=cache,target=/root/.npm npm ci
 COPY apps/webapp/frontend ./frontend
 RUN npm run build \
  && echo "== build output in ./static ==" \
- && ls -la ./static || true \
- && test -f ./static/webapp.js || (echo 'ERROR: ./static/webapp.js not found' && exit 1)
+ && ls -la ./static ./static/js || true \
+ && test -f ./static/js/index.js || (echo 'ERROR: ./static/js/index.js not found' && exit 1)
 
 FROM py-base AS deps-app
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
