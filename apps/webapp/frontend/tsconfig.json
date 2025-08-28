@@ -4,8 +4,8 @@
     "module": "ES2020",
     "moduleResolution": "Node",
     "lib": ["ES2019", "DOM", "DOM.Iterable"],
-    "rootDir": "./",
-    "outDir": "../static",
+    "rootDir": "./src",
+    "outDir": "../static/js",
     "strict": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
@@ -15,6 +15,6 @@
     "noEmitOnError": true,
     "isolatedModules": true
   },
-  "include": ["./**/*.ts", "./types/**/*.d.ts"],
+  "include": ["src/**/*.ts", "types/**/*.d.ts"],
   "exclude": ["../static"]
 }

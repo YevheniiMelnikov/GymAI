@@ -168,5 +168,4 @@ staticfiles/
 **/node_modules/
 
 # Webapp build outputs
-apps/webapp/static/webapp.js
-apps/webapp/static/webapp.js.map
+apps/webapp/static/js/
