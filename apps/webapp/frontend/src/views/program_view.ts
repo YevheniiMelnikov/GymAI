@@ -15,12 +15,13 @@ function setText(txt: string): void {
   if (content) content.textContent = txt;
 }
 
-function renderProgramControls(): void {
+function renderProgramControls(currentId?: string): void {
   if (!controls) return;
   controls.innerHTML = '';
   const btn = createButton(t('history'), () => {
     const url = new URL(window.location.toString());
     url.searchParams.set('page', 'history');
+    if (currentId) url.searchParams.set('current_id', currentId);
     url.searchParams.delete('program_id');
     url.searchParams.delete('type');
     window.location.href = url.toString();
@@ -83,5 +84,5 @@ export async function renderProgramView(id?: string, type?: 'subscription'): Pro
     }
   }
 
-  renderProgramControls();
+  renderProgramControls(id);
 }

@@ -18,6 +18,7 @@ export const fallbackEn: Record<string, string> = {
   sort_newest: 'Sort: Newest',
   sort_oldest: 'Sort: Oldest',
   show_ai: 'Show AI workout plans',
+  back: 'Back',
   open_from_telegram: 'Open this page from Telegram.'
 };
 

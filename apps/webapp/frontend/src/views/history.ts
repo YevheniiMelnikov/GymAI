@@ -1,7 +1,7 @@
 import { API, getJSON, statusToMessage } from '../api/http';
 import { HistoryResp, HistoryItem } from '../api/types';
 import { applyLang, t, formatDate } from '../i18n/i18n';
-import { createToggle } from '../ui/components';
+import { createButton, createToggle } from '../ui/components';
 
 const content = document.getElementById('content');
 const controls = document.getElementById('controls');
@@ -50,33 +50,42 @@ function render(): void {
 }
 
 export async function renderHistory(): Promise<void> {
-  if (!initData) {
-    await applyLang('eng');
-    setText(t('open_from_telegram'));
-    return;
+    if (!initData) {
+      await applyLang('eng');
+      setText(t('open_from_telegram'));
+      return;
+    }
+    const q = new URLSearchParams();
+    q.set('init_data', initData);
+    const url = `${API.programs}?${q.toString()}`;
+    const res = await getJSON<HistoryResp>(url);
+    if (!res.ok) {
+      setText(statusToMessage(res.status));
+      return;
+    }
+    const data = res.data;
+    await applyLang(data.language);
+    if (controls) {
+      controls.innerHTML = '';
+      const backBtn = createButton(t('back'), () => {
+        const cur = new URL(window.location.toString());
+        const prevId = cur.searchParams.get('current_id');
+        cur.searchParams.delete('page');
+        cur.searchParams.delete('current_id');
+        if (prevId) cur.searchParams.set('program_id', prevId);
+        window.location.href = cur.toString();
+      });
+      const toggle = createToggle(true, (state) => {
+        showAI = state;
+        render();
+      });
+      controls.appendChild(backBtn);
+      controls.appendChild(toggle);
+    }
+    if (data.error === 'service_unavailable') {
+      setText(t('service_unavailable'));
+      return;
+    }
+    items = (data.programs || []).sort((a, b) => b.created_at - a.created_at);
+    render();
   }
-  if (controls) {
-    controls.innerHTML = '';
-    const toggle = createToggle(true, (state) => {
-      showAI = state;
-      render();
-    });
-    controls.appendChild(toggle);
-  }
-  const q = new URLSearchParams();
-  q.set('init_data', initData);
-  const url = `${API.programs}?${q.toString()}`;
-  const res = await getJSON<HistoryResp>(url);
-  if (!res.ok) {
-    setText(statusToMessage(res.status));
-    return;
-  }
-  const data = res.data;
-  await applyLang(data.language);
-  if (data.error === 'service_unavailable') {
-    setText(t('service_unavailable'));
-    return;
-  }
-  items = (data.programs || []).sort((a, b) => b.created_at - a.created_at);
-  render();
-}
