@@ -84,6 +84,7 @@ services:
       start_period: 30s
     volumes:
       - staticfiles:/app/staticfiles
+      - ../google_creds.json:/app/google_creds.json:ro
     restart: unless-stopped
 
   celery_worker:

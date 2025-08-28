@@ -31,6 +31,7 @@ CSRF_TRUSTED_ORIGINS = [f"{p.scheme}://{p.netloc}" for p in _parsed_urls if p.sc
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 ASGI_APPLICATION = "config.asgi.application"
+STATICFILES_STORAGE = "django.contrib.staticfiles.storage.ManifestStaticFilesStorage"
 
 INSTALLED_APPS = [
     "django.contrib.admin",

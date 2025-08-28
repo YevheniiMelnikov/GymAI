@@ -107,8 +107,8 @@ services:
       retries: 5
       start_period: 30s
     volumes:
-      - ../:/app
       - staticfiles:/app/staticfiles
+      - ../google_creds.json:/app/google_creds.json:ro
     ports:
       - "${HOST_API_PORT:-8000}:8000"
 

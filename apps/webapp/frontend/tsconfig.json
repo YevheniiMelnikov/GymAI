@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2019",
+    "module": "ES2020",
+    "moduleResolution": "Node",
+    "lib": ["ES2019", "DOM", "DOM.Iterable"],
+    "rootDir": "./",
+    "outDir": "../static",
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "removeComments": true,
+    "noEmitOnError": true,
+    "isolatedModules": true
+  },
+  "include": ["./**/*.ts", "./types/**/*.d.ts"],
+  "exclude": ["../static"]
+}

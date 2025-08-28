@@ -14,7 +14,10 @@ WORKDIR /app/apps/webapp
 COPY apps/webapp/package*.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
 COPY apps/webapp/frontend ./frontend
-RUN npm run build
+RUN npm run build \
+ && echo "== build output in ./static ==" \
+ && ls -la ./static || true \
+ && test -f ./static/webapp.js || (echo 'ERROR: ./static/webapp.js not found' && exit 1)
 
 FROM py-base AS deps-app
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \

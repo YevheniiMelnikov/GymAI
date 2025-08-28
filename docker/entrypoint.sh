@@ -14,6 +14,7 @@ if [ "${RUN_MIGRATIONS}" = "true" ]; then
   python manage.py ensure_ai_coach
 
   echo "▶ Collecting static files..."
+  rm -f /app/staticfiles/webapp.js /app/staticfiles/webapp.css || true
   python manage.py collectstatic --noinput || echo "Skipping collectstatic"
 fi
 
