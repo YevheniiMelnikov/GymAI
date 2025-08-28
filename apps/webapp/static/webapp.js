@@ -30,6 +30,7 @@ function renderProgramControls() {
     controls.appendChild(btn);
 }
 async function loadProgram(programId) {
+    let message = null;
     try {
         const q = new URLSearchParams();
         q.set("init_data", initData);
@@ -37,51 +38,62 @@ async function loadProgram(programId) {
             q.set("program_id", programId);
         const resp = await fetch(`/webapp/api/program/?${q.toString()}`);
         if (resp.status === 403) {
-            setText("Unauthorized");
-            return;
+            message = "Unauthorized";
         }
-        if (resp.status === 404) {
-            setText("No program found");
-            return;
+        else if (resp.status === 404) {
+            message = "No program found";
         }
-        if (resp.status >= 500) {
-            setText("Server error");
-            return;
+        else if (resp.status >= 500) {
+            message = "Server error";
         }
-        const data = await resp.json();
-        if (data.error === "service_unavailable") {
-            setText("Service temporarily unavailable");
-            return;
-        }
-        if (dateEl) {
-            const ts = Number(data.created_at);
-            dateEl.textContent = Number.isFinite(ts) ? `Created: ${formatDate(ts)}` : "";
-        }
-        if (originEl) {
-            if (data.coach_type === "ai_coach") {
-                originEl.textContent = "AI";
-                originEl.className = "ai-label";
+        else {
+            const data = await resp.json();
+            if (data.error === "service_unavailable") {
+                message = "Service temporarily unavailable";
             }
             else {
+                if (dateEl) {
+                    const ts = Number(data.created_at);
+                    dateEl.textContent = Number.isFinite(ts) ? `Created: ${formatDate(ts)}` : "";
+                }
+                if (originEl) {
+                    if (data.coach_type === "ai_coach") {
+                        originEl.textContent = "AI";
+                        originEl.className = "ai-label";
+                    }
+                    else {
+                        originEl.textContent = "";
+                        originEl.className = "";
+                    }
+                }
+                setText(data.program || "");
+            }
+        }
+    }
+    catch (err) {
+        console.error("Failed to load program", err);
+        message = "Server error";
+    }
+    finally {
+        if (message) {
+            setText(message);
+            if (dateEl)
+                dateEl.textContent = "";
+            if (originEl) {
                 originEl.textContent = "";
                 originEl.className = "";
             }
         }
-        setText(data.program || "");
         renderProgramControls();
         const url = new URL(window.location.toString());
         url.searchParams.delete("page");
-        if (programId) {
+        if (programId && !message) {
             url.searchParams.set("program_id", programId);
         }
         else {
             url.searchParams.delete("program_id");
         }
         window.history.replaceState({}, "", url);
-    }
-    catch (err) {
-        console.error("Failed to load program", err);
-        setText("Server error");
     }
 }
 async function loadHistory() {
@@ -120,6 +132,7 @@ async function loadHistory() {
             return;
         content.innerHTML = "";
         const list = document.createElement("ul");
+        list.className = "history-list";
         let sortBy = "date";
         let asc = false;
         function render() {
@@ -205,4 +218,15 @@ else {
         const programId = params.get("program_id");
         void loadProgram(programId);
     }
+    window.addEventListener("popstate", () => {
+        var _a;
+        const p = new URLSearchParams(window.location.search);
+        const view = (_a = p.get("page")) !== null && _a !== void 0 ? _a : "program";
+        if (view === "history") {
+            void loadHistory();
+        }
+        else {
+            void loadProgram(p.get("program_id"));
+        }
+    });
 }

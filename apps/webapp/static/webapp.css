@@ -31,3 +31,14 @@ button {
   color: purple;
   font-weight: bold;
 }
+
+.history-list {
+  list-style: none;
+  padding-left: 0;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.history-list li {
+  margin-bottom: 0.25rem;
+}

@@ -29,7 +29,7 @@ class Settings(BaseSettings):
 
     CACHE_TTL: int = 60 * 5  # Django cache TTL
     BACKUP_RETENTION_DAYS: int = 30  # Postgres/Redis backup retention
-    STATIC_VERSION: int = 1
+    STATIC_VERSION: int = 2
 
     TIME_ZONE: Annotated[str, Field(default="Europe/Kyiv")]
     DEFAULT_LANG: Annotated[str, Field(default="ua")]
