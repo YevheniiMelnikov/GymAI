@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Tuple
+from typing import Any, Tuple, cast
+from datetime import datetime
 
 from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.shortcuts import render
@@ -46,16 +47,16 @@ async def _auth_and_get_client(request: HttpRequest) -> Tuple[ClientProfile | No
         return None, JsonResponse({"error": "not_found"}, status=404), tg_id
 
     try:
-        client: ClientProfile = await sync_to_async(ClientProfileRepository.get_by_profile_id)(profile.id)
+        client: ClientProfile = await sync_to_async(ClientProfileRepository.get_by_profile_id)(int(profile.pk))
     except NotFound:
-        logger.warning("Client profile not found for profile_id={}", profile.id)
+        logger.warning("Client profile not found for profile_id={}", profile.pk)
         return None, JsonResponse({"error": "not_found"}, status=404), tg_id
 
     return client, None, tg_id
 
 
 def _parse_program_id(request: HttpRequest) -> Tuple[int | None, JsonResponse | None]:
-    raw: str | None = request.GET.get("program_id")
+    raw = cast(str | None, request.GET.get("program_id"))
     if not raw:
         return None, None
     try:
@@ -71,7 +72,8 @@ def _format_program_text(raw_exercises: Any) -> str:
     return _format_full_program(exercises)
 
 
-@require_GET
+# type checking of async views with require_GET is not supported by stubs
+@require_GET  # type: ignore[misc]
 async def program_data(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
@@ -85,14 +87,14 @@ async def program_data(request: HttpRequest) -> JsonResponse:
         return pid_error
 
     if program_id is not None:
-        program_obj: Program | None = await sync_to_async(ProgramRepository.get_by_id)(client.id, program_id)
+        program_obj: Program | None = await sync_to_async(ProgramRepository.get_by_id)(int(client.pk), program_id)
     else:
-        program_obj = await sync_to_async(ProgramRepository.get_latest)(client.id)
+        program_obj = await sync_to_async(ProgramRepository.get_latest)(int(client.pk))
 
     if program_obj is None:
         logger.warning(
             "Program not found for client_profile_id={} program_id={}",
-            client.id,
+            client.pk,
             program_id,
         )
         return JsonResponse({"error": "not_found"}, status=404)
@@ -101,13 +103,14 @@ async def program_data(request: HttpRequest) -> JsonResponse:
     return JsonResponse(
         {
             "program": text,
-            "created_at": int(program_obj.created_at.timestamp()),
+            "created_at": int(cast(datetime, program_obj.created_at).timestamp()),
             "coach_type": program_obj.coach_type,
         }
     )
 
 
-@require_GET
+# type checking of async views with require_GET is not supported by stubs
+@require_GET  # type: ignore[misc]
 async def programs_history(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
@@ -117,16 +120,24 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
     assert client is not None
 
     try:
-        programs: list[Program] = await sync_to_async(ProgramRepository.get_all)(client.id)
+        programs: list[Program] = await sync_to_async(ProgramRepository.get_all)(int(client.pk))
     except Exception:
         logger.exception("Failed to fetch programs for tg_id={}", tg_id)
         return JsonResponse({"error": "server_error"}, status=500)
 
-    items = [{"id": p.id, "created_at": int(p.created_at.timestamp()), "coach_type": p.coach_type} for p in programs]
+    items = [
+        {
+            "id": int(p.pk),
+            "created_at": int(cast(datetime, p.created_at).timestamp()),
+            "coach_type": p.coach_type,
+        }
+        for p in programs
+    ]
     return JsonResponse({"programs": items})
 
 
-@require_GET
+# type checking of async views with require_GET is not supported by stubs
+@require_GET  # type: ignore[misc]
 async def subscription_data(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
@@ -135,9 +146,9 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
         return auth_error
     assert client is not None
 
-    subscription: Subscription | None = await sync_to_async(SubscriptionRepository.get_latest)(client.id)
+    subscription: Subscription | None = await sync_to_async(SubscriptionRepository.get_latest)(int(client.pk))
     if subscription is None:
-        logger.warning("Subscription not found for client_profile_id={}", client.id)
+        logger.warning("Subscription not found for client_profile_id={}", client.pk)
         return JsonResponse({"error": "not_found"}, status=404)
 
     text: str = _format_program_text(subscription.exercises)
