@@ -124,7 +124,11 @@ services:
     container_name: celery_worker
     <<: *common_env
     entrypoint: /app/docker/entrypoint.sh
-    command: celery -A config.celery:celery_app worker -l info -Q default,maintenance -P threads
+    command: >
+      celery -A config.celery:celery_app worker
+      -l info
+      -Q default,maintenance
+      -P threads
     restart: unless-stopped
 
   ai_coach:
@@ -157,7 +161,9 @@ services:
       db:
         condition: service_healthy
     entrypoint: /app/docker/entrypoint.sh
-    command: bash -lc "python -c 'import asyncio; from cognee.modules.engine.operations.setup import setup; asyncio.run(setup())' && uvicorn ai_coach.api:app --host 0.0.0.0 --port 9000"
+    command: >
+      bash -lc "python -c 'import asyncio; from cognee.modules.engine.operations.setup import setup; asyncio.run(setup())'
+      && uvicorn ai_coach.api:app --host 0.0.0.0 --port 9000"
     ports:
       - "${HOST_COACH_PORT:-9000}:9000"
 

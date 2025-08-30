@@ -31,7 +31,7 @@ from bot.utils.text import (
 from bot.utils.exercises import format_program, format_full_program
 from config.app_settings import settings
 from bot.utils.bot import del_msg, answer_msg, get_webapp_url
-from core.services import avatar_manager
+from core.services import get_avatar_manager
 from core.utils.validators import validate_or_raise
 
 
@@ -253,6 +253,7 @@ async def show_coaches_menu(message: Message, coaches: list[Coach], bot: Bot, cu
         file_path = Path(__file__).resolve().parent.parent / "images" / "ai_coach.png"
         coach_photo_url = FSInputFile(file_path)
     else:
+        avatar_manager = get_avatar_manager()
         coach_photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{current_coach.profile_photo}"
     formatted_text = msg_text("coach_page", lang).format(**current_coach.model_dump(mode="json"))
 

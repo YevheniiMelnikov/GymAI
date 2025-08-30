@@ -19,7 +19,7 @@ from core.enums import CoachType
 from core.services import APIService
 from bot.utils.text import format_new_client_message, get_client_page, get_workout_types
 from bot.utils.profiles import get_assigned_coach
-from core.services import avatar_manager
+from core.services import get_avatar_manager
 
 
 async def send_message(
@@ -134,6 +134,7 @@ async def send_coach_request(
     contact = f"@{user.username}" if user.username else tg_id
 
     file_name = data.get("profile_photo")
+    avatar_manager = get_avatar_manager()
     photo = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{file_name}"
 
     await bot.send_photo(
@@ -158,21 +159,28 @@ async def contact_coach(callback_query: CallbackQuery, profile: Profile, state: 
     try:
         client = await Cache.client.get_client(profile.id)
     except Exception:
-        await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
+        await callback_query.answer(
+            msg_text("unexpected_error", profile.language),
+            show_alert=True,
+        )
         return
-    if not client.assigned_to:
-        await callback_query.answer(msg_text("client_not_assigned_to_coach", profile.language), show_alert=True)
-        return
+
     coach = await get_assigned_coach(client, coach_type=CoachType.human)
-    if coach is None:
-        await callback_query.answer(msg_text("client_not_assigned_to_coach", profile.language), show_alert=True)
+    if client.assigned_to and coach:
+        await state.update_data(recipient_id=coach.profile_id, sender_name=client.name)
+        await state.set_state(States.contact_coach)
+        msg = callback_query.message
+        if msg is not None:
+            await msg.answer(msg_text("enter_your_message", profile.language))
+            await del_msg(msg)
+        else:
+            await del_msg(callback_query)
         return
-    await state.update_data(recipient_id=coach.profile, sender_name=client.name)
-    await state.set_state(States.contact_coach)
-    message = callback_query.message
-    if message is not None:
-        await message.answer(msg_text("enter_your_message", profile.language))
-    await del_msg(cast(Message | CallbackQuery | None, callback_query))
+
+    await callback_query.answer(
+        msg_text("client_not_assigned_to_coach", profile.language),
+        show_alert=True,
+    )
 
 
 async def contact_client(callback_query: CallbackQuery, profile: Profile, profile_id: str, state: FSMContext) -> None:

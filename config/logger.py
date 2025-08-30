@@ -20,16 +20,6 @@ def configure_loguru():
                 ),
                 "colorize": True,
             },
-            {
-                "sink": "gym_bot.log",
-                "level": settings.LOG_LEVEL,
-                "serialize": False,
-                "format": "{time:YYYY-MM-DD HH:mm:ss} | {level} | {name}:{function}:{line} - {message}",
-                "rotation": "100 MB",
-                "retention": "30 days",
-                "compression": "zip",
-                "enqueue": True,
-            },
         ]
     )
 

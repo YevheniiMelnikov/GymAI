@@ -17,7 +17,7 @@ from core.enums import ClientStatus
 from core.schemas import Profile
 from core.services import APIService
 from bot.utils.chat import send_message
-from core.services import avatar_manager
+from core.services import get_avatar_manager
 from bot.utils.exercises import edit_subscription_exercises
 from bot.utils.menus import show_main_menu, manage_subscription, show_exercises_menu, program_menu_pagination
 from bot.texts.text_manager import msg_text
@@ -95,6 +95,7 @@ async def contact_coach(message: Message, state: FSMContext, bot: Bot) -> None:
     avatar = None
     if not (message.photo or message.video):
         if client.profile_photo:
+            avatar_manager = get_avatar_manager()
             avatar = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{client.profile_photo}"
         else:
             avatar_name = "male.png" if client.gender != "female" else "female.png"
