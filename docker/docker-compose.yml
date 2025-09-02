@@ -5,9 +5,11 @@ x-common-env: &common_env
   environment:
     PYTHONPATH: /app
     DJANGO_SETTINGS_MODULE: config.settings
-    PYTHONUNBUFFERED: "1"
-    PYTHONDONTWRITEBYTECODE: "1"
-    REDIS_URL: "${REDIS_URL}"
+    COGNEE_DATA_ROOT: /.data_storage
+    GRAPH_DATABASE_PROVIDER: ${GRAPH_DATABASE_PROVIDER}
+    PYTHONUNBUFFERED: 1
+    PYTHONDONTWRITEBYTECODE: 1
+    REDIS_URL: ${REDIS_URL}
     POSTGRES_DB: "${DB_NAME}"
     POSTGRES_USER: "${DB_USER}"
     POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:- password}"
@@ -18,6 +20,7 @@ x-common-env: &common_env
     - .env
   volumes:
     - staticfiles:/app/staticfiles
+    - /.data_storage:/.data_storage
   depends_on:
     redis:
       condition: service_healthy
@@ -186,3 +189,4 @@ services:
 volumes:
   pgdata:
   staticfiles:
+  data_storage:

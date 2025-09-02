@@ -34,7 +34,8 @@ class GDriveDocumentLoader(KnowledgeLoader):
     def _get_drive_files_service(self) -> Any:
         if self._files_service is None:
             creds = Credentials.from_service_account_file(  # type: ignore[arg-type]
-                self.credentials_path, scopes=SCOPES
+                filename=self.credentials_path,
+                scopes=SCOPES,
             )
             service = build("drive", "v3", credentials=creds)
             self._files_service = service.files()

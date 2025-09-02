@@ -143,9 +143,13 @@ services:
     container_name: ai_coach
     <<: *common_env
     environment:
-      PYTHONUNBUFFERED: "1"
-      PYTHONDONTWRITEBYTECODE: "1"
-      REDIS_URL: "${REDIS_URL}"
+      COGNEE_DEBUG: 1
+      LOGURU_LEVEL: DEBUG
+      COGNEE_DATA_ROOT: /.data_storage
+      GRAPH_DATABASE_PROVIDER: ${GRAPH_DATABASE_PROVIDER}
+      PYTHONUNBUFFERED: 1
+      PYTHONDONTWRITEBYTECODE: 1
+      REDIS_URL: ${REDIS_URL}
       PGHOST: ${DB_HOST}
       PGPORT: ${DB_PORT}
       PGDATABASE: ${DB_NAME}
@@ -155,6 +159,7 @@ services:
       - .env
     volumes:
       - ../:/app
+      - /.data_storage:/.data_storage
     depends_on:
       redis:
         condition: service_healthy
@@ -162,8 +167,7 @@ services:
         condition: service_healthy
     entrypoint: /app/docker/entrypoint.sh
     command: >
-      bash -lc "python -c 'import asyncio; from cognee.modules.engine.operations.setup import setup; asyncio.run(setup())'
-      && uvicorn ai_coach.api:app --host 0.0.0.0 --port 9000"
+      bash -lc "uvicorn ai_coach.api:app --host 0.0.0.0 --port 9000"
     ports:
       - "${HOST_COACH_PORT:-9000}:9000"
 
@@ -185,3 +189,4 @@ services:
 volumes:
   pgdata:
   staticfiles:
+  data_storage:

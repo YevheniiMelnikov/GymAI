@@ -169,6 +169,7 @@ async def contact_coach(callback_query: CallbackQuery, profile: Profile, state: 
     if client.assigned_to and coach:
         await state.update_data(recipient_id=coach.profile_id, sender_name=client.name)
         await state.set_state(States.contact_coach)
+
         msg = callback_query.message
         if msg is not None:
             await msg.answer(msg_text("enter_your_message", profile.language))
@@ -231,9 +232,10 @@ async def client_request(coach: Coach, client: Client, data: dict[str, Any], bot
 
     avatar = None
     if client.profile_photo:
+        avatar_manager = get_avatar_manager()
         avatar = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{client.profile_photo}"
     else:
-        avatar_name = "male.png" if client.gender != "female" else "female.png"
+        avatar_name = "male.png" if client.gender == "male" else "female.png"
         file_path = Path(__file__).resolve().parent.parent / "images" / avatar_name
         if file_path.exists():
             avatar = FSInputFile(file_path)
