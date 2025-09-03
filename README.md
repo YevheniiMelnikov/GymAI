@@ -106,6 +106,46 @@ Use the credentials from `docker/.env` (`DJANGO_ADMIN` / `DJANGO_PASSWORD`) to a
 
 ---
 
+## AI Coach API
+
+FastAPI service under `/ask/`.
+
+### Request
+
+```json
+{
+  "client_id": 1,
+  "prompt": "text",
+  "mode": "program" | "subscription" | "update" | "ask_ai",
+  "period": "1m",        // subscription only
+  "workout_days": ["Mon"],// subscription only
+  "expected_workout": "...", // update only
+  "feedback": "..."          // update only
+}
+```
+
+### Response
+
+* `mode=program` or `mode=update` → `Program`.
+* `mode=subscription` → `Subscription`.
+* `mode=ask_ai` → `QAResponse` `{ "answer": str, "sources": [str, ...] }`.
+
+Enable agent mode globally with `AGENT_PYDANTICAI_ENABLED=true` or per request via header `X-Agent: pydanticai`.
+
+**ask_ai response example**
+
+```json
+{
+  "answer": "Drink water and rest between sets.",
+  "sources": [
+    "client: last session notes",
+    "global: hydration guidelines"
+  ]
+}
+```
+
+---
+
 ## Redis
 
 Redis runs with `appendonly.aof` and LRU eviction. Configuration is stored in `docker/redis.conf`.

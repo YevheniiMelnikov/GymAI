@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import base64
 from enum import Enum
+from typing import Any, Literal, overload
 from urllib.parse import urljoin
 
 import httpx
 from loguru import logger
 
 from core.exceptions import UserServiceError
-from core.schemas import AiCoachAskRequest, AiCoachMessageRequest
+from core.schemas import AiCoachAskRequest, AiCoachMessageRequest, Program, Subscription, QAResponse
 from .api_client import APIClient
 
 
@@ -18,22 +19,85 @@ class AiCoachService(APIClient):
         self.base_url = settings.AI_COACH_URL
         self.use_default_auth = False
 
+    @overload
     async def ask(
         self,
         prompt: str,
         *,
         client_id: int,
         language: str | None = None,
+        mode: Literal["ask_ai"],
+        period: str | None = None,
+        workout_days: list[str] | None = None,
+        expected_workout: str | None = None,
+        feedback: str | None = None,
         request_id: str | None = None,
-    ) -> list[str] | None:
+        use_agent_header: bool = False,
+    ) -> QAResponse | None: ...
+
+    @overload
+    async def ask(
+        self,
+        prompt: str,
+        *,
+        client_id: int,
+        language: str | None = None,
+        mode: Literal["program", "update"],
+        period: str | None = None,
+        workout_days: list[str] | None = None,
+        expected_workout: str | None = None,
+        feedback: str | None = None,
+        request_id: str | None = None,
+        use_agent_header: bool = False,
+    ) -> Program | None: ...
+
+    @overload
+    async def ask(
+        self,
+        prompt: str,
+        *,
+        client_id: int,
+        language: str | None = None,
+        mode: Literal["subscription"],
+        period: str | None = None,
+        workout_days: list[str] | None = None,
+        expected_workout: str | None = None,
+        feedback: str | None = None,
+        request_id: str | None = None,
+        use_agent_header: bool = False,
+    ) -> Subscription | None: ...
+
+    async def ask(
+        self,
+        prompt: str,
+        *,
+        client_id: int,
+        language: str | None = None,
+        mode: Literal["program", "subscription", "update", "ask_ai"] = "program",
+        period: str | None = None,
+        workout_days: list[str] | None = None,
+        expected_workout: str | None = None,
+        feedback: str | None = None,
+        request_id: str | None = None,
+        use_agent_header: bool = False,
+    ) -> Any:
         url = urljoin(self.base_url, "ask/")
         request = AiCoachAskRequest(
             prompt=prompt,
             client_id=client_id,
             language=language.value if isinstance(language, Enum) else language,
+            mode=mode,
+            period=period,
+            workout_days=workout_days,
+            expected_workout=expected_workout,
+            feedback=feedback,
             request_id=request_id,
         )
-        headers = {"X-Request-ID": request_id} if request_id else None
+        headers: dict[str, str] | None = None
+        if request_id:
+            headers = {"X-Request-ID": request_id}
+        if use_agent_header:
+            headers = {**(headers or {}), "X-Agent": "pydanticai"}
         logger.debug("AI coach ask request_id={} client_id={}", request_id, client_id)
         status, data = await self._api_request(
             "post", url, request.model_dump(), headers=headers, timeout=self.settings.AI_COACH_TIMEOUT
@@ -44,10 +108,8 @@ class AiCoachService(APIClient):
             status,
             data,
         )
-        if status == 200 and isinstance(data, list):
+        if status == 200:
             return data
-        if status == 200 and isinstance(data, dict):
-            return data.get("responses")  # type: ignore[return-value]
         logger.error(f"AI coach request failed HTTP={status}: {data}")
         return None
 

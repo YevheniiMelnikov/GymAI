@@ -274,7 +274,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
 
     if service == "program":
         try:
-            exercises, program_raw = await generate_program(
+            exercises = await generate_program(
                 client,
                 profile.language,
                 workout_type,
@@ -292,7 +292,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
             )
             await bot.send_message(
                 settings.ADMIN_ID,
-                f"AI program generation failed for client {client.id}\nRaw:\n{program_raw}",
+                f"AI program generation failed for client {client.id}",
             )
             return
         program_text = await format_program(exercises, day=0)
@@ -354,7 +354,7 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     period = data.get("period", "1m")
     await answer_msg(callback_query, msg_text("request_in_progress", lang))
     await show_main_menu(cast(Message, callback_query.message), profile, state)
-    exercises, sub_raw = await generate_subscription(client, lang, workout_type, wishes, period, days)
+    exercises = await generate_subscription(client, lang, workout_type, wishes, period, days)
     if not exercises:
         await answer_msg(
             callback_query,
@@ -363,7 +363,7 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
         bot = cast(Bot, callback_query.bot)
         await bot.send_message(
             settings.ADMIN_ID,
-            f"AI subscription generation failed for client {client.id}\nRaw:\n{sub_raw}",
+            f"AI subscription generation failed for client {client.id}",
         )
         return
     program_text = await format_program(exercises, day=0)

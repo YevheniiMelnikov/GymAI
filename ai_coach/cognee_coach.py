@@ -218,6 +218,19 @@ class CogneeCoach(BaseAICoach):
         return []
 
     @classmethod
+    async def search_knowledge(cls, query: str, k: int = 6) -> list[str]:
+        """Search only in global dataset for a knowledge query."""
+        user = await cls._get_cognee_user()
+        datasets = [cls._resolve_dataset_alias(cls.GLOBAL_DATASET)]
+        try:
+            return await cognee.search(query, datasets=datasets, top_k=k, user=_to_user_or_none(user))
+        except (PermissionDeniedError, DatasetNotFoundError) as e:
+            logger.warning(f"Knowledge search issue: {e}")
+        except Exception as e:  # pragma: no cover - unexpected
+            logger.error(f"Unexpected knowledge search error: {e}")
+        return []
+
+    @classmethod
     async def add_text(
         cls,
         text: str,

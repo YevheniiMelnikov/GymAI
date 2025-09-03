@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     KNOWLEDGE_REFRESH_INTERVAL: int = 60 * 60
     KNOWLEDGE_REFRESH_START_DELAY: int = 180
     AI_COACH_TIMEOUT: int = 120
+    AGENT_PYDANTICAI_ENABLED: bool = False
+    AGENT_TIMEOUT: int = 60
+    LOG_CONVERSATION_FOR_ASK_AI: bool = False
 
     CACHE_TTL: int = 60 * 5  # Django cache TTL
     BACKUP_RETENTION_DAYS: int = 30  # Postgres/Redis backup retention

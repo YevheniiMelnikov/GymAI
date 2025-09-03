@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field, field_validator, condecimal, ConfigDict
 
 from core.utils.encryptor import Encryptor
@@ -188,9 +188,19 @@ class AiCoachAskRequest(BaseModel):
     prompt: str
     client_id: int
     language: str | None = None
+    mode: Literal["program", "subscription", "update", "ask_ai"] = "program"
+    period: str | None = None
+    workout_days: list[str] | None = None
+    expected_workout: str | None = None
+    feedback: str | None = None
     request_id: str | None = None
 
 
 class AiCoachMessageRequest(BaseModel):
     text: str
     client_id: int
+
+
+class QAResponse(BaseModel):
+    answer: str
+    sources: list[str] = []
