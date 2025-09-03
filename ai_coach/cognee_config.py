@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import importlib
-import logging
 import os
-import warnings
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -11,9 +9,7 @@ from uuid import uuid4
 import cognee
 from loguru import logger
 from sqlalchemy import schema as sa_schema
-from sqlalchemy.exc import SAWarning
 
-from config import configure_loguru
 from config.app_settings import settings
 
 

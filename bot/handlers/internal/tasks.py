@@ -8,7 +8,6 @@ from bot.keyboards import workout_survey_kb
 from bot.texts.text_manager import msg_text
 from bot.utils.profiles import get_clients_to_survey
 from config.app_settings import settings
-from bot.ai_coach.parsers import parse_program_text, parse_program_json
 from core.exceptions import SubscriptionNotFoundError
 from core.containers import get_container
 from core.cache import Cache
@@ -94,43 +93,38 @@ async def internal_send_workout_result(request: web.Request) -> web.Response:
         )
         client = await Cache.client.get_client(int(client_id))
         profile = await APIService.profile.get_profile(client.profile)
-        updated_workout = await process_workout_result(
+        updated_program = await process_workout_result(
             client_id=int(client_id),
             expected_workout_result=expected_workout_result,
             feedback=str(client_workout_feedback),
             language=profile.language if profile else settings.DEFAULT_LANG,
         )
-        if profile is not None and updated_workout:
-            dto = parse_program_json(updated_workout)
-            if dto is not None:
-                exercises = dto.days
-            else:
-                exercises, _ = parse_program_text(updated_workout)
+        if profile is not None and updated_program.exercises_by_day:
+            exercises = updated_program.exercises_by_day
+        else:
+            logger.error("AI workout update produced no exercises")
+            return web.json_response({"result": "AI workout update produced no exercises"})
 
-            if not exercises:
-                logger.error("AI workout update produced no exercises")
-                return web.json_response({"result": "AI workout update produced no exercises"})
+        try:
+            subscription = await Cache.workout.get_latest_subscription(client_id)
+        except SubscriptionNotFoundError:
+            logger.error(f"No subscription found for client_id={client_id}")
+            return web.json_response({"result": f"No subscription found for client_id={client_id}"})
 
-            try:
-                subscription = await Cache.workout.get_latest_subscription(client_id)
-            except SubscriptionNotFoundError:
-                logger.error(f"No subscription found for client_id={client_id}")
-                return web.json_response({"result": f"No subscription found for client_id={client_id}"})
+        serialized = [day.model_dump() for day in exercises]
+        subscription_data = subscription.model_dump()
+        subscription_data.update(client_profile=client_id, exercises=serialized)
 
-            serialized = [day.model_dump() for day in exercises]
-            subscription_data = subscription.model_dump()
-            subscription_data.update(client_profile=client_id, exercises=serialized)
-
-            await APIService.workout.update_subscription(subscription.id, subscription_data)
-            await Cache.workout.update_subscription(
-                client_id,
-                {"exercises": serialized, "client_profile": client_id},
-            )
-            await bot.send_message(
-                chat_id=profile.tg_id,
-                text=msg_text("program_updated", profile.language),
-                parse_mode=ParseMode.HTML,
-            )
+        await APIService.workout.update_subscription(subscription.id, subscription_data)
+        await Cache.workout.update_subscription(
+            client_id,
+            {"exercises": serialized, "client_profile": client_id},
+        )
+        await bot.send_message(
+            chat_id=profile.tg_id,
+            text=msg_text("program_updated", profile.language),
+            parse_mode=ParseMode.HTML,
+        )
     else:
         await send_message(
             recipient=coach,

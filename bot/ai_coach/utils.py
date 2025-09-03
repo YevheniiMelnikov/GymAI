@@ -1,288 +1,67 @@
-from decimal import Decimal
-import json
-from typing import Callable, Optional, TypeVar
+from __future__ import annotations
+
 from loguru import logger
 
-from core.services.internal import APIService
-from config.app_settings import settings
-from .prompts import (
-    WORKOUT_PLAN_PROMPT,
-    PROGRAM_RESPONSE_TEMPLATE,
-    SUBSCRIPTION_RESPONSE_TEMPLATE,
-    WORKOUT_RULES,
-    SYSTEM_PROMPT,
-    UPDATE_WORKOUT_PROMPT,
-)
-from .parsers import (
-    parse_program_text,
-    parse_program_json,
-    parse_subscription_json,
-    extract_json,
-    normalize_program_data,
-)
 from core.cache import Cache
-from core.exceptions import ProgramNotFoundError
-from core.schemas import Client, Program, DayExercises
-from bot.utils.workout_plans import _next_payment_date
-from datetime import date
-from bot.texts.exercises import exercise_dict
-from bot.utils.other import short_url
-from core.services import get_gif_manager
-
-T = TypeVar("T")
-
-
-def extract_client_data(client: Client) -> str:
-    details = {
-        "name": client.name,
-        "gender": client.gender,
-        "born_in": client.born_in,
-        "weight": client.weight,
-        "health_notes": client.health_notes,
-        "workout_experience": client.workout_experience,
-        "workout_goals": client.workout_goals,
-    }
-    clean = {k: v for k, v in details.items() if v is not None}
-    return json.dumps(clean, ensure_ascii=False)
-
-
-def describe_client(client: Client) -> str:
-    """Return natural language description of ``client``."""
-
-    today = date.today()
-    parts: list[str] = []
-    if client.name:
-        parts.append(f"Name: {client.name}")
-    if client.gender:
-        parts.append(f"Gender: {client.gender}")
-    if client.born_in:
-        try:
-            age = today.year - int(client.born_in)
-            parts.append(f"Age: {age}")
-        except ValueError:
-            pass
-    if client.weight:
-        parts.append(f"Weight: {client.weight} kg")
-    if client.workout_experience:
-        if client.workout_experience == "5+":
-            exp_text = "Training experience: 5 or more years (maximum option in the questionnaire)"
-        else:
-            exp_text = f"Training experience: {client.workout_experience} years"
-        parts.append(exp_text)
-    if client.workout_goals:
-        parts.append(f"Goals: {client.workout_goals}")
-    if client.health_notes:
-        parts.append(f"Health notes: {client.health_notes}")
-    return "; ".join(parts)
-
-
-async def _attach_gifs_to_exercises(exercises: list[DayExercises]) -> None:
-    for day in exercises:
-        for exercise in day.exercises:
-            gif_manager = get_gif_manager()
-            link = await gif_manager.find_gif(exercise.name, exercise_dict)
-            if link:
-                exercise.gif_link = await short_url(link)
-                gif_file_name = link.split("/")[-1]
-                await Cache.workout.cache_gif_filename(exercise.name, gif_file_name)
-
-
-def _normalise_program(raw: str, *, key: str = "days") -> dict:
-    """Extract and clean JSON workout data from ``raw`` text."""
-
-    extracted = extract_json(raw)
-    if not extracted:
-        raise ValueError("no JSON found")
-    data = json.loads(extracted)
-    normalize_program_data(data, key=key)
-    return data
-
-
-async def _cache_program(
-    client: Client,
-    program_raw: str,
-    saved: Program,
-    workout_type: str,
-    wishes: str,
-) -> None:
-    """Normalise ``program_raw`` and store result in cache."""
-
-    try:
-        program_dict = _normalise_program(program_raw)
-    except Exception as e:  # pragma: no cover - log and continue
-        logger.error(f"Program normalisation failed: {e}")
-        return
-
-    program_dict.update(
-        {
-            "id": saved.id,
-            "client_profile": client.id,
-            "created_at": saved.created_at,
-            "split_number": len(program_dict.get("days", [])),
-            "workout_type": workout_type,
-            "wishes": wishes,
-            "program_text": program_raw,
-        }
-    )
-
-    if "days" in program_dict and "exercises_by_day" not in program_dict:
-        program_dict["exercises_by_day"] = program_dict.pop("days")
-
-    await Cache.workout.save_program(client.id, program_dict)
-    logger.info(f"Program generated for client_id={client.id}")
-
-
-async def _generate_workout(
-    client: Client,
-    lang: str,
-    request_context: str,
-    response_template: str,
-    parser: Callable[[str], Optional[T]],
-    request_id: str | None = None,
-) -> tuple[str, Optional[T]]:
-    """Request workout plan from AI and parse result."""
-
-    profile_description = describe_client(client)
-    today = date.today().isoformat()
-    prompt = (
-        SYSTEM_PROMPT
-        + "\n\n"
-        + WORKOUT_PLAN_PROMPT.format(
-            client_profile=profile_description,
-            request_context=request_context,
-            language=lang,
-            current_date=today,
-            workout_rules=WORKOUT_RULES,
-            response_template=response_template,
-        )
-    )
-    raw = ""
-    dto: Optional[T] = None
-    for _ in range(settings.AI_GENERATION_RETRIES):
-        response = await APIService.ai_coach.ask(
-            prompt,
-            client_id=client.id,
-            language=lang,
-            request_id=request_id,
-        )
-        raw = response[0] if response else ""
-        dto = parser(raw)
-        if dto is not None:
-            break
-    return raw, dto
+from core.schemas import Client, DayExercises, Program, Subscription
+from core.services.internal import APIService
 
 
 async def generate_program(
     client: Client,
-    lang: str,
+    language: str,
     workout_type: str,
     wishes: str,
     *,
     request_id: str,
-) -> tuple[list[DayExercises], str]:
-    logger.debug("generate_program started request_id={} client_id={}", request_id, client.id)
-    try:
-        prev_program = await Cache.workout.get_latest_program(client.id, use_fallback=False)
-        previous_program = json.dumps([d.model_dump() for d in prev_program.exercises_by_day], ensure_ascii=False)
-    except ProgramNotFoundError:
-        previous_program = "[]"
-
-    request_context = (
-        f"Previous program (JSON):\n{previous_program}\n\n"
-        f"The client requests a {workout_type} program. Additional wishes: {wishes}."
-    )
-
-    program_raw, program_dto = await _generate_workout(
-        client,
-        lang,
-        request_context,
-        PROGRAM_RESPONSE_TEMPLATE,
-        parse_program_json,
+) -> list[DayExercises]:
+    """Request and cache a workout program via the AI coach service."""
+    prompt = f"The client requests a {workout_type} program. Wishes: {wishes}"
+    logger.debug("generate_program request_id={} client_id={}", request_id, client.id)
+    data = await APIService.ai_coach.ask(
+        prompt,
+        client_id=client.id,
+        language=language,
+        mode="program",
         request_id=request_id,
     )
-    if program_dto is not None:
-        exercises = program_dto.days
-        split_number = len(exercises)
-    else:
-        try:
-            prog_dict = _normalise_program(program_raw, key="days")
-            exercises = [DayExercises.model_validate(d) for d in prog_dict.get("days", [])]
-            split_number = len(exercises)
-        except Exception:
-            exercises, split_number = parse_program_text(program_raw)
-
-    if not exercises:
-        logger.error("Program parsing produced no exercises")
-        return [], program_raw
-    await _attach_gifs_to_exercises(exercises)
-    saved = await APIService.workout.save_program(client.id, exercises, split_number, wishes)
-    if saved:
-        await _cache_program(client, program_raw, saved, workout_type, wishes)
-    return exercises, program_raw
+    if not data:
+        logger.error("Program generation failed client_id={}", client.id)
+        return []
+    program = Program.model_validate(data)
+    await Cache.workout.save_program(client.id, program.model_dump())
+    return program.exercises_by_day
 
 
 async def generate_subscription(
     client: Client,
-    lang: str,
+    language: str,
     workout_type: str,
     wishes: str,
     period: str,
     workout_days: list[str],
-) -> tuple[list[DayExercises], str]:
-    request_context = (
-        f"The client requests a {workout_type} program for a {period} subscription.\n"
-        f"Wishes: {wishes}.\n"
-        f"Preferred workout days: {', '.join(workout_days)} (total {len(workout_days)} days per week)."
+) -> list[DayExercises]:
+    """Request and cache a subscription workout plan."""
+    prompt = (
+        f"The client requests a {workout_type} program for a {period} subscription. "
+        f"Wishes: {wishes}. Preferred days: {', '.join(workout_days)}."
     )
-
-    sub_raw, sub_dto = await _generate_workout(
-        client,
-        lang,
-        request_context,
-        SUBSCRIPTION_RESPONSE_TEMPLATE,
-        parse_subscription_json,
-    )
-    if sub_dto is not None:
-        exercises = sub_dto.exercises
-    else:
-        try:
-            sub_dict = _normalise_program(sub_raw, key="exercises")
-            exercises = [DayExercises.model_validate(d) for d in sub_dict.get("exercises", [])]
-        except Exception:
-            exercises, _ = parse_program_text(sub_raw)
-
-    if not exercises:
-        logger.error("Subscription parsing produced no exercises")
-        return [], sub_raw
-    await _attach_gifs_to_exercises(exercises)
-
-    sub_id = await APIService.workout.create_subscription(
-        client_profile_id=client.id,
-        workout_days=workout_days,
-        wishes=wishes,
-        amount=Decimal("0"),
+    data = await APIService.ai_coach.ask(
+        prompt,
+        client_id=client.id,
+        language=language,
+        mode="subscription",
         period=period,
-        exercises=[e.model_dump() for e in exercises],
+        workout_days=workout_days,
     )
-    if sub_id:
-        next_payment = _next_payment_date(period)
-        await APIService.workout.update_subscription(sub_id, {"enabled": True, "payment_date": next_payment})
-        await Cache.workout.save_subscription(
-            client.profile,
-            {
-                "id": sub_id,
-                "enabled": True,
-                "payment_date": next_payment,
-                "workout_type": workout_type,
-                "wishes": wishes,
-                "workout_days": workout_days,
-                "period": period,
-                "exercises": [d.model_dump() for d in exercises],
-            },
-        )
-        logger.info(f"New AI-coach subscription generated for client_id={client.id}")
-
-    return exercises, sub_raw
+    if not data:
+        logger.error("Subscription generation failed client_id={}", client.id)
+        return []
+    if "exercises" not in data and "exercises_by_day" in data:
+        data["exercises"] = data.pop("exercises_by_day")
+    subscription = Subscription.model_validate(data)
+    await Cache.workout.save_subscription(client.profile, subscription.model_dump())
+    return subscription.exercises
 
 
 async def process_workout_result(
@@ -290,24 +69,26 @@ async def process_workout_result(
     expected_workout_result: str,
     feedback: str,
     language: str,
-) -> str:
-    """Return updated workout plan for ``client_id`` based on ``feedback``."""
-
-    try:
-        ctx = await APIService.ai_coach.get_client_context(client_id, "workout")
-    except Exception:
-        ctx = {"messages": []}
-
-    prompt = (
-        SYSTEM_PROMPT
-        + "\n\n"
-        + UPDATE_WORKOUT_PROMPT.format(
-            expected_workout=expected_workout_result.strip(),
-            feedback=feedback.strip(),
-            context="\n".join(ctx["messages"]).strip(),
-            language=language,
-        )
+) -> Program:
+    """Update a program based on client feedback."""
+    prompt = "Update workout program based on client feedback"
+    data = await APIService.ai_coach.ask(
+        prompt,
+        client_id=client_id,
+        language=language,
+        mode="update",
+        expected_workout=expected_workout_result,
+        feedback=feedback,
     )
-
-    responses = await APIService.ai_coach.ask(prompt, client_id=client_id)
-    return responses[0] if responses else ""
+    if not data:
+        logger.error("Workout update failed client_id={}", client_id)
+        return Program(
+            id=0,
+            client_profile=client_id,
+            exercises_by_day=[],
+            created_at=0.0,
+            split_number=0,
+            workout_type="",
+            wishes="",
+        )
+    return Program.model_validate(data)
