@@ -170,13 +170,28 @@ class CogneeCoach(BaseAICoach):
         return name
 
     @classmethod
+    async def _ensure_dataset_exists(cls, name: str, user: Any | None) -> None:
+        user_ns = _to_user_or_none(user)
+        try:  # pragma: no cover - import may fail in tests
+            from cognee.modules.data.methods import (  # type: ignore
+                get_authorized_dataset_by_name,
+                create_authorized_dataset,
+            )
+        except Exception:
+            return
+        exists = await get_authorized_dataset_by_name(name, user_ns, "write")
+        if exists is None:
+            await create_authorized_dataset(name, user_ns)
+
+    @classmethod
     async def refresh_knowledge_base(cls) -> None:
         DatasetNotFoundError, PermissionDeniedError = _exceptions()
+        user = await cls._get_cognee_user()
+        ds = cls._resolve_dataset_alias(cls.GLOBAL_DATASET)
+        await cls._ensure_dataset_exists(ds, user)
         if cls._loader:
             await cls._loader.refresh()
-        user = await cls._get_cognee_user()
         try:
-            ds = cls._resolve_dataset_alias(cls.GLOBAL_DATASET)
             await _safe_cognify(datasets=[ds], user=user)
         except (PermissionDeniedError, DatasetNotFoundError) as e:
             logger.error(f"Knowledge base update skipped: {e}")
@@ -239,6 +254,7 @@ class CogneeCoach(BaseAICoach):
             return dataset, False
         digest = sha256(text.encode()).hexdigest()
         ds_name = cls._resolve_dataset_alias(dataset)
+        await cls._ensure_dataset_exists(ds_name, user)
         if await HashStore.contains(ds_name, digest):
             if _debug_enabled():
                 logger.debug("[COGNEE_DEBUG] HashStore hit dataset=%s digest=%s (skip add)", ds_name, digest[:12])
