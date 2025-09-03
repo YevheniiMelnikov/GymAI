@@ -27,7 +27,7 @@ from bot.utils.workout_plans import _next_payment_date
 from datetime import date
 from bot.texts.exercises import exercise_dict
 from bot.utils.other import short_url
-from core.services import gif_manager
+from core.services import get_gif_manager
 
 T = TypeVar("T")
 
@@ -79,6 +79,7 @@ def describe_client(client: Client) -> str:
 async def _attach_gifs_to_exercises(exercises: list[DayExercises]) -> None:
     for day in exercises:
         for exercise in day.exercises:
+            gif_manager = get_gif_manager()
             link = await gif_manager.find_gif(exercise.name, exercise_dict)
             if link:
                 exercise.gif_link = await short_url(link)

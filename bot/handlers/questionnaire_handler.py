@@ -34,7 +34,7 @@ from bot.utils.text import get_state_and_message
 from bot.utils.other import parse_price
 from bot.utils.bot import del_msg, answer_msg, delete_messages, set_bot_commands
 from bot.texts.text_manager import msg_text
-from core.services import avatar_manager
+from core.services import get_avatar_manager
 from core.utils.validators import is_valid_year
 
 questionnaire_router = Router()
@@ -394,6 +394,7 @@ async def profile_photo(message: Message, state: FSMContext, bot: Bot) -> None:
     await delete_messages(state)
     data = await state.get_data()
     lang = data.get("lang", settings.DEFAULT_LANG)
+    avatar_manager = get_avatar_manager()
     local_file = await avatar_manager.save_image(message)
 
     if local_file and avatar_manager.check_file_size(local_file):

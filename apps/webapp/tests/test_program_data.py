@@ -22,7 +22,7 @@ async def test_program_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         views.ProfileRepository,
         "get_by_telegram_id",
-        lambda _tg_id: SimpleNamespace(id=1),
+        lambda _tg_id: SimpleNamespace(id=1, language="eng"),
     )
     monkeypatch.setattr(
         views.ClientProfileRepository,
@@ -48,6 +48,7 @@ async def test_program_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
     assert response["program"] == ""
     assert response["created_at"] == 1
     assert response["coach_type"] == CoachType.human
+    assert response["language"] == "eng"
 
 
 @pytest.mark.asyncio
@@ -56,7 +57,7 @@ async def test_program_data_with_id(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         views.ProfileRepository,
         "get_by_telegram_id",
-        lambda _tg_id: SimpleNamespace(id=1),
+        lambda _tg_id: SimpleNamespace(id=1, language="eng"),
     )
     monkeypatch.setattr(
         views.ClientProfileRepository,
@@ -81,6 +82,7 @@ async def test_program_data_with_id(monkeypatch: pytest.MonkeyPatch) -> None:
     assert response.status_code == 200
     assert response["created_at"] == 2
     assert response["coach_type"] == CoachType.human
+    assert response["language"] == "eng"
 
 
 @pytest.mark.asyncio

@@ -1,0 +1,16 @@
+{
+  "history": "Історія",
+  "created": "Створено",
+  "ai_label": "ШІ",
+  "service_unavailable": "Сервіс тимчасово недоступний",
+  "unauthorized": "Немає доступу",
+  "not_found": "Не знайдено",
+  "server_error": "Помилка сервера",
+  "unexpected_error": "Невідома помилка",
+  "no_programs": "Програм не знайдено",
+  "sort_newest": "Сортування: нові",
+  "sort_oldest": "Сортування: старі",
+  "show_ai": "Показувати плани ШІ",
+  "back": "Назад",
+  "open_from_telegram": "Відкрийте цю сторінку в Telegram."
+}

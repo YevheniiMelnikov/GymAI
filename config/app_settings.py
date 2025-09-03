@@ -59,6 +59,7 @@ class Settings(BaseSettings):
 
     AI_COACH_REFRESH_USER: Annotated[str, Field(default="admin")]
     AI_COACH_REFRESH_PASSWORD: Annotated[str, Field(default="password")]
+    GDRIVE_FOLDER_ID: str | None = None  # External knowledge base for AI Coach
 
     OPENAI_BASE_URL: Annotated[str, Field(default="https://api.openai.com/v1")]
     EMBEDDING_API_KEY: Annotated[str, Field(default="")]  # used for embeddings
@@ -81,7 +82,6 @@ class Settings(BaseSettings):
     BOT_PORT: Annotated[int, Field(default=8088)]
 
     GOOGLE_APPLICATION_CREDENTIALS: Annotated[str, Field(default="google_creds.json")]
-    GDRIVE_FOLDER_ID: str | None = None
     SPREADSHEET_ID: str
     TG_SUPPORT_CONTACT: str
     PUBLIC_OFFER: str

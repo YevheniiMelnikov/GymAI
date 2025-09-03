@@ -377,7 +377,7 @@ except Exception:  # pragma: no cover - fallback stubs
     di_mod.containers = di_containers
     di_mod.providers = di_providers
     sys.modules.setdefault("dependency_injector.containers", di_containers)
-    sys.modules.setdefault("dependency_injector.providers", di_providers)
+sys.modules.setdefault("dependency_injector.providers", di_providers)
 
 # Additional lightweight stubs for Django, FastAPI, and DRF components
 django_core = types.ModuleType("django.core")
@@ -418,6 +418,19 @@ django_cache_page.cache_page = lambda *a, **k: (lambda f: f)
 sys.modules.setdefault("django.views", django_views)
 sys.modules.setdefault("django.views.decorators", django_views_decorators)
 sys.modules.setdefault("django.views.decorators.cache", django_cache_page)
+django_http = types.ModuleType("django.views.decorators.http")
+django_http.require_GET = lambda f: f
+sys.modules.setdefault("django.views.decorators.http", django_http)
+
+django_test = types.ModuleType("django.test")
+django_test.Client = object
+sys.modules.setdefault("django.test", django_test)
+
+asgiref_mod = types.ModuleType("asgiref")
+asgiref_sync = types.ModuleType("asgiref.sync")
+asgiref_sync.sync_to_async = lambda f, *a, **k: f
+sys.modules.setdefault("asgiref", asgiref_mod)
+sys.modules.setdefault("asgiref.sync", asgiref_sync)
 
 django_http = types.ModuleType("django.http")
 

@@ -46,7 +46,7 @@ from bot.utils.workout_plans import reset_workout_plan, save_workout_plan, next_
 from core.schemas import DayExercises, Profile
 from bot.texts import msg_text, btn_text
 from core.exceptions import SubscriptionNotFoundError
-from core.services import gif_manager
+from core.services import get_gif_manager
 
 workout_router = Router()
 
@@ -164,6 +164,7 @@ async def set_exercise_name(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     exercise_name = message.text or ""
+    gif_manager = get_gif_manager()
     link_to_gif = await gif_manager.find_gif(exercise_name, exercise_dict)
     shorted_link = await short_url(link_to_gif) if link_to_gif else None
 

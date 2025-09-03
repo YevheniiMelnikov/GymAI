@@ -7,4 +7,5 @@
 *.html text eol=lf
 *.css text eol=lf
 *.js text eol=lf
+docker/entrypoint.sh text eol=lf
 * text=auto

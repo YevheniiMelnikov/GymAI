@@ -21,7 +21,7 @@ async def test_programs_history_success(monkeypatch: pytest.MonkeyPatch) -> None
     monkeypatch.setattr(
         views.ProfileRepository,
         "get_by_telegram_id",
-        lambda _tg_id: SimpleNamespace(id=1),
+        lambda _tg_id: SimpleNamespace(id=1, language="eng"),
     )
     monkeypatch.setattr(
         views.ClientProfileRepository,
@@ -42,6 +42,7 @@ async def test_programs_history_success(monkeypatch: pytest.MonkeyPatch) -> None
     assert response.status_code == 200
     assert response["programs"][0]["id"] == 1
     assert response["programs"][0]["coach_type"] == CoachType.ai_coach
+    assert response["language"] == "eng"
 
 
 @pytest.mark.asyncio

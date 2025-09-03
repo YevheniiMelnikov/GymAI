@@ -4,6 +4,7 @@
 docker/.env
 docker/.env.example
 docker/.env
+!pyproject.toml
 
 __pycache__/
 *.py[cod]
@@ -36,7 +37,10 @@ htmlcov/
 node_modules/
 apps/webapp/frontend/node_modules/
 apps/webapp/frontend/.cache/
-apps/webapp/static/**
+apps/webapp/static/js/
+# keep CSS in context so styles are copied into the image
+!apps/webapp/static/i18n/
+!apps/webapp/static/i18n/*.json
 
 .dask-worker-space/
 .cache/

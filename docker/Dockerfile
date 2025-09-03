@@ -14,10 +14,11 @@ WORKDIR /app/apps/webapp
 COPY apps/webapp/package*.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
 COPY apps/webapp/frontend ./frontend
+COPY apps/webapp/static ./static
 RUN npm run build \
  && echo "== build output in ./static ==" \
- && ls -la ./static || true \
- && test -f ./static/webapp.js || (echo 'ERROR: ./static/webapp.js not found' && exit 1)
+ && ls -la ./static ./static/js || true \
+ && test -f ./static/js/index.js || (echo 'ERROR: ./static/js/index.js not found' && exit 1)
 
 FROM py-base AS deps-app
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -53,7 +54,11 @@ RUN --mount=type=cache,target=/root/.cache/uv bash -lc '\
 FROM py-base AS py-runtime
 COPY --from=deps-app /usr/local /usr/local
 COPY . /app
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+RUN chmod 0755 /app/docker/entrypoint.sh \
+ && sed -i 's/\r$//' /app/docker/entrypoint.sh \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends curl libpq5 \
+ && rm -rf /var/lib/apt/lists/*
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
 
 FROM py-runtime AS api-runtime
@@ -63,5 +68,9 @@ ENTRYPOINT ["/app/docker/entrypoint.sh"]
 FROM py-base AS coach-runtime
 COPY --from=deps-coach /usr/local /usr/local
 COPY . /app
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+RUN chmod 0755 /app/docker/entrypoint.sh \
+ && sed -i 's/\r$//' /app/docker/entrypoint.sh \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends curl libpq5 \
+ && rm -rf /var/lib/apt/lists/*
 ENTRYPOINT ["/app/docker/entrypoint.sh"]

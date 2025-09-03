@@ -22,7 +22,7 @@ from core.services import APIService
 from bot.utils.bot import del_msg, answer_msg, delete_messages
 from core.schemas import Client, Coach, Profile
 from bot.texts.text_manager import msg_text
-from core.services import avatar_manager
+from core.services import get_avatar_manager
 
 
 async def update_profile_data(message: Message, state: FSMContext, role: str, bot: Bot) -> None:
@@ -170,6 +170,7 @@ async def fetch_user(profile: Profile) -> Client | Coach:
 
 async def answer_profile(cbq: CallbackQuery, profile: Profile, user: Coach | Client, text: str) -> None:
     message = cbq.message
+    avatar_manager = get_avatar_manager()
     if not isinstance(message, Message):
         return
 

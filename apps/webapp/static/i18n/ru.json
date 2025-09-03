@@ -1,0 +1,16 @@
+{
+  "history": "История",
+  "created": "Создано",
+  "ai_label": "ИИ",
+  "service_unavailable": "Сервис временно недоступен",
+  "unauthorized": "Нет доступа",
+  "not_found": "Не найдено",
+  "server_error": "Ошибка сервера",
+  "unexpected_error": "Неизвестная ошибка",
+  "no_programs": "Программы не найдены",
+  "sort_newest": "Сортировка: новые",
+  "sort_oldest": "Сортировка: старые",
+  "show_ai": "Показывать планы ИИ",
+  "back": "Назад",
+  "open_from_telegram": "Откройте эту страницу в Telegram."
+}
