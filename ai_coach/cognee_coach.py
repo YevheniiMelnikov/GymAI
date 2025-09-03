@@ -2,12 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import os
-import time
-import traceback
-from dataclasses import asdict, dataclass, is_dataclass
+from dataclasses import asdict, is_dataclass
 from hashlib import sha256
 from types import SimpleNamespace
-from typing import Any, Optional, Tuple
+from typing import Any
 
 from loguru import logger
 
@@ -16,164 +14,123 @@ from ai_coach.base_knowledge_loader import KnowledgeLoader
 from ai_coach.cognee_config import CogneeConfig
 from ai_coach.hash_store import HashStore
 from ai_coach.lock_cache import LockCache
-from ai_coach.schemas import MessageRole
+from ai_coach.schemas import MessageRole, CogneeUser
 from core.exceptions import UserServiceError
 from core.services import APIService
 from core.schemas import Client
 
+import cognee  # type: ignore
 
-def _c():
-    import cognee  # type: ignore
-    return cognee
+try:
+    from cognee.modules.users.methods.get_default_user import get_default_user  # type: ignore
+except Exception:
+
+    async def get_default_user() -> Any | None:  # type: ignore
+        return None
 
 
-def _exceptions():
+try:
     from cognee.modules.data.exceptions import DatasetNotFoundError  # type: ignore
     from cognee.modules.users.exceptions.exceptions import PermissionDeniedError  # type: ignore
-    return DatasetNotFoundError, PermissionDeniedError
+except Exception:
+
+    class DatasetNotFoundError(Exception): ...
+
+    class PermissionDeniedError(Exception): ...
 
 
-@dataclass
-class CoachUser:
-    id: Any
-    tenant_id: Any | None = None
-    roles: list[str] | None = None
-
-
-def _debug_enabled() -> bool:
-    return os.environ.get("COGNEE_DEBUG", "0") == "1"
-
-
-def _to_user_or_none(u: Any) -> Any | None:
-    if u is None:
+def _to_user_or_none(user: Any) -> Any | None:
+    """Normalize user object into SimpleNamespace or return None."""
+    if user is None:
         return None
-    if isinstance(u, CoachUser):
-        d = asdict(u)
-        return SimpleNamespace(**d)
-    if is_dataclass(u):
-        d = asdict(u)
-        idv = d.get("id")
-        return SimpleNamespace(**({**d} if idv else d)) if idv else None
-    if hasattr(u, "id") and getattr(u, "id", None):
-        return u
+    if isinstance(user, CogneeUser):
+        return SimpleNamespace(**asdict(user))
+    if is_dataclass(user):
+        d = asdict(user)
+        return SimpleNamespace(**d) if d.get("id") else None
+    if getattr(user, "id", None):
+        return user
     return None
 
 
-def _brief(obj: Any, limit: int = 200) -> str:
-    try:
-        s = repr(obj)
-    except Exception:
-        s = f"<{type(obj).__name__}>"
-    return (s[:limit] + "…") if len(s) > limit else s
-
-
-async def _safe_add(*, text: str, dataset_name: str, user: Any | None, node_set: list[str] | None):
-    user = _to_user_or_none(user)
-    try:
-        res = await _c().add(text, dataset_name=dataset_name, user=user, node_set=node_set)
-        if _debug_enabled():
-            logger.debug(
-                "[COGNEE_DEBUG] add() OK dataset=%s user=%s node_set=%s -> %s",
-                dataset_name,
-                getattr(user, "id", None) if user is not None else None,
-                node_set,
-                _brief(res),
-            )
-        return res
-    except Exception as e:
-        logger.error(
-            "[COGNEE_DEBUG] add() FAIL dataset=%s user=%s node_set=%s exc=%s\n%s",
-            dataset_name,
-            _brief(user),
-            node_set,
-            e,
-            traceback.format_exc(),
-        )
-        raise
-
-
-async def _safe_cognify(*, datasets: list[str] | None, user: Any | None):
-    user = _to_user_or_none(user)
-    try:
-        res = await _c().cognify(datasets=datasets, user=user)
-        if _debug_enabled():
-            logger.debug(
-                "[COGNEE_DEBUG] cognify() OK datasets=%s user=%s -> %s",
-                datasets,
-                getattr(user, "id", None) if user is not None else None,
-                _brief(res),
-            )
-        return res
-    except Exception as e:
-        logger.error(
-            "[COGNEE_DEBUG] cognify() FAIL datasets=%s user=%s exc=%s\n%s",
-            datasets,
-            _brief(user),
-            e,
-            traceback.format_exc(),
-        )
-        raise
-
-
 class CogneeCoach(BaseAICoach):
-    _loader: Optional[KnowledgeLoader] = None
+    """Main integration class to connect AI coach with Cognee."""
+
+    _loader: KnowledgeLoader | None = None
     _cognify_locks: LockCache = LockCache()
-    _user: Optional[Any] = None
-    _dataset_map: dict[str, str] = {}
+    _user: Any | None = None
 
     GLOBAL_DATASET: str = os.environ.get("COGNEE_GLOBAL_DATASET", "external_docs")
 
     @classmethod
     async def initialize(cls, knowledge_loader: KnowledgeLoader | None = None) -> None:
+        """Initialize Cognee config, user, and preload knowledge base."""
         CogneeConfig.apply()
         try:
             from cognee.modules.engine.operations.setup import setup as cognee_setup  # type: ignore
+
             await cognee_setup()
-        except Exception as e:
-            logger.debug(f"Cognee setup note: {e}")
-
+        except Exception:
+            pass
         cls._loader = knowledge_loader
-        cls._user = None
-
+        cls._user = await cls._get_cognee_user()
         try:
             await cls.refresh_knowledge_base()
         except Exception as e:
-            logger.warning(f"Knowledge refresh (non-fatal): {e}")
-
-        logger.debug("CogneeCoach: initialize complete")
+            logger.warning(f"Knowledge refresh skipped: {e}")
 
     @classmethod
     async def _get_cognee_user(cls) -> Any | None:
-        return None
+        """Fetch and cache default Cognee user."""
+        if cls._user is not None:
+            return cls._user
+        try:
+            cls._user = await get_default_user()
+        except Exception:
+            cls._user = None
+        return cls._user
 
     @classmethod
     def _resolve_dataset_alias(cls, name: str) -> str:
-        return cls._dataset_map.get(name, name)
+        """Map dataset alias to actual dataset name (currently identity)."""
+        return name
 
     @classmethod
-    def _register_dataset_alias(cls, src: str, dst: str) -> None:
-        cls._dataset_map[src] = dst
-        if src == cls.GLOBAL_DATASET:
-            cls.GLOBAL_DATASET = dst
-            os.environ["COGNEE_GLOBAL_DATASET"] = dst
+    async def _ensure_dataset_exists(cls, name: str, user: Any | None) -> None:
+        """Create dataset if it does not exist for the given user."""
+        user_ns = _to_user_or_none(user)
+        try:
+            from cognee.modules.data.methods import (  # type: ignore
+                get_authorized_dataset_by_name,
+                create_authorized_dataset,
+            )
+        except Exception:
+            return
+        exists = await get_authorized_dataset_by_name(name, user_ns, "write")
+        if exists is None:
+            await create_authorized_dataset(name, user_ns)
 
     @classmethod
     async def refresh_knowledge_base(cls) -> None:
-        _, PermissionDeniedError = _exceptions()
+        """Re-cognify global dataset and refresh loader if available."""
+        user = await cls._get_cognee_user()
+        ds = cls._resolve_dataset_alias(cls.GLOBAL_DATASET)
+        await cls._ensure_dataset_exists(ds, user)
         if cls._loader:
             await cls._loader.refresh()
         try:
-            ds = cls._resolve_dataset_alias(cls.GLOBAL_DATASET)
-            await _safe_cognify(datasets=[ds], user=None)
-        except PermissionDeniedError as e:
-            logger.error(f"Permission denied while updating knowledge base: {e}")
+            await cognee.cognify(datasets=[ds], user=_to_user_or_none(user))
+        except (PermissionDeniedError, DatasetNotFoundError) as e:
+            logger.error(f"Knowledge base update skipped: {e}")
 
     @staticmethod
     def _dataset_name(client_id: int) -> str:
+        """Generate dataset name for a client."""
         return f"client_{client_id}"
 
     @staticmethod
     def _client_profile_text(client: Client) -> str:
+        """Format client profile attributes into text for indexing."""
         parts = []
         if client.name:
             parts.append(f"name: {client.name}")
@@ -193,6 +150,7 @@ class CogneeCoach(BaseAICoach):
 
     @classmethod
     async def _ensure_profile_indexed(cls, client_id: int, user: Any | None) -> None:
+        """Fetch client profile and add it to dataset if missing."""
         try:
             client = await APIService.profile.get_client_by_profile_id(client_id)
         except UserServiceError as e:
@@ -208,10 +166,11 @@ class CogneeCoach(BaseAICoach):
 
     @classmethod
     async def _process_dataset(cls, dataset: str, user: Any | None) -> None:
+        """Run cognify on a dataset with a per-dataset lock."""
         lock = cls._cognify_locks.get(dataset)
         async with lock:
             ds = cls._resolve_dataset_alias(dataset)
-            await _safe_cognify(datasets=[ds], user=user)
+            await cognee.cognify(datasets=[ds], user=_to_user_or_none(user))
 
     @classmethod
     async def update_dataset(
@@ -220,43 +179,42 @@ class CogneeCoach(BaseAICoach):
         dataset: str,
         user: Any | None,
         node_set: list[str] | None = None,
-    ) -> Tuple[str, bool]:
+    ) -> tuple[str, bool]:
+        """Add text to dataset if new, update hash store, return (dataset, created)."""
         text = (text or "").strip()
         if not text:
             return dataset, False
         digest = sha256(text.encode()).hexdigest()
         ds_name = cls._resolve_dataset_alias(dataset)
+        await cls._ensure_dataset_exists(ds_name, user)
         if await HashStore.contains(ds_name, digest):
-            if _debug_enabled():
-                logger.debug("[COGNEE_DEBUG] HashStore hit dataset=%s digest=%s (skip add)", ds_name, digest[:12])
             return ds_name, False
-        DatasetNotFoundError, PermissionDeniedError = _exceptions()
         try:
-            info = await _safe_add(text=text, dataset_name=ds_name, user=user, node_set=node_set)
+            info = await cognee.add(
+                text,
+                dataset_name=ds_name,
+                user=_to_user_or_none(user),
+                node_set=node_set,
+            )
         except (DatasetNotFoundError, PermissionDeniedError):
-            suffix = str(int(time.time()))
-            new_name = f"{dataset}_{suffix}"
-            logger.debug(f"[COGNEE_DEBUG] remap dataset '{dataset}' -> '{new_name}' due to 403/404")
-            cls._register_dataset_alias(dataset, new_name)
-            info = await _safe_add(text=text, dataset_name=new_name, user=user, node_set=node_set)
-            ds_name = new_name
+            raise
         await HashStore.add(ds_name, digest)
         resolved = getattr(info, "dataset_id", None) or getattr(info, "dataset_name", None) or ds_name
         return str(resolved), True
 
     @classmethod
     async def make_request(cls, prompt: str, client_id: int) -> list[str]:
-        DatasetNotFoundError, PermissionDeniedError = _exceptions()
-        user = None
+        """Search across client and global datasets with given prompt."""
+        user = await cls._get_cognee_user()
         await cls._ensure_profile_indexed(client_id, user)
         datasets = [cls._dataset_name(client_id), cls.GLOBAL_DATASET]
         datasets = [cls._resolve_dataset_alias(d) for d in datasets]
         try:
-            return await _c().search(prompt, datasets=datasets, user=user)
+            return await cognee.search(prompt, datasets=datasets, user=_to_user_or_none(user))
         except (PermissionDeniedError, DatasetNotFoundError) as e:
             logger.warning(f"Search issue for client {client_id}: {e}")
         except Exception as e:
-            logger.exception(f"Unexpected error during client {client_id} request: {e}")
+            logger.error(f"Unexpected error during client {client_id} request: {e}")
         return []
 
     @classmethod
@@ -270,7 +228,8 @@ class CogneeCoach(BaseAICoach):
         client_id: int | None = None,
         role: MessageRole | None = None,
     ) -> None:
-        user = None
+        """Add message text to a dataset, schedule cognify if new."""
+        user = await cls._get_cognee_user()
         ds = dataset or (cls._dataset_name(client_id) if client_id is not None else cls.GLOBAL_DATASET)
         if role:
             text = f"{role.value}: {text}"
@@ -278,33 +237,38 @@ class CogneeCoach(BaseAICoach):
             ds, created = await cls.update_dataset(text, ds, user, node_set=node_set or [])
             if created:
                 asyncio.create_task(cls._process_dataset(ds, user))
+        except PermissionDeniedError:
+            raise
         except Exception:
-            logger.opt(exception=True).warning("Add text skipped")
+            logger.warning("Add text skipped")
 
     @classmethod
     async def refresh_client_knowledge(cls, client_id: int) -> None:
-        user = None
+        """Re-cognify client-specific dataset asynchronously."""
+        user = await cls._get_cognee_user()
         dataset = cls._dataset_name(client_id)
         logger.info(f"Reindexing dataset {dataset}")
         asyncio.create_task(cls._process_dataset(dataset, user))
 
     @classmethod
     async def save_client_message(cls, text: str, client_id: int) -> None:
+        """Save a client message into dataset."""
         await cls.add_text(text, client_id=client_id, role=MessageRole.CLIENT)
 
     @classmethod
     async def save_ai_message(cls, text: str, client_id: int) -> None:
+        """Save an AI coach message into dataset."""
         await cls.add_text(text, client_id=client_id, role=MessageRole.AI_COACH)
 
     @classmethod
     async def get_client_context(cls, client_id: int, query: str) -> dict[str, list[str]]:
-        DatasetNotFoundError, _ = _exceptions()
-        user = None
+        """Search client + global datasets for context messages."""
+        user = await cls._get_cognee_user()
         await cls._ensure_profile_indexed(client_id, user)
         datasets = [cls._dataset_name(client_id), cls.GLOBAL_DATASET]
         datasets = [cls._resolve_dataset_alias(d) for d in datasets]
         try:
-            messages = await _c().search(query, datasets=datasets, top_k=5, user=user)
+            messages = await cognee.search(query, datasets=datasets, top_k=5, user=_to_user_or_none(user))
         except DatasetNotFoundError:
             messages = []
         except Exception as e:

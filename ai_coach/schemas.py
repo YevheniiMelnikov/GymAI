@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -22,3 +24,10 @@ class AskRequest(BaseModel):
 class MessageRequest(BaseModel):
     text: str
     client_id: int
+
+
+@dataclass
+class CogneeUser:
+    id: Any
+    tenant_id: Any | None = None
+    roles: list[str] | None = None
