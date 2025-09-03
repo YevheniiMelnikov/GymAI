@@ -24,12 +24,14 @@ from core.schemas import Client
 
 def _c():
     import cognee  # type: ignore
+
     return cognee
 
 
 def _exceptions():
     from cognee.modules.data.exceptions import DatasetNotFoundError  # type: ignore
     from cognee.modules.users.exceptions.exceptions import PermissionDeniedError  # type: ignore
+
     return DatasetNotFoundError, PermissionDeniedError
 
 
@@ -128,6 +130,7 @@ class CogneeCoach(BaseAICoach):
         CogneeConfig.apply()
         try:
             from cognee.modules.engine.operations.setup import setup as cognee_setup  # type: ignore
+
             await cognee_setup()
         except Exception as e:
             logger.debug(f"Cognee setup note: {e}")
@@ -159,14 +162,26 @@ class CogneeCoach(BaseAICoach):
 
     @classmethod
     async def refresh_knowledge_base(cls) -> None:
-        _, PermissionDeniedError = _exceptions()
+        DatasetNotFoundError, PermissionDeniedError = _exceptions()
         if cls._loader:
             await cls._loader.refresh()
         try:
             ds = cls._resolve_dataset_alias(cls.GLOBAL_DATASET)
             await _safe_cognify(datasets=[ds], user=None)
-        except PermissionDeniedError as e:
-            logger.error(f"Permission denied while updating knowledge base: {e}")
+        except (PermissionDeniedError, DatasetNotFoundError) as e:
+            logger.error(f"Knowledge base update skipped: {e}")
+
+    @classmethod
+    async def _ensure_dataset_exists(cls, name: str, user: Any | None) -> None:
+        create = getattr(_c(), "create_authorized_dataset", None)
+        if not callable(create):
+            create = getattr(_c(), "create_dataset", None)
+        if callable(create):
+            try:
+                await create(name, user=user)
+            except Exception as e:  # pragma: no cover - best effort
+                if _debug_enabled():
+                    logger.debug("[COGNEE_DEBUG] create_dataset failed name=%s exc=%s", name, e)
 
     @staticmethod
     def _dataset_name(client_id: int) -> str:
@@ -226,6 +241,7 @@ class CogneeCoach(BaseAICoach):
             return dataset, False
         digest = sha256(text.encode()).hexdigest()
         ds_name = cls._resolve_dataset_alias(dataset)
+        await cls._ensure_dataset_exists(ds_name, user)
         if await HashStore.contains(ds_name, digest):
             if _debug_enabled():
                 logger.debug("[COGNEE_DEBUG] HashStore hit dataset=%s digest=%s (skip add)", ds_name, digest[:12])
@@ -238,6 +254,7 @@ class CogneeCoach(BaseAICoach):
             new_name = f"{dataset}_{suffix}"
             logger.debug(f"[COGNEE_DEBUG] remap dataset '{dataset}' -> '{new_name}' due to 403/404")
             cls._register_dataset_alias(dataset, new_name)
+            await cls._ensure_dataset_exists(new_name, user)
             info = await _safe_add(text=text, dataset_name=new_name, user=user, node_set=node_set)
             ds_name = new_name
         await HashStore.add(ds_name, digest)
