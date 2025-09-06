@@ -319,9 +319,6 @@ Create `docker/.env` from `docker/.env.example` and set the following minimum va
 * `API_KEY` – internal API key for bot/API communication
 * `BOT_TOKEN` – Telegram bot token
 * `WEBHOOK_HOST` – base URL for webhooks (e.g., `http://localhost:9090` for local Nginx)
-* `BOT_LINK` – public t.me link
-* `API_URL` – base URL of the Django API (e.g., `http://api:8000/` in Docker, `http://localhost:8000/` locally)
-* `SPREADSHEET_ID` – Google Sheets ID used by the app
 
 > **Important:** To enable Google services (Sheets/Drive/Docs), you **must** place a file named `google_creds.json` at the **project root**. This file is bind-mounted into containers at `/app/google_creds.json` and should be referenced by `GOOGLE_APPLICATION_CREDENTIALS`.
 
