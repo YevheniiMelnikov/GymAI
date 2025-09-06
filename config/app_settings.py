@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Annotated
 
@@ -37,7 +38,10 @@ class Settings(BaseSettings):
     DEFAULT_LANG: Annotated[str, Field(default="ua")]
     ADMIN_LANG: Annotated[str, Field(default="ru")]
     LOG_LEVEL: Annotated[str, Field(default="INFO")]
+
     REDIS_URL: Annotated[str, Field(default="redis://redis:6379")]
+    HOST_REDIS_PORT: Annotated[str, Field(default="6379")]
+    DOCKER_BOT_START: Annotated[bool, Field(default=False)]
 
     BOT_INTERNAL_URL: Annotated[str, Field(default="http://bot:8000/")]
     WEB_SERVER_HOST: Annotated[str, Field(default="0.0.0.0")]
@@ -136,9 +140,20 @@ class Settings(BaseSettings):
         # PAYMENT_CALLBACK_URL
         if not self.PAYMENT_CALLBACK_URL:
             self.PAYMENT_CALLBACK_URL = f"{self.WEBHOOK_HOST}/payment-webhook/"
+
+        # API_URL
         if not self.API_URL:
             base = str(self.API_HOST).rstrip("/")
             self.API_URL = f"{base}:{self.HOST_API_PORT}/"
+
+        # --- Redis URL selection ---
+        in_docker = os.path.exists("/.dockerenv") or os.getenv("KUBERNETES_SERVICE_HOST") is not None
+
+        if not in_docker:
+            normalized = (self.REDIS_URL or "").strip().lower()
+            if not normalized or normalized.startswith("redis://redis"):
+                self.REDIS_URL = f"redis://127.0.0.1:{self.HOST_REDIS_PORT}"
+
         return self
 
     @property

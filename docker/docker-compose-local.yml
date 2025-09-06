@@ -1,7 +1,6 @@
-# Uncomment 'bot' service if you're running inside Docker. It's commented to allow running the Python
-
 x-app-image: &app_image gymbot-app:local
 x-coach-image: &coach_image gymbot-coach:local
+
 x-common-env: &common_env
   environment:
     PYTHONPATH: /app
@@ -27,22 +26,23 @@ x-common-env: &common_env
       condition: service_healthy
 
 services:
-#    bot:
-#      image: *app_image
-#      build:
-#        context: ..
-#        dockerfile: docker/Dockerfile
-#        target: py-runtime
-#        args:
-#          INSTALL_DEV: "true"
-#          EXTRAS: ""
-#      container_name: bot
-#      environment:
-#        GOOGLE_APPLICATION_CREDENTIALS: "/app/google_creds.json"
-#      <<: *common_env
-#      entrypoint: /app/docker/entrypoint.sh
-#      command: python -m bot.main
-#      restart: unless-stopped
+  bot:
+    image: *app_image
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: py-runtime
+      args:
+        INSTALL_DEV: "true"
+        EXTRAS: ""
+    container_name: bot
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: "/app/google_creds.json"
+      DOCKER_BOT_START: ${DOCKER_BOT_START:-false}
+    <<: *common_env
+    entrypoint: /bin/sh
+    command: -lc 'if [ "${DOCKER_BOT_START}" = "true" ]; then exec /app/docker/entrypoint.sh python -m bot.main; else echo "bot disabled (DOCKER_BOT_START!=true)"; exec sleep infinity; fi'
+    restart: unless-stopped
 
   db:
     image: pgvector/pgvector:pg17
@@ -91,17 +91,18 @@ services:
     environment:
       GOOGLE_APPLICATION_CREDENTIALS: /app/google_creds.json
       RUN_MIGRATIONS: true
+      API_PORT: ${API_PORT:-8000}
     entrypoint: /app/docker/entrypoint.sh
     command: >
       gunicorn config.asgi:application
       --worker-class uvicorn.workers.UvicornWorker
-      --bind 0.0.0.0:8000
+      --bind 0.0.0.0:${API_PORT:-8000}
       --workers 2
       --timeout 60
       --access-logfile -
       --error-logfile -
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health/"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:${API_PORT:-8000}/health/"]
       interval: 60s
       timeout: 5s
       retries: 5
@@ -110,7 +111,7 @@ services:
       - staticfiles:/app/staticfiles
       - ../google_creds.json:/app/google_creds.json:ro
     ports:
-      - ${HOST_API_PORT:-8000}:8000
+      - ${HOST_API_PORT:-8000}:${API_PORT:-8000}
 
   celery_worker:
     image: *app_image
@@ -147,14 +148,13 @@ services:
       LOGURU_LEVEL: DEBUG
       COGNEE_DATA_ROOT: /app/.data_storage
       GRAPH_DATABASE_PROVIDER: ${GRAPH_DATABASE_PROVIDER}
-      PYTHONUNBUFFERED: 1
-      PYTHONDONTWRITEBYTECODE: 1
       REDIS_URL: ${REDIS_URL}
       PGHOST: ${DB_HOST}
       PGPORT: ${DB_PORT}
       PGDATABASE: ${DB_NAME}
       PGUSER: ${DB_USER}
       PGPASSWORD: ${POSTGRES_PASSWORD:- password}
+      COACH_PORT: ${COACH_PORT:-9000}
     env_file:
       - .env
     volumes:
@@ -167,9 +167,9 @@ services:
         condition: service_healthy
     entrypoint: /app/docker/entrypoint.sh
     command: >
-      bash -lc "uvicorn ai_coach.api:app --host 0.0.0.0 --port 9000"
+      bash -lc "uvicorn ai_coach.api:app --host 0.0.0.0 --port ${COACH_PORT:-9000}"
     ports:
-      - ${HOST_COACH_PORT:-9000}:9000
+      - ${HOST_COACH_PORT:-9000}:${COACH_PORT:-9000}
 
   nginx:
     image: nginx:alpine

@@ -53,15 +53,17 @@ GymBot is a Dockerized platform that includes a Telegram bot (aiogram), API (Dja
    cp docker/.env.example docker/.env
    ```
 
-2. Place Google service account credentials at the project root:
+2. Set `Required` ENV's (see section `Configuration` below).
+
+3. Place Google service account credentials at the project root:
 
    * Put `google_creds.json` in the repository root (same level as `docker/`).
    * The file will be bind-mounted into containers at `/app/google_creds.json` and referenced via `GOOGLE_APPLICATION_CREDENTIALS`.
 
-3. Build and run the services:
+4. Build and run the services (locally):
 
    ```bash
-   task run
+   task localrun
    ```
 
    Or manually:
@@ -85,12 +87,16 @@ Local development options:
   * Start the bot: `uv run python -m bot.main`.
   * Local Nginx forwards webhooks to `host.docker.internal:8088` as configured in `docker/nginx.local.conf`.
 
-Note on ngrok for local webhooks:
-- Run ngrok on the same port exposed by local Nginx. This port is configured via `HOST_NGINX_PORT` in `docker/.env` (default 8000).
-- Example:
-  - Windows (PowerShell): `ngrok http $Env:HOST_NGINX_PORT`
-  - Linux/macOS: `ngrok http $HOST_NGINX_PORT`
-- Use the generated HTTPS URL as `WEBHOOK_HOST` in `docker/.env` so Telegram can reach your bot.
+**Note on ngrok for local webhooks:**
+
+* Run ngrok on the same port exposed by local Nginx. This port is configured via `HOST_NGINX_PORT` in `docker/.env` (default 8000).
+* Example:
+
+  * Windows (PowerShell): `ngrok http $Env:HOST_NGINX_PORT`
+  * Linux/macOS: `ngrok http $HOST_NGINX_PORT`
+* Use the generated HTTPS URL as `WEBHOOK_HOST` in `docker/.env` so Telegram can reach your bot.
+
+> To run bot locally FULLY with docker set `DOCKER_BOT_START=true`
 
 ---
 
@@ -139,7 +145,7 @@ FastAPI service under `/ask/`.
 
 Enable agent mode globally with `AGENT_PYDANTICAI_ENABLED=true` or per request via header `X-Agent: pydanticai`.
 
-**ask_ai response example**
+**ask\_ai response example**
 
 ```json
 {
