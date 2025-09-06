@@ -85,6 +85,13 @@ Local development options:
   * Start the bot: `uv run python -m bot.main`.
   * Local Nginx forwards webhooks to `host.docker.internal:8088` as configured in `docker/nginx.local.conf`.
 
+Note on ngrok for local webhooks:
+- Run ngrok on the same port exposed by local Nginx. This port is configured via `HOST_NGINX_PORT` in `docker/.env` (default 8000).
+- Example:
+  - Windows (PowerShell): `ngrok http $Env:HOST_NGINX_PORT`
+  - Linux/macOS: `ngrok http $HOST_NGINX_PORT`
+- Use the generated HTTPS URL as `WEBHOOK_HOST` in `docker/.env` so Telegram can reach your bot.
+
 ---
 
 ## API
@@ -116,11 +123,11 @@ FastAPI service under `/ask/`.
 {
   "client_id": 1,
   "prompt": "text",
-  "mode": "program" | "subscription" | "update" | "ask_ai",
-  "period": "1m",        // subscription only
-  "workout_days": ["Mon"],// subscription only
-  "expected_workout": "...", // update only
-  "feedback": "..."          // update only
+  "mode": "program | subscription | update | ask_ai",
+  "period": "1m",
+  "workout_days": ["Mon"],
+  "expected_workout": "...",
+  "feedback": "..."
 }
 ```
 

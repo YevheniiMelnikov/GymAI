@@ -12,11 +12,11 @@ from core.schemas import DayExercises, Program, QAResponse, Subscription
 
 try:  # pragma: no cover - optional dependency
     from pydantic_ai import Agent, RunContext
-    from pydantic_ai.models.openai import OpenAIModel
+    from pydantic_ai.models.openai import OpenAIChatModel
 except Exception:  # pragma: no cover - optional dependency
     Agent = None  # type: ignore[assignment]
     RunContext = Any  # type: ignore[assignment]
-    OpenAIModel = None  # type: ignore[assignment]
+    OpenAIChatModel = None  # type: ignore[assignment]
 
 
 SYSTEM_PROMPT_PATH = Path(__file__).with_name("prompts") / "coach_system_prompt.txt"
@@ -240,10 +240,10 @@ class CoachAgent:
 
     @classmethod
     def _get_agent(cls) -> Any:
-        if Agent is None or OpenAIModel is None:
+        if Agent is None or OpenAIChatModel is None:
             raise RuntimeError("pydantic_ai package is required")
         if cls._agent is None:
-            model = OpenAIModel(
+            model = OpenAIChatModel(
                 settings.LLM_MODEL,
                 api_key=settings.LLM_API_KEY,
                 base_url=settings.LLM_API_URL,
