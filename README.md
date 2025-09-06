@@ -316,7 +316,7 @@ Create `docker/.env` from `docker/.env.example` and set the following minimum va
 **Required**
 
 * `SECRET_KEY` – Django secret key
-* `API_KEY` – internal API key for bot/API communication
+* `API_KEY` – internal API key for bot/API communication (generate from Django container)
 * `BOT_TOKEN` – Telegram bot token
 * `WEBHOOK_HOST` – base URL for webhooks (e.g., `http://localhost:9090` for local Nginx)
 
