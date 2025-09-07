@@ -1,24 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel
 
-
-class MessageRole(str, Enum):
-    """Role of a chat message."""
-
-    CLIENT = "client"
-    AI_COACH = "ai_coach"
+from ai_coach.types import CoachMode
 
 
 class AskRequest(BaseModel):
     client_id: int
     prompt: str
     language: str | None = None
-    mode: Literal["program", "subscription", "update", "ask_ai"] = "program"
+    mode: CoachMode = CoachMode.program
     period: str | None = None
     workout_days: list[str] | None = None
     expected_workout: str | None = None

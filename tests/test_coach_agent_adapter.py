@@ -24,6 +24,7 @@ from ai_coach.coach_agent import (
     QAResponse,
 )
 from ai_coach.schemas import AskRequest
+from ai_coach.types import CoachMode
 from ai_coach.application import app
 from ai_coach.cognee_coach import CogneeCoach
 from config.app_settings import settings
@@ -89,7 +90,7 @@ def test_subscription_payload_validation() -> None:
 
 def test_ask_request_accepts_ask_ai() -> None:
     req = AskRequest(client_id=1, prompt="hi", mode="ask_ai")
-    assert req.mode == "ask_ai"
+    assert req.mode is CoachMode.ask_ai
 
 
 @pytest.mark.asyncio

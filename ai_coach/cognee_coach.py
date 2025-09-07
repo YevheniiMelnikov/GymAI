@@ -14,7 +14,8 @@ from ai_coach.base_knowledge_loader import KnowledgeLoader
 from ai_coach.cognee_config import CogneeConfig
 from ai_coach.hash_store import HashStore
 from ai_coach.lock_cache import LockCache
-from ai_coach.schemas import MessageRole, CogneeUser
+from ai_coach.schemas import CogneeUser
+from ai_coach.types import MessageRole
 from core.exceptions import UserServiceError
 from core.services import APIService
 from core.schemas import Client
