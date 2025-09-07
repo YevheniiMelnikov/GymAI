@@ -7,7 +7,7 @@ from pydantic import ValidationError
 from typing import Awaitable, Callable
 
 from ai_coach.knowledge_base import KnowledgeBase
-from ai_coach.coach_agent import AgentDeps, CoachAgent
+from ai_coach.agent import AgentDeps, CoachAgent
 from ai_coach.application import app, security
 from ai_coach.schemas import AskRequest, MessageRequest
 from ai_coach.types import AskCtx, CoachMode

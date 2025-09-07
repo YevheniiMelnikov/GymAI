@@ -2,7 +2,7 @@ import pytest
 from httpx import AsyncClient
 
 from ai_coach.application import app
-from ai_coach.coach_agent import QAResponse, CoachAgent
+from ai_coach.agent import QAResponse, CoachAgent
 
 
 @pytest.mark.asyncio

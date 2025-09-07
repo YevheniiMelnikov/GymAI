@@ -15,7 +15,7 @@ os.environ.setdefault("ADMIN_ID", "1")
 import pytest
 from pydantic import ValidationError
 
-from ai_coach.coach_agent import (
+from ai_coach.agent import (
     AgentDeps,
     CoachAgent,
     ProgramAdapter,

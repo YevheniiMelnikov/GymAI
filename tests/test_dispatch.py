@@ -1,7 +1,7 @@
 import pytest
 
 from ai_coach.api import DISPATCH
-from ai_coach.coach_agent import CoachAgent
+from ai_coach.agent import CoachAgent
 from ai_coach.types import CoachMode
 
 
