@@ -48,13 +48,7 @@ async def health() -> dict[str, str]:
 @app.post("/ask/", response_model=Program | Subscription | QAResponse | list[str] | None)
 async def ask(data: AskRequest, request: Request) -> Program | Subscription | QAResponse | list[str] | None:
     mode = data.mode if isinstance(data.mode, CoachMode) else CoachMode(data.mode)
-    logger.debug(
-        "/ask received request_id={} client_id={} mode={}",
-        data.request_id,
-        data.client_id,
-        mode.value,
-    )
-    use_agent = settings.AGENT_PYDANTICAI_ENABLED or request.headers.get("X-Agent", "").lower() == "pydanticai"
+    logger.debug(f"/ask received request_id={data.request_id} client_id={data.client_id} mode={mode.value}")
     ctx: AskCtx = {
         "prompt": data.prompt,
         "client_id": data.client_id,
@@ -64,63 +58,50 @@ async def ask(data: AskRequest, request: Request) -> Program | Subscription | QA
         "feedback": data.feedback or "",
         "language": data.language or settings.DEFAULT_LANG,
     }
-    if use_agent:
-        deps = AgentDeps(
-            client_id=data.client_id,
-            locale=ctx["language"],
-            allow_save=mode != CoachMode.ask_ai,
-            log_conversation_for_ask_ai=settings.LOG_CONVERSATION_FOR_ASK_AI,
-        )
-        ctx["deps"] = deps
-        try:
-            strategy = DISPATCH[mode]
-        except KeyError as e:
-            logger.exception("/ask unsupported mode: {}", mode.value)
-            raise HTTPException(status_code=422, detail="Unsupported mode") from e
-        try:
-            result = await strategy(ctx)
-            if mode == CoachMode.ask_ai:
-                sources = getattr(result, "sources", []) or []
-                logger.debug(
-                    "/ask agent completed request_id={} client_id={} mode=ask_ai answer_len={} sources={}",
-                    data.request_id,
-                    data.client_id,
-                    len(result.answer),
-                    len(sources),
-                )
-                if settings.LOG_CONVERSATION_FOR_ASK_AI:
-                    await CogneeCoach.save_client_message(data.prompt, client_id=data.client_id)
-                    await CogneeCoach.save_ai_message(result.answer, client_id=data.client_id)
-            else:
-                logger.debug(
-                    "/ask agent completed request_id={} client_id={} mode={}",
-                    data.request_id,
-                    data.client_id,
-                    mode.value,
-                )
-            return result
-        except ValidationError as e:
-            logger.exception("/ask agent validation error: {}", e)
-            raise HTTPException(status_code=422, detail="Invalid response") from e
-        except Exception as e:  # pragma: no cover - log unexpected errors
-            logger.exception("/ask agent failed: {}", e)
-            raise HTTPException(status_code=503, detail="Service unavailable") from e
+    deps = AgentDeps(
+        client_id=data.client_id,
+        locale=ctx["language"],
+        allow_save=mode != CoachMode.ask_ai,
+    )
+    ctx["deps"] = deps
     try:
-        responses = await CogneeCoach.make_request(data.prompt, client_id=data.client_id)
-        await CogneeCoach.save_client_message(data.prompt, client_id=data.client_id)
-        if responses:
-            for r in responses:
-                await CogneeCoach.save_ai_message(r, client_id=data.client_id)
-        logger.debug(
-            "/ask completed request_id={} client_id={} responses={}",
-            data.request_id,
-            data.client_id,
-            responses,
-        )
-        return responses
+        agent_action = DISPATCH[mode]
+    except KeyError as e:
+        logger.exception("/ask unsupported mode: {}", mode.value)
+        raise HTTPException(status_code=422, detail="Unsupported mode") from e
+    try:
+        result = await agent_action(ctx)
+        if mode == CoachMode.ask_ai:
+            sources = getattr(result, "sources", []) or []
+            logger.debug(
+                f"/ask agent completed request_id={data.request_id} client_id={data.client_id} mode=ask_ai answer_len={len(result.answer)} sources={(len(sources),)}",
+            )
+            await CogneeCoach.save_client_message(data.prompt, client_id=data.client_id)
+            await CogneeCoach.save_ai_message(result.answer, client_id=data.client_id)
+        else:
+            logger.debug(
+                f"/ask agent completed request_id={data.request_id} client_id={data.client_id} mode={mode.value}"
+            )
+        return result
+
+    except ValidationError as e:
+        logger.exception("/ask agent validation error: {}", e)
+        raise HTTPException(status_code=422, detail="Invalid response") from e
     except Exception as e:  # pragma: no cover - log unexpected errors
-        logger.exception("/ask failed: {}", e)
-        raise HTTPException(status_code=503, detail="Service unavailable") from e
+        logger.exception("/ask agent failed, falling back to CogneeCoach: {}", e)
+        try:
+            responses = await CogneeCoach.make_request(data.prompt, client_id=data.client_id)
+            await CogneeCoach.save_client_message(data.prompt, client_id=data.client_id)
+            if responses:
+                for r in responses:
+                    await CogneeCoach.save_ai_message(r, client_id=data.client_id)
+            logger.debug(
+                f"/ask completed request_id={data.request_id} client_id={data.client_id} responses={responses}"
+            )
+            return responses
+        except Exception as e:  # pragma: no cover - log unexpected errors
+            logger.exception("/ask failed: {}", e)
+            raise HTTPException(status_code=503, detail="Service unavailable") from e
 
 
 @app.post("/messages/")

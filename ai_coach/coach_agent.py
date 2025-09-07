@@ -27,7 +27,6 @@ class AgentDeps:
     client_id: int
     locale: str | None = None
     allow_save: bool = True
-    log_conversation_for_ask_ai: bool = False
 
 
 class ProgramPayload(Program):
@@ -97,11 +96,7 @@ async def tool_search_knowledge(ctx: RunContext[AgentDeps], query: str, k: int =
 
     from ai_coach.cognee_coach import CogneeCoach
 
-    logger.debug(
-        "tool_search_knowledge query='{}' k={}",
-        query[:80],
-        k,
-    )
+    logger.debug(f"tool_search_knowledge query='{query[:80]}' k={k}")
     result = await CogneeCoach.search_knowledge(query, k)
     logger.debug("tool_search_knowledge results={}", len(result))
     return result
@@ -191,12 +186,7 @@ async def tool_create_subscription(
     if not ctx.deps.allow_save:
         raise RuntimeError("saving not allowed in this mode")
     client_id = ctx.deps.client_id
-    logger.debug(
-        "tool_create_subscription client_id={} period={} days={}",
-        client_id,
-        period,
-        workout_days,
-    )
+    logger.debug(f"tool_create_subscription client_id={client_id} period={period} days={workout_days}")
     exercises_payload = [d.model_dump() for d in exercises]
     sub_id = await APIService.workout.create_subscription(
         client_profile_id=client_id,
@@ -247,7 +237,7 @@ class CoachAgent:
                 settings.LLM_MODEL,
                 api_key=settings.LLM_API_KEY,
                 base_url=settings.LLM_API_URL,
-                timeout=settings.AGENT_TIMEOUT,
+                timeout=settings.COACH_AGENT_TIMEOUT,
             )
             cls._agent = Agent(
                 model=model,
@@ -261,7 +251,7 @@ class CoachAgent:
                     tool_create_subscription,
                 ],
                 result_type=ProgramPayload,
-                retries=settings.AI_GENERATION_RETRIES,
+                retries=settings.COACH_AGENT_RETRIES,
             )
 
             @cls._agent.system_prompt

@@ -22,14 +22,36 @@ class Settings(BaseSettings):
     API_TIMEOUT: int = 10
     API_MAX_CONNECTIONS: int = 100
     API_MAX_KEEPALIVE_CONNECTIONS: int = 20
-    AI_GENERATION_RETRIES: int = 3
 
+    KNOWLEDGE_BASE_FOLDER_ID: str | None = None
     KNOWLEDGE_REFRESH_INTERVAL: int = 60 * 60
     KNOWLEDGE_REFRESH_START_DELAY: int = 180
     AI_COACH_TIMEOUT: int = 120
-    AGENT_PYDANTICAI_ENABLED: bool = False
-    AGENT_TIMEOUT: int = 60
-    LOG_CONVERSATION_FOR_ASK_AI: bool = False
+    COACH_AGENT_RETRIES: int = 3
+    COACH_AGENT_TIMEOUT: int = 60
+
+    AI_COACH_REFRESH_USER: Annotated[str, Field(default="admin")]
+    AI_COACH_REFRESH_PASSWORD: Annotated[str, Field(default="password")]
+
+    OPENAI_BASE_URL: Annotated[str, Field(default="https://api.openai.com/v1")]
+    EMBEDDING_API_KEY: Annotated[str, Field(default="")]
+    LLM_API_URL: Annotated[str, Field(default="https://openrouter.ai/api/v1")]
+    LLM_API_KEY: Annotated[str, Field(default="")]
+    LLM_MODEL: Annotated[str, Field(default="gpt-4o")]
+    LLM_PROVIDER: Annotated[str, Field(default="custom")]
+    LLM_COOLDOWN: Annotated[int, Field(default=60)]
+
+    EMBEDDING_MODEL: Annotated[str, Field(default="openai/text-embedding-3-large")]
+    EMBEDDING_PROVIDER: Annotated[str, Field(default="openai")]
+    EMBEDDING_ENDPOINT: Annotated[str, Field(default="https://api.openai.com/v1")]
+
+    BOT_TOKEN: str
+    BOT_LINK: str
+    WEBHOOK_HOST: str
+    HOST_NGINX_PORT: Annotated[str, Field(default="8000")]
+    WEBAPP_PUBLIC_URL: Annotated[str | None, Field(default=None)]
+    WEB_SERVER_HOST: Annotated[str, Field(default="0.0.0.0")]
+    BOT_PORT: Annotated[int, Field(default=8088)]
 
     CACHE_TTL: int = 60 * 5  # Django cache TTL
     BACKUP_RETENTION_DAYS: int = 30  # Postgres/Redis backup retention
@@ -63,30 +85,6 @@ class Settings(BaseSettings):
     API_URL: Annotated[str | None, Field(default=None)]
     ALLOWED_HOSTS: Annotated[list[str], Field(default=["localhost", "127.0.0.1"])]
     SITE_NAME: Annotated[str, Field(default="AchieveTogether")]
-
-    AI_COACH_REFRESH_USER: Annotated[str, Field(default="admin")]
-    AI_COACH_REFRESH_PASSWORD: Annotated[str, Field(default="password")]
-    GDRIVE_FOLDER_ID: str | None = None  # External knowledge base for AI Coach
-
-    OPENAI_BASE_URL: Annotated[str, Field(default="https://api.openai.com/v1")]
-    EMBEDDING_API_KEY: Annotated[str, Field(default="")]  # used for embeddings
-    LLM_API_URL: Annotated[str, Field(default="https://openrouter.ai/api/v1")]
-    LLM_API_KEY: Annotated[str, Field(default="")]
-    LLM_MODEL: Annotated[str, Field(default="gpt-4o")]
-    LLM_PROVIDER: Annotated[str, Field(default="custom")]
-    LLM_COOLDOWN: Annotated[int, Field(default=60)]
-
-    EMBEDDING_MODEL: Annotated[str, Field(default="openai/text-embedding-3-large")]
-    EMBEDDING_PROVIDER: Annotated[str, Field(default="openai")]
-    EMBEDDING_ENDPOINT: Annotated[str, Field(default="https://api.openai.com/v1")]
-
-    BOT_TOKEN: str
-    BOT_LINK: str
-    WEBHOOK_HOST: str
-    HOST_NGINX_PORT: Annotated[str, Field(default="8000")]
-    WEBAPP_PUBLIC_URL: Annotated[str | None, Field(default=None)]
-    WEB_SERVER_HOST: Annotated[str, Field(default="0.0.0.0")]
-    BOT_PORT: Annotated[int, Field(default=8088)]
 
     GOOGLE_APPLICATION_CREDENTIALS: Annotated[str, Field(default="google_creds.json")]
     SPREADSHEET_ID: str

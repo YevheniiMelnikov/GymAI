@@ -42,7 +42,7 @@ def _read_pdf(data: bytes) -> str:
 
 
 class GDriveDocumentLoader(KnowledgeLoader):
-    folder_id: str | None = settings.GDRIVE_FOLDER_ID
+    folder_id: str | None = settings.KNOWLEDGE_BASE_FOLDER_ID
     credentials_path: str | Path = settings.GOOGLE_APPLICATION_CREDENTIALS
     _files_service: Any | None = None
     _add_text: Callable[..., Awaitable[None]]
