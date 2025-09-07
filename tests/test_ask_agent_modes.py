@@ -2,7 +2,7 @@ import pytest
 from httpx import AsyncClient
 
 from ai_coach.application import app
-from ai_coach.coach_agent import CoachAgent
+from ai_coach.agent import CoachAgent
 from core.enums import CoachType
 from core.schemas import DayExercises, Exercise, Program, Subscription
 

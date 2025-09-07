@@ -1,7 +1,7 @@
 import types
 import pytest
 
-from ai_coach.coach_agent import AgentDeps, CoachAgent
+from ai_coach.agent import AgentDeps, CoachAgent
 from core.schemas import DayExercises, Exercise, Program
 
 

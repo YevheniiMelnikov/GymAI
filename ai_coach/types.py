@@ -2,7 +2,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, NotRequired, TypedDict
 
 if TYPE_CHECKING:  # pragma: no cover - runtime import avoidance
-    from ai_coach.coach_agent import AgentDeps
+    from ai_coach.agent import AgentDeps
 
 
 class CoachMode(str, Enum):

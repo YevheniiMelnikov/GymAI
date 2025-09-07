@@ -1,6 +1,7 @@
 import pytest
 
-from ai_coach.coach_agent import AgentDeps, tool_search_knowledge
+from ai_coach.agent import AgentDeps
+from ai_coach.agent.tools import tool_search_knowledge
 from ai_coach.knowledge_base import KnowledgeBase
 
 
