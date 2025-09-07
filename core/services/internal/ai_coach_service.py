@@ -98,16 +98,11 @@ class AiCoachService(APIClient):
             headers = {"X-Request-ID": request_id}
         if use_agent_header:
             headers = {**(headers or {}), "X-Agent": "pydanticai"}
-        logger.debug("AI coach ask request_id={} client_id={}", request_id, client_id)
+        logger.debug(f"AI coach ask request_id={request_id} client_id={client_id}")
         status, data = await self._api_request(
             "post", url, request.model_dump(), headers=headers, timeout=self.settings.AI_COACH_TIMEOUT
         )
-        logger.debug(
-            "AI coach ask response request_id={} HTTP={}: {}",
-            request_id,
-            status,
-            data,
-        )
+        logger.debug(f"AI coach ask response request_id={request_id} HTTP={status}: {data}")
         if status == 200:
             return data
         logger.error(f"AI coach request failed HTTP={status}: {data}")

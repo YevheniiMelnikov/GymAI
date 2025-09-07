@@ -17,7 +17,7 @@ async def generate_program(
 ) -> list[DayExercises]:
     """Request and cache a workout program via the AI coach service."""
     prompt = f"The client requests a {workout_type} program. Wishes: {wishes}"
-    logger.debug("generate_program request_id={} client_id={}", request_id, client.id)
+    logger.debug(f"generate_program request_id={request_id} client_id={client.id}")
     data = await APIService.ai_coach.ask(
         prompt,
         client_id=client.id,
@@ -26,7 +26,7 @@ async def generate_program(
         request_id=request_id,
     )
     if not data:
-        logger.error("Program generation failed client_id={}", client.id)
+        logger.error(f"Program generation failed client_id={client.id}")
         return []
     program = Program.model_validate(data)
     await Cache.workout.save_program(client.id, program.model_dump())
@@ -55,7 +55,7 @@ async def generate_subscription(
         workout_days=workout_days,
     )
     if not data:
-        logger.error("Subscription generation failed client_id={}", client.id)
+        logger.error(f"Subscription generation failed client_id={client.id}")
         return []
     if "exercises" not in data and "exercises_by_day" in data:
         data["exercises"] = data.pop("exercises_by_day")
@@ -81,7 +81,7 @@ async def process_workout_result(
         feedback=feedback,
     )
     if not data:
-        logger.error("Workout update failed client_id={}", client_id)
+        logger.error(f"Workout update failed client_id={client_id}")
         return Program(
             id=0,
             client_profile=client_id,

@@ -1,8 +1,8 @@
 import asyncio
 from types import SimpleNamespace
 
-from ai_coach.cognee_coach import CogneeCoach
-import ai_coach.cognee_coach as coach
+from ai_coach.knowledge_base import KnowledgeBase
+import ai_coach.knowledge_base as coach
 
 
 def test_update_dataset_ensures_exists(monkeypatch):
@@ -15,11 +15,11 @@ def test_update_dataset_ensures_exists(monkeypatch):
         calls.append(("add", dataset_name))
         return SimpleNamespace(dataset_id=dataset_name)
 
-    monkeypatch.setattr(CogneeCoach, "_ensure_dataset_exists", classmethod(ensure))
+    monkeypatch.setattr(KnowledgeBase, "_ensure_dataset_exists", classmethod(ensure))
     monkeypatch.setattr(coach, "_safe_add", fake_add)
 
     async def runner() -> None:
-        ds, created = await CogneeCoach.update_dataset("x", "ds", user=None)
+        ds, created = await KnowledgeBase.update_dataset("x", "ds", user=None)
         assert (ds, created) == ("ds", True)
 
     asyncio.run(runner())

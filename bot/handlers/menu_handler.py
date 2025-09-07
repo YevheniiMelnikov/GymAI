@@ -242,19 +242,12 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
 
     if service == "program":
         if not await acquire_once(f"gen_program:{client.id}", settings.LLM_COOLDOWN):
-            logger.warning(
-                "Duplicate program generation suppressed for client_id={} request_id={}",
-                client.id,
-                request_id,
-            )
+            logger.warning(f"Duplicate program generation suppressed for client_id={client.id} request_id={request_id}")
             await del_msg(callback_query)
             return
 
         logger.debug(
-            "Program generation started for client_id={} ttl={} request_id={}",
-            client.id,
-            settings.LLM_COOLDOWN,
-            request_id,
+            f"Program generation started for client_id={client.id} ttl={settings.LLM_COOLDOWN} request_id={request_id}"
         )
 
     await APIService.profile.adjust_client_credits(profile.id, -required)
@@ -282,7 +275,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
                 request_id=request_id,
             )
         except Exception as e:  # noqa: BLE001
-            logger.exception("Program generation failed: {} request_id={}", e, request_id)
+            logger.exception(f"Program generation failed: {e} request_id={request_id}")
             await answer_msg(callback_query, msg_text("unexpected_error", profile.language))
             return
         if not exercises:

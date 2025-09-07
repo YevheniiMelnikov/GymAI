@@ -2,9 +2,9 @@ import asyncio
 import pytest
 from types import SimpleNamespace
 
-from ai_coach.cognee_coach import CogneeCoach
-import ai_coach.cognee_coach as coach
-from ai_coach.application import coach_ready_event, init_ai_coach
+from ai_coach.knowledge_base import KnowledgeBase
+import ai_coach.knowledge_base as coach
+from ai_coach.application import knowledge_ready_event, init_knowledge_base
 
 
 def test_reinit_on_failure(monkeypatch):
@@ -17,36 +17,36 @@ def test_reinit_on_failure(monkeypatch):
             if called == 1:
                 raise RuntimeError("boom")
 
-        monkeypatch.setattr(CogneeCoach, "initialize", broken)
-        monkeypatch.setattr(CogneeCoach, "_user", None)
+        monkeypatch.setattr(KnowledgeBase, "initialize", broken)
+        monkeypatch.setattr(KnowledgeBase, "_user", None)
 
         async def fake_user():
             return SimpleNamespace(id="test")
 
-        monkeypatch.setattr("ai_coach.cognee_coach.get_default_user", fake_user)
-        if coach_ready_event is not None:
-            coach_ready_event.clear()
+        monkeypatch.setattr("ai_coach.knowledge_base.get_default_user", fake_user)
+        if knowledge_ready_event is not None:
+            knowledge_ready_event.clear()
         with pytest.raises(RuntimeError):
-            await init_ai_coach(CogneeCoach)
+            await init_knowledge_base()
 
         async def ok(*args, **kwargs):
-            CogneeCoach._user = SimpleNamespace(id="ok")
+            KnowledgeBase._user = SimpleNamespace(id="ok")
 
-        monkeypatch.setattr(CogneeCoach, "initialize", ok)
-        await init_ai_coach(CogneeCoach)
-        assert CogneeCoach._user is not None
+        monkeypatch.setattr(KnowledgeBase, "initialize", ok)
+        await init_knowledge_base()
+        assert KnowledgeBase._user is not None
 
     asyncio.run(runner())
 
 
 def test_empty_context_does_not_crash(monkeypatch):
     async def runner():
-        CogneeCoach._user = SimpleNamespace(id="test-u")
+        KnowledgeBase._user = SimpleNamespace(id="test-u")
 
         async def noop(*a, **k):
             pass
 
-        monkeypatch.setattr(CogneeCoach, "_ensure_profile_indexed", noop)
+        monkeypatch.setattr(KnowledgeBase, "_ensure_profile_indexed", noop)
 
         calls: list[list[str]] = []
 
@@ -58,8 +58,8 @@ def test_empty_context_does_not_crash(monkeypatch):
 
         monkeypatch.setattr(coach.cognee, "search", fake_search)
 
-        res = await CogneeCoach.get_client_context(client_id=42, query="hello")
-        assert calls == [["client_42", coach.CogneeCoach.GLOBAL_DATASET]]
+        res = await KnowledgeBase.get_client_context(client_id=42, query="hello")
+        assert calls == [["client_42", coach.KnowledgeBase.GLOBAL_DATASET]]
         assert res == {"messages": []}
 
     asyncio.run(runner())

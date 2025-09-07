@@ -1,7 +1,7 @@
 import pytest
 
 from ai_coach.coach_agent import AgentDeps, tool_search_knowledge
-from ai_coach.cognee_coach import CogneeCoach
+from ai_coach.knowledge_base import KnowledgeBase
 
 
 class _Ctx:
@@ -17,7 +17,7 @@ async def test_tool_search_knowledge_k(monkeypatch):
         called["k"] = k
         return []
 
-    monkeypatch.setattr(CogneeCoach, "search_knowledge", fake_search)
+    monkeypatch.setattr(KnowledgeBase, "search_knowledge", fake_search)
     ctx = _Ctx()
     result = await tool_search_knowledge(ctx, "hi", k=5)
     assert result == []

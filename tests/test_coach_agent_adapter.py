@@ -26,7 +26,7 @@ from ai_coach.coach_agent import (
 from ai_coach.schemas import AskRequest
 from ai_coach.types import CoachMode
 from ai_coach.application import app
-from ai_coach.cognee_coach import CogneeCoach
+from ai_coach.knowledge_base import KnowledgeBase
 from config.app_settings import settings
 from core.enums import CoachType
 
@@ -117,9 +117,9 @@ def test_ask_ai_legacy(monkeypatch) -> None:
     async def noop(*args, **kwargs) -> None:
         return None
 
-    monkeypatch.setattr(CogneeCoach, "make_request", staticmethod(fake_make_request))
-    monkeypatch.setattr(CogneeCoach, "save_client_message", staticmethod(noop))
-    monkeypatch.setattr(CogneeCoach, "save_ai_message", staticmethod(noop))
+    monkeypatch.setattr(KnowledgeBase, "make_request", staticmethod(fake_make_request))
+    monkeypatch.setattr(KnowledgeBase, "save_client_message", staticmethod(noop))
+    monkeypatch.setattr(KnowledgeBase, "save_ai_message", staticmethod(noop))
 
     from fastapi.testclient import TestClient
 

@@ -84,21 +84,21 @@ class ProgramAdapter:
 async def tool_get_client_context(ctx: RunContext[AgentDeps], query: str) -> dict[str, Sequence[str]]:
     """Return personal context for a client by query."""
 
-    from ai_coach.cognee_coach import CogneeCoach
+    from ai_coach.knowledge_base import KnowledgeBase
 
     client_id = ctx.deps.client_id
-    logger.debug("tool_get_client_context client_id={} query={}", client_id, query)
-    return await CogneeCoach.get_client_context(client_id, query)
+    logger.debug(f"tool_get_client_context client_id={client_id} query={query}")
+    return await KnowledgeBase.get_client_context(client_id, query)
 
 
 async def tool_search_knowledge(ctx: RunContext[AgentDeps], query: str, k: int = 6) -> list[str]:
     """Search global knowledge base with top-k limit."""
 
-    from ai_coach.cognee_coach import CogneeCoach
+    from ai_coach.knowledge_base import KnowledgeBase
 
     logger.debug(f"tool_search_knowledge query='{query[:80]}' k={k}")
-    result = await CogneeCoach.search_knowledge(query, k)
-    logger.debug("tool_search_knowledge results={}", len(result))
+    result = await KnowledgeBase.search_knowledge(query, k)
+    logger.debug(f"tool_search_knowledge results={len(result)}")
     return result
 
 
@@ -110,7 +110,7 @@ async def tool_save_program(ctx: RunContext[AgentDeps], plan: ProgramPayload) ->
     if not ctx.deps.allow_save:
         raise RuntimeError("saving not allowed in this mode")
     client_id = ctx.deps.client_id
-    logger.debug("tool_save_program client_id={}", client_id)
+    logger.debug(f"tool_save_program client_id={client_id}")
     program = ProgramAdapter.to_domain(plan)
     try:
         saved = await APIService.workout.save_program(
@@ -119,7 +119,7 @@ async def tool_save_program(ctx: RunContext[AgentDeps], plan: ProgramPayload) ->
             split_number=program.split_number or len(program.exercises_by_day),
             wishes=program.wishes or "",
         )
-        logger.debug("event=save_program.success program_id={saved.id} client_id={client_id}")
+        logger.debug(f"event=save_program.success program_id={saved.id} client_id={client_id}")
         return saved
     except Exception as e:  # pragma: no cover - log and re-raise
         logger.error(f"Failed to save program for user {client_id}: {e}")
@@ -132,7 +132,7 @@ async def tool_get_program_history(ctx: RunContext[AgentDeps]) -> list[Program]:
     from core.services import APIService
 
     client_id = ctx.deps.client_id
-    logger.debug("tool_get_program_history client_id={}", client_id)
+    logger.debug(f"tool_get_program_history client_id={client_id}")
     return await APIService.workout.get_all_programs(client_id)
 
 
@@ -145,7 +145,7 @@ async def tool_attach_gifs(ctx: RunContext[AgentDeps], exercises: list[DayExerci
     from core.cache import Cache
 
     client_id = ctx.deps.client_id
-    logger.debug("tool_attach_gifs client_id={}", client_id)
+    logger.debug(f"tool_attach_gifs client_id={client_id}")
     gif_manager = get_gif_manager()
     result: list[DayExercises] = []
     for day in exercises:
@@ -196,11 +196,7 @@ async def tool_create_subscription(
         raise RuntimeError("subscription creation failed")
     payment_date = next_payment_date(period)
     await APIService.workout.update_subscription(sub_id, {"enabled": True, "payment_date": payment_date})
-    logger.debug(
-        "event=create_subscription.success subscription_id={} payment_date={}",
-        sub_id,
-        payment_date,
-    )
+    logger.debug(f"event=create_subscription.success subscription_id={sub_id} payment_date={payment_date}")
     sub = await APIService.workout.get_latest_subscription(client_id)
     if sub is not None:
         return sub

@@ -125,12 +125,12 @@ def deactivate_expired_subscriptions(self):
             )
             await Cache.workout.update_subscription(sub.client_profile, {"enabled": False})
             await Cache.payment.reset_status(sub.client_profile, "subscription")
-            logger.info("Subscription {} deactivated for user {}", sub.id, sub.client_profile)
+            logger.info(f"Subscription {sub.id} deactivated for user {sub.client_profile}")
 
     try:
         asyncio.run(_impl())
     except Exception as exc:  # noqa: BLE001
-        logger.error("deactivate_expired_subscriptions failed: {}", exc)
+        logger.error(f"deactivate_expired_subscriptions failed: {exc}")
         raise
     logger.info("deactivate_expired_subscriptions completed")
 
@@ -164,7 +164,7 @@ def warn_low_credits(self):
     try:
         asyncio.run(_impl())
     except Exception as exc:  # noqa: BLE001
-        logger.error("warn_low_credits failed: {}", exc)
+        logger.error(f"warn_low_credits failed: {exc}")
         raise
     logger.info("warn_low_credits completed")
 
@@ -211,7 +211,7 @@ def charge_due_subscriptions(self):
     try:
         asyncio.run(_impl())
     except Exception as exc:  # noqa: BLE001
-        logger.error("charge_due_subscriptions failed: {}", exc)
+        logger.error(f"charge_due_subscriptions failed: {exc}")
         raise
     logger.info("charge_due_subscriptions completed")
 
@@ -235,7 +235,7 @@ def export_coach_payouts(self):
         resp = httpx.post(url, headers=headers, timeout=15.0)
         resp.raise_for_status()
     except httpx.HTTPError as exc:
-        logger.warning("Bot call failed for coach payouts: {}", exc)
+        logger.warning(f"Bot call failed for coach payouts: {exc}")
         raise self.retry(exc=exc)
     logger.info("export_coach_payouts completed")
 
@@ -358,6 +358,6 @@ def prune_cognee(self):
         resp = httpx.post(url, headers=headers, timeout=30.0)
         resp.raise_for_status()
     except httpx.HTTPError as exc:
-        logger.warning("Bot call failed for prune_cognee: {}", exc)
+        logger.warning(f"Bot call failed for prune_cognee: {exc}")
         raise self.retry(exc=exc)
     logger.info("prune_cognee completed")
