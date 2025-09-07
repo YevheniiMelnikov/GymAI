@@ -119,11 +119,7 @@ async def tool_save_program(ctx: RunContext[AgentDeps], plan: ProgramPayload) ->
             split_number=program.split_number or len(program.exercises_by_day),
             wishes=program.wishes or "",
         )
-        logger.debug(
-            "event=save_program.success program_id={} client_id={}",
-            saved.id,
-            client_id,
-        )
+        logger.debug("event=save_program.success program_id={saved.id} client_id={client_id}")
         return saved
     except Exception as e:  # pragma: no cover - log and re-raise
         logger.error(f"Failed to save program for user {client_id}: {e}")
@@ -163,7 +159,7 @@ async def tool_attach_gifs(ctx: RunContext[AgentDeps], exercises: list[DayExerci
                 try:
                     await Cache.workout.cache_gif_filename(ex.name, link.split("/")[-1])
                 except Exception as e:  # pragma: no cover - cache errors ignored
-                    logger.debug("cache_gif_filename failed name={} err={}", ex.name, e)
+                    logger.debug(f"cache_gif_filename failed name={ex.name} err={e}")
             new_day.exercises.append(ex_copy)
         result.append(new_day)
     return result
