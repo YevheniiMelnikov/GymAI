@@ -6,7 +6,7 @@ from loguru import logger
 from pydantic import ValidationError
 from typing import Awaitable, Callable
 
-from ai_coach.knowledge_base import KnowledgeBase
+from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from ai_coach.agent import AgentDeps, CoachAgent
 from ai_coach.application import app, security
 from ai_coach.schemas import AskRequest, MessageRequest

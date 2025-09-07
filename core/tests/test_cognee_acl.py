@@ -3,7 +3,7 @@ import asyncio
 
 import pytest
 
-import ai_coach.knowledge_base as coach
+import ai_coach.agent.knowledge.knowledge_base as coach
 
 
 def test_case_success_create_and_search(monkeypatch):

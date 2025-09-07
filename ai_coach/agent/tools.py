@@ -18,13 +18,13 @@ from core.utils.short_url import short_url
 from .base import AgentDeps
 
 if TYPE_CHECKING:  # pragma: no cover
-    from .coach import ProgramPayload
+    from ..schemas import ProgramPayload
 
 
 async def tool_get_client_context(ctx: RunContext[AgentDeps], query: str) -> dict[str, Sequence[str]]:
     """Return personal context for a client by query."""
 
-    from ai_coach.knowledge_base import KnowledgeBase
+    from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 
     client_id = ctx.deps.client_id
     logger.debug(f"tool_get_client_context client_id={client_id} query={query}")
@@ -34,7 +34,7 @@ async def tool_get_client_context(ctx: RunContext[AgentDeps], query: str) -> dic
 async def tool_search_knowledge(ctx: RunContext[AgentDeps], query: str, k: int = 6) -> list[str]:
     """Search global knowledge base with top-k limit."""
 
-    from ai_coach.knowledge_base import KnowledgeBase
+    from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 
     logger.debug(f"tool_search_knowledge query='{query[:80]}' k={k}")
     result = await KnowledgeBase.search_knowledge(query, k)

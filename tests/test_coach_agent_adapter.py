@@ -19,14 +19,12 @@ from ai_coach.agent import (
     AgentDeps,
     CoachAgent,
     ProgramAdapter,
-    ProgramPayload,
-    SubscriptionPayload,
     QAResponse,
 )
-from ai_coach.schemas import AskRequest
+from ai_coach.schemas import AskRequest, ProgramPayload, SubscriptionPayload
 from ai_coach.types import CoachMode
 from ai_coach.application import app
-from ai_coach.knowledge_base import KnowledgeBase
+from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from config.app_settings import settings
 from core.enums import CoachType
 

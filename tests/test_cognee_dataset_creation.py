@@ -1,8 +1,8 @@
 import asyncio
 from types import SimpleNamespace
 
-from ai_coach.knowledge_base import KnowledgeBase
-import ai_coach.knowledge_base as coach
+from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+import ai_coach.agent.knowledge.knowledge_base as coach
 
 
 def test_update_dataset_ensures_exists(monkeypatch):

@@ -8,8 +8,8 @@ from fastapi import FastAPI
 from fastapi.security import HTTPBasic
 from loguru import logger
 
-from ai_coach.knowledge_base import KnowledgeBase
-from ai_coach.base_knowledge_loader import KnowledgeLoader
+from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+from ai_coach.agent.knowledge.base_knowledge_loader import KnowledgeLoader
 from core.containers import create_container, set_container, get_container
 from core.services.internal import APIService
 
@@ -38,7 +38,7 @@ async def init_knowledge_base(knowledge_loader: KnowledgeLoader | None = None) -
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    from ai_coach.gdrive_knowledge_loader import GDriveDocumentLoader
+    from ai_coach.agent.knowledge.gdrive_knowledge_loader import GDriveDocumentLoader
 
     container = create_container()
     set_container(container)

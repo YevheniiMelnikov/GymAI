@@ -3,10 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
-
 from config.app_settings import settings
-from core.schemas import DayExercises, Program, QAResponse, Subscription
+from core.schemas import Program, QAResponse, Subscription
 
 from .base import AgentDeps
 from .tools import (
@@ -17,6 +15,7 @@ from .tools import (
     tool_save_program,
     tool_search_knowledge,
 )
+from ..schemas import ProgramPayload
 
 try:  # pragma: no cover - optional dependency
     from pydantic_ai import Agent, RunContext
@@ -25,52 +24,6 @@ except Exception:  # pragma: no cover - optional dependency
     Agent = None  # type: ignore[assignment]
     RunContext = Any  # type: ignore[assignment]
     OpenAIChatModel = None  # type: ignore[assignment]
-
-
-SYSTEM_PROMPT_PATH = Path(__file__).with_name("prompts") / "coach_system_prompt.txt"
-
-
-class ProgramPayload(Program):
-    """Program schema used by the agent (allows schema_version)."""
-
-    schema_version: str | None = Field(
-        default=None,
-        description="Internal schema version used by the agent; dropped before save",
-    )
-
-    @model_validator(mode="after")
-    def _validate_invariants(self) -> "ProgramPayload":
-        if not self.exercises_by_day:
-            raise ValueError("exercises_by_day must not be empty")
-        for day in self.exercises_by_day:
-            if not day.exercises:
-                raise ValueError("day exercises must not be empty")
-            for ex in day.exercises:
-                if not (ex.name and ex.sets and ex.reps):
-                    raise ValueError("exercise must have name, sets and reps")
-        if self.split_number is None:
-            self.split_number = len(self.exercises_by_day)
-        return self
-
-
-class SubscriptionPayload(BaseModel):
-    """Subscription schema produced by the agent."""
-
-    workout_days: list[str]
-    exercises: list[DayExercises]
-    wishes: str | None = None
-    schema_version: str | None = None
-
-    @model_validator(mode="after")
-    def _check(self) -> "SubscriptionPayload":
-        if not self.workout_days:
-            raise ValueError("workout_days must not be empty")
-        if not self.exercises:
-            raise ValueError("exercises must not be empty")
-        return self
-
-
-UpdatedProgramPayload = ProgramPayload
 
 
 class ProgramAdapter:
@@ -86,6 +39,7 @@ class CoachAgent:
     """PydanticAI wrapper for program generation."""
 
     _agent: Any | None = None
+    SYSTEM_PROMPT_PATH = Path(__file__).with_name("prompts") / "coach_system_prompt.txt"
 
     @classmethod
     def _get_agent(cls) -> Any:
@@ -116,7 +70,7 @@ class CoachAgent:
             @cls._agent.system_prompt
             async def coach_sys(ctx: RunContext[AgentDeps]) -> str:  # pragma: no cover - runtime config
                 lang = ctx.deps.locale or settings.DEFAULT_LANG
-                prompt = SYSTEM_PROMPT_PATH.read_text(encoding="utf-8")
+                prompt = cls.SYSTEM_PROMPT_PATH.read_text(encoding="utf-8")
                 return prompt.format(locale=lang)
 
         return cls._agent

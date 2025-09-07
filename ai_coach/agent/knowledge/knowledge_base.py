@@ -9,10 +9,10 @@ from typing import Any
 
 from loguru import logger
 
-from ai_coach.base_knowledge_loader import KnowledgeLoader
-from ai_coach.cognee_config import CogneeConfig
-from ai_coach.hash_store import HashStore
-from ai_coach.lock_cache import LockCache
+from ai_coach.agent.knowledge.base_knowledge_loader import KnowledgeLoader
+from ai_coach.agent.knowledge.cognee_config import CogneeConfig
+from ai_coach.agent.knowledge.utils.hash_store import HashStore
+from ai_coach.agent.knowledge.utils.lock_cache import LockCache
 from ai_coach.schemas import CogneeUser
 from ai_coach.types import MessageRole
 from core.exceptions import UserServiceError

@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 
-from ai_coach.cognee_config import CogneeConfig
+from ai_coach.agent.knowledge.cognee_config import CogneeConfig
 from cognee.infrastructure.files import utils as file_utils
 
 
