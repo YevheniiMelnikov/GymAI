@@ -28,7 +28,7 @@ urlpatterns = [
 
 
 def not_found_view(request, exception):
-    logger.warning("Unhandled path 404: {}", request.get_full_path())
+    logger.warning(f"Unhandled path 404: {request.get_full_path()}")
     return HttpResponseNotFound()
 
 

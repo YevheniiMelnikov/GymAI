@@ -3,13 +3,13 @@ import asyncio
 
 import pytest
 
-import ai_coach.cognee_coach as coach
+import ai_coach.knowledge_base as coach
 
 
 def test_case_success_create_and_search(monkeypatch):
     async def runner():
         user = SimpleNamespace(id="u1")
-        monkeypatch.setattr(coach.CogneeCoach, "_user", user)
+        monkeypatch.setattr(coach.KnowledgeBase, "_user", user)
         calls = {}
         cognify_calls: list[list[str]] = []
 
@@ -40,18 +40,18 @@ def test_case_success_create_and_search(monkeypatch):
         async def fake_index(*a, **k):
             pass
 
-        monkeypatch.setattr(coach.CogneeCoach, "_ensure_profile_indexed", fake_index)
+        monkeypatch.setattr(coach.KnowledgeBase, "_ensure_profile_indexed", fake_index)
 
-        await coach.CogneeCoach.save_client_message("hi", client_id=1)
+        await coach.KnowledgeBase.save_client_message("hi", client_id=1)
         await asyncio.sleep(0)
-        await coach.CogneeCoach.refresh_client_knowledge(1)
+        await coach.KnowledgeBase.refresh_client_knowledge(1)
         await asyncio.sleep(0)
-        await coach.CogneeCoach.make_request("hi", client_id=1)
+        await coach.KnowledgeBase.make_request("hi", client_id=1)
 
         assert calls["dataset_name"] == "client_1"
         assert cognify_calls[0] == ["ds1"]
         assert cognify_calls[1] == ["client_1"]
-        assert calls["search"] == ["client_1", coach.CogneeCoach.GLOBAL_DATASET]
+        assert calls["search"] == ["client_1", coach.KnowledgeBase.GLOBAL_DATASET]
 
     asyncio.run(runner())
 
@@ -59,7 +59,7 @@ def test_case_success_create_and_search(monkeypatch):
 def test_case_conflict_existing_dataset(monkeypatch):
     async def runner():
         user = SimpleNamespace(id="u2")
-        monkeypatch.setattr(coach.CogneeCoach, "_user", user)
+        monkeypatch.setattr(coach.KnowledgeBase, "_user", user)
         calls = {}
 
         async def fake_add(prompt, dataset_name=None, user=None, node_set=None):
@@ -76,7 +76,7 @@ def test_case_conflict_existing_dataset(monkeypatch):
         monkeypatch.setattr(coach.HashStore, "contains", fake_contains)
 
         with pytest.raises(coach.PermissionDeniedError):
-            await coach.CogneeCoach.save_client_message("hello", client_id=2)
+            await coach.KnowledgeBase.save_client_message("hello", client_id=2)
 
         assert calls["dataset_names"] == ["client_2"]
 

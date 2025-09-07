@@ -9,7 +9,6 @@ from typing import Any
 
 from loguru import logger
 
-from ai_coach.base_coach import BaseAICoach
 from ai_coach.base_knowledge_loader import KnowledgeLoader
 from ai_coach.cognee_config import CogneeConfig
 from ai_coach.hash_store import HashStore
@@ -54,8 +53,8 @@ def _to_user_or_none(user: Any) -> Any | None:
     return None
 
 
-class CogneeCoach(BaseAICoach):
-    """Main integration class to connect AI coach with Cognee."""
+class KnowledgeBase:
+    """Cognee-backed knowledge storage for the coach agent."""
 
     _loader: KnowledgeLoader | None = None
     _cognify_locks: LockCache = LockCache()

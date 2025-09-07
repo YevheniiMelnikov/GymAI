@@ -15,7 +15,7 @@ async def short_url(url: str) -> str:
                 text = await response.text()
                 if response.status == 200:
                     return text
-                logger.error("Failed to short url status={} text={}", response.status, text)
+                logger.error(f"Failed to short url status={response.status} text={text}")
     except Exception as exc:  # pragma: no cover - network errors
-        logger.error("TinyURL request failed: {}", exc)
+        logger.error(f"TinyURL request failed: {exc}")
     return url

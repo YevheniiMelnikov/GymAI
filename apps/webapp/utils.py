@@ -55,23 +55,16 @@ def verify_init_data(init_data: str) -> dict[str, object]:
         ok_old = False
 
     logger.debug(
-        "verify_init_data: keys={} recv_hash={} calc_new={} calc_old={} token_head={} check_len={}",
-        sorted(items.keys()),
-        received_hash[:16],
-        (calc_new or "")[:16],
-        (calc_old or "")[:16],
-        token[:12],
-        len(check_string),
+        f"verify_init_data: keys={sorted(items.keys())} "
+        f"recv_hash={received_hash[:16]} calc_new={(calc_new or '')[:16]} "
+        f"calc_old={(calc_old or '')[:16]} token_head={token[:12]} "
+        f"check_len={len(check_string)}"
     )
 
     if not (ok_new or ok_old):
         logger.warning(
-            "verify_init_data mismatch: token_head={} recv={} calc_new={} calc_old={} check={!r}",
-            token[:12],
-            received_hash,
-            calc_new,
-            calc_old,
-            check_string,
+            f"verify_init_data mismatch: token_head={token[:12]} recv={received_hash} "
+            f"calc_new={calc_new} calc_old={calc_old} check={check_string!r}"
         )
         raise ValueError("Invalid init data")
 
@@ -89,11 +82,7 @@ def verify_init_data(init_data: str) -> dict[str, object]:
 
     user = result.get("user")
     user_id = user.get("id") if isinstance(user, dict) else None
-    logger.debug(
-        "verify_init_data ok (scheme={}) for user_id={}",
-        "new" if ok_new else "old",
-        user_id,
-    )
+    logger.debug(f"verify_init_data ok (scheme={'new' if ok_new else 'old'}) for user_id={user_id}")
     return cast(dict[str, object], result)
 
 

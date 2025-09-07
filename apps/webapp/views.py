@@ -33,12 +33,12 @@ async def _auth_and_get_client(
     Returns (client | None, language, error_response | None, tg_id).
     """
     init_data: str = str(request.GET.get("init_data", ""))
-    logger.debug("Webapp request: init_data length={}", len(init_data))
+    logger.debug(f"Webapp request: init_data length={len(init_data)}")
     lang: str = "eng"
     try:
         data: dict[str, Any] = verify_init_data(init_data)
     except Exception as exc:
-        logger.warning("Init data verification failed: {} | length={}", exc, len(init_data))
+        logger.warning(f"Init data verification failed: {exc} | length={len(init_data)}")
         return None, lang, JsonResponse({"error": "unauthorized"}, status=403), 0
 
     user: dict[str, Any] = data.get("user", {})  # type: ignore[arg-type]
@@ -47,14 +47,14 @@ async def _auth_and_get_client(
     try:
         profile: Profile = await sync_to_async(ProfileRepository.get_by_telegram_id)(tg_id)
     except NotFound:
-        logger.warning("Profile not found for tg_id={}", tg_id)
+        logger.warning(f"Profile not found for tg_id={tg_id}")
         return None, lang, JsonResponse({"error": "not_found"}, status=404), tg_id
 
     lang = str(getattr(profile, "language", "eng") or "eng")
     try:
         client: ClientProfile = await sync_to_async(ClientProfileRepository.get_by_profile_id)(int(profile.pk))
     except NotFound:
-        logger.warning("Client profile not found for profile_id={}", profile.pk)
+        logger.warning(f"Client profile not found for profile_id={profile.pk}")
         return None, lang, JsonResponse({"error": "not_found"}, status=404), tg_id
 
     return client, lang, None, tg_id
@@ -67,7 +67,7 @@ def _parse_program_id(request: HttpRequest) -> Tuple[int | None, JsonResponse | 
     try:
         return int(raw), None
     except ValueError:
-        logger.warning("Invalid program_id={}", raw)
+        logger.warning(f"Invalid program_id={raw}")
         return None, JsonResponse({"error": "bad_request"}, status=400)
 
 
@@ -97,11 +97,7 @@ async def program_data(request: HttpRequest) -> JsonResponse:
         program_obj = await sync_to_async(ProgramRepository.get_latest)(int(client.pk))
 
     if program_obj is None:
-        logger.warning(
-            "Program not found for client_profile_id={} program_id={}",
-            client.pk,
-            program_id,
-        )
+        logger.warning(f"Program not found for client_profile_id={client.pk} program_id={program_id}")
         return JsonResponse({"error": "not_found"}, status=404)
 
     text: str = _format_program_text(program_obj.exercises_by_day)
@@ -128,7 +124,7 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
     try:
         programs: list[Program] = await sync_to_async(ProgramRepository.get_all)(int(client.pk))
     except Exception:
-        logger.exception("Failed to fetch programs for tg_id={}", tg_id)
+        logger.exception(f"Failed to fetch programs for tg_id={tg_id}")
         return JsonResponse({"error": "server_error"}, status=500)
 
     items = [
@@ -154,7 +150,7 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
 
     subscription: Subscription | None = await sync_to_async(SubscriptionRepository.get_latest)(int(client.pk))
     if subscription is None:
-        logger.warning("Subscription not found for client_profile_id={}", client.pk)
+        logger.warning(f"Subscription not found for client_profile_id={client.pk}")
         return JsonResponse({"error": "not_found"}, status=404)
 
     text: str = _format_program_text(subscription.exercises)
@@ -162,10 +158,10 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
 
 
 def index(request: HttpRequest) -> HttpResponse:
-    logger.info("Webapp hit: {} {}", request.method, request.get_full_path())
+    logger.info(f"Webapp hit: {request.method} {request.get_full_path()}")
     return render(request, "webapp/index.html")
 
 
 def ping(request: HttpRequest) -> HttpResponse:
-    logger.info("Webapp ping: {} {}", request.method, request.get_full_path())
+    logger.info(f"Webapp ping: {request.method} {request.get_full_path()}")
     return HttpResponse("ok")

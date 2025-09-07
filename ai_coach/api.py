@@ -6,7 +6,7 @@ from loguru import logger
 from pydantic import ValidationError
 from typing import Awaitable, Callable
 
-from ai_coach.cognee_coach import CogneeCoach
+from ai_coach.knowledge_base import KnowledgeBase
 from ai_coach.coach_agent import AgentDeps, CoachAgent
 from ai_coach.application import app, security
 from ai_coach.schemas import AskRequest, MessageRequest
@@ -67,17 +67,19 @@ async def ask(data: AskRequest, request: Request) -> Program | Subscription | QA
     try:
         agent_action = DISPATCH[mode]
     except KeyError as e:
-        logger.exception("/ask unsupported mode: {}", mode.value)
+        logger.exception(f"/ask unsupported mode: {mode.value}")
         raise HTTPException(status_code=422, detail="Unsupported mode") from e
     try:
         result = await agent_action(ctx)
         if mode == CoachMode.ask_ai:
             sources = getattr(result, "sources", []) or []
             logger.debug(
-                f"/ask agent completed request_id={data.request_id} client_id={data.client_id} mode=ask_ai answer_len={len(result.answer)} sources={(len(sources),)}",
+                f"/ask agent completed request_id={data.request_id}"
+                f" client_id={data.client_id} mode=ask_ai"
+                f" answer_len={len(result.answer)} sources={len(sources)}"
             )
-            await CogneeCoach.save_client_message(data.prompt, client_id=data.client_id)
-            await CogneeCoach.save_ai_message(result.answer, client_id=data.client_id)
+            await KnowledgeBase.save_client_message(data.prompt, client_id=data.client_id)
+            await KnowledgeBase.save_ai_message(result.answer, client_id=data.client_id)
         else:
             logger.debug(
                 f"/ask agent completed request_id={data.request_id} client_id={data.client_id} mode={mode.value}"
@@ -85,34 +87,34 @@ async def ask(data: AskRequest, request: Request) -> Program | Subscription | QA
         return result
 
     except ValidationError as e:
-        logger.exception("/ask agent validation error: {}", e)
+        logger.exception(f"/ask agent validation error: {e}")
         raise HTTPException(status_code=422, detail="Invalid response") from e
     except Exception as e:  # pragma: no cover - log unexpected errors
-        logger.exception("/ask agent failed, falling back to CogneeCoach: {}", e)
+        logger.exception(f"/ask agent failed, falling back to KnowledgeBase: {e}")
         try:
-            responses = await CogneeCoach.make_request(data.prompt, client_id=data.client_id)
-            await CogneeCoach.save_client_message(data.prompt, client_id=data.client_id)
+            responses = await KnowledgeBase.make_request(data.prompt, client_id=data.client_id)
+            await KnowledgeBase.save_client_message(data.prompt, client_id=data.client_id)
             if responses:
                 for r in responses:
-                    await CogneeCoach.save_ai_message(r, client_id=data.client_id)
+                    await KnowledgeBase.save_ai_message(r, client_id=data.client_id)
             logger.debug(
                 f"/ask completed request_id={data.request_id} client_id={data.client_id} responses={responses}"
             )
             return responses
         except Exception as e:  # pragma: no cover - log unexpected errors
-            logger.exception("/ask failed: {}", e)
+            logger.exception(f"/ask failed: {e}")
             raise HTTPException(status_code=503, detail="Service unavailable") from e
 
 
 @app.post("/messages/")
 async def save_message(data: MessageRequest) -> dict[str, str]:
-    await CogneeCoach.save_client_message(data.text, client_id=data.client_id)
+    await KnowledgeBase.save_client_message(data.text, client_id=data.client_id)
     return {"status": "ok"}
 
 
 @app.get("/knowledge/")
 async def get_knowledge(client_id: int, query: str) -> dict[str, list[str]]:
-    return await CogneeCoach.get_client_context(client_id, query)
+    return await KnowledgeBase.get_client_context(client_id, query)
 
 
 @app.post("/knowledge/refresh/")
@@ -127,5 +129,5 @@ async def refresh_knowledge(credentials: HTTPBasicCredentials = Depends(security
         refresh_external_knowledge.apply_async(queue="maintenance")  # pyrefly: ignore[not-callable]
         return {"status": "queued"}
     except Exception as e:
-        logger.exception("Failed to enqueue refresh task: {}", e)
+        logger.exception(f"Failed to enqueue refresh task: {e}")
         raise HTTPException(status_code=503, detail="Queue unavailable")
