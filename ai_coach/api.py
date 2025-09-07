@@ -20,9 +20,9 @@ from config.celery import celery_app as celery  # type: ignore
 celery.set_default()
 
 
-DispatchFunc = Callable[[AskCtx], Awaitable[object]]
+CoachAction = Callable[[AskCtx], Awaitable[object]]
 
-DISPATCH: dict[CoachMode, DispatchFunc] = {
+DISPATCH: dict[CoachMode, CoachAction] = {
     CoachMode.program: lambda ctx: CoachAgent.generate_program(ctx["prompt"], deps=ctx["deps"]),
     CoachMode.subscription: lambda ctx: CoachAgent.generate_subscription(
         ctx["prompt"],
@@ -65,12 +65,12 @@ async def ask(data: AskRequest, request: Request) -> Program | Subscription | QA
     )
     ctx["deps"] = deps
     try:
-        agent_action = DISPATCH[mode]
+        coach_agent_action = DISPATCH[mode]
     except KeyError as e:
         logger.exception(f"/ask unsupported mode: {mode.value}")
         raise HTTPException(status_code=422, detail="Unsupported mode") from e
     try:
-        result = await agent_action(ctx)
+        result = await coach_agent_action(ctx)
         if mode == CoachMode.ask_ai:
             sources = getattr(result, "sources", []) or []
             logger.debug(
