@@ -4,7 +4,6 @@ from .coach import (
     ProgramAdapter,
     QAResponse,
 )
-from ..schemas import ProgramPayload, SubscriptionPayload
 
 __all__ = [
     "AgentDeps",

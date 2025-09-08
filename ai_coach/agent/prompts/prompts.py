@@ -1,23 +1,15 @@
 from pathlib import Path
 
-TEMPLATES_DIR = Path(__file__).with_name("prompt_templates")
+PROMPTS_DIR = Path(__file__).parent
 
 
 def _load_template(name: str) -> str:
-    return (TEMPLATES_DIR / name).read_text(encoding="utf-8")
+    return (PROMPTS_DIR / name).read_text(encoding="utf-8")
 
 
-SYSTEM_PROMPT = _load_template("system_prompt.txt")
+COACH_SYSTEM_PROMPT = _load_template("coach_system_prompt.txt")
 WORKOUT_RULES = _load_template("workout_rules.txt")
 WORKOUT_PLAN_PROMPT = _load_template("workout_plan_prompt.txt")
-PROGRAM_RESPONSE_TEMPLATE = _load_template("program_response.json")
-SUBSCRIPTION_RESPONSE_TEMPLATE = _load_template("subscription_response.json")
-
-INITIAL_PROMPT = """
-    Memorize the following client profile information and use it as context for all future responses.
-    {client_data}
-    Always respond strictly in the client's language: {language}
-"""
 
 UPDATE_WORKOUT_PROMPT = """
     Your task is to update a client's workout plan based on:
@@ -47,3 +39,10 @@ UPDATE_WORKOUT_PROMPT = """
     Respond strictly in the client's language: {language}
     Only return the updated plan. Do not include commentary or explanations.
 """
+
+__all__ = [
+    "COACH_SYSTEM_PROMPT",
+    "WORKOUT_RULES",
+    "WORKOUT_PLAN_PROMPT",
+    "UPDATE_WORKOUT_PROMPT",
+]

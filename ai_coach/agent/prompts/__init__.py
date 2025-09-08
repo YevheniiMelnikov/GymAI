@@ -1,0 +1,13 @@
+from .prompts import (
+    COACH_SYSTEM_PROMPT,
+    WORKOUT_RULES,
+    WORKOUT_PLAN_PROMPT,
+    UPDATE_WORKOUT_PROMPT,
+)
+
+__all__ = [
+    "COACH_SYSTEM_PROMPT",
+    "WORKOUT_RULES",
+    "WORKOUT_PLAN_PROMPT",
+    "UPDATE_WORKOUT_PROMPT",
+]

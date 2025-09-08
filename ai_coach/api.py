@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-from fastapi import Depends, HTTPException, Request
-from fastapi.security import HTTPBasicCredentials
-from loguru import logger
-from pydantic import ValidationError
-from typing import Awaitable, Callable
+from fastapi import Depends, HTTPException, Request  # pyrefly: ignore[import-error]
+from fastapi.security import HTTPBasicCredentials  # pyrefly: ignore[import-error]
+from loguru import logger  # pyrefly: ignore[import-error]
+from pydantic import ValidationError  # pyrefly: ignore[import-error]
+from typing import Awaitable, Callable, Any
 
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from ai_coach.agent import AgentDeps, CoachAgent
+from core.cache import Cache
 from ai_coach.application import app, security
 from ai_coach.schemas import AskRequest, MessageRequest
 from ai_coach.types import AskCtx, CoachMode
@@ -58,10 +59,17 @@ async def ask(data: AskRequest, request: Request) -> Program | Subscription | QA
         "feedback": data.feedback or "",
         "language": data.language or settings.DEFAULT_LANG,
     }
+    client_name: str | None = None
+    try:
+        client = await Cache.client.get_client(data.client_id)
+        client_name = client.name
+    except Exception:  # pragma: no cover - missing cache/service
+        client_name = None
     deps = AgentDeps(
         client_id=data.client_id,
         locale=ctx["language"],
         allow_save=mode != CoachMode.ask_ai,
+        client_name=client_name,
     )
     ctx["deps"] = deps
     try:
@@ -70,7 +78,7 @@ async def ask(data: AskRequest, request: Request) -> Program | Subscription | QA
         logger.exception(f"/ask unsupported mode: {mode.value}")
         raise HTTPException(status_code=422, detail="Unsupported mode") from e
     try:
-        result = await coach_agent_action(ctx)
+        result: Any = await coach_agent_action(ctx)
         if mode == CoachMode.ask_ai:
             sources = getattr(result, "sources", []) or []
             logger.debug(

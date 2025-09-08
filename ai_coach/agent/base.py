@@ -11,6 +11,7 @@ class AgentDeps:
     client_id: int
     locale: str | None = None
     allow_save: bool = True
+    client_name: str | None = None
 
 
 class CoachAgentProtocol(Protocol):
