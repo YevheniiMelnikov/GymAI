@@ -4,22 +4,8 @@ from typing import Any, TYPE_CHECKING, TypedDict, cast
 
 from loguru import logger  # pyrefly: ignore[import-error]
 
-try:  # pragma: no cover - optional dependency
-    from pydantic_ai import RunContext  # pyrefly: ignore[import-error]
-    from pydantic_ai.toolsets.function import (
-        FunctionToolset,
-    )  # pyrefly: ignore[import-error]
-except Exception:  # pragma: no cover - optional dependency
-    RunContext = Any  # type: ignore[assignment]
-
-    class FunctionToolset:  # type: ignore[no-redef]
-        def __init__(self) -> None:
-            self.tools: list[Any] = []
-
-        def tool(self, func: Any) -> Any:
-            self.tools.append(func)
-            return func
-
+from pydantic_ai import RunContext
+from pydantic_ai.toolsets.function import FunctionToolset
 
 from core.cache import Cache
 from core.resources.exercises import exercise_dict
@@ -52,7 +38,6 @@ async def tool_get_client_context(
     query: str,
 ) -> ClientContext:
     """Return personal context for a client by query."""
-
     from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 
     client_id = ctx.deps.client_id
@@ -68,7 +53,6 @@ async def tool_search_knowledge(
     k: int = 6,
 ) -> list[str]:
     """Search global knowledge base with top-k limit."""
-
     from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 
     logger.debug(f"tool_search_knowledge query='{query[:80]}' k={k}")
@@ -83,7 +67,6 @@ async def tool_save_program(
     plan: "ProgramPayload",
 ) -> Program:
     """Persist generated plan for the current client."""
-
     from core.services import APIService
     from .coach import ProgramAdapter
 
@@ -111,7 +94,6 @@ async def tool_get_program_history(
     ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
 ) -> list[Program]:
     """Return client's previous programs."""
-
     from core.services import APIService
 
     client_id = ctx.deps.client_id
@@ -125,7 +107,6 @@ async def tool_attach_gifs(
     exercises: list[DayExercises],
 ) -> list[DayExercises]:
     """Attach GIF links to exercises if available."""
-
     client_id = ctx.deps.client_id
     logger.debug(f"tool_attach_gifs client_id={client_id}")
     try:
@@ -133,14 +114,24 @@ async def tool_attach_gifs(
     except Exception as e:  # pragma: no cover - optional service
         logger.warning(f"gif manager unavailable: {e}")
         return exercises
+
     result: list[DayExercises] = []
     for day in exercises:
         new_day = DayExercises(day=day.day, exercises=[])
         for ex in day.exercises:
-            link = await gif_manager.find_gif(ex.name, exercise_dict)
+            try:
+                link = await gif_manager.find_gif(ex.name, exercise_dict)
+            except Exception as e:
+                logger.debug(f"find_gif failed name={ex.name} err={e}")
+                link = None
+
             ex_copy = ex.model_copy()
             if link:
-                short = await short_url(link)
+                try:
+                    short = await short_url(link)
+                except Exception as e:
+                    logger.debug(f"short_url failed link={link} err={e}")
+                    short = link
                 ex_copy.gif_link = short
                 try:
                     await Cache.workout.cache_gif_filename(ex.name, link.split("/")[-1])
@@ -160,7 +151,6 @@ async def tool_create_subscription(
     wishes: str | None = None,
 ) -> Subscription:
     """Create a subscription and return its summary."""
-
     from decimal import Decimal
 
     from core.services import APIService

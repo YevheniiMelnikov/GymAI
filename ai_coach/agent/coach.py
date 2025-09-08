@@ -39,6 +39,10 @@ class CoachAgent:
 
     _agent: Any | None = None
 
+    @staticmethod
+    def _lang(deps: AgentDeps) -> str:
+        return deps.locale or settings.DEFAULT_LANG
+
     @classmethod
     def _get_agent(cls) -> Any:
         if Agent is None or OpenAIChatModel is None:
@@ -70,14 +74,14 @@ class CoachAgent:
     @classmethod
     async def generate_program(cls, prompt: str, deps: AgentDeps) -> Program:
         agent = cls._get_agent()
-        request_context = prompt
+        today = date.today().isoformat()
         formatted = WORKOUT_PLAN_PROMPT.format(
-            current_date=date.today().isoformat(),
-            request_context=request_context,
+            current_date=today,
+            request_context=prompt,
             workout_rules=WORKOUT_RULES,
-            language=deps.locale or settings.DEFAULT_LANG,
+            language=cls._lang(deps),
         )
-        user_prompt = f"MODE: program\n{formatted}".strip()
+        user_prompt = f"MODE: program\n{formatted}"
         result: Program = await agent.run(user_prompt, deps=deps, result_type=Program)
         return result
 
@@ -91,17 +95,17 @@ class CoachAgent:
         wishes: str | None = None,
     ) -> Subscription:
         agent = cls._get_agent()
-        request_parts = [prompt, f"Period: {period}", f"Workout days: {', '.join(workout_days)}"]
+        req = [prompt, f"Period: {period}", f"Workout days: {', '.join(workout_days)}"]
         if wishes:
-            request_parts.append(f"Wishes: {wishes}")
-        request_context = "\n".join(request_parts)
+            req.append(f"Wishes: {wishes}")
+        today = date.today().isoformat()
         formatted = WORKOUT_PLAN_PROMPT.format(
-            current_date=date.today().isoformat(),
-            request_context=request_context,
+            current_date=today,
+            request_context="\n".join(req),
             workout_rules=WORKOUT_RULES,
-            language=deps.locale or settings.DEFAULT_LANG,
+            language=cls._lang(deps),
         )
-        user_prompt = f"MODE: subscription\n{formatted}".strip()
+        user_prompt = f"MODE: subscription\n{formatted}"
         result: Subscription = await agent.run(
             user_prompt,
             deps=deps,
@@ -116,9 +120,9 @@ class CoachAgent:
             expected_workout=expected_workout,
             feedback=feedback,
             context=prompt,
-            language=deps.locale or settings.DEFAULT_LANG,
+            language=cls._lang(deps),
         )
-        user_prompt = ("MODE: update\n" + formatted + "\nRules:\n" + WORKOUT_RULES).strip()
+        user_prompt = f"MODE: update\n{formatted}\nRules:\n{WORKOUT_RULES}"
         result: Program = await agent.run(user_prompt, deps=deps, result_type=Program)
         return result
 
