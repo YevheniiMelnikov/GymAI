@@ -1,4 +1,4 @@
-import pytest
+import pytest  # pyrefly: ignore[import-error]
 
 from ai_coach.agent import AgentDeps
 from ai_coach.agent.tools import tool_search_knowledge

@@ -1,18 +1,24 @@
 from __future__ import annotations
 
-from pathlib import Path
+from datetime import date
 from typing import Any
 
 from config.app_settings import settings
 from core.schemas import Program, QAResponse, Subscription
 
 from .base import AgentDeps
-from .tools import get_all_tools
+from .prompts import (
+    COACH_SYSTEM_PROMPT,
+    UPDATE_WORKOUT_PROMPT,
+    WORKOUT_PLAN_PROMPT,
+    WORKOUT_RULES,
+)
+from .tools import toolset
 from ..schemas import ProgramPayload
 
 try:  # pragma: no cover - optional dependency
-    from pydantic_ai import Agent, RunContext
-    from pydantic_ai.models.openai import OpenAIChatModel
+    from pydantic_ai import Agent, RunContext  # pyrefly: ignore[import-error]
+    from pydantic_ai.models.openai import OpenAIChatModel  # pyrefly: ignore[import-error]
 except Exception:  # pragma: no cover - optional dependency
     Agent = None  # type: ignore[assignment]
     RunContext = Any  # type: ignore[assignment]
@@ -32,7 +38,6 @@ class CoachAgent:
     """PydanticAI wrapper for program generation."""
 
     _agent: Any | None = None
-    SYSTEM_PROMPT_PATH = Path(__file__).with_name("prompts") / "coach_system_prompt.txt"
 
     @classmethod
     def _get_agent(cls) -> Any:
@@ -48,23 +53,31 @@ class CoachAgent:
             cls._agent = Agent(
                 model=model,
                 deps_type=AgentDeps,
-                tools=get_all_tools(),
-                result_type=ProgramPayload,
+                tools=toolset,
                 retries=settings.COACH_AGENT_RETRIES,
             )
 
             @cls._agent.system_prompt
-            async def coach_sys(ctx: RunContext[AgentDeps]) -> str:  # pragma: no cover - runtime config
+            async def coach_sys(
+                ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
+            ) -> str:  # pragma: no cover - runtime config
                 lang = ctx.deps.locale or settings.DEFAULT_LANG
-                prompt = cls.SYSTEM_PROMPT_PATH.read_text(encoding="utf-8")
-                return prompt.format(locale=lang)
+                client_name = ctx.deps.client_name or "the client"
+                return COACH_SYSTEM_PROMPT.format(locale=lang, client_name=client_name)
 
         return cls._agent
 
     @classmethod
     async def generate_program(cls, prompt: str, deps: AgentDeps) -> Program:
         agent = cls._get_agent()
-        user_prompt = f"MODE: program\n{prompt}".strip()
+        request_context = prompt
+        formatted = WORKOUT_PLAN_PROMPT.format(
+            current_date=date.today().isoformat(),
+            request_context=request_context,
+            workout_rules=WORKOUT_RULES,
+            language=deps.locale or settings.DEFAULT_LANG,
+        )
+        user_prompt = f"MODE: program\n{formatted}".strip()
         result: Program = await agent.run(user_prompt, deps=deps, result_type=Program)
         return result
 
@@ -78,13 +91,17 @@ class CoachAgent:
         wishes: str | None = None,
     ) -> Subscription:
         agent = cls._get_agent()
-        extra = (
-            "\nMODE: subscription"
-            + f"\nPeriod: {period}"
-            + f"\nWorkout days: {', '.join(workout_days)}"
-            + f"\nWishes: {wishes or ''}"
+        request_parts = [prompt, f"Period: {period}", f"Workout days: {', '.join(workout_days)}"]
+        if wishes:
+            request_parts.append(f"Wishes: {wishes}")
+        request_context = "\n".join(request_parts)
+        formatted = WORKOUT_PLAN_PROMPT.format(
+            current_date=date.today().isoformat(),
+            request_context=request_context,
+            workout_rules=WORKOUT_RULES,
+            language=deps.locale or settings.DEFAULT_LANG,
         )
-        user_prompt = (prompt + extra).strip()
+        user_prompt = f"MODE: subscription\n{formatted}".strip()
         result: Subscription = await agent.run(
             user_prompt,
             deps=deps,
@@ -95,8 +112,13 @@ class CoachAgent:
     @classmethod
     async def update_program(cls, prompt: str, expected_workout: str, feedback: str, deps: AgentDeps) -> Program:
         agent = cls._get_agent()
-        extra = "\nMODE: update" + f"\n--- Expected Workout ---\n{expected_workout}" + f"\n--- Feedback ---\n{feedback}"
-        user_prompt = (prompt + extra).strip()
+        formatted = UPDATE_WORKOUT_PROMPT.format(
+            expected_workout=expected_workout,
+            feedback=feedback,
+            context=prompt,
+            language=deps.locale or settings.DEFAULT_LANG,
+        )
+        user_prompt = ("MODE: update\n" + formatted + "\nRules:\n" + WORKOUT_RULES).strip()
         result: Program = await agent.run(user_prompt, deps=deps, result_type=Program)
         return result
 

@@ -1,20 +1,29 @@
 from __future__ import annotations
 
-from typing import Any, Sequence, TYPE_CHECKING, Callable
-import inspect
-import sys
+from typing import Any, TYPE_CHECKING, TypedDict, cast
 
-from loguru import logger
+from loguru import logger  # pyrefly: ignore[import-error]
 
 try:  # pragma: no cover - optional dependency
-    from pydantic_ai import RunContext
+    from pydantic_ai import RunContext  # pyrefly: ignore[import-error]
+    from pydantic_ai.toolsets.function import (
+        FunctionToolset,
+    )  # pyrefly: ignore[import-error]
 except Exception:  # pragma: no cover - optional dependency
     RunContext = Any  # type: ignore[assignment]
+
+    class FunctionToolset:  # type: ignore[no-redef]
+        def __init__(self) -> None:
+            self.tools: list[Any] = []
+
+        def tool(self, func: Any) -> Any:
+            self.tools.append(func)
+            return func
+
 
 from core.cache import Cache
 from core.resources.exercises import exercise_dict
 from core.schemas import DayExercises, Program, Subscription
-from core.services import get_gif_manager
 from core.utils.short_url import short_url
 
 from .base import AgentDeps
@@ -22,18 +31,42 @@ from .base import AgentDeps
 if TYPE_CHECKING:  # pragma: no cover
     from ..schemas import ProgramPayload
 
+try:  # pragma: no cover - optional dependency
+    from core.services import get_gif_manager
+except Exception:  # pragma: no cover - no gif service
 
-async def tool_get_client_context(ctx: RunContext[AgentDeps], query: str) -> dict[str, Sequence[str]]:
+    def get_gif_manager() -> Any:  # type: ignore[override]
+        raise RuntimeError("gif manager unavailable")
+
+
+class ClientContext(TypedDict):
+    messages: list[str]
+
+
+toolset = FunctionToolset()
+
+
+@toolset.tool
+async def tool_get_client_context(
+    ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
+    query: str,
+) -> ClientContext:
     """Return personal context for a client by query."""
 
     from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 
     client_id = ctx.deps.client_id
     logger.debug(f"tool_get_client_context client_id={client_id} query={query}")
-    return await KnowledgeBase.get_client_context(client_id, query)
+    data = await KnowledgeBase.get_client_context(client_id, query)
+    return cast(ClientContext, data)
 
 
-async def tool_search_knowledge(ctx: RunContext[AgentDeps], query: str, k: int = 6) -> list[str]:
+@toolset.tool
+async def tool_search_knowledge(
+    ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
+    query: str,
+    k: int = 6,
+) -> list[str]:
     """Search global knowledge base with top-k limit."""
 
     from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
@@ -44,7 +77,11 @@ async def tool_search_knowledge(ctx: RunContext[AgentDeps], query: str, k: int =
     return result
 
 
-async def tool_save_program(ctx: RunContext[AgentDeps], plan: "ProgramPayload") -> Program:
+@toolset.tool
+async def tool_save_program(
+    ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
+    plan: "ProgramPayload",
+) -> Program:
     """Persist generated plan for the current client."""
 
     from core.services import APIService
@@ -69,7 +106,10 @@ async def tool_save_program(ctx: RunContext[AgentDeps], plan: "ProgramPayload") 
         raise
 
 
-async def tool_get_program_history(ctx: RunContext[AgentDeps]) -> list[Program]:
+@toolset.tool
+async def tool_get_program_history(
+    ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
+) -> list[Program]:
     """Return client's previous programs."""
 
     from core.services import APIService
@@ -79,12 +119,20 @@ async def tool_get_program_history(ctx: RunContext[AgentDeps]) -> list[Program]:
     return await APIService.workout.get_all_programs(client_id)
 
 
-async def tool_attach_gifs(ctx: RunContext[AgentDeps], exercises: list[DayExercises]) -> list[DayExercises]:
+@toolset.tool
+async def tool_attach_gifs(
+    ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
+    exercises: list[DayExercises],
+) -> list[DayExercises]:
     """Attach GIF links to exercises if available."""
 
     client_id = ctx.deps.client_id
     logger.debug(f"tool_attach_gifs client_id={client_id}")
-    gif_manager = get_gif_manager()
+    try:
+        gif_manager = get_gif_manager()
+    except Exception as e:  # pragma: no cover - optional service
+        logger.warning(f"gif manager unavailable: {e}")
+        return exercises
     result: list[DayExercises] = []
     for day in exercises:
         new_day = DayExercises(day=day.day, exercises=[])
@@ -103,8 +151,9 @@ async def tool_attach_gifs(ctx: RunContext[AgentDeps], exercises: list[DayExerci
     return result
 
 
+@toolset.tool
 async def tool_create_subscription(
-    ctx: RunContext[AgentDeps],
+    ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
     period: str,
     workout_days: list[str],
     exercises: list[DayExercises],
@@ -151,15 +200,3 @@ async def tool_create_subscription(
         "payment_date": payment_date,
     }
     return Subscription.model_validate(data)
-
-
-def get_all_tools(include: Callable[[str, Callable[..., Any]], bool] | None = None) -> list[Callable[..., Any]]:
-    module = sys.modules[__name__]
-    funcs: list[Callable[..., Any]] = []
-    for name, obj in inspect.getmembers(module, inspect.iscoroutinefunction):
-        if not name.startswith("tool_"):
-            continue
-        if include is None or include(name, obj):
-            funcs.append(obj)
-    funcs.sort(key=lambda f: f.__name__)
-    return funcs
