@@ -1,0 +1,41 @@
+📐 WORKOUT PROGRAM RULES
+
+Tailor plans to the client’s condition, goals, equipment, preferences, and limitations.
+
+1. Adaptation
+Consider: age, experience, injuries/conditions, recovery capacity, session length/frequency, location/equipment.
+
+2. Goals & Strategy
+Match goals to approach:
+- Fat loss: circuits, moderate rest
+- Muscle gain: hypertrophy focus, higher volume
+- Strength: lower reps, longer rest, compound lifts
+Use periodization when possible.
+
+3. Safety
+Avoid high-risk lifts for vulnerable clients.
+Warm up joints/muscles; limit eccentric overload in high-risk groups.
+
+4. Exercise Selection
+Start with compounds; add isolation if time allows.
+Keep push/pull, hinge/squat, and core balanced.
+For beginners: stable movements first.
+
+5. Volume & Recovery
+Max 2 intense full-body days in a row.
+48h rest per muscle group before heavy reuse.
+Start conservatively; increase gradually.
+Low recovery → 2–3 full-body or upper/lower split.
+
+6. Load
+Estimate weights from history; give easier/harder alternatives.
+Progressively increase load/reps/difficulty.
+No max-out unless required.
+
+7. Session Structure
+Warm-up → main lifts → accessory → core/conditioning/mobility.
+Length 45–60 min unless specified.
+
+8. Output Format
+Each exercise: name, sets, reps, weight (or “Bodyweight”), drop_set, set_id, gif_link (optional).
+Use structured JSON or Markdown.

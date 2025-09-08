@@ -7,14 +7,7 @@ from config.app_settings import settings
 from core.schemas import Program, QAResponse, Subscription
 
 from .base import AgentDeps
-from .tools import (
-    tool_attach_gifs,
-    tool_create_subscription,
-    tool_get_client_context,
-    tool_get_program_history,
-    tool_save_program,
-    tool_search_knowledge,
-)
+from .tools import get_all_tools
 from ..schemas import ProgramPayload
 
 try:  # pragma: no cover - optional dependency
@@ -55,14 +48,7 @@ class CoachAgent:
             cls._agent = Agent(
                 model=model,
                 deps_type=AgentDeps,
-                tools=[
-                    tool_get_client_context,
-                    tool_search_knowledge,
-                    tool_get_program_history,
-                    tool_attach_gifs,
-                    tool_save_program,
-                    tool_create_subscription,
-                ],
+                tools=get_all_tools(),
                 result_type=ProgramPayload,
                 retries=settings.COACH_AGENT_RETRIES,
             )

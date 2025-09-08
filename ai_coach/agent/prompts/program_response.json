@@ -1,0 +1,27 @@
+{
+  "days": [
+    {
+      "day": "day_1",
+      "exercises": [
+        {
+          "name": "Bench Press",
+          "sets": "4",
+          "reps": "8",
+          "gif_link": null,
+          "weight": "80",
+          "set_id": null,
+          "drop_set": false
+        },
+        {
+          "name": "Incline Dumbbell Press",
+          "sets": "3",
+          "reps": "10",
+          "gif_link": null,
+          "weight": "24",
+          "set_id": null,
+          "drop_set": false
+        }
+      ]
+    }
+  ]
+}

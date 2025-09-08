@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Sequence, TYPE_CHECKING
+from typing import Any, Sequence, TYPE_CHECKING, Callable
+import inspect
+import sys
 
 from loguru import logger
 
@@ -149,3 +151,15 @@ async def tool_create_subscription(
         "payment_date": payment_date,
     }
     return Subscription.model_validate(data)
+
+
+def get_all_tools(include: Callable[[str, Callable[..., Any]], bool] | None = None) -> list[Callable[..., Any]]:
+    module = sys.modules[__name__]
+    funcs: list[Callable[..., Any]] = []
+    for name, obj in inspect.getmembers(module, inspect.iscoroutinefunction):
+        if not name.startswith("tool_"):
+            continue
+        if include is None or include(name, obj):
+            funcs.append(obj)
+    funcs.sort(key=lambda f: f.__name__)
+    return funcs
