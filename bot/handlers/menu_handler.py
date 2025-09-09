@@ -46,7 +46,7 @@ from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
 from core.services import APIService
 from bot.keyboards import payment_kb
 from bot.utils.credits import available_packages
-from bot.ai_coach.utils import generate_workout_plan
+from bot.utils.ai_coach import generate_workout_plan
 from core.enums import WorkoutPlanType, WorkoutType
 from bot.utils.credits import available_ai_services
 from bot.utils.exercises import format_program

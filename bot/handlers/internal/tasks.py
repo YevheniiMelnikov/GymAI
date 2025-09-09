@@ -15,7 +15,7 @@ from core.enums import CoachType, WorkoutPlanType
 from bot.utils.chat import send_message
 from aiogram.enums import ParseMode
 from core.services import APIService
-from bot.ai_coach.utils import process_workout_plan_result
+from bot.utils.ai_coach import process_workout_plan_result
 from core.schemas import Subscription
 from cognee.api.v1.prune import prune  # pyrefly: ignore[import-error]
 
