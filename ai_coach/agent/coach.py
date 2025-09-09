@@ -13,10 +13,11 @@ from core.schemas import Program, QAResponse, Subscription
 from .base import AgentDeps
 from .prompts import (
     COACH_SYSTEM_PROMPT,
-    UPDATE_WORKOUT_PROMPT,
-    WORKOUT_PLAN_PROMPT,
-    WORKOUT_RULES,
+    UPDATE_WORKOUT,
+    GENERATE_WORKOUT,
+    COACH_INSTRUCTIONS,
 )
+
 from .tools import toolset
 from ..schemas import ProgramPayload
 
@@ -60,8 +61,9 @@ class CoachAgent:
         cls._agent = Agent(
             model=model,
             deps_type=AgentDeps,
-            tools=toolset,
+            toolsets=[toolset],
             retries=settings.COACH_AGENT_RETRIES,
+            system_prompt=COACH_SYSTEM_PROMPT,
         )
 
         @cls._agent.system_prompt
@@ -70,7 +72,7 @@ class CoachAgent:
         ) -> str:  # pragma: no cover - runtime config
             lang = ctx.deps.locale or settings.DEFAULT_LANG
             client_name = ctx.deps.client_name or "the client"
-            return COACH_SYSTEM_PROMPT.format(locale=lang, client_name=client_name)
+            return f"Client's name: {client_name}\nClient's language: {lang}"
 
         return cls._agent
 
@@ -106,10 +108,10 @@ class CoachAgent:
         if wishes:
             context_lines.append(f"Wishes: {wishes}")
         mode = "program" if result_type is Program else "subscription"
-        formatted = WORKOUT_PLAN_PROMPT.format(
+        formatted = GENERATE_WORKOUT.format(
             current_date=today,
             request_context="\n".join(context_lines),
-            workout_rules=WORKOUT_RULES,
+            workout_rules=COACH_INSTRUCTIONS,
             language=cls._lang(deps),
         )
         user_prompt = f"MODE: {mode}\n{formatted}"
@@ -133,13 +135,13 @@ class CoachAgent:
             context_lines.append(f"Workout type: {workout_type.value}")
         if prompt:
             context_lines.append(prompt)
-        formatted = UPDATE_WORKOUT_PROMPT.format(
+        formatted = UPDATE_WORKOUT.format(
             expected_workout=expected_workout,
             feedback=feedback,
             context="\n".join(context_lines),
             language=cls._lang(deps),
         )
-        user_prompt = f"MODE: update\n{formatted}\nRules:\n{WORKOUT_RULES}"
+        user_prompt = f"MODE: update\n{formatted}\nRules:\n{COACH_INSTRUCTIONS}"
         result: Program | Subscription = await agent.run(user_prompt, deps=deps, result_type=result_type)
         return result
 
