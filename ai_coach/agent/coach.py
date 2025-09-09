@@ -1,5 +1,10 @@
+from __future__ import annotations
+
+import os
 from datetime import date
 from typing import Any
+
+from pydantic_ai.settings import ModelSettings
 
 from config.app_settings import settings
 from core.enums import WorkoutType
@@ -38,31 +43,41 @@ class CoachAgent:
         return deps.locale or settings.DEFAULT_LANG
 
     @classmethod
-    def _get_agent(cls) -> Any:
+    def _init_agent(cls) -> Any:
         if Agent is None or OpenAIChatModel is None:
             raise RuntimeError("pydantic_ai package is required")
+
+        os.environ.setdefault("OPENAI_API_KEY", settings.LLM_API_KEY)
+        os.environ.setdefault("OPENAI_BASE_URL", settings.LLM_API_URL)
+
+        model = OpenAIChatModel(
+            model_name=settings.LLM_MODEL,
+            provider=settings.LLM_PROVIDER,
+            settings=ModelSettings(
+                timeout=float(settings.COACH_AGENT_TIMEOUT),
+            ),
+        )
+        cls._agent = Agent(
+            model=model,
+            deps_type=AgentDeps,
+            tools=toolset,
+            retries=settings.COACH_AGENT_RETRIES,
+        )
+
+        @cls._agent.system_prompt
+        async def coach_sys(
+            ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
+        ) -> str:  # pragma: no cover - runtime config
+            lang = ctx.deps.locale or settings.DEFAULT_LANG
+            client_name = ctx.deps.client_name or "the client"
+            return COACH_SYSTEM_PROMPT.format(locale=lang, client_name=client_name)
+
+        return cls._agent
+
+    @classmethod
+    def _get_agent(cls) -> Any:
         if cls._agent is None:
-            model = OpenAIChatModel(
-                model_name=settings.LLM_MODEL,
-                api_key=settings.LLM_API_KEY,
-                base_url=settings.LLM_API_URL,
-                timeout=settings.COACH_AGENT_TIMEOUT,
-            )
-            cls._agent = Agent(
-                model=model,
-                deps_type=AgentDeps,
-                tools=toolset,
-                retries=settings.COACH_AGENT_RETRIES,
-            )
-
-            @cls._agent.system_prompt
-            async def coach_sys(
-                ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
-            ) -> str:  # pragma: no cover - runtime config
-                lang = ctx.deps.locale or settings.DEFAULT_LANG
-                client_name = ctx.deps.client_name or "the client"
-                return COACH_SYSTEM_PROMPT.format(locale=lang, client_name=client_name)
-
+            return cls._init_agent()
         return cls._agent
 
     @classmethod
