@@ -70,49 +70,45 @@ class CoachAgent:
         return cls._agent
 
     @classmethod
-    async def generate_program(cls, prompt: str, deps: AgentDeps) -> Program:
-        agent = cls._get_agent()
-        today = date.today().isoformat()
-        formatted = WORKOUT_PLAN_PROMPT.format(
-            current_date=today,
-            request_context=prompt,
-            workout_rules=WORKOUT_RULES,
-            language=cls._lang(deps),
-        )
-        user_prompt = f"MODE: program\n{formatted}"
-        result: Program = await agent.run(user_prompt, deps=deps, result_type=Program)
-        return result
-
-    @classmethod
-    async def generate_subscription(
+    async def generate_workout_plan(
         cls,
         prompt: str,
-        period: str,
-        workout_days: list[str],
         deps: AgentDeps,
+        *,
+        period: str | None = None,
+        workout_days: list[str] | None = None,
         wishes: str | None = None,
-    ) -> Subscription:
+        result_type: type[Program] | type[Subscription],
+    ) -> Program | Subscription:
         agent = cls._get_agent()
-        req = [prompt, f"Period: {period}", f"Workout days: {', '.join(workout_days)}"]
-        if wishes:
-            req.append(f"Wishes: {wishes}")
         today = date.today().isoformat()
+        context_lines = [prompt]
+        if period:
+            context_lines.append(f"Period: {period}")
+        if workout_days:
+            context_lines.append(f"Workout days: {', '.join(workout_days)}")
+        if wishes:
+            context_lines.append(f"Wishes: {wishes}")
+        mode = "program" if result_type is Program else "subscription"
         formatted = WORKOUT_PLAN_PROMPT.format(
             current_date=today,
-            request_context="\n".join(req),
+            request_context="\n".join(context_lines),
             workout_rules=WORKOUT_RULES,
             language=cls._lang(deps),
         )
-        user_prompt = f"MODE: subscription\n{formatted}"
-        result: Subscription = await agent.run(
-            user_prompt,
-            deps=deps,
-            result_type=Subscription,
-        )
+        user_prompt = f"MODE: {mode}\n{formatted}"
+        result: Program | Subscription = await agent.run(user_prompt, deps=deps, result_type=result_type)
         return result
 
     @classmethod
-    async def update_program(cls, prompt: str, expected_workout: str, feedback: str, deps: AgentDeps) -> Program:
+    async def update_workout_plan(
+        cls,
+        prompt: str,
+        expected_workout: str,
+        feedback: str,
+        deps: AgentDeps,
+        result_type: type[Program] | type[Subscription] = Subscription,
+    ) -> Program | Subscription:
         agent = cls._get_agent()
         formatted = UPDATE_WORKOUT_PROMPT.format(
             expected_workout=expected_workout,
@@ -121,7 +117,7 @@ class CoachAgent:
             language=cls._lang(deps),
         )
         user_prompt = f"MODE: update\n{formatted}\nRules:\n{WORKOUT_RULES}"
-        result: Program = await agent.run(user_prompt, deps=deps, result_type=Program)
+        result: Program | Subscription = await agent.run(user_prompt, deps=deps, result_type=result_type)
         return result
 
     @classmethod

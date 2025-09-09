@@ -30,5 +30,6 @@ class AskCtx(TypedDict):
     workout_days: list[str]
     expected_workout: str
     feedback: str
+    wishes: str
     language: str
     deps: NotRequired["AgentDeps"]

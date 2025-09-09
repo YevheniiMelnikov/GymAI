@@ -25,10 +25,6 @@ class AiCoachService(APIClient):
         client_id: int,
         language: str | None = None,
         mode: Literal["ask_ai"],
-        period: str | None = None,
-        workout_days: list[str] | None = None,
-        expected_workout: str | None = None,
-        feedback: str | None = None,
         request_id: str | None = None,
         use_agent_header: bool = False,
     ) -> QAResponse | None: ...
@@ -45,6 +41,7 @@ class AiCoachService(APIClient):
         workout_days: list[str] | None = None,
         expected_workout: str | None = None,
         feedback: str | None = None,
+        wishes: str | None = None,
         request_id: str | None = None,
         use_agent_header: bool = False,
     ) -> Program | None: ...
@@ -59,8 +56,7 @@ class AiCoachService(APIClient):
         mode: Literal["subscription"],
         period: str | None = None,
         workout_days: list[str] | None = None,
-        expected_workout: str | None = None,
-        feedback: str | None = None,
+        wishes: str | None = None,
         request_id: str | None = None,
         use_agent_header: bool = False,
     ) -> Subscription | None: ...
@@ -76,6 +72,7 @@ class AiCoachService(APIClient):
         workout_days: list[str] | None = None,
         expected_workout: str | None = None,
         feedback: str | None = None,
+        wishes: str | None = None,
         request_id: str | None = None,
         use_agent_header: bool = False,
     ) -> Any:
@@ -89,16 +86,21 @@ class AiCoachService(APIClient):
             workout_days=workout_days,
             expected_workout=expected_workout,
             feedback=feedback,
+            wishes=wishes,
             request_id=request_id,
         )
-        headers: dict[str, str] | None = None
+        headers: dict[str, str] = {}
         if request_id:
-            headers = {"X-Request-ID": request_id}
+            headers["X-Request-ID"] = request_id
         if use_agent_header:
-            headers = {**(headers or {}), "X-Agent": "pydanticai"}
+            headers["X-Agent"] = "pydanticai"
         logger.debug(f"AI coach ask request_id={request_id} client_id={client_id}")
         status, data = await self._api_request(
-            "post", url, request.model_dump(), headers=headers, timeout=self.settings.AI_COACH_TIMEOUT
+            "post",
+            url,
+            request.model_dump(exclude_none=True),
+            headers=headers or None,
+            timeout=self.settings.AI_COACH_TIMEOUT,
         )
         logger.debug(f"AI coach ask response request_id={request_id} HTTP={status}: {data}")
         if status == 200:

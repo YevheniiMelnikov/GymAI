@@ -15,15 +15,12 @@ settings_mod = types.ModuleType("config.app_settings")
 settings_mod.settings = types.SimpleNamespace(EMAIL="e", TG_SUPPORT_CONTACT="t")
 sys.modules["config.app_settings"] = settings_mod
 
-from core.enums import PaymentStatus
-from core.payment.strategies import FailurePayment, SuccessPayment
-
 
 class DummyCache:
     def __init__(self) -> None:
         self.payment = types.SimpleNamespace(calls=[])
 
-        async def set_status(client_id: int, service_type: str, status: PaymentStatus) -> None:
+        async def set_status(client_id: int, service_type: str, status: Any) -> None:
             self.payment.calls.append((client_id, service_type, status))
 
         self.payment.set_status = set_status
@@ -64,6 +61,9 @@ class CreditTopupStub:
 
 @pytest.mark.asyncio
 async def test_success_payment_strategy() -> None:
+    from core.enums import PaymentStatus
+    from core.payment.strategies import SuccessPayment
+
     cache = DummyCache()
     profile_service = DummyProfileService(profile=types.SimpleNamespace(language="eng"))
     log: list[str] = []
@@ -90,6 +90,9 @@ async def test_success_payment_strategy() -> None:
 
 @pytest.mark.asyncio
 async def test_failure_payment_strategy() -> None:
+    from core.enums import PaymentStatus
+    from core.payment.strategies import FailurePayment
+
     cache = DummyCache()
     profile_service = DummyProfileService(profile=types.SimpleNamespace(language="eng"))
     log: list[str] = []

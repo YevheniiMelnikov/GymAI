@@ -22,18 +22,26 @@ celery.set_default()
 CoachAction = Callable[[AskCtx], Awaitable[object]]
 
 DISPATCH: dict[CoachMode, CoachAction] = {
-    CoachMode.program: lambda ctx: CoachAgent.generate_program(ctx["prompt"], deps=ctx["deps"]),
-    CoachMode.subscription: lambda ctx: CoachAgent.generate_subscription(
+    CoachMode.program: lambda ctx: CoachAgent.generate_workout_plan(
         ctx["prompt"],
+        deps=ctx["deps"],
+        wishes=ctx["wishes"],
+        result_type=Program,
+    ),
+    CoachMode.subscription: lambda ctx: CoachAgent.generate_workout_plan(
+        ctx["prompt"],
+        deps=ctx["deps"],
         period=ctx["period"],
         workout_days=ctx["workout_days"],
-        deps=ctx["deps"],
+        wishes=ctx["wishes"],
+        result_type=Subscription,
     ),
-    CoachMode.update: lambda ctx: CoachAgent.update_program(
+    CoachMode.update: lambda ctx: CoachAgent.update_workout_plan(
         ctx["prompt"],
         expected_workout=ctx["expected_workout"],
         feedback=ctx["feedback"],
         deps=ctx["deps"],
+        result_type=Program,
     ),
     CoachMode.ask_ai: lambda ctx: CoachAgent.answer_question(ctx["prompt"], deps=ctx["deps"]),
 }
@@ -55,6 +63,7 @@ async def ask(data: AskRequest, request: Request) -> Program | Subscription | QA
         "workout_days": data.workout_days or [],
         "expected_workout": data.expected_workout or "",
         "feedback": data.feedback or "",
+        "wishes": data.wishes or "",
         "language": data.language or settings.DEFAULT_LANG,
     }
     client_name: str | None = None

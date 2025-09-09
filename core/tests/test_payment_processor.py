@@ -44,9 +44,6 @@ sys.modules["core.services.gsheets_service"] = gsheets_mod
 sys.modules.setdefault("bot.utils.profiles", types.ModuleType("bot.utils.profiles"))
 sys.modules["bot.utils.profiles"].get_assigned_coach = lambda *a, **k: None
 
-from core.enums import PaymentStatus
-from core.payment import PaymentProcessor
-
 
 class DummyStrategy:
     def __init__(self) -> None:
@@ -66,6 +63,9 @@ class DummyNotifier:
 
 @pytest.mark.asyncio
 async def test_process_payment_invokes_strategy() -> None:
+    from core.enums import PaymentStatus
+    from core.payment import PaymentProcessor
+
     strategy = DummyStrategy()
     client = types.SimpleNamespace(id=1, profile=1)
 
@@ -114,6 +114,9 @@ async def test_process_payment_invokes_strategy() -> None:
 
 @pytest.mark.asyncio
 async def test_process_payment_skips_when_processed() -> None:
+    from core.enums import PaymentStatus
+    from core.payment import PaymentProcessor
+
     called = False
 
     async def get_client(profile_id: int):  # pragma: no cover - should not run
@@ -152,6 +155,9 @@ async def test_process_payment_skips_when_processed() -> None:
 
 @pytest.mark.asyncio
 async def test_process_payment_no_strategy() -> None:
+    from core.enums import PaymentStatus
+    from core.payment import PaymentProcessor
+
     client = types.SimpleNamespace(id=1, profile=1)
 
     async def get_client(profile_id: int):

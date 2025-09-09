@@ -14,26 +14,26 @@ class AgentDeps:
 
 class CoachAgentProtocol(Protocol):
     @classmethod
-    async def generate_program(cls, prompt: str, deps: AgentDeps) -> Program: ...
-
-    @classmethod
-    async def generate_subscription(
+    async def generate_workout_plan(
         cls,
         prompt: str,
-        period: str,
-        workout_days: list[str],
         deps: AgentDeps,
+        *,
+        period: str | None = None,
+        workout_days: list[str] | None = None,
         wishes: str | None = None,
-    ) -> Subscription: ...
+        result_type: type[Program] | type[Subscription],
+    ) -> Program | Subscription: ...
 
     @classmethod
-    async def update_program(
+    async def update_workout_plan(
         cls,
         prompt: str,
         expected_workout: str,
         feedback: str,
         deps: AgentDeps,
-    ) -> Program: ...
+        result_type: type[Program] | type[Subscription] = Subscription,
+    ) -> Program | Subscription: ...
 
     @classmethod
     async def answer_question(cls, prompt: str, deps: AgentDeps) -> QAResponse: ...
