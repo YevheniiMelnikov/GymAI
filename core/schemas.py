@@ -193,6 +193,7 @@ class AiCoachAskRequest(BaseModel):
     workout_days: list[str] | None = None
     expected_workout: str | None = None
     feedback: str | None = None
+    wishes: str | None = None
     request_id: str | None = None
 
 

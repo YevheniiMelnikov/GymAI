@@ -39,14 +39,16 @@ def _sample_subscription() -> Subscription:
 
 @pytest.mark.asyncio
 async def test_program_mode(monkeypatch):
-    async def fake_generate(prompt, deps):
+    async def fake_generate(prompt, deps, **kwargs):
+        assert kwargs.get("wishes") == "w"
+        assert kwargs.get("result_type") is Program
         return _sample_program()
 
-    monkeypatch.setattr(CoachAgent, "generate_program", staticmethod(fake_generate))
+    monkeypatch.setattr(CoachAgent, "generate_workout_plan", staticmethod(fake_generate))
     async with AsyncClient(app=app, base_url="http://test") as ac:
         resp = await ac.post(
             "/ask/",
-            json={"client_id": 1, "prompt": "p", "mode": "program"},
+            json={"client_id": 1, "prompt": "p", "mode": "program", "wishes": "w"},
             headers={"X-Agent": "pydanticai"},
         )
     assert resp.status_code == 200
@@ -55,14 +57,18 @@ async def test_program_mode(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_subscription_mode(monkeypatch):
-    async def fake_generate(prompt, period, workout_days, deps, wishes=None):
+    async def fake_generate(prompt, deps, **kwargs):
+        assert kwargs.get("period") == "1m"
+        assert kwargs.get("workout_days") == ["mon"]
+        assert kwargs.get("wishes") == "w"
+        assert kwargs.get("result_type") is Subscription
         return _sample_subscription()
 
-    monkeypatch.setattr(CoachAgent, "generate_subscription", staticmethod(fake_generate))
+    monkeypatch.setattr(CoachAgent, "generate_workout_plan", staticmethod(fake_generate))
     async with AsyncClient(app=app, base_url="http://test") as ac:
         resp = await ac.post(
             "/ask/",
-            json={"client_id": 1, "prompt": "p", "mode": "subscription"},
+            json={"client_id": 1, "prompt": "p", "mode": "subscription", "wishes": "w"},
             headers={"X-Agent": "pydanticai"},
         )
     assert resp.status_code == 200
@@ -71,10 +77,11 @@ async def test_subscription_mode(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_update_mode(monkeypatch):
-    async def fake_update(prompt, expected_workout, feedback, deps):
+    async def fake_update(prompt, expected_workout, feedback, deps, result_type=None):
+        assert result_type is Program
         return _sample_program()
 
-    monkeypatch.setattr(CoachAgent, "update_program", staticmethod(fake_update))
+    monkeypatch.setattr(CoachAgent, "update_workout_plan", staticmethod(fake_update))
     async with AsyncClient(app=app, base_url="http://test") as ac:
         resp = await ac.post(
             "/ask/",

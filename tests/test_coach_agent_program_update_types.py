@@ -6,7 +6,7 @@ from core.schemas import DayExercises, Exercise, Program, Subscription
 
 
 @pytest.mark.asyncio
-async def test_generate_program_returns_program(monkeypatch):
+async def test_generate_plan_returns_program(monkeypatch):
     async def fake_run(prompt, deps, result_type=None):
         assert "MODE: program" in prompt
         assert "WORKOUT PROGRAM RULES" in prompt
@@ -22,12 +22,12 @@ async def test_generate_program_returns_program(monkeypatch):
 
     monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: types.SimpleNamespace(run=fake_run)))
     deps = AgentDeps(client_id=1)
-    result = await CoachAgent.generate_program("hi", deps)
+    result = await CoachAgent.generate_workout_plan("hi", deps, result_type=Program)
     assert isinstance(result, Program)
 
 
 @pytest.mark.asyncio
-async def test_update_program_returns_program(monkeypatch):
+async def test_update_workout_plan_returns_program(monkeypatch):
     async def fake_run(prompt, deps, result_type=None):
         assert "MODE: update" in prompt
         assert "Client Feedback" in prompt
@@ -43,12 +43,12 @@ async def test_update_program_returns_program(monkeypatch):
 
     monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: types.SimpleNamespace(run=fake_run)))
     deps = AgentDeps(client_id=1)
-    result = await CoachAgent.update_program("hi", "exp", "fb", deps)
+    result = await CoachAgent.update_workout_plan("hi", "exp", "fb", deps, result_type=Program)
     assert isinstance(result, Program)
 
 
 @pytest.mark.asyncio
-async def test_generate_subscription_returns_subscription(monkeypatch):
+async def test_generate_plan_returns_subscription(monkeypatch):
     async def fake_run(prompt, deps, result_type=None):
         assert "MODE: subscription" in prompt
         assert "WORKOUT PROGRAM RULES" in prompt
@@ -67,5 +67,11 @@ async def test_generate_subscription_returns_subscription(monkeypatch):
 
     monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: types.SimpleNamespace(run=fake_run)))
     deps = AgentDeps(client_id=1)
-    result = await CoachAgent.generate_subscription("hi", "1m", ["mon"], deps)
+    result = await CoachAgent.generate_workout_plan(
+        "hi",
+        deps,
+        period="1m",
+        workout_days=["mon"],
+        result_type=Subscription,
+    )
     assert isinstance(result, Subscription)

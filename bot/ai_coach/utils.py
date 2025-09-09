@@ -21,6 +21,7 @@ async def generate_program(
         client_id=client.id,
         language=language,
         mode="program",
+        wishes=wishes,
         request_id=request_id,
     )
     if not data:
@@ -51,6 +52,7 @@ async def generate_subscription(
         mode="subscription",
         period=period,
         workout_days=workout_days,
+        wishes=wishes,
     )
     if not data:
         logger.error(f"Subscription generation failed client_id={client.id}")
