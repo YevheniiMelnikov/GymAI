@@ -46,7 +46,8 @@ from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
 from core.services import APIService
 from bot.keyboards import payment_kb
 from bot.utils.credits import available_packages
-from bot.ai_coach.utils import generate_subscription, generate_program
+from bot.ai_coach.utils import generate_workout_plan
+from core.enums import WorkoutPlanType, WorkoutType
 from bot.utils.credits import available_ai_services
 from bot.utils.exercises import format_program
 from core.utils.idempotency import acquire_once
@@ -127,7 +128,7 @@ async def services_menu(callback_query: CallbackQuery, state: FSMContext, bot: B
     cb_data = callback_query.data or ""
 
     if cb_data == "back" and isinstance(callback_query.message, Message):
-        await show_main_menu(cast(Message, callback_query.message), profile, state)
+        await show_main_menu(callback_query.message, profile, state)
         return
 
     if cb_data == "balance":
@@ -229,7 +230,6 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
     client = Client.model_validate(data.get("client"))
     service = data.get("ai_service", "program")
     required = int(data.get("required", 0))
-    workout_type = data.get("workout_type", "gym")
     wishes = data.get("wishes", "")
 
     if callback_query.data == "no":
@@ -252,7 +252,8 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
     await APIService.profile.adjust_client_credits(profile.id, -required)
     await Cache.client.update_client(client.profile, {"credits": client.credits - required})
     await answer_msg(callback_query, msg_text("request_in_progress", profile.language))
-    await show_main_menu(cast(Message, callback_query.message), profile, state)
+    if isinstance(callback_query.message, Message):
+        await show_main_menu(callback_query.message, profile, state)
     bot = cast(Bot, callback_query.bot)
     assigned_coaches = [await Cache.coach.get_coach(coach_id) for coach_id in client.assigned_to]
     if any(coach.coach_type == CoachType.ai_coach for coach in assigned_coaches):
@@ -266,11 +267,12 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
 
     if service == "program":
         try:
-            exercises = await generate_program(
-                client,
-                profile.language,
-                workout_type,
-                wishes,
+            exercises = await generate_workout_plan(
+                client=client,
+                language=profile.language,
+                plan_type=WorkoutPlanType.PROGRAM,
+                workout_type=WorkoutType(data.get("workout_type", "")),
+                wishes=wishes,
                 request_id=request_id,
             )
         except Exception as e:  # noqa: BLE001
@@ -341,12 +343,21 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
 
     await state.update_data(workout_days=days)
     client = Client.model_validate(data.get("client"))
-    workout_type = data.get("workout_type", "gym")
     wishes = data.get("wishes", "")
     period = data.get("period", "1m")
+    request_id = uuid4().hex
     await answer_msg(callback_query, msg_text("request_in_progress", lang))
     await show_main_menu(cast(Message, callback_query.message), profile, state)
-    exercises = await generate_subscription(client, lang, workout_type, wishes, period, days)
+    exercises = await generate_workout_plan(
+        client=client,
+        language=lang,
+        plan_type=WorkoutPlanType.SUBSCRIPTION,
+        workout_type=WorkoutType(data.get("workout_type", "")),
+        wishes=wishes,
+        request_id=request_id,
+        period=period,
+        workout_days=days,
+    )
     if not exercises:
         await answer_msg(
             callback_query,

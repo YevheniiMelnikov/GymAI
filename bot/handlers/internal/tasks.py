@@ -11,12 +11,13 @@ from config.app_settings import settings
 from core.exceptions import SubscriptionNotFoundError
 from core.containers import get_container
 from core.cache import Cache
-from core.enums import CoachType
+from core.enums import CoachType, WorkoutPlanType
 from bot.utils.chat import send_message
 from aiogram.enums import ParseMode
 from core.services import APIService
-from bot.ai_coach.utils import process_workout_result
-from cognee.api.v1.prune import prune
+from bot.ai_coach.utils import process_workout_plan_result
+from core.schemas import Subscription
+from cognee.api.v1.prune import prune  # pyrefly: ignore[import-error]
 
 
 async def internal_send_daily_survey(request: web.Request) -> web.Response:
@@ -88,19 +89,17 @@ async def internal_send_workout_result(request: web.Request) -> web.Response:
         return web.json_response({"detail": "Coach not found"}, status=404)
 
     if coach.coach_type == CoachType.ai_coach:
-        await APIService.ai_coach.save_client_message(  # pyrefly: ignore[missing-attribute]
-            str(client_workout_feedback), client_id=int(client_id)
-        )
         client = await Cache.client.get_client(int(client_id))
         profile = await APIService.profile.get_profile(client.profile)
-        updated_program = await process_workout_result(
+        updated_subscription = await process_workout_plan_result(
             client_id=int(client_id),
             expected_workout_result=expected_workout_result,
             feedback=str(client_workout_feedback),
             language=profile.language if profile else settings.DEFAULT_LANG,
+            plan_type=WorkoutPlanType.SUBSCRIPTION,
         )
-        if profile is not None and updated_program.exercises_by_day:
-            exercises = updated_program.exercises_by_day
+        if profile is not None and isinstance(updated_subscription, Subscription) and updated_subscription.exercises:
+            exercises = updated_subscription.exercises
         else:
             logger.error("AI workout update produced no exercises")
             return web.json_response({"result": "AI workout update produced no exercises"})

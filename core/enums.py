@@ -69,8 +69,17 @@ class CommandName(str, Enum):
         return self.value
 
 
-class CoachAgentMode(str, Enum):
-    ASK_AI = "ask_ai"
+class WorkoutPlanType(str, Enum):
     PROGRAM = "program"
-    UPDATE = "update"
     SUBSCRIPTION = "subscription"
+
+    def __str__(self) -> str:
+        return self.value
+
+
+class WorkoutType(str, Enum):
+    HOME = "home"
+    GYM = "gym"
+
+    def __str__(self) -> str:
+        return self.value
