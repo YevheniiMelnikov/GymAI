@@ -201,47 +201,24 @@ class KnowledgeBase:
         return str(resolved), True
 
     @classmethod
-    async def make_request(cls, prompt: str, client_id: int) -> list[str]:
-        """Search across client and global datasets with given prompt."""
+    async def search(cls, query: str, client_id: int, k: int | None = None) -> list[str]:
+        """Search across client and global datasets."""
         user = await cls._get_cognee_user()
         await cls._ensure_profile_indexed(client_id, user)
         datasets = [cls._dataset_name(client_id), cls.GLOBAL_DATASET]
         datasets = [cls._resolve_dataset_alias(d) for d in datasets]
         try:
-            return await cognee.search(prompt, datasets=datasets, user=_to_user_or_none(user))
+            params: dict[str, Any] = {
+                "datasets": datasets,
+                "user": _to_user_or_none(user),
+            }
+            if k is not None:
+                params["top_k"] = k
+            return await cognee.search(query, **params)
         except (PermissionDeniedError, DatasetNotFoundError) as e:
-            logger.warning(f"Search issue for client {client_id}: {e}")
+            logger.warning(f"Search issue client_id={client_id}: {e}")
         except Exception as e:
-            logger.error(f"Unexpected error during client {client_id} request: {e}")
-        return []
-
-    @classmethod
-    async def get_client_context(cls, client_id: int, query: str) -> dict[str, list[str]]:
-        """Search client + global datasets for context messages."""
-        user = await cls._get_cognee_user()
-        await cls._ensure_profile_indexed(client_id, user)
-        datasets = [cls._dataset_name(client_id), cls.GLOBAL_DATASET]
-        datasets = [cls._resolve_dataset_alias(d) for d in datasets]
-        try:
-            messages = await cognee.search(query, datasets=datasets, top_k=5, user=_to_user_or_none(user))
-        except DatasetNotFoundError:
-            messages = []
-        except Exception as e:
-            logger.error(f"get_client_context failed: {e}")
-            messages = []
-        return {"messages": messages}
-
-    @classmethod
-    async def search(cls, query: str, k: int = 6) -> list[str]:
-        """Search only in global dataset for a knowledge query."""
-        user = await cls._get_cognee_user()
-        datasets = [cls._resolve_dataset_alias(cls.GLOBAL_DATASET)]
-        try:
-            return await cognee.search(query, datasets=datasets, top_k=k, user=_to_user_or_none(user))
-        except (PermissionDeniedError, DatasetNotFoundError) as e:
-            logger.warning(f"Knowledge search issue: {e}")
-        except Exception as e:  # pragma: no cover - unexpected
-            logger.error(f"Unexpected knowledge search error: {e}")
+            logger.error(f"Unexpected search error client_id={client_id}: {e}")
         return []
 
     @classmethod
