@@ -10,6 +10,7 @@ from core.enums import (
     Gender,
     PaymentStatus,
     CoachType,
+    CoachAgentMode,
 )
 
 Price = condecimal(max_digits=10, decimal_places=2, gt=0)
@@ -184,11 +185,11 @@ class Payment(BaseModel):
             return 0.0
 
 
-class AiCoachAskRequest(BaseModel):
+class CoachAgentRequest(BaseModel):
     prompt: str
     client_id: int
     language: str | None = None
-    mode: Literal["program", "subscription", "update", "ask_ai"] = "program"
+    mode: CoachAgentMode
     period: str | None = None
     workout_days: list[str] | None = None
     expected_workout: str | None = None
@@ -197,7 +198,7 @@ class AiCoachAskRequest(BaseModel):
     request_id: str | None = None
 
 
-class AiCoachMessageRequest(BaseModel):
+class CoachAgentMessageRequest(BaseModel):
     text: str
     client_id: int
 

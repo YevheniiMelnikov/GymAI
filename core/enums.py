@@ -67,3 +67,10 @@ class CommandName(str, Enum):
 
     def __str__(self) -> str:
         return self.value
+
+
+class CoachAgentMode(str, Enum):
+    ASK_AI = "ask_ai"
+    PROGRAM = "program"
+    UPDATE = "update"
+    SUBSCRIPTION = "subscription"
