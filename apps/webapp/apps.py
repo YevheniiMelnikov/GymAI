@@ -1,4 +1,3 @@
-from __future__ import annotations
 from django.apps import AppConfig
 from core.containers import create_container, set_container, get_container
 from core.services.internal import APIService

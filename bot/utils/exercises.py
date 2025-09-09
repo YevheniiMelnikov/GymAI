@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import cast, Any
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import cast, Dict, Any
 from django.core.cache import cache
 from rest_framework.exceptions import ValidationError, NotFound

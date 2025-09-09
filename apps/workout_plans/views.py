@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Any, Optional
 
 from django.core.cache import cache

@@ -1,8 +1,6 @@
-from __future__ import annotations
+from typing import TypedDict, cast
 
-from typing import Any, TYPE_CHECKING, TypedDict, cast
-
-from loguru import logger  # pyrefly: ignore[import-error]
+from loguru import logger
 
 from pydantic_ai import RunContext
 from pydantic_ai.toolsets.function import FunctionToolset
@@ -14,15 +12,8 @@ from core.utils.short_url import short_url
 
 from .base import AgentDeps
 
-if TYPE_CHECKING:  # pragma: no cover
-    from ..schemas import ProgramPayload
-
-try:  # pragma: no cover - optional dependency
-    from core.services import get_gif_manager
-except Exception:  # pragma: no cover - no gif service
-
-    def get_gif_manager() -> Any:  # type: ignore[override]
-        raise RuntimeError("gif manager unavailable")
+from ..schemas import ProgramPayload
+from core.services import get_gif_manager
 
 
 class ClientContext(TypedDict):
@@ -56,7 +47,7 @@ async def tool_search_knowledge(
     from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 
     logger.debug(f"tool_search_knowledge query='{query[:80]}' k={k}")
-    result = await KnowledgeBase.search_knowledge(query, k)
+    result = await KnowledgeBase.search(query, k)
     logger.debug(f"tool_search_knowledge results={len(result)}")
     return result
 

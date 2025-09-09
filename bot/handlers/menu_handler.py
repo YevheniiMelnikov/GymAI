@@ -1,4 +1,3 @@
-from __future__ import annotations
 from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message

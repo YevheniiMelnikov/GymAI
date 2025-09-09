@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import os
 from dataclasses import asdict, is_dataclass
@@ -75,7 +73,7 @@ class KnowledgeBase:
         cls._loader = knowledge_loader
         cls._user = await cls._get_cognee_user()
         try:
-            await cls.refresh_knowledge_base()
+            await cls.refresh()
         except Exception as e:
             logger.warning(f"Knowledge refresh skipped: {e}")
 
@@ -111,7 +109,7 @@ class KnowledgeBase:
             await create_authorized_dataset(name, user_ns)
 
     @classmethod
-    async def refresh_knowledge_base(cls) -> None:
+    async def refresh(cls) -> None:
         """Re-cognify global dataset and refresh loader if available."""
         user = await cls._get_cognee_user()
         ds = cls._resolve_dataset_alias(cls.GLOBAL_DATASET)
@@ -218,7 +216,23 @@ class KnowledgeBase:
         return []
 
     @classmethod
-    async def search_knowledge(cls, query: str, k: int = 6) -> list[str]:
+    async def get_client_context(cls, client_id: int, query: str) -> dict[str, list[str]]:
+        """Search client + global datasets for context messages."""
+        user = await cls._get_cognee_user()
+        await cls._ensure_profile_indexed(client_id, user)
+        datasets = [cls._dataset_name(client_id), cls.GLOBAL_DATASET]
+        datasets = [cls._resolve_dataset_alias(d) for d in datasets]
+        try:
+            messages = await cognee.search(query, datasets=datasets, top_k=5, user=_to_user_or_none(user))
+        except DatasetNotFoundError:
+            messages = []
+        except Exception as e:
+            logger.error(f"get_client_context failed: {e}")
+            messages = []
+        return {"messages": messages}
+
+    @classmethod
+    async def search(cls, query: str, k: int = 6) -> list[str]:
         """Search only in global dataset for a knowledge query."""
         user = await cls._get_cognee_user()
         datasets = [cls._resolve_dataset_alias(cls.GLOBAL_DATASET)]
@@ -272,19 +286,3 @@ class KnowledgeBase:
     async def save_ai_message(cls, text: str, client_id: int) -> None:
         """Save an AI coach message into dataset."""
         await cls.add_text(text, client_id=client_id, role=MessageRole.AI_COACH)
-
-    @classmethod
-    async def get_client_context(cls, client_id: int, query: str) -> dict[str, list[str]]:
-        """Search client + global datasets for context messages."""
-        user = await cls._get_cognee_user()
-        await cls._ensure_profile_indexed(client_id, user)
-        datasets = [cls._dataset_name(client_id), cls.GLOBAL_DATASET]
-        datasets = [cls._resolve_dataset_alias(d) for d in datasets]
-        try:
-            messages = await cognee.search(query, datasets=datasets, top_k=5, user=_to_user_or_none(user))
-        except DatasetNotFoundError:
-            messages = []
-        except Exception as e:
-            logger.error(f"get_client_context failed: {e}")
-            messages = []
-        return {"messages": messages}

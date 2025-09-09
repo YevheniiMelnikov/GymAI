@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from fastapi import Depends, HTTPException, Request  # pyrefly: ignore[import-error]
 from fastapi.security import HTTPBasicCredentials  # pyrefly: ignore[import-error]
 from loguru import logger  # pyrefly: ignore[import-error]
