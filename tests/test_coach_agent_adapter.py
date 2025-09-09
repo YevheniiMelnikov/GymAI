@@ -12,7 +12,7 @@ os.environ.setdefault("PRIVACY_POLICY", "x")
 os.environ.setdefault("EMAIL", "x")
 os.environ.setdefault("ADMIN_ID", "1")
 
-import pytest
+import pytest  # pyrefly: ignore[import-error]
 from pydantic import ValidationError
 
 from ai_coach.agent import (
@@ -21,7 +21,7 @@ from ai_coach.agent import (
     ProgramAdapter,
     QAResponse,
 )
-from ai_coach.schemas import AskRequest, ProgramPayload, SubscriptionPayload
+from ai_coach.schemas import AICoachRequest, ProgramPayload, SubscriptionPayload
 from ai_coach.types import CoachMode
 from ai_coach.application import app
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
@@ -87,7 +87,7 @@ def test_subscription_payload_validation() -> None:
 
 
 def test_ask_request_accepts_ask_ai() -> None:
-    req = AskRequest(client_id=1, prompt="hi", mode="ask_ai")
+    req = AICoachRequest(client_id=1, prompt="hi", mode="ask_ai")
     assert req.mode is CoachMode.ask_ai
 
 

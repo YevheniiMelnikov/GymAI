@@ -1,15 +1,16 @@
 from dataclasses import dataclass
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ai_coach.types import CoachMode
 from core.schemas import Program, DayExercises
+from core.enums import WorkoutPlanType, WorkoutType
 
 
-class AskRequest(BaseModel):
+class AICoachRequest(BaseModel):
     client_id: int
-    prompt: str
+    prompt: str | None = None
     language: str | None = None
     mode: CoachMode = CoachMode.program
     period: str | None = None
@@ -17,12 +18,22 @@ class AskRequest(BaseModel):
     expected_workout: str | None = None
     feedback: str | None = None
     wishes: str | None = None
+    workout_type: WorkoutType | None = None
+    plan_type: WorkoutPlanType | None = None
     request_id: str | None = None
 
+    @field_validator("workout_type", mode="before")
+    @staticmethod
+    def _normalize_workout_type(value: str | WorkoutType | None) -> WorkoutType | None:
+        if value is None or isinstance(value, WorkoutType):
+            return value
+        return WorkoutType(value.lower())
 
-class MessageRequest(BaseModel):
-    text: str
-    client_id: int
+    @model_validator(mode="after")
+    def _validate_update_plan_type(self) -> "AICoachRequest":
+        if self.mode is CoachMode.update and self.plan_type is None:
+            raise ValueError("plan_type is required for update mode")
+        return self
 
 
 @dataclass

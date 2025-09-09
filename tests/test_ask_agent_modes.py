@@ -1,9 +1,9 @@
-import pytest
+import pytest  # pyrefly: ignore[import-error]
 from httpx import AsyncClient
 
 from ai_coach.application import app
 from ai_coach.agent import CoachAgent
-from core.enums import CoachType
+from core.enums import CoachType, WorkoutType
 from core.schemas import DayExercises, Exercise, Program, Subscription
 
 
@@ -39,16 +39,23 @@ def _sample_subscription() -> Subscription:
 
 @pytest.mark.asyncio
 async def test_program_mode(monkeypatch):
-    async def fake_generate(prompt, deps, **kwargs):
+    async def fake_generate(prompt, deps, *, workout_type: WorkoutType | None = None, **kwargs):
+        assert workout_type is WorkoutType.HOME
         assert kwargs.get("wishes") == "w"
         assert kwargs.get("result_type") is Program
         return _sample_program()
 
     monkeypatch.setattr(CoachAgent, "generate_workout_plan", staticmethod(fake_generate))
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(app=app, base_url="http://test") as ac:  # pyrefly: ignore[unexpected-keyword]
         resp = await ac.post(
             "/ask/",
-            json={"client_id": 1, "prompt": "p", "mode": "program", "wishes": "w"},
+            json={
+                "client_id": 1,
+                "prompt": "p",
+                "mode": "program",
+                "wishes": "w",
+                "workout_type": "home",
+            },
             headers={"X-Agent": "pydanticai"},
         )
     assert resp.status_code == 200
@@ -57,7 +64,8 @@ async def test_program_mode(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_subscription_mode(monkeypatch):
-    async def fake_generate(prompt, deps, **kwargs):
+    async def fake_generate(prompt, deps, *, workout_type: WorkoutType | None = None, **kwargs):
+        assert workout_type is WorkoutType.HOME
         assert kwargs.get("period") == "1m"
         assert kwargs.get("workout_days") == ["mon"]
         assert kwargs.get("wishes") == "w"
@@ -65,10 +73,16 @@ async def test_subscription_mode(monkeypatch):
         return _sample_subscription()
 
     monkeypatch.setattr(CoachAgent, "generate_workout_plan", staticmethod(fake_generate))
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(app=app, base_url="http://test") as ac:  # pyrefly: ignore[unexpected-keyword]
         resp = await ac.post(
             "/ask/",
-            json={"client_id": 1, "prompt": "p", "mode": "subscription", "wishes": "w"},
+            json={
+                "client_id": 1,
+                "prompt": "p",
+                "mode": "subscription",
+                "wishes": "w",
+                "workout_type": "home",
+            },
             headers={"X-Agent": "pydanticai"},
         )
     assert resp.status_code == 200
@@ -77,16 +91,36 @@ async def test_subscription_mode(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_update_mode(monkeypatch):
-    async def fake_update(prompt, expected_workout, feedback, deps, result_type=None):
+    async def fake_update(
+        prompt, expected_workout, feedback, *, workout_type: WorkoutType | None = None, deps=None, result_type=None
+    ):
+        assert workout_type is WorkoutType.HOME
         assert result_type is Program
         return _sample_program()
 
     monkeypatch.setattr(CoachAgent, "update_workout_plan", staticmethod(fake_update))
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(app=app, base_url="http://test") as ac:  # pyrefly: ignore[unexpected-keyword]
         resp = await ac.post(
             "/ask/",
-            json={"client_id": 1, "prompt": "p", "mode": "update"},
+            json={
+                "client_id": 1,
+                "prompt": "p",
+                "mode": "update",
+                "workout_type": "home",
+                "plan_type": "program",
+            },
             headers={"X-Agent": "pydanticai"},
         )
     assert resp.status_code == 200
     assert resp.json()["id"] == 1
+
+
+@pytest.mark.asyncio
+async def test_update_requires_plan_type() -> None:
+    async with AsyncClient(app=app, base_url="http://test") as ac:  # pyrefly: ignore[unexpected-keyword]
+        resp = await ac.post(
+            "/ask/",
+            json={"client_id": 1, "prompt": "p", "mode": "update", "workout_type": "home"},
+            headers={"X-Agent": "pydanticai"},
+        )
+    assert resp.status_code == 422

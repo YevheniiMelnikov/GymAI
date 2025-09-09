@@ -8,9 +8,11 @@ import httpx
 from loguru import logger
 
 from core.exceptions import UserServiceError
-from core.schemas import CoachAgentRequest, CoachAgentMessageRequest, Program, Subscription, QAResponse
+from ai_coach.schemas import AICoachRequest
+from ai_coach.types import CoachMode
+from core.schemas import Program, Subscription, QAResponse
 from .api_client import APIClient
-from ...enums import CoachAgentMode
+from ...enums import WorkoutPlanType, WorkoutType
 
 
 class AiCoachService(APIClient):
@@ -27,11 +29,11 @@ class AiCoachService(APIClient):
         language: str | Enum | None = None,
         request_id: str | None = None,
     ) -> QAResponse | None:
-        payload = CoachAgentRequest(
+        payload = AICoachRequest(
             prompt=prompt,
             client_id=client_id,
             language=language.value if isinstance(language, Enum) else language,
-            mode=CoachAgentMode.ASK_AI,
+            mode=CoachMode.ask_ai,
             request_id=request_id,
         )
         data = await self._post_ask(payload, request_id=request_id)
@@ -39,35 +41,62 @@ class AiCoachService(APIClient):
             return None
         return QAResponse.model_validate(data)
 
-    async def create_program(
+    async def ask(
         self,
         prompt: str,
+        *,
+        client_id: int,
+        language: str | Enum | None = None,
+        request_id: str | None = None,
+        use_agent_header: bool = False,
+    ) -> QAResponse | None:
+        payload = AICoachRequest(
+            prompt=prompt,
+            client_id=client_id,
+            language=language.value if isinstance(language, Enum) else language,
+            mode=CoachMode.ask_ai,
+            request_id=request_id,
+        )
+        headers = {"X-Agent": "pydanticai"} if use_agent_header else None
+        data = await self._post_ask(payload, request_id=request_id, extra_headers=headers)
+        if data is None:
+            return None
+        return QAResponse.model_validate(data)
+
+    async def create_workout_plan(
+        self,
+        plan_type: WorkoutPlanType,
         *,
         client_id: int,
         language: str | Enum | None = None,
         period: str | None = None,
         workout_days: list[str] | None = None,
         wishes: str | None = None,
+        workout_type: WorkoutType | None = None,
         request_id: str | None = None,
-    ) -> Program | None:
-        payload = CoachAgentRequest(
-            prompt=prompt,
+    ) -> Program | Subscription | None:
+        payload = AICoachRequest(
+            prompt=None,
             client_id=client_id,
             language=language.value if isinstance(language, Enum) else language,
-            mode=CoachAgentMode.PROGRAM,
+            mode=(CoachMode.program if plan_type is WorkoutPlanType.PROGRAM else CoachMode.subscription),
             period=period,
             workout_days=workout_days,
             wishes=wishes,
+            workout_type=workout_type,
+            plan_type=plan_type,
             request_id=request_id,
         )
         data = await self._post_ask(payload, request_id=request_id)
         if data is None:
             return None
-        return Program.model_validate(data)
+        if plan_type is WorkoutPlanType.PROGRAM:
+            return Program.model_validate(data)
+        return Subscription.model_validate(data)
 
-    async def update_program(
+    async def update_workout_plan(
         self,
-        prompt: str,
+        plan_type: WorkoutPlanType,
         *,
         client_id: int,
         language: str | Enum | None = None,
@@ -76,61 +105,43 @@ class AiCoachService(APIClient):
         expected_workout: str | None = None,
         feedback: str | None = None,
         wishes: str | None = None,
+        workout_type: WorkoutType | None = None,
         request_id: str | None = None,
-    ) -> Program | None:
-        payload = CoachAgentRequest(
-            prompt=prompt,
+    ) -> Program | Subscription | None:
+        payload = AICoachRequest(
+            prompt=None,
             client_id=client_id,
             language=language.value if isinstance(language, Enum) else language,
-            mode=CoachAgentMode.UPDATE,
+            mode=CoachMode.update,
             period=period,
             workout_days=workout_days,
             expected_workout=expected_workout,
             feedback=feedback,
             wishes=wishes,
+            workout_type=workout_type,
+            plan_type=plan_type,
             request_id=request_id,
         )
         data = await self._post_ask(payload, request_id=request_id)
         if data is None:
             return None
-        return Program.model_validate(data)
-
-    async def create_subscription(
-        self,
-        prompt: str,
-        *,
-        client_id: int,
-        language: str | Enum | None = None,
-        period: str | None = None,
-        workout_days: list[str] | None = None,
-        wishes: str | None = None,
-        request_id: str | None = None,
-    ) -> Subscription | None:
-        payload = CoachAgentRequest(
-            prompt=prompt,
-            client_id=client_id,
-            language=language.value if isinstance(language, Enum) else language,
-            mode=CoachAgentMode.SUBSCRIPTION,
-            period=period,
-            workout_days=workout_days,
-            wishes=wishes,
-            request_id=request_id,
-        )
-        data = await self._post_ask(payload, request_id=request_id)
-        if data is None:
-            return None
+        if plan_type is WorkoutPlanType.PROGRAM:
+            return Program.model_validate(data)
         return Subscription.model_validate(data)
 
     async def _post_ask(
         self,
-        payload: CoachAgentRequest,
+        payload: AICoachRequest,
         *,
         request_id: str | None,
+        extra_headers: dict[str, str] | None = None,
     ) -> Any | None:
         url = urljoin(self.base_url, "ask/")
         headers: dict[str, str] = {}
         if request_id:
             headers["X-Request-ID"] = request_id
+        if extra_headers:
+            headers.update(extra_headers)
         logger.debug(f"AI coach ask request_id={request_id} client_id={payload.client_id}")
         status, data = await self._api_request(
             "post",
@@ -144,11 +155,6 @@ class AiCoachService(APIClient):
             return data
         logger.error(f"AI coach request failed HTTP={status}: {data}")
         return None
-
-    async def save_user_message(self, text: str, client_id: int) -> None:
-        url = urljoin(self.base_url, "messages/")
-        request = CoachAgentMessageRequest(text=text, client_id=client_id)
-        await self._api_request("post", url, request.model_dump())
 
     async def refresh_knowledge(self) -> None:
         url = urljoin(self.base_url, "knowledge/refresh/")

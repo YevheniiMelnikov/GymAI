@@ -8,8 +8,9 @@ from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from ai_coach.agent import AgentDeps, CoachAgent
 from core.cache import Cache
 from ai_coach.application import app, security
-from ai_coach.schemas import AskRequest, MessageRequest
+from ai_coach.schemas import AICoachRequest
 from ai_coach.types import AskCtx, CoachMode
+from core.enums import WorkoutPlanType
 from config.app_settings import settings
 from core.schemas import Program, QAResponse, Subscription
 from core.tasks import refresh_external_knowledge
@@ -23,25 +24,31 @@ CoachAction = Callable[[AskCtx], Awaitable[object]]
 
 DISPATCH: dict[CoachMode, CoachAction] = {
     CoachMode.program: lambda ctx: CoachAgent.generate_workout_plan(
-        ctx["prompt"],
+        ctx.get("prompt"),
         deps=ctx["deps"],
+        workout_type=ctx.get("workout_type"),
         wishes=ctx["wishes"],
         result_type=Program,
     ),
     CoachMode.subscription: lambda ctx: CoachAgent.generate_workout_plan(
-        ctx["prompt"],
+        ctx.get("prompt"),
         deps=ctx["deps"],
+        workout_type=ctx.get("workout_type"),
         period=ctx["period"],
         workout_days=ctx["workout_days"],
         wishes=ctx["wishes"],
         result_type=Subscription,
     ),
     CoachMode.update: lambda ctx: CoachAgent.update_workout_plan(
-        ctx["prompt"],
+        ctx.get("prompt"),
         expected_workout=ctx["expected_workout"],
         feedback=ctx["feedback"],
+        workout_type=ctx.get("workout_type"),
         deps=ctx["deps"],
-        result_type=Program,
+        result_type={
+            WorkoutPlanType.PROGRAM: Program,
+            WorkoutPlanType.SUBSCRIPTION: Subscription,
+        }[ctx["plan_type"]],
     ),
     CoachMode.ask_ai: lambda ctx: CoachAgent.answer_question(ctx["prompt"], deps=ctx["deps"]),
 }
@@ -53,9 +60,11 @@ async def health() -> dict[str, str]:
 
 
 @app.post("/ask/", response_model=Program | Subscription | QAResponse | list[str] | None)
-async def ask(data: AskRequest, request: Request) -> Program | Subscription | QAResponse | list[str] | None:
+async def ask(data: AICoachRequest, request: Request) -> Program | Subscription | QAResponse | list[str] | None:
     mode = data.mode if isinstance(data.mode, CoachMode) else CoachMode(data.mode)
     logger.debug(f"/ask received request_id={data.request_id} client_id={data.client_id} mode={mode.value}")
+    if mode is CoachMode.update and data.plan_type is None:
+        raise HTTPException(status_code=422, detail="plan_type required for update mode")
     ctx: AskCtx = {
         "prompt": data.prompt,
         "client_id": data.client_id,
@@ -65,6 +74,8 @@ async def ask(data: AskRequest, request: Request) -> Program | Subscription | QA
         "feedback": data.feedback or "",
         "wishes": data.wishes or "",
         "language": data.language or settings.DEFAULT_LANG,
+        "workout_type": data.workout_type,
+        "plan_type": data.plan_type,
     }
     client_name: str | None = None
     try:
@@ -93,7 +104,7 @@ async def ask(data: AskRequest, request: Request) -> Program | Subscription | QA
                 f" client_id={data.client_id} mode=ask_ai"
                 f" answer_len={len(result.answer)} sources={len(sources)}"
             )
-            await KnowledgeBase.save_client_message(data.prompt, client_id=data.client_id)
+            await KnowledgeBase.save_client_message(data.prompt or "", client_id=data.client_id)
             await KnowledgeBase.save_ai_message(result.answer, client_id=data.client_id)
         else:
             logger.debug(
@@ -107,8 +118,8 @@ async def ask(data: AskRequest, request: Request) -> Program | Subscription | QA
     except Exception as e:  # pragma: no cover - log unexpected errors
         logger.exception(f"/ask agent failed, falling back to KnowledgeBase: {e}")
         try:
-            responses = await KnowledgeBase.search(data.prompt, client_id=data.client_id)
-            await KnowledgeBase.save_client_message(data.prompt, client_id=data.client_id)
+            responses = await KnowledgeBase.search(data.prompt or "", client_id=data.client_id)
+            await KnowledgeBase.save_client_message(data.prompt or "", client_id=data.client_id)
             if responses:
                 for r in responses:
                     await KnowledgeBase.save_ai_message(r, client_id=data.client_id)
@@ -119,12 +130,6 @@ async def ask(data: AskRequest, request: Request) -> Program | Subscription | QA
         except Exception as e:  # pragma: no cover - log unexpected errors
             logger.exception(f"/ask failed: {e}")
             raise HTTPException(status_code=503, detail="Service unavailable") from e
-
-
-@app.post("/messages/")
-async def save_message(data: MessageRequest) -> dict[str, str]:
-    await KnowledgeBase.save_client_message(data.text, client_id=data.client_id)
-    return {"status": "ok"}
 
 
 @app.post("/knowledge/refresh/")

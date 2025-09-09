@@ -1,6 +1,8 @@
 from enum import Enum
 from typing import TYPE_CHECKING, NotRequired, TypedDict
 
+from core.enums import WorkoutPlanType, WorkoutType
+
 if TYPE_CHECKING:  # pragma: no cover - runtime import avoidance
     from ai_coach.agent import AgentDeps
 
@@ -24,7 +26,7 @@ class MessageRole(str, Enum):
 class AskCtx(TypedDict):
     """Context passed to dispatch functions."""
 
-    prompt: str
+    prompt: str | None
     client_id: int
     period: str
     workout_days: list[str]
@@ -32,4 +34,6 @@ class AskCtx(TypedDict):
     feedback: str
     wishes: str
     language: str
+    workout_type: WorkoutType | None
+    plan_type: WorkoutPlanType | None
     deps: NotRequired["AgentDeps"]

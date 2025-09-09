@@ -2,6 +2,7 @@ from datetime import date
 from typing import Any
 
 from config.app_settings import settings
+from core.enums import WorkoutType
 from core.schemas import Program, QAResponse, Subscription
 
 from .base import AgentDeps
@@ -72,9 +73,10 @@ class CoachAgent:
     @classmethod
     async def generate_workout_plan(
         cls,
-        prompt: str,
+        prompt: str | None,
         deps: AgentDeps,
         *,
+        workout_type: WorkoutType | None = None,
         period: str | None = None,
         workout_days: list[str] | None = None,
         wishes: str | None = None,
@@ -82,7 +84,11 @@ class CoachAgent:
     ) -> Program | Subscription:
         agent = cls._get_agent()
         today = date.today().isoformat()
-        context_lines = [prompt]
+        context_lines: list[str] = []
+        if workout_type:
+            context_lines.append(f"Workout type: {workout_type.value}")
+        if prompt:
+            context_lines.append(prompt)
         if period:
             context_lines.append(f"Period: {period}")
         if workout_days:
@@ -103,17 +109,24 @@ class CoachAgent:
     @classmethod
     async def update_workout_plan(
         cls,
-        prompt: str,
+        prompt: str | None,
         expected_workout: str,
         feedback: str,
         deps: AgentDeps,
+        *,
+        workout_type: WorkoutType | None = None,
         result_type: type[Program] | type[Subscription] = Subscription,
     ) -> Program | Subscription:
         agent = cls._get_agent()
+        context_lines: list[str] = []
+        if workout_type:
+            context_lines.append(f"Workout type: {workout_type.value}")
+        if prompt:
+            context_lines.append(prompt)
         formatted = UPDATE_WORKOUT_PROMPT.format(
             expected_workout=expected_workout,
             feedback=feedback,
-            context=prompt,
+            context="\n".join(context_lines),
             language=cls._lang(deps),
         )
         user_prompt = f"MODE: update\n{formatted}\nRules:\n{WORKOUT_RULES}"

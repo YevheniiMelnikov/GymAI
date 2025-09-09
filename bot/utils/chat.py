@@ -44,9 +44,6 @@ async def send_message(
             lang = None
         _: Client | None = None
         if sender_id is not None:
-            await APIService.ai_coach.save_client_message(  # pyrefly: ignore[missing-attribute]
-                text, client_id=sender_id
-            )
             try:
                 _ = await Cache.client.get_client(sender_id)
             except Exception:
@@ -165,11 +162,11 @@ async def contact_coach(callback_query: CallbackQuery, profile: Profile, state: 
 
     coach = await get_assigned_coach(client, coach_type=CoachType.human)
     if client.assigned_to and coach:
-        await state.update_data(recipient_id=coach.profile_id, sender_name=client.name)
+        await state.update_data(recipient_id=coach.profile, sender_name=client.name)
         await state.set_state(States.contact_coach)
 
         msg = callback_query.message
-        if msg is not None:
+        if msg is not None and isinstance(msg, Message):
             await msg.answer(msg_text("enter_your_message", profile.language))
             await del_msg(msg)
         else:

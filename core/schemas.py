@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 from pydantic import BaseModel, Field, field_validator, condecimal, ConfigDict
 
 from core.utils.encryptor import Encryptor
@@ -10,7 +10,6 @@ from core.enums import (
     Gender,
     PaymentStatus,
     CoachType,
-    CoachAgentMode,
 )
 
 Price = condecimal(max_digits=10, decimal_places=2, gt=0)
@@ -183,24 +182,6 @@ class Payment(BaseModel):
             return datetime.fromisoformat(str(v)).timestamp()
         except Exception:
             return 0.0
-
-
-class CoachAgentRequest(BaseModel):
-    prompt: str
-    client_id: int
-    language: str | None = None
-    mode: CoachAgentMode
-    period: str | None = None
-    workout_days: list[str] | None = None
-    expected_workout: str | None = None
-    feedback: str | None = None
-    wishes: str | None = None
-    request_id: str | None = None
-
-
-class CoachAgentMessageRequest(BaseModel):
-    text: str
-    client_id: int
 
 
 class QAResponse(BaseModel):
