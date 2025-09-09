@@ -15,13 +15,8 @@ from .prompts import (
 from .tools import toolset
 from ..schemas import ProgramPayload
 
-try:  # pragma: no cover - optional dependency
-    from pydantic_ai import Agent, RunContext  # pyrefly: ignore[import-error]
-    from pydantic_ai.models.openai import OpenAIChatModel  # pyrefly: ignore[import-error]
-except Exception:  # pragma: no cover - optional dependency
-    Agent = None  # type: ignore[assignment]
-    RunContext = Any  # type: ignore[assignment]
-    OpenAIChatModel = None  # type: ignore[assignment]
+from pydantic_ai import Agent, RunContext
+from pydantic_ai.models.openai import OpenAIChatModel
 
 
 class ProgramAdapter:
@@ -48,7 +43,7 @@ class CoachAgent:
             raise RuntimeError("pydantic_ai package is required")
         if cls._agent is None:
             model = OpenAIChatModel(
-                settings.LLM_MODEL,
+                model_name=settings.LLM_MODEL,
                 api_key=settings.LLM_API_KEY,
                 base_url=settings.LLM_API_URL,
                 timeout=settings.COACH_AGENT_TIMEOUT,
