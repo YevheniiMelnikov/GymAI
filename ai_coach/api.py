@@ -98,7 +98,7 @@ async def ask(data: AskRequest, request: Request) -> Program | Subscription | QA
     except Exception as e:  # pragma: no cover - log unexpected errors
         logger.exception(f"/ask agent failed, falling back to KnowledgeBase: {e}")
         try:
-            responses = await KnowledgeBase.make_request(data.prompt, client_id=data.client_id)
+            responses = await KnowledgeBase.search(data.prompt, client_id=data.client_id)
             await KnowledgeBase.save_client_message(data.prompt, client_id=data.client_id)
             if responses:
                 for r in responses:
@@ -116,11 +116,6 @@ async def ask(data: AskRequest, request: Request) -> Program | Subscription | QA
 async def save_message(data: MessageRequest) -> dict[str, str]:
     await KnowledgeBase.save_client_message(data.text, client_id=data.client_id)
     return {"status": "ok"}
-
-
-@app.get("/knowledge/")
-async def get_knowledge(client_id: int, query: str) -> dict[str, list[str]]:
-    return await KnowledgeBase.get_client_context(client_id, query)
 
 
 @app.post("/knowledge/refresh/")

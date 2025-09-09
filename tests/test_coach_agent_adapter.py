@@ -109,13 +109,13 @@ async def test_answer_question(monkeypatch) -> None:
 def test_ask_ai_legacy(monkeypatch) -> None:
     monkeypatch.setattr(settings, "AGENT_PYDANTICAI_ENABLED", False)
 
-    async def fake_make_request(prompt: str, client_id: int) -> list[str]:
+    async def fake_search(prompt: str, client_id: int) -> list[str]:
         return ["legacy"]
 
     async def noop(*args, **kwargs) -> None:
         return None
 
-    monkeypatch.setattr(KnowledgeBase, "make_request", staticmethod(fake_make_request))
+    monkeypatch.setattr(KnowledgeBase, "search", staticmethod(fake_search))
     monkeypatch.setattr(KnowledgeBase, "save_client_message", staticmethod(noop))
     monkeypatch.setattr(KnowledgeBase, "save_ai_message", staticmethod(noop))
 

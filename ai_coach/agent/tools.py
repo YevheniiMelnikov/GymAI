@@ -1,4 +1,3 @@
-from typing import TypedDict, cast
 
 from loguru import logger
 
@@ -16,25 +15,7 @@ from ..schemas import ProgramPayload
 from core.services import get_gif_manager
 
 
-class ClientContext(TypedDict):
-    messages: list[str]
-
-
 toolset = FunctionToolset()
-
-
-@toolset.tool
-async def tool_get_client_context(
-    ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
-    query: str,
-) -> ClientContext:
-    """Return personal context for a client by query."""
-    from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
-
-    client_id = ctx.deps.client_id
-    logger.debug(f"tool_get_client_context client_id={client_id} query={query}")
-    data = await KnowledgeBase.get_client_context(client_id, query)
-    return cast(ClientContext, data)
 
 
 @toolset.tool
@@ -43,11 +24,12 @@ async def tool_search_knowledge(
     query: str,
     k: int = 6,
 ) -> list[str]:
-    """Search global knowledge base with top-k limit."""
+    """Search client and global knowledge with top-k limit."""
     from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 
-    logger.debug(f"tool_search_knowledge query='{query[:80]}' k={k}")
-    result = await KnowledgeBase.search(query, k)
+    client_id = ctx.deps.client_id
+    logger.debug(f"tool_search_knowledge client_id={client_id} query='{query[:80]}' k={k}")
+    result = await KnowledgeBase.search(query, client_id, k)
     logger.debug(f"tool_search_knowledge results={len(result)}")
     return result
 

@@ -14,12 +14,14 @@ class _Ctx:
 async def test_tool_search_knowledge_k(monkeypatch):
     called = {}
 
-    async def fake_search(query: str, k: int):
+    async def fake_search(query: str, client_id: int, k: int) -> list[str]:
         called["k"] = k
+        called["client_id"] = client_id
         return []
 
-    monkeypatch.setattr(KnowledgeBase, "search_knowledge", fake_search)
+    monkeypatch.setattr(KnowledgeBase, "search", fake_search)
     ctx = _Ctx()
     result = await tool_search_knowledge(ctx, "hi", k=5)
     assert result == []
     assert called["k"] == 5
+    assert called["client_id"] == 1

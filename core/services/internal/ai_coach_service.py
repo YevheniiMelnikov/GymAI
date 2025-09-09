@@ -111,16 +111,6 @@ class AiCoachService(APIClient):
         request = AiCoachMessageRequest(text=text, client_id=client_id)
         await self._api_request("post", url, request.model_dump())
 
-    async def get_client_context(self, client_id: int, query: str) -> dict[str, list[str]]:
-        url = urljoin(self.base_url, f"knowledge/?client_id={client_id}&query={query}")
-        status, data = await self._api_request("get", url)
-        if status == 200 and isinstance(data, dict):
-            msgs = data.get("messages")
-            if isinstance(msgs, list):
-                return {"messages": msgs}
-        logger.error(f"Failed to fetch knowledge HTTP={status}: {data}")
-        return {"messages": []}
-
     async def refresh_knowledge(self) -> None:
         url = urljoin(self.base_url, "knowledge/refresh/")
         token = base64.b64encode(
