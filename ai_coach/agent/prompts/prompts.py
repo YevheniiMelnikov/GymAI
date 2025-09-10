@@ -8,15 +8,34 @@ def _load_template(name: str) -> str:
 
 
 COACH_SYSTEM_PROMPT: str = _load_template("system_prompt.txt")
-AGENT_INSTRUCTIONS: str = _load_template("agent_instructions.txt")
 COACH_INSTRUCTIONS: str = _load_template("coach_instructions.txt")
 GENERATE_WORKOUT: str = _load_template("generate_workout.txt")
 UPDATE_WORKOUT: str = _load_template("update_workout.txt")
 
+_AGENT_COMMON: str = _load_template("agent_common.txt")
+_AGENT_PROGRAM: str = _load_template("agent_program.txt")
+_AGENT_SUBSCRIPTION: str = _load_template("agent_subscription.txt")
+_AGENT_UPDATE: str = _load_template("agent_update.txt")
+_AGENT_ASK_AI: str = _load_template("agent_ask_ai.txt")
+
+
+def agent_instructions(mode: str) -> str:
+    mapping = {
+        "program": _AGENT_PROGRAM,
+        "subscription": _AGENT_SUBSCRIPTION,
+        "update": _AGENT_UPDATE,
+        "ask_ai": _AGENT_ASK_AI,
+    }
+    try:
+        return f"{_AGENT_COMMON}\n{mapping[mode]}"
+    except KeyError as e:
+        raise KeyError(f"Unknown mode: {mode}") from e
+
+
 __all__ = [
     "COACH_SYSTEM_PROMPT",
-    "AGENT_INSTRUCTIONS",
     "COACH_INSTRUCTIONS",
     "GENERATE_WORKOUT",
     "UPDATE_WORKOUT",
+    "agent_instructions",
 ]

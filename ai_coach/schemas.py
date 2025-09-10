@@ -21,6 +21,7 @@ class AICoachRequest(BaseModel):
     workout_type: WorkoutType | None = None
     plan_type: WorkoutPlanType | None = None
     request_id: str | None = None
+    instructions: str | None = None  # User-provided custom instructions
 
     @field_validator("workout_type", mode="before")
     @staticmethod
