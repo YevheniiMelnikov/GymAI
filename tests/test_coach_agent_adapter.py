@@ -101,6 +101,7 @@ async def test_answer_question(monkeypatch) -> None:
             deps: AgentDeps,
             output_type: type[QAResponse] | None = None,
             model_settings: ModelSettings | None = None,
+            message_history: list | None = None,
         ) -> QAResponse:  # pragma: no cover - dummy
             assert "MODE: ask_ai" in prompt
             assert output_type is QAResponse

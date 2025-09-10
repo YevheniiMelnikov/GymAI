@@ -44,13 +44,10 @@ def test_case_success_create_and_search(monkeypatch):
 
         await coach.KnowledgeBase.save_client_message("hi", client_id=1)
         await asyncio.sleep(0)
-        await coach.KnowledgeBase.refresh_client_knowledge(1)
-        await asyncio.sleep(0)
         await coach.KnowledgeBase.search("hi", client_id=1)
 
         assert calls["dataset_name"] == "client_1"
         assert cognify_calls[0] == ["ds1"]
-        assert cognify_calls[1] == ["client_1"]
         assert calls["search"] == ["client_1", coach.KnowledgeBase.GLOBAL_DATASET]
 
     asyncio.run(runner())

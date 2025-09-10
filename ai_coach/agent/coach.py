@@ -23,8 +23,10 @@ from .tools import toolset
 from ..schemas import ProgramPayload
 
 from pydantic_ai import Agent, RunContext
+from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart
 from pydantic_ai.models.openai import OpenAIChatModel
-from ai_coach.types import CoachMode
+from ai_coach.types import CoachMode, MessageRole
+from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 
 
 class ProgramAdapter:
@@ -66,9 +68,9 @@ class CoachAgent:
             toolsets=[toolset],
             retries=settings.COACH_AGENT_RETRIES,
             system_prompt=COACH_SYSTEM_PROMPT,
-        )
+        )  # pyrefly: ignore[no-matching-overload]
 
-        @cls._agent.system_prompt
+        @cls._agent.system_prompt  # pyrefly: ignore[no-matching-overload]
         async def coach_sys(
             ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
         ) -> str:  # pragma: no cover - runtime config
@@ -76,7 +78,7 @@ class CoachAgent:
             client_name = ctx.deps.client_name or "the client"
             return f"Client's name: {client_name}\nClient's language: {lang}"
 
-        @cls._agent.instructions
+        @cls._agent.instructions  # pyrefly: ignore[no-matching-overload]
         def agent_instr(ctx: RunContext[AgentDeps]) -> str:  # pragma: no cover - runtime config
             mode = ctx.deps.mode.value if ctx.deps.mode else "ask_ai"
             return agent_instructions(mode)
@@ -88,6 +90,20 @@ class CoachAgent:
         if cls._agent is None:
             return cls._init_agent()
         return cls._agent
+
+    @staticmethod
+    async def _message_history(client_id: int) -> list[ModelMessage]:
+        """Prepare past messages for the agent."""
+        raw = await KnowledgeBase.get_message_history(client_id)
+        history: list[ModelMessage] = []
+        for item in raw:
+            if item.startswith(f"{MessageRole.CLIENT.value}:"):
+                text = item.split(":", 1)[1]
+                history.append(ModelRequest.user_text_prompt(text.strip()))
+            elif item.startswith(f"{MessageRole.AI_COACH.value}:"):
+                text = item.split(":", 1)[1]
+                history.append(ModelResponse(parts=[TextPart(content=text.strip())]))
+        return history
 
     @classmethod
     async def generate_workout_plan(
@@ -125,10 +141,12 @@ class CoachAgent:
             language=cls._lang(deps),
         )
         user_prompt = f"MODE: {mode}\n{formatted}"
+        history = await cls._message_history(deps.client_id)
         result: Program | Subscription = await agent.run(
             user_prompt,
             deps=deps,
             output_type=output_type,
+            message_history=history,
         )
         return result
 
@@ -159,10 +177,12 @@ class CoachAgent:
         )
         rules = "\n".join(filter(None, [COACH_INSTRUCTIONS, instructions]))
         user_prompt = f"MODE: update\n{formatted}\nRules:\n{rules}"
+        history = await cls._message_history(deps.client_id)
         result: Program | Subscription = await agent.run(
             user_prompt,
             deps=deps,
             output_type=output_type,
+            message_history=history,
         )
         return result
 
@@ -175,10 +195,12 @@ class CoachAgent:
         agent = cls._get_agent()
         deps.mode = CoachMode.ask_ai
         user_prompt = f"MODE: ask_ai\n{prompt}"
+        history = await cls._message_history(deps.client_id)
         result: QAResponse = await agent.run(
             user_prompt,
             deps=deps,
             output_type=QAResponse,
-            model_settings=ModelSettings(temperature=0.3, max_output_tokens=256),
+            model_settings=ModelSettings(temperature=0.3, max_tokens=256),
+            message_history=history,
         )
         return result

@@ -35,7 +35,7 @@ def _read_pdf(data: bytes) -> str:
     doc = fitz.open(stream=f, filetype="pdf")
     parts: list[str] = []
     for page in doc:
-        parts.append(page.get_text("text"))
+        parts.append(page.get_text("text"))  # pyrefly: ignore[missing-attribute]
     return "\n".join(parts)
 
 

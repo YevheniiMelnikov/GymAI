@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     AI_COACH_TIMEOUT: int = 120
     COACH_AGENT_RETRIES: int = 3
     COACH_AGENT_TIMEOUT: int = 60
+    CHAT_HISTORY_LIMIT: int = 20
 
     AI_COACH_REFRESH_USER: Annotated[str, Field(default="admin")]
     AI_COACH_REFRESH_PASSWORD: Annotated[str, Field(default="password")]

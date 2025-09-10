@@ -41,13 +41,10 @@ DISPATCH: dict[CoachMode, CoachAction] = {
         feedback=ctx["feedback"],
         workout_type=ctx.get("workout_type"),
         deps=ctx["deps"],
-        output_type={
-            WorkoutPlanType.PROGRAM: Program,
-            WorkoutPlanType.SUBSCRIPTION: Subscription,
-        }[ctx["plan_type"]],
+        output_type=Program if ctx["plan_type"] is WorkoutPlanType.PROGRAM else Subscription,
         instructions=ctx.get("instructions"),
     ),
-    CoachMode.ask_ai: lambda ctx: CoachAgent.answer_question(ctx["prompt"], deps=ctx["deps"]),
+    CoachMode.ask_ai: lambda ctx: CoachAgent.answer_question(ctx["prompt"] or "", deps=ctx["deps"]),
 }
 
 
@@ -118,10 +115,6 @@ async def ask(data: AICoachRequest, request: Request) -> Program | Subscription 
         logger.exception(f"/ask agent failed, falling back to KnowledgeBase: {e}")
         try:
             responses = await KnowledgeBase.search(data.prompt or "", client_id=data.client_id)
-            await KnowledgeBase.save_client_message(data.prompt or "", client_id=data.client_id)
-            if responses:
-                for r in responses:
-                    await KnowledgeBase.save_ai_message(r, client_id=data.client_id)
             logger.debug(
                 f"/ask completed request_id={data.request_id} client_id={data.client_id} responses={responses}"
             )

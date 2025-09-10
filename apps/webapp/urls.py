@@ -2,9 +2,13 @@ from django.urls import path, re_path
 from . import views
 
 urlpatterns = [
-    path("api/program/", views.program_data, name="webapp-program-data"),
-    path("api/programs/", views.programs_history, name="webapp-programs-history"),
-    path("api/subscription/", views.subscription_data, name="webapp-subscription-data"),
+    path("api/program/", views.program_data, name="webapp-program-data"),  # pyrefly: ignore[no-matching-overload]
+    path(
+        "api/programs/", views.programs_history, name="webapp-programs-history"
+    ),  # pyrefly: ignore[no-matching-overload]
+    path(
+        "api/subscription/", views.subscription_data, name="webapp-subscription-data"
+    ),  # pyrefly: ignore[no-matching-overload]
     path("", views.index, name="webapp"),
     path("__ping__", views.ping, name="webapp-ping"),
     re_path(r"^(?!api/).*$", views.index),

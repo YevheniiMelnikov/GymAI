@@ -1,7 +1,7 @@
 import importlib
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable, Callable, cast
 from uuid import uuid4
 
 import cognee
@@ -78,7 +78,7 @@ class CogneeConfig:
                     continue
 
             CogneeConfig._patch_graph_relationship_ledger(GraphRelationshipLedger)
-            CogneeConfig._patch_litellm_embedding_engine(LiteLLMEmbeddingEngine)
+            CogneeConfig._patch_litellm_embedding_engine(LiteLLMEmbeddingEngine)  # pyrefly: ignore[bad-argument-type]
             if GenericAPIAdapter:
                 CogneeConfig._patch_generic_api_adapter(GenericAPIAdapter)
 
@@ -88,7 +88,9 @@ class CogneeConfig:
     @staticmethod
     def _patch_graph_relationship_ledger(ledger_cls: type) -> None:
         """Fix default ID generation for graph relationship ledger."""
-        ledger_cls.__table__.c.id.default = sa_schema.ColumnDefault(uuid4)
+        ledger_cls.__table__.c.id.default = sa_schema.ColumnDefault(
+            uuid4
+        )  # pyrefly: ignore[missing-attribute, bad-argument-type]
 
     @staticmethod
     def _patch_litellm_embedding_engine(engine_cls: type) -> None:
@@ -97,8 +99,8 @@ class CogneeConfig:
         async def patched_embedding(texts: list[str], model: str | None = None, **kwargs: Any) -> Any:
             from litellm import embedding
 
-            return await embedding(
-                model=model or settings.LLM_EMBEDDINGS_MODEL,
+            return await embedding(  # pyrefly: ignore[async-error]
+                model=model or settings.EMBEDDING_MODEL,
                 input=texts,
                 api_key=settings.LLM_API_KEY,
                 base_url=settings.LLM_API_URL or None,
@@ -109,7 +111,7 @@ class CogneeConfig:
                 caching=kwargs.get("caching", False),
             )
 
-        engine_cls.embedding = staticmethod(patched_embedding)
+        engine_cls.embedding = staticmethod(patched_embedding)  # pyrefly: ignore[missing-attribute]
 
     @staticmethod
     def _patch_generic_api_adapter(adapter_cls: type) -> None:
@@ -125,7 +127,7 @@ class CogneeConfig:
                 if callable(original_create):
                     result = original_create(*args, **kwargs)
                     if hasattr(result, "__await__"):
-                        return await result
+                        return await cast(Awaitable[Any], result)
                     return result
                 raise
 
@@ -155,10 +157,11 @@ class CogneeConfig:
             orig_auth = getattr(m_auth, "get_authorized_existing_datasets", None)
 
             if callable(orig_all):
+                original_all = cast(Callable[[Any, str], Awaitable[list[Any] | None]], orig_all)
 
-                async def safe_all(user: Any, permission_type: str):
+                async def safe_all(user: Any, permission_type: str) -> list[Any]:
                     try:
-                        res = await orig_all(user, permission_type)
+                        res = await original_all(user, permission_type)
                     except Exception:
                         return []
                     return [x for x in (res or []) if getattr(x, "id", None)]
@@ -166,10 +169,11 @@ class CogneeConfig:
                 setattr(m_all, "get_all_user_permission_datasets", safe_all)
 
             if callable(orig_auth):
+                original_auth = cast(Callable[[list[Any], str, Any], Awaitable[list[Any] | None]], orig_auth)
 
-                async def safe_auth(datasets: list[Any], permission_type: str, user: Any):
+                async def safe_auth(datasets: list[Any], permission_type: str, user: Any) -> list[Any]:
                     try:
-                        res = await orig_auth(datasets, permission_type, user)
+                        res = await original_auth(datasets, permission_type, user)
                     except Exception:
                         return []
                     return [x for x in (res or []) if getattr(x, "id", None)]

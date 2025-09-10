@@ -349,6 +349,9 @@ sys.modules.setdefault("bot.texts.resources", resources_mod)
 
 try:
     import dependency_injector  # noqa: F401
+    import dependency_injector.providers as di_providers  # type: ignore
+
+    sys.modules.setdefault("dependency_injector.providers", di_providers)
 except Exception:  # pragma: no cover - fallback stubs
     di_mod = types.ModuleType("dependency_injector")
     di_wiring = types.ModuleType("dependency_injector.wiring")
@@ -377,7 +380,7 @@ except Exception:  # pragma: no cover - fallback stubs
     di_mod.containers = di_containers
     di_mod.providers = di_providers
     sys.modules.setdefault("dependency_injector.containers", di_containers)
-sys.modules.setdefault("dependency_injector.providers", di_providers)
+    sys.modules.setdefault("dependency_injector.providers", di_providers)
 
 # Additional lightweight stubs for Django, FastAPI, and DRF components
 django_core = types.ModuleType("django.core")
