@@ -25,7 +25,7 @@ from core.exceptions import ProfileNotFoundError, ClientNotFoundError
 from core.schemas import Profile, Client
 from core.services import APIService
 from bot.utils.chat import client_request
-from bot.utils.credits import required_credits
+from bot.utils.credits import uah_to_credits
 from bot.utils.workout_plans import process_new_subscription, edit_subscription_days
 from bot.utils.menus import show_main_menu, show_my_profile_menu, send_policy_confirmation, show_balance_menu
 from bot.utils.profiles import update_profile_data, check_assigned_clients, get_assigned_coach
@@ -543,7 +543,7 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
                     reply_markup=select_days_kb(profile.language or settings.DEFAULT_LANG, []),
                 )
         elif data.get("service_type") == "program":
-            required = required_credits(coach.program_price or Decimal("0"))
+            required = uah_to_credits(coach.program_price or Decimal("0"))
             if client.credits < required:
                 if message is not None:
                     await answer_msg(

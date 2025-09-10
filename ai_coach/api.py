@@ -10,15 +10,9 @@ from core.cache import Cache
 from ai_coach.application import app, security
 from ai_coach.schemas import AICoachRequest
 from ai_coach.types import AskCtx, CoachMode
-from core.enums import WorkoutPlanType
+from core.enums import WorkoutPlanType, SubscriptionPeriod
 from config.app_settings import settings
 from core.schemas import Program, QAResponse, Subscription
-from core.tasks import refresh_external_knowledge
-
-from config.celery import celery_app as celery  # type: ignore
-
-celery.set_default()
-
 
 CoachAction = Callable[[AskCtx], Awaitable[object]]
 
@@ -68,10 +62,11 @@ async def ask(data: AICoachRequest, request: Request) -> Program | Subscription 
     logger.debug(f"/ask received request_id={data.request_id} client_id={data.client_id} mode={mode.value}")
     if mode is CoachMode.update and data.plan_type is None:
         raise HTTPException(status_code=422, detail="plan_type required for update mode")
+    period = SubscriptionPeriod(data.period or SubscriptionPeriod.one_month.value)
     ctx: AskCtx = {
         "prompt": data.prompt,
         "client_id": data.client_id,
-        "period": data.period or "1m",
+        "period": period.value,
         "workout_days": data.workout_days or [],
         "expected_workout": data.expected_workout or "",
         "feedback": data.feedback or "",
@@ -145,8 +140,8 @@ async def refresh_knowledge(credentials: HTTPBasicCredentials = Depends(security
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     try:
-        refresh_external_knowledge.apply_async(queue="maintenance")  # pyrefly: ignore[not-callable]
-        return {"status": "queued"}
-    except Exception as e:
-        logger.exception(f"Failed to enqueue refresh task: {e}")
-        raise HTTPException(status_code=503, detail="Queue unavailable")
+        await KnowledgeBase.refresh()
+    except Exception as e:  # pragma: no cover - log unexpected errors
+        logger.exception(f"Knowledge refresh failed: {e}")
+        raise HTTPException(status_code=503, detail="Refresh failed")
+    return {"status": "ok"}

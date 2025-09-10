@@ -19,7 +19,7 @@ from bot.states import States
 from bot.texts.text_manager import msg_text
 from config.app_settings import settings
 from core.cache import Cache
-from core.enums import CoachType
+from core.enums import CoachType, SubscriptionPeriod
 from core.schemas import Coach, Client, Profile
 from bot.utils.chat import contact_client, process_feedback_content, send_program
 from bot.utils.menus import (
@@ -301,10 +301,10 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
         return
 
     period_map = {
-        "subscription_1_month": "1m",
-        "subscription_6_months": "6m",
+        "subscription_1_month": SubscriptionPeriod.one_month,
+        "subscription_6_months": SubscriptionPeriod.six_months,
     }
-    await state.update_data(period=period_map.get(service, "1m"))
+    await state.update_data(period=period_map.get(service, SubscriptionPeriod.one_month).value)
     await state.set_state(States.ai_workout_days)
     await answer_msg(
         callback_query,

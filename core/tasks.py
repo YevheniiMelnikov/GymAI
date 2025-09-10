@@ -16,17 +16,14 @@ from core.cache import Cache
 from core.services import APIService
 from bot.texts.text_manager import msg_text
 from apps.payments.tasks import send_payment_message
-from bot.utils.credits import required_credits
 from bot.utils.profiles import get_assigned_coach
-from core.enums import CoachType
+from core.enums import CoachType, SubscriptionPeriod
 from core.utils.redis_lock import redis_try_lock, get_redis_client
 
 
-def _next_payment_date(period: str) -> str:
+def _next_payment_date(period: SubscriptionPeriod = SubscriptionPeriod.one_month) -> str:
     today = date.today()
-    if period == "14d":
-        next_date: date = today + timedelta(days=14)
-    elif period == "6m":
+    if period is SubscriptionPeriod.six_months:
         next_date = cast(date, today + relativedelta(months=+6))
     else:
         next_date = cast(date, today + relativedelta(months=+1))
@@ -151,7 +148,7 @@ def warn_low_credits(self):
                 continue
             client = await Cache.client.get_client(sub.client_profile)
             profile = await APIService.profile.get_profile(client.profile)
-            required = required_credits(Decimal(str(sub.price)))
+            required = int(sub.price)
             if client.credits < required:
                 lang = profile.language if profile else settings.DEFAULT_LANG
                 send_payment_message.delay(  # pyrefly: ignore[not-callable]
@@ -184,7 +181,7 @@ def charge_due_subscriptions(self):
             if not sub.id or not sub.client_profile:
                 continue
             client = await Cache.client.get_client(sub.client_profile)
-            required = required_credits(Decimal(str(sub.price)))
+            required = int(sub.price)
             if client.credits < required:
                 await APIService.workout.update_subscription(
                     sub.id, {"enabled": False, "client_profile": sub.client_profile}
@@ -198,11 +195,15 @@ def charge_due_subscriptions(self):
             if client.assigned_to:
                 coach = await get_assigned_coach(client, coach_type=CoachType.human)
                 if coach:
-                    payout = Decimal(str(sub.price)).quantize(Decimal("0.01"), ROUND_HALF_UP)
+                    payout = (Decimal(sub.price) * settings.CREDIT_RATE_MAX_PACK).quantize(
+                        Decimal("0.01"), ROUND_HALF_UP
+                    )
                     await APIService.profile.adjust_coach_payout_due(coach.profile, payout)
                     new_due = (coach.payout_due or Decimal("0")) + payout
                     await Cache.coach.update_coach(coach.profile, {"payout_due": str(new_due)})
-            next_date = _next_payment_date(getattr(sub, "period", "1m"))
+            period_str = getattr(sub, "period", SubscriptionPeriod.one_month.value)
+            period = SubscriptionPeriod(period_str)
+            next_date = _next_payment_date(period)
             await APIService.workout.update_subscription(sub.id, {"payment_date": next_date})
             await Cache.workout.update_subscription(sub.client_profile, {"payment_date": next_date})
 

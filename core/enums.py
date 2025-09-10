@@ -83,3 +83,11 @@ class WorkoutType(str, Enum):
 
     def __str__(self) -> str:
         return self.value
+
+
+class SubscriptionPeriod(str, Enum):
+    one_month = "1m"
+    six_months = "6m"
+
+    def __str__(self) -> str:
+        return self.value

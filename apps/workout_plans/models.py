@@ -7,7 +7,6 @@ from apps.profiles.choices import CoachType
 
 
 class SubscriptionPeriod(models.TextChoices):
-    FOURTEEN_DAYS = "14d", "14 days"
     ONE_MONTH = "1m", "1 month"
     SIX_MONTHS = "6m", "6 months"
 

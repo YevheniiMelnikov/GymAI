@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, date
+from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from typing import cast
 from decimal import Decimal, ROUND_HALF_UP
@@ -12,7 +12,7 @@ from bot.keyboards import program_edit_kb, program_manage_kb, subscription_view_
 from bot.states import States
 from config.app_settings import settings
 from core.cache import Cache
-from core.enums import ClientStatus, PaymentStatus
+from core.enums import ClientStatus, PaymentStatus, SubscriptionPeriod
 from core.schemas import Profile, DayExercises, Subscription, Program
 from core.exceptions import (
     ClientNotFoundError,
@@ -29,15 +29,13 @@ from bot.utils.text import get_translated_week_day
 from bot.utils.exercises import format_program
 from bot.utils.bot import del_msg, answer_msg, delete_messages
 from bot.keyboards import yes_no_kb
-from bot.utils.credits import required_credits
+from bot.utils.credits import uah_to_credits
 from bot.texts import msg_text, btn_text
 
 
-def _next_payment_date(period: str) -> str:
+def _next_payment_date(period: SubscriptionPeriod = SubscriptionPeriod.one_month) -> str:
     today = date.today()
-    if period == "14d":
-        next_date: date = today + timedelta(days=14)
-    elif period == "6m":
+    if period is SubscriptionPeriod.six_months:
         next_date = cast(date, today + relativedelta(months=+6))
     else:
         next_date = cast(date, today + relativedelta(months=+1))
@@ -363,7 +361,7 @@ async def process_new_subscription(
     if not coach:
         return
 
-    required = required_credits(coach.subscription_price or Decimal("0"))
+    required = uah_to_credits(coach.subscription_price or Decimal("0"))
     if client.credits < required:
         await callback_query.answer(msg_text("not_enough_credits", language), show_alert=True)
         await show_balance_menu(callback_query, profile, state)
@@ -371,10 +369,10 @@ async def process_new_subscription(
 
     service_type = data.get("service_type", "subscription")
     period_map = {
-        "subscription_1_month": "1m",
-        "subscription_6_months": "6m",
+        "subscription_1_month": SubscriptionPeriod.one_month,
+        "subscription_6_months": SubscriptionPeriod.six_months,
     }
-    period = period_map.get(service_type, "1m")
+    period = period_map.get(service_type, SubscriptionPeriod.one_month)
 
     if not confirmed:
         await state.update_data(required=required, period=period, coach=coach.model_dump())
@@ -390,7 +388,7 @@ async def process_new_subscription(
         client_profile_id=client.id,
         workout_days=data.get("workout_days", []),
         wishes=data.get("wishes", ""),
-        amount=coach.subscription_price or Decimal("0"),
+        amount=Decimal(required),
         period=period,
     )
     if sub_id is None:
@@ -406,7 +404,13 @@ async def process_new_subscription(
     await APIService.workout.update_subscription(sub_id, {"enabled": True, "payment_date": next_payment})
     await Cache.workout.update_subscription(
         client.profile,
-        {"id": sub_id, "enabled": True, "payment_date": next_payment, "period": period},
+        {
+            "id": sub_id,
+            "enabled": True,
+            "payment_date": next_payment,
+            "period": period.value,
+            "price": required,
+        },
     )
     await callback_query.answer(msg_text("payment_success", language), show_alert=True)
 

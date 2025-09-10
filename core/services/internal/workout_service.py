@@ -7,6 +7,7 @@ from loguru import logger
 from core.services.internal.api_client import APIClient
 from core.exceptions import UserServiceError
 from core.schemas import Program, DayExercises, Subscription
+from core.enums import SubscriptionPeriod
 
 
 class WorkoutService(APIClient):
@@ -87,7 +88,7 @@ class WorkoutService(APIClient):
         workout_days: list[str],
         wishes: str,
         amount: Decimal,
-        period: str = "1m",
+        period: SubscriptionPeriod = SubscriptionPeriod.one_month,
         exercises: list[dict] | None = None,
     ) -> int | None:
         url = urljoin(self.api_url, "api/v1/subscriptions/")
@@ -96,7 +97,7 @@ class WorkoutService(APIClient):
             "enabled": False,
             "price": str(amount),
             "workout_days": workout_days,
-            "period": period,
+            "period": period.value,
             "payment_date": datetime.today().strftime("%Y-%m-%d"),
             "wishes": wishes,
             "exercises": exercises or [],

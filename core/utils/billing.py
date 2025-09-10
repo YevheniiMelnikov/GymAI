@@ -1,13 +1,13 @@
-from datetime import date, timedelta
+from datetime import date
 from dateutil.relativedelta import relativedelta
 
+from core.enums import SubscriptionPeriod
 
-def next_payment_date(period: str) -> str:
+
+def next_payment_date(period: SubscriptionPeriod = SubscriptionPeriod.one_month) -> str:
     """Return next payment date for a given period."""
     today = date.today()
-    if period == "14d":
-        next_date: date = today + timedelta(days=14)
-    elif period == "6m":
+    if period is SubscriptionPeriod.six_months:
         next_date = today + relativedelta(months=6)
     else:
         next_date = today + relativedelta(months=1)

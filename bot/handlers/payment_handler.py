@@ -16,7 +16,7 @@ from bot.states import States
 
 from core.cache import Cache
 from core.cache.payment import PaymentCacheManager
-from core.enums import ClientStatus, PaymentStatus
+from core.enums import ClientStatus, PaymentStatus, SubscriptionPeriod
 from core.services import APIService
 from bot.utils.menus import show_main_menu, show_services_menu
 from core.schemas import Coach, Client
@@ -25,6 +25,7 @@ from bot.utils.workout_plans import cache_program_data, process_new_subscription
 from bot.texts import msg_text, btn_text
 from core.schemas import Profile
 from core.exceptions import ClientNotFoundError, CoachNotFoundError, ClientNotAssignedError
+from bot.utils.credits import uah_to_credits
 
 payment_router = Router()
 
@@ -139,17 +140,18 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext) -> No
     if service_type == "program":
         await cache_program_data(data, client.id)
     else:
-        price = coach.subscription_price or Decimal("0")
+        price_uah = coach.subscription_price or Decimal("0")
+        price = uah_to_credits(price_uah)
         period_map = {
-            "subscription_1_month": "1m",
-            "subscription_6_months": "6m",
+            "subscription_1_month": SubscriptionPeriod.one_month,
+            "subscription_6_months": SubscriptionPeriod.six_months,
         }
-        period = period_map.get(service_type, "1m")
+        period = period_map.get(service_type, SubscriptionPeriod.one_month)
         subscription_id = await APIService.workout.create_subscription(
             client_profile_id=client.id,
             workout_days=data.get("workout_days", []),
             wishes=wishes,
-            amount=price,
+            amount=Decimal(price),
             period=period,
         )
 
@@ -158,7 +160,7 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext) -> No
             "payment_date": datetime.today().strftime("%Y-%m-%d"),
             "enabled": False,
             "price": price,
-            "period": period,
+            "period": period.value,
             "client_profile": client.id,
             "workout_days": data.get("workout_days", []),
             "workout_type": data.get("workout_type"),

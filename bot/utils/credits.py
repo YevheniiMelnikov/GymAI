@@ -43,11 +43,6 @@ def uah_to_credits(
     return int(credits.to_integral_value(rounding=ROUND_HALF_UP))
 
 
-def required_credits(amount: Decimal) -> int:
-    """Return how many credits are needed to pay for a service."""
-    return uah_to_credits(amount)
-
-
 def available_packages() -> list[CreditPackage]:
     return [
         CreditPackage("max", settings.PACKAGE_MAX_CREDITS, settings.PACKAGE_MAX_PRICE),
