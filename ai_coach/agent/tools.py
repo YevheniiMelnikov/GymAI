@@ -7,6 +7,7 @@ from core.cache import Cache
 from core.resources.exercises import exercise_dict
 from core.schemas import DayExercises, Program, Subscription
 from core.utils.short_url import short_url
+from core.enums import SubscriptionPeriod
 
 from .base import AgentDeps
 
@@ -117,9 +118,9 @@ async def tool_attach_gifs(
 @toolset.tool
 async def tool_create_subscription(
     ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
-    period: str,
     workout_days: list[str],
     exercises: list[DayExercises],
+    period: SubscriptionPeriod = SubscriptionPeriod.one_month,
     wishes: str | None = None,
 ) -> Subscription:
     """Create a subscription and return its summary."""
@@ -127,17 +128,23 @@ async def tool_create_subscription(
 
     from core.services import APIService
     from core.utils.billing import next_payment_date
+    from config.app_settings import settings
 
     if not ctx.deps.allow_save:
         raise RuntimeError("saving not allowed in this mode")
     client_id = ctx.deps.client_id
     logger.debug(f"tool_create_subscription client_id={client_id} period={period} days={workout_days}")
     exercises_payload = [d.model_dump() for d in exercises]
+    price_map = {
+        SubscriptionPeriod.one_month: int(settings.REGULAR_AI_SUBSCRIPTION_PRICE),
+        SubscriptionPeriod.six_months: int(settings.LARGE_AI_SUBSCRIPTION_PRICE),
+    }
+    price = price_map.get(period, int(settings.REGULAR_AI_SUBSCRIPTION_PRICE))
     sub_id = await APIService.workout.create_subscription(
         client_profile_id=client_id,
         workout_days=workout_days,
         wishes=wishes or "",
-        amount=Decimal("0"),
+        amount=Decimal(price),
         period=period,
         exercises=exercises_payload,
     )
@@ -153,10 +160,10 @@ async def tool_create_subscription(
         "id": sub_id,
         "client_profile": client_id,
         "enabled": True,
-        "price": 0,
+        "price": price,
         "workout_type": "",
         "wishes": wishes or "",
-        "period": period,
+        "period": period.value,
         "workout_days": workout_days,
         "exercises": exercises_payload,
         "payment_date": payment_date,

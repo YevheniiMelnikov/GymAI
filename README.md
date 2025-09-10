@@ -196,7 +196,7 @@ If Celery prints connection errors such as `Error -2 connecting to redis:6379`, 
 
 The project ships an AI coach backed by Cognee. Each client and chat is mapped to datasets named `client_<id>_message`. Chat entries are stored with a `user:` or `bot:` prefix so Cognee keeps the full dialog history. SHA‑256 hashes are cached in Redis with a TTL derived from `BACKUP_RETENTION_DAYS` to prevent repeat ingestion. New texts are ingested asynchronously and cognified before they are searchable.
 
-To refresh external knowledge (e.g., documents from Google Drive), Celery calls `refresh_external_knowledge` every `KNOWLEDGE_REFRESH_INTERVAL` seconds. The task invokes `KnowledgeBase.refresh_knowledge_base` under basic authentication.
+To refresh external knowledge (e.g., documents from Google Drive), Celery calls `refresh_external_knowledge` every `KNOWLEDGE_REFRESH_INTERVAL` seconds. The task sends an authenticated request to the AI coach, which in turn runs `KnowledgeBase.refresh()`.
 
 **Key settings**
 
