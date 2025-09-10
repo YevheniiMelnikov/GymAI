@@ -14,6 +14,7 @@ os.environ.setdefault("ADMIN_ID", "1")
 
 import pytest  # pyrefly: ignore[import-error]
 from pydantic import ValidationError
+from pydantic_ai.settings import ModelSettings
 
 from ai_coach.agent import (
     AgentDeps,
@@ -95,9 +96,15 @@ def test_ask_request_accepts_ask_ai() -> None:
 async def test_answer_question(monkeypatch) -> None:
     class DummyAgent:
         async def run(
-            self, prompt: str, deps: AgentDeps, result_type: type[QAResponse] = QAResponse
+            self,
+            prompt: str,
+            deps: AgentDeps,
+            output_type: type[QAResponse] | None = None,
+            model_settings: ModelSettings | None = None,
         ) -> QAResponse:  # pragma: no cover - dummy
             assert "MODE: ask_ai" in prompt
+            assert output_type is QAResponse
+            assert model_settings is not None
             return QAResponse(answer="answer", sources=["s"])
 
     monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: DummyAgent()))

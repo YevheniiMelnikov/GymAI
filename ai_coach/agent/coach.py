@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import date
-from typing import Any
+from typing import Any, Optional
 
 from pydantic_ai.settings import ModelSettings
 
@@ -16,6 +16,7 @@ from .prompts import (
     UPDATE_WORKOUT,
     GENERATE_WORKOUT,
     COACH_INSTRUCTIONS,
+    agent_instructions,
 )
 
 from .tools import toolset
@@ -23,6 +24,7 @@ from ..schemas import ProgramPayload
 
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.openai import OpenAIChatModel
+from ai_coach.types import CoachMode
 
 
 class ProgramAdapter:
@@ -37,7 +39,7 @@ class ProgramAdapter:
 class CoachAgent:
     """PydanticAI wrapper for program generation."""
 
-    _agent: Any | None = None
+    _agent: Optional[Agent] = None
 
     @staticmethod
     def _lang(deps: AgentDeps) -> str:
@@ -74,6 +76,11 @@ class CoachAgent:
             client_name = ctx.deps.client_name or "the client"
             return f"Client's name: {client_name}\nClient's language: {lang}"
 
+        @cls._agent.instructions
+        def agent_instr(ctx: RunContext[AgentDeps]) -> str:  # pragma: no cover - runtime config
+            mode = ctx.deps.mode.value if ctx.deps.mode else "ask_ai"
+            return agent_instructions(mode)
+
         return cls._agent
 
     @classmethod
@@ -92,9 +99,11 @@ class CoachAgent:
         period: str | None = None,
         workout_days: list[str] | None = None,
         wishes: str | None = None,
-        result_type: type[Program] | type[Subscription],
+        output_type: type[Program] | type[Subscription],
+        instructions: str | None = None,
     ) -> Program | Subscription:
         agent = cls._get_agent()
+        deps.mode = CoachMode.program if output_type is Program else CoachMode.subscription
         today = date.today().isoformat()
         context_lines: list[str] = []
         if workout_type:
@@ -107,15 +116,20 @@ class CoachAgent:
             context_lines.append(f"Workout days: {', '.join(workout_days)}")
         if wishes:
             context_lines.append(f"Wishes: {wishes}")
-        mode = "program" if result_type is Program else "subscription"
+        mode = "program" if output_type is Program else "subscription"
+        rules = "\n".join(filter(None, [COACH_INSTRUCTIONS, instructions]))
         formatted = GENERATE_WORKOUT.format(
             current_date=today,
             request_context="\n".join(context_lines),
-            workout_rules=COACH_INSTRUCTIONS,
+            workout_rules=rules,
             language=cls._lang(deps),
         )
         user_prompt = f"MODE: {mode}\n{formatted}"
-        result: Program | Subscription = await agent.run(user_prompt, deps=deps, result_type=result_type)
+        result: Program | Subscription = await agent.run(
+            user_prompt,
+            deps=deps,
+            output_type=output_type,
+        )
         return result
 
     @classmethod
@@ -127,9 +141,11 @@ class CoachAgent:
         deps: AgentDeps,
         *,
         workout_type: WorkoutType | None = None,
-        result_type: type[Program] | type[Subscription] = Subscription,
+        output_type: type[Program] | type[Subscription] = Subscription,
+        instructions: str | None = None,
     ) -> Program | Subscription:
         agent = cls._get_agent()
+        deps.mode = CoachMode.update
         context_lines: list[str] = []
         if workout_type:
             context_lines.append(f"Workout type: {workout_type.value}")
@@ -141,19 +157,28 @@ class CoachAgent:
             context="\n".join(context_lines),
             language=cls._lang(deps),
         )
-        user_prompt = f"MODE: update\n{formatted}\nRules:\n{COACH_INSTRUCTIONS}"
-        result: Program | Subscription = await agent.run(user_prompt, deps=deps, result_type=result_type)
+        rules = "\n".join(filter(None, [COACH_INSTRUCTIONS, instructions]))
+        user_prompt = f"MODE: update\n{formatted}\nRules:\n{rules}"
+        result: Program | Subscription = await agent.run(
+            user_prompt,
+            deps=deps,
+            output_type=output_type,
+        )
         return result
 
     @classmethod
-    async def answer_question(cls, prompt: str, deps: AgentDeps) -> QAResponse:
+    async def answer_question(
+        cls,
+        prompt: str,
+        deps: AgentDeps,
+    ) -> QAResponse:
         agent = cls._get_agent()
+        deps.mode = CoachMode.ask_ai
         user_prompt = f"MODE: ask_ai\n{prompt}"
         result: QAResponse = await agent.run(
             user_prompt,
             deps=deps,
-            result_type=QAResponse,
-            temperature=0.3,
-            max_output_tokens=256,
+            output_type=QAResponse,
+            model_settings=ModelSettings(temperature=0.3, max_output_tokens=256),
         )
         return result

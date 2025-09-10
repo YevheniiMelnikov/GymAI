@@ -18,10 +18,15 @@ async def test_program_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
         return "program-result"
 
     monkeypatch.setattr(CoachAgent, "generate_workout_plan", staticmethod(fake_generate))
-    ctx = {"prompt": "p", "deps": "d", "wishes": "w", "workout_type": WorkoutType.HOME}
+    ctx = {"prompt": "p", "deps": "d", "wishes": "w", "workout_type": WorkoutType.HOME, "instructions": "i"}
     result = await DISPATCH[CoachMode.program](ctx)  # pyrefly: ignore[bad-argument-type]
     assert result == "program-result"
-    assert captured["args"] == ("p", "d", WorkoutType.HOME, {"wishes": "w", "result_type": Program})
+    assert captured["args"] == (
+        "p",
+        "d",
+        WorkoutType.HOME,
+        {"wishes": "w", "instructions": "i", "output_type": Program},
+    )
 
 
 @pytest.mark.asyncio
@@ -42,6 +47,7 @@ async def test_subscription_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
         "deps": "d",
         "wishes": "w",
         "workout_type": WorkoutType.HOME,
+        "instructions": "i",
     }
     result = await DISPATCH[CoachMode.subscription](ctx)  # pyrefly: ignore[bad-argument-type]
     assert result == "subscription-result"
@@ -53,7 +59,8 @@ async def test_subscription_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
             "period": "1m",
             "workout_days": ["mon"],
             "wishes": "w",
-            "result_type": Subscription,
+            "instructions": "i",
+            "output_type": Subscription,
         },
     )
 
@@ -69,9 +76,18 @@ async def test_update_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
         *,
         workout_type: WorkoutType | None = None,
         deps=None,
-        result_type=None,
+        output_type=None,
+        instructions=None,
     ) -> str:
-        captured["args"] = (prompt, expected_workout, feedback, workout_type, deps, result_type)
+        captured["args"] = (
+            prompt,
+            expected_workout,
+            feedback,
+            workout_type,
+            deps,
+            output_type,
+            instructions,
+        )
         return "update-result"
 
     monkeypatch.setattr(CoachAgent, "update_workout_plan", staticmethod(fake_update))
@@ -83,10 +99,11 @@ async def test_update_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
         "wishes": "",
         "workout_type": WorkoutType.HOME,
         "plan_type": WorkoutPlanType.PROGRAM,
+        "instructions": "i",
     }
     result = await DISPATCH[CoachMode.update](ctx)  # pyrefly: ignore[bad-argument-type]
     assert result == "update-result"
-    assert captured["args"] == ("p", "ew", "fb", WorkoutType.HOME, "d", Program)
+    assert captured["args"] == ("p", "ew", "fb", WorkoutType.HOME, "d", Program, "i")
 
 
 @pytest.mark.asyncio

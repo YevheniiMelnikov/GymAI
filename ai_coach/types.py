@@ -36,4 +36,5 @@ class AskCtx(TypedDict):
     language: str
     workout_type: WorkoutType | None
     plan_type: WorkoutPlanType | None
+    instructions: NotRequired[str | None]
     deps: NotRequired["AgentDeps"]

@@ -28,7 +28,8 @@ DISPATCH: dict[CoachMode, CoachAction] = {
         deps=ctx["deps"],
         workout_type=ctx.get("workout_type"),
         wishes=ctx["wishes"],
-        result_type=Program,
+        instructions=ctx.get("instructions"),
+        output_type=Program,
     ),
     CoachMode.subscription: lambda ctx: CoachAgent.generate_workout_plan(
         ctx.get("prompt"),
@@ -37,7 +38,8 @@ DISPATCH: dict[CoachMode, CoachAction] = {
         period=ctx["period"],
         workout_days=ctx["workout_days"],
         wishes=ctx["wishes"],
-        result_type=Subscription,
+        instructions=ctx.get("instructions"),
+        output_type=Subscription,
     ),
     CoachMode.update: lambda ctx: CoachAgent.update_workout_plan(
         ctx.get("prompt"),
@@ -45,10 +47,11 @@ DISPATCH: dict[CoachMode, CoachAction] = {
         feedback=ctx["feedback"],
         workout_type=ctx.get("workout_type"),
         deps=ctx["deps"],
-        result_type={
+        output_type={
             WorkoutPlanType.PROGRAM: Program,
             WorkoutPlanType.SUBSCRIPTION: Subscription,
         }[ctx["plan_type"]],
+        instructions=ctx.get("instructions"),
     ),
     CoachMode.ask_ai: lambda ctx: CoachAgent.answer_question(ctx["prompt"], deps=ctx["deps"]),
 }
@@ -76,6 +79,7 @@ async def ask(data: AICoachRequest, request: Request) -> Program | Subscription 
         "language": data.language or settings.DEFAULT_LANG,
         "workout_type": data.workout_type,
         "plan_type": data.plan_type,
+        "instructions": data.instructions,
     }
     client_name: str | None = None
     try:

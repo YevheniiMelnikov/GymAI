@@ -3,6 +3,7 @@ from typing import Protocol
 
 from core.schemas import Program, QAResponse, Subscription
 from core.enums import WorkoutType
+from ai_coach.types import CoachMode
 
 
 @dataclass
@@ -11,6 +12,7 @@ class AgentDeps:
     locale: str | None = None
     allow_save: bool = True
     client_name: str | None = None
+    mode: CoachMode | None = None
 
 
 class CoachAgentProtocol(Protocol):
@@ -24,7 +26,8 @@ class CoachAgentProtocol(Protocol):
         period: str | None = None,
         workout_days: list[str] | None = None,
         wishes: str | None = None,
-        result_type: type[Program] | type[Subscription],
+        output_type: type[Program] | type[Subscription],
+        instructions: str | None = None,
     ) -> Program | Subscription: ...
 
     @classmethod
@@ -36,7 +39,8 @@ class CoachAgentProtocol(Protocol):
         deps: AgentDeps,
         *,
         workout_type: WorkoutType | None = None,
-        result_type: type[Program] | type[Subscription] = Subscription,
+        output_type: type[Program] | type[Subscription] = Subscription,
+        instructions: str | None = None,
     ) -> Program | Subscription: ...
 
     @classmethod

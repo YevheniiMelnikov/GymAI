@@ -3,6 +3,7 @@ from .prompts import (
     COACH_INSTRUCTIONS,
     GENERATE_WORKOUT,
     UPDATE_WORKOUT,
+    agent_instructions,
 )
 
 __all__ = [
@@ -10,4 +11,5 @@ __all__ = [
     "COACH_INSTRUCTIONS",
     "GENERATE_WORKOUT",
     "UPDATE_WORKOUT",
+    "agent_instructions",
 ]

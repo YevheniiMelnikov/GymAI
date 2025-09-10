@@ -42,7 +42,8 @@ async def test_program_mode(monkeypatch):
     async def fake_generate(prompt, deps, *, workout_type: WorkoutType | None = None, **kwargs):
         assert workout_type is WorkoutType.HOME
         assert kwargs.get("wishes") == "w"
-        assert kwargs.get("result_type") is Program
+        assert kwargs.get("instructions") == "i"
+        assert kwargs.get("output_type") is Program
         return _sample_program()
 
     monkeypatch.setattr(CoachAgent, "generate_workout_plan", staticmethod(fake_generate))
@@ -55,6 +56,7 @@ async def test_program_mode(monkeypatch):
                 "mode": "program",
                 "wishes": "w",
                 "workout_type": "home",
+                "instructions": "i",
             },
             headers={"X-Agent": "pydanticai"},
         )
@@ -69,7 +71,8 @@ async def test_subscription_mode(monkeypatch):
         assert kwargs.get("period") == "1m"
         assert kwargs.get("workout_days") == ["mon"]
         assert kwargs.get("wishes") == "w"
-        assert kwargs.get("result_type") is Subscription
+        assert kwargs.get("instructions") == "i"
+        assert kwargs.get("output_type") is Subscription
         return _sample_subscription()
 
     monkeypatch.setattr(CoachAgent, "generate_workout_plan", staticmethod(fake_generate))
@@ -82,6 +85,7 @@ async def test_subscription_mode(monkeypatch):
                 "mode": "subscription",
                 "wishes": "w",
                 "workout_type": "home",
+                "instructions": "i",
             },
             headers={"X-Agent": "pydanticai"},
         )
@@ -92,10 +96,18 @@ async def test_subscription_mode(monkeypatch):
 @pytest.mark.asyncio
 async def test_update_mode(monkeypatch):
     async def fake_update(
-        prompt, expected_workout, feedback, *, workout_type: WorkoutType | None = None, deps=None, result_type=None
+        prompt,
+        expected_workout,
+        feedback,
+        *,
+        workout_type: WorkoutType | None = None,
+        deps=None,
+        output_type=None,
+        instructions=None,
     ):
         assert workout_type is WorkoutType.HOME
-        assert result_type is Program
+        assert output_type is Program
+        assert instructions == "i"
         return _sample_program()
 
     monkeypatch.setattr(CoachAgent, "update_workout_plan", staticmethod(fake_update))
@@ -108,6 +120,7 @@ async def test_update_mode(monkeypatch):
                 "mode": "update",
                 "workout_type": "home",
                 "plan_type": "program",
+                "instructions": "i",
             },
             headers={"X-Agent": "pydanticai"},
         )

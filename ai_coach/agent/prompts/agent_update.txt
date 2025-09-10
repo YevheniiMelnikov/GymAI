@@ -1,0 +1,11 @@
+MODE: update
+1) Call tool_search_knowledge(query) and tool_get_program_history().
+2) Generate a new ProgramPayload using the expected workout and feedback.
+3) Call tool_attach_gifs(plan.exercises_by_day) and replace plan.exercises_by_day with the returned list.
+4) Call tool_save_program(plan) and return the resulting Program.
+
+PROGRAM PAYLOAD REQUIREMENTS:
+- Do not return empty or partially filled fields.
+- Workout days must be non-empty; each exercise needs name, sets, and reps.
+- If split_number is missing, set it to the number of workout days.
+
