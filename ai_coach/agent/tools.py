@@ -1,6 +1,6 @@
 from loguru import logger
 
-from pydantic_ai import RunContext
+from pydantic_ai import ModelRetry, RunContext
 from pydantic_ai.toolsets.function import FunctionToolset
 
 from core.cache import Cache
@@ -29,9 +29,28 @@ async def tool_search_knowledge(
 
     client_id = ctx.deps.client_id
     logger.debug(f"tool_search_knowledge client_id={client_id} query='{query[:80]}' k={k}")
-    result = await KnowledgeBase.search(query, client_id, k)
+    try:
+        result = await KnowledgeBase.search(query, client_id, k)
+    except Exception as e:  # pragma: no cover - forward to model
+        raise ModelRetry(f"Knowledge search failed: {e}. Refine the query and retry.") from e
     logger.debug(f"tool_search_knowledge results={len(result)}")
     return result
+
+
+@toolset.tool
+async def tool_get_chat_history(
+    ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
+    limit: int = 20,
+) -> list[str]:
+    """Load recent chat messages for context."""
+    from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+
+    client_id = ctx.deps.client_id
+    logger.debug(f"tool_get_chat_history client_id={client_id} limit={limit}")
+    try:
+        return await KnowledgeBase.get_message_history(client_id, limit)
+    except Exception as e:  # pragma: no cover - forward to model
+        raise ModelRetry(f"Chat history unavailable: {e}. Try calling again.") from e
 
 
 @toolset.tool
@@ -57,9 +76,8 @@ async def tool_save_program(
         )
         logger.debug(f"event=save_program.success program_id={saved.id} client_id={client_id}")
         return saved
-    except Exception as e:  # pragma: no cover - log and re-raise
-        logger.error(f"Failed to save program for user {client_id}: {e}")
-        raise
+    except Exception as e:  # pragma: no cover - forward to model
+        raise ModelRetry(f"Program saving failed: {e}. Ensure plan data is valid and retry.") from e
 
 
 @toolset.tool
@@ -71,7 +89,10 @@ async def tool_get_program_history(
 
     client_id = ctx.deps.client_id
     logger.debug(f"tool_get_program_history client_id={client_id}")
-    return await APIService.workout.get_all_programs(client_id)
+    try:
+        return await APIService.workout.get_all_programs(client_id)
+    except Exception as e:  # pragma: no cover - forward to model
+        raise ModelRetry(f"Program history unavailable: {e}. Try calling the tool again later.") from e
 
 
 @toolset.tool
@@ -140,32 +161,37 @@ async def tool_create_subscription(
         SubscriptionPeriod.six_months: int(settings.LARGE_AI_SUBSCRIPTION_PRICE),
     }
     price = price_map.get(period, int(settings.REGULAR_AI_SUBSCRIPTION_PRICE))
-    sub_id = await APIService.workout.create_subscription(
-        client_profile_id=client_id,
-        workout_days=workout_days,
-        wishes=wishes or "",
-        amount=Decimal(price),
-        period=period,
-        exercises=exercises_payload,
-    )
-    if sub_id is None:
-        raise RuntimeError("subscription creation failed")
-    payment_date = next_payment_date(period)
-    await APIService.workout.update_subscription(sub_id, {"enabled": True, "payment_date": payment_date})
-    logger.debug(f"event=create_subscription.success subscription_id={sub_id} payment_date={payment_date}")
-    sub = await APIService.workout.get_latest_subscription(client_id)
-    if sub is not None:
-        return sub
-    data = {
-        "id": sub_id,
-        "client_profile": client_id,
-        "enabled": True,
-        "price": price,
-        "workout_type": "",
-        "wishes": wishes or "",
-        "period": period.value,
-        "workout_days": workout_days,
-        "exercises": exercises_payload,
-        "payment_date": payment_date,
-    }
-    return Subscription.model_validate(data)
+    try:
+        sub_id = await APIService.workout.create_subscription(
+            client_profile_id=client_id,
+            workout_days=workout_days,
+            wishes=wishes or "",
+            amount=Decimal(price),
+            period=period,
+            exercises=exercises_payload,
+        )
+        if sub_id is None:
+            raise ModelRetry("Subscription creation failed. Adjust provided data and retry.")
+        payment_date = next_payment_date(period)
+        await APIService.workout.update_subscription(sub_id, {"enabled": True, "payment_date": payment_date})
+        logger.debug(f"event=create_subscription.success subscription_id={sub_id} payment_date={payment_date}")
+        sub = await APIService.workout.get_latest_subscription(client_id)
+        if sub is not None:
+            return sub
+        data = {
+            "id": sub_id,
+            "client_profile": client_id,
+            "enabled": True,
+            "price": price,
+            "workout_type": "",
+            "wishes": wishes or "",
+            "period": period.value,
+            "workout_days": workout_days,
+            "exercises": exercises_payload,
+            "payment_date": payment_date,
+        }
+        return Subscription.model_validate(data)
+    except ModelRetry:
+        raise
+    except Exception as e:  # pragma: no cover - forward to model
+        raise ModelRetry(f"Subscription creation failed: {e}. Verify inputs and try again.") from e

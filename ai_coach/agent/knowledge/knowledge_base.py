@@ -13,6 +13,7 @@ from ai_coach.agent.knowledge.utils.hash_store import HashStore
 from ai_coach.agent.knowledge.utils.lock_cache import LockCache
 from ai_coach.schemas import CogneeUser
 from ai_coach.types import MessageRole
+from config.app_settings import settings
 from core.exceptions import UserServiceError
 from core.services import APIService
 from core.schemas import Client
@@ -35,9 +36,6 @@ except Exception:
     class DatasetNotFoundError(Exception): ...
 
     class PermissionDeniedError(Exception): ...
-
-
-
 
 
 class KnowledgeBase:
@@ -75,7 +73,7 @@ class KnowledgeBase:
         if cls._loader:
             await cls._loader.refresh()
         try:
-            await cognee.cognify(datasets=[ds], user=cls._to_user_or_none(user))
+            await cognee.cognify(datasets=[ds], user=cls._to_user_or_none(user))  # pyrefly: ignore[bad-argument-type]
         except (PermissionDeniedError, DatasetNotFoundError) as e:
             logger.error(f"Knowledge base update skipped: {e}")
 
@@ -100,7 +98,7 @@ class KnowledgeBase:
             info = await cognee.add(
                 text,
                 dataset_name=ds_name,
-                user=cls._to_user_or_none(user),
+                user=cls._to_user_or_none(user),  # pyrefly: ignore[bad-argument-type]
                 node_set=node_set,
             )
         except (DatasetNotFoundError, PermissionDeniedError):
@@ -155,14 +153,6 @@ class KnowledgeBase:
             logger.warning("Add text skipped")
 
     @classmethod
-    async def refresh_client_knowledge(cls, client_id: int) -> None:
-        """Re-cognify client-specific dataset asynchronously."""
-        user = await cls._get_cognee_user()
-        dataset = cls._dataset_name(client_id)
-        logger.info(f"Reindexing dataset {dataset}")
-        asyncio.create_task(cls._process_dataset(dataset, user))
-
-    @classmethod
     async def save_client_message(cls, text: str, client_id: int) -> None:
         """Save a client message into dataset."""
         await cls.add_text(text, client_id=client_id, role=MessageRole.CLIENT)
@@ -171,6 +161,24 @@ class KnowledgeBase:
     async def save_ai_message(cls, text: str, client_id: int) -> None:
         """Save an AI coach message into dataset."""
         await cls.add_text(text, client_id=client_id, role=MessageRole.AI_COACH)
+
+    @classmethod
+    async def get_message_history(cls, client_id: int, limit: int | None = None) -> list[str]:
+        """Return recent chat messages for a client."""
+        dataset = cls._dataset_name(client_id)
+        dataset = cls._resolve_dataset_alias(dataset)
+        try:
+            data = await cognee.datasets.list_data(dataset)
+        except Exception as e:
+            logger.warning(f"History fetch failed client_id={client_id}: {e}")
+            return []
+        messages: list[str] = []
+        for item in data:
+            text = getattr(item, "text", None)
+            if text:
+                messages.append(str(text))
+        limit = limit or settings.CHAT_HISTORY_LIMIT
+        return messages[-limit:]
 
     @classmethod
     async def _get_cognee_user(cls) -> Any | None:
@@ -199,9 +207,9 @@ class KnowledgeBase:
             )
         except Exception:
             return
-        exists = await get_authorized_dataset_by_name(name, user_ns, "write")
+        exists = await get_authorized_dataset_by_name(name, user_ns, "write")  # pyrefly: ignore[bad-argument-type]
         if exists is None:
-            await create_authorized_dataset(name, user_ns)
+            await create_authorized_dataset(name, user_ns)  # pyrefly: ignore[bad-argument-type]
 
     @staticmethod
     def _dataset_name(client_id: int) -> str:
@@ -250,7 +258,7 @@ class KnowledgeBase:
         lock = cls._cognify_locks.get(dataset)
         async with lock:
             ds = cls._resolve_dataset_alias(dataset)
-            await cognee.cognify(datasets=[ds], user=cls._to_user_or_none(user))
+            await cognee.cognify(datasets=[ds], user=cls._to_user_or_none(user))  # pyrefly: ignore[bad-argument-type]
 
     @classmethod
     def _to_user_or_none(cls, user: Any) -> Any | None:
