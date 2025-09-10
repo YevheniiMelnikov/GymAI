@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import os
 from datetime import date
 from typing import Any, Optional
 
+from openai import AsyncOpenAI
 from pydantic_ai.settings import ModelSettings
 
 from config.app_settings import settings
@@ -52,16 +52,19 @@ class CoachAgent:
         if Agent is None or OpenAIChatModel is None:
             raise RuntimeError("pydantic_ai package is required")
 
-        os.environ.setdefault("OPENAI_API_KEY", settings.LLM_API_KEY)
-        os.environ.setdefault("OPENAI_BASE_URL", settings.LLM_API_URL)
-
         model = OpenAIChatModel(
-            model_name=settings.LLM_MODEL,
-            provider=settings.LLM_PROVIDER,
+            model_name=settings.AGENT_MODEL,
+            provider=settings.AGENT_PROVIDER,
             settings=ModelSettings(
                 timeout=float(settings.COACH_AGENT_TIMEOUT),
             ),
         )
+
+        model.client = AsyncOpenAI(
+            api_key=settings.LLM_API_KEY,
+            base_url=settings.LLM_API_URL,
+        )
+
         cls._agent = Agent(
             model=model,
             deps_type=AgentDeps,
@@ -71,9 +74,7 @@ class CoachAgent:
         )  # pyrefly: ignore[no-matching-overload]
 
         @cls._agent.system_prompt  # pyrefly: ignore[no-matching-overload]
-        async def coach_sys(
-            ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
-        ) -> str:  # pragma: no cover - runtime config
+        async def coach_sys(ctx: RunContext[AgentDeps]) -> str:  # pyrefly: ignore[unsupported-operation]
             lang = ctx.deps.locale or settings.DEFAULT_LANG
             client_name = ctx.deps.client_name or "the client"
             return f"Client's name: {client_name}\nClient's language: {lang}"

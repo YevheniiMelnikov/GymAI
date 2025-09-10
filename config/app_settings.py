@@ -21,10 +21,14 @@ class Settings(BaseSettings):
     API_MAX_CONNECTIONS: int = 100
     API_MAX_KEEPALIVE_CONNECTIONS: int = 20
 
+    CACHE_TTL: int = 60 * 5  # Django cache TTL
+    BACKUP_RETENTION_DAYS: int = 30  # Postgres/Redis backup retention
+
     KNOWLEDGE_BASE_FOLDER_ID: str | None = None
     KNOWLEDGE_REFRESH_INTERVAL: int = 60 * 60
     KNOWLEDGE_REFRESH_START_DELAY: int = 180
     AI_COACH_TIMEOUT: int = 120
+    LLM_COOLDOWN: int = 60
     COACH_AGENT_RETRIES: int = 3
     COACH_AGENT_TIMEOUT: int = 60
     CHAT_HISTORY_LIMIT: int = 20
@@ -36,24 +40,22 @@ class Settings(BaseSettings):
     EMBEDDING_API_KEY: Annotated[str, Field(default="")]
     LLM_API_URL: Annotated[str, Field(default="https://openrouter.ai/api/v1")]
     LLM_API_KEY: Annotated[str, Field(default="")]
-    LLM_MODEL: Annotated[str, Field(default="gpt-4o")]
-    LLM_PROVIDER: Annotated[str, Field(default="custom")]
-    LLM_COOLDOWN: Annotated[int, Field(default=60)]
+    LLM_MODEL: Annotated[str, Field(default="gpt-5-mini")]  # for cognee
+    LLM_PROVIDER: Annotated[str, Field(default="custom")]  # for cognee
+    AGENT_MODEL: Annotated[str, Field(default="openai/gpt-5-mini")]
+    AGENT_PROVIDER: Annotated[str, Field(default="openrouter")]
 
     EMBEDDING_MODEL: Annotated[str, Field(default="openai/text-embedding-3-large")]
     EMBEDDING_PROVIDER: Annotated[str, Field(default="openai")]
     EMBEDDING_ENDPOINT: Annotated[str, Field(default="https://api.openai.com/v1")]
 
-    BOT_TOKEN: str
-    BOT_LINK: str
-    WEBHOOK_HOST: str
+    BOT_TOKEN: Annotated[str, Field(default="")]
+    BOT_LINK: Annotated[str, Field(default="")]
+    WEBHOOK_HOST: Annotated[str, Field(default="")]
     HOST_NGINX_PORT: Annotated[str, Field(default="8000")]
     WEBAPP_PUBLIC_URL: Annotated[str | None, Field(default=None)]
     WEB_SERVER_HOST: Annotated[str, Field(default="0.0.0.0")]
     BOT_PORT: Annotated[int, Field(default=8088)]
-
-    CACHE_TTL: int = 60 * 5  # Django cache TTL
-    BACKUP_RETENTION_DAYS: int = 30  # Postgres/Redis backup retention
 
     TIME_ZONE: Annotated[str, Field(default="Europe/Kyiv")]
     DEFAULT_LANG: Annotated[str, Field(default="ua")]
@@ -77,8 +79,8 @@ class Settings(BaseSettings):
     GRAPH_DATABASE_PROVIDER: Annotated[str, Field(default="networkx")]
     AI_COACH_URL: Annotated[str, Field(default="http://ai_coach:9000/")]
 
-    API_KEY: str
-    SECRET_KEY: str
+    API_KEY: Annotated[str, Field(default="")]
+    SECRET_KEY: Annotated[str, Field(default="")]
     API_HOST: Annotated[str, Field(default="http://127.0.0.1")]
     HOST_API_PORT: Annotated[str, Field(default="8000")]
     API_URL: Annotated[str | None, Field(default=None)]
@@ -86,19 +88,19 @@ class Settings(BaseSettings):
     SITE_NAME: Annotated[str, Field(default="AchieveTogether")]
 
     GOOGLE_APPLICATION_CREDENTIALS: Annotated[str, Field(default="google_creds.json")]
-    SPREADSHEET_ID: str
-    TG_SUPPORT_CONTACT: str
-    PUBLIC_OFFER: str
-    PRIVACY_POLICY: str
-    EMAIL: str
-    ADMIN_ID: str
+    SPREADSHEET_ID: Annotated[str, Field(default="")]
+    TG_SUPPORT_CONTACT: Annotated[str, Field(default="")]
+    PUBLIC_OFFER: Annotated[str, Field(default="")]
+    PRIVACY_POLICY: Annotated[str, Field(default="")]
+    EMAIL: Annotated[str, Field(default="")]
+    ADMIN_ID: Annotated[str, Field(default="")]
 
     DJANGO_ADMIN: Annotated[str, Field(default="admin")]
     DJANGO_PASSWORD: Annotated[str, Field(default="admin")]
 
-    PAYMENT_PRIVATE_KEY: str
-    PAYMENT_PUB_KEY: str
-    CHECKOUT_URL: str
+    PAYMENT_PRIVATE_KEY: Annotated[str, Field(default="")]
+    PAYMENT_PUB_KEY: Annotated[str, Field(default="")]
+    CHECKOUT_URL: Annotated[str, Field(default="")]
     BOT_PAYMENT_OPTIONS: Annotated[str, Field(default="bot/images")]
 
     WEBHOOK_PATH: Annotated[str, Field(default="/telegram/webhook")]
