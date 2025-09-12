@@ -151,7 +151,7 @@ class Settings(BaseSettings):
         if not in_docker:
             normalized = (self.REDIS_URL or "").strip().lower()
             if not normalized or normalized.startswith("redis://redis"):
-                self.REDIS_URL = f"redis://127.0.0.1:{self.HOST_REDIS_PORT}"
+                self.REDIS_URL = f"redis://127.0.0.1:6379"
 
         return self
 
