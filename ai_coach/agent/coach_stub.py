@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from core.enums import WorkoutType
+from core.enums import CoachType, WorkoutType
 from core.schemas import Program, QAResponse, Subscription
+from pydantic_ai.settings import ModelSettings
 
 
 class ProgramAdapter:
@@ -13,7 +14,11 @@ class ProgramAdapter:
 
     @staticmethod
     def to_domain(payload: Any) -> Program:
-        return Program.model_validate(payload)
+        data = payload.model_dump() if hasattr(payload, "model_dump") else dict(payload)
+        data.pop("schema_version", None)
+        if data.get("coach_type") == "ai":
+            data["coach_type"] = CoachType.ai
+        return Program(**data)
 
 
 class CoachAgent:
@@ -50,4 +55,10 @@ class CoachAgent:
 
     @classmethod
     async def answer_question(cls, prompt: str, deps: Any) -> QAResponse:
+        agent = cls._get_agent()
+        prompt = f"MODE: ask_ai\n{prompt}"
+        return await agent.run(prompt, deps, QAResponse, ModelSettings())
+
+    @classmethod
+    def _get_agent(cls) -> Any:  # pragma: no cover - stub
         raise RuntimeError("pydantic_ai package is required")

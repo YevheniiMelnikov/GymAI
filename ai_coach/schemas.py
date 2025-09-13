@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from ai_coach.types import CoachMode
 from core.schemas import Program, DayExercises
-from core.enums import WorkoutPlanType, WorkoutType
+from core.enums import CoachType, WorkoutPlanType, WorkoutType
 
 
 class AICoachRequest(BaseModel):
@@ -51,6 +51,13 @@ class ProgramPayload(Program):
         default=None,
         description="Internal schema version used by the agent; dropped before save",
     )
+
+    @field_validator("coach_type", mode="before")
+    @staticmethod
+    def _map_coach_type(value: str | CoachType | None) -> CoachType | str | None:
+        if value == "ai":
+            return CoachType.ai
+        return value
 
     @model_validator(mode="after")
     def _validate_invariants(self) -> "ProgramPayload":

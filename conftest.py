@@ -26,6 +26,7 @@ modules = {
     "cognee.base_config": types.ModuleType("cognee.base_config"),
     "cognee.infrastructure": types.ModuleType("cognee.infrastructure"),
     "cognee.infrastructure.files": types.ModuleType("cognee.infrastructure.files"),
+    "cognee.config": types.ModuleType("cognee.config"),
 }
 modules["cognee.modules.data.exceptions"].DatasetNotFoundError = Exception
 modules["cognee.modules.users.exceptions.exceptions"].PermissionDeniedError = Exception
@@ -34,6 +35,11 @@ modules["cognee.infrastructure.databases.exceptions"].DatabaseNotCreatedError = 
 modules["cognee.modules.engine.operations.setup"].setup = lambda: None
 modules["cognee.base_config"].get_base_config = lambda: types.SimpleNamespace(data_root_directory=".")
 cognee_stub.base_config = modules["cognee.base_config"]
+modules["cognee.config"].set_llm_provider = lambda *a, **k: None
+cognee_stub.config = modules["cognee.config"]
+modules["cognee.config"].set_llm_model = lambda *a, **k: None
+modules["cognee.config"].set_llm_api_key = lambda *a, **k: None
+modules["cognee.config"].set_llm_endpoint = lambda *a, **k: None
 files_utils_mod = types.ModuleType("cognee.infrastructure.files.utils")
 
 
@@ -97,6 +103,9 @@ gspread_mod.authorize = lambda *a, **k: gspread_mod.Client()
 gspread_mod.utils = types.SimpleNamespace(ValueInputOption=types.SimpleNamespace(user_entered="USER_ENTERED"))
 sys.modules.setdefault("gspread", gspread_mod)
 sys.modules.setdefault("gspread.utils", gspread_mod.utils)
+celery_mod = types.ModuleType("celery")
+celery_mod.shared_task = lambda *a, **k: (lambda f: f)
+sys.modules.setdefault("celery", celery_mod)
 docx_mod = types.ModuleType("docx")
 
 
@@ -166,9 +175,13 @@ settings_stub = types.SimpleNamespace(
     PAYMENT_PUB_KEY="pub",
     WEBHOOK_PATH="/telegram/webhook",
     DEFAULT_LANG="ru",
+    AGENT_PYDANTICAI_ENABLED=True,
+    KNOWLEDGE_BASE_FOLDER_ID="kb",
+    LLM_PROVIDER="openai",
+    LLM_MODEL="gpt-4o",
+    LLM_API_KEY="test",
+    LLM_API_URL="http://localhost",
 )
-pydantic_mod = types.ModuleType("pydantic")
-pydantic_mod.__path__ = []  # mark as package for submodule imports
 sys.modules.setdefault("config.app_settings", types.ModuleType("config.app_settings"))
 sys.modules["config.app_settings"].settings = settings_stub
 logger_stub = types.ModuleType("config.logger")
@@ -177,31 +190,36 @@ logger_stub.LOGGING = {}
 sys.modules.setdefault("config.logger", logger_stub)
 
 
-class BaseModel:
-    def __init__(self, **data: Any) -> None:
-        for k, v in data.items():
-            setattr(self, k, v)
+try:  # use real pydantic if available
+    import pydantic  # noqa: F401
+except Exception:  # pragma: no cover - fallback stubs
+    pydantic_mod = types.ModuleType("pydantic")
+    pydantic_mod.__path__ = []  # mark as package for submodule imports
 
-    def model_dump(self) -> dict[str, Any]:
-        return self.__dict__
+    class BaseModel:
+        def __init__(self, **data: Any) -> None:
+            for k, v in data.items():
+                setattr(self, k, v)
 
+        def model_dump(self) -> dict[str, Any]:
+            return self.__dict__
 
-pydantic_mod.BaseModel = BaseModel
-pydantic_mod.Field = lambda *a, **k: None
-pydantic_mod.field_validator = lambda *a, **k: (lambda x: x)
-pydantic_mod.model_validator = lambda *a, **k: (lambda x: x)
-pydantic_mod.condecimal = lambda *a, **k: float
-pydantic_mod.ConfigDict = dict
-pydantic_mod.create_model = lambda name, **fields: type(name, (BaseModel,), fields)
-pydantic_mod.ValidationError = Exception
-json_schema_mod = types.ModuleType("pydantic.json_schema")
-json_schema_mod.GenerateJsonSchema = object
-sys.modules.setdefault("pydantic", pydantic_mod)
-sys.modules.setdefault("pydantic.json_schema", json_schema_mod)
-pydantic_mod.json_schema = json_schema_mod
-core_mod = types.ModuleType("pydantic_core")
-core_mod.ValidationError = Exception
-sys.modules.setdefault("pydantic_core", core_mod)
+    pydantic_mod.BaseModel = BaseModel
+    pydantic_mod.Field = lambda *a, **k: None
+    pydantic_mod.field_validator = lambda *a, **k: (lambda x: x)
+    pydantic_mod.model_validator = lambda *a, **k: (lambda x: x)
+    pydantic_mod.condecimal = lambda *a, **k: float
+    pydantic_mod.ConfigDict = dict
+    pydantic_mod.create_model = lambda name, **fields: type(name, (BaseModel,), fields)
+    pydantic_mod.ValidationError = Exception
+    json_schema_mod = types.ModuleType("pydantic.json_schema")
+    json_schema_mod.GenerateJsonSchema = object
+    sys.modules.setdefault("pydantic", pydantic_mod)
+    sys.modules.setdefault("pydantic.json_schema", json_schema_mod)
+    pydantic_mod.json_schema = json_schema_mod
+    core_mod = types.ModuleType("pydantic_core")
+    core_mod.ValidationError = Exception
+    sys.modules.setdefault("pydantic_core", core_mod)
 redis_mod = types.ModuleType("redis")
 redis_mod.exceptions = types.ModuleType("redis.exceptions")
 redis_mod.exceptions.RedisError = Exception
@@ -259,6 +277,9 @@ class DummyRedis:
 redis_async_mod.Redis = DummyRedis
 redis_async_mod.from_url = lambda *a, **k: DummyRedis()
 sys.modules.setdefault("redis.asyncio", redis_async_mod)
+redis_async_mod.client = types.ModuleType("redis.asyncio.client")
+redis_async_mod.client.Pipeline = object
+sys.modules.setdefault("redis.asyncio.client", redis_async_mod.client)
 try:
     import httpx  # noqa: F401
 except Exception:  # pragma: no cover - fallback stub
@@ -382,8 +403,16 @@ aiogram_mod.types = types.SimpleNamespace(
     ),
     CallbackQuery=type("CallbackQuery", (), {"answer": lambda *a, **k: None, "message": None}),
     BotCommand=object,
-    InlineKeyboardButton=type("InlineKeyboardButton", (), {}),
-    InlineKeyboardMarkup=type("InlineKeyboardMarkup", (), {}),
+    InlineKeyboardButton=type(
+        "InlineKeyboardButton",
+        (),
+        {"__init__": lambda self, text, **k: None},
+    ),
+    InlineKeyboardMarkup=type(
+        "InlineKeyboardMarkup",
+        (),
+        {"__init__": lambda self, **k: None},
+    ),
     WebAppInfo=type("WebAppInfo", (), {}),
     FSInputFile=object,
     InputFile=object,

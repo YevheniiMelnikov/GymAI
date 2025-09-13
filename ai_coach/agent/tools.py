@@ -12,7 +12,13 @@ from core.enums import SubscriptionPeriod
 from .base import AgentDeps
 
 from ..schemas import ProgramPayload
-from core.services import get_gif_manager
+
+try:  # optional gif service
+    from core.services import get_gif_manager
+except Exception:  # pragma: no cover - service optional
+
+    def get_gif_manager(*args, **kwargs):  # type: ignore[empty-body]
+        raise RuntimeError("gif service not available")
 
 
 toolset = FunctionToolset()

@@ -10,6 +10,8 @@ from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from ai_coach.agent.knowledge.base_knowledge_loader import KnowledgeLoader
 from core.containers import create_container, set_container, get_container
 from core.services.internal import APIService
+from config.app_settings import settings
+from ai_coach.schemas import AICoachRequest
 
 knowledge_ready_event: asyncio.Event | None = None
 
@@ -46,8 +48,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if init_resources is not None:
         await init_resources
 
-    loader = GDriveDocumentLoader(KnowledgeBase.add_text)
-    await init_knowledge_base(loader)
+    if settings.AGENT_PYDANTICAI_ENABLED:
+        loader = GDriveDocumentLoader(KnowledgeBase.add_text)
+        await init_knowledge_base(loader)
     try:
         yield
     finally:
@@ -58,3 +61,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="AI Coach", lifespan=lifespan)
 security = HTTPBasic()
+
+
+@app.post("/ask/")
+async def ask(req: AICoachRequest) -> list[str]:  # simple stub endpoint
+    return await KnowledgeBase.search(req.prompt or "", req.client_id)

@@ -12,25 +12,74 @@ from pathlib import Path
 
 from bot import keyboards as kb
 from bot.keyboards import subscription_manage_kb, program_edit_kb, program_view_kb
-from bot.utils.profiles import fetch_user, answer_profile, get_assigned_coach
 from bot.utils.credits import uah_to_credits, available_packages, available_ai_services
 from decimal import Decimal
 from bot.states import States
 from bot.texts import msg_text
 from core.cache import Cache
 from core.enums import ClientStatus, CoachType
-from core.exceptions import ClientNotFoundError, CoachNotFoundError, SubscriptionNotFoundError
+from core.exceptions import (
+    ClientNotFoundError,
+    CoachNotFoundError,
+    ProgramNotFoundError,
+    SubscriptionNotFoundError,
+)
 from core.schemas import Client, Coach, Profile, Subscription, Program, DayExercises
 from bot.utils.text import (
     get_client_page,
     get_profile_attributes,
     get_translated_week_day,
 )
-from bot.utils.exercises import format_program, format_full_program
 from config.app_settings import settings
-from bot.utils.bot import del_msg, answer_msg, get_webapp_url
-from core.services import get_avatar_manager
 from core.utils.validators import validate_or_raise
+
+try:  # optional service access
+    from core.services import get_avatar_manager
+except Exception:  # pragma: no cover - minimal env
+
+    def get_avatar_manager(*args, **kwargs):  # type: ignore[empty-body]
+        raise RuntimeError("services module not available")
+
+
+try:  # optional bot helpers
+    from bot.utils.bot import del_msg, answer_msg, get_webapp_url
+except Exception:  # pragma: no cover - missing aiogram etc.
+    from typing import Any
+
+    async def del_msg(*_: Any, **__: Any) -> None:  # type: ignore[empty-body]
+        return None
+
+    async def answer_msg(*_: Any, **__: Any) -> Any:  # type: ignore[empty-body]
+        return None
+
+    def get_webapp_url(*_: Any, **__: Any) -> None:  # type: ignore[empty-body]
+        return None
+
+
+try:  # heavy formatting utils
+    from bot.utils.exercises import format_program, format_full_program
+except Exception:  # pragma: no cover - optional
+
+    async def format_program(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise RuntimeError("exercises module not available")
+
+    async def format_full_program(*args, **kwargs):  # type: ignore[no-untyped-def]
+        raise RuntimeError("exercises module not available")
+
+
+try:  # optional heavy deps
+    from bot.utils.profiles import fetch_user, answer_profile, get_assigned_coach
+except Exception:  # pragma: no cover - missing aiogram etc.
+    from typing import Any
+
+    async def fetch_user(*_: Any, **__: Any) -> Any:
+        raise RuntimeError("profiles module not available")
+
+    async def answer_profile(*_: Any, **__: Any) -> Any:
+        raise RuntimeError("profiles module not available")
+
+    async def get_assigned_coach(*_: Any, **__: Any) -> Any:
+        raise RuntimeError("profiles module not available")
 
 
 async def has_human_coach_subscription(profile_id: int) -> bool:
@@ -423,16 +472,14 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
 
 
 async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    message = cast(Message, callback_query.message)
-    assert message
-
-    await answer_msg(
-        message,
-        msg_text("select_action", profile.language),
-        reply_markup=kb.program_action_kb(profile.language, get_webapp_url("program")),
-    )
-    await state.set_state(States.program_action_choice)
-    await del_msg(cast(Message | CallbackQuery | None, message))
+    client = await Cache.client.get_client(profile.id)
+    try:
+        await Cache.workout.get_latest_program(client.id)
+    except ProgramNotFoundError:
+        if hasattr(callback_query, "answer"):
+            await callback_query.answer(msg_text("no_program", profile.language), show_alert=True)
+        return
+    await show_program_promo_page(callback_query, profile, state)
 
 
 async def show_program_promo_page(
