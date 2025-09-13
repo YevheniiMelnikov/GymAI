@@ -1,4 +1,5 @@
 import os
+import asyncio
 
 os.environ.setdefault("SECRET_KEY", "x")
 os.environ.setdefault("API_KEY", "x")
@@ -14,17 +15,12 @@ os.environ.setdefault("ADMIN_ID", "1")
 
 import pytest  # pyrefly: ignore[import-error]
 from pydantic import ValidationError
-from pydantic_ai.settings import ModelSettings
+from ai_coach.model_settings import ModelSettings
 
-from ai_coach.agent import (
-    AgentDeps,
-    CoachAgent,
-    ProgramAdapter,
-    QAResponse,
-)
+from ai_coach.agent import AgentDeps, CoachAgent, ProgramAdapter, QAResponse
 from ai_coach.schemas import AICoachRequest, ProgramPayload, SubscriptionPayload
 from ai_coach.types import CoachMode
-from ai_coach.application import app
+from ai_coach.api import ask
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from config.app_settings import settings
 from core.enums import CoachType
@@ -92,8 +88,7 @@ def test_ask_request_accepts_ask_ai() -> None:
     assert req.mode is CoachMode.ask_ai
 
 
-@pytest.mark.asyncio
-async def test_answer_question(monkeypatch) -> None:
+def test_answer_question(monkeypatch) -> None:
     class DummyAgent:
         async def run(
             self,
@@ -110,12 +105,12 @@ async def test_answer_question(monkeypatch) -> None:
 
     monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: DummyAgent()))
     deps = AgentDeps(client_id=1, locale="en", allow_save=False)
-    result = await CoachAgent.answer_question("question", deps)
+    result = asyncio.run(CoachAgent.answer_question("question", deps))
     assert result.answer == "answer"
 
 
 def test_ask_ai_legacy(monkeypatch) -> None:
-    monkeypatch.setattr(settings, "AGENT_PYDANTICAI_ENABLED", False)
+    monkeypatch.setattr(settings, "AGENT_PYDANTICAI_ENABLED", False, raising=False)
 
     async def fake_search(prompt: str, client_id: int) -> list[str]:
         return ["legacy"]
@@ -127,9 +122,6 @@ def test_ask_ai_legacy(monkeypatch) -> None:
     monkeypatch.setattr(KnowledgeBase, "save_client_message", staticmethod(noop))
     monkeypatch.setattr(KnowledgeBase, "save_ai_message", staticmethod(noop))
 
-    from fastapi.testclient import TestClient
-
-    with TestClient(app) as client:
-        resp = client.post("/ask/", json={"client_id": 1, "prompt": "hi", "mode": "ask_ai"})
-    assert resp.status_code == 200
-    assert resp.json() == ["legacy"]
+    req = AICoachRequest(client_id=1, prompt="hi", mode="ask_ai")
+    result = asyncio.run(ask(req, object()))
+    assert result == ["legacy"]

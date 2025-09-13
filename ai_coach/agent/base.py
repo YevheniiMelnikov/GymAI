@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from dataclasses import dataclass
 from typing import Protocol
 
 from core.schemas import Program, QAResponse, Subscription

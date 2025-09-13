@@ -1,5 +1,7 @@
 import pytest  # pyrefly: ignore[import-error]
 
+import asyncio
+
 from ai_coach.api import DISPATCH
 from ai_coach.agent import CoachAgent
 from ai_coach.types import CoachMode
@@ -7,8 +9,7 @@ from core.schemas import Program, Subscription
 from core.enums import WorkoutPlanType, WorkoutType
 
 
-@pytest.mark.asyncio
-async def test_program_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_program_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, tuple] = {}
 
     async def fake_generate(
@@ -19,7 +20,7 @@ async def test_program_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(CoachAgent, "generate_workout_plan", staticmethod(fake_generate))
     ctx = {"prompt": "p", "deps": "d", "wishes": "w", "workout_type": WorkoutType.HOME, "instructions": "i"}
-    result = await DISPATCH[CoachMode.program](ctx)  # pyrefly: ignore[bad-argument-type]
+    result = asyncio.run(DISPATCH[CoachMode.program](ctx))  # pyrefly: ignore[bad-argument-type]
     assert result == "program-result"
     assert captured["args"] == (
         "p",
@@ -29,8 +30,7 @@ async def test_program_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-@pytest.mark.asyncio
-async def test_subscription_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_subscription_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, tuple] = {}
 
     async def fake_generate(
@@ -49,7 +49,7 @@ async def test_subscription_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
         "workout_type": WorkoutType.HOME,
         "instructions": "i",
     }
-    result = await DISPATCH[CoachMode.subscription](ctx)  # pyrefly: ignore[bad-argument-type]
+    result = asyncio.run(DISPATCH[CoachMode.subscription](ctx))  # pyrefly: ignore[bad-argument-type]
     assert result == "subscription-result"
     assert captured["args"] == (
         "p",
@@ -65,8 +65,7 @@ async def test_subscription_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-@pytest.mark.asyncio
-async def test_update_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_update_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, tuple] = {}
 
     async def fake_update(
@@ -101,13 +100,12 @@ async def test_update_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
         "plan_type": WorkoutPlanType.PROGRAM,
         "instructions": "i",
     }
-    result = await DISPATCH[CoachMode.update](ctx)  # pyrefly: ignore[bad-argument-type]
+    result = asyncio.run(DISPATCH[CoachMode.update](ctx))  # pyrefly: ignore[bad-argument-type]
     assert result == "update-result"
     assert captured["args"] == ("p", "ew", "fb", WorkoutType.HOME, "d", Program, "i")
 
 
-@pytest.mark.asyncio
-async def test_ask_ai_dispatch_and_keys(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ask_ai_dispatch_and_keys(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, tuple] = {}
 
     async def fake_answer(prompt: str, deps: object) -> str:
@@ -116,7 +114,7 @@ async def test_ask_ai_dispatch_and_keys(monkeypatch: pytest.MonkeyPatch) -> None
 
     monkeypatch.setattr(CoachAgent, "answer_question", staticmethod(fake_answer))
     ctx = {"prompt": "p", "deps": "d"}
-    result = await DISPATCH[CoachMode.ask_ai](ctx)  # pyrefly: ignore[bad-argument-type]
+    result = asyncio.run(DISPATCH[CoachMode.ask_ai](ctx))  # pyrefly: ignore[bad-argument-type]
     assert result == "ask_ai-result"
     assert captured["args"] == ("p", "d")
     assert set(DISPATCH) == {

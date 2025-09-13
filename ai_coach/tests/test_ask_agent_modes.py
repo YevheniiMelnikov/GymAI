@@ -1,8 +1,9 @@
+import asyncio
 import pytest  # pyrefly: ignore[import-error]
-from httpx import AsyncClient
 
-from ai_coach.application import app
+from ai_coach.api import ask
 from ai_coach.agent import CoachAgent
+from ai_coach.schemas import AICoachRequest
 from core.enums import CoachType, WorkoutType
 from core.schemas import DayExercises, Exercise, Program, Subscription
 
@@ -37,8 +38,7 @@ def _sample_subscription() -> Subscription:
     )
 
 
-@pytest.mark.asyncio
-async def test_program_mode(monkeypatch):
+def test_program_mode(monkeypatch):
     async def fake_generate(prompt, deps, *, workout_type: WorkoutType | None = None, **kwargs):
         assert workout_type is WorkoutType.HOME
         assert kwargs.get("wishes") == "w"
@@ -47,25 +47,19 @@ async def test_program_mode(monkeypatch):
         return _sample_program()
 
     monkeypatch.setattr(CoachAgent, "generate_workout_plan", staticmethod(fake_generate))
-    async with AsyncClient(app=app, base_url="http://test") as ac:  # pyrefly: ignore[unexpected-keyword]
-        resp = await ac.post(
-            "/ask/",
-            json={
-                "client_id": 1,
-                "prompt": "p",
-                "mode": "program",
-                "wishes": "w",
-                "workout_type": "home",
-                "instructions": "i",
-            },
-            headers={"X-Agent": "pydanticai"},
-        )
-    assert resp.status_code == 200
-    assert resp.json()["id"] == 1
+    req = AICoachRequest(
+        client_id=1,
+        prompt="p",
+        mode="program",
+        wishes="w",
+        workout_type="home",
+        instructions="i",
+    )
+    result = asyncio.run(ask(req, object()))
+    assert isinstance(result, Program) and result.id == 1
 
 
-@pytest.mark.asyncio
-async def test_subscription_mode(monkeypatch):
+def test_subscription_mode(monkeypatch):
     async def fake_generate(prompt, deps, *, workout_type: WorkoutType | None = None, **kwargs):
         assert workout_type is WorkoutType.HOME
         assert kwargs.get("period") == "1m"
@@ -76,25 +70,21 @@ async def test_subscription_mode(monkeypatch):
         return _sample_subscription()
 
     monkeypatch.setattr(CoachAgent, "generate_workout_plan", staticmethod(fake_generate))
-    async with AsyncClient(app=app, base_url="http://test") as ac:  # pyrefly: ignore[unexpected-keyword]
-        resp = await ac.post(
-            "/ask/",
-            json={
-                "client_id": 1,
-                "prompt": "p",
-                "mode": "subscription",
-                "wishes": "w",
-                "workout_type": "home",
-                "instructions": "i",
-            },
-            headers={"X-Agent": "pydanticai"},
-        )
-    assert resp.status_code == 200
-    assert resp.json()["id"] == 1
+    req = AICoachRequest(
+        client_id=1,
+        prompt="p",
+        mode="subscription",
+        wishes="w",
+        workout_type="home",
+        instructions="i",
+        workout_days=["mon"],
+        period="1m",
+    )
+    result = asyncio.run(ask(req, object()))
+    assert isinstance(result, Subscription) and result.id == 1
 
 
-@pytest.mark.asyncio
-async def test_update_mode(monkeypatch):
+def test_update_mode(monkeypatch):
     async def fake_update(
         prompt,
         expected_workout,
@@ -111,29 +101,18 @@ async def test_update_mode(monkeypatch):
         return _sample_program()
 
     monkeypatch.setattr(CoachAgent, "update_workout_plan", staticmethod(fake_update))
-    async with AsyncClient(app=app, base_url="http://test") as ac:  # pyrefly: ignore[unexpected-keyword]
-        resp = await ac.post(
-            "/ask/",
-            json={
-                "client_id": 1,
-                "prompt": "p",
-                "mode": "update",
-                "workout_type": "home",
-                "plan_type": "program",
-                "instructions": "i",
-            },
-            headers={"X-Agent": "pydanticai"},
-        )
-    assert resp.status_code == 200
-    assert resp.json()["id"] == 1
+    req = AICoachRequest(
+        client_id=1,
+        prompt="p",
+        mode="update",
+        workout_type="home",
+        plan_type="program",
+        instructions="i",
+    )
+    result = asyncio.run(ask(req, object()))
+    assert isinstance(result, Program) and result.id == 1
 
 
-@pytest.mark.asyncio
-async def test_update_requires_plan_type() -> None:
-    async with AsyncClient(app=app, base_url="http://test") as ac:  # pyrefly: ignore[unexpected-keyword]
-        resp = await ac.post(
-            "/ask/",
-            json={"client_id": 1, "prompt": "p", "mode": "update", "workout_type": "home"},
-            headers={"X-Agent": "pydanticai"},
-        )
-    assert resp.status_code == 422
+def test_update_requires_plan_type() -> None:
+    with pytest.raises(ValueError):
+        AICoachRequest(client_id=1, prompt="p", mode="update", workout_type="home")

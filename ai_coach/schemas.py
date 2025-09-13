@@ -1,10 +1,10 @@
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel
 
 from ai_coach.types import CoachMode
-from core.schemas import Program, DayExercises
+from core.schemas import DayExercises, Exercise
 from core.enums import CoachType, WorkoutPlanType, WorkoutType
 
 
@@ -23,18 +23,14 @@ class AICoachRequest(BaseModel):
     request_id: str | None = None
     instructions: str | None = None  # User-provided custom instructions
 
-    @field_validator("workout_type", mode="before")
-    @staticmethod
-    def _normalize_workout_type(value: str | WorkoutType | None) -> WorkoutType | None:
-        if value is None or isinstance(value, WorkoutType):
-            return value
-        return WorkoutType(value.lower())
-
-    @model_validator(mode="after")
-    def _validate_update_plan_type(self) -> "AICoachRequest":
+    def __init__(self, **data: Any) -> None:  # pragma: no cover - simple validation
+        super().__init__(**data)
+        if isinstance(self.workout_type, str):
+            self.workout_type = WorkoutType(self.workout_type.lower())
+        if isinstance(self.mode, str):
+            self.mode = CoachMode(self.mode)
         if self.mode is CoachMode.update and self.plan_type is None:
             raise ValueError("plan_type is required for update mode")
-        return self
 
 
 @dataclass
@@ -44,37 +40,46 @@ class CogneeUser:
     roles: list[str] | None = None
 
 
-class ProgramPayload(Program):
+@dataclass
+class ProgramPayload:
     """Program schema used by the agent (allows schema_version)."""
 
-    schema_version: str | None = Field(
-        default=None,
-        description="Internal schema version used by the agent; dropped before save",
-    )
+    id: int
+    client_profile: int
+    exercises_by_day: list[DayExercises]
+    created_at: float
+    split_number: int | None = None
+    workout_type: str | None = None
+    wishes: str | None = None
+    coach_type: CoachType = CoachType.human
+    schema_version: str | None = None
 
-    @field_validator("coach_type", mode="before")
-    @staticmethod
-    def _map_coach_type(value: str | CoachType | None) -> CoachType | str | None:
-        if value == "ai":
-            return CoachType.ai
-        return value
-
-    @model_validator(mode="after")
-    def _validate_invariants(self) -> "ProgramPayload":
+    def __post_init__(self) -> None:
         if not self.exercises_by_day:
             raise ValueError("exercises_by_day must not be empty")
+        days: list[DayExercises] = []
         for day in self.exercises_by_day:
-            if not day.exercises:
+            if isinstance(day, dict):
+                ex_list = [Exercise(**e) if isinstance(e, dict) else e for e in day.get("exercises", [])]
+                day_obj = DayExercises(day=day.get("day", ""), exercises=ex_list)
+            else:
+                day_obj = day
+            if not day_obj.exercises:
                 raise ValueError("day exercises must not be empty")
-            for ex in day.exercises:
+            for ex in day_obj.exercises:
                 if not (ex.name and ex.sets and ex.reps):
                     raise ValueError("exercise must have name, sets and reps")
+            days.append(day_obj)
+        self.exercises_by_day = days
         if self.split_number is None:
             self.split_number = len(self.exercises_by_day)
-        return self
+
+    def model_dump(self) -> dict[str, Any]:
+        return asdict(self)
 
 
-class SubscriptionPayload(BaseModel):
+@dataclass
+class SubscriptionPayload:
     """Subscription schema produced by the agent."""
 
     workout_days: list[str]
@@ -82,13 +87,14 @@ class SubscriptionPayload(BaseModel):
     wishes: str | None = None
     schema_version: str | None = None
 
-    @model_validator(mode="after")
-    def _check(self) -> "SubscriptionPayload":
+    def __post_init__(self) -> None:
         if not self.workout_days:
             raise ValueError("workout_days must not be empty")
         if not self.exercises:
             raise ValueError("exercises must not be empty")
-        return self
+
+    def model_dump(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 UpdatedProgramPayload = ProgramPayload

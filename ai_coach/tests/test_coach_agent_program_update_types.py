@@ -1,13 +1,12 @@
+import asyncio
 import types
-import pytest  # pyrefly: ignore[import-error]
 
 from ai_coach.agent import AgentDeps, CoachAgent
 from core.schemas import DayExercises, Exercise, Program, Subscription
 from core.enums import WorkoutType
 
 
-@pytest.mark.asyncio
-async def test_generate_plan_returns_program(monkeypatch):
+def test_generate_plan_returns_program(monkeypatch):
     async def fake_run(prompt, deps, output_type=None, message_history=None):
         assert message_history is not None
         assert len(message_history) == 2
@@ -24,12 +23,13 @@ async def test_generate_plan_returns_program(monkeypatch):
     monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: types.SimpleNamespace(run=fake_run)))
     monkeypatch.setattr(CoachAgent, "_message_history", staticmethod(lambda client_id: [object(), object()]))
     deps = AgentDeps(client_id=1)
-    result = await CoachAgent.generate_workout_plan("hi", deps, workout_type=WorkoutType.HOME, output_type=Program)
+    result = asyncio.run(
+        CoachAgent.generate_workout_plan("hi", deps, workout_type=WorkoutType.HOME, output_type=Program)
+    )
     assert isinstance(result, Program)
 
 
-@pytest.mark.asyncio
-async def test_update_workout_plan_returns_program(monkeypatch):
+def test_update_workout_plan_returns_program(monkeypatch):
     async def fake_run(prompt, deps, output_type=None, message_history=None):
         assert "MODE: update" in prompt
         assert "Client Feedback" in prompt
@@ -47,14 +47,13 @@ async def test_update_workout_plan_returns_program(monkeypatch):
 
     monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: types.SimpleNamespace(run=fake_run)))
     deps = AgentDeps(client_id=1)
-    result = await CoachAgent.update_workout_plan(
-        "hi", "exp", "fb", deps, workout_type=WorkoutType.HOME, output_type=Program
+    result = asyncio.run(
+        CoachAgent.update_workout_plan("hi", "exp", "fb", deps, workout_type=WorkoutType.HOME, output_type=Program)
     )
     assert isinstance(result, Program)
 
 
-@pytest.mark.asyncio
-async def test_generate_plan_returns_subscription(monkeypatch):
+def test_generate_plan_returns_subscription(monkeypatch):
     async def fake_run(prompt, deps, output_type=None, message_history=None):
         assert "MODE: subscription" in prompt
         assert "WORKOUT PROGRAM RULES" in prompt
@@ -74,19 +73,20 @@ async def test_generate_plan_returns_subscription(monkeypatch):
 
     monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: types.SimpleNamespace(run=fake_run)))
     deps = AgentDeps(client_id=1)
-    result = await CoachAgent.generate_workout_plan(
-        "hi",
-        deps,
-        workout_type=WorkoutType.HOME,
-        period="1m",
-        workout_days=["mon"],
-        output_type=Subscription,
+    result = asyncio.run(
+        CoachAgent.generate_workout_plan(
+            "hi",
+            deps,
+            workout_type=WorkoutType.HOME,
+            period="1m",
+            workout_days=["mon"],
+            output_type=Subscription,
+        )
     )
     assert isinstance(result, Subscription)
 
 
-@pytest.mark.asyncio
-async def test_custom_rules_append(monkeypatch):
+def test_custom_rules_append(monkeypatch):
     async def fake_run(prompt, deps, output_type=None, message_history=None):
         assert "WORKOUT PROGRAM RULES" in prompt
         assert "extra" in prompt
@@ -102,10 +102,12 @@ async def test_custom_rules_append(monkeypatch):
 
     monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: types.SimpleNamespace(run=fake_run)))
     deps = AgentDeps(client_id=1)
-    await CoachAgent.generate_workout_plan(
-        "p",
-        deps,
-        workout_type=WorkoutType.HOME,
-        output_type=Program,
-        instructions="extra",
+    asyncio.run(
+        CoachAgent.generate_workout_plan(
+            "p",
+            deps,
+            workout_type=WorkoutType.HOME,
+            output_type=Program,
+            instructions="extra",
+        )
     )

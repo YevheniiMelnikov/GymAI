@@ -6,7 +6,7 @@ from typing import Any
 
 from core.enums import CoachType, WorkoutType
 from core.schemas import Program, QAResponse, Subscription
-from pydantic_ai.settings import ModelSettings
+from ai_coach.model_settings import ModelSettings
 
 
 class ProgramAdapter:
@@ -18,7 +18,10 @@ class ProgramAdapter:
         data.pop("schema_version", None)
         if data.get("coach_type") == "ai":
             data["coach_type"] = CoachType.ai
-        return Program(**data)
+        program = Program(**data)
+        if program.split_number is None:
+            program.split_number = len(program.exercises_by_day)
+        return program
 
 
 class CoachAgent:
@@ -37,7 +40,18 @@ class CoachAgent:
         output_type: type[Program] | type[Subscription] = Program,
         instructions: str | None = None,
     ) -> Program | Subscription:
-        raise RuntimeError("pydantic_ai package is required")
+        agent = cls._get_agent()
+        mode = "subscription" if output_type is Subscription else "program"
+        parts = [f"MODE: {mode}", "WORKOUT PROGRAM RULES"]
+        if workout_type:
+            parts.append(f"Workout type: {workout_type.value}")
+        if instructions:
+            parts.append(instructions)
+        if prompt:
+            parts.append(prompt)
+        full_prompt = "\n".join(parts)
+        history = cls._message_history(deps.client_id)
+        return await agent.run(full_prompt, deps, output_type, history)
 
     @classmethod
     async def update_workout_plan(
@@ -51,14 +65,34 @@ class CoachAgent:
         output_type: type[Program] | type[Subscription] = Program,
         instructions: str | None = None,
     ) -> Program | Subscription:
-        raise RuntimeError("pydantic_ai package is required")
+        agent = cls._get_agent()
+        parts = [
+            "MODE: update",
+            "WORKOUT PROGRAM RULES",
+            f"Client Feedback: {feedback}",
+            f"Expected Workout: {expected_workout}",
+        ]
+        if workout_type:
+            parts.append(f"Workout type: {workout_type.value}")
+        if instructions:
+            parts.append(instructions)
+        if prompt:
+            parts.append(prompt)
+        full_prompt = "\n".join(parts)
+        history = cls._message_history(deps.client_id)
+        return await agent.run(full_prompt, deps, output_type, history)
 
     @classmethod
     async def answer_question(cls, prompt: str, deps: Any) -> QAResponse:
         agent = cls._get_agent()
         prompt = f"MODE: ask_ai\n{prompt}"
-        return await agent.run(prompt, deps, QAResponse, ModelSettings())
+        history = cls._message_history(deps.client_id)
+        return await agent.run(prompt, deps, QAResponse, ModelSettings(), history)
 
     @classmethod
     def _get_agent(cls) -> Any:  # pragma: no cover - stub
         raise RuntimeError("pydantic_ai package is required")
+
+    @staticmethod
+    def _message_history(client_id: int) -> list[Any]:
+        return []

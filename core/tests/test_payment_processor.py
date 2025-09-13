@@ -2,7 +2,7 @@ import sys
 import types
 from decimal import Decimal
 
-import pytest
+import asyncio
 
 sys.modules.setdefault("apps.payments.tasks", types.ModuleType("apps.payments.tasks"))
 sys.modules["apps.payments.tasks"].send_payment_message = types.SimpleNamespace(delay=lambda *a, **k: None)
@@ -61,8 +61,7 @@ class DummyNotifier:
         pass
 
 
-@pytest.mark.asyncio
-async def test_process_payment_invokes_strategy() -> None:
+def test_process_payment_invokes_strategy() -> None:
     from core.enums import PaymentStatus
     from core.payment import PaymentProcessor
 
@@ -107,13 +106,12 @@ async def test_process_payment_invokes_strategy() -> None:
         processed=False,
     )
 
-    await processor._process_payment(payment)
+    asyncio.run(processor._process_payment(payment))
     assert strategy.called == [(payment, client)]
     assert update_called
 
 
-@pytest.mark.asyncio
-async def test_process_payment_skips_when_processed() -> None:
+def test_process_payment_skips_when_processed() -> None:
     from core.enums import PaymentStatus
     from core.payment import PaymentProcessor
 
@@ -149,12 +147,11 @@ async def test_process_payment_skips_when_processed() -> None:
         processed=True,
     )
 
-    await processor._process_payment(payment)
+    asyncio.run(processor._process_payment(payment))
     assert not called
 
 
-@pytest.mark.asyncio
-async def test_process_payment_no_strategy() -> None:
+def test_process_payment_no_strategy() -> None:
     from core.enums import PaymentStatus
     from core.payment import PaymentProcessor
 
@@ -195,5 +192,5 @@ async def test_process_payment_no_strategy() -> None:
         processed=False,
     )
 
-    await processor._process_payment(payment)
+    asyncio.run(processor._process_payment(payment))
     assert not update_called
