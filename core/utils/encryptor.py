@@ -1,21 +1,21 @@
 import base64
 import hashlib
-from importlib import import_module
-from typing import Any, ClassVar, Optional
+from typing import Optional, ClassVar
+
+from cryptography.fernet import Fernet
 
 from loguru import logger
 from config.app_settings import settings
 
 
 class Encryptor:
-    _fernet: ClassVar[Optional[Any]] = None
+    _fernet: ClassVar[Optional[Fernet]] = None
 
     @classmethod
-    def _get_fernet(cls):
+    def _get_fernet(cls) -> Fernet:
         if cls._fernet is None:
             key = hashlib.sha256(settings.API_KEY.encode()).digest()
             fernet_key = base64.urlsafe_b64encode(key)
-            Fernet = getattr(import_module("cryptography.fernet"), "Fernet")
             cls._fernet = Fernet(fernet_key)
         return cls._fernet
 

@@ -44,7 +44,6 @@ class Settings(BaseSettings):
     LLM_PROVIDER: Annotated[str, Field(default="custom")]  # for cognee
     AGENT_MODEL: Annotated[str, Field(default="openai/gpt-5-mini")]
     AGENT_PROVIDER: Annotated[str, Field(default="openrouter")]
-    AGENT_PYDANTICAI_ENABLED: Annotated[bool, Field(default=True)]
 
     EMBEDDING_MODEL: Annotated[str, Field(default="openai/text-embedding-3-large")]
     EMBEDDING_PROVIDER: Annotated[str, Field(default="openai")]

@@ -14,7 +14,7 @@ from core.enums import WorkoutPlanType, SubscriptionPeriod
 from config.app_settings import settings
 from core.schemas import Program, QAResponse, Subscription
 
-CoachAction = Callable[[AskCtx], Awaitable[Program | Subscription | QAResponse | list[str] | None]]
+CoachAction = Callable[[AskCtx], Awaitable[object]]
 
 DISPATCH: dict[CoachMode, CoachAction] = {
     CoachMode.program: lambda ctx: CoachAgent.generate_workout_plan(
@@ -41,7 +41,7 @@ DISPATCH: dict[CoachMode, CoachAction] = {
         feedback=ctx["feedback"],
         workout_type=ctx.get("workout_type"),
         deps=ctx["deps"],
-        output_type=Program if ctx["plan_type"] == WorkoutPlanType.PROGRAM else Subscription,
+        output_type=Program if ctx["plan_type"] is WorkoutPlanType.PROGRAM else Subscription,
         instructions=ctx.get("instructions"),
     ),
     CoachMode.ask_ai: lambda ctx: CoachAgent.answer_question(ctx["prompt"] or "", deps=ctx["deps"]),
@@ -57,24 +57,9 @@ async def health() -> dict[str, str]:
 async def ask(data: AICoachRequest, request: Request) -> Program | Subscription | QAResponse | list[str] | None:
     mode = data.mode if isinstance(data.mode, CoachMode) else CoachMode(data.mode)
     logger.debug(f"/ask received request_id={data.request_id} client_id={data.client_id} mode={mode.value}")
-
-    if mode == CoachMode.update and data.plan_type is None:
+    if mode is CoachMode.update and data.plan_type is None:
         raise HTTPException(status_code=422, detail="plan_type required for update mode")
-
-    if mode == CoachMode.ask_ai and not settings.AGENT_PYDANTICAI_ENABLED:
-        try:
-            responses = await KnowledgeBase.search(data.prompt or "", client_id=data.client_id)
-        except Exception as e:  # pragma: no cover - log unexpected errors
-            logger.exception(f"/ask legacy search failed: {e}")
-            raise HTTPException(status_code=503, detail="Service unavailable") from e
-        return responses
-
-    period = (
-        data.period
-        if isinstance(data.period, SubscriptionPeriod)
-        else SubscriptionPeriod(data.period or SubscriptionPeriod.one_month.value)
-    )
-
+    period = SubscriptionPeriod(data.period or SubscriptionPeriod.one_month.value)
     ctx: AskCtx = {
         "prompt": data.prompt,
         "client_id": data.client_id,
@@ -83,18 +68,17 @@ async def ask(data: AICoachRequest, request: Request) -> Program | Subscription 
         "expected_workout": data.expected_workout or "",
         "feedback": data.feedback or "",
         "wishes": data.wishes or "",
-        "language": data.language or getattr(settings, "DEFAULT_LANG", "ru"),
+        "language": data.language or settings.DEFAULT_LANG,
         "workout_type": data.workout_type,
         "plan_type": data.plan_type,
         "instructions": data.instructions,
     }
-
+    client_name: str | None = None
     try:
         client = await Cache.client.get_client(data.client_id)
         client_name = client.name
     except Exception:  # pragma: no cover - missing cache/service
         client_name = None
-
     deps = AgentDeps(
         client_id=data.client_id,
         locale=ctx["language"],
@@ -102,27 +86,22 @@ async def ask(data: AICoachRequest, request: Request) -> Program | Subscription 
         client_name=client_name,
     )
     ctx["deps"] = deps
-
     try:
         coach_agent_action = DISPATCH[mode]
     except KeyError as e:
         logger.exception(f"/ask unsupported mode: {mode.value}")
         raise HTTPException(status_code=422, detail="Unsupported mode") from e
-
     try:
         result: Any = await coach_agent_action(ctx)
-
         if mode == CoachMode.ask_ai:
-            answer = getattr(result, "answer", None)
             sources = getattr(result, "sources", []) or []
             logger.debug(
                 f"/ask agent completed request_id={data.request_id}"
                 f" client_id={data.client_id} mode=ask_ai"
-                f" answer_len={len(answer) if isinstance(answer, str) else 0} sources={len(sources)}"
+                f" answer_len={len(result.answer)} sources={len(sources)}"
             )
-            if isinstance(answer, str):
-                await KnowledgeBase.save_client_message(data.prompt or "", client_id=data.client_id)
-                await KnowledgeBase.save_ai_message(answer, client_id=data.client_id)
+            await KnowledgeBase.save_client_message(data.prompt or "", client_id=data.client_id)
+            await KnowledgeBase.save_ai_message(result.answer, client_id=data.client_id)
         else:
             logger.debug(
                 f"/ask agent completed request_id={data.request_id} client_id={data.client_id} mode={mode.value}"

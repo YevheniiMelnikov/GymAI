@@ -25,10 +25,6 @@ class Profile(BaseModel):
     language: Annotated[Language, Field()]
     model_config = ConfigDict(extra="ignore")
 
-    @field_validator("language", mode="before")
-    def _map_language(cls, v: Any) -> Any:
-        return "eng" if v == "en" else v
-
 
 class Client(BaseModel):
     id: int

@@ -14,10 +14,9 @@ from core.schemas import DayExercises
 async def ensure_container_ready() -> None:
     try:
         from core.containers import get_container
-
-        container = get_container()
-    except Exception:  # pragma: no cover - container not required for tests
+    except Exception:  # pragma: no cover - optional in tests
         return
+    container = get_container()
     if hasattr(container, "init_resources"):
         maybe = container.init_resources()
         if asyncio.iscoroutine(maybe):

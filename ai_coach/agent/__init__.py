@@ -1,5 +1,9 @@
 from .base import AgentDeps, CoachAgentProtocol
-from .coach_stub import CoachAgent, ProgramAdapter, QAResponse
+from .coach import (
+    CoachAgent,
+    ProgramAdapter,
+    QAResponse,
+)
 
 __all__ = [
     "AgentDeps",

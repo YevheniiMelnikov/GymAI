@@ -5,7 +5,7 @@ import sys
 import types
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 os.environ["TIME_ZONE"] = "Europe/Kyiv"
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.test_settings")
@@ -26,7 +26,6 @@ modules = {
     "cognee.base_config": types.ModuleType("cognee.base_config"),
     "cognee.infrastructure": types.ModuleType("cognee.infrastructure"),
     "cognee.infrastructure.files": types.ModuleType("cognee.infrastructure.files"),
-    "cognee.config": types.ModuleType("cognee.config"),
 }
 modules["cognee.modules.data.exceptions"].DatasetNotFoundError = Exception
 modules["cognee.modules.users.exceptions.exceptions"].PermissionDeniedError = Exception
@@ -35,11 +34,6 @@ modules["cognee.infrastructure.databases.exceptions"].DatabaseNotCreatedError = 
 modules["cognee.modules.engine.operations.setup"].setup = lambda: None
 modules["cognee.base_config"].get_base_config = lambda: types.SimpleNamespace(data_root_directory=".")
 cognee_stub.base_config = modules["cognee.base_config"]
-modules["cognee.config"].set_llm_provider = lambda *a, **k: None
-cognee_stub.config = modules["cognee.config"]
-modules["cognee.config"].set_llm_model = lambda *a, **k: None
-modules["cognee.config"].set_llm_api_key = lambda *a, **k: None
-modules["cognee.config"].set_llm_endpoint = lambda *a, **k: None
 files_utils_mod = types.ModuleType("cognee.infrastructure.files.utils")
 
 
@@ -103,9 +97,6 @@ gspread_mod.authorize = lambda *a, **k: gspread_mod.Client()
 gspread_mod.utils = types.SimpleNamespace(ValueInputOption=types.SimpleNamespace(user_entered="USER_ENTERED"))
 sys.modules.setdefault("gspread", gspread_mod)
 sys.modules.setdefault("gspread.utils", gspread_mod.utils)
-celery_mod = types.ModuleType("celery")
-celery_mod.shared_task = lambda *a, **k: (lambda f: f)
-sys.modules.setdefault("celery", celery_mod)
 docx_mod = types.ModuleType("docx")
 
 
@@ -174,13 +165,6 @@ settings_stub = types.SimpleNamespace(
     PAYMENT_PRIVATE_KEY="priv",
     PAYMENT_PUB_KEY="pub",
     WEBHOOK_PATH="/telegram/webhook",
-    DEFAULT_LANG="ru",
-    AGENT_PYDANTICAI_ENABLED=True,
-    KNOWLEDGE_BASE_FOLDER_ID="kb",
-    LLM_PROVIDER="openai",
-    LLM_MODEL="gpt-4o",
-    LLM_API_KEY="test",
-    LLM_API_URL="http://localhost",
 )
 sys.modules.setdefault("config.app_settings", types.ModuleType("config.app_settings"))
 sys.modules["config.app_settings"].settings = settings_stub
@@ -188,38 +172,18 @@ logger_stub = types.ModuleType("config.logger")
 logger_stub.configure_loguru = lambda: None
 logger_stub.LOGGING = {}
 sys.modules.setdefault("config.logger", logger_stub)
-
-
-try:  # use real pydantic if available
-    import pydantic  # noqa: F401
-except Exception:  # pragma: no cover - fallback stubs
-    pydantic_mod = types.ModuleType("pydantic")
-    pydantic_mod.__path__ = []  # mark as package for submodule imports
-
-    class BaseModel:
-        def __init__(self, **data: Any) -> None:
-            for k, v in data.items():
-                setattr(self, k, v)
-
-        def model_dump(self) -> dict[str, Any]:
-            return self.__dict__
-
-    pydantic_mod.BaseModel = BaseModel
-    pydantic_mod.Field = lambda *a, **k: None
-    pydantic_mod.field_validator = lambda *a, **k: (lambda x: x)
-    pydantic_mod.model_validator = lambda *a, **k: (lambda x: x)
-    pydantic_mod.condecimal = lambda *a, **k: float
-    pydantic_mod.ConfigDict = dict
-    pydantic_mod.create_model = lambda name, **fields: type(name, (BaseModel,), fields)
-    pydantic_mod.ValidationError = Exception
-    json_schema_mod = types.ModuleType("pydantic.json_schema")
-    json_schema_mod.GenerateJsonSchema = object
-    sys.modules.setdefault("pydantic", pydantic_mod)
-    sys.modules.setdefault("pydantic.json_schema", json_schema_mod)
-    pydantic_mod.json_schema = json_schema_mod
-    core_mod = types.ModuleType("pydantic_core")
-    core_mod.ValidationError = Exception
-    sys.modules.setdefault("pydantic_core", core_mod)
+pydantic_mod = types.ModuleType("pydantic")
+pydantic_mod.BaseModel = object
+pydantic_mod.Field = lambda *a, **k: None
+pydantic_mod.field_validator = lambda *a, **k: (lambda x: x)
+pydantic_mod.condecimal = lambda *a, **k: float
+pydantic_mod.ConfigDict = dict
+pydantic_mod.create_model = lambda name, **fields: type(name, (object,), fields)
+pydantic_mod.ValidationError = Exception
+sys.modules.setdefault("pydantic", pydantic_mod)
+core_mod = types.ModuleType("pydantic_core")
+core_mod.ValidationError = Exception
+sys.modules.setdefault("pydantic_core", core_mod)
 redis_mod = types.ModuleType("redis")
 redis_mod.exceptions = types.ModuleType("redis.exceptions")
 redis_mod.exceptions.RedisError = Exception
@@ -277,9 +241,6 @@ class DummyRedis:
 redis_async_mod.Redis = DummyRedis
 redis_async_mod.from_url = lambda *a, **k: DummyRedis()
 sys.modules.setdefault("redis.asyncio", redis_async_mod)
-redis_async_mod.client = types.ModuleType("redis.asyncio.client")
-redis_async_mod.client.Pipeline = object
-sys.modules.setdefault("redis.asyncio.client", redis_async_mod.client)
 try:
     import httpx  # noqa: F401
 except Exception:  # pragma: no cover - fallback stub
@@ -321,67 +282,6 @@ except Exception:  # pragma: no cover - fallback stub
     httpx_mod.Response = Response
     httpx_mod.DecodingError = DecodingError
     sys.modules.setdefault("httpx", httpx_mod)
-else:
-
-    class AsyncClient:
-        def __init__(self, *a, app=None, **k):
-            self.app = app
-
-        async def post(self, url: str, json: dict | None = None, headers: dict[str, str] | None = None) -> Any:
-            if self.app is None:
-                raise RuntimeError("app is required")
-            from ai_coach.api import ask
-            from ai_coach.schemas import AICoachRequest
-            from core.enums import WorkoutPlanType, WorkoutType
-            from fastapi import HTTPException
-
-            payload = dict(json or {})
-            wt = payload.get("workout_type")
-            if isinstance(wt, str):
-                payload["workout_type"] = WorkoutType(wt.lower())
-            pt = payload.get("plan_type")
-            if isinstance(pt, str):
-                payload["plan_type"] = WorkoutPlanType(pt.lower())
-            if payload.get("mode") == "subscription" and "workout_days" not in payload:
-                payload["workout_days"] = ["mon"]
-            req = types.SimpleNamespace(headers=headers or {})
-            data = AICoachRequest(**payload)
-
-            from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
-
-            async def _noop(*a, **k):
-                return None
-
-            KnowledgeBase.save_client_message = _noop  # type: ignore[assignment]
-            KnowledgeBase.save_ai_message = _noop  # type: ignore[assignment]
-            KnowledgeBase.add_text = _noop  # type: ignore[assignment]
-            KnowledgeBase.update_dataset = _noop  # type: ignore[assignment]
-            KnowledgeBase.search = _noop  # type: ignore[assignment]
-
-            try:
-                result = await ask(data, req)
-                if result is None and payload.get("mode") == "ask_ai":
-                    return types.SimpleNamespace(status_code=503, json=lambda: {"detail": "Service unavailable"})
-                body = result.model_dump() if hasattr(result, "model_dump") else result
-                return types.SimpleNamespace(status_code=200, json=lambda: body)
-            except HTTPException as exc:  # type: ignore[name-defined]
-                detail = exc.detail
-                status = exc.status_code
-                if status == 422 and payload.get("mode") == "ask_ai":
-                    status = 503
-                    detail = "Service unavailable"
-                return types.SimpleNamespace(status_code=status, json=lambda: {"detail": detail})
-
-        async def __aenter__(self) -> "AsyncClient":
-            return self
-
-        async def __aexit__(self, *exc: Any) -> None:
-            pass
-
-        async def aclose(self) -> None:
-            pass
-
-    httpx.AsyncClient = AsyncClient
 
 aiogram_mod = types.ModuleType("aiogram")
 aiogram_mod.Bot = type("Bot", (), {})
@@ -403,16 +303,8 @@ aiogram_mod.types = types.SimpleNamespace(
     ),
     CallbackQuery=type("CallbackQuery", (), {"answer": lambda *a, **k: None, "message": None}),
     BotCommand=object,
-    InlineKeyboardButton=type(
-        "InlineKeyboardButton",
-        (),
-        {"__init__": lambda self, text, **k: None},
-    ),
-    InlineKeyboardMarkup=type(
-        "InlineKeyboardMarkup",
-        (),
-        {"__init__": lambda self, **k: None},
-    ),
+    InlineKeyboardButton=type("InlineKeyboardButton", (), {}),
+    InlineKeyboardMarkup=type("InlineKeyboardMarkup", (), {}),
     WebAppInfo=type("WebAppInfo", (), {}),
     FSInputFile=object,
     InputFile=object,
@@ -534,22 +426,7 @@ django_http.require_GET = lambda f: f
 sys.modules.setdefault("django.views.decorators.http", django_http)
 
 django_test = types.ModuleType("django.test")
-
-
-class _DummyResponse(dict):
-    def __init__(self, status: int = 200) -> None:
-        super().__init__()
-        self.status_code = status
-
-
-class Client:
-    def get(self, path: str) -> _DummyResponse:
-        resp = _DummyResponse(status=302)
-        resp["Location"] = f"/webapp{path}"
-        return resp
-
-
-django_test.Client = Client
+django_test.Client = object
 sys.modules.setdefault("django.test", django_test)
 
 asgiref_mod = types.ModuleType("asgiref")
@@ -602,81 +479,19 @@ django_db_models.Model = object
 sys.modules.setdefault("django.db", django_db)
 sys.modules.setdefault("django.db.models", django_db_models)
 
-try:
-    import fastapi  # noqa: F401
-except Exception:  # pragma: no cover - fallback stub
-    import json
+fastapi_mod = types.ModuleType("fastapi")
 
-    from ai_coach.schemas import AICoachRequest
 
-    fastapi_mod = types.ModuleType("fastapi")
+class FastAPI:
+    def __init__(self, *a, **k):
+        pass
 
-    class HTTPException(Exception):
-        def __init__(self, status_code: int, detail: str | None = None):
-            self.status_code = status_code
-            self.detail = detail or ""
 
-    class Request:
-        def __init__(self, headers: dict[str, str] | None = None):
-            self.headers = headers or {}
-
-    class FastAPI:
-        def __init__(self, *a, **k):  # pragma: no cover - simple init
-            self.routes: dict[tuple[str, str], Any] = {}
-
-        def post(self, path: str, **_: Any) -> Callable[[Any], Any]:
-            def decorator(fn: Any) -> Any:
-                self.routes[("POST", path)] = fn
-                return fn
-
-            return decorator
-
-        def get(self, path: str, **_: Any) -> Callable[[Any], Any]:
-            def decorator(fn: Any) -> Any:
-                self.routes[("GET", path)] = fn
-                return fn
-
-            return decorator
-
-        async def __call__(self, scope: dict, receive: Callable, send: Callable) -> None:
-            path = scope.get("path", "")
-            if not path.endswith("/"):
-                path += "/"
-            key = (scope.get("method"), path)
-            handler = self.routes.get(key)
-            if handler is None:
-                await send({"type": "http.response.start", "status": 404, "headers": []})
-                await send({"type": "http.response.body", "body": b""})
-                return
-            body = b""
-            while True:
-                message = await receive()
-                body += message.get("body", b"")
-                if not message.get("more_body"):
-                    break
-            data = json.loads(body or b"{}")
-            try:
-                resp = await handler(AICoachRequest.model_validate(data), Request(scope.get("headers", {})))
-                payload = resp.model_dump() if hasattr(resp, "model_dump") else resp
-                content = json.dumps(payload).encode()
-                status = 200
-            except HTTPException as exc:  # pragma: no cover - error path
-                content = json.dumps({"detail": exc.detail}).encode()
-                status = exc.status_code
-            await send(
-                {"type": "http.response.start", "status": status, "headers": [(b"content-type", b"application/json")]}
-            )
-            await send({"type": "http.response.body", "body": content})
-
-    fastapi_mod.FastAPI = FastAPI
-    fastapi_mod.HTTPException = HTTPException
-    fastapi_mod.Request = Request
-    fastapi_mod.Depends = lambda x: x
-    fastapi_security = types.ModuleType("fastapi.security")
-    fastapi_security.HTTPBasic = object
-    fastapi_security.HTTPBasicCredentials = object
-    sys.modules.setdefault("fastapi", fastapi_mod)
-    sys.modules.setdefault("fastapi.security", fastapi_security)
+fastapi_mod.FastAPI = FastAPI
+fastapi_security = types.ModuleType("fastapi.security")
+fastapi_security.HTTPBasic = object
+sys.modules.setdefault("fastapi", fastapi_mod)
+sys.modules.setdefault("fastapi.security", fastapi_security)
 
 rest_framework = types.ModuleType("rest_framework")
 rf_views = types.ModuleType("rest_framework.views")

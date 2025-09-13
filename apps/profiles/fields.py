@@ -1,10 +1,11 @@
 from django.db.models import CharField
+from django.utils.translation import gettext_lazy as _
 
 from core.utils.encryptor import Encryptor
 
 
 class EncryptedField(CharField):
-    description = "Encrypted string"  # pyrefly: ignore[bad-override]
+    description = str(_("Encrypted string"))  # pyrefly: ignore[bad-override]
 
     def __init__(self, *args, **kwargs):
         kwargs.setdefault("max_length", 2048)
