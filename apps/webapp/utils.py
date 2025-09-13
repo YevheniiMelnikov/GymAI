@@ -3,7 +3,7 @@ import hashlib
 import hmac
 import json
 from typing import Any, cast
-from urllib.parse import parse_qsl, unquote_plus
+from urllib.parse import parse_qsl
 
 from config.app_settings import settings
 from loguru import logger
@@ -35,8 +35,7 @@ def _hash_legacy(token: str, check_string: str) -> str:
 
 
 def verify_init_data(init_data: str) -> dict[str, object]:
-    decoded = unquote_plus(init_data)
-    items = dict(parse_qsl(decoded, keep_blank_values=True))
+    items = dict(parse_qsl(init_data, keep_blank_values=True))
 
     received_hash = (items.pop("hash", "") or "").lower()
     if not received_hash:
