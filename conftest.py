@@ -5,7 +5,7 @@ import sys
 import types
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Generic, TypeVar
 
 os.environ["TIME_ZONE"] = "Europe/Kyiv"
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.test_settings")
@@ -97,6 +97,114 @@ gspread_mod.authorize = lambda *a, **k: gspread_mod.Client()
 gspread_mod.utils = types.SimpleNamespace(ValueInputOption=types.SimpleNamespace(user_entered="USER_ENTERED"))
 sys.modules.setdefault("gspread", gspread_mod)
 sys.modules.setdefault("gspread.utils", gspread_mod.utils)
+
+aiohttp_mod = types.ModuleType("aiohttp")
+aiohttp_mod.ClientSession = object
+sys.modules.setdefault("aiohttp", aiohttp_mod)
+
+pydantic_ai_mod = types.ModuleType("pydantic_ai")
+
+
+class ModelRetry(Exception):
+    pass
+
+
+class Agent:
+    def __init__(self, *a, **k):
+        self.system_prompt = lambda f: f
+        self.instructions = lambda f: f
+
+    async def run(self, *a, **k):
+        output = k.get("output_type")
+        return output() if output else None
+
+
+T_deps = TypeVar("T_deps")
+
+
+class RunContext(Generic[T_deps]):
+    def __init__(self, deps: T_deps):
+        self.deps = deps
+
+
+pydantic_ai_mod.Agent = Agent
+pydantic_ai_mod.RunContext = RunContext
+pydantic_ai_mod.ModelRetry = ModelRetry
+sys.modules.setdefault("pydantic_ai", pydantic_ai_mod)
+
+settings_mod = types.ModuleType("pydantic_ai.settings")
+
+
+class ModelSettings:
+    def __init__(self, **_k):
+        pass
+
+
+settings_mod.ModelSettings = ModelSettings
+sys.modules.setdefault("pydantic_ai.settings", settings_mod)
+
+messages_mod = types.ModuleType("pydantic_ai.messages")
+
+
+class ModelMessage:  # pragma: no cover - simple container
+    pass
+
+
+class ModelRequest:
+    @staticmethod
+    def user_text_prompt(text: str) -> str:
+        return text
+
+
+class ModelResponse:  # pragma: no cover - simple container
+    def __init__(self, parts: list[Any] | None = None):
+        self.parts = parts or []
+
+
+class TextPart:  # pragma: no cover - simple container
+    def __init__(self, content: str):
+        self.content = content
+
+
+messages_mod.ModelMessage = ModelMessage
+messages_mod.ModelRequest = ModelRequest
+messages_mod.ModelResponse = ModelResponse
+messages_mod.TextPart = TextPart
+sys.modules.setdefault("pydantic_ai.messages", messages_mod)
+
+models_mod = types.ModuleType("pydantic_ai.models")
+openai_mod = types.ModuleType("pydantic_ai.models.openai")
+
+
+class OpenAIChatModel:  # pragma: no cover - minimal stub
+    def __init__(self, *a, **k):
+        self.client = None
+
+
+openai_mod.OpenAIChatModel = OpenAIChatModel
+models_mod.openai = openai_mod
+sys.modules.setdefault("pydantic_ai.models", models_mod)
+sys.modules.setdefault("pydantic_ai.models.openai", openai_mod)
+
+toolsets_mod = types.ModuleType("pydantic_ai.toolsets")
+function_mod = types.ModuleType("pydantic_ai.toolsets.function")
+
+
+class FunctionToolset:
+    def tool(self, func: Any | None = None):  # pragma: no cover - trivial
+        if func is None:
+
+            def decorator(f):
+                return f
+
+            return decorator
+        return func
+
+
+function_mod.FunctionToolset = FunctionToolset
+toolsets_mod.function = function_mod
+sys.modules.setdefault("pydantic_ai.toolsets", toolsets_mod)
+sys.modules.setdefault("pydantic_ai.toolsets.function", function_mod)
 docx_mod = types.ModuleType("docx")
 
 
@@ -172,22 +280,6 @@ logger_stub = types.ModuleType("config.logger")
 logger_stub.configure_loguru = lambda: None
 logger_stub.LOGGING = {}
 sys.modules.setdefault("config.logger", logger_stub)
-pydantic_mod = types.ModuleType("pydantic")
-pydantic_mod.BaseModel = object
-pydantic_mod.Field = lambda *a, **k: None
-pydantic_mod.field_validator = lambda *a, **k: (lambda x: x)
-pydantic_mod.model_validator = lambda *a, **k: (lambda x: x)
-pydantic_mod.condecimal = lambda *a, **k: float
-pydantic_mod.ConfigDict = dict
-pydantic_mod.create_model = lambda name, **fields: type(name, (object,), fields)
-pydantic_mod.ValidationError = Exception
-sys.modules.setdefault("pydantic", pydantic_mod)
-json_schema_mod = types.ModuleType("pydantic.json_schema")
-json_schema_mod.GenerateJsonSchema = object
-sys.modules.setdefault("pydantic.json_schema", json_schema_mod)
-core_mod = types.ModuleType("pydantic_core")
-core_mod.ValidationError = Exception
-sys.modules.setdefault("pydantic_core", core_mod)
 redis_mod = types.ModuleType("redis")
 redis_mod.exceptions = types.ModuleType("redis.exceptions")
 redis_mod.exceptions.RedisError = Exception
@@ -199,7 +291,20 @@ yaml_mod.SafeLoader = object
 sys.modules.setdefault("yaml", yaml_mod)
 crypto_mod = types.ModuleType("cryptography")
 crypto_mod.fernet = types.ModuleType("cryptography.fernet")
-crypto_mod.fernet.Fernet = object
+
+
+class _Fernet:
+    def __init__(self, key: bytes):
+        self.key = key
+
+    def encrypt(self, data: bytes) -> bytes:
+        return data[::-1]
+
+    def decrypt(self, token: bytes) -> bytes:
+        return token[::-1]
+
+
+crypto_mod.fernet.Fernet = _Fernet
 sys.modules.setdefault("cryptography", crypto_mod)
 sys.modules.setdefault("cryptography.fernet", crypto_mod.fernet)
 sqlalchemy_mod = types.ModuleType("sqlalchemy")
@@ -245,47 +350,60 @@ class DummyRedis:
 redis_async_mod.Redis = DummyRedis
 redis_async_mod.from_url = lambda *a, **k: DummyRedis()
 sys.modules.setdefault("redis.asyncio", redis_async_mod)
-try:
-    import httpx  # noqa: F401
-except Exception:  # pragma: no cover - fallback stub
-    httpx_mod = types.ModuleType("httpx")
+httpx_mod = types.ModuleType("httpx")
 
-    class HTTPError(Exception):
+
+class HTTPError(Exception):
+    pass
+
+
+class HTTPStatusError(HTTPError):
+    def __init__(self, message: str, request: Any = None, response: Any = None):
+        super().__init__(message)
+        self.request = request
+        self.response = response
+
+
+class AsyncClient:
+    def __init__(self, *a, **k):
+        self.timeout = k.get("timeout")
+
+    async def __aenter__(self):  # pragma: no cover - trivial
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):  # pragma: no cover - trivial
+        await self.aclose()
+
+    async def request(self, *a, **k):
+        return types.SimpleNamespace(status_code=200, headers={}, json=lambda: {}, text="", is_success=True)
+
+    async def aclose(self):  # pragma: no cover - trivial
         pass
 
-    class HTTPStatusError(HTTPError):
-        def __init__(self, message: str, request: Any = None, response: Any = None):
-            super().__init__(message)
-            self.request = request
-            self.response = response
+    async def post(self, *a, **k):
+        return await self.request(*a, **k)
 
-    class AsyncClient:
-        def __init__(self, *a, **k):
-            self.timeout = k.get("timeout")
 
-        async def request(self, *a, **k):
-            return types.SimpleNamespace(status_code=200, headers={}, json=lambda: {}, text="", is_success=True)
-
-        async def aclose(self):
-            pass
-
-    class Request:
-        def __init__(self, *a, **k):
-            pass
-
-    class Response:
+class Request:
+    def __init__(self, *a, **k):
         pass
 
-    class DecodingError(Exception):
-        pass
 
-    httpx_mod.AsyncClient = AsyncClient
-    httpx_mod.HTTPError = HTTPError
-    httpx_mod.HTTPStatusError = HTTPStatusError
-    httpx_mod.Request = Request
-    httpx_mod.Response = Response
-    httpx_mod.DecodingError = DecodingError
-    sys.modules.setdefault("httpx", httpx_mod)
+class Response:
+    pass
+
+
+class DecodingError(Exception):
+    pass
+
+
+httpx_mod.AsyncClient = AsyncClient
+httpx_mod.HTTPError = HTTPError
+httpx_mod.HTTPStatusError = HTTPStatusError
+httpx_mod.Request = Request
+httpx_mod.Response = Response
+httpx_mod.DecodingError = DecodingError
+sys.modules.setdefault("httpx", httpx_mod)
 
 aiogram_mod = types.ModuleType("aiogram")
 aiogram_mod.Bot = type("Bot", (), {})
@@ -605,7 +723,12 @@ class ClientProfile:
     pass
 
 
+class Profile:
+    pass
+
+
 profiles_models.ClientProfile = ClientProfile
+profiles_models.Profile = Profile
 sys.modules.setdefault("apps.profiles.models", profiles_models)
 
 bot_utils_bot = types.ModuleType("bot.utils.bot")
@@ -645,6 +768,7 @@ core_services_pkg.APIService = types.SimpleNamespace(
     workout=types.SimpleNamespace(),
     ai_coach=types.SimpleNamespace(),
 )
+core_services_pkg.get_gif_manager = lambda: types.SimpleNamespace(find_gif=lambda *a, **k: None)
 sys.modules.setdefault("core.services", core_services_pkg)
 
 env_defaults = {
