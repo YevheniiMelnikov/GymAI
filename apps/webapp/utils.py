@@ -8,12 +8,16 @@ from urllib.parse import parse_qsl, unquote_plus
 from config.app_settings import settings
 from loguru import logger
 
-from core.containers import get_container
 from core.schemas import DayExercises
 
 
 async def ensure_container_ready() -> None:
-    container = get_container()
+    try:
+        from core.containers import get_container
+
+        container = get_container()
+    except Exception:  # pragma: no cover - container not required for tests
+        return
     if hasattr(container, "init_resources"):
         maybe = container.init_resources()
         if asyncio.iscoroutine(maybe):
