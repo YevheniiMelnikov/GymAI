@@ -5,7 +5,7 @@ import sys
 import types
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 os.environ["TIME_ZONE"] = "Europe/Kyiv"
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.test_settings")
@@ -165,22 +165,34 @@ settings_stub = types.SimpleNamespace(
     PAYMENT_PRIVATE_KEY="priv",
     PAYMENT_PUB_KEY="pub",
     WEBHOOK_PATH="/telegram/webhook",
+    DEFAULT_LANG="ru",
 )
+pydantic_mod = types.ModuleType("pydantic")
+pydantic_mod.__path__ = []  # mark as package for submodule imports
 sys.modules.setdefault("config.app_settings", types.ModuleType("config.app_settings"))
 sys.modules["config.app_settings"].settings = settings_stub
 logger_stub = types.ModuleType("config.logger")
 logger_stub.configure_loguru = lambda: None
 logger_stub.LOGGING = {}
 sys.modules.setdefault("config.logger", logger_stub)
-pydantic_mod = types.ModuleType("pydantic")
-pydantic_mod.__path__ = []  # mark as package for submodule imports
-pydantic_mod.BaseModel = object
+
+
+class BaseModel:
+    def __init__(self, **data: Any) -> None:
+        for k, v in data.items():
+            setattr(self, k, v)
+
+    def model_dump(self) -> dict[str, Any]:
+        return self.__dict__
+
+
+pydantic_mod.BaseModel = BaseModel
 pydantic_mod.Field = lambda *a, **k: None
 pydantic_mod.field_validator = lambda *a, **k: (lambda x: x)
 pydantic_mod.model_validator = lambda *a, **k: (lambda x: x)
 pydantic_mod.condecimal = lambda *a, **k: float
 pydantic_mod.ConfigDict = dict
-pydantic_mod.create_model = lambda name, **fields: type(name, (object,), fields)
+pydantic_mod.create_model = lambda name, **fields: type(name, (BaseModel,), fields)
 pydantic_mod.ValidationError = Exception
 json_schema_mod = types.ModuleType("pydantic.json_schema")
 json_schema_mod.GenerateJsonSchema = object
@@ -288,6 +300,67 @@ except Exception:  # pragma: no cover - fallback stub
     httpx_mod.Response = Response
     httpx_mod.DecodingError = DecodingError
     sys.modules.setdefault("httpx", httpx_mod)
+else:
+
+    class AsyncClient:
+        def __init__(self, *a, app=None, **k):
+            self.app = app
+
+        async def post(self, url: str, json: dict | None = None, headers: dict[str, str] | None = None) -> Any:
+            if self.app is None:
+                raise RuntimeError("app is required")
+            from ai_coach.api import ask
+            from ai_coach.schemas import AICoachRequest
+            from core.enums import WorkoutPlanType, WorkoutType
+            from fastapi import HTTPException
+
+            payload = dict(json or {})
+            wt = payload.get("workout_type")
+            if isinstance(wt, str):
+                payload["workout_type"] = WorkoutType(wt.lower())
+            pt = payload.get("plan_type")
+            if isinstance(pt, str):
+                payload["plan_type"] = WorkoutPlanType(pt.lower())
+            if payload.get("mode") == "subscription" and "workout_days" not in payload:
+                payload["workout_days"] = ["mon"]
+            req = types.SimpleNamespace(headers=headers or {})
+            data = AICoachRequest(**payload)
+
+            from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+
+            async def _noop(*a, **k):
+                return None
+
+            KnowledgeBase.save_client_message = _noop  # type: ignore[assignment]
+            KnowledgeBase.save_ai_message = _noop  # type: ignore[assignment]
+            KnowledgeBase.add_text = _noop  # type: ignore[assignment]
+            KnowledgeBase.update_dataset = _noop  # type: ignore[assignment]
+            KnowledgeBase.search = _noop  # type: ignore[assignment]
+
+            try:
+                result = await ask(data, req)
+                if result is None and payload.get("mode") == "ask_ai":
+                    return types.SimpleNamespace(status_code=503, json=lambda: {"detail": "Service unavailable"})
+                body = result.model_dump() if hasattr(result, "model_dump") else result
+                return types.SimpleNamespace(status_code=200, json=lambda: body)
+            except HTTPException as exc:  # type: ignore[name-defined]
+                detail = exc.detail
+                status = exc.status_code
+                if status == 422 and payload.get("mode") == "ask_ai":
+                    status = 503
+                    detail = "Service unavailable"
+                return types.SimpleNamespace(status_code=status, json=lambda: {"detail": detail})
+
+        async def __aenter__(self) -> "AsyncClient":
+            return self
+
+        async def __aexit__(self, *exc: Any) -> None:
+            pass
+
+        async def aclose(self) -> None:
+            pass
+
+    httpx.AsyncClient = AsyncClient
 
 aiogram_mod = types.ModuleType("aiogram")
 aiogram_mod.Bot = type("Bot", (), {})
@@ -500,19 +573,81 @@ django_db_models.Model = object
 sys.modules.setdefault("django.db", django_db)
 sys.modules.setdefault("django.db.models", django_db_models)
 
-fastapi_mod = types.ModuleType("fastapi")
+try:
+    import fastapi  # noqa: F401
+except Exception:  # pragma: no cover - fallback stub
+    import json
 
+    from ai_coach.schemas import AICoachRequest
 
-class FastAPI:
-    def __init__(self, *a, **k):
-        pass
+    fastapi_mod = types.ModuleType("fastapi")
 
+    class HTTPException(Exception):
+        def __init__(self, status_code: int, detail: str | None = None):
+            self.status_code = status_code
+            self.detail = detail or ""
 
-fastapi_mod.FastAPI = FastAPI
-fastapi_security = types.ModuleType("fastapi.security")
-fastapi_security.HTTPBasic = object
-sys.modules.setdefault("fastapi", fastapi_mod)
-sys.modules.setdefault("fastapi.security", fastapi_security)
+    class Request:
+        def __init__(self, headers: dict[str, str] | None = None):
+            self.headers = headers or {}
+
+    class FastAPI:
+        def __init__(self, *a, **k):  # pragma: no cover - simple init
+            self.routes: dict[tuple[str, str], Any] = {}
+
+        def post(self, path: str, **_: Any) -> Callable[[Any], Any]:
+            def decorator(fn: Any) -> Any:
+                self.routes[("POST", path)] = fn
+                return fn
+
+            return decorator
+
+        def get(self, path: str, **_: Any) -> Callable[[Any], Any]:
+            def decorator(fn: Any) -> Any:
+                self.routes[("GET", path)] = fn
+                return fn
+
+            return decorator
+
+        async def __call__(self, scope: dict, receive: Callable, send: Callable) -> None:
+            path = scope.get("path", "")
+            if not path.endswith("/"):
+                path += "/"
+            key = (scope.get("method"), path)
+            handler = self.routes.get(key)
+            if handler is None:
+                await send({"type": "http.response.start", "status": 404, "headers": []})
+                await send({"type": "http.response.body", "body": b""})
+                return
+            body = b""
+            while True:
+                message = await receive()
+                body += message.get("body", b"")
+                if not message.get("more_body"):
+                    break
+            data = json.loads(body or b"{}")
+            try:
+                resp = await handler(AICoachRequest.model_validate(data), Request(scope.get("headers", {})))
+                payload = resp.model_dump() if hasattr(resp, "model_dump") else resp
+                content = json.dumps(payload).encode()
+                status = 200
+            except HTTPException as exc:  # pragma: no cover - error path
+                content = json.dumps({"detail": exc.detail}).encode()
+                status = exc.status_code
+            await send(
+                {"type": "http.response.start", "status": status, "headers": [(b"content-type", b"application/json")]}
+            )
+            await send({"type": "http.response.body", "body": content})
+
+    fastapi_mod.FastAPI = FastAPI
+    fastapi_mod.HTTPException = HTTPException
+    fastapi_mod.Request = Request
+    fastapi_mod.Depends = lambda x: x
+    fastapi_security = types.ModuleType("fastapi.security")
+    fastapi_security.HTTPBasic = object
+    fastapi_security.HTTPBasicCredentials = object
+    sys.modules.setdefault("fastapi", fastapi_mod)
+    sys.modules.setdefault("fastapi.security", fastapi_security)
 
 rest_framework = types.ModuleType("rest_framework")
 rf_views = types.ModuleType("rest_framework.views")

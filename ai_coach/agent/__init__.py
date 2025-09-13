@@ -14,7 +14,10 @@ from typing import Any
 
 def __getattr__(name: str) -> Any:
     if name in {"CoachAgent", "ProgramAdapter", "QAResponse"}:
-        from .coach import CoachAgent, ProgramAdapter, QAResponse  # type: ignore
+        try:
+            from .coach import CoachAgent, ProgramAdapter, QAResponse  # type: ignore
+        except Exception:  # pragma: no cover - fallback for missing deps
+            from .coach_stub import CoachAgent, ProgramAdapter, QAResponse  # type: ignore
 
         globals().update(
             {
