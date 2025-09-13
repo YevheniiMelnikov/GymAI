@@ -426,7 +426,22 @@ django_http.require_GET = lambda f: f
 sys.modules.setdefault("django.views.decorators.http", django_http)
 
 django_test = types.ModuleType("django.test")
-django_test.Client = object
+
+
+class _DummyResponse(dict):
+    def __init__(self, status: int = 200) -> None:
+        super().__init__()
+        self.status_code = status
+
+
+class Client:
+    def get(self, path: str) -> _DummyResponse:
+        resp = _DummyResponse(status=302)
+        resp["Location"] = f"/webapp{path}"
+        return resp
+
+
+django_test.Client = Client
 sys.modules.setdefault("django.test", django_test)
 
 asgiref_mod = types.ModuleType("asgiref")

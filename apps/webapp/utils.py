@@ -42,7 +42,7 @@ def verify_init_data(init_data: str) -> dict[str, object]:
     if not received_hash:
         raise ValueError("Invalid init data")
 
-    signature = items.get("signature")
+    signature = items.pop("signature", None)
     check_string = "\n".join(f"{k}={v}" for k, v in sorted(items.items()))
     token: str = settings.BOT_TOKEN or ""
     if not token:
