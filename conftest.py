@@ -176,11 +176,15 @@ pydantic_mod = types.ModuleType("pydantic")
 pydantic_mod.BaseModel = object
 pydantic_mod.Field = lambda *a, **k: None
 pydantic_mod.field_validator = lambda *a, **k: (lambda x: x)
+pydantic_mod.model_validator = lambda *a, **k: (lambda x: x)
 pydantic_mod.condecimal = lambda *a, **k: float
 pydantic_mod.ConfigDict = dict
 pydantic_mod.create_model = lambda name, **fields: type(name, (object,), fields)
 pydantic_mod.ValidationError = Exception
 sys.modules.setdefault("pydantic", pydantic_mod)
+json_schema_mod = types.ModuleType("pydantic.json_schema")
+json_schema_mod.GenerateJsonSchema = object
+sys.modules.setdefault("pydantic.json_schema", json_schema_mod)
 core_mod = types.ModuleType("pydantic_core")
 core_mod.ValidationError = Exception
 sys.modules.setdefault("pydantic_core", core_mod)
