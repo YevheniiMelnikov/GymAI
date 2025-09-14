@@ -7,6 +7,7 @@ import pytest
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Generic, TypeVar
+import inspect
 
 os.environ["TIME_ZONE"] = "Europe/Kyiv"
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.test_settings")
@@ -117,6 +118,26 @@ class BaseModel:
             setattr(self, name, value)
         for k, v in data.items():
             setattr(self, k, v)
+        # run field validators
+        for attr in dir(self.__class__):
+            fn = getattr(self.__class__, attr)
+            meta = getattr(fn, "_field_validator", None)
+            if meta:
+                fields, mode = meta
+                for field in fields:
+                    current = getattr(self, field, None)
+                    params = len(inspect.signature(fn).parameters)
+                    info = types.SimpleNamespace(data=data)
+                    if params == 3:
+                        current = fn(self.__class__, current, info)
+                    else:
+                        current = fn(self.__class__, current)
+                    setattr(self, field, current)
+        # run model validators (after)
+        for attr in dir(self.__class__):
+            fn = getattr(self.__class__, attr)
+            if getattr(fn, "_model_validator", None) == "after":
+                fn(self)
 
     @classmethod
     def model_validate(cls, data: dict[str, any]) -> "BaseModel":
@@ -151,15 +172,17 @@ def Field(default: any = None, **_: any) -> any:
     return default
 
 
-def field_validator(*_a: any, **_k: any):
+def field_validator(*fields: str, mode: str = "after"):
     def decorator(f: any) -> any:
+        f._field_validator = (fields, mode)
         return f
 
     return decorator
 
 
-def model_validator(*_a: any, **_k: any):
+def model_validator(*, mode: str = "after"):
     def decorator(f: any) -> any:
+        f._model_validator = mode
         return f
 
     return decorator
@@ -475,6 +498,9 @@ class DummyRedis:
 
     async def sismember(self, *a, **k):
         return False
+
+    async def expire(self, *a, **k):
+        return None
 
 
 redis_async_mod.Redis = DummyRedis
@@ -928,12 +954,25 @@ rf_generics.CreateAPIView = CreateAPIView
 rf_permissions = types.ModuleType("rest_framework.permissions")
 rf_permissions.AllowAny = object
 rf_serializers = types.ModuleType("rest_framework.serializers")
-rf_serializers.BaseSerializer = object
+
+
+class _BaseSerializer:
+    def __init__(self, *a: Any, **k: Any) -> None:
+        pass
+
+
+class _ModelSerializer(_BaseSerializer):
+    pass
+
+
+rf_serializers.BaseSerializer = _BaseSerializer
+rf_serializers.ModelSerializer = _ModelSerializer
 rf_status = types.ModuleType("rest_framework.status")
 rf_status.HTTP_200_OK = 200
 rf_status.HTTP_400_BAD_REQUEST = 400
 rf_exceptions = types.ModuleType("rest_framework.exceptions")
 rf_exceptions.NotFound = Exception
+rf_exceptions.ValidationError = Exception
 rest_framework.views = rf_views
 rest_framework.generics = rf_generics
 rest_framework.permissions = rf_permissions
@@ -1010,8 +1049,13 @@ class Profile:
     pass
 
 
+class CoachProfile:
+    pass
+
+
 profiles_models.ClientProfile = ClientProfile
 profiles_models.Profile = Profile
+profiles_models.CoachProfile = CoachProfile
 sys.modules.setdefault("apps.profiles.models", profiles_models)
 
 bot_utils_bot = types.ModuleType("bot.utils.bot")

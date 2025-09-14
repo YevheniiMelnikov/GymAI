@@ -13,7 +13,6 @@ os.environ.setdefault("EMAIL", "x")
 os.environ.setdefault("ADMIN_ID", "1")
 
 import pytest  # pyrefly: ignore[import-error]
-from pydantic import ValidationError
 from pydantic_ai.settings import ModelSettings
 
 from ai_coach.agent import (
@@ -69,18 +68,18 @@ def test_payload_split_number_defaults() -> None:
 
 
 def test_payload_empty_days_validation() -> None:
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValueError):
         _sample_program(exercises_by_day=[])
 
 
 def test_payload_missing_fields_validation() -> None:
     bad_day = {"day": "d", "exercises": [{"sets": "3", "reps": "10"}]}
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValueError):
         _sample_program(exercises_by_day=[bad_day])
 
 
 def test_subscription_payload_validation() -> None:
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValueError):
         SubscriptionPayload(workout_days=[], exercises=[])
     day = {"day": "d", "exercises": [{"name": "x", "sets": "1", "reps": "1"}]}
     payload = SubscriptionPayload(workout_days=["mon"], exercises=[day])

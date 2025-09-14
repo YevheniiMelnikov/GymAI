@@ -102,12 +102,6 @@ class Program(BaseModel):
     coach_type: CoachType = CoachType.human
     model_config = ConfigDict(extra="ignore")
 
-    def __init__(self, **data: Any) -> None:  # type: ignore[no-untyped-def]
-        super().__init__(**data)
-        if getattr(self, "split_number", None) is None:
-            days = getattr(self, "exercises_by_day", []) or []
-            self.split_number = len(days)
-
     @field_validator("client_profile", mode="before")
     def _normalize_client_profile(cls, v: Any) -> int:
         if isinstance(v, dict):

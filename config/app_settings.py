@@ -68,7 +68,6 @@ class Settings(BaseSettings):
     DOCKER_BOT_START: Annotated[bool, Field(default=False)]
 
     BOT_INTERNAL_URL: Annotated[str, Field(default="http://bot:8000/")]
-    WEB_SERVER_HOST: Annotated[str, Field(default="0.0.0.0")]
 
     DB_PORT: Annotated[str, Field(default="5432")]
     DB_NAME: Annotated[str, Field(default="postgres")]

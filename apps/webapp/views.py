@@ -1,62 +1,16 @@
 from __future__ import annotations
 
-from typing import Any, Awaitable, Callable, Tuple, TypeVar, TYPE_CHECKING, cast
 import inspect
 from datetime import datetime
-
-try:  # pragma: no cover - optional framework
-    from django.http import JsonResponse, HttpRequest, HttpResponse
-    from django.shortcuts import render
-    from django.views.decorators.http import require_GET
-except Exception:  # pragma: no cover - minimal stubs
-
-    class HttpRequest(dict):  # type: ignore[override]
-        method: str = "GET"
-
-        def get_full_path(self) -> str:  # pragma: no cover - stub
-            return ""
-
-    class HttpResponse(dict):  # pragma: no cover - stub
-        status_code: int = 200
-
-        def __init__(self, content: str = "", status: int = 200) -> None:
-            super().__init__()
-            self.content = content
-            self.status_code = status
-
-    class JsonResponse(HttpResponse):  # pragma: no cover - stub
-        def __init__(self, data: dict[str, Any], status: int = 200) -> None:
-            super().__init__(status=status)
-            self.data = data
-
-    def render(_request: HttpRequest, _template: str, _ctx: dict[str, Any] | None = None) -> HttpResponse:
-        return HttpResponse()
-
-    def require_GET(func: Callable[..., Any]) -> Callable[..., Any]:
-        return func
-
+from types import SimpleNamespace
+from typing import Any, Awaitable, Callable, Tuple, TypeVar, TYPE_CHECKING, cast
 
 from asgiref.sync import sync_to_async
-
-try:  # pragma: no cover - optional dependency
-    from loguru import logger
-except Exception:  # pragma: no cover - simple logger
-
-    class _Logger:
-        def debug(self, *a: Any, **k: Any) -> None: ...
-        def info(self, *a: Any, **k: Any) -> None: ...
-        def warning(self, *a: Any, **k: Any) -> None: ...
-        def exception(self, *a: Any, **k: Any) -> None: ...
-
-    logger = _Logger()
-
-try:  # pragma: no cover - optional dependency
-    from rest_framework.exceptions import NotFound
-except Exception:  # pragma: no cover - stub
-
-    class NotFound(Exception):
-        pass
-
+from django.http import JsonResponse, HttpRequest, HttpResponse
+from django.shortcuts import render
+from django.views.decorators.http import require_GET
+from loguru import logger
+from rest_framework.exceptions import NotFound
 
 from core.schemas import DayExercises
 from .utils import (
@@ -69,45 +23,21 @@ from .utils import (
 if TYPE_CHECKING:
     from apps.profiles.models import ClientProfile, Profile
     from apps.workout_plans.models import Program, Subscription
-
-try:
     from apps.profiles.repos import ClientProfileRepository, ProfileRepository
     from apps.workout_plans.repos import ProgramRepository, SubscriptionRepository
-except Exception as exc:  # pragma: no cover - optional in tests
-    logger.debug(f"Repository imports failed: {exc}")
+else:  # attributes for monkeypatching in tests
 
-    class _ProfileRepoStub:
-        @staticmethod
-        def get_by_telegram_id(_tg_id: int) -> None:  # pragma: no cover - stub
-            raise NotImplementedError
+    class _RepoStub(SimpleNamespace):
+        pass
 
-    class _ClientProfileRepoStub:
-        @staticmethod
-        def get_by_profile_id(_pid: int) -> None:  # pragma: no cover - stub
-            raise NotImplementedError
-
-    class _ProgramRepoStub:
-        @staticmethod
-        def get_latest(_cid: int) -> None:  # pragma: no cover - stub
-            raise NotImplementedError
-
-        @staticmethod
-        def get_by_id(_cid: int, _pid: int) -> None:  # pragma: no cover - stub
-            raise NotImplementedError
-
-        @staticmethod
-        def get_all(_cid: int) -> list[Program]:  # pragma: no cover - stub
-            raise NotImplementedError
-
-    class _SubscriptionRepoStub:
-        @staticmethod
-        def get_latest(_cid: int) -> None:  # pragma: no cover - stub
-            raise NotImplementedError
-
-    ClientProfileRepository = _ClientProfileRepoStub
-    ProfileRepository = _ProfileRepoStub
-    ProgramRepository = _ProgramRepoStub
-    SubscriptionRepository = _SubscriptionRepoStub
+    ClientProfileRepository = _RepoStub(get_by_profile_id=lambda *a, **k: None)
+    ProfileRepository = _RepoStub(get_by_telegram_id=lambda *a, **k: None)
+    ProgramRepository = _RepoStub(
+        get_latest=lambda *a, **k: None,
+        get_by_id=lambda *a, **k: None,
+        get_all=lambda *a, **k: [],
+    )
+    SubscriptionRepository = _RepoStub(get_latest=lambda *a, **k: None)
 
 T = TypeVar("T")
 
@@ -139,6 +69,8 @@ async def _auth_and_get_client(
 
     user: dict[str, Any] = data.get("user", {})  # type: ignore[arg-type]
     tg_id: int = int(str(user.get("id", "0")))
+
+    global ClientProfileRepository, ProfileRepository
 
     try:
         profile: Profile = await _call_repo(ProfileRepository.get_by_telegram_id, tg_id)
@@ -195,6 +127,8 @@ async def program_data(request: HttpRequest) -> JsonResponse:
         return auth_error
     assert client is not None
 
+    global ProgramRepository
+
     if program_id is not None:
         program_obj: Program | None = await _call_repo(ProgramRepository.get_by_id, int(client.id), program_id)
     else:
@@ -229,6 +163,8 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
         return auth_error
     assert client is not None
 
+    global ProgramRepository
+
     try:
         programs: list[Program] = await _call_repo(ProgramRepository.get_all, int(client.id))
     except Exception:
@@ -259,6 +195,8 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
     if auth_error:
         return auth_error
     assert client is not None
+
+    global SubscriptionRepository
 
     subscription: Subscription | None = await _call_repo(SubscriptionRepository.get_latest, int(client.id))
     if subscription is None:

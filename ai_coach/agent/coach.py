@@ -37,7 +37,7 @@ class ProgramAdapter:
     @staticmethod
     def to_domain(payload: ProgramPayload) -> Program:
         data = payload.model_dump(exclude={"schema_version"})
-        coach_type = data.get("coach_type")
+        coach_type = getattr(payload, "_coach_type_raw", data.get("coach_type"))
         if isinstance(coach_type, str):
             data["coach_type"] = CoachType.ai_coach if coach_type == "ai" else CoachType(coach_type)
         if data.get("split_number") is None:

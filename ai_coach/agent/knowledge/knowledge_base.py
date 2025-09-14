@@ -28,15 +28,16 @@ except Exception:
         return None
 
 
-try:
+try:  # pragma: no cover - optional dependency
     from cognee.modules.data.exceptions import DatasetNotFoundError  # type: ignore
     from cognee.modules.users.exceptions.exceptions import PermissionDeniedError  # type: ignore
-except Exception:
+except Exception:  # pragma: no cover - stubs for tests
 
-    class DatasetNotFoundError(Exception): ...
+    class DatasetNotFoundError(Exception):
+        pass
 
-
-class PermissionDeniedError(Exception): ...
+    class PermissionDeniedError(Exception):
+        pass
 
 
 async def _safe_add(*args, **kwargs):
@@ -159,39 +160,11 @@ class KnowledgeBase:
 
     @classmethod
     async def save_client_message(cls, text: str, client_id: int) -> None:
-        """Save a client message into dataset."""
-        ds = cls._dataset_name(client_id)
-        try:
-            info = await cognee.add(
-                text=f"{MessageRole.CLIENT.value}: {text}",
-                dataset_name=ds,
-                user=cls._user,
-                node_set=[],
-            )
-            resolved = getattr(info, "dataset_id", None) or getattr(info, "dataset_name", ds)
-            await cls._process_dataset(str(resolved), cls._user)
-        except PermissionDeniedError:
-            raise
-        except Exception:
-            pass
+        await cls.add_text(text, client_id=client_id, role=MessageRole.CLIENT)
 
     @classmethod
     async def save_ai_message(cls, text: str, client_id: int) -> None:
-        """Save an AI coach message into dataset."""
-        ds = cls._dataset_name(client_id)
-        try:
-            info = await cognee.add(
-                text=f"{MessageRole.AI_COACH.value}: {text}",
-                dataset_name=ds,
-                user=cls._user,
-                node_set=[],
-            )
-            resolved = getattr(info, "dataset_id", None) or getattr(info, "dataset_name", ds)
-            await cls._process_dataset(str(resolved), cls._user)
-        except PermissionDeniedError:
-            raise
-        except Exception:
-            pass
+        await cls.add_text(text, client_id=client_id, role=MessageRole.AI_COACH)
 
     @classmethod
     async def get_message_history(cls, client_id: int, limit: int | None = None) -> list[str]:

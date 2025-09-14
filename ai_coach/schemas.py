@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-from pydantic import BaseModel, ValidationError, field_validator, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 from ai_coach.types import CoachMode
 from core.schemas import Program, DayExercises
@@ -56,19 +56,24 @@ class ProgramPayload(Program):
     schema_version: str | None = None
 
     def __init__(self, **data: Any) -> None:
+        self._coach_type_raw = data.get("coach_type")
         super().__init__(**data)
-        if not getattr(self, "exercises_by_day", []):
-            raise ValidationError("exercises_by_day must not be empty")
-        for day in getattr(self, "exercises_by_day", []):
-            exercises = day.get("exercises", []) if isinstance(day, dict) else getattr(day, "exercises", [])
+
+    @model_validator(mode="after")
+    def _validate(self) -> "ProgramPayload":
+        if not self.exercises_by_day:
+            raise ValueError("exercises_by_day must not be empty")
+        for day in self.exercises_by_day:
+            exercises = day.get("exercises", []) if isinstance(day, dict) else day.exercises
             if not exercises:
-                raise ValidationError("day exercises must not be empty")
+                raise ValueError("day exercises must not be empty")
             for ex in exercises:
-                getter = ex.get if isinstance(ex, dict) else lambda k, d=None: getattr(ex, k, d)
-                if not all(getter(attr) for attr in ("name", "sets", "reps")):
-                    raise ValidationError("exercise must have name, sets and reps")
-        if getattr(self, "split_number", None) is None:
-            self.split_number = len(getattr(self, "exercises_by_day", []))
+                getter = ex.get if isinstance(ex, dict) else lambda a, d=None: getattr(ex, a, d)
+                if not (getter("name") and getter("sets") and getter("reps")):
+                    raise ValueError("exercise must have name, sets and reps")
+        if self.split_number is None:
+            self.split_number = len(self.exercises_by_day)
+        return self
 
 
 class SubscriptionPayload(BaseModel):
@@ -79,12 +84,13 @@ class SubscriptionPayload(BaseModel):
     wishes: str | None = None
     schema_version: str | None = None
 
-    def __init__(self, **data: Any) -> None:
-        super().__init__(**data)
-        if not getattr(self, "workout_days", []):
-            raise ValidationError("workout_days must not be empty")
-        if not getattr(self, "exercises", []):
-            raise ValidationError("exercises must not be empty")
+    @model_validator(mode="after")
+    def _validate(self) -> "SubscriptionPayload":
+        if not self.workout_days:
+            raise ValueError("workout_days must not be empty")
+        if not self.exercises:
+            raise ValueError("exercises must not be empty")
+        return self
 
 
 UpdatedProgramPayload = ProgramPayload
