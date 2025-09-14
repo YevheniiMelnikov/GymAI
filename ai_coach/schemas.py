@@ -4,7 +4,7 @@ from typing import Any
 from pydantic import BaseModel, field_validator, model_validator
 
 from ai_coach.types import CoachMode
-from core.schemas import Program, DayExercises
+from core.schemas import Program, DayExercises, Exercise
 from core.enums import WorkoutPlanType, WorkoutType
 
 
@@ -63,13 +63,18 @@ class ProgramPayload(Program):
     def _validate(self) -> "ProgramPayload":
         if not self.exercises_by_day:
             raise ValueError("exercises_by_day must not be empty")
-        for day in self.exercises_by_day:
-            exercises = day.get("exercises", []) if isinstance(day, dict) else day.exercises
-            if not exercises:
+        for raw_day in self.exercises_by_day:
+            day = raw_day if isinstance(raw_day, DayExercises) else DayExercises.model_validate(raw_day)
+            if not day.exercises:
                 raise ValueError("day exercises must not be empty")
-            for ex in exercises:
-                getter = ex.get if isinstance(ex, dict) else lambda a, d=None: getattr(ex, a, d)
-                if not (getter("name") and getter("sets") and getter("reps")):
+            for raw_ex in day.exercises:
+                if isinstance(raw_ex, Exercise):
+                    name, sets, reps = raw_ex.name, raw_ex.sets, raw_ex.reps
+                else:
+                    name = raw_ex.get("name")
+                    sets = raw_ex.get("sets")
+                    reps = raw_ex.get("reps")
+                if not (name and sets and reps):
                     raise ValueError("exercise must have name, sets and reps")
         if self.split_number is None:
             self.split_number = len(self.exercises_by_day)

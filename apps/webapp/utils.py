@@ -2,7 +2,7 @@ import asyncio
 import hashlib
 import hmac
 import json
-from typing import Any, cast
+from typing import Any
 from urllib.parse import parse_qsl
 
 from config.app_settings import settings
@@ -86,7 +86,7 @@ def verify_init_data(init_data: str) -> dict[str, object]:
     user = result.get("user")
     user_id = user.get("id") if isinstance(user, dict) else None
     logger.debug(f"verify_init_data ok (scheme={'new' if ok_new else 'old'}) for user_id={user_id}")
-    return cast(dict[str, object], result)
+    return result
 
 
 def normalize_day_exercises(raw: Any) -> list[dict[str, Any]]:

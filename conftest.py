@@ -414,7 +414,6 @@ settings_stub = types.SimpleNamespace(
     WEBHOOK_PATH="/telegram/webhook",
     AI_COACH_REFRESH_USER="admin",
     AI_COACH_REFRESH_PASSWORD="pass",
-    AGENT_PYDANTICAI_ENABLED=True,
 )
 sys.modules["config.app_settings"] = types.ModuleType("config.app_settings")
 sys.modules["config.app_settings"].settings = settings_stub

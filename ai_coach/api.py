@@ -5,7 +5,7 @@ from pydantic import ValidationError  # pyrefly: ignore[import-error]
 from typing import Awaitable, Callable, Any
 
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
-from ai_coach.agent import AgentDeps, CoachAgent
+from ai_coach.agent import AgentDeps, CoachAgent  # pyrefly: ignore[missing-module-attribute]
 from core.cache import Cache
 from ai_coach.application import app, security
 from ai_coach.schemas import AICoachRequest

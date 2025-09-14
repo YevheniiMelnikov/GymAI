@@ -96,9 +96,12 @@ class WorkoutCacheManager(BaseCacheManager):
         except UserServiceError:
             if not use_fallback:
                 raise
-            history = await cls.get_json("workout_plans:programs_history", str(client_profile_id)) or []
+            history = cast(
+                list[dict[str, Any]],
+                await cls.get_json("workout_plans:programs_history", str(client_profile_id)) or [],
+            )
             if history:
-                data = history[0]
+                data: dict[str, Any] = history[0]
                 try:
                     program = validate_or_raise(data, Program, context=str(client_profile_id))
                 finally:

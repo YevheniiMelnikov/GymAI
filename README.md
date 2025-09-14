@@ -143,7 +143,6 @@ FastAPI service under `/ask/`.
 * `mode=subscription` → `Subscription`.
 * `mode=ask_ai` → `QAResponse` `{ "answer": str, "sources": [str, ...] }`.
 
-Enable agent mode globally with `AGENT_PYDANTICAI_ENABLED=true` or per request via header `X-Agent: pydanticai`.
 
 **ask\_ai response example**
 

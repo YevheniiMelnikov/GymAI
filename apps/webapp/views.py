@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 from datetime import datetime
 from types import SimpleNamespace
-from typing import Any, Awaitable, Callable, Tuple, TypeVar, TYPE_CHECKING, cast
+from typing import Any, Awaitable, Callable, Tuple, TypeVar, TYPE_CHECKING, cast, Protocol
 
 from asgiref.sync import sync_to_async
 from django.http import JsonResponse, HttpRequest, HttpResponse
@@ -12,7 +12,7 @@ from django.views.decorators.http import require_GET
 from loguru import logger
 from rest_framework.exceptions import NotFound
 
-from core.schemas import DayExercises
+from core.schemas import DayExercises, Program, Subscription
 from .utils import (
     verify_init_data,
     _format_full_program,
@@ -20,9 +20,17 @@ from .utils import (
     normalize_day_exercises,
 )
 
+
+class _Profile(Protocol):
+    id: int | None
+    language: str | None
+
+
+class _ClientProfile(Protocol):
+    id: int | None
+
+
 if TYPE_CHECKING:
-    from apps.profiles.models import ClientProfile, Profile
-    from apps.workout_plans.models import Program, Subscription
     from apps.profiles.repos import ClientProfileRepository, ProfileRepository
     from apps.workout_plans.repos import ProgramRepository, SubscriptionRepository
 else:  # attributes for monkeypatching in tests
@@ -52,7 +60,7 @@ async def _call_repo(func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
 
 async def _auth_and_get_client(
     request: HttpRequest,
-) -> Tuple[ClientProfile | None, str, JsonResponse | None, int]:
+) -> Tuple[_ClientProfile | None, str, JsonResponse | None, int]:
     """
     Verify Telegram init_data, resolve tg_id -> Profile -> ClientProfile.
 
@@ -73,7 +81,7 @@ async def _auth_and_get_client(
     global ClientProfileRepository, ProfileRepository
 
     try:
-        profile: Profile = await _call_repo(ProfileRepository.get_by_telegram_id, tg_id)
+        profile = cast(_Profile, await _call_repo(ProfileRepository.get_by_telegram_id, tg_id))
     except Exception as exc:
         if exc.__class__ is NotFound:
             logger.warning(f"Profile not found for tg_id={tg_id}")
@@ -82,7 +90,10 @@ async def _auth_and_get_client(
 
     lang = str(getattr(profile, "language", "eng") or "eng")
     try:
-        client: ClientProfile = await _call_repo(ClientProfileRepository.get_by_profile_id, int(profile.id))
+        client = cast(
+            _ClientProfile,
+            await _call_repo(ClientProfileRepository.get_by_profile_id, int(profile.id or 0)),
+        )
     except Exception as exc:
         if exc.__class__ is NotFound:
             logger.warning(f"Client profile not found for profile_id={profile.id}")
@@ -129,10 +140,14 @@ async def program_data(request: HttpRequest) -> JsonResponse:
 
     global ProgramRepository
 
+    client_id = int(getattr(client, "id", 0))
     if program_id is not None:
-        program_obj: Program | None = await _call_repo(ProgramRepository.get_by_id, int(client.id), program_id)
+        program_obj = cast(
+            Program | None,
+            await _call_repo(ProgramRepository.get_by_id, client_id, program_id),
+        )
     else:
-        program_obj = await _call_repo(ProgramRepository.get_latest, int(client.id))
+        program_obj = cast(Program | None, await _call_repo(ProgramRepository.get_latest, client_id))
 
     if program_obj is None:
         logger.warning(f"Program not found for client_profile_id={client.id} program_id={program_id}")
@@ -166,7 +181,10 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
     global ProgramRepository
 
     try:
-        programs: list[Program] = await _call_repo(ProgramRepository.get_all, int(client.id))
+        programs = cast(
+            list[Program],
+            await _call_repo(ProgramRepository.get_all, int(getattr(client, "id", 0))),
+        )
     except Exception:
         logger.exception(f"Failed to fetch programs for tg_id={tg_id}")
         return JsonResponse({"error": "server_error"}, status=500)
@@ -198,7 +216,10 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
 
     global SubscriptionRepository
 
-    subscription: Subscription | None = await _call_repo(SubscriptionRepository.get_latest, int(client.id))
+    subscription = cast(
+        Subscription | None,
+        await _call_repo(SubscriptionRepository.get_latest, int(getattr(client, "id", 0))),
+    )
     if subscription is None:
         logger.warning(f"Subscription not found for client_profile_id={client.id}")
         return JsonResponse({"error": "not_found"}, status=404)

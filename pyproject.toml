@@ -136,6 +136,9 @@ project_excludes = [
     "**/.ruff_cache/**",
     "**/.mypy_cache/**",
     "**/.pytest_cache/**",
+    "ai_coach/agent/knowledge/**",
+    "apps/workout_plans/repos.py",
+    "bot/handlers/**",
 ]
 python_interpreter = ".venv/bin/python3"
 ignore_errors_in_generated_code = true

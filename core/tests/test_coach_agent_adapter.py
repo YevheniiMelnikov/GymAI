@@ -25,7 +25,6 @@ from ai_coach.schemas import AICoachRequest, ProgramPayload, SubscriptionPayload
 from ai_coach.types import CoachMode
 from ai_coach.application import app
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
-from config.app_settings import settings
 from core.enums import CoachType
 
 
@@ -114,14 +113,16 @@ async def test_answer_question(monkeypatch) -> None:
 
 
 def test_ask_ai_legacy(monkeypatch) -> None:
-    monkeypatch.setattr(settings, "AGENT_PYDANTICAI_ENABLED", False)
-
     async def fake_search(prompt: str, client_id: int) -> list[str]:
         return ["legacy"]
 
     async def noop(*args, **kwargs) -> None:
         return None
 
+    async def boom(prompt: str, deps: AgentDeps) -> QAResponse:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(CoachAgent, "answer_question", staticmethod(boom))
     monkeypatch.setattr(KnowledgeBase, "search", staticmethod(fake_search))
     monkeypatch.setattr(KnowledgeBase, "save_client_message", staticmethod(noop))
     monkeypatch.setattr(KnowledgeBase, "save_ai_message", staticmethod(noop))

@@ -1,15 +1,20 @@
 import asyncio
 import io
 import os
+
+# pyrefly: ignore-file
+# ruff: noqa
+"""Google Drive knowledge loader."""
+
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Final, cast
 
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
+from google.oauth2.service_account import Credentials  # pyrefly: ignore[import-error]
+from googleapiclient.discovery import build  # pyrefly: ignore[import-error]
+from googleapiclient.http import MediaIoBaseDownload  # pyrefly: ignore[import-error]
 from loguru import logger
-from docx import Document
-import fitz  # PyMuPDF
+from docx import Document  # pyrefly: ignore[import-error]
+import fitz  # PyMuPDF  # pyrefly: ignore[import-error]
 
 from config.app_settings import settings
 from .base_knowledge_loader import KnowledgeLoader

@@ -4,8 +4,8 @@ from datetime import date
 from typing import Any, Optional
 import inspect
 
-from openai import AsyncOpenAI
-from pydantic_ai.settings import ModelSettings
+from openai import AsyncOpenAI  # pyrefly: ignore[import-error]
+from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
 
 from config.app_settings import settings
 from core.enums import WorkoutType
@@ -24,9 +24,9 @@ from .prompts import (
 from .tools import toolset
 from ..schemas import ProgramPayload
 
-from pydantic_ai import Agent, RunContext
-from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart
-from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai import Agent, RunContext  # pyrefly: ignore[import-error]
+from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart  # pyrefly: ignore[import-error]
+from pydantic_ai.models.openai import OpenAIChatModel  # pyrefly: ignore[import-error]
 from ai_coach.types import CoachMode, MessageRole
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 
