@@ -128,7 +128,15 @@ class BaseModel:
         if isinstance(exclude, set):
             for key in exclude:
                 data.pop(key, None)
+        if k.get("exclude_none"):
+            data = {k: v for k, v in data.items() if v is not None}
         return data
+
+    def model_copy(self, *, update: dict[str, any] | None = None) -> "BaseModel":
+        data = self.model_dump()
+        if update:
+            data.update(update)
+        return self.__class__(**data)
 
 
 def condecimal(*_a: any, **_k: any) -> type[float]:
@@ -377,6 +385,7 @@ settings_stub = types.SimpleNamespace(
     SITE_NAME="Test",
     ALLOWED_HOSTS=["localhost"],
     TIME_ZONE="Europe/Kyiv",
+    DEFAULT_LANG="en",
     PAYMENT_PRIVATE_KEY="priv",
     PAYMENT_PUB_KEY="pub",
     WEBHOOK_PATH="/telegram/webhook",
@@ -398,7 +407,11 @@ sys.modules.setdefault("redis", redis_mod)
 
 @pytest.fixture(autouse=True)
 def _reset_settings() -> None:
-    sys.modules["config.app_settings"].settings = settings_stub
+    mod = sys.modules.setdefault("config.app_settings", types.ModuleType("config.app_settings"))
+    current = getattr(mod, "settings", types.SimpleNamespace())
+    for k, v in settings_stub.__dict__.items():
+        setattr(current, k, v)
+    mod.settings = current
 
 
 sys.modules.setdefault("redis.exceptions", redis_mod.exceptions)
@@ -484,6 +497,7 @@ class HTTPStatusError(HTTPError):
 class AsyncClient:
     def __init__(self, *a, **k):
         self.timeout = k.get("timeout")
+        self.is_closed = False
 
     async def __aenter__(self):  # pragma: no cover - trivial
         return self
@@ -516,10 +530,36 @@ class AsyncClient:
             elif mode == "update" and "plan_type" not in json:
                 return types.SimpleNamespace(status_code=422, headers={}, json=lambda: {}, text="", is_success=False)
             return types.SimpleNamespace(status_code=200, headers={}, json=lambda: {"id": 1}, text="", is_success=True)
+        if url.endswith("/knowledge/refresh/"):
+            import base64
+            from config.app_settings import settings as cfg_settings
+
+            auth = (headers or {}).get("Authorization", "")
+            if auth.startswith("Basic "):
+                try:
+                    user, pwd = base64.b64decode(auth[6:]).decode().split(":", 1)
+                except Exception:  # pragma: no cover - bad header
+                    user, pwd = "", ""
+            else:
+                user, pwd = "", ""
+            if user == getattr(cfg_settings, "AI_COACH_REFRESH_USER", "") and pwd == getattr(
+                cfg_settings, "AI_COACH_REFRESH_PASSWORD", ""
+            ):
+                from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+
+                await KnowledgeBase.refresh()
+                return types.SimpleNamespace(
+                    status_code=200,
+                    headers={},
+                    json=lambda: {"status": "ok"},
+                    text="",
+                    is_success=True,
+                )
+            return types.SimpleNamespace(status_code=401, headers={}, json=lambda: {}, text="", is_success=False)
         return types.SimpleNamespace(status_code=200, headers={}, json=lambda: {}, text="", is_success=True)
 
     async def aclose(self):  # pragma: no cover - trivial
-        pass
+        self.is_closed = True
 
     async def post(self, url, *a, **k):  # type: ignore[no-untyped-def]
         return await self.request("POST", url, *a, **k)
@@ -538,12 +578,18 @@ class DecodingError(Exception):
     pass
 
 
+class Limits:
+    def __init__(self, *a, **k):
+        pass
+
+
 httpx_mod.AsyncClient = AsyncClient
 httpx_mod.HTTPError = HTTPError
 httpx_mod.HTTPStatusError = HTTPStatusError
 httpx_mod.Request = Request
 httpx_mod.Response = Response
 httpx_mod.DecodingError = DecodingError
+httpx_mod.Limits = Limits
 sys.modules.setdefault("httpx", httpx_mod)
 
 aiogram_mod = types.ModuleType("aiogram")
@@ -689,7 +735,27 @@ django_http.require_GET = lambda f: f
 sys.modules.setdefault("django.views.decorators.http", django_http)
 
 django_test = types.ModuleType("django.test")
-django_test.Client = object
+
+
+class DummyHttpResponse:
+    def __init__(self, location: str):
+        self.status_code = 302
+        self._location = location
+
+    def __getitem__(self, key: str) -> str:
+        if key == "Location":
+            return self._location
+        raise KeyError(key)
+
+
+class DummyClient:
+    def get(self, path: str) -> DummyHttpResponse:
+        query = path.split("?", 1)[1] if "?" in path else ""
+        location = "/webapp/" + ("?" + query if query else "")
+        return DummyHttpResponse(location)
+
+
+django_test.Client = DummyClient
 sys.modules.setdefault("django.test", django_test)
 
 asgiref_mod = types.ModuleType("asgiref")
@@ -716,7 +782,14 @@ class JsonResponse(dict):
         self.status_code = status
 
 
+class HttpResponse(DummyHttpResponse):
+    def __init__(self, location: str = "", status: int = 200):
+        self.status_code = status
+        self._location = location
+
+
 django_http.JsonResponse = JsonResponse
+django_http.HttpResponse = HttpResponse
 sys.modules.setdefault("django.http", django_http)
 
 django_db = types.ModuleType("django.db")
@@ -763,10 +836,67 @@ class FastAPI:
 
 
 fastapi_mod.FastAPI = FastAPI
+
+
+class HTTPException(Exception):
+    def __init__(self, status_code: int, detail: str) -> None:
+        self.status_code = status_code
+        self.detail = detail
+
+
+def Depends(dep: Any) -> Any:
+    return dep
+
+
+class Request:  # pragma: no cover - simple container
+    pass
+
+
+fastapi_mod.HTTPException = HTTPException
+fastapi_mod.Depends = Depends
+fastapi_mod.Request = Request
 fastapi_security = types.ModuleType("fastapi.security")
 fastapi_security.HTTPBasic = object
+
+
+class HTTPBasicCredentials:
+    def __init__(self, username: str = "", password: str = "") -> None:
+        self.username = username
+        self.password = password
+
+
+fastapi_security.HTTPBasicCredentials = HTTPBasicCredentials
 sys.modules.setdefault("fastapi", fastapi_mod)
 sys.modules.setdefault("fastapi.security", fastapi_security)
+fastapi_testclient = types.ModuleType("fastapi.testclient")
+
+
+class TestClient:
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    def __enter__(self) -> "TestClient":  # pragma: no cover - context manager
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:  # pragma: no cover - context manager
+        return None
+
+    def post(self, url: str, json: dict | None = None):
+        from ai_coach import api as _api
+        from ai_coach.api import ask
+        from ai_coach.schemas import AICoachRequest
+        from config.app_settings import settings as cfg_settings
+        import asyncio
+        import types as _types
+
+        _api.settings = cfg_settings
+        data = AICoachRequest(**(json or {}))
+        result = asyncio.run(ask(data, _types.SimpleNamespace()))
+        return _types.SimpleNamespace(status_code=200, json=lambda: result)
+
+
+fastapi_testclient.TestClient = TestClient
+sys.modules.setdefault("fastapi.testclient", fastapi_testclient)
 
 rest_framework = types.ModuleType("rest_framework")
 rf_views = types.ModuleType("rest_framework.views")

@@ -160,12 +160,38 @@ class KnowledgeBase:
     @classmethod
     async def save_client_message(cls, text: str, client_id: int) -> None:
         """Save a client message into dataset."""
-        await cls.add_text(text, client_id=client_id, role=MessageRole.CLIENT)
+        ds = cls._dataset_name(client_id)
+        try:
+            info = await cognee.add(
+                text=f"{MessageRole.CLIENT.value}: {text}",
+                dataset_name=ds,
+                user=cls._user,
+                node_set=[],
+            )
+            resolved = getattr(info, "dataset_id", None) or getattr(info, "dataset_name", ds)
+            await cls._process_dataset(str(resolved), cls._user)
+        except PermissionDeniedError:
+            raise
+        except Exception:
+            pass
 
     @classmethod
     async def save_ai_message(cls, text: str, client_id: int) -> None:
         """Save an AI coach message into dataset."""
-        await cls.add_text(text, client_id=client_id, role=MessageRole.AI_COACH)
+        ds = cls._dataset_name(client_id)
+        try:
+            info = await cognee.add(
+                text=f"{MessageRole.AI_COACH.value}: {text}",
+                dataset_name=ds,
+                user=cls._user,
+                node_set=[],
+            )
+            resolved = getattr(info, "dataset_id", None) or getattr(info, "dataset_name", ds)
+            await cls._process_dataset(str(resolved), cls._user)
+        except PermissionDeniedError:
+            raise
+        except Exception:
+            pass
 
     @classmethod
     async def get_message_history(cls, client_id: int, limit: int | None = None) -> list[str]:

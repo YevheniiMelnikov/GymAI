@@ -1,31 +1,8 @@
-from __future__ import annotations
-
-from typing import Any, Awaitable, Callable
-
-try:  # pragma: no cover - optional dependency
-    from fastapi import Depends, HTTPException, Request
-    from fastapi.security import HTTPBasicCredentials
-except Exception:  # pragma: no cover - simple stubs
-
-    class HTTPException(Exception):
-        def __init__(self, status_code: int, detail: str) -> None:
-            self.status_code = status_code
-            self.detail = detail
-
-    class Request:  # type: ignore[too-many-ancestors]
-        pass
-
-    def Depends(dependency: Any) -> Any:
-        return dependency
-
-    class HTTPBasicCredentials:  # pragma: no cover - placeholder
-        def __init__(self, username: str = "", password: str = "") -> None:
-            self.username = username
-            self.password = password
-
-
+from fastapi import Depends, HTTPException, Request  # pyrefly: ignore[import-error]
+from fastapi.security import HTTPBasicCredentials  # pyrefly: ignore[import-error]
 from loguru import logger  # pyrefly: ignore[import-error]
 from pydantic import ValidationError  # pyrefly: ignore[import-error]
+from typing import Awaitable, Callable, Any
 
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from ai_coach.agent import AgentDeps, CoachAgent
@@ -64,7 +41,7 @@ DISPATCH: dict[CoachMode, CoachAction] = {
         feedback=ctx["feedback"],
         workout_type=ctx.get("workout_type"),
         deps=ctx["deps"],
-        output_type=Program if ctx["plan_type"] is WorkoutPlanType.PROGRAM else Subscription,
+        output_type=Program if ctx["plan_type"] == WorkoutPlanType.PROGRAM else Subscription,
         instructions=ctx.get("instructions"),
     ),
     CoachMode.ask_ai: lambda ctx: CoachAgent.answer_question(ctx["prompt"] or "", deps=ctx["deps"]),
@@ -80,9 +57,16 @@ async def health() -> dict[str, str]:
 async def ask(data: AICoachRequest, request: Request) -> Program | Subscription | QAResponse | list[str] | None:
     mode = data.mode if isinstance(data.mode, CoachMode) else CoachMode(data.mode)
     logger.debug(f"/ask received request_id={data.request_id} client_id={data.client_id} mode={mode.value}")
-    if mode is CoachMode.update and data.plan_type is None:
+
+    if mode == CoachMode.update and data.plan_type is None:
         raise HTTPException(status_code=422, detail="plan_type required for update mode")
-    period = SubscriptionPeriod(data.period or SubscriptionPeriod.one_month.value)
+
+    period = (
+        data.period
+        if isinstance(data.period, SubscriptionPeriod)
+        else SubscriptionPeriod(data.period or SubscriptionPeriod.one_month.value)
+    )
+
     ctx: AskCtx = {
         "prompt": data.prompt,
         "client_id": data.client_id,
@@ -96,12 +80,13 @@ async def ask(data: AICoachRequest, request: Request) -> Program | Subscription 
         "plan_type": data.plan_type,
         "instructions": data.instructions,
     }
-    client_name: str | None = None
+
     try:
         client = await Cache.client.get_client(data.client_id)
         client_name = client.name
     except Exception:  # pragma: no cover - missing cache/service
         client_name = None
+
     deps = AgentDeps(
         client_id=data.client_id,
         locale=ctx["language"],
@@ -109,13 +94,16 @@ async def ask(data: AICoachRequest, request: Request) -> Program | Subscription 
         client_name=client_name,
     )
     ctx["deps"] = deps
+
     try:
         coach_agent_action = DISPATCH[mode]
     except KeyError as e:
         logger.exception(f"/ask unsupported mode: {mode.value}")
         raise HTTPException(status_code=422, detail="Unsupported mode") from e
+
     try:
         result: Any = await coach_agent_action(ctx)
+
         if mode == CoachMode.ask_ai:
             answer = getattr(result, "answer", None)
             sources = getattr(result, "sources", []) or []
@@ -156,6 +144,7 @@ async def refresh_knowledge(credentials: HTTPBasicCredentials = Depends(security
         or credentials.password != settings.AI_COACH_REFRESH_PASSWORD
     ):
         raise HTTPException(status_code=401, detail="Unauthorized")
+
     try:
         await KnowledgeBase.refresh()
     except Exception as e:  # pragma: no cover - log unexpected errors

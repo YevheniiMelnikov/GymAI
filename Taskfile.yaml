@@ -36,7 +36,7 @@ tasks:
     env:
       DJANGO_SETTINGS_MODULE: config.test_settings
     cmds:
-      - uv run pytest -q
+      - uv run --with pytest-asyncio pytest -q
 
   update:
     desc: Update dependencies (main + dev)
