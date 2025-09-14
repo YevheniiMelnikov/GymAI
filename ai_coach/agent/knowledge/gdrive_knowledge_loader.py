@@ -7,7 +7,7 @@ import os
 """Google Drive knowledge loader."""
 
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Final, cast
+from typing import Any, Callable, Final, Protocol, cast
 
 from google.oauth2.service_account import Credentials  # pyrefly: ignore[import-error]
 from googleapiclient.discovery import build  # pyrefly: ignore[import-error]
@@ -48,10 +48,14 @@ class GDriveDocumentLoader(KnowledgeLoader):
     folder_id: str | None = settings.KNOWLEDGE_BASE_FOLDER_ID
     credentials_path: str | Path = settings.GOOGLE_APPLICATION_CREDENTIALS
     _files_service: Any | None = None
-    _add_text: Callable[..., Awaitable[None]]
+
+    class _AddText(Protocol):
+        async def __call__(self, text: str, *, dataset: str, node_set: list[str] | None = None) -> None: ...
+
+    _add_text: _AddText
     _dataset_name: str = os.environ.get("COGNEE_GLOBAL_DATASET", "external_docs")
 
-    def __init__(self, add_text: Callable[..., Awaitable[None]]) -> None:
+    def __init__(self, add_text: _AddText) -> None:
         self._add_text = add_text
 
     def _get_drive_files_service(self) -> Any:
@@ -119,11 +123,10 @@ class GDriveDocumentLoader(KnowledgeLoader):
                 await self._add_text(
                     text,
                     dataset=self._dataset_name,
-                    user=None,
                     node_set=[f"gdrive:{name}"],
                 )
-            except Exception as exc:
-                logger.error(f"Failed to process {name} (id={file_id}): {exc}")
+            except Exception:
+                logger.exception(f"Failed to process {name} (id={file_id})")
 
     async def refresh(self) -> None:
         await self.load()
