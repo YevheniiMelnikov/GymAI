@@ -540,8 +540,8 @@ aiogram_mod.types = types.SimpleNamespace(
     ),
     CallbackQuery=type("CallbackQuery", (), {"answer": lambda *a, **k: None, "message": None}),
     BotCommand=object,
-    InlineKeyboardButton=type("InlineKeyboardButton", (), {}),
-    InlineKeyboardMarkup=type("InlineKeyboardMarkup", (), {}),
+    InlineKeyboardButton=type("InlineKeyboardButton", (), {"__init__": lambda self, *a, **k: None}),
+    InlineKeyboardMarkup=type("InlineKeyboardMarkup", (), {"__init__": lambda self, *a, **k: None}),
     WebAppInfo=type("WebAppInfo", (), {}),
     FSInputFile=object,
     InputFile=object,
@@ -859,7 +859,15 @@ profiles_models.Profile = Profile
 sys.modules.setdefault("apps.profiles.models", profiles_models)
 
 bot_utils_bot = types.ModuleType("bot.utils.bot")
-bot_utils_bot.answer_msg = lambda *a, **k: None
+
+
+async def _noop_async(*a: Any, **k: Any) -> None:
+    return None
+
+
+bot_utils_bot.answer_msg = _noop_async
+bot_utils_bot.del_msg = _noop_async
+bot_utils_bot.delete_messages = _noop_async
 bot_utils_bot.get_webapp_url = lambda *a, **k: ""
 sys.modules.setdefault("bot.utils.bot", bot_utils_bot)
 
@@ -869,6 +877,8 @@ sys.modules.setdefault("bot.utils.chat", bot_utils_chat)
 
 bot_utils_profiles = types.ModuleType("bot.utils.profiles")
 bot_utils_profiles.get_assigned_coach = lambda *a, **k: None
+bot_utils_profiles.fetch_user = lambda *a, **k: None
+bot_utils_profiles.answer_profile = lambda *a, **k: None
 sys.modules.setdefault("bot.utils.profiles", bot_utils_profiles)
 
 workout_models = types.ModuleType("apps.workout_plans.models")
@@ -896,6 +906,7 @@ core_services_pkg.APIService = types.SimpleNamespace(
     ai_coach=types.SimpleNamespace(),
 )
 core_services_pkg.get_gif_manager = lambda: types.SimpleNamespace(find_gif=lambda *a, **k: None)
+core_services_pkg.get_avatar_manager = lambda: types.SimpleNamespace(bucket_name="")
 sys.modules.setdefault("core.services", core_services_pkg)
 
 env_defaults = {
