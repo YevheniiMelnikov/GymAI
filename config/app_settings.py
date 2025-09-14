@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     CACHE_TTL: int = 60 * 5  # Django cache TTL
     BACKUP_RETENTION_DAYS: int = 30  # Postgres/Redis backup retention
 
-    KNOWLEDGE_BASE_FOLDER_ID: str | None = None
+    KNOWLEDGE_BASE_FOLDER_ID: Annotated[str, Field(default="")]
     KNOWLEDGE_REFRESH_INTERVAL: int = 60 * 60
     KNOWLEDGE_REFRESH_START_DELAY: int = 180
     AI_COACH_TIMEOUT: int = 120

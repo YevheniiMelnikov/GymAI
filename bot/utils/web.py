@@ -2,7 +2,6 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit, urlunsplit
 
 
-
 from config.app_settings import settings
 
 if TYPE_CHECKING:

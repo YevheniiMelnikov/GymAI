@@ -7,7 +7,7 @@ from pydantic_ai import ModelRetry, RunContext  # pyrefly: ignore[import-error]
 from pydantic_ai.toolsets.function import FunctionToolset  # pyrefly: ignore[import-error]
 
 from core.cache import Cache
-from core.resources.exercises import exercise_dict
+from core.exercises import exercise_dict
 from core.schemas import DayExercises, Program, Subscription
 from core.utils.short_url import short_url
 from core.enums import SubscriptionPeriod
