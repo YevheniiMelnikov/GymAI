@@ -9,6 +9,7 @@ from pydantic_ai.settings import ModelSettings
 from config.app_settings import settings
 from core.enums import WorkoutType
 from core.schemas import Program, QAResponse, Subscription
+from core.enums import CoachType
 
 from .base import AgentDeps
 from .prompts import (
@@ -35,6 +36,11 @@ class ProgramAdapter:
     @staticmethod
     def to_domain(payload: ProgramPayload) -> Program:
         data = payload.model_dump(exclude={"schema_version"})
+        coach_type = data.get("coach_type")
+        if isinstance(coach_type, str):
+            data["coach_type"] = CoachType.ai_coach if coach_type == "ai" else CoachType(coach_type)
+        if data.get("split_number") is None:
+            data["split_number"] = len(getattr(payload, "exercises_by_day", []))
         return Program.model_validate(data)
 
 
@@ -45,7 +51,7 @@ class CoachAgent:
 
     @staticmethod
     def _lang(deps: AgentDeps) -> str:
-        return deps.locale or settings.DEFAULT_LANG
+        return deps.locale or getattr(settings, "DEFAULT_LANG", "en")
 
     @classmethod
     def _init_agent(cls) -> Any:

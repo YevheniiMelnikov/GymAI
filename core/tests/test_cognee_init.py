@@ -23,7 +23,7 @@ def test_reinit_on_failure(monkeypatch):
         async def fake_user():
             return SimpleNamespace(id="test")
 
-        monkeypatch.setattr("ai_coach.knowledge_base.get_default_user", fake_user)
+        monkeypatch.setattr("ai_coach.agent.knowledge.knowledge_base.get_default_user", fake_user)
         if knowledge_ready_event is not None:
             knowledge_ready_event.clear()
         with pytest.raises(RuntimeError):

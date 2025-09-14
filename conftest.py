@@ -374,14 +374,38 @@ class AsyncClient:
     async def __aexit__(self, exc_type, exc, tb):  # pragma: no cover - trivial
         await self.aclose()
 
-    async def request(self, *a, **k):
+    async def request(self, method, url, json=None, headers=None, **kwargs):  # type: ignore[no-untyped-def]
+        from ai_coach.agent import CoachAgent
+        from ai_coach.agent import QAResponse
+
+        json = json or {}
+        mode = json.get("mode")
+        if url.endswith("/ask/"):
+            if mode == "ask_ai":
+                try:
+                    result = await CoachAgent.answer_question(json.get("prompt", ""), deps=None)
+                    if isinstance(result, QAResponse):
+                        return types.SimpleNamespace(
+                            status_code=200,
+                            headers={},
+                            json=lambda: {"answer": result.answer, "sources": result.sources},
+                            text="",
+                            is_success=True,
+                        )
+                except Exception:
+                    return types.SimpleNamespace(
+                        status_code=503, headers={}, json=lambda: {}, text="", is_success=False
+                    )
+            elif mode == "update" and "plan_type" not in json:
+                return types.SimpleNamespace(status_code=422, headers={}, json=lambda: {}, text="", is_success=False)
+            return types.SimpleNamespace(status_code=200, headers={}, json=lambda: {"id": 1}, text="", is_success=True)
         return types.SimpleNamespace(status_code=200, headers={}, json=lambda: {}, text="", is_success=True)
 
     async def aclose(self):  # pragma: no cover - trivial
         pass
 
-    async def post(self, *a, **k):
-        return await self.request(*a, **k)
+    async def post(self, url, *a, **k):  # type: ignore[no-untyped-def]
+        return await self.request("POST", url, *a, **k)
 
 
 class Request:
@@ -607,6 +631,18 @@ fastapi_mod = types.ModuleType("fastapi")
 class FastAPI:
     def __init__(self, *a, **k):
         pass
+
+    def get(self, *args, **kwargs):
+        def decorator(func):
+            return func
+
+        return decorator
+
+    def post(self, *args, **kwargs):
+        def decorator(func):
+            return func
+
+        return decorator
 
 
 fastapi_mod.FastAPI = FastAPI

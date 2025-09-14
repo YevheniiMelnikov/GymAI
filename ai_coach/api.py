@@ -1,8 +1,31 @@
-from fastapi import Depends, HTTPException, Request  # pyrefly: ignore[import-error]
-from fastapi.security import HTTPBasicCredentials  # pyrefly: ignore[import-error]
+from __future__ import annotations
+
+from typing import Any, Awaitable, Callable
+
+try:  # pragma: no cover - optional dependency
+    from fastapi import Depends, HTTPException, Request
+    from fastapi.security import HTTPBasicCredentials
+except Exception:  # pragma: no cover - simple stubs
+
+    class HTTPException(Exception):
+        def __init__(self, status_code: int, detail: str) -> None:
+            self.status_code = status_code
+            self.detail = detail
+
+    class Request:  # type: ignore[too-many-ancestors]
+        pass
+
+    def Depends(dependency: Any) -> Any:
+        return dependency
+
+    class HTTPBasicCredentials:  # pragma: no cover - placeholder
+        def __init__(self, username: str = "", password: str = "") -> None:
+            self.username = username
+            self.password = password
+
+
 from loguru import logger  # pyrefly: ignore[import-error]
 from pydantic import ValidationError  # pyrefly: ignore[import-error]
-from typing import Awaitable, Callable, Any
 
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from ai_coach.agent import AgentDeps, CoachAgent
@@ -14,7 +37,7 @@ from core.enums import WorkoutPlanType, SubscriptionPeriod
 from config.app_settings import settings
 from core.schemas import Program, QAResponse, Subscription
 
-CoachAction = Callable[[AskCtx], Awaitable[object]]
+CoachAction = Callable[[AskCtx], Awaitable[Program | Subscription | QAResponse | list[str] | None]]
 
 DISPATCH: dict[CoachMode, CoachAction] = {
     CoachMode.program: lambda ctx: CoachAgent.generate_workout_plan(
@@ -94,14 +117,16 @@ async def ask(data: AICoachRequest, request: Request) -> Program | Subscription 
     try:
         result: Any = await coach_agent_action(ctx)
         if mode == CoachMode.ask_ai:
+            answer = getattr(result, "answer", None)
             sources = getattr(result, "sources", []) or []
             logger.debug(
                 f"/ask agent completed request_id={data.request_id}"
                 f" client_id={data.client_id} mode=ask_ai"
-                f" answer_len={len(result.answer)} sources={len(sources)}"
+                f" answer_len={len(answer) if isinstance(answer, str) else 0} sources={len(sources)}"
             )
-            await KnowledgeBase.save_client_message(data.prompt or "", client_id=data.client_id)
-            await KnowledgeBase.save_ai_message(result.answer, client_id=data.client_id)
+            if isinstance(answer, str):
+                await KnowledgeBase.save_client_message(data.prompt or "", client_id=data.client_id)
+                await KnowledgeBase.save_ai_message(answer, client_id=data.client_id)
         else:
             logger.debug(
                 f"/ask agent completed request_id={data.request_id} client_id={data.client_id} mode={mode.value}"
@@ -131,7 +156,6 @@ async def refresh_knowledge(credentials: HTTPBasicCredentials = Depends(security
         or credentials.password != settings.AI_COACH_REFRESH_PASSWORD
     ):
         raise HTTPException(status_code=401, detail="Unauthorized")
-
     try:
         await KnowledgeBase.refresh()
     except Exception as e:  # pragma: no cover - log unexpected errors

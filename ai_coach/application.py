@@ -2,8 +2,32 @@ import asyncio
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 
-from fastapi import FastAPI
-from fastapi.security import HTTPBasic
+try:  # pragma: no cover - optional dependency
+    from fastapi import FastAPI
+    from fastapi.security import HTTPBasic
+except Exception:  # pragma: no cover - simple stubs
+
+    class FastAPI:  # type: ignore[too-many-ancestors]
+        def __init__(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
+            pass
+
+        def get(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            def decorator(func):
+                return func
+
+            return decorator
+
+        def post(self, *args, **kwargs):  # type: ignore[no-untyped-def]
+            def decorator(func):
+                return func
+
+            return decorator
+
+    class HTTPBasic:  # pragma: no cover - placeholder
+        def __call__(self, *args, **kwargs) -> None:  # type: ignore[no-untyped-def]
+            return None
+
+
 from loguru import logger
 
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase

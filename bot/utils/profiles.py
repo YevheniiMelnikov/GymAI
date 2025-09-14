@@ -1,14 +1,10 @@
 from datetime import datetime, timedelta
 from typing import cast
 
-from loguru import logger
-from aiogram import Bot
-from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, CallbackQuery, FSInputFile
-from aiogram.exceptions import TelegramBadRequest
+from typing import TYPE_CHECKING, Any
 from pathlib import Path
 
-from bot.keyboards import profile_menu_kb
+from loguru import logger
 from config.app_settings import settings
 from core.cache import Cache
 from core.enums import ClientStatus, CoachType
@@ -18,11 +14,22 @@ from core.exceptions import (
     ClientNotFoundError,
     ClientNotAssignedError,
 )
-from core.services import APIService
+from core.services.internal import APIService
 from bot.utils.bot import del_msg, answer_msg, delete_messages
 from core.schemas import Client, Coach, Profile
 from bot.texts.text_manager import msg_text
 from core.services import get_avatar_manager
+
+if TYPE_CHECKING:  # pragma: no cover - type hints only
+    from aiogram import Bot
+    from aiogram.fsm.context import FSMContext
+    from aiogram.types import Message, CallbackQuery, FSInputFile
+    from aiogram.exceptions import TelegramBadRequest
+else:  # pragma: no cover - optional dependency stubs
+    Bot = FSMContext = Message = CallbackQuery = FSInputFile = Any
+
+    class TelegramBadRequest(Exception):
+        pass
 
 
 async def update_profile_data(message: Message, state: FSMContext, role: str, bot: Bot) -> None:
@@ -169,6 +176,8 @@ async def fetch_user(profile: Profile) -> Client | Coach:
 
 
 async def answer_profile(cbq: CallbackQuery, profile: Profile, user: Coach | Client, text: str) -> None:
+    from bot.keyboards import profile_menu_kb
+
     message = cbq.message
     avatar_manager = get_avatar_manager()
     if not isinstance(message, Message):

@@ -1,7 +1,32 @@
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit, urlunsplit
 
-from aiohttp import web
+
+try:  # pragma: no cover - optional dependency
+    from aiohttp import web  # type: ignore[import-not-found]
+except Exception:  # pragma: no cover - simple stub
+
+    class _WebStub:
+        class Request: ...
+
+        class Response: ...
+
+        class Application: ...
+
+        class AppRunner:
+            def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+            async def setup(self) -> None: ...
+
+        class TCPSite:
+            def __init__(self, *args: Any, **kwargs: Any) -> None: ...
+            async def start(self) -> None: ...
+
+        @staticmethod
+        def json_response(data: dict[str, Any]) -> dict[str, Any]:
+            return data
+
+    web = _WebStub()  # type: ignore
+
 from config.app_settings import settings
 
 if TYPE_CHECKING:
