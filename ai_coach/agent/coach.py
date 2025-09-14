@@ -39,7 +39,13 @@ class ProgramAdapter:
         data = payload.model_dump(exclude={"schema_version"})
         coach_type = getattr(payload, "_coach_type_raw", data.get("coach_type"))
         if isinstance(coach_type, str):
-            data["coach_type"] = CoachType.ai_coach if coach_type == "ai" else CoachType(coach_type)
+            normalized = coach_type.lower()
+            mapping = {
+                "ai": CoachType.ai_coach,
+                "ai_coach": CoachType.ai_coach,
+                "human": CoachType.human,
+            }
+            data["coach_type"] = mapping.get(normalized, CoachType.ai_coach)
         if data.get("split_number") is None:
             data["split_number"] = len(getattr(payload, "exercises_by_day", []))
         return Program.model_validate(data)

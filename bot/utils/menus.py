@@ -436,7 +436,15 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
             await callback_query.answer(msg_text("no_program", profile.language), show_alert=True)
         await show_program_promo_page(callback_query, profile, state)
         return
-    await show_program_promo_page(callback_query, profile, state)
+    message = cast(Message, callback_query.message)
+    assert message
+    await answer_msg(
+        message,
+        msg_text("select_action", profile.language),
+        reply_markup=kb.program_action_kb(profile.language, get_webapp_url("program")),
+    )
+    await state.set_state(States.program_action_choice)
+    await del_msg(cast(Message | CallbackQuery | None, message))
 
 
 async def show_program_promo_page(
