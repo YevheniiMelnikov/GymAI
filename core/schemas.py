@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Annotated, Any
 from pydantic import BaseModel, Field, field_validator, condecimal, ConfigDict
 
-from core.utils.encryptor import Encryptor
+from core.encryptor import Encryptor
 from core.enums import (
     ProfileRole,
     ClientStatus,

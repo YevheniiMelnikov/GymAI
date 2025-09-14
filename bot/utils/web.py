@@ -1,16 +1,20 @@
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit, urlunsplit
 
-from aiohttp import web
+
+
 from config.app_settings import settings
 
 if TYPE_CHECKING:
+    from aiohttp import web
     from aiogram import Bot, Dispatcher
 else:  # pragma: no cover - runtime imports
     Bot = Dispatcher = Any
 
 
-async def ping_handler(_: web.Request) -> web.Response:
+async def ping_handler(_: "web.Request") -> "web.Response":
+    from aiohttp import web
+
     return web.json_response({"ok": True})
 
 
@@ -22,7 +26,7 @@ def build_ping_url(webhook_url: str | None) -> str:
     return urlunsplit((s.scheme, s.netloc, path, "", ""))
 
 
-async def setup_app(app: web.Application, bot: "Bot", dp: "Dispatcher") -> None:
+async def setup_app(app: "web.Application", bot: "Bot", dp: "Dispatcher") -> None:
     from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
     from bot.handlers.internal import (
         internal_payment_handler,
@@ -47,7 +51,9 @@ async def setup_app(app: web.Application, bot: "Bot", dp: "Dispatcher") -> None:
     setup_application(app, dp, bot=bot)
 
 
-async def start_web_app(app: web.Application) -> web.AppRunner:
+async def start_web_app(app: "web.Application") -> "web.AppRunner":
+    from aiohttp import web
+
     runner = web.AppRunner(app, access_log=None)
     await runner.setup()
     site = web.TCPSite(

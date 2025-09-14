@@ -1,13 +1,13 @@
 import json
+import inspect
 from typing import Any, cast
-from inspect import isawaitable
 from loguru import logger
 
 from core.schemas import Subscription, Program
 from .base import BaseCacheManager
 from core.utils.validators import validate_or_raise
 from core.containers import get_container
-from core.exceptions import SubscriptionNotFoundError, ProgramNotFoundError
+from core.exceptions import SubscriptionNotFoundError, ProgramNotFoundError, UserServiceError
 
 
 class WorkoutCacheManager(BaseCacheManager):
@@ -15,7 +15,7 @@ class WorkoutCacheManager(BaseCacheManager):
     async def _fetch_from_service(cls, cache_key: str, field: str, *, use_fallback: bool) -> Subscription | Program:
         client_profile_id = int(field)
         service = get_container().workout_service()
-        if isawaitable(service):
+        if inspect.isawaitable(service):
             service = await service
         if cache_key.endswith("subscriptions"):
             subscription = await service.get_latest_subscription(client_profile_id)
@@ -87,11 +87,29 @@ class WorkoutCacheManager(BaseCacheManager):
 
     @classmethod
     async def get_latest_program(cls, client_profile_id: int, *, use_fallback: bool = True) -> Program:
-        return await cls.get_or_fetch(
-            "workout_plans:programs",
-            str(client_profile_id),
-            use_fallback=use_fallback,
-        )
+        try:
+            return await cls.get_or_fetch(
+                "workout_plans:programs",
+                str(client_profile_id),
+                use_fallback=use_fallback,
+            )
+        except UserServiceError:
+            if not use_fallback:
+                raise
+            history = cast(
+                list[dict[str, Any]],
+                await cls.get_json("workout_plans:programs_history", str(client_profile_id)) or [],
+            )
+            if history:
+                data: dict[str, Any] = history[0]
+                try:
+                    program = validate_or_raise(data, Program, context=str(client_profile_id))
+                finally:
+                    maybe = cls.delete("workout_plans:programs_history", str(client_profile_id))
+                    if inspect.isawaitable(maybe):
+                        await maybe
+                return program
+            raise
 
     @classmethod
     async def get_all_subscriptions(cls, client_profile_id: int) -> list[Subscription]:
@@ -106,7 +124,7 @@ class WorkoutCacheManager(BaseCacheManager):
                 await cls.delete("workout_plans:subscriptions_history", str(client_profile_id))
 
         service = get_container().workout_service()
-        if isawaitable(service):
+        if inspect.isawaitable(service):
             service = await service
         subscriptions = await service.get_all_subscriptions(client_profile_id)
         await cls.set(
@@ -127,7 +145,7 @@ class WorkoutCacheManager(BaseCacheManager):
                 await cls.delete("workout_plans:programs_history", str(client_profile_id))
 
         service = get_container().workout_service()
-        if isawaitable(service):
+        if inspect.isawaitable(service):
             service = await service
         programs = await service.get_all_programs(client_profile_id)
         await cls.set(

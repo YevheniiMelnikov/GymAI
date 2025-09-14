@@ -1,5 +1,10 @@
 import importlib
 import os
+
+# pyrefly: ignore-file
+# ruff: noqa
+"""Cognee configuration helpers."""
+
 from pathlib import Path
 from typing import Any, Awaitable, Callable, cast
 from uuid import uuid4

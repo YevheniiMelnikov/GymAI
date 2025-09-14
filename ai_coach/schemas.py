@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 from ai_coach.types import CoachMode
-from core.schemas import Program, DayExercises
+from core.schemas import Program, DayExercises, Exercise
 from core.enums import WorkoutPlanType, WorkoutType
 
 
@@ -22,6 +22,12 @@ class AICoachRequest(BaseModel):
     plan_type: WorkoutPlanType | None = None
     request_id: str | None = None
     instructions: str | None = None  # User-provided custom instructions
+
+    def __init__(self, **data: Any) -> None:
+        mode = data.get("mode")
+        if isinstance(mode, str):
+            data["mode"] = CoachMode(mode)
+        super().__init__(**data)
 
     @field_validator("workout_type", mode="before")
     @staticmethod
@@ -47,20 +53,28 @@ class CogneeUser:
 class ProgramPayload(Program):
     """Program schema used by the agent (allows schema_version)."""
 
-    schema_version: str | None = Field(
-        default=None,
-        description="Internal schema version used by the agent; dropped before save",
-    )
+    schema_version: str | None = None
+
+    def __init__(self, **data: Any) -> None:
+        self._coach_type_raw = data.get("coach_type")
+        super().__init__(**data)
 
     @model_validator(mode="after")
-    def _validate_invariants(self) -> "ProgramPayload":
+    def _validate(self) -> "ProgramPayload":
         if not self.exercises_by_day:
             raise ValueError("exercises_by_day must not be empty")
-        for day in self.exercises_by_day:
+        for raw_day in self.exercises_by_day:
+            day = raw_day if isinstance(raw_day, DayExercises) else DayExercises.model_validate(raw_day)
             if not day.exercises:
                 raise ValueError("day exercises must not be empty")
-            for ex in day.exercises:
-                if not (ex.name and ex.sets and ex.reps):
+            for raw_ex in day.exercises:
+                if isinstance(raw_ex, Exercise):
+                    name, sets, reps = raw_ex.name, raw_ex.sets, raw_ex.reps
+                else:
+                    name = raw_ex.get("name")
+                    sets = raw_ex.get("sets")
+                    reps = raw_ex.get("reps")
+                if not (name and sets and reps):
                     raise ValueError("exercise must have name, sets and reps")
         if self.split_number is None:
             self.split_number = len(self.exercises_by_day)
@@ -76,7 +90,7 @@ class SubscriptionPayload(BaseModel):
     schema_version: str | None = None
 
     @model_validator(mode="after")
-    def _check(self) -> "SubscriptionPayload":
+    def _validate(self) -> "SubscriptionPayload":
         if not self.workout_days:
             raise ValueError("workout_days must not be empty")
         if not self.exercises:

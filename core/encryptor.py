@@ -1,9 +1,10 @@
+from __future__ import annotations
+
 import base64
 import hashlib
-from typing import Optional, ClassVar
+from typing import ClassVar, Optional
 
 from cryptography.fernet import Fernet
-
 from loguru import logger
 from config.app_settings import settings
 

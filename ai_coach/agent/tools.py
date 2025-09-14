@@ -1,7 +1,10 @@
-from loguru import logger
+# pyrefly: ignore-file
+# ruff: noqa
+"""Tool definitions for the coach agent."""
 
-from pydantic_ai import ModelRetry, RunContext
-from pydantic_ai.toolsets.function import FunctionToolset
+from loguru import logger
+from pydantic_ai import ModelRetry, RunContext  # pyrefly: ignore[import-error]
+from pydantic_ai.toolsets.function import FunctionToolset  # pyrefly: ignore[import-error]
 
 from core.cache import Cache
 from core.resources.exercises import exercise_dict

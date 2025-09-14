@@ -32,7 +32,7 @@ repos:
     hooks:
       - id: pytest
         name: pytest
-        entry: bash -c 'PYTHONPATH=. uv run pytest -q'
+        entry: bash -c 'PYTHONPATH=. DJANGO_SETTINGS_MODULE=config.test_settings uv run --with pytest-asyncio pytest -q'
         language: system
         types: [python]
         pass_filenames: false

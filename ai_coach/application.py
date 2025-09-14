@@ -4,6 +4,8 @@ from collections.abc import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.security import HTTPBasic
+
+
 from loguru import logger
 
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase

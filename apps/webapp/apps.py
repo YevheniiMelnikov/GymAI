@@ -4,7 +4,7 @@ from core.services.internal import APIService
 
 
 class WebappConfig(AppConfig):
-    default_auto_field = "django.db.models.BigAutoField"
+    default_auto_field = "django.db.models.BigAutoField"  # pyrefly: ignore[bad-override]
     name = "apps.webapp"
 
     def ready(self) -> None:

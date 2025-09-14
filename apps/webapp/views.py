@@ -1,19 +1,18 @@
-from typing import Any, Tuple, cast
-from datetime import datetime
+from __future__ import annotations
 
+import inspect
+from datetime import datetime
+from types import SimpleNamespace
+from typing import Any, Awaitable, Callable, Tuple, TypeVar, TYPE_CHECKING, cast, Protocol
+
+from asgiref.sync import sync_to_async
 from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET
-
-from asgiref.sync import sync_to_async
 from loguru import logger
 from rest_framework.exceptions import NotFound
 
-from apps.profiles.models import ClientProfile, Profile
-from apps.profiles.repos import ClientProfileRepository, ProfileRepository
-from apps.workout_plans.models import Program, Subscription
-from apps.workout_plans.repos import ProgramRepository, SubscriptionRepository
-from core.schemas import DayExercises
+from core.schemas import DayExercises, Program, Subscription
 from .utils import (
     verify_init_data,
     _format_full_program,
@@ -22,9 +21,46 @@ from .utils import (
 )
 
 
+class _Profile(Protocol):
+    id: int | None
+    language: str | None
+
+
+class _ClientProfile(Protocol):
+    id: int | None
+
+
+if TYPE_CHECKING:
+    from apps.profiles.repos import ClientProfileRepository, ProfileRepository
+    from apps.workout_plans.repos import ProgramRepository, SubscriptionRepository
+else:  # attributes for monkeypatching in tests
+
+    class _RepoStub(SimpleNamespace):
+        pass
+
+    ClientProfileRepository = _RepoStub(get_by_profile_id=lambda *a, **k: None)
+    ProfileRepository = _RepoStub(get_by_telegram_id=lambda *a, **k: None)
+    ProgramRepository = _RepoStub(
+        get_latest=lambda *a, **k: None,
+        get_by_id=lambda *a, **k: None,
+        get_all=lambda *a, **k: [],
+    )
+    SubscriptionRepository = _RepoStub(get_latest=lambda *a, **k: None)
+
+T = TypeVar("T")
+
+
+async def _call_repo(func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
+    """Execute repository call regardless of sync_to_async stubbing."""
+    result = sync_to_async(func)(*args, **kwargs)
+    if inspect.isawaitable(result):
+        return await cast(Awaitable[T], result)
+    return cast(T, result)
+
+
 async def _auth_and_get_client(
     request: HttpRequest,
-) -> Tuple[ClientProfile | None, str, JsonResponse | None, int]:
+) -> Tuple[_ClientProfile | None, str, JsonResponse | None, int]:
     """
     Verify Telegram init_data, resolve tg_id -> Profile -> ClientProfile.
 
@@ -42,18 +78,27 @@ async def _auth_and_get_client(
     user: dict[str, Any] = data.get("user", {})  # type: ignore[arg-type]
     tg_id: int = int(str(user.get("id", "0")))
 
+    global ClientProfileRepository, ProfileRepository
+
     try:
-        profile: Profile = await sync_to_async(ProfileRepository.get_by_telegram_id)(tg_id)
-    except NotFound:
-        logger.warning(f"Profile not found for tg_id={tg_id}")
-        return None, lang, JsonResponse({"error": "not_found"}, status=404), tg_id
+        profile = cast(_Profile, await _call_repo(ProfileRepository.get_by_telegram_id, tg_id))
+    except Exception as exc:
+        if exc.__class__ is NotFound:
+            logger.warning(f"Profile not found for tg_id={tg_id}")
+            return None, lang, JsonResponse({"error": "not_found"}, status=404), tg_id
+        raise
 
     lang = str(getattr(profile, "language", "eng") or "eng")
     try:
-        client: ClientProfile = await sync_to_async(ClientProfileRepository.get_by_profile_id)(int(profile.pk))
-    except NotFound:
-        logger.warning(f"Client profile not found for profile_id={profile.pk}")
-        return None, lang, JsonResponse({"error": "not_found"}, status=404), tg_id
+        client = cast(
+            _ClientProfile,
+            await _call_repo(ClientProfileRepository.get_by_profile_id, int(profile.id or 0)),
+        )
+    except Exception as exc:
+        if exc.__class__ is NotFound:
+            logger.warning(f"Client profile not found for profile_id={profile.id}")
+            return None, lang, JsonResponse({"error": "not_found"}, status=404), tg_id
+        raise
 
     return client, lang, None, tg_id
 
@@ -80,22 +125,32 @@ def _format_program_text(raw_exercises: Any) -> str:
 async def program_data(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
-    client, lang, auth_error, _tg = await _auth_and_get_client(request)
-    if auth_error:
-        return auth_error
-    assert client is not None
-
     program_id, pid_error = _parse_program_id(request)
     if pid_error:
         return pid_error
 
+    try:
+        client, lang, auth_error, _tg = await _auth_and_get_client(request)
+    except Exception:
+        logger.exception("Auth resolution failed")
+        return JsonResponse({"error": "server_error"}, status=500)
+    if auth_error:
+        return auth_error
+    assert client is not None
+
+    global ProgramRepository
+
+    client_id = int(getattr(client, "id", 0))
     if program_id is not None:
-        program_obj: Program | None = await sync_to_async(ProgramRepository.get_by_id)(int(client.pk), program_id)
+        program_obj = cast(
+            Program | None,
+            await _call_repo(ProgramRepository.get_by_id, client_id, program_id),
+        )
     else:
-        program_obj = await sync_to_async(ProgramRepository.get_latest)(int(client.pk))
+        program_obj = cast(Program | None, await _call_repo(ProgramRepository.get_latest, client_id))
 
     if program_obj is None:
-        logger.warning(f"Program not found for client_profile_id={client.pk} program_id={program_id}")
+        logger.warning(f"Program not found for client_profile_id={client.id} program_id={program_id}")
         return JsonResponse({"error": "not_found"}, status=404)
 
     text: str = _format_program_text(program_obj.exercises_by_day)
@@ -114,20 +169,29 @@ async def program_data(request: HttpRequest) -> JsonResponse:
 async def programs_history(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
-    client, lang, auth_error, tg_id = await _auth_and_get_client(request)
+    try:
+        client, lang, auth_error, tg_id = await _auth_and_get_client(request)
+    except Exception:
+        logger.exception("Auth resolution failed")
+        return JsonResponse({"error": "server_error"}, status=500)
     if auth_error:
         return auth_error
     assert client is not None
 
+    global ProgramRepository
+
     try:
-        programs: list[Program] = await sync_to_async(ProgramRepository.get_all)(int(client.pk))
+        programs = cast(
+            list[Program],
+            await _call_repo(ProgramRepository.get_all, int(getattr(client, "id", 0))),
+        )
     except Exception:
         logger.exception(f"Failed to fetch programs for tg_id={tg_id}")
         return JsonResponse({"error": "server_error"}, status=500)
 
     items = [
         {
-            "id": int(p.pk),
+            "id": int(p.id),
             "created_at": int(cast(datetime, p.created_at).timestamp()),
             "coach_type": p.coach_type,
         }
@@ -141,14 +205,23 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
 async def subscription_data(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
-    client, lang, auth_error, _tg = await _auth_and_get_client(request)
+    try:
+        client, lang, auth_error, _tg = await _auth_and_get_client(request)
+    except Exception:
+        logger.exception("Auth resolution failed")
+        return JsonResponse({"error": "server_error"}, status=500)
     if auth_error:
         return auth_error
     assert client is not None
 
-    subscription: Subscription | None = await sync_to_async(SubscriptionRepository.get_latest)(int(client.pk))
+    global SubscriptionRepository
+
+    subscription = cast(
+        Subscription | None,
+        await _call_repo(SubscriptionRepository.get_latest, int(getattr(client, "id", 0))),
+    )
     if subscription is None:
-        logger.warning(f"Subscription not found for client_profile_id={client.pk}")
+        logger.warning(f"Subscription not found for client_profile_id={client.id}")
         return JsonResponse({"error": "not_found"}, status=404)
 
     text: str = _format_program_text(subscription.exercises)

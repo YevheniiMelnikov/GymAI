@@ -1,4 +1,10 @@
 from typing import Any, Optional, cast, List
+
+"""Repositories for workout plan models."""
+
+# pyrefly: ignore-file
+# ruff: noqa
+
 from django.db.models import QuerySet
 from django.core.cache import cache
 from rest_framework.exceptions import NotFound

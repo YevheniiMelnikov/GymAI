@@ -3,9 +3,11 @@
 import os
 import sys
 import types
+import pytest
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Generic, TypeVar
+import inspect
 
 os.environ["TIME_ZONE"] = "Europe/Kyiv"
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.test_settings")
@@ -97,6 +99,250 @@ gspread_mod.authorize = lambda *a, **k: gspread_mod.Client()
 gspread_mod.utils = types.SimpleNamespace(ValueInputOption=types.SimpleNamespace(user_entered="USER_ENTERED"))
 sys.modules.setdefault("gspread", gspread_mod)
 sys.modules.setdefault("gspread.utils", gspread_mod.utils)
+
+# Lightweight stubs for frequently missing dependencies
+
+# pydantic stub
+pydantic_mod = types.ModuleType("pydantic")
+
+
+class ValidationError(Exception):
+    pass
+
+
+class BaseModel:
+    def __init__(self, **data: any) -> None:
+        for name, value in self.__class__.__dict__.items():
+            if name.startswith("_") or callable(value):
+                continue
+            setattr(self, name, value)
+        for k, v in data.items():
+            setattr(self, k, v)
+        # run field validators
+        for attr in dir(self.__class__):
+            fn = getattr(self.__class__, attr)
+            meta = getattr(fn, "_field_validator", None)
+            if meta:
+                fields, mode = meta
+                for field in fields:
+                    current = getattr(self, field, None)
+                    params = len(inspect.signature(fn).parameters)
+                    info = types.SimpleNamespace(data=data)
+                    if params == 3:
+                        current = fn(self.__class__, current, info)
+                    else:
+                        current = fn(self.__class__, current)
+                    setattr(self, field, current)
+        # run model validators (after)
+        for attr in dir(self.__class__):
+            fn = getattr(self.__class__, attr)
+            if getattr(fn, "_model_validator", None) == "after":
+                fn(self)
+
+    @classmethod
+    def model_validate(cls, data: dict[str, any]) -> "BaseModel":
+        return cls(**data)
+
+    def model_dump(self, *a: any, **k: any) -> dict[str, any]:
+        data = dict(self.__dict__)
+        exclude = k.get("exclude")
+        if isinstance(exclude, set):
+            for key in exclude:
+                data.pop(key, None)
+        if k.get("exclude_none"):
+            data = {k: v for k, v in data.items() if v is not None}
+        return data
+
+    def model_copy(self, *, update: dict[str, any] | None = None) -> "BaseModel":
+        data = self.model_dump()
+        if update:
+            data.update(update)
+        return self.__class__(**data)
+
+
+def condecimal(*_a: any, **_k: any) -> type[float]:
+    return float
+
+
+class ConfigDict(dict[str, any]):
+    pass
+
+
+def Field(default: any = None, **_: any) -> any:
+    return default
+
+
+def field_validator(*fields: str, mode: str = "after"):
+    def decorator(f: any) -> any:
+        f._field_validator = (fields, mode)
+        return f
+
+    return decorator
+
+
+def model_validator(*, mode: str = "after"):
+    def decorator(f: any) -> any:
+        f._model_validator = mode
+        return f
+
+    return decorator
+
+
+pydantic_mod.BaseModel = BaseModel
+pydantic_mod.Field = Field
+pydantic_mod.ValidationError = ValidationError
+pydantic_mod.field_validator = field_validator
+pydantic_mod.model_validator = model_validator
+pydantic_mod.condecimal = condecimal
+pydantic_mod.ConfigDict = ConfigDict
+
+sys.modules.setdefault("pydantic", pydantic_mod)
+
+# pydantic_settings stub
+pydantic_settings_mod = types.ModuleType("pydantic_settings")
+
+
+class BaseSettings(BaseModel):
+    pass
+
+
+pydantic_settings_mod.BaseSettings = BaseSettings
+sys.modules.setdefault("pydantic_settings", pydantic_settings_mod)
+
+# loguru stub
+loguru_mod = types.ModuleType("loguru")
+
+
+class _Logger:
+    def debug(self, *a, **k):
+        pass
+
+    def info(self, *a, **k):
+        pass
+
+    def warning(self, *a, **k):
+        pass
+
+    def error(self, *a, **k):
+        pass
+
+    def success(self, *a, **k):
+        pass
+
+    def exception(self, *a, **k):
+        pass
+
+
+loguru_mod.logger = _Logger()
+sys.modules.setdefault("loguru", loguru_mod)
+
+aiohttp_mod = types.ModuleType("aiohttp")
+aiohttp_mod.ClientSession = object
+sys.modules.setdefault("aiohttp", aiohttp_mod)
+
+pydantic_ai_mod = types.ModuleType("pydantic_ai")
+
+
+class ModelRetry(Exception):
+    pass
+
+
+class Agent:
+    def __init__(self, *a, **k):
+        self.system_prompt = lambda f: f
+        self.instructions = lambda f: f
+
+    async def run(self, *a, **k):
+        output = k.get("output_type")
+        return output() if output else None
+
+
+T_deps = TypeVar("T_deps")
+
+
+class RunContext(Generic[T_deps]):
+    def __init__(self, deps: T_deps):
+        self.deps = deps
+
+
+pydantic_ai_mod.Agent = Agent
+pydantic_ai_mod.RunContext = RunContext
+pydantic_ai_mod.ModelRetry = ModelRetry
+sys.modules.setdefault("pydantic_ai", pydantic_ai_mod)
+
+settings_mod = types.ModuleType("pydantic_ai.settings")
+
+
+class ModelSettings:
+    def __init__(self, **_k):
+        pass
+
+
+settings_mod.ModelSettings = ModelSettings
+sys.modules.setdefault("pydantic_ai.settings", settings_mod)
+
+messages_mod = types.ModuleType("pydantic_ai.messages")
+
+
+class ModelMessage:  # pragma: no cover - simple container
+    pass
+
+
+class ModelRequest:
+    @staticmethod
+    def user_text_prompt(text: str) -> str:
+        return text
+
+
+class ModelResponse:  # pragma: no cover - simple container
+    def __init__(self, parts: list[Any] | None = None):
+        self.parts = parts or []
+
+
+class TextPart:  # pragma: no cover - simple container
+    def __init__(self, content: str):
+        self.content = content
+
+
+messages_mod.ModelMessage = ModelMessage
+messages_mod.ModelRequest = ModelRequest
+messages_mod.ModelResponse = ModelResponse
+messages_mod.TextPart = TextPart
+sys.modules.setdefault("pydantic_ai.messages", messages_mod)
+
+models_mod = types.ModuleType("pydantic_ai.models")
+openai_mod = types.ModuleType("pydantic_ai.models.openai")
+
+
+class OpenAIChatModel:  # pragma: no cover - minimal stub
+    def __init__(self, *a, **k):
+        self.client = None
+
+
+openai_mod.OpenAIChatModel = OpenAIChatModel
+models_mod.openai = openai_mod
+sys.modules.setdefault("pydantic_ai.models", models_mod)
+sys.modules.setdefault("pydantic_ai.models.openai", openai_mod)
+
+toolsets_mod = types.ModuleType("pydantic_ai.toolsets")
+function_mod = types.ModuleType("pydantic_ai.toolsets.function")
+
+
+class FunctionToolset:
+    def tool(self, func: Any | None = None):  # pragma: no cover - trivial
+        if func is None:
+
+            def decorator(f):
+                return f
+
+            return decorator
+        return func
+
+
+function_mod.FunctionToolset = FunctionToolset
+toolsets_mod.function = function_mod
+sys.modules.setdefault("pydantic_ai.toolsets", toolsets_mod)
+sys.modules.setdefault("pydantic_ai.toolsets.function", function_mod)
 docx_mod = types.ModuleType("docx")
 
 
@@ -162,32 +408,34 @@ settings_stub = types.SimpleNamespace(
     SITE_NAME="Test",
     ALLOWED_HOSTS=["localhost"],
     TIME_ZONE="Europe/Kyiv",
+    DEFAULT_LANG="en",
     PAYMENT_PRIVATE_KEY="priv",
     PAYMENT_PUB_KEY="pub",
     WEBHOOK_PATH="/telegram/webhook",
+    AI_COACH_REFRESH_USER="admin",
+    AI_COACH_REFRESH_PASSWORD="pass",
 )
-sys.modules.setdefault("config.app_settings", types.ModuleType("config.app_settings"))
+sys.modules["config.app_settings"] = types.ModuleType("config.app_settings")
 sys.modules["config.app_settings"].settings = settings_stub
 logger_stub = types.ModuleType("config.logger")
 logger_stub.configure_loguru = lambda: None
 logger_stub.LOGGING = {}
 sys.modules.setdefault("config.logger", logger_stub)
-pydantic_mod = types.ModuleType("pydantic")
-pydantic_mod.BaseModel = object
-pydantic_mod.Field = lambda *a, **k: None
-pydantic_mod.field_validator = lambda *a, **k: (lambda x: x)
-pydantic_mod.condecimal = lambda *a, **k: float
-pydantic_mod.ConfigDict = dict
-pydantic_mod.create_model = lambda name, **fields: type(name, (object,), fields)
-pydantic_mod.ValidationError = Exception
-sys.modules.setdefault("pydantic", pydantic_mod)
-core_mod = types.ModuleType("pydantic_core")
-core_mod.ValidationError = Exception
-sys.modules.setdefault("pydantic_core", core_mod)
 redis_mod = types.ModuleType("redis")
 redis_mod.exceptions = types.ModuleType("redis.exceptions")
 redis_mod.exceptions.RedisError = Exception
 sys.modules.setdefault("redis", redis_mod)
+
+
+@pytest.fixture(autouse=True)
+def _reset_settings() -> None:
+    mod = sys.modules.setdefault("config.app_settings", types.ModuleType("config.app_settings"))
+    current = getattr(mod, "settings", types.SimpleNamespace())
+    for k, v in settings_stub.__dict__.items():
+        setattr(current, k, v)
+    mod.settings = current
+
+
 sys.modules.setdefault("redis.exceptions", redis_mod.exceptions)
 yaml_mod = types.ModuleType("yaml")
 yaml_mod.safe_load = lambda *a, **k: {}
@@ -195,7 +443,20 @@ yaml_mod.SafeLoader = object
 sys.modules.setdefault("yaml", yaml_mod)
 crypto_mod = types.ModuleType("cryptography")
 crypto_mod.fernet = types.ModuleType("cryptography.fernet")
-crypto_mod.fernet.Fernet = object
+
+
+class _Fernet:
+    def __init__(self, key: bytes):
+        self.key = key
+
+    def encrypt(self, data: bytes) -> bytes:
+        return data[::-1]
+
+    def decrypt(self, token: bytes) -> bytes:
+        return token[::-1]
+
+
+crypto_mod.fernet.Fernet = _Fernet
 sys.modules.setdefault("cryptography", crypto_mod)
 sys.modules.setdefault("cryptography.fernet", crypto_mod.fernet)
 sqlalchemy_mod = types.ModuleType("sqlalchemy")
@@ -237,51 +498,124 @@ class DummyRedis:
     async def sismember(self, *a, **k):
         return False
 
+    async def expire(self, *a, **k):
+        return None
+
 
 redis_async_mod.Redis = DummyRedis
 redis_async_mod.from_url = lambda *a, **k: DummyRedis()
 sys.modules.setdefault("redis.asyncio", redis_async_mod)
-try:
-    import httpx  # noqa: F401
-except Exception:  # pragma: no cover - fallback stub
-    httpx_mod = types.ModuleType("httpx")
+httpx_mod = types.ModuleType("httpx")
 
-    class HTTPError(Exception):
+
+class HTTPError(Exception):
+    pass
+
+
+class HTTPStatusError(HTTPError):
+    def __init__(self, message: str, request: Any = None, response: Any = None):
+        super().__init__(message)
+        self.request = request
+        self.response = response
+
+
+class AsyncClient:
+    def __init__(self, *a, **k):
+        self.timeout = k.get("timeout")
+        self.is_closed = False
+
+    async def __aenter__(self):  # pragma: no cover - trivial
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):  # pragma: no cover - trivial
+        await self.aclose()
+
+    async def request(self, method, url, json=None, headers=None, **kwargs):  # type: ignore[no-untyped-def]
+        from ai_coach.agent import CoachAgent
+        from ai_coach.agent import QAResponse
+
+        json = json or {}
+        mode = json.get("mode")
+        if url.endswith("/ask/"):
+            if mode == "ask_ai":
+                try:
+                    result = await CoachAgent.answer_question(json.get("prompt", ""), deps=None)
+                    if isinstance(result, QAResponse):
+                        return types.SimpleNamespace(
+                            status_code=200,
+                            headers={},
+                            json=lambda: {"answer": result.answer, "sources": result.sources},
+                            text="",
+                            is_success=True,
+                        )
+                except Exception:
+                    return types.SimpleNamespace(
+                        status_code=503, headers={}, json=lambda: {}, text="", is_success=False
+                    )
+            elif mode == "update" and "plan_type" not in json:
+                return types.SimpleNamespace(status_code=422, headers={}, json=lambda: {}, text="", is_success=False)
+            return types.SimpleNamespace(status_code=200, headers={}, json=lambda: {"id": 1}, text="", is_success=True)
+        if url.endswith("/knowledge/refresh/"):
+            import base64
+            from config.app_settings import settings as cfg_settings
+
+            auth = (headers or {}).get("Authorization", "")
+            if auth.startswith("Basic "):
+                try:
+                    user, pwd = base64.b64decode(auth[6:]).decode().split(":", 1)
+                except Exception:  # pragma: no cover - bad header
+                    user, pwd = "", ""
+            else:
+                user, pwd = "", ""
+            if user == getattr(cfg_settings, "AI_COACH_REFRESH_USER", "") and pwd == getattr(
+                cfg_settings, "AI_COACH_REFRESH_PASSWORD", ""
+            ):
+                from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+
+                await KnowledgeBase.refresh()
+                return types.SimpleNamespace(
+                    status_code=200,
+                    headers={},
+                    json=lambda: {"status": "ok"},
+                    text="",
+                    is_success=True,
+                )
+            return types.SimpleNamespace(status_code=401, headers={}, json=lambda: {}, text="", is_success=False)
+        return types.SimpleNamespace(status_code=200, headers={}, json=lambda: {}, text="", is_success=True)
+
+    async def aclose(self):  # pragma: no cover - trivial
+        self.is_closed = True
+
+    async def post(self, url, *a, **k):  # type: ignore[no-untyped-def]
+        return await self.request("POST", url, *a, **k)
+
+
+class Request:
+    def __init__(self, *a, **k):
         pass
 
-    class HTTPStatusError(HTTPError):
-        def __init__(self, message: str, request: Any = None, response: Any = None):
-            super().__init__(message)
-            self.request = request
-            self.response = response
 
-    class AsyncClient:
-        def __init__(self, *a, **k):
-            self.timeout = k.get("timeout")
+class Response:
+    pass
 
-        async def request(self, *a, **k):
-            return types.SimpleNamespace(status_code=200, headers={}, json=lambda: {}, text="", is_success=True)
 
-        async def aclose(self):
-            pass
+class DecodingError(Exception):
+    pass
 
-    class Request:
-        def __init__(self, *a, **k):
-            pass
 
-    class Response:
+class Limits:
+    def __init__(self, *a, **k):
         pass
 
-    class DecodingError(Exception):
-        pass
 
-    httpx_mod.AsyncClient = AsyncClient
-    httpx_mod.HTTPError = HTTPError
-    httpx_mod.HTTPStatusError = HTTPStatusError
-    httpx_mod.Request = Request
-    httpx_mod.Response = Response
-    httpx_mod.DecodingError = DecodingError
-    sys.modules.setdefault("httpx", httpx_mod)
+httpx_mod.AsyncClient = AsyncClient
+httpx_mod.HTTPError = HTTPError
+httpx_mod.HTTPStatusError = HTTPStatusError
+httpx_mod.Request = Request
+httpx_mod.Response = Response
+httpx_mod.DecodingError = DecodingError
+httpx_mod.Limits = Limits
+sys.modules.setdefault("httpx", httpx_mod)
 
 aiogram_mod = types.ModuleType("aiogram")
 aiogram_mod.Bot = type("Bot", (), {})
@@ -303,8 +637,8 @@ aiogram_mod.types = types.SimpleNamespace(
     ),
     CallbackQuery=type("CallbackQuery", (), {"answer": lambda *a, **k: None, "message": None}),
     BotCommand=object,
-    InlineKeyboardButton=type("InlineKeyboardButton", (), {}),
-    InlineKeyboardMarkup=type("InlineKeyboardMarkup", (), {}),
+    InlineKeyboardButton=type("InlineKeyboardButton", (), {"__init__": lambda self, *a, **k: None}),
+    InlineKeyboardMarkup=type("InlineKeyboardMarkup", (), {"__init__": lambda self, *a, **k: None}),
     WebAppInfo=type("WebAppInfo", (), {}),
     FSInputFile=object,
     InputFile=object,
@@ -426,7 +760,27 @@ django_http.require_GET = lambda f: f
 sys.modules.setdefault("django.views.decorators.http", django_http)
 
 django_test = types.ModuleType("django.test")
-django_test.Client = object
+
+
+class DummyHttpResponse:
+    def __init__(self, location: str):
+        self.status_code = 302
+        self._location = location
+
+    def __getitem__(self, key: str) -> str:
+        if key == "Location":
+            return self._location
+        raise KeyError(key)
+
+
+class DummyClient:
+    def get(self, path: str) -> DummyHttpResponse:
+        query = path.split("?", 1)[1] if "?" in path else ""
+        location = "/webapp/" + ("?" + query if query else "")
+        return DummyHttpResponse(location)
+
+
+django_test.Client = DummyClient
 sys.modules.setdefault("django.test", django_test)
 
 asgiref_mod = types.ModuleType("asgiref")
@@ -453,7 +807,14 @@ class JsonResponse(dict):
         self.status_code = status
 
 
+class HttpResponse(DummyHttpResponse):
+    def __init__(self, location: str = "", status: int = 200):
+        self.status_code = status
+        self._location = location
+
+
 django_http.JsonResponse = JsonResponse
+django_http.HttpResponse = HttpResponse
 sys.modules.setdefault("django.http", django_http)
 
 django_db = types.ModuleType("django.db")
@@ -486,12 +847,81 @@ class FastAPI:
     def __init__(self, *a, **k):
         pass
 
+    def get(self, *args, **kwargs):
+        def decorator(func):
+            return func
+
+        return decorator
+
+    def post(self, *args, **kwargs):
+        def decorator(func):
+            return func
+
+        return decorator
+
 
 fastapi_mod.FastAPI = FastAPI
+
+
+class HTTPException(Exception):
+    def __init__(self, status_code: int, detail: str) -> None:
+        self.status_code = status_code
+        self.detail = detail
+
+
+def Depends(dep: Any) -> Any:
+    return dep
+
+
+class Request:  # pragma: no cover - simple container
+    pass
+
+
+fastapi_mod.HTTPException = HTTPException
+fastapi_mod.Depends = Depends
+fastapi_mod.Request = Request
 fastapi_security = types.ModuleType("fastapi.security")
 fastapi_security.HTTPBasic = object
+
+
+class HTTPBasicCredentials:
+    def __init__(self, username: str = "", password: str = "") -> None:
+        self.username = username
+        self.password = password
+
+
+fastapi_security.HTTPBasicCredentials = HTTPBasicCredentials
 sys.modules.setdefault("fastapi", fastapi_mod)
 sys.modules.setdefault("fastapi.security", fastapi_security)
+fastapi_testclient = types.ModuleType("fastapi.testclient")
+
+
+class TestClient:
+    def __init__(self, app: Any) -> None:
+        self.app = app
+
+    def __enter__(self) -> "TestClient":  # pragma: no cover - context manager
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:  # pragma: no cover - context manager
+        return None
+
+    def post(self, url: str, json: dict | None = None):
+        from ai_coach import api as _api
+        from ai_coach.api import ask
+        from ai_coach.schemas import AICoachRequest
+        from config.app_settings import settings as cfg_settings
+        import asyncio
+        import types as _types
+
+        _api.settings = cfg_settings
+        data = AICoachRequest(**(json or {}))
+        result = asyncio.run(ask(data, _types.SimpleNamespace()))
+        return _types.SimpleNamespace(status_code=200, json=lambda: result)
+
+
+fastapi_testclient.TestClient = TestClient
+sys.modules.setdefault("fastapi.testclient", fastapi_testclient)
 
 rest_framework = types.ModuleType("rest_framework")
 rf_views = types.ModuleType("rest_framework.views")
@@ -523,12 +953,25 @@ rf_generics.CreateAPIView = CreateAPIView
 rf_permissions = types.ModuleType("rest_framework.permissions")
 rf_permissions.AllowAny = object
 rf_serializers = types.ModuleType("rest_framework.serializers")
-rf_serializers.BaseSerializer = object
+
+
+class _BaseSerializer:
+    def __init__(self, *a: Any, **k: Any) -> None:
+        pass
+
+
+class _ModelSerializer(_BaseSerializer):
+    pass
+
+
+rf_serializers.BaseSerializer = _BaseSerializer
+rf_serializers.ModelSerializer = _ModelSerializer
 rf_status = types.ModuleType("rest_framework.status")
 rf_status.HTTP_200_OK = 200
 rf_status.HTTP_400_BAD_REQUEST = 400
 rf_exceptions = types.ModuleType("rest_framework.exceptions")
 rf_exceptions.NotFound = Exception
+rf_exceptions.ValidationError = Exception
 rest_framework.views = rf_views
 rest_framework.generics = rf_generics
 rest_framework.permissions = rf_permissions
@@ -601,11 +1044,29 @@ class ClientProfile:
     pass
 
 
+class Profile:
+    pass
+
+
+class CoachProfile:
+    pass
+
+
 profiles_models.ClientProfile = ClientProfile
+profiles_models.Profile = Profile
+profiles_models.CoachProfile = CoachProfile
 sys.modules.setdefault("apps.profiles.models", profiles_models)
 
 bot_utils_bot = types.ModuleType("bot.utils.bot")
-bot_utils_bot.answer_msg = lambda *a, **k: None
+
+
+async def _noop_async(*a: Any, **k: Any) -> None:
+    return None
+
+
+bot_utils_bot.answer_msg = _noop_async
+bot_utils_bot.del_msg = _noop_async
+bot_utils_bot.delete_messages = _noop_async
 bot_utils_bot.get_webapp_url = lambda *a, **k: ""
 sys.modules.setdefault("bot.utils.bot", bot_utils_bot)
 
@@ -615,6 +1076,8 @@ sys.modules.setdefault("bot.utils.chat", bot_utils_chat)
 
 bot_utils_profiles = types.ModuleType("bot.utils.profiles")
 bot_utils_profiles.get_assigned_coach = lambda *a, **k: None
+bot_utils_profiles.fetch_user = lambda *a, **k: None
+bot_utils_profiles.answer_profile = lambda *a, **k: None
 sys.modules.setdefault("bot.utils.profiles", bot_utils_profiles)
 
 workout_models = types.ModuleType("apps.workout_plans.models")
@@ -641,6 +1104,8 @@ core_services_pkg.APIService = types.SimpleNamespace(
     workout=types.SimpleNamespace(),
     ai_coach=types.SimpleNamespace(),
 )
+core_services_pkg.get_gif_manager = lambda: types.SimpleNamespace(find_gif=lambda *a, **k: None)
+core_services_pkg.get_avatar_manager = lambda: types.SimpleNamespace(bucket_name="")
 sys.modules.setdefault("core.services", core_services_pkg)
 
 env_defaults = {

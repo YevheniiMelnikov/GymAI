@@ -3,7 +3,7 @@ from typing import Any
 import httpx
 from loguru import logger
 
-from core.utils.encryptor import Encryptor
+from core.encryptor import Encryptor
 from core.schemas import Client, Coach, Profile
 from core.services.internal.api_client import APIClient, APISettings
 

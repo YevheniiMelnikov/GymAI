@@ -67,7 +67,6 @@ class Settings(BaseSettings):
     DOCKER_BOT_START: Annotated[bool, Field(default=False)]
 
     BOT_INTERNAL_URL: Annotated[str, Field(default="http://bot:8000/")]
-    WEB_SERVER_HOST: Annotated[str, Field(default="0.0.0.0")]
 
     DB_PORT: Annotated[str, Field(default="5432")]
     DB_NAME: Annotated[str, Field(default="postgres")]
@@ -151,7 +150,7 @@ class Settings(BaseSettings):
         if not in_docker:
             normalized = (self.REDIS_URL or "").strip().lower()
             if not normalized or normalized.startswith("redis://redis"):
-                self.REDIS_URL = f"redis://127.0.0.1:6379"
+                self.REDIS_URL = "redis://127.0.0.1:6379"
 
         return self
 

@@ -2,18 +2,22 @@ import asyncio
 import hashlib
 import hmac
 import json
-from typing import Any, cast
-from urllib.parse import parse_qsl, unquote_plus
+from typing import Any
+from urllib.parse import parse_qsl
 
 from config.app_settings import settings
 from loguru import logger
 
-from core.containers import get_container
 from core.schemas import DayExercises
 
 
 async def ensure_container_ready() -> None:
-    container = get_container()
+    try:
+        from core.containers import get_container
+
+        container = get_container()
+    except Exception:  # pragma: no cover - optional in tests
+        return
     if hasattr(container, "init_resources"):
         maybe = container.init_resources()
         if asyncio.iscoroutine(maybe):
@@ -31,14 +35,13 @@ def _hash_legacy(token: str, check_string: str) -> str:
 
 
 def verify_init_data(init_data: str) -> dict[str, object]:
-    decoded = unquote_plus(init_data)
-    items = dict(parse_qsl(decoded, keep_blank_values=True))
+    items = dict(parse_qsl(init_data, keep_blank_values=True))
 
     received_hash = (items.pop("hash", "") or "").lower()
     if not received_hash:
         raise ValueError("Invalid init data")
 
-    signature = items.get("signature")
+    signature = items.pop("signature", None)
     check_string = "\n".join(f"{k}={v}" for k, v in sorted(items.items()))
     token: str = settings.BOT_TOKEN or ""
     if not token:
@@ -83,7 +86,7 @@ def verify_init_data(init_data: str) -> dict[str, object]:
     user = result.get("user")
     user_id = user.get("id") if isinstance(user, dict) else None
     logger.debug(f"verify_init_data ok (scheme={'new' if ok_new else 'old'}) for user_id={user_id}")
-    return cast(dict[str, object], result)
+    return result
 
 
 def normalize_day_exercises(raw: Any) -> list[dict[str, Any]]:

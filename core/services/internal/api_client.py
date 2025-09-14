@@ -26,14 +26,14 @@ class APIClient:
     def __init__(self, client: httpx.AsyncClient, settings: APISettings) -> None:
         self.client = client
         self.settings = settings
-        self.api_url = settings.API_URL.rstrip("/")
-        self.api_key = settings.API_KEY
+        self.api_url = getattr(settings, "API_URL", "").rstrip("/")
+        self.api_key = getattr(settings, "API_KEY", "")
         self.use_default_auth = True
-        self.max_retries = settings.API_MAX_RETRIES
-        self.initial_delay = settings.API_RETRY_INITIAL_DELAY
-        self.backoff_factor = settings.API_RETRY_BACKOFF_FACTOR
-        self.max_delay = settings.API_RETRY_MAX_DELAY
-        self.default_timeout = settings.API_TIMEOUT
+        self.max_retries = getattr(settings, "API_MAX_RETRIES", 0)
+        self.initial_delay = getattr(settings, "API_RETRY_INITIAL_DELAY", 0.0)
+        self.backoff_factor = getattr(settings, "API_RETRY_BACKOFF_FACTOR", 0.0)
+        self.max_delay = getattr(settings, "API_RETRY_MAX_DELAY", 0.0)
+        self.default_timeout = getattr(settings, "API_TIMEOUT", 0)
 
     async def aclose(self) -> None:
         try:

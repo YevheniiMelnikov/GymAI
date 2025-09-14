@@ -28,14 +28,20 @@ except Exception:
         return None
 
 
-try:
+try:  # pragma: no cover - optional dependency
     from cognee.modules.data.exceptions import DatasetNotFoundError  # type: ignore
     from cognee.modules.users.exceptions.exceptions import PermissionDeniedError  # type: ignore
-except Exception:
+except Exception:  # pragma: no cover - stubs for tests
 
-    class DatasetNotFoundError(Exception): ...
+    class DatasetNotFoundError(Exception):
+        pass
 
-    class PermissionDeniedError(Exception): ...
+    class PermissionDeniedError(Exception):
+        pass
+
+
+async def _safe_add(*args, **kwargs):
+    return await cognee.add(*args, **kwargs)
 
 
 class KnowledgeBase:
@@ -95,8 +101,8 @@ class KnowledgeBase:
         if await HashStore.contains(ds_name, digest):
             return ds_name, False
         try:
-            info = await cognee.add(
-                text,
+            info = await _safe_add(
+                text=text,
                 dataset_name=ds_name,
                 user=cls._to_user_or_none(user),  # pyrefly: ignore[bad-argument-type]
                 node_set=node_set,
@@ -154,12 +160,10 @@ class KnowledgeBase:
 
     @classmethod
     async def save_client_message(cls, text: str, client_id: int) -> None:
-        """Save a client message into dataset."""
         await cls.add_text(text, client_id=client_id, role=MessageRole.CLIENT)
 
     @classmethod
     async def save_ai_message(cls, text: str, client_id: int) -> None:
-        """Save an AI coach message into dataset."""
         await cls.add_text(text, client_id=client_id, role=MessageRole.AI_COACH)
 
     @classmethod

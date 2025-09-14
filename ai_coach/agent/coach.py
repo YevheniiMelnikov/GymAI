@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from datetime import date
 from typing import Any, Optional
+import inspect
 
-from openai import AsyncOpenAI
-from pydantic_ai.settings import ModelSettings
+from openai import AsyncOpenAI  # pyrefly: ignore[import-error]
+from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
 
 from config.app_settings import settings
 from core.enums import WorkoutType
 from core.schemas import Program, QAResponse, Subscription
+from core.enums import CoachType
 
 from .base import AgentDeps
 from .prompts import (
@@ -22,9 +24,9 @@ from .prompts import (
 from .tools import toolset
 from ..schemas import ProgramPayload
 
-from pydantic_ai import Agent, RunContext
-from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart
-from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai import Agent, RunContext  # pyrefly: ignore[import-error]
+from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart  # pyrefly: ignore[import-error]
+from pydantic_ai.models.openai import OpenAIChatModel  # pyrefly: ignore[import-error]
 from ai_coach.types import CoachMode, MessageRole
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 
@@ -35,6 +37,17 @@ class ProgramAdapter:
     @staticmethod
     def to_domain(payload: ProgramPayload) -> Program:
         data = payload.model_dump(exclude={"schema_version"})
+        coach_type = getattr(payload, "_coach_type_raw", data.get("coach_type"))
+        if isinstance(coach_type, str):
+            normalized = coach_type.lower()
+            mapping = {
+                "ai": CoachType.ai_coach,
+                "ai_coach": CoachType.ai_coach,
+                "human": CoachType.human,
+            }
+            data["coach_type"] = mapping.get(normalized, CoachType.ai_coach)
+        if data.get("split_number") is None:
+            data["split_number"] = len(getattr(payload, "exercises_by_day", []))
         return Program.model_validate(data)
 
 
@@ -45,7 +58,7 @@ class CoachAgent:
 
     @staticmethod
     def _lang(deps: AgentDeps) -> str:
-        return deps.locale or settings.DEFAULT_LANG
+        return deps.locale or getattr(settings, "DEFAULT_LANG", "en")
 
     @classmethod
     def _init_agent(cls) -> Any:
@@ -142,7 +155,9 @@ class CoachAgent:
             language=cls._lang(deps),
         )
         user_prompt = f"MODE: {mode}\n{formatted}"
-        history = await cls._message_history(deps.client_id)
+        history = cls._message_history(deps.client_id)
+        if inspect.isawaitable(history):
+            history = await history
         result: Program | Subscription = await agent.run(
             user_prompt,
             deps=deps,
@@ -178,7 +193,9 @@ class CoachAgent:
         )
         rules = "\n".join(filter(None, [COACH_INSTRUCTIONS, instructions]))
         user_prompt = f"MODE: update\n{formatted}\nRules:\n{rules}"
-        history = await cls._message_history(deps.client_id)
+        history = cls._message_history(deps.client_id)
+        if inspect.isawaitable(history):
+            history = await history
         result: Program | Subscription = await agent.run(
             user_prompt,
             deps=deps,
@@ -196,7 +213,9 @@ class CoachAgent:
         agent = cls._get_agent()
         deps.mode = CoachMode.ask_ai
         user_prompt = f"MODE: ask_ai\n{prompt}"
-        history = await cls._message_history(deps.client_id)
+        history = cls._message_history(deps.client_id)
+        if inspect.isawaitable(history):
+            history = await history
         result: QAResponse = await agent.run(
             user_prompt,
             deps=deps,
