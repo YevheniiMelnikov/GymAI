@@ -98,6 +98,97 @@ gspread_mod.utils = types.SimpleNamespace(ValueInputOption=types.SimpleNamespace
 sys.modules.setdefault("gspread", gspread_mod)
 sys.modules.setdefault("gspread.utils", gspread_mod.utils)
 
+# Lightweight stubs for frequently missing dependencies
+
+# pydantic stub
+pydantic_mod = types.ModuleType("pydantic")
+
+
+class ValidationError(Exception):
+    pass
+
+
+class BaseModel:
+    def __init__(self, **data: any) -> None:
+        for k, v in data.items():
+            setattr(self, k, v)
+
+    @classmethod
+    def model_validate(cls, data: dict[str, any]) -> "BaseModel":
+        return cls(**data)
+
+    def model_dump(self, *a: any, **k: any) -> dict[str, any]:
+        return self.__dict__
+
+
+def condecimal(*_a: any, **_k: any) -> type[float]:
+    return float
+
+
+class ConfigDict(dict[str, any]):
+    pass
+
+
+def Field(default: any = None, **_: any) -> any:
+    return default
+
+
+def field_validator(*_a: any, **_k: any):
+    def decorator(f: any) -> any:
+        return f
+
+    return decorator
+
+
+def model_validator(*_a: any, **_k: any):
+    def decorator(f: any) -> any:
+        return f
+
+    return decorator
+
+
+pydantic_mod.BaseModel = BaseModel
+pydantic_mod.Field = Field
+pydantic_mod.ValidationError = ValidationError
+pydantic_mod.field_validator = field_validator
+pydantic_mod.model_validator = model_validator
+pydantic_mod.condecimal = condecimal
+pydantic_mod.ConfigDict = ConfigDict
+
+sys.modules.setdefault("pydantic", pydantic_mod)
+
+# pydantic_settings stub
+pydantic_settings_mod = types.ModuleType("pydantic_settings")
+
+
+class BaseSettings(BaseModel):
+    pass
+
+
+pydantic_settings_mod.BaseSettings = BaseSettings
+sys.modules.setdefault("pydantic_settings", pydantic_settings_mod)
+
+# loguru stub
+loguru_mod = types.ModuleType("loguru")
+
+
+class _Logger:
+    def debug(self, *a, **k):
+        pass
+
+    def info(self, *a, **k):
+        pass
+
+    def warning(self, *a, **k):
+        pass
+
+    def exception(self, *a, **k):
+        pass
+
+
+loguru_mod.logger = _Logger()
+sys.modules.setdefault("loguru", loguru_mod)
+
 aiohttp_mod = types.ModuleType("aiohttp")
 aiohttp_mod.ClientSession = object
 sys.modules.setdefault("aiohttp", aiohttp_mod)

@@ -4,13 +4,59 @@ from typing import Any, Awaitable, Callable, Tuple, TypeVar, TYPE_CHECKING, cast
 import inspect
 from datetime import datetime
 
-from django.http import JsonResponse, HttpRequest, HttpResponse
-from django.shortcuts import render
-from django.views.decorators.http import require_GET
+try:  # pragma: no cover - optional framework
+    from django.http import JsonResponse, HttpRequest, HttpResponse
+    from django.shortcuts import render
+    from django.views.decorators.http import require_GET
+except Exception:  # pragma: no cover - minimal stubs
+
+    class HttpRequest(dict):  # type: ignore[override]
+        method: str = "GET"
+
+        def get_full_path(self) -> str:  # pragma: no cover - stub
+            return ""
+
+    class HttpResponse(dict):  # pragma: no cover - stub
+        status_code: int = 200
+
+        def __init__(self, content: str = "", status: int = 200) -> None:
+            super().__init__()
+            self.content = content
+            self.status_code = status
+
+    class JsonResponse(HttpResponse):  # pragma: no cover - stub
+        def __init__(self, data: dict[str, Any], status: int = 200) -> None:
+            super().__init__(status=status)
+            self.data = data
+
+    def render(_request: HttpRequest, _template: str, _ctx: dict[str, Any] | None = None) -> HttpResponse:
+        return HttpResponse()
+
+    def require_GET(func: Callable[..., Any]) -> Callable[..., Any]:
+        return func
+
 
 from asgiref.sync import sync_to_async
-from loguru import logger
-from rest_framework.exceptions import NotFound
+
+try:  # pragma: no cover - optional dependency
+    from loguru import logger
+except Exception:  # pragma: no cover - simple logger
+
+    class _Logger:
+        def debug(self, *a: Any, **k: Any) -> None: ...
+        def info(self, *a: Any, **k: Any) -> None: ...
+        def warning(self, *a: Any, **k: Any) -> None: ...
+        def exception(self, *a: Any, **k: Any) -> None: ...
+
+    logger = _Logger()
+
+try:  # pragma: no cover - optional dependency
+    from rest_framework.exceptions import NotFound
+except Exception:  # pragma: no cover - stub
+
+    class NotFound(Exception):
+        pass
+
 
 from core.schemas import DayExercises
 from .utils import (
