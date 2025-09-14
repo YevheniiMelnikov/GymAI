@@ -3,6 +3,7 @@
 import os
 import sys
 import types
+import pytest
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Generic, TypeVar
@@ -110,6 +111,10 @@ class ValidationError(Exception):
 
 class BaseModel:
     def __init__(self, **data: any) -> None:
+        for name, value in self.__class__.__dict__.items():
+            if name.startswith("_") or callable(value):
+                continue
+            setattr(self, name, value)
         for k, v in data.items():
             setattr(self, k, v)
 
@@ -118,7 +123,12 @@ class BaseModel:
         return cls(**data)
 
     def model_dump(self, *a: any, **k: any) -> dict[str, any]:
-        return self.__dict__
+        data = dict(self.__dict__)
+        exclude = k.get("exclude")
+        if isinstance(exclude, set):
+            for key in exclude:
+                data.pop(key, None)
+        return data
 
 
 def condecimal(*_a: any, **_k: any) -> type[float]:
@@ -180,6 +190,12 @@ class _Logger:
         pass
 
     def warning(self, *a, **k):
+        pass
+
+    def error(self, *a, **k):
+        pass
+
+    def success(self, *a, **k):
         pass
 
     def exception(self, *a, **k):
@@ -364,8 +380,11 @@ settings_stub = types.SimpleNamespace(
     PAYMENT_PRIVATE_KEY="priv",
     PAYMENT_PUB_KEY="pub",
     WEBHOOK_PATH="/telegram/webhook",
+    AI_COACH_REFRESH_USER="admin",
+    AI_COACH_REFRESH_PASSWORD="pass",
+    AGENT_PYDANTICAI_ENABLED=True,
 )
-sys.modules.setdefault("config.app_settings", types.ModuleType("config.app_settings"))
+sys.modules["config.app_settings"] = types.ModuleType("config.app_settings")
 sys.modules["config.app_settings"].settings = settings_stub
 logger_stub = types.ModuleType("config.logger")
 logger_stub.configure_loguru = lambda: None
@@ -375,6 +394,13 @@ redis_mod = types.ModuleType("redis")
 redis_mod.exceptions = types.ModuleType("redis.exceptions")
 redis_mod.exceptions.RedisError = Exception
 sys.modules.setdefault("redis", redis_mod)
+
+
+@pytest.fixture(autouse=True)
+def _reset_settings() -> None:
+    sys.modules["config.app_settings"].settings = settings_stub
+
+
 sys.modules.setdefault("redis.exceptions", redis_mod.exceptions)
 yaml_mod = types.ModuleType("yaml")
 yaml_mod.safe_load = lambda *a, **k: {}

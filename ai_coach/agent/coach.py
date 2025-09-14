@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 from typing import Any, Optional
+import inspect
 
 from openai import AsyncOpenAI
 from pydantic_ai.settings import ModelSettings
@@ -148,7 +149,9 @@ class CoachAgent:
             language=cls._lang(deps),
         )
         user_prompt = f"MODE: {mode}\n{formatted}"
-        history = await cls._message_history(deps.client_id)
+        history = cls._message_history(deps.client_id)
+        if inspect.isawaitable(history):
+            history = await history
         result: Program | Subscription = await agent.run(
             user_prompt,
             deps=deps,
@@ -184,7 +187,9 @@ class CoachAgent:
         )
         rules = "\n".join(filter(None, [COACH_INSTRUCTIONS, instructions]))
         user_prompt = f"MODE: update\n{formatted}\nRules:\n{rules}"
-        history = await cls._message_history(deps.client_id)
+        history = cls._message_history(deps.client_id)
+        if inspect.isawaitable(history):
+            history = await history
         result: Program | Subscription = await agent.run(
             user_prompt,
             deps=deps,
@@ -202,7 +207,9 @@ class CoachAgent:
         agent = cls._get_agent()
         deps.mode = CoachMode.ask_ai
         user_prompt = f"MODE: ask_ai\n{prompt}"
-        history = await cls._message_history(deps.client_id)
+        history = cls._message_history(deps.client_id)
+        if inspect.isawaitable(history):
+            history = await history
         result: QAResponse = await agent.run(
             user_prompt,
             deps=deps,

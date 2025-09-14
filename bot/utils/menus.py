@@ -19,7 +19,12 @@ from bot.states import States
 from bot.texts import msg_text
 from core.cache import Cache
 from core.enums import ClientStatus, CoachType
-from core.exceptions import ClientNotFoundError, CoachNotFoundError, SubscriptionNotFoundError
+from core.exceptions import (
+    ClientNotFoundError,
+    CoachNotFoundError,
+    ProgramNotFoundError,
+    SubscriptionNotFoundError,
+)
 from core.schemas import Client, Coach, Profile, Subscription, Program, DayExercises
 from bot.utils.text import (
     get_client_page,
@@ -423,16 +428,15 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
 
 
 async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    message = cast(Message, callback_query.message)
-    assert message
-
-    await answer_msg(
-        message,
-        msg_text("select_action", profile.language),
-        reply_markup=kb.program_action_kb(profile.language, get_webapp_url("program")),
-    )
-    await state.set_state(States.program_action_choice)
-    await del_msg(cast(Message | CallbackQuery | None, message))
+    client = await Cache.client.get_client(profile.id)
+    try:
+        await Cache.workout.get_latest_program(client.id)
+    except ProgramNotFoundError:
+        if hasattr(callback_query, "answer"):
+            await callback_query.answer(msg_text("no_program", profile.language), show_alert=True)
+        await show_program_promo_page(callback_query, profile, state)
+        return
+    await show_program_promo_page(callback_query, profile, state)
 
 
 async def show_program_promo_page(

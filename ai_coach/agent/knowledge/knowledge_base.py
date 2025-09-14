@@ -35,7 +35,12 @@ except Exception:
 
     class DatasetNotFoundError(Exception): ...
 
-    class PermissionDeniedError(Exception): ...
+
+class PermissionDeniedError(Exception): ...
+
+
+async def _safe_add(*args, **kwargs):
+    return await cognee.add(*args, **kwargs)
 
 
 class KnowledgeBase:
@@ -95,8 +100,8 @@ class KnowledgeBase:
         if await HashStore.contains(ds_name, digest):
             return ds_name, False
         try:
-            info = await cognee.add(
-                text,
+            info = await _safe_add(
+                text=text,
                 dataset_name=ds_name,
                 user=cls._to_user_or_none(user),  # pyrefly: ignore[bad-argument-type]
                 node_set=node_set,
