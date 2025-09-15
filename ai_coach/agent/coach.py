@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any, Optional
 import inspect
+from typing import Any, Optional
 
 from openai import AsyncOpenAI  # pyrefly: ignore[import-error]
 from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
@@ -65,9 +65,19 @@ class CoachAgent:
         if Agent is None or OpenAIChatModel is None:
             raise RuntimeError("pydantic_ai package is required")
 
+        provider_value: Any = settings.AGENT_PROVIDER
+        if isinstance(provider_value, str) and provider_value.lower() == "openrouter":
+            api_key: str = settings.LLM_API_KEY
+            if api_key:
+                try:
+                    from pydantic_ai.providers.openrouter import OpenRouterProvider  # pyrefly: ignore[import-error]
+                except Exception as exc:
+                    raise RuntimeError("OpenRouter provider is not available") from exc
+                provider_value = OpenRouterProvider(api_key=api_key)
+
         model = OpenAIChatModel(
             model_name=settings.AGENT_MODEL,
-            provider=settings.AGENT_PROVIDER,
+            provider=provider_value,
             settings=ModelSettings(
                 timeout=float(settings.COACH_AGENT_TIMEOUT),
             ),
