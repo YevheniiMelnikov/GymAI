@@ -271,9 +271,9 @@ class KnowledgeBase:
     async def _ensure_profile_indexed(cls, client_id: int, user: Any | None) -> None:
         """Fetch client profile and add it to dataset if missing."""
         try:
-            client = await APIService.profile.get_client_by_profile_id(client_id)
+            client = await APIService.profile.get_client(client_id)
         except UserServiceError as e:
-            logger.warning(f"Failed to fetch client profile id={client_id}: {e}")
+            logger.warning(f"Failed to fetch client id={client_id}: {e}")
             return
         if not client:
             return

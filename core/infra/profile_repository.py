@@ -157,6 +157,13 @@ class HTTPProfileRepository(APIClient):
             return model.model_validate(data)
         return None
 
+    async def get_client(self, client_id: int) -> Client | None:
+        url = self._build_url(f"api/v1/client-profiles/pk/{client_id}/")
+        status, data = await self._api_request("get", url, headers={"Authorization": f"Api-Key {self.api_key}"})
+        if status == 200 and data:
+            return Client.model_validate(data)
+        return None
+
     async def get_client_by_profile_id(self, profile_id: int) -> Client | None:
         return await self._get_by_profile(f"api/v1/client-profiles/by-profile/{profile_id}/", Client)
 
