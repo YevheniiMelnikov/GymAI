@@ -113,8 +113,16 @@ class KnowledgeBase:
         except (DatasetNotFoundError, PermissionDeniedError):
             raise
         await HashStore.add(ds_name, digest)
-        resolved = getattr(info, "dataset_id", None) or getattr(info, "dataset_name", None) or ds_name
-        return str(resolved), True
+        resolved = ds_name
+        if info is not None:
+            for candidate in (getattr(info, "dataset_id", None), getattr(info, "dataset_name", None)):
+                if isinstance(candidate, str) and candidate:
+                    try:
+                        resolved = str(UUID(candidate))
+                        break
+                    except ValueError:
+                        continue
+        return resolved, True
 
     @classmethod
     async def search(cls, query: str, client_id: int, k: int | None = None) -> list[str]:

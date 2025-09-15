@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     MAX_BIRTH_YEAR: int = 2020
     MAX_FILE_SIZE_MB: int = 10
 
-    API_MAX_RETRIES: int = 3
+    API_MAX_RETRIES: int = 1
     API_RETRY_INITIAL_DELAY: int = 1
     API_RETRY_BACKOFF_FACTOR: int = 2
     API_RETRY_MAX_DELAY: int = 10
@@ -29,9 +29,9 @@ class Settings(BaseSettings):
     KNOWLEDGE_BASE_FOLDER_ID: Annotated[str, Field(default="")]
     KNOWLEDGE_REFRESH_INTERVAL: int = 60 * 60
     KNOWLEDGE_REFRESH_START_DELAY: int = 180
-    AI_COACH_TIMEOUT: int = 120
+    AI_COACH_TIMEOUT: int = 300
     LLM_COOLDOWN: int = 60
-    COACH_AGENT_RETRIES: int = 3
+    COACH_AGENT_RETRIES: int = 1
     COACH_AGENT_TIMEOUT: int = 60
     CHAT_HISTORY_LIMIT: int = 20
 
