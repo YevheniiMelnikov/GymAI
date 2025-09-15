@@ -24,9 +24,9 @@ from core.utils.redis_lock import redis_try_lock, get_redis_client
 def _next_payment_date(period: SubscriptionPeriod = SubscriptionPeriod.one_month) -> str:
     today = date.today()
     if period is SubscriptionPeriod.six_months:
-        next_date = cast(date, today + relativedelta(months=+6))
+        next_date = cast(date, today + relativedelta(months=+6))  # pyrefly: ignore[redundant-cast]
     else:
-        next_date = cast(date, today + relativedelta(months=+1))
+        next_date = cast(date, today + relativedelta(months=+1))  # pyrefly: ignore[redundant-cast]
     return next_date.isoformat()
 
 

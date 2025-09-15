@@ -152,9 +152,7 @@ class KnowledgeBase:
         try:
             logger.debug(f"Updating dataset {ds}")
             ds, created = await cls.update_dataset(text, ds, user, node_set=node_set or [])
-            logger.debug(f"Dataset {ds} updated, created={created}")
             if created:
-                logger.debug(f"Scheduling dataset processing for {ds}")
                 task = asyncio.create_task(cls._process_dataset(ds, user))
                 task.add_done_callback(cls._log_task_exception)
         except PermissionDeniedError:

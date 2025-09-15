@@ -1,7 +1,7 @@
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
-from typing import cast
 from decimal import Decimal, ROUND_HALF_UP
+from typing import cast
 
 from aiogram import Bot
 from aiogram.fsm.context import FSMContext
@@ -36,9 +36,9 @@ from bot.texts import msg_text, btn_text
 def _next_payment_date(period: SubscriptionPeriod = SubscriptionPeriod.one_month) -> str:
     today = date.today()
     if period is SubscriptionPeriod.six_months:
-        next_date = cast(date, today + relativedelta(months=+6))
+        next_date = cast(date, today + relativedelta(months=+6))  # pyrefly: ignore[redundant-cast]
     else:
-        next_date = cast(date, today + relativedelta(months=+1))
+        next_date = cast(date, today + relativedelta(months=+1))  # pyrefly: ignore[redundant-cast]
     return next_date.strftime("%Y-%m-%d")
 
 
@@ -351,7 +351,7 @@ async def process_new_subscription(
     *,
     confirmed: bool = False,
 ) -> None:
-    language = cast(str, profile.language or settings.DEFAULT_LANG)
+    language: str = profile.language or settings.DEFAULT_LANG
     await callback_query.answer(msg_text("checkbox_reminding", language), show_alert=True)
     data = await state.get_data()
     client = await Cache.client.get_client(profile.id)
@@ -430,7 +430,7 @@ async def edit_subscription_days(
     subscription_data.update(payload)
 
     await Cache.workout.update_subscription(profile_id, payload)
-    await APIService.workout.update_subscription(cast(int, subscription_data["id"]), subscription_data)
+    await APIService.workout.update_subscription(int(subscription_data["id"]), subscription_data)
     await state.set_state(States.show_subscription)
     await show_subscription_page(callback_query, state, subscription)
     if isinstance(callback_query, CallbackQuery) and isinstance(callback_query.message, Message):
