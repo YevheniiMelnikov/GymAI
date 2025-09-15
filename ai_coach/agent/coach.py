@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import date
 import inspect
-from typing import Any, Optional, TypeVar, Type, cast
+from typing import Any, Optional
 
 from openai import AsyncOpenAI  # pyrefly: ignore[import-error]
 from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
+from pydantic import BaseModel
 
 from config.app_settings import settings
 from core.enums import WorkoutType
@@ -51,9 +52,6 @@ class ProgramAdapter:
         return Program.model_validate(data)
 
 
-TOutput = TypeVar("TOutput", Program, Subscription, QAResponse)
-
-
 class CoachAgent:
     """PydanticAI wrapper for program generation."""
 
@@ -68,19 +66,17 @@ class CoachAgent:
         if Agent is None or OpenAIChatModel is None:
             raise RuntimeError("pydantic_ai package is required")
 
-        provider_value: Any = settings.AGENT_PROVIDER
-        if isinstance(provider_value, str) and provider_value.lower() == "openrouter":
-            api_key: str = settings.LLM_API_KEY
-            if api_key:
-                try:
-                    from pydantic_ai.providers.openrouter import OpenRouterProvider  # pyrefly: ignore[import-error]
-                except Exception as exc:
-                    raise RuntimeError("OpenRouter provider is not available") from exc
-                provider_value = OpenRouterProvider(api_key=api_key)
+        api_key: str = settings.LLM_API_KEY
+        if not api_key:
+            raise RuntimeError("LLM_API_KEY must be configured for OpenRouter provider")
+        try:
+            from pydantic_ai.providers.openrouter import OpenRouterProvider  # pyrefly: ignore[import-error]
+        except Exception as exc:  # pragma: no cover - optional dependency
+            raise RuntimeError("OpenRouter provider is not available") from exc
 
         model = OpenAIChatModel(
             model_name=settings.AGENT_MODEL,
-            provider=provider_value,
+            provider=OpenRouterProvider(api_key=api_key),
             settings=ModelSettings(
                 timeout=float(settings.COACH_AGENT_TIMEOUT),
             ),
@@ -119,13 +115,16 @@ class CoachAgent:
         return cls._agent
 
     @staticmethod
-    def _normalize_output(raw: Any, expected: Type[TOutput]) -> TOutput:
+    def _normalize_output(
+        raw: Any,
+        expected: type[Program] | type[Subscription] | type[QAResponse],
+    ) -> Program | Subscription | QAResponse:
         value = getattr(raw, "output", raw)
         if isinstance(value, expected):
             return value
-        if hasattr(expected, "model_validate"):
-            return cast(TOutput, expected.model_validate(value))
-        return cast(TOutput, expected(**value))
+        if issubclass(expected, BaseModel):
+            return expected.model_validate(value)
+        return expected(**value)
 
     @staticmethod
     async def _message_history(client_id: int) -> list[ModelMessage]:

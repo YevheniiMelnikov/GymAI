@@ -4,7 +4,7 @@ from dataclasses import asdict, is_dataclass
 from hashlib import sha256
 from types import SimpleNamespace
 from typing import Any
-from uuid import UUID, uuid5
+from uuid import NAMESPACE_DNS, UUID, uuid5
 
 from loguru import logger
 
@@ -53,7 +53,7 @@ class KnowledgeBase:
     _user: Any | None = None
 
     GLOBAL_DATASET: str = os.environ.get("COGNEE_GLOBAL_DATASET", "external_docs")
-    _CLIENT_DATASET_NAMESPACE: UUID = UUID("d1d0df9c-bbe9-4ae9-9d3b-601a3b09057d")
+    _CLIENT_DATASET_NAMESPACE: UUID | None = None
     _CLIENT_ALIAS_PREFIX: str = "client_"
 
     @classmethod
@@ -230,7 +230,22 @@ class KnowledgeBase:
     @classmethod
     def _dataset_name(cls, client_id: int) -> str:
         """Generate deterministic dataset identifier for a client profile."""
-        return str(uuid5(cls._CLIENT_DATASET_NAMESPACE, f"client-profile:{client_id}"))
+        namespace = cls._client_namespace()
+        return str(uuid5(namespace, f"client-profile:{client_id}"))
+
+    @classmethod
+    def _client_namespace(cls) -> UUID:
+        if cls._CLIENT_DATASET_NAMESPACE is None:
+            raw = getattr(settings, "COGNEE_CLIENT_DATASET_NAMESPACE", None)
+            if not raw:
+                seed = getattr(settings, "SECRET_KEY", "") or getattr(settings, "SITE_NAME", "") or "gymbot"
+                base_namespace = uuid5(NAMESPACE_DNS, "gymbot.cognee")
+                raw = str(uuid5(base_namespace, seed))
+            try:
+                cls._CLIENT_DATASET_NAMESPACE = UUID(str(raw))
+            except ValueError as exc:  # pragma: no cover - configuration error
+                raise RuntimeError("Invalid COGNEE_CLIENT_DATASET_NAMESPACE value") from exc
+        return cls._CLIENT_DATASET_NAMESPACE
 
     @staticmethod
     def _client_profile_text(client: Client) -> str:

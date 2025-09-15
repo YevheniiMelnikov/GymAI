@@ -3,6 +3,7 @@ import os
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Annotated
 from urllib.parse import SplitResult, urlsplit, urlunsplit
+from uuid import NAMESPACE_DNS, uuid5
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
@@ -78,6 +79,7 @@ class Settings(BaseSettings):
     VECTORDATABASE_PROVIDER: Annotated[str, Field(default="pgvector")]
     GRAPH_DATABASE_PROVIDER: Annotated[str, Field(default="networkx")]
     AI_COACH_URL: Annotated[str, Field(default="http://ai_coach:9000/")]
+    COGNEE_CLIENT_DATASET_NAMESPACE: Annotated[str | None, Field(default=None)]
 
     API_KEY: Annotated[str, Field(default="")]
     SECRET_KEY: Annotated[str, Field(default="")]
@@ -146,6 +148,12 @@ class Settings(BaseSettings):
         # API_URL
         if not self.API_URL:
             self.API_URL = self._derive_api_url(in_docker)
+
+        # Cognee dataset namespace
+        if not self.COGNEE_CLIENT_DATASET_NAMESPACE:
+            namespace_seed: str = self.SECRET_KEY or self.SITE_NAME or "gymbot"
+            base_namespace = uuid5(NAMESPACE_DNS, "gymbot.cognee")
+            self.COGNEE_CLIENT_DATASET_NAMESPACE = str(uuid5(base_namespace, namespace_seed))
 
         # --- Redis URL selection ---
         if not in_docker:

@@ -1,6 +1,5 @@
 from loguru import logger
 
-
 from core.cache import Cache
 from core.schemas import Client, DayExercises, Program, Subscription
 from core.services.internal import APIService
@@ -19,12 +18,7 @@ async def generate_workout_plan(
     workout_days: list[str] | None = None,
 ) -> list[DayExercises]:
     profile_id = client.profile
-    logger.debug(
-        "generate_workout_plan request_id=%s profile_id=%s type=%s",
-        request_id,
-        profile_id,
-        plan_type,
-    )
+    logger.debug(f"generate_workout_plan request_id={request_id} profile_id={profile_id} type={plan_type}")
     plan = await APIService.ai_coach.create_workout_plan(
         plan_type,
         client_id=profile_id,
@@ -36,7 +30,7 @@ async def generate_workout_plan(
         request_id=request_id,
     )
     if not plan:
-        logger.error("Workout plan generation failed profile_id=%s", profile_id)
+        logger.error(f"Workout plan generation failed profile_id={profile_id}")
         return []
     if plan_type is WorkoutPlanType.PROGRAM:
         assert isinstance(plan, Program)
@@ -64,7 +58,7 @@ async def process_workout_plan_result(
     )
     if plan:
         return plan
-    logger.error("Workout update failed client_id=%s", client_id)
+    logger.error(f"Workout update failed client_id={client_id}")
     if plan_type is WorkoutPlanType.PROGRAM:
         return Program(
             id=0,
