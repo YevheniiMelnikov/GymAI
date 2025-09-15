@@ -1,4 +1,5 @@
 import aiohttp
+import asyncio
 import pytest
 
 from core.utils.short_url import short_url
@@ -34,21 +35,25 @@ class _Session:
         return _Resp(self._status, self._text)
 
 
-@pytest.mark.asyncio
-async def test_short_url_success(monkeypatch):
-    def _factory(*args, **kwargs):
-        return _Session(200, "https://tinyurl.com/abc")
+def test_short_url_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        def _factory(*args, **kwargs):
+            return _Session(200, "https://tinyurl.com/abc")
 
-    monkeypatch.setattr(aiohttp, "ClientSession", _factory)
-    result = await short_url("https://example.com")
-    assert result == "https://tinyurl.com/abc"
+        monkeypatch.setattr(aiohttp, "ClientSession", _factory)
+        result = await short_url("https://example.com")
+        assert result == "https://tinyurl.com/abc"
+
+    asyncio.run(runner())
 
 
-@pytest.mark.asyncio
-async def test_short_url_failure(monkeypatch):
-    def _factory(*args, **kwargs):
-        return _Session(500, "err")
+def test_short_url_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        def _factory(*args, **kwargs):
+            return _Session(500, "err")
 
-    monkeypatch.setattr(aiohttp, "ClientSession", _factory)
-    result = await short_url("https://example.com")
-    assert result == "https://example.com"
+        monkeypatch.setattr(aiohttp, "ClientSession", _factory)
+        result = await short_url("https://example.com")
+        assert result == "https://example.com"
+
+    asyncio.run(runner())
