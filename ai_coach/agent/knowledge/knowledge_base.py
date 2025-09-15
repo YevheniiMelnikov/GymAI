@@ -150,17 +150,17 @@ class KnowledgeBase:
         if role:
             text = f"{role.value}: {text}"
         try:
-            logger.debug("Updating dataset %s", ds)
+            logger.debug(f"Updating dataset {ds}")
             ds, created = await cls.update_dataset(text, ds, user, node_set=node_set or [])
-            logger.debug("Dataset %s updated, created=%s", ds, created)
+            logger.debug(f"Dataset {ds} updated, created={created}")
             if created:
-                logger.debug("Scheduling dataset processing for %s", ds)
+                logger.debug(f"Scheduling dataset processing for {ds}")
                 task = asyncio.create_task(cls._process_dataset(ds, user))
                 task.add_done_callback(cls._log_task_exception)
         except PermissionDeniedError:
             raise
         except Exception as exc:
-            logger.warning("Add text skipped: %s", exc, exc_info=True)
+            logger.warning(f"Add text skipped: {exc}", exc_info=True)
 
     @classmethod
     async def save_client_message(cls, text: str, client_id: int) -> None:
@@ -272,7 +272,7 @@ class KnowledgeBase:
     def _log_task_exception(task: asyncio.Task[Any]) -> None:
         """Log exception from a background task."""
         if exc := task.exception():
-            logger.warning("Dataset processing failed: %s", exc, exc_info=True)
+            logger.warning(f"Dataset processing failed: {exc}", exc_info=True)
 
     @classmethod
     def _to_user_or_none(cls, user: Any) -> Any | None:
