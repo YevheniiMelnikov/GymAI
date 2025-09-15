@@ -279,13 +279,13 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
             logger.exception(f"Program generation failed: {e} request_id={request_id}")
             await answer_msg(
                 callback_query,
-                msg_text("ai_program_error", profile.language).format(tg=settings.TG_SUPPORT_CONTACT),
+                msg_text("coach_agent_error", profile.language).format(tg=settings.TG_SUPPORT_CONTACT),
             )
             return
         if not exercises:
             await answer_msg(
                 callback_query,
-                msg_text("ai_program_error", profile.language).format(tg=settings.TG_SUPPORT_CONTACT),
+                msg_text("coach_agent_error", profile.language).format(tg=settings.TG_SUPPORT_CONTACT),
             )
             await bot.send_message(
                 settings.ADMIN_ID,
@@ -364,7 +364,7 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     if not exercises:
         await answer_msg(
             callback_query,
-            msg_text("ai_program_error", lang).format(tg=settings.TG_SUPPORT_CONTACT),
+            msg_text("coach_agent_error", lang).format(tg=settings.TG_SUPPORT_CONTACT),
         )
         bot = cast(Bot, callback_query.bot)
         await bot.send_message(

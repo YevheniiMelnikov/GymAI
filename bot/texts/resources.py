@@ -102,6 +102,7 @@ class MessageText(AutoName):
     invalid_content = auto()
     questionnaire_not_completed = auto()
     unexpected_error = auto()
+    coach_agent_error = auto()
 
     client_profile = auto()
     client_page = auto()
