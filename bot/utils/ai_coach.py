@@ -18,10 +18,16 @@ async def generate_workout_plan(
     period: str | None = None,
     workout_days: list[str] | None = None,
 ) -> list[DayExercises]:
-    logger.debug("generate_workout_plan request_id=%s client_id=%s type=%s", request_id, client.id, plan_type)
+    profile_id = client.profile
+    logger.debug(
+        "generate_workout_plan request_id=%s profile_id=%s type=%s",
+        request_id,
+        profile_id,
+        plan_type,
+    )
     plan = await APIService.ai_coach.create_workout_plan(
         plan_type,
-        client_id=client.id,
+        client_id=profile_id,
         language=language,
         period=period,
         workout_days=workout_days,
@@ -30,7 +36,7 @@ async def generate_workout_plan(
         request_id=request_id,
     )
     if not plan:
-        logger.error("Workout plan generation failed client_id=%s", client.id)
+        logger.error("Workout plan generation failed profile_id=%s", profile_id)
         return []
     if plan_type is WorkoutPlanType.PROGRAM:
         assert isinstance(plan, Program)

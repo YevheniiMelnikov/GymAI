@@ -4,6 +4,7 @@ from dataclasses import asdict, is_dataclass
 from hashlib import sha256
 from types import SimpleNamespace
 from typing import Any
+from uuid import UUID, uuid5
 
 from loguru import logger
 
@@ -52,6 +53,8 @@ class KnowledgeBase:
     _user: Any | None = None
 
     GLOBAL_DATASET: str = os.environ.get("COGNEE_GLOBAL_DATASET", "external_docs")
+    _CLIENT_DATASET_NAMESPACE: UUID = UUID("d1d0df9c-bbe9-4ae9-9d3b-601a3b09057d")
+    _CLIENT_ALIAS_PREFIX: str = "client_"
 
     @classmethod
     async def initialize(cls, knowledge_loader: KnowledgeLoader | None = None) -> None:
@@ -199,7 +202,14 @@ class KnowledgeBase:
 
     @classmethod
     def _resolve_dataset_alias(cls, name: str) -> str:
-        """Map dataset alias to actual dataset name (currently identity)."""
+        """Map dataset alias to the canonical dataset identifier."""
+        if name.startswith(cls._CLIENT_ALIAS_PREFIX):
+            suffix = name[len(cls._CLIENT_ALIAS_PREFIX) :]
+            try:
+                client_id = int(suffix)
+            except ValueError:
+                return name
+            return cls._dataset_name(client_id)
         return name
 
     @classmethod
@@ -217,10 +227,10 @@ class KnowledgeBase:
         if exists is None:
             await create_authorized_dataset(name, user_ns)  # pyrefly: ignore[bad-argument-type]
 
-    @staticmethod
-    def _dataset_name(client_id: int) -> str:
-        """Generate dataset name for a client."""
-        return f"client_{client_id}"
+    @classmethod
+    def _dataset_name(cls, client_id: int) -> str:
+        """Generate deterministic dataset identifier for a client profile."""
+        return str(uuid5(cls._CLIENT_DATASET_NAMESPACE, f"client-profile:{client_id}"))
 
     @staticmethod
     def _client_profile_text(client: Client) -> str:

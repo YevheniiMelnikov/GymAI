@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 import inspect
-from typing import Any, Optional
+from typing import Any, Optional, TypeVar, Type, cast
 
 from openai import AsyncOpenAI  # pyrefly: ignore[import-error]
 from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
@@ -49,6 +49,9 @@ class ProgramAdapter:
         if data.get("split_number") is None:
             data["split_number"] = len(getattr(payload, "exercises_by_day", []))
         return Program.model_validate(data)
+
+
+TOutput = TypeVar("TOutput", Program, Subscription, QAResponse)
 
 
 class CoachAgent:
@@ -116,6 +119,15 @@ class CoachAgent:
         return cls._agent
 
     @staticmethod
+    def _normalize_output(raw: Any, expected: Type[TOutput]) -> TOutput:
+        value = getattr(raw, "output", raw)
+        if isinstance(value, expected):
+            return value
+        if hasattr(expected, "model_validate"):
+            return cast(TOutput, expected.model_validate(value))
+        return cast(TOutput, expected(**value))
+
+    @staticmethod
     async def _message_history(client_id: int) -> list[ModelMessage]:
         """Prepare past messages for the agent."""
         raw = await KnowledgeBase.get_message_history(client_id)
@@ -168,13 +180,13 @@ class CoachAgent:
         history = cls._message_history(deps.client_id)
         if inspect.isawaitable(history):
             history = await history
-        result: Program | Subscription = await agent.run(
+        raw_result = await agent.run(
             user_prompt,
             deps=deps,
             output_type=output_type,
             message_history=history,
         )
-        return result
+        return cls._normalize_output(raw_result, output_type)
 
     @classmethod
     async def update_workout_plan(
@@ -206,13 +218,13 @@ class CoachAgent:
         history = cls._message_history(deps.client_id)
         if inspect.isawaitable(history):
             history = await history
-        result: Program | Subscription = await agent.run(
+        raw_result = await agent.run(
             user_prompt,
             deps=deps,
             output_type=output_type,
             message_history=history,
         )
-        return result
+        return cls._normalize_output(raw_result, output_type)
 
     @classmethod
     async def answer_question(
@@ -226,11 +238,11 @@ class CoachAgent:
         history = cls._message_history(deps.client_id)
         if inspect.isawaitable(history):
             history = await history
-        result: QAResponse = await agent.run(
+        raw_result = await agent.run(
             user_prompt,
             deps=deps,
             output_type=QAResponse,
             model_settings=ModelSettings(temperature=0.3, max_tokens=256),
             message_history=history,
         )
-        return result
+        return cls._normalize_output(raw_result, QAResponse)
