@@ -102,7 +102,7 @@ class KnowledgeBase:
             return ds_name, False
         try:
             info = await _safe_add(
-                text=text,
+                text,
                 dataset_name=ds_name,
                 user=cls._to_user_or_none(user),  # pyrefly: ignore[bad-argument-type]
                 node_set=node_set,
