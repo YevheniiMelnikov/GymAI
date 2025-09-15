@@ -151,7 +151,7 @@ missing-attribute = true
 annotation-mismatch = true
 
 [[tool.bumpversion.files]]
-filename = "bot/VERSION"
+filename = "VERSION"
 
 [tool.bumpversion]
 current_version = "1.1.0"

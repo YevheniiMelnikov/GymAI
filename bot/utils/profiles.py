@@ -1,38 +1,38 @@
-from datetime import datetime, timedelta
-from typing import cast
+from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from datetime import datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING, Any, cast
 
 from loguru import logger
+
+from bot.texts.text_manager import msg_text
+from bot.utils.bot import answer_msg, del_msg, delete_messages
 from config.app_settings import settings
 from core.cache import Cache
 from core.enums import ClientStatus, CoachType
 from core.exceptions import (
+    ClientNotAssignedError,
+    ClientNotFoundError,
     CoachNotFoundError,
     SubscriptionNotFoundError,
-    ClientNotFoundError,
-    ClientNotAssignedError,
 )
-from core.services.internal import APIService
-from bot.utils.bot import del_msg, answer_msg, delete_messages
 from core.schemas import Client, Coach, Profile
-from bot.texts.text_manager import msg_text
 from core.services import get_avatar_manager
+from core.services.internal import APIService
 
-if TYPE_CHECKING:  # pragma: no cover - type hints only
+from aiogram.exceptions import TelegramBadRequest
+from aiogram.types import FSInputFile
+
+if TYPE_CHECKING:
     from aiogram import Bot
     from aiogram.fsm.context import FSMContext
-    from aiogram.types import Message, CallbackQuery, FSInputFile
-    from aiogram.exceptions import TelegramBadRequest
-else:  # pragma: no cover - optional dependency stubs
-    Bot = FSMContext = Message = CallbackQuery = FSInputFile = Any
+    from aiogram.types import Message as TgMessage, CallbackQuery as TgCallbackQuery
 
-    class TelegramBadRequest(Exception):
-        pass
+_IMAGES_DIR = Path(__file__).resolve().parent.parent / "images"
 
 
-async def update_profile_data(message: Message, state: FSMContext, role: str, bot: Bot) -> None:
+async def update_profile_data(message: TgMessage, state: FSMContext, role: str, bot: Bot) -> None:
     data = await state.get_data()
     await delete_messages(state)
 
@@ -65,7 +65,8 @@ async def update_profile_data(message: Message, state: FSMContext, role: str, bo
             else:
                 if message.from_user:
                     await answer_msg(
-                        message, msg_text("wait_for_verification", data.get("lang", settings.DEFAULT_LANG))
+                        message,
+                        msg_text("wait_for_verification", data.get("lang", settings.DEFAULT_LANG)),
                     )
                     from bot.utils.chat import send_coach_request
 
@@ -75,7 +76,8 @@ async def update_profile_data(message: Message, state: FSMContext, role: str, bo
                         await Cache.coach.save_coach(profile.id, coach.model_dump())
 
         await answer_msg(message, msg_text("your_data_updated", data.get("lang", settings.DEFAULT_LANG)))
-        from bot.utils.menus import show_main_menu  # circular import
+
+        from bot.utils.menus import show_main_menu
 
         await show_main_menu(message, profile, state)
 
@@ -84,7 +86,7 @@ async def update_profile_data(message: Message, state: FSMContext, role: str, bo
         await answer_msg(message, msg_text("unexpected_error", data.get("lang", settings.DEFAULT_LANG)))
 
     finally:
-        await del_msg(cast(Message | CallbackQuery | None, message))
+        await del_msg(cast("TgMessage | TgCallbackQuery | None", message))
 
 
 async def assign_coach(coach: Coach, client: Client) -> None:
@@ -95,15 +97,15 @@ async def assign_coach(coach: Coach, client: Client) -> None:
         await APIService.profile.update_coach_profile(coach.id, {"assigned_to": coach_clients})
         await Cache.coach.update_coach(coach.profile, {"assigned_to": coach_clients})
 
-    assigned = client.assigned_to or []
+    assigned = list(client.assigned_to or [])
 
-    for cid in assigned:
+    for coach_id in list(assigned):
         try:
-            existing = await Cache.coach.get_coach(cid)
+            existing = await Cache.coach.get_coach(coach_id)
         except CoachNotFoundError:
             continue
         if existing.coach_type == coach.coach_type:
-            assigned.remove(cid)
+            assigned.remove(coach_id)
             break
 
     if coach.profile not in assigned:
@@ -115,6 +117,8 @@ async def assign_coach(coach: Coach, client: Client) -> None:
 
 async def get_assigned_coach(client: Client, *, coach_type: CoachType | None = None) -> Coach | None:
     """Return client's coach filtered by ``coach_type`` if provided."""
+    if not client.assigned_to:
+        return None
     for cid in client.assigned_to:
         try:
             coach = await Cache.coach.get_coach(cid)
@@ -139,15 +143,15 @@ async def check_assigned_clients(profile_id: int) -> bool:
 
     assigned_clients = coach.assigned_to or []
 
-    for profile_id in assigned_clients:
+    for client in assigned_clients:
         try:
-            subscription = await Cache.workout.get_latest_subscription(profile_id)
+            subscription = await Cache.workout.get_latest_subscription(client)
             if subscription.enabled:
                 return True
         except SubscriptionNotFoundError:
             pass
 
-        if await Cache.payment.get_status(profile_id, "program"):
+        if await Cache.payment.get_status(client, "program"):
             return True
 
     return False
@@ -163,7 +167,7 @@ async def fetch_user(profile: Profile) -> Client | Coach:
             )
             raise ValueError(f"Client data not found for existing profile id {profile.id}")
 
-    elif profile.role == "coach":
+    if profile.role == "coach":
         try:
             return await Cache.coach.get_coach(profile.id)
         except CoachNotFoundError:
@@ -171,21 +175,22 @@ async def fetch_user(profile: Profile) -> Client | Coach:
                 f"CoachNotFoundError for an existing profile {profile.id}. This might indicate data inconsistency."
             )
             raise ValueError(f"Coach data not found for existing profile id {profile.id}")
-    else:
-        raise ValueError(f"Unknown profile role: {profile.role}")
+
+    raise ValueError(f"Unknown profile role: {profile.role}")
 
 
-async def answer_profile(cbq: CallbackQuery, profile: Profile, user: Coach | Client, text: str) -> None:
+async def answer_profile(cbq: TgCallbackQuery, profile: Profile, user: Coach | Client, text: str) -> None:
     from bot.keyboards import profile_menu_kb
 
-    message = cbq.message
-    avatar_manager = get_avatar_manager()
-    if not isinstance(message, Message):
+    message = cbq.message  # Optional[TgMessage]
+    if message is None:
         return
+
+    avatar_manager = get_avatar_manager()
 
     if profile.role == "coach" and isinstance(user, Coach):
         if user.coach_type == CoachType.ai_coach or not user.profile_photo:
-            file_path = Path(__file__).resolve().parent.parent / "images" / "ai_coach.png"
+            file_path = _IMAGES_DIR / "ai_coach.png"
             if file_path.exists():
                 avatar = FSInputFile(file_path)
                 try:
@@ -222,8 +227,8 @@ async def answer_profile(cbq: CallbackQuery, profile: Profile, user: Coach | Cli
             except TelegramBadRequest:
                 logger.warning(f"Photo not found for client {profile.id}")
 
-        avatar_name = "male.png" if user.gender != "female" else "female.png"
-        file_path = Path(__file__).resolve().parent.parent / "images" / avatar_name
+        avatar_name = "female.png" if getattr(user, "gender", None) == "female" else "male.png"
+        file_path = _IMAGES_DIR / avatar_name
 
         if file_path.exists():
             avatar_file = FSInputFile(file_path)
