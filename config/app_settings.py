@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     KNOWLEDGE_BASE_FOLDER_ID: Annotated[str, Field(default="")]
     KNOWLEDGE_REFRESH_INTERVAL: int = 60 * 60
     KNOWLEDGE_REFRESH_START_DELAY: int = 180
-    AI_COACH_TIMEOUT: int = 300
+    AI_COACH_TIMEOUT: int = 420
     LLM_COOLDOWN: int = 60
     COACH_AGENT_RETRIES: int = 1
     COACH_AGENT_TIMEOUT: int = 60

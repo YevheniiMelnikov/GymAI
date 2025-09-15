@@ -182,10 +182,18 @@ class KnowledgeBase:
     @classmethod
     async def get_message_history(cls, client_id: int, limit: int | None = None) -> list[str]:
         """Return recent chat messages for a client."""
-        dataset = cls._dataset_name(client_id)
-        dataset = cls._resolve_dataset_alias(dataset)
+        dataset: str = cls._resolve_dataset_alias(cls._dataset_name(client_id))
+        user: Any | None = await cls._get_cognee_user()
         try:
-            data = await cognee.datasets.list_data(dataset)
+            await cls._ensure_dataset_exists(dataset, user)
+        except Exception as exc:  # pragma: no cover - non-critical indexing failure
+            logger.debug(f"Dataset ensure skipped client_id={client_id}: {exc}")
+        try:
+            params: dict[str, Any] = {}
+            user_ns: Any | None = cls._to_user_or_none(user)
+            if user_ns is not None:
+                params["user"] = user_ns
+            data = await cognee.datasets.list_data(dataset, **params)
         except Exception as e:
             logger.warning(f"History fetch failed client_id={client_id}: {e}")
             return []
