@@ -66,26 +66,42 @@ class CoachAgent:
         if Agent is None or OpenAIChatModel is None:
             raise RuntimeError("pydantic_ai package is required")
 
-        api_key: str = settings.LLM_API_KEY
-        if not api_key:
-            raise RuntimeError("LLM_API_KEY must be configured for OpenRouter provider")
-        try:
-            from pydantic_ai.providers.openrouter import OpenRouterProvider  # pyrefly: ignore[import-error]
-        except Exception as exc:  # pragma: no cover - optional dependency
-            raise RuntimeError("OpenRouter provider is not available") from exc
+        provider_config: Any = settings.AGENT_PROVIDER
+        if isinstance(provider_config, str):
+            provider_name: str | None = provider_config.strip().lower()
+        else:
+            provider_name = None
+
+        provider: Any = provider_config
+        client_override: AsyncOpenAI | None = None
+
+        if provider_name == "openrouter":
+            try:
+                from pydantic_ai.providers.openrouter import OpenRouterProvider  # pyrefly: ignore[import-error]
+            except Exception as exc:  # pragma: no cover - optional dependency
+                raise RuntimeError("OpenRouter provider is not available") from exc
+
+            api_key: str = settings.LLM_API_KEY
+            if not api_key:
+                raise RuntimeError("LLM_API_KEY must be configured when using the OpenRouter provider")
+            provider = OpenRouterProvider(api_key=api_key)
+        else:
+            if settings.LLM_API_KEY or settings.LLM_API_URL:
+                client_override = AsyncOpenAI(
+                    api_key=settings.LLM_API_KEY or None,
+                    base_url=settings.LLM_API_URL or None,
+                )
 
         model = OpenAIChatModel(
             model_name=settings.AGENT_MODEL,
-            provider=OpenRouterProvider(api_key=api_key),
+            provider=provider,
             settings=ModelSettings(
                 timeout=float(settings.COACH_AGENT_TIMEOUT),
             ),
         )
 
-        model.client = AsyncOpenAI(
-            api_key=settings.LLM_API_KEY,
-            base_url=settings.LLM_API_URL,
-        )
+        if client_override is not None:
+            model.client = client_override
 
         cls._agent = Agent(
             model=model,
