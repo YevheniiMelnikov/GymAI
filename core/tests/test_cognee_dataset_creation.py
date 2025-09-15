@@ -11,7 +11,13 @@ def test_update_dataset_ensures_exists(monkeypatch):
     async def ensure(cls, name: str, user: object) -> None:  # type: ignore[override]
         calls.append(("ensure", name))
 
-    async def fake_add(*, text: str, dataset_name: str, user: object, node_set: list[str] | None):
+    async def fake_add(
+        text: str,
+        *,
+        dataset_name: str,
+        user: object,
+        node_set: list[str] | None,
+    ) -> SimpleNamespace:
         calls.append(("add", dataset_name))
         return SimpleNamespace(dataset_id=dataset_name)
 

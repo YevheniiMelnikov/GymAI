@@ -104,8 +104,8 @@ async def _auth_and_get_client(
 
 
 def _parse_program_id(request: HttpRequest) -> Tuple[int | None, JsonResponse | None]:
-    raw = cast(str | None, request.GET.get("program_id"))
-    if not raw:
+    raw = request.GET.get("program_id")
+    if not isinstance(raw, str) or not raw:
         return None, None
     try:
         return int(raw), None

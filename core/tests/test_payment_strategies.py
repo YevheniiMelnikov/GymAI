@@ -3,7 +3,8 @@ import types
 from decimal import Decimal
 from typing import Any
 
-import pytest
+
+import asyncio
 
 sys.modules.setdefault("apps.payments.tasks", types.ModuleType("apps.payments.tasks"))
 sys.modules["apps.payments.tasks"].send_payment_message = types.SimpleNamespace(delay=lambda *a, **k: None)
@@ -59,56 +60,60 @@ class CreditTopupStub:
         self.calls.append((client, amount))
 
 
-@pytest.mark.asyncio
-async def test_success_payment_strategy() -> None:
-    from core.enums import PaymentStatus
-    from core.payment.strategies import SuccessPayment
+def test_success_payment_strategy() -> None:
+    async def runner() -> None:
+        from core.enums import PaymentStatus
+        from core.payment.strategies import SuccessPayment
 
-    cache = DummyCache()
-    profile_service = DummyProfileService(profile=types.SimpleNamespace(language="eng"))
-    log: list[str] = []
-    credit_topup = CreditTopupStub(log)
-    notifier = DummyNotifier(log)
-    strategy = SuccessPayment(cache, profile_service, credit_topup, notifier)
-    payment = types.SimpleNamespace(
-        id=1,
-        client_profile=1,
-        payment_type="credits",
-        order_id="o1",
-        amount=Decimal("10"),
-        status=PaymentStatus.SUCCESS,
-        created_at=0.0,
-        updated_at=0.0,
-    )
-    client = types.SimpleNamespace(id=1, profile=1)
-    await strategy.handle(payment, client)
-    assert cache.payment.calls == [(1, "credits", PaymentStatus.SUCCESS)]
-    assert credit_topup.calls[0][1] == Decimal("10")
-    assert notifier.success_calls == [(1, "eng")]
-    assert log == ["topup", "notify"]
+        cache = DummyCache()
+        profile_service = DummyProfileService(profile=types.SimpleNamespace(language="eng"))
+        log: list[str] = []
+        credit_topup = CreditTopupStub(log)
+        notifier = DummyNotifier(log)
+        strategy = SuccessPayment(cache, profile_service, credit_topup, notifier)
+        payment = types.SimpleNamespace(
+            id=1,
+            client_profile=1,
+            payment_type="credits",
+            order_id="o1",
+            amount=Decimal("10"),
+            status=PaymentStatus.SUCCESS,
+            created_at=0.0,
+            updated_at=0.0,
+        )
+        client = types.SimpleNamespace(id=1, profile=1)
+        await strategy.handle(payment, client)
+        assert cache.payment.calls == [(1, "credits", PaymentStatus.SUCCESS)]
+        assert credit_topup.calls[0][1] == Decimal("10")
+        assert notifier.success_calls == [(1, "eng")]
+        assert log == ["topup", "notify"]
+
+    asyncio.run(runner())
 
 
-@pytest.mark.asyncio
-async def test_failure_payment_strategy() -> None:
-    from core.enums import PaymentStatus
-    from core.payment.strategies import FailurePayment
+def test_failure_payment_strategy() -> None:
+    async def runner() -> None:
+        from core.enums import PaymentStatus
+        from core.payment.strategies import FailurePayment
 
-    cache = DummyCache()
-    profile_service = DummyProfileService(profile=types.SimpleNamespace(language="eng"))
-    log: list[str] = []
-    notifier = DummyNotifier(log)
-    strategy = FailurePayment(cache, profile_service, notifier)
-    payment = types.SimpleNamespace(
-        id=2,
-        client_profile=1,
-        payment_type="credits",
-        order_id="o2",
-        amount=Decimal("5"),
-        status=PaymentStatus.FAILURE,
-        created_at=0.0,
-        updated_at=0.0,
-    )
-    client = types.SimpleNamespace(id=1, profile=1)
-    await strategy.handle(payment, client)
-    assert cache.payment.calls == [(1, "credits", PaymentStatus.FAILURE)]
-    assert notifier.failure_calls == [(1, "eng")]
+        cache = DummyCache()
+        profile_service = DummyProfileService(profile=types.SimpleNamespace(language="eng"))
+        log: list[str] = []
+        notifier = DummyNotifier(log)
+        strategy = FailurePayment(cache, profile_service, notifier)
+        payment = types.SimpleNamespace(
+            id=2,
+            client_profile=1,
+            payment_type="credits",
+            order_id="o2",
+            amount=Decimal("5"),
+            status=PaymentStatus.FAILURE,
+            created_at=0.0,
+            updated_at=0.0,
+        )
+        client = types.SimpleNamespace(id=1, profile=1)
+        await strategy.handle(payment, client)
+        assert cache.payment.calls == [(1, "credits", PaymentStatus.FAILURE)]
+        assert notifier.failure_calls == [(1, "eng")]
+
+    asyncio.run(runner())

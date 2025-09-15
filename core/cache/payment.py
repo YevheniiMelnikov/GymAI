@@ -1,4 +1,4 @@
-from typing import Any, cast
+from typing import Any
 from loguru import logger
 import json
 
@@ -19,14 +19,14 @@ class PaymentCacheManager(BaseCacheManager):
         if payment is None:
             raise PaymentNotFoundError(int(field))
         try:
-            return cast(PaymentStatus, PaymentStatus(payment.status))
+            return PaymentStatus(payment.status)
         except (ValueError, KeyError):
             logger.error(f"Invalid payment status '{payment.status}' for client_id={field}")
             return PaymentStatus.PENDING
 
     @classmethod
     def _prepare_for_cache(cls, data: Any, cache_key: str, field: str) -> dict:
-        status = cast(PaymentStatus, data)
+        status: PaymentStatus = data
         return {"status": status.value}
 
     @classmethod
@@ -34,7 +34,7 @@ class PaymentCacheManager(BaseCacheManager):
         try:
             data = json.loads(raw)
             if "status" in data:
-                return cast(PaymentStatus, PaymentStatus(data["status"]))
+                return PaymentStatus(data["status"])
         except Exception:
             pass
         raise PaymentNotFoundError(int(field))

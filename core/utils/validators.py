@@ -1,4 +1,4 @@
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar
 from pydantic import BaseModel, ValidationError
 from loguru import logger
 
@@ -10,9 +10,10 @@ ModelT = TypeVar("ModelT", bound=BaseModel)
 
 def validate_or_raise(data: dict[str, Any], model_cls: type[ModelT], context: str = "") -> ModelT:
     try:
-        return cast(ModelT, model_cls.model_validate(data))
+        validated: ModelT = model_cls.model_validate(data)
+        return validated
     except ValidationError as e:
-        name = cast(str, getattr(model_cls, "__name__", model_cls.__class__.__name__))
+        name: str = getattr(model_cls, "__name__", model_cls.__class__.__name__)
         context_text = f" in {context}" if context else ""
         msg = f"Validation failed for {name}{context_text}: {e}"
         logger.error(msg)

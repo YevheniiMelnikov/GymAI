@@ -12,6 +12,7 @@ os.environ.setdefault("PRIVACY_POLICY", "x")
 os.environ.setdefault("EMAIL", "x")
 os.environ.setdefault("ADMIN_ID", "1")
 
+import asyncio
 import pytest  # pyrefly: ignore[import-error]
 from pydantic_ai.settings import ModelSettings
 
@@ -90,26 +91,28 @@ def test_ask_request_accepts_ask_ai() -> None:
     assert req.mode is CoachMode.ask_ai
 
 
-@pytest.mark.asyncio
-async def test_answer_question(monkeypatch) -> None:
-    class DummyAgent:
-        async def run(
-            self,
-            prompt: str,
-            deps: AgentDeps,
-            output_type: type[QAResponse] | None = None,
-            model_settings: ModelSettings | None = None,
-            message_history: list | None = None,
-        ) -> QAResponse:  # pragma: no cover - dummy
-            assert "MODE: ask_ai" in prompt
-            assert output_type is QAResponse
-            assert model_settings is not None
-            return QAResponse(answer="answer", sources=["s"])
+def test_answer_question(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        class DummyAgent:
+            async def run(
+                self,
+                prompt: str,
+                deps: AgentDeps,
+                output_type: type[QAResponse] | None = None,
+                model_settings: ModelSettings | None = None,
+                message_history: list | None = None,
+            ) -> QAResponse:  # pragma: no cover - dummy
+                assert "MODE: ask_ai" in prompt
+                assert output_type is QAResponse
+                assert model_settings is not None
+                return QAResponse(answer="answer", sources=["s"])
 
-    monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: DummyAgent()))
-    deps = AgentDeps(client_id=1, locale="en", allow_save=False)
-    result = await CoachAgent.answer_question("question", deps)
-    assert result.answer == "answer"
+        monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: DummyAgent()))
+        deps = AgentDeps(client_id=1, locale="en", allow_save=False)
+        result = await CoachAgent.answer_question("question", deps)
+        assert result.answer == "answer"
+
+    asyncio.run(runner())
 
 
 def test_ask_ai_legacy(monkeypatch) -> None:

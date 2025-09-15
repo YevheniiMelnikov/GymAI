@@ -1,3 +1,4 @@
+import asyncio
 import sys
 from importlib import import_module
 from types import SimpleNamespace
@@ -13,74 +14,80 @@ django_shortcuts = sys.modules.setdefault("django.shortcuts", SimpleNamespace(re
 views = import_module("apps.webapp.views")
 
 
-@pytest.mark.asyncio
-async def test_subscription_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
-    monkeypatch.setattr(
-        views.ProfileRepository,
-        "get_by_telegram_id",
-        lambda _tg_id: SimpleNamespace(id=1, language="eng"),
-    )
-    monkeypatch.setattr(
-        views.ClientProfileRepository,
-        "get_by_profile_id",
-        lambda _id: SimpleNamespace(id=1),
-    )
-    monkeypatch.setattr(
-        views.SubscriptionRepository,
-        "get_latest",
-        lambda _id: SimpleNamespace(exercises=[]),
-    )
+def test_subscription_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
+        monkeypatch.setattr(
+            views.ProfileRepository,
+            "get_by_telegram_id",
+            lambda _tg_id: SimpleNamespace(id=1, language="eng"),
+        )
+        monkeypatch.setattr(
+            views.ClientProfileRepository,
+            "get_by_profile_id",
+            lambda _id: SimpleNamespace(id=1),
+        )
+        monkeypatch.setattr(
+            views.SubscriptionRepository,
+            "get_latest",
+            lambda _id: SimpleNamespace(exercises=[]),
+        )
 
-    request: HttpRequest = HttpRequest()
-    request.method = "GET"
-    request.GET = {"init_data": "data"}
+        request: HttpRequest = HttpRequest()
+        request.method = "GET"
+        request.GET = {"init_data": "data"}
 
-    response: JsonResponse = await views.subscription_data(request)
-    assert response.status_code == 200
-    assert response["program"] == ""
-    assert response["language"] == "eng"
+        response: JsonResponse = await views.subscription_data(request)
+        assert response.status_code == 200
+        assert response["program"] == ""
+        assert response["language"] == "eng"
 
-
-@pytest.mark.asyncio
-async def test_subscription_data_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
-    monkeypatch.setattr(
-        views.ProfileRepository,
-        "get_by_telegram_id",
-        lambda _tg_id: SimpleNamespace(id=1),
-    )
-    monkeypatch.setattr(
-        views.ClientProfileRepository,
-        "get_by_profile_id",
-        lambda _id: SimpleNamespace(id=1),
-    )
-    monkeypatch.setattr(
-        views.SubscriptionRepository,
-        "get_latest",
-        lambda _id: None,
-    )
-
-    request: HttpRequest = HttpRequest()
-    request.method = "GET"
-    request.GET = {"init_data": "data"}
-
-    response: JsonResponse = await views.subscription_data(request)
-    assert response.status_code == 404
+    asyncio.run(runner())
 
 
-@pytest.mark.asyncio
-async def test_subscription_data_server_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
-    monkeypatch.setattr(
-        views.ProfileRepository,
-        "get_by_telegram_id",
-        lambda _tg_id: (_ for _ in ()).throw(RuntimeError("boom")),
-    )
+def test_subscription_data_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
+        monkeypatch.setattr(
+            views.ProfileRepository,
+            "get_by_telegram_id",
+            lambda _tg_id: SimpleNamespace(id=1),
+        )
+        monkeypatch.setattr(
+            views.ClientProfileRepository,
+            "get_by_profile_id",
+            lambda _id: SimpleNamespace(id=1),
+        )
+        monkeypatch.setattr(
+            views.SubscriptionRepository,
+            "get_latest",
+            lambda _id: None,
+        )
 
-    request: HttpRequest = HttpRequest()
-    request.method = "GET"
-    request.GET = {"init_data": "data"}
+        request: HttpRequest = HttpRequest()
+        request.method = "GET"
+        request.GET = {"init_data": "data"}
 
-    response: JsonResponse = await views.subscription_data(request)
-    assert response.status_code == 500
+        response: JsonResponse = await views.subscription_data(request)
+        assert response.status_code == 404
+
+    asyncio.run(runner())
+
+
+def test_subscription_data_server_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
+        monkeypatch.setattr(
+            views.ProfileRepository,
+            "get_by_telegram_id",
+            lambda _tg_id: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        request: HttpRequest = HttpRequest()
+        request.method = "GET"
+        request.GET = {"init_data": "data"}
+
+        response: JsonResponse = await views.subscription_data(request)
+        assert response.status_code == 500
+
+    asyncio.run(runner())

@@ -1,3 +1,4 @@
+import asyncio
 import sys
 from importlib import import_module
 from types import SimpleNamespace
@@ -16,131 +17,143 @@ django_shortcuts = sys.modules.setdefault("django.shortcuts", SimpleNamespace(re
 views = import_module("apps.webapp.views")
 
 
-@pytest.mark.asyncio
-async def test_program_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
-    monkeypatch.setattr(
-        views.ProfileRepository,
-        "get_by_telegram_id",
-        lambda _tg_id: SimpleNamespace(id=1, language="eng"),
-    )
-    monkeypatch.setattr(
-        views.ClientProfileRepository,
-        "get_by_profile_id",
-        lambda _id: SimpleNamespace(id=1),
-    )
-    monkeypatch.setattr(
-        views.ProgramRepository,
-        "get_latest",
-        lambda _id: SimpleNamespace(
-            exercises_by_day=[],
-            created_at=datetime.fromtimestamp(1),
-            coach_type=CoachType.human,
-        ),
-    )
+def test_program_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
+        monkeypatch.setattr(
+            views.ProfileRepository,
+            "get_by_telegram_id",
+            lambda _tg_id: SimpleNamespace(id=1, language="eng"),
+        )
+        monkeypatch.setattr(
+            views.ClientProfileRepository,
+            "get_by_profile_id",
+            lambda _id: SimpleNamespace(id=1),
+        )
+        monkeypatch.setattr(
+            views.ProgramRepository,
+            "get_latest",
+            lambda _id: SimpleNamespace(
+                exercises_by_day=[],
+                created_at=datetime.fromtimestamp(1),
+                coach_type=CoachType.human,
+            ),
+        )
 
-    request: HttpRequest = HttpRequest()
-    request.method = "GET"
-    request.GET = {"init_data": "data"}
+        request: HttpRequest = HttpRequest()
+        request.method = "GET"
+        request.GET = {"init_data": "data"}
 
-    response: JsonResponse = await views.program_data(request)
-    assert response.status_code == 200
-    assert response["program"] == ""
-    assert response["created_at"] == 1
-    assert response["coach_type"] == CoachType.human
-    assert response["language"] == "eng"
+        response: JsonResponse = await views.program_data(request)
+        assert response.status_code == 200
+        assert response["program"] == ""
+        assert response["created_at"] == 1
+        assert response["coach_type"] == CoachType.human
+        assert response["language"] == "eng"
 
-
-@pytest.mark.asyncio
-async def test_program_data_with_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
-    monkeypatch.setattr(
-        views.ProfileRepository,
-        "get_by_telegram_id",
-        lambda _tg_id: SimpleNamespace(id=1, language="eng"),
-    )
-    monkeypatch.setattr(
-        views.ClientProfileRepository,
-        "get_by_profile_id",
-        lambda _id: SimpleNamespace(id=1),
-    )
-    monkeypatch.setattr(
-        views.ProgramRepository,
-        "get_by_id",
-        lambda _cid, _pid: SimpleNamespace(
-            exercises_by_day=[],
-            created_at=datetime.fromtimestamp(2),
-            coach_type=CoachType.human,
-        ),
-    )
-
-    request: HttpRequest = HttpRequest()
-    request.method = "GET"
-    request.GET = {"init_data": "data", "program_id": "5"}
-
-    response: JsonResponse = await views.program_data(request)
-    assert response.status_code == 200
-    assert response["created_at"] == 2
-    assert response["coach_type"] == CoachType.human
-    assert response["language"] == "eng"
+    asyncio.run(runner())
 
 
-@pytest.mark.asyncio
-async def test_program_data_bad_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
+def test_program_data_with_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
+        monkeypatch.setattr(
+            views.ProfileRepository,
+            "get_by_telegram_id",
+            lambda _tg_id: SimpleNamespace(id=1, language="eng"),
+        )
+        monkeypatch.setattr(
+            views.ClientProfileRepository,
+            "get_by_profile_id",
+            lambda _id: SimpleNamespace(id=1),
+        )
+        monkeypatch.setattr(
+            views.ProgramRepository,
+            "get_by_id",
+            lambda _cid, _pid: SimpleNamespace(
+                exercises_by_day=[],
+                created_at=datetime.fromtimestamp(2),
+                coach_type=CoachType.human,
+            ),
+        )
 
-    request: HttpRequest = HttpRequest()
-    request.method = "GET"
-    request.GET = {"init_data": "data", "program_id": "bad"}
+        request: HttpRequest = HttpRequest()
+        request.method = "GET"
+        request.GET = {"init_data": "data", "program_id": "5"}
 
-    response: JsonResponse = await views.program_data(request)
-    assert response.status_code == 400
+        response: JsonResponse = await views.program_data(request)
+        assert response.status_code == 200
+        assert response["created_at"] == 2
+        assert response["coach_type"] == CoachType.human
+        assert response["language"] == "eng"
 
-
-@pytest.mark.asyncio
-async def test_program_data_unauthorized(monkeypatch: pytest.MonkeyPatch) -> None:
-    def raise_error(_d: str) -> dict[str, object]:
-        raise ValueError
-
-    monkeypatch.setattr(views, "verify_init_data", raise_error)
-
-    request: HttpRequest = HttpRequest()
-    request.method = "GET"
-    request.GET = {"init_data": "bad"}
-
-    response: JsonResponse = await views.program_data(request)
-    assert response.status_code == 403
-
-
-@pytest.mark.asyncio
-async def test_program_data_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
-    monkeypatch.setattr(
-        views.ProfileRepository,
-        "get_by_telegram_id",
-        lambda _tg_id: (_ for _ in ()).throw(NotFound("missing")),
-    )
-
-    request: HttpRequest = HttpRequest()
-    request.method = "GET"
-    request.GET = {"init_data": "data"}
-
-    response: JsonResponse = await views.program_data(request)
-    assert response.status_code == 404
+    asyncio.run(runner())
 
 
-@pytest.mark.asyncio
-async def test_program_data_server_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
-    monkeypatch.setattr(
-        views.ProfileRepository,
-        "get_by_telegram_id",
-        lambda _tg_id: (_ for _ in ()).throw(RuntimeError("boom")),
-    )
+def test_program_data_bad_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
 
-    request: HttpRequest = HttpRequest()
-    request.method = "GET"
-    request.GET = {"init_data": "data"}
+        request: HttpRequest = HttpRequest()
+        request.method = "GET"
+        request.GET = {"init_data": "data", "program_id": "bad"}
 
-    response: JsonResponse = await views.program_data(request)
-    assert response.status_code == 500
+        response: JsonResponse = await views.program_data(request)
+        assert response.status_code == 400
+
+    asyncio.run(runner())
+
+
+def test_program_data_unauthorized(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        def raise_error(_d: str) -> dict[str, object]:
+            raise ValueError
+
+        monkeypatch.setattr(views, "verify_init_data", raise_error)
+
+        request: HttpRequest = HttpRequest()
+        request.method = "GET"
+        request.GET = {"init_data": "bad"}
+
+        response: JsonResponse = await views.program_data(request)
+        assert response.status_code == 403
+
+    asyncio.run(runner())
+
+
+def test_program_data_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
+        monkeypatch.setattr(
+            views.ProfileRepository,
+            "get_by_telegram_id",
+            lambda _tg_id: (_ for _ in ()).throw(NotFound("missing")),
+        )
+
+        request: HttpRequest = HttpRequest()
+        request.method = "GET"
+        request.GET = {"init_data": "data"}
+
+        response: JsonResponse = await views.program_data(request)
+        assert response.status_code == 404
+
+    asyncio.run(runner())
+
+
+def test_program_data_server_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
+        monkeypatch.setattr(
+            views.ProfileRepository,
+            "get_by_telegram_id",
+            lambda _tg_id: (_ for _ in ()).throw(RuntimeError("boom")),
+        )
+
+        request: HttpRequest = HttpRequest()
+        request.method = "GET"
+        request.GET = {"init_data": "data"}
+
+        response: JsonResponse = await views.program_data(request)
+        assert response.status_code == 500
+
+    asyncio.run(runner())
