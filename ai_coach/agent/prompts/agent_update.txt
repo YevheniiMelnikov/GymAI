@@ -8,4 +8,3 @@ PROGRAM PAYLOAD REQUIREMENTS:
 - Do not return empty or partially filled fields.
 - Workout days must be non-empty; each exercise needs name, sets, and reps.
 - If split_number is missing, set it to the number of workout days.
-

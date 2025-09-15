@@ -4,4 +4,3 @@ MODE: ask_ai
 3) Synthesize a concise answer (≤6 sentences) and up to top-3 sources.
 4) Return QAResponse(answer, sources).
 5) Never call saving tools.
-

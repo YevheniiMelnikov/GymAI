@@ -3,4 +3,3 @@ MODE: subscription
 2) Generate SubscriptionPayload including workout_days and exercises.
 3) Call tool_attach_gifs(payload.exercises) and replace payload.exercises with the returned list.
 4) Call tool_create_subscription(workout_days, payload.exercises, period, wishes) and return Subscription.
-
