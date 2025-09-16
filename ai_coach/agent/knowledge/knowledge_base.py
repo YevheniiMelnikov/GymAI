@@ -3,7 +3,7 @@ import os
 from dataclasses import asdict, is_dataclass
 from hashlib import sha256
 from types import SimpleNamespace
-from typing import Any, Awaitable, Callable, Iterable
+from typing import Any, Awaitable, Callable, Iterable, cast
 from uuid import NAMESPACE_DNS, UUID, uuid5
 
 from loguru import logger
@@ -52,6 +52,7 @@ class KnowledgeBase:
     _cognify_locks: LockCache = LockCache()
     _user: Any | None = None
     _list_data_supports_user: bool | None = None
+    _has_datasets_module: bool | None = None
 
     GLOBAL_DATASET: str = os.environ.get("COGNEE_GLOBAL_DATASET", "external_docs")
     _CLIENT_DATASET_NAMESPACE: UUID | None = None
@@ -189,10 +190,27 @@ class KnowledgeBase:
             await cls._ensure_dataset_exists(dataset, user)
         except Exception as exc:  # pragma: no cover - non-critical indexing failure
             logger.debug(f"Dataset ensure skipped client_id={client_id}: {exc}")
-        list_data = getattr(cognee.datasets, "list_data")
+        datasets_module = getattr(cognee, "datasets", None)
+        if datasets_module is None:
+            if cls._has_datasets_module is not False:
+                logger.warning(f"History fetch skipped client_id={client_id}: datasets module unavailable")
+            cls._has_datasets_module = False
+            return []
+
+        list_data = getattr(datasets_module, "list_data", None)
+        if not callable(list_data):
+            if cls._has_datasets_module is not False:
+                logger.warning(
+                    f"History fetch skipped client_id={client_id}: list_data callable missing",
+                )
+            cls._has_datasets_module = False
+            return []
+
+        cls._has_datasets_module = True
+        list_data_callable = cast(Callable[..., Awaitable[Iterable[Any]]], list_data)
         user_ns: Any | None = cls._to_user_or_none(user)
         try:
-            data = await cls._fetch_dataset_rows(list_data, dataset, user_ns)
+            data = await cls._fetch_dataset_rows(list_data_callable, dataset, user_ns)
         except Exception as e:
             logger.warning(f"History fetch failed client_id={client_id}: {e}")
             return []

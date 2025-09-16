@@ -2,13 +2,16 @@ import asyncio
 import hashlib
 import hmac
 import json
-from typing import Any
+import re
+from typing import Any, Iterable, Sequence
 from urllib.parse import parse_qsl
 
 from config.app_settings import settings
 from loguru import logger
 
 from core.schemas import DayExercises
+
+_DAY_INDEX_RE = re.compile(r"\d+")
 
 
 async def ensure_container_ready() -> None:
@@ -56,17 +59,12 @@ def verify_init_data(init_data: str) -> dict[str, object]:
         calc_old = None
         ok_old = False
 
-    logger.debug(
-        f"verify_init_data: keys={sorted(items.keys())} "
-        f"recv_hash={received_hash[:16]} calc_new={(calc_new or '')[:16]} "
-        f"calc_old={(calc_old or '')[:16]} token_head={token[:12]} "
-        f"check_len={len(check_string)}"
-    )
-
     if not (ok_new or ok_old):
-        logger.warning(
-            f"verify_init_data mismatch: token_head={token[:12]} recv={received_hash} "
-            f"calc_new={calc_new} calc_old={calc_old} check={check_string!r}"
+        logger.error(
+            "Init data verification failed",
+            hash_preview=received_hash[:16],
+            calc_new_preview=(calc_new or "")[:16],
+            calc_old_preview=(calc_old or "")[:16],
         )
         raise ValueError("Invalid init data")
 
@@ -80,28 +78,66 @@ def verify_init_data(init_data: str) -> dict[str, object]:
         else:
             result[k] = v
 
-    user = result.get("user")
-    user_id = user.get("id") if isinstance(user, dict) else None
-    logger.debug(f"verify_init_data ok (scheme={'new' if ok_new else 'old'}) for user_id={user_id}")
     return result
+
+
+def _extract_day_index(label: str) -> int | None:
+    match = _DAY_INDEX_RE.search(label)
+    if not match:
+        return None
+    try:
+        return int(match.group())
+    except ValueError:
+        return None
+
+
+def _sort_day_entries(entries: Iterable[tuple[int, str, Any]]) -> list[tuple[str, Any]]:
+    def sort_key(item: tuple[int, str, Any]) -> tuple[int, int]:
+        position, label, _ = item
+        numeric = _extract_day_index(label)
+        return (numeric if numeric is not None else position, position)
+
+    ordered = sorted(entries, key=sort_key)
+    return [(label, value) for _, label, value in ordered]
 
 
 def normalize_day_exercises(raw: Any) -> list[dict[str, Any]]:
     if isinstance(raw, dict):
-        return [{"day": str(k), "exercises": v} for k, v in sorted(raw.items(), key=lambda kv: int(str(kv[0])))]
+        entries = [(idx, str(key), value) for idx, (key, value) in enumerate(raw.items())]
+        ordered = _sort_day_entries(entries)
+        return [{"day": label, "exercises": value} for label, value in ordered]
     if isinstance(raw, list):
         return raw
     return []
 
 
+def _sorted_exercises(exercises: Sequence[DayExercises]) -> list[DayExercises]:
+    enumerated = [(idx, day) for idx, day in enumerate(exercises)]
+
+    def sort_key(item: tuple[int, DayExercises]) -> tuple[int, int]:
+        position, day = item
+        numeric = _extract_day_index(day.day)
+        return (numeric if numeric is not None else position, position)
+
+    ordered = sorted(enumerated, key=sort_key)
+    return [day for _, day in ordered]
+
+
 def _format_full_program(exercises: list[DayExercises]) -> str:
     lines: list[str] = []
-    for day in sorted(exercises, key=lambda d: int(d.day)):
-        lines.append(f"Day {int(day.day) + 1}")
+    for order, day in enumerate(_sorted_exercises(exercises)):
+        label = day.day.strip()
+        if label.isdigit():
+            header = f"Day {int(label) + 1}"
+        elif label:
+            header = label
+        else:
+            header = f"Day {order + 1}"
+        lines.append(header)
         for idx, ex in enumerate(day.exercises):
             line = f"{idx + 1}. {ex.name} | {ex.sets} x {ex.reps}"
             if ex.weight:
-                line += f" | {ex.weight} kg"
+                line += f" | {ex.weight}"
             if ex.set_id is not None:
                 line += f" | Set {ex.set_id}"
             if ex.drop_set:
