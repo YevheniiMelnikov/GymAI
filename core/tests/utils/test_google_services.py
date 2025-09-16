@@ -1,8 +1,19 @@
 import importlib.util
+import sys
+import types
 from pathlib import Path
 from typing import Any
 
-services_path = Path(__file__).resolve().parents[1] / "services"
+import conftest
+
+settings_mod = sys.modules.get("config.app_settings")
+if settings_mod is None:
+    settings_mod = types.ModuleType("config.app_settings")
+    sys.modules["config.app_settings"] = settings_mod
+
+settings_mod.settings = types.SimpleNamespace(**conftest.settings_stub.__dict__)
+
+services_path = Path(__file__).resolve().parents[2] / "services"
 
 gs_spec = importlib.util.spec_from_file_location("gsheets_service", services_path / "gsheets_service.py")
 if gs_spec is None:

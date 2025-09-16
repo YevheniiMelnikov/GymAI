@@ -1,5 +1,15 @@
 import sys
 import importlib
+import types
+
+import conftest
+
+settings_mod = sys.modules.get("config.app_settings")
+if settings_mod is None:
+    settings_mod = types.ModuleType("config.app_settings")
+    sys.modules["config.app_settings"] = settings_mod
+
+settings_mod.settings = types.SimpleNamespace(**conftest.settings_stub.__dict__)
 
 
 class DummyFernet:

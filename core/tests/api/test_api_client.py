@@ -9,7 +9,7 @@ from pathlib import Path
 from core.exceptions import UserServiceError
 
 spec = importlib.util.spec_from_file_location(
-    "api_client", Path(__file__).resolve().parents[1] / "services" / "internal" / "api_client.py"
+    "api_client", Path(__file__).resolve().parents[2] / "services" / "internal" / "api_client.py"
 )
 api_client_module = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
