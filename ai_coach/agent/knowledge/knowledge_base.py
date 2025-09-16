@@ -3,7 +3,7 @@ import os
 from dataclasses import asdict, is_dataclass
 from hashlib import sha256
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Awaitable, Callable, Iterable
 from uuid import NAMESPACE_DNS, UUID, uuid5
 
 from loguru import logger
@@ -51,6 +51,7 @@ class KnowledgeBase:
     _loader: KnowledgeLoader | None = None
     _cognify_locks: LockCache = LockCache()
     _user: Any | None = None
+    _list_data_supports_user: bool | None = None
 
     GLOBAL_DATASET: str = os.environ.get("COGNEE_GLOBAL_DATASET", "external_docs")
     _CLIENT_DATASET_NAMESPACE: UUID | None = None
@@ -188,12 +189,10 @@ class KnowledgeBase:
             await cls._ensure_dataset_exists(dataset, user)
         except Exception as exc:  # pragma: no cover - non-critical indexing failure
             logger.debug(f"Dataset ensure skipped client_id={client_id}: {exc}")
+        list_data = getattr(cognee.datasets, "list_data")
+        user_ns: Any | None = cls._to_user_or_none(user)
         try:
-            params: dict[str, Any] = {}
-            user_ns: Any | None = cls._to_user_or_none(user)
-            if user_ns is not None:
-                params["user"] = user_ns
-            data = await cognee.datasets.list_data(dataset, **params)
+            data = await cls._fetch_dataset_rows(list_data, dataset, user_ns)
         except Exception as e:
             logger.warning(f"History fetch failed client_id={client_id}: {e}")
             return []
@@ -262,6 +261,26 @@ class KnowledgeBase:
             except ValueError as exc:  # pragma: no cover - configuration error
                 raise RuntimeError("Invalid COGNEE_CLIENT_DATASET_NAMESPACE value") from exc
         return cls._CLIENT_DATASET_NAMESPACE
+
+    @classmethod
+    async def _fetch_dataset_rows(
+        cls,
+        list_data: Callable[..., Awaitable[Iterable[Any]]],
+        dataset: str,
+        user_ns: Any | None,
+    ) -> list[Any]:
+        """Fetch dataset rows, gracefully handling legacy signatures."""
+        if user_ns is not None and cls._list_data_supports_user is not False:
+            try:
+                rows = await list_data(dataset, user=user_ns)
+            except TypeError:
+                logger.debug("cognee.datasets.list_data does not accept 'user', retrying without it")
+                cls._list_data_supports_user = False
+            else:
+                cls._list_data_supports_user = True
+                return list(rows)
+        rows = await list_data(dataset)
+        return list(rows)
 
     @staticmethod
     def _client_profile_text(client: Client) -> str:
