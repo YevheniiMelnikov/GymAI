@@ -3,7 +3,6 @@
 .git/**
 docker/.env
 docker/.env.example
-docker/.env
 !pyproject.toml
 
 __pycache__/
