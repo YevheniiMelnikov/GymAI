@@ -25,7 +25,7 @@ async def ensure_container_ready() -> None:
 
 
 def _hash_webapp(token: str, check_string: str) -> str:
-    secret = hmac.new(b"WebAppData", token.encode("utf-8"), hashlib.sha256).digest()
+    secret = hmac.new(token.encode("utf-8"), b"WebAppData", hashlib.sha256).digest()
     return hmac.new(secret, check_string.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
