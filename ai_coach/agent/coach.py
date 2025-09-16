@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Any, Optional
 import inspect
+from typing import Any, Optional
 
 from openai import AsyncOpenAI  # pyrefly: ignore[import-error]
 from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
+from pydantic import BaseModel
 
 from config.app_settings import settings
 from core.enums import WorkoutType
@@ -65,18 +66,42 @@ class CoachAgent:
         if Agent is None or OpenAIChatModel is None:
             raise RuntimeError("pydantic_ai package is required")
 
+        provider_config: Any = settings.AGENT_PROVIDER
+        if isinstance(provider_config, str):
+            provider_name: str | None = provider_config.strip().lower()
+        else:
+            provider_name = None
+
+        provider: Any = provider_config
+        client_override: AsyncOpenAI | None = None
+
+        if provider_name == "openrouter":
+            try:
+                from pydantic_ai.providers.openrouter import OpenRouterProvider  # pyrefly: ignore[import-error]
+            except Exception as exc:  # pragma: no cover - optional dependency
+                raise RuntimeError("OpenRouter provider is not available") from exc
+
+            api_key: str = settings.LLM_API_KEY
+            if not api_key:
+                raise RuntimeError("LLM_API_KEY must be configured when using the OpenRouter provider")
+            provider = OpenRouterProvider(api_key=api_key)
+        else:
+            if settings.LLM_API_KEY or settings.LLM_API_URL:
+                client_override = AsyncOpenAI(
+                    api_key=settings.LLM_API_KEY or None,
+                    base_url=settings.LLM_API_URL or None,
+                )
+
         model = OpenAIChatModel(
             model_name=settings.AGENT_MODEL,
-            provider=settings.AGENT_PROVIDER,
+            provider=provider,
             settings=ModelSettings(
                 timeout=float(settings.COACH_AGENT_TIMEOUT),
             ),
         )
 
-        model.client = AsyncOpenAI(
-            api_key=settings.LLM_API_KEY,
-            base_url=settings.LLM_API_URL,
-        )
+        if client_override is not None:
+            model.client = client_override
 
         cls._agent = Agent(
             model=model,
@@ -104,6 +129,18 @@ class CoachAgent:
         if cls._agent is None:
             return cls._init_agent()
         return cls._agent
+
+    @staticmethod
+    def _normalize_output(
+        raw: Any,
+        expected: type[Program] | type[Subscription] | type[QAResponse],
+    ) -> Program | Subscription | QAResponse:
+        value = getattr(raw, "output", raw)
+        if isinstance(value, expected):
+            return value
+        if issubclass(expected, BaseModel):
+            return expected.model_validate(value)
+        return expected(**value)
 
     @staticmethod
     async def _message_history(client_id: int) -> list[ModelMessage]:
@@ -158,13 +195,13 @@ class CoachAgent:
         history = cls._message_history(deps.client_id)
         if inspect.isawaitable(history):
             history = await history
-        result: Program | Subscription = await agent.run(
+        raw_result = await agent.run(
             user_prompt,
             deps=deps,
             output_type=output_type,
             message_history=history,
         )
-        return result
+        return cls._normalize_output(raw_result, output_type)
 
     @classmethod
     async def update_workout_plan(
@@ -196,13 +233,13 @@ class CoachAgent:
         history = cls._message_history(deps.client_id)
         if inspect.isawaitable(history):
             history = await history
-        result: Program | Subscription = await agent.run(
+        raw_result = await agent.run(
             user_prompt,
             deps=deps,
             output_type=output_type,
             message_history=history,
         )
-        return result
+        return cls._normalize_output(raw_result, output_type)
 
     @classmethod
     async def answer_question(
@@ -216,11 +253,11 @@ class CoachAgent:
         history = cls._message_history(deps.client_id)
         if inspect.isawaitable(history):
             history = await history
-        result: QAResponse = await agent.run(
+        raw_result = await agent.run(
             user_prompt,
             deps=deps,
             output_type=QAResponse,
             model_settings=ModelSettings(temperature=0.3, max_tokens=256),
             message_history=history,
         )
-        return result
+        return cls._normalize_output(raw_result, QAResponse)

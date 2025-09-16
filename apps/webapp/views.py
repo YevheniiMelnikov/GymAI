@@ -38,14 +38,27 @@ else:  # attributes for monkeypatching in tests
     class _RepoStub(SimpleNamespace):
         pass
 
-    ClientProfileRepository = _RepoStub(get_by_profile_id=lambda *a, **k: None)
-    ProfileRepository = _RepoStub(get_by_telegram_id=lambda *a, **k: None)
-    ProgramRepository = _RepoStub(
-        get_latest=lambda *a, **k: None,
-        get_by_id=lambda *a, **k: None,
-        get_all=lambda *a, **k: [],
-    )
-    SubscriptionRepository = _RepoStub(get_latest=lambda *a, **k: None)
+    try:
+        from apps.profiles.repos import ClientProfileRepository as _ClientProfileRepo
+        from apps.profiles.repos import ProfileRepository as _ProfileRepo
+        from apps.workout_plans.repos import (
+            ProgramRepository as _ProgramRepo,
+            SubscriptionRepository as _SubscriptionRepo,
+        )
+    except Exception:  # pragma: no cover - fall back to stubs in exceptional cases
+        _ClientProfileRepo = _RepoStub(get_by_profile_id=lambda *a, **k: None)
+        _ProfileRepo = _RepoStub(get_by_telegram_id=lambda *a, **k: None)
+        _ProgramRepo = _RepoStub(
+            get_latest=lambda *a, **k: None,
+            get_by_id=lambda *a, **k: None,
+            get_all=lambda *a, **k: [],
+        )
+        _SubscriptionRepo = _RepoStub(get_latest=lambda *a, **k: None)
+
+    ClientProfileRepository = _ClientProfileRepo
+    ProfileRepository = _ProfileRepo
+    ProgramRepository = _ProgramRepo
+    SubscriptionRepository = _SubscriptionRepo
 
 T = TypeVar("T")
 

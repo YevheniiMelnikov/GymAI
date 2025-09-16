@@ -2,8 +2,10 @@ import json
 import os
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Annotated
+from urllib.parse import SplitResult, urlsplit, urlunsplit
+from uuid import NAMESPACE_DNS, uuid5
 
-from pydantic import Field, model_validator, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
@@ -13,7 +15,7 @@ class Settings(BaseSettings):
     MAX_BIRTH_YEAR: int = 2020
     MAX_FILE_SIZE_MB: int = 10
 
-    API_MAX_RETRIES: int = 3
+    API_MAX_RETRIES: int = 1
     API_RETRY_INITIAL_DELAY: int = 1
     API_RETRY_BACKOFF_FACTOR: int = 2
     API_RETRY_MAX_DELAY: int = 10
@@ -27,9 +29,9 @@ class Settings(BaseSettings):
     KNOWLEDGE_BASE_FOLDER_ID: Annotated[str, Field(default="")]
     KNOWLEDGE_REFRESH_INTERVAL: int = 60 * 60
     KNOWLEDGE_REFRESH_START_DELAY: int = 180
-    AI_COACH_TIMEOUT: int = 120
+    AI_COACH_TIMEOUT: int = 420
     LLM_COOLDOWN: int = 60
-    COACH_AGENT_RETRIES: int = 3
+    COACH_AGENT_RETRIES: int = 1
     COACH_AGENT_TIMEOUT: int = 60
     CHAT_HISTORY_LIMIT: int = 20
 
@@ -77,11 +79,13 @@ class Settings(BaseSettings):
     VECTORDATABASE_PROVIDER: Annotated[str, Field(default="pgvector")]
     GRAPH_DATABASE_PROVIDER: Annotated[str, Field(default="networkx")]
     AI_COACH_URL: Annotated[str, Field(default="http://ai_coach:9000/")]
+    COGNEE_CLIENT_DATASET_NAMESPACE: Annotated[str | None, Field(default=None)]
 
     API_KEY: Annotated[str, Field(default="")]
     SECRET_KEY: Annotated[str, Field(default="")]
     API_HOST: Annotated[str, Field(default="http://127.0.0.1")]
     HOST_API_PORT: Annotated[str, Field(default="8000")]
+    API_INTERNAL_PORT: Annotated[str, Field(default="8000")]
     API_URL: Annotated[str | None, Field(default=None)]
     ALLOWED_HOSTS: Annotated[list[str], Field(default=["localhost", "127.0.0.1"])]
     SITE_NAME: Annotated[str, Field(default="AchieveTogether")]
@@ -127,6 +131,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _compute_derived_fields(self) -> "Settings":
+        in_docker: bool = os.path.exists("/.dockerenv") or os.getenv("KUBERNETES_SERVICE_HOST") is not None
+
         # WEBHOOK_URL
         if not self.WEBHOOK_URL:
             self.WEBHOOK_URL = f"{self.WEBHOOK_HOST}{self.WEBHOOK_PATH}"
@@ -141,18 +147,51 @@ class Settings(BaseSettings):
 
         # API_URL
         if not self.API_URL:
-            base = str(self.API_HOST).rstrip("/")
-            self.API_URL = f"{base}:{self.HOST_API_PORT}/"
+            self.API_URL = self._derive_api_url(in_docker)
+
+        # Cognee dataset namespace
+        if not self.COGNEE_CLIENT_DATASET_NAMESPACE:
+            namespace_seed: str = self.SECRET_KEY or self.SITE_NAME or "gymbot"
+            base_namespace = uuid5(NAMESPACE_DNS, "gymbot.cognee")
+            self.COGNEE_CLIENT_DATASET_NAMESPACE = str(uuid5(base_namespace, namespace_seed))
 
         # --- Redis URL selection ---
-        in_docker = os.path.exists("/.dockerenv") or os.getenv("KUBERNETES_SERVICE_HOST") is not None
-
         if not in_docker:
             normalized = (self.REDIS_URL or "").strip().lower()
             if not normalized or normalized.startswith("redis://redis"):
                 self.REDIS_URL = "redis://127.0.0.1:6379"
 
         return self
+
+    def _derive_api_url(self, in_docker: bool) -> str:
+        """Build API URL taking container networking into account."""
+        api_host_raw: str = str(self.API_HOST).strip()
+        has_scheme: bool = "://" in api_host_raw
+        prepared_host: str = api_host_raw if has_scheme else f"http://{api_host_raw}"
+        parsed: SplitResult = urlsplit(prepared_host)
+        scheme: str = parsed.scheme or "http"
+        netloc_source: str = parsed.netloc or parsed.path
+        hostname: str
+        existing_port: str | None
+        if ":" in netloc_source:
+            hostname, existing_port = netloc_source.split(":", 1)
+        else:
+            hostname, existing_port = netloc_source, None
+        normalized_hostname: str = hostname or "api"
+        if in_docker and normalized_hostname in {"127.0.0.1", "localhost"}:
+            normalized_hostname = os.getenv("API_SERVICE_HOST", "api")
+        port_env_raw: str | None = os.getenv("API_PORT")
+        port_env: str | None = port_env_raw.strip() if port_env_raw else None
+        existing_port_clean: str | None = existing_port.strip() if existing_port else None
+        port_candidates: tuple[str | None, ...] = (
+            port_env,
+            existing_port_clean,
+        )
+        resolved_port: str | None = next((candidate for candidate in port_candidates if candidate), None)
+        if not resolved_port:
+            resolved_port = self.API_INTERNAL_PORT if in_docker else self.HOST_API_PORT
+        netloc: str = f"{normalized_hostname}:{resolved_port}" if resolved_port else normalized_hostname
+        return urlunsplit((scheme, netloc, "/", "", ""))
 
     @property
     def CREDIT_RATE_MAX_PACK(self) -> Decimal:

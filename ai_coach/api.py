@@ -6,7 +6,7 @@ from typing import Awaitable, Callable, Any
 
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from ai_coach.agent import AgentDeps, CoachAgent  # pyrefly: ignore[missing-module-attribute]
-from core.cache import Cache
+from core.services import APIService
 from ai_coach.application import app, security
 from ai_coach.schemas import AICoachRequest
 from ai_coach.types import AskCtx, CoachMode
@@ -82,10 +82,11 @@ async def ask(data: AICoachRequest, request: Request) -> Program | Subscription 
     }
 
     try:
-        client = await Cache.client.get_client(data.client_id)
-        client_name = client.name
-    except Exception:  # pragma: no cover - missing cache/service
-        client_name = None
+        client = await APIService.profile.get_client(data.client_id)
+    except Exception:  # pragma: no cover - missing profile service
+        client = None
+
+    client_name = getattr(client, "name", None)
 
     deps = AgentDeps(
         client_id=data.client_id,

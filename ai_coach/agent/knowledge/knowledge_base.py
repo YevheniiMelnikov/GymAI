@@ -3,7 +3,8 @@ import os
 from dataclasses import asdict, is_dataclass
 from hashlib import sha256
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Awaitable, Callable, Iterable, cast
+from uuid import NAMESPACE_DNS, UUID, uuid5
 
 from loguru import logger
 
@@ -50,8 +51,12 @@ class KnowledgeBase:
     _loader: KnowledgeLoader | None = None
     _cognify_locks: LockCache = LockCache()
     _user: Any | None = None
+    _list_data_supports_user: bool | None = None
+    _has_datasets_module: bool | None = None
 
     GLOBAL_DATASET: str = os.environ.get("COGNEE_GLOBAL_DATASET", "external_docs")
+    _CLIENT_DATASET_NAMESPACE: UUID | None = None
+    _CLIENT_ALIAS_PREFIX: str = "client_"
 
     @classmethod
     async def initialize(cls, knowledge_loader: KnowledgeLoader | None = None) -> None:
@@ -110,8 +115,16 @@ class KnowledgeBase:
         except (DatasetNotFoundError, PermissionDeniedError):
             raise
         await HashStore.add(ds_name, digest)
-        resolved = getattr(info, "dataset_id", None) or getattr(info, "dataset_name", None) or ds_name
-        return str(resolved), True
+        resolved = ds_name
+        if info is not None:
+            for candidate in (getattr(info, "dataset_id", None), getattr(info, "dataset_name", None)):
+                if isinstance(candidate, str) and candidate:
+                    try:
+                        resolved = str(UUID(candidate))
+                        break
+                    except ValueError:
+                        continue
+        return resolved, True
 
     @classmethod
     async def search(cls, query: str, client_id: int, k: int | None = None) -> list[str]:
@@ -171,10 +184,33 @@ class KnowledgeBase:
     @classmethod
     async def get_message_history(cls, client_id: int, limit: int | None = None) -> list[str]:
         """Return recent chat messages for a client."""
-        dataset = cls._dataset_name(client_id)
-        dataset = cls._resolve_dataset_alias(dataset)
+        dataset: str = cls._resolve_dataset_alias(cls._dataset_name(client_id))
+        user: Any | None = await cls._get_cognee_user()
         try:
-            data = await cognee.datasets.list_data(dataset)
+            await cls._ensure_dataset_exists(dataset, user)
+        except Exception as exc:  # pragma: no cover - non-critical indexing failure
+            logger.debug(f"Dataset ensure skipped client_id={client_id}: {exc}")
+        datasets_module = getattr(cognee, "datasets", None)
+        if datasets_module is None:
+            if cls._has_datasets_module is not False:
+                logger.warning(f"History fetch skipped client_id={client_id}: datasets module unavailable")
+            cls._has_datasets_module = False
+            return []
+
+        list_data = getattr(datasets_module, "list_data", None)
+        if not callable(list_data):
+            if cls._has_datasets_module is not False:
+                logger.warning(
+                    f"History fetch skipped client_id={client_id}: list_data callable missing",
+                )
+            cls._has_datasets_module = False
+            return []
+
+        cls._has_datasets_module = True
+        list_data_callable = cast(Callable[..., Awaitable[Iterable[Any]]], list_data)
+        user_ns: Any | None = cls._to_user_or_none(user)
+        try:
+            data = await cls._fetch_dataset_rows(list_data_callable, dataset, user_ns)
         except Exception as e:
             logger.warning(f"History fetch failed client_id={client_id}: {e}")
             return []
@@ -199,7 +235,14 @@ class KnowledgeBase:
 
     @classmethod
     def _resolve_dataset_alias(cls, name: str) -> str:
-        """Map dataset alias to actual dataset name (currently identity)."""
+        """Map dataset alias to the canonical dataset identifier."""
+        if name.startswith(cls._CLIENT_ALIAS_PREFIX):
+            suffix = name[len(cls._CLIENT_ALIAS_PREFIX) :]
+            try:
+                client_id = int(suffix)
+            except ValueError:
+                return name
+            return cls._dataset_name(client_id)
         return name
 
     @classmethod
@@ -217,10 +260,45 @@ class KnowledgeBase:
         if exists is None:
             await create_authorized_dataset(name, user_ns)  # pyrefly: ignore[bad-argument-type]
 
-    @staticmethod
-    def _dataset_name(client_id: int) -> str:
-        """Generate dataset name for a client."""
-        return f"client_{client_id}"
+    @classmethod
+    def _dataset_name(cls, client_id: int) -> str:
+        """Generate deterministic dataset identifier for a client profile."""
+        namespace = cls._client_namespace()
+        return str(uuid5(namespace, f"client-profile:{client_id}"))
+
+    @classmethod
+    def _client_namespace(cls) -> UUID:
+        if cls._CLIENT_DATASET_NAMESPACE is None:
+            raw = getattr(settings, "COGNEE_CLIENT_DATASET_NAMESPACE", None)
+            if not raw:
+                seed = getattr(settings, "SECRET_KEY", "") or getattr(settings, "SITE_NAME", "") or "gymbot"
+                base_namespace = uuid5(NAMESPACE_DNS, "gymbot.cognee")
+                raw = str(uuid5(base_namespace, seed))
+            try:
+                cls._CLIENT_DATASET_NAMESPACE = UUID(str(raw))
+            except ValueError as exc:  # pragma: no cover - configuration error
+                raise RuntimeError("Invalid COGNEE_CLIENT_DATASET_NAMESPACE value") from exc
+        return cls._CLIENT_DATASET_NAMESPACE
+
+    @classmethod
+    async def _fetch_dataset_rows(
+        cls,
+        list_data: Callable[..., Awaitable[Iterable[Any]]],
+        dataset: str,
+        user_ns: Any | None,
+    ) -> list[Any]:
+        """Fetch dataset rows, gracefully handling legacy signatures."""
+        if user_ns is not None and cls._list_data_supports_user is not False:
+            try:
+                rows = await list_data(dataset, user=user_ns)
+            except TypeError:
+                logger.debug("cognee.datasets.list_data does not accept 'user', retrying without it")
+                cls._list_data_supports_user = False
+            else:
+                cls._list_data_supports_user = True
+                return list(rows)
+        rows = await list_data(dataset)
+        return list(rows)
 
     @staticmethod
     def _client_profile_text(client: Client) -> str:
@@ -246,9 +324,9 @@ class KnowledgeBase:
     async def _ensure_profile_indexed(cls, client_id: int, user: Any | None) -> None:
         """Fetch client profile and add it to dataset if missing."""
         try:
-            client = await APIService.profile.get_client_by_profile_id(client_id)
+            client = await APIService.profile.get_client(client_id)
         except UserServiceError as e:
-            logger.warning(f"Failed to fetch client profile id={client_id}: {e}")
+            logger.warning(f"Failed to fetch client id={client_id}: {e}")
             return
         if not client:
             return

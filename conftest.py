@@ -1097,7 +1097,10 @@ sys.modules.setdefault("apps.workout_plans.models", workout_models)
 
 core_services_pkg = types.ModuleType("core.services")
 core_services_pkg.__path__ = [str(Path(__file__).resolve().parent / "core" / "services")]
-core_services_pkg.ProfileService = types.SimpleNamespace(get_client_by_profile_id=lambda *_a, **_k: None)
+core_services_pkg.ProfileService = types.SimpleNamespace(
+    get_client_by_profile_id=lambda *_a, **_k: None,
+    get_client=lambda *_a, **_k: None,
+)
 core_services_pkg.APIService = types.SimpleNamespace(
     profile=types.SimpleNamespace(),
     payment=types.SimpleNamespace(),

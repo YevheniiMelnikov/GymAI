@@ -59,7 +59,8 @@ def test_empty_context_does_not_crash(monkeypatch):
         monkeypatch.setattr(coach.cognee, "search", fake_search)
 
         res = await KnowledgeBase.search("hello", client_id=42)
-        assert calls == [["client_42", coach.KnowledgeBase.GLOBAL_DATASET]]
+        expected_dataset = KnowledgeBase._dataset_name(42)
+        assert calls == [[expected_dataset, coach.KnowledgeBase.GLOBAL_DATASET]]
         assert res == []
 
     asyncio.run(runner())

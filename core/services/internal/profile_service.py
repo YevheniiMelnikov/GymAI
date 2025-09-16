@@ -42,6 +42,9 @@ class ProfileService:
     async def update_coach_profile(self, coach_id: int, data: dict[str, Any]) -> bool:
         return await self._repository.update_coach_profile(coach_id, data)
 
+    async def get_client(self, client_id: int) -> Client | None:
+        return await self._repository.get_client(client_id)
+
     async def get_client_by_profile_id(self, profile_id: int) -> Client | None:
         return await self._repository.get_client_by_profile_id(profile_id)
 
