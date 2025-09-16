@@ -21,7 +21,7 @@ def _patched_base_settings_init(self: object, **data: object) -> None:
 _original_base_settings_init = conftest.BaseSettings.__init__
 conftest.BaseSettings.__init__ = _patched_base_settings_init
 spec = importlib.util.spec_from_file_location(
-    "app_settings", Path(__file__).resolve().parents[2] / "config" / "app_settings.py"
+    "app_settings", Path(__file__).resolve().parents[3] / "config" / "app_settings.py"
 )
 assert spec is not None and spec.loader is not None
 app_settings_module = importlib.util.module_from_spec(spec)
