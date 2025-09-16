@@ -1,13 +1,21 @@
 # pyrefly: ignore-file
 # pyright: reportGeneralTypeIssues=false
+import inspect
 import os
 import sys
 import types
-import pytest
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Generic, TypeVar
-import inspect
+
+import pytest
+
+TESTS_DIR: Path = Path(__file__).resolve().parent
+CORE_DIR: Path = TESTS_DIR.parent
+ROOT_DIR: Path = CORE_DIR.parent
+python_path: list[str] = sys.path
+if str(ROOT_DIR) not in python_path:
+    python_path.append(str(ROOT_DIR))
 
 os.environ["TIME_ZONE"] = "Europe/Kyiv"
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.test_settings")
@@ -1096,7 +1104,7 @@ workout_models.Subscription = Subscription
 sys.modules.setdefault("apps.workout_plans.models", workout_models)
 
 core_services_pkg = types.ModuleType("core.services")
-core_services_pkg.__path__ = [str(Path(__file__).resolve().parent / "core" / "services")]
+core_services_pkg.__path__ = [str(ROOT_DIR / "core" / "services")]
 core_services_pkg.ProfileService = types.SimpleNamespace(
     get_client_by_profile_id=lambda *_a, **_k: None,
     get_client=lambda *_a, **_k: None,

@@ -1,9 +1,18 @@
 import os
 import sys
+from pathlib import Path
+from typing import Final
+
+ROOT_DIR: Path = Path(__file__).resolve().parent.parent
+python_path: list[str] = sys.path
+if str(ROOT_DIR) not in python_path:
+    python_path.append(str(ROOT_DIR))
+
+SETTINGS_MODULE: Final[str] = "config.settings"
 
 
 def main() -> None:
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", SETTINGS_MODULE)
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:
