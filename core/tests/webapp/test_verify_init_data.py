@@ -21,7 +21,7 @@ def _build_init_data(payload: dict[str, str], token: str) -> str:
 def _build_webapp_init_data(payload: dict[str, str], token: str) -> str:
     payload_to_sign: dict[str, str] = {k: v for k, v in payload.items() if k != "signature"}
     check_string: str = "\n".join(f"{k}={v}" for k, v in sorted(payload_to_sign.items()))
-    secret_key: bytes = hmac.new(token.encode(), b"WebAppData", hashlib.sha256).digest()
+    secret_key: bytes = hmac.new(b"WebAppData", token.encode(), hashlib.sha256).digest()
     hash_value: str = hmac.new(secret_key, check_string.encode(), hashlib.sha256).hexdigest()
     body: str = "&".join(f"{k}={quote(v, safe='')}" for k, v in payload.items())
     return f"{body}&hash={hash_value}"
