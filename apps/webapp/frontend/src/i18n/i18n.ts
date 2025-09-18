@@ -19,7 +19,22 @@ export const fallbackEn: Record<string, string> = {
   sort_oldest: 'Sort: Oldest',
   show_ai: 'Show AI workout plans',
   back: 'Back',
-  open_from_telegram: 'Open this page from Telegram.'
+  open_from_telegram: 'Open this page from Telegram.',
+  retry: 'Retry',
+  'program.title': 'Workout Program',
+  'program.created': 'Created: {date}',
+  'program.origin.ai': 'AI',
+  'program.origin.coach': 'Coach',
+  'program.week': 'Week {n}',
+  'program.day': 'Day {n}: {title}',
+  'program.day.rest': 'Rest',
+  'program.view_history': 'View History',
+  'program.ex.sets_reps': '{sets} × {reps}',
+  'program.ex.weight': '{w} {unit}',
+  'program.ex.bodyweight': 'Bodyweight',
+  'program.ex.more': 'Details',
+  'program.ex.unit.kg': 'kg',
+  'program.ex.unit.lb': 'lb'
 };
 
 async function loadMessages(code: LangCode): Promise<void> {
@@ -32,8 +47,17 @@ async function loadMessages(code: LangCode): Promise<void> {
   }
 }
 
-export function t<K extends keyof typeof fallbackEn>(key: K): string {
-  return (messages[key] ?? fallbackEn[key]) as string;
+export type TemplateParams = Record<string, string | number>;
+
+export function t<K extends keyof typeof fallbackEn>(key: K, params?: TemplateParams): string {
+  const template = (messages[key] ?? fallbackEn[key]) as string;
+  if (!params) return template;
+  return template.replace(/\{(\w+)\}/g, (_, token: string) => {
+    if (Object.prototype.hasOwnProperty.call(params, token)) {
+      return String(params[token]);
+    }
+    return '';
+  });
 }
 
 export async function applyLang(raw: string | undefined): Promise<LangCode> {

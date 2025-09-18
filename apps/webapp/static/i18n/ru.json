@@ -12,5 +12,20 @@
   "sort_oldest": "Сортировка: старые",
   "show_ai": "Показывать планы ИИ",
   "back": "Назад",
-  "open_from_telegram": "Откройте эту страницу в Telegram."
+  "open_from_telegram": "Откройте эту страницу в Telegram.",
+  "retry": "Повторить",
+  "program.title": "Программа тренировок",
+  "program.created": "Создано: {date}",
+  "program.origin.ai": "AI",
+  "program.origin.coach": "Тренер",
+  "program.week": "Неделя {n}",
+  "program.day": "День {n}: {title}",
+  "program.day.rest": "Отдых",
+  "program.view_history": "История",
+  "program.ex.sets_reps": "{sets} × {reps}",
+  "program.ex.weight": "{w} {unit}",
+  "program.ex.bodyweight": "Собственный вес",
+  "program.ex.more": "Детали",
+  "program.ex.unit.kg": "кг",
+  "program.ex.unit.lb": "фунт"
 }

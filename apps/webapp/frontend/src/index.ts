@@ -1,5 +1,5 @@
 import { applyLang, t } from './i18n/i18n';
-import { getRoute } from './router';
+import { getRoute, ProgramRoute } from './router';
 
 declare const Telegram: any;
 
@@ -8,13 +8,13 @@ const initData: string = tg?.initData || '';
 
 async function route(): Promise<void> {
   const info = getRoute();
-  if (info.route === 'history') {
+  if (info.name === 'history') {
     const { renderHistory } = await import('./views/history');
     await renderHistory();
     return;
   }
   const { renderProgramView } = await import('./views/program_view');
-  await renderProgramView(info.id, info.type);
+  await renderProgramView(info as ProgramRoute);
 }
 
 void (async () => {

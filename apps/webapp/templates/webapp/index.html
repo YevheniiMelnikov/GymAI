@@ -11,10 +11,23 @@
 </head>
 <body>
   <main id="app">
-    <div id="program-date" aria-live="polite"></div>
-    <div id="program-origin" aria-live="polite"></div>
-    <div id="content" aria-live="polite">Loading...</div>
-    <div id="controls"></div>
+    <header class="app-header">
+      <button type="button" id="back-button" class="app-header__back" aria-label="Back">
+        <span aria-hidden="true">&#8592;</span>
+      </button>
+      <h1 id="page-title"></h1>
+    </header>
+
+    <div class="page-meta page-meta--hidden">
+      <span id="program-date" hidden></span>
+      <span id="program-origin" class="ai-label" hidden></span>
+    </div>
+
+    <section id="content" class="program-content" aria-live="polite" aria-busy="false"></section>
+
+    <footer class="history-cta">
+      <button type="button" id="history-button"></button>
+    </footer>
   </main>
 
   <noscript>This page requires JavaScript. Please open it inside Telegram.</noscript>

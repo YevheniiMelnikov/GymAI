@@ -12,5 +12,20 @@
   "sort_oldest": "Сортування: старі",
   "show_ai": "Показувати плани ШІ",
   "back": "Назад",
-  "open_from_telegram": "Відкрийте цю сторінку в Telegram."
+  "open_from_telegram": "Відкрийте цю сторінку в Telegram.",
+  "retry": "Повторити",
+  "program.title": "Програма тренувань",
+  "program.created": "Створено: {date}",
+  "program.origin.ai": "AI",
+  "program.origin.coach": "Тренер",
+  "program.week": "Тиждень {n}",
+  "program.day": "День {n}: {title}",
+  "program.day.rest": "Відпочинок",
+  "program.view_history": "Історія",
+  "program.ex.sets_reps": "{sets} × {reps}",
+  "program.ex.weight": "{w} {unit}",
+  "program.ex.bodyweight": "Вага тіла",
+  "program.ex.more": "Деталі",
+  "program.ex.unit.kg": "кг",
+  "program.ex.unit.lb": "фунт"
 }
