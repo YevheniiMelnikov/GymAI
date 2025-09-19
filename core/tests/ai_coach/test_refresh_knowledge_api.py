@@ -8,7 +8,6 @@ from httpx import AsyncClient
 import conftest
 from ai_coach.application import app
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
-from config.app_settings import settings
 
 
 def _reset_settings(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
