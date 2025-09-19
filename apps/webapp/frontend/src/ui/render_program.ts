@@ -1,4 +1,4 @@
-import { Day, Exercise, Program, Week } from '../api/types';
+import { Day, Exercise, Locale, Program, Week } from '../api/types';
 import { TemplateParams, t } from '../i18n/i18n';
 
 const dateFormatterCache = new Map<string, Intl.DateTimeFormat>();
@@ -61,6 +61,118 @@ function ensureWeeks(program: Program): Week[] {
       days
     }
   ];
+}
+
+const LEGACY_DAY_HEADERS = [
+  /^\s*День\s*(\d+)\s*[—–-:]?\s*(.+)?$/i,
+  /^\s*Day\s*(\d+)\s*[—–-:]?\s*(.+)?$/i
+];
+
+const REST_TOKENS = [/rest/i, /відпочинок/i, /отдых/i];
+
+type LegacyParsedDay = {
+  readonly index: number;
+  readonly title: string;
+  readonly lines: readonly string[];
+  readonly type: 'workout' | 'rest';
+};
+
+function matchLegacyDayHeader(header: string): { index: number; title: string } | null {
+  for (const pattern of LEGACY_DAY_HEADERS) {
+    const match = header.match(pattern);
+    if (!match) continue;
+    const parsedIndex = Number.parseInt(match[1] ?? '', 10);
+    if (!Number.isFinite(parsedIndex)) continue;
+    const rawTitle = (match[2] ?? '').trim();
+    return {
+      index: parsedIndex,
+      title: rawTitle || header.replace(pattern, '').trim() || header
+    };
+  }
+  return null;
+}
+
+function detectRestDay(title: string, lines: readonly string[]): boolean {
+  if (lines.length > 0) return false;
+  return REST_TOKENS.some((pattern) => pattern.test(title));
+}
+
+function parseLegacyDays(text: string): LegacyParsedDay[] {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return [];
+  }
+  const rawBlocks = trimmed
+    .split(/\n\s*\n/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+
+  const parsed: LegacyParsedDay[] = [];
+
+  rawBlocks.forEach((block, blockIndex) => {
+    const lines = block.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    if (lines.length === 0) {
+      return;
+    }
+    const header = lines[0];
+    const matched = matchLegacyDayHeader(header);
+    const displayIndex = matched?.index ?? blockIndex + 1;
+    const title = matched?.title ?? header;
+    const rest = lines.slice(1);
+    const hasExercises = rest.length > 0;
+    const isRest = detectRestDay(title, rest) || !hasExercises;
+    parsed.push({
+      index: displayIndex,
+      title,
+      lines: isRest ? [] : rest,
+      type: isRest ? 'rest' : 'workout'
+    });
+  });
+
+  if (parsed.length === 0) {
+    const lines = trimmed.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    if (lines.length === 0) {
+      return [];
+    }
+    const [firstLine, ...rest] = lines;
+    const exercises = rest;
+    const hasExercises = exercises.length > 0;
+    const isRest = detectRestDay(firstLine, exercises) || !hasExercises;
+    parsed.push({
+      index: 1,
+      title: isRest ? t('program.day.rest') : firstLine,
+      lines: isRest ? [] : exercises,
+      type: isRest ? 'rest' : 'workout'
+    });
+  }
+
+  return parsed;
+}
+
+function createLegacyDays(data: readonly LegacyParsedDay[]): Day[] {
+  return data.map((day, order) => {
+    const displayIndex = Number.isFinite(day.index) && day.index > 0 ? day.index : order + 1;
+    const dayId = `legacy-${String(displayIndex).padStart(2, '0')}-${order + 1}`;
+    const exercises: Exercise[] =
+      day.type === 'workout'
+        ? day.lines.map((line, exerciseIndex) => ({
+            id: `${dayId}-ex-${exerciseIndex + 1}`,
+            name: line,
+            sets: null,
+            reps: null,
+            weight: null,
+            equipment: null,
+            notes: null
+          }))
+        : [];
+    return {
+      id: dayId,
+      index: displayIndex,
+      type: day.type,
+      title: day.title,
+      exercises
+    };
+  });
 }
 
 function buildChevron(): SVGSVGElement {
@@ -257,37 +369,29 @@ export function renderWeekList(
   return { fragment, dayPanels };
 }
 
-export function renderLegacyProgram(text: string): HTMLElement {
-  const section = document.createElement('section');
-  section.className = 'legacy-program';
-  const blocks = text.trim().split(/\n\s*\n/).map((block) => block.trim()).filter(Boolean);
-  if (blocks.length === 0) {
-    const paragraph = document.createElement('p');
-    paragraph.textContent = text;
-    section.appendChild(paragraph);
-    return section;
-  }
-  blocks.forEach((block, index) => {
-    const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
-    if (lines.length === 0) return;
-    const day = document.createElement('article');
-    day.className = 'legacy-program__day';
-    const heading = document.createElement(index === 0 ? 'h2' : 'h3');
-    heading.className = 'legacy-program__day-title';
-    heading.textContent = lines[0];
-    day.appendChild(heading);
-    if (lines.length > 1) {
-      const list = document.createElement('ul');
-      list.className = 'legacy-program__list';
-      for (let i = 1; i < lines.length; i += 1) {
-        const item = document.createElement('li');
-        item.className = 'legacy-program__item';
-        item.textContent = lines[i];
-        list.appendChild(item);
-      }
-      day.appendChild(list);
+export function renderLegacyProgram(text: string, locale: Locale, expandedDays: Set<string>): RenderedProgram {
+  const parsed = parseLegacyDays(text);
+  if (parsed.length === 0) {
+    const fragment = document.createDocumentFragment();
+    if (text.trim()) {
+      const paragraph = document.createElement('p');
+      paragraph.textContent = text.trim();
+      fragment.appendChild(paragraph);
     }
-    section.appendChild(day);
-  });
-  return section;
+    return { fragment, dayPanels: new Map() };
+  }
+  const legacyDays = createLegacyDays(parsed);
+  const program: Program = {
+    id: 'legacy',
+    created_at: new Date().toISOString(),
+    locale,
+    weeks: [
+      {
+        index: 1,
+        days: legacyDays
+      }
+    ],
+    days: legacyDays
+  };
+  return renderWeekList(program, locale, expandedDays);
 }

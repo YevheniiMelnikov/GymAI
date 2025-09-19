@@ -2,7 +2,7 @@ import { getProgram, HttpError, LoadedProgram, statusToMessage } from '../api/ht
 import { Locale, Program, ProgramOrigin } from '../api/types';
 import { applyLang, t } from '../i18n/i18n';
 import { RenderedProgram, fmtDate, renderLegacyProgram, renderWeekList } from '../ui/render_program';
-import { ProgramRoute, goToHistory, goToProgram } from '../router';
+import { ProgramRoute, goToHistory } from '../router';
 
 type ExpandedState = Record<string, string[]>;
 
@@ -10,9 +10,7 @@ const content = document.getElementById('content') as HTMLElement | null;
 const dateChip = document.getElementById('program-date') as HTMLSpanElement | null;
 const originChip = document.getElementById('program-origin') as HTMLSpanElement | null;
 const historyButton = document.getElementById('history-button') as HTMLButtonElement | null;
-const backButton = document.getElementById('back-button') as HTMLButtonElement | null;
 const titleEl = document.getElementById('page-title') as HTMLElement | null;
-const metaContainer = document.querySelector('.page-meta') as HTMLElement | null;
 
 const tg = (window as any).Telegram?.WebApp;
 const initData: string = tg?.initData || '';
@@ -83,16 +81,6 @@ function ensureHistoryHandlers(): void {
     historyButton.dataset.bound = 'true';
     historyButton.addEventListener('click', () => {
       goToHistory();
-    });
-  }
-  if (backButton && !backButton.dataset.bound) {
-    backButton.dataset.bound = 'true';
-    backButton.addEventListener('click', () => {
-      if (window.history.length > 1) {
-        window.history.back();
-      } else {
-        goToProgram();
-      }
     });
   }
   if (content && !content.dataset.bound) {
@@ -219,9 +207,7 @@ function updateMetaFrom(meta: MetaOptions): void {
   if (historyButton) {
     historyButton.textContent = t('program.view_history');
     historyButton.disabled = false;
-    historyButton.classList.remove('history-cta__button--disabled');
   }
-  if (backButton) backButton.setAttribute('aria-label', t('back'));
   const formattedDate = meta.createdAt ? fmtDate(meta.createdAt, meta.locale) : null;
   if (dateChip) {
     if (formattedDate) {
@@ -241,20 +227,29 @@ function updateMetaFrom(meta: MetaOptions): void {
     } else {
       originChip.textContent = '';
       originChip.setAttribute('hidden', 'true');
+      originChip.classList.remove('ai-label');
     }
-  }
-  if (metaContainer) {
-    const hasMeta = Boolean(formattedDate || (originChip && !originChip.hasAttribute('hidden')));
-    metaContainer.classList.toggle('page-meta--hidden', !hasMeta);
   }
 }
 
-function renderLegacyContent(text: string): void {
+function renderLegacyContent(text: string, locale: Locale): void {
   if (!content) return;
-  rendered = null;
   clearContent();
   content.removeAttribute('aria-busy');
-  content.appendChild(renderLegacyProgram(text));
+  rendered = renderLegacyProgram(text, locale, expandedDays);
+  content.appendChild(rendered.fragment);
+  rendered.dayPanels.forEach((panel, dayId) => {
+    if (expandedDays.has(dayId)) {
+      panel.classList.add('exercise-list--expanded');
+      panel.style.maxHeight = 'none';
+      panel.setAttribute('aria-hidden', 'false');
+    } else {
+      panel.classList.remove('exercise-list--expanded');
+      panel.style.maxHeight = '0px';
+      panel.setAttribute('aria-hidden', 'true');
+    }
+  });
+  attachPanelTransitions();
 }
 
 function resetMeta(): void {
@@ -265,14 +260,11 @@ function resetMeta(): void {
   if (originChip) {
     originChip.textContent = '';
     originChip.setAttribute('hidden', 'true');
-  }
-  if (metaContainer) {
-    metaContainer.classList.add('page-meta--hidden');
+    originChip.classList.remove('ai-label');
   }
   if (historyButton) {
     historyButton.textContent = t('program.view_history');
     historyButton.disabled = true;
-    historyButton.classList.add('history-cta__button--disabled');
   }
 }
 
@@ -339,14 +331,16 @@ export async function renderProgramView(route: ProgramRoute): Promise<void> {
       updateMeta(loaded.program, loaded.locale);
       renderProgramContent(loaded.program);
     } else {
-      currentProgramId = null;
-      expandedDays = new Set();
+      const legacyId = loaded.programId ?? 'legacy';
+      currentProgramId = legacyId;
+      expandedDays = readExpanded(legacyId);
+      persistExpanded(legacyId, expandedDays);
       updateMetaFrom({
         locale: loaded.locale,
         createdAt: loaded.createdAt ?? null,
         origin: loaded.origin ?? null
       });
-      renderLegacyContent(loaded.programText);
+      renderLegacyContent(loaded.programText, loaded.locale);
     }
   } catch (error) {
     if ((error as { name?: string } | null)?.name === 'AbortError') {

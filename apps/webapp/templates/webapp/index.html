@@ -12,21 +12,17 @@
 <body>
   <main id="app">
     <header class="app-header">
-      <button type="button" id="back-button" class="app-header__back" aria-label="Back">
-        <span aria-hidden="true">&#8592;</span>
-      </button>
       <h1 id="page-title"></h1>
+      <div class="meta-bar">
+        <span id="program-date" class="meta-text" hidden></span>
+        <span id="program-origin" class="meta-chip" hidden></span>
+      </div>
     </header>
-
-    <div class="page-meta page-meta--hidden">
-      <span id="program-date" hidden></span>
-      <span id="program-origin" class="ai-label" hidden></span>
-    </div>
 
     <section id="content" class="program-content" aria-live="polite" aria-busy="false"></section>
 
     <footer class="history-cta">
-      <button type="button" id="history-button"></button>
+      <button type="button" id="history-button" class="btn btn--primary">View History</button>
     </footer>
   </main>
 

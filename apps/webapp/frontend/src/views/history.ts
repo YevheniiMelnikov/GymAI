@@ -8,7 +8,6 @@ import { createToggle } from '../ui/components';
 const content = document.getElementById('content') as HTMLElement | null;
 const historyButton = document.getElementById('history-button') as HTMLButtonElement | null;
 const titleEl = document.getElementById('page-title') as HTMLElement | null;
-const metaContainer = document.querySelector('.page-meta') as HTMLElement | null;
 const dateChip = document.getElementById('program-date') as HTMLSpanElement | null;
 const originChip = document.getElementById('program-origin') as HTMLSpanElement | null;
 
@@ -79,10 +78,6 @@ function prepareHeader(): void {
   if (historyButton) {
     historyButton.textContent = t('program.view_history');
     historyButton.disabled = true;
-    historyButton.classList.add('history-cta__button--disabled');
-  }
-  if (metaContainer) {
-    metaContainer.classList.add('page-meta--hidden');
   }
   if (dateChip) {
     dateChip.textContent = '';
