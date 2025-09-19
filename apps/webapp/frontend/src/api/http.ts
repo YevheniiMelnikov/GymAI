@@ -1,4 +1,4 @@
-import { Locale, Program } from './types';
+import { Locale, Program, ProgramResp, ProgramStructuredResponse } from './types';
 
 export class HttpError extends Error {
   readonly status: number;
@@ -40,6 +40,10 @@ type GetProgramOpts = {
   signal?: AbortSignal;
 };
 
+function isStructuredProgram(data: ProgramResp): data is ProgramStructuredResponse {
+  return typeof data === 'object' && data !== null && 'days' in data;
+}
+
 export async function getProgram(
   programId: string,
   locale: Locale,
@@ -49,10 +53,30 @@ export async function getProgram(
   const headers: Record<string, string> = {};
   if (opts.initData) headers['X-Telegram-InitData'] = opts.initData;
 
-  const data = await getJSON<any>(url, { headers, signal: opts.signal });
+  const data = await getJSON<ProgramResp>(url, { headers, signal: opts.signal });
 
-  if (typeof data === 'string') {
-    return { kind: 'legacy', programText: data, locale, createdAt: null };
+  if (isStructuredProgram(data)) {
+    const programLocale = data.locale ?? locale;
+    return {
+      kind: 'structured',
+      program: {
+        ...data,
+        locale: programLocale,
+        created_at: data.created_at ?? null,
+        weeks: data.weeks ?? [],
+        days: data.days ?? []
+      },
+      locale: programLocale
+    };
   }
-  return { kind: 'structured', program: data as Program, locale };
+
+  const createdAtRaw = data.created_at;
+  let createdAt: string | null = null;
+  if (typeof createdAtRaw === 'number') {
+    createdAt = new Date(createdAtRaw * 1000).toISOString();
+  } else if (typeof createdAtRaw === 'string') {
+    createdAt = createdAtRaw;
+  }
+
+  return { kind: 'legacy', programText: data.program, locale, createdAt };
 }

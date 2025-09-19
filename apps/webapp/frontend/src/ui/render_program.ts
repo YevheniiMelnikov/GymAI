@@ -5,8 +5,11 @@ export type RenderedProgram = {
   readonly fragment: DocumentFragment;
 };
 
-export function fmtDate(value: string, locale: string): string {
-  const date = new Date(value);
+export function fmtDate(value: string | number, locale: string): string {
+  const date = typeof value === 'number' ? new Date(value * 1000) : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
   return new Intl.DateTimeFormat(locale, {
     day: 'numeric',
     month: 'short',
@@ -24,7 +27,7 @@ function createExerciseItem(ex: Exercise, index: number, locale: string): HTMLLI
   li.textContent = `${index + 1}. ${ex.name}`;
   const meta: string[] = [];
   if (ex.sets && ex.reps) meta.push(`${ex.sets}×${ex.reps}`);
-  else if (ex.reps) meta.push(ex.reps);
+  else if (ex.reps) meta.push(String(ex.reps));
   if (ex.weight) meta.push(`${ex.weight.value} ${ex.weight.unit}`);
   if (ex.equipment) meta.push(ex.equipment);
   if (ex.notes) meta.push(ex.notes);
@@ -47,7 +50,7 @@ function renderDay(day: Day, locale: string): HTMLElement {
   if (day.type === 'rest') {
     h3.textContent = t('program.day.rest');
   } else {
-    h3.textContent = t('program.day', { n: day.index, title: day.title });
+    h3.textContent = t('program.day', { n: day.index, title: day.title ?? '' });
   }
   section.appendChild(h3);
 
@@ -89,10 +92,10 @@ export function renderLegacyProgram(text: string, locale: Locale): RenderedProgr
     const lines = block.split(/\n/).map((l) => l.trim()).filter(Boolean);
     if (lines.length === 0) return;
 
-    const fakeDay: Day = {
+    const fakeDay = {
       id: `legacy-${idx + 1}`,
       index: idx + 1,
-      type: 'workout',
+      type: 'workout' as const,
       title: lines[0],
       exercises: lines.slice(1).map((line, i) => ({
         id: `ex-${idx + 1}-${i + 1}`,
@@ -103,7 +106,7 @@ export function renderLegacyProgram(text: string, locale: Locale): RenderedProgr
         equipment: null,
         notes: null
       }))
-    };
+    } satisfies Day;
     fragment.appendChild(renderDay(fakeDay, locale));
   });
 
