@@ -6,7 +6,7 @@ const numberFormatterCache = new Map<string, Intl.NumberFormat>();
 
 export type RenderedProgram = {
   readonly fragment: DocumentFragment;
-  readonly dayPanels: Map<string, HTMLDivElement>;
+  readonly days: Map<string, { button: HTMLButtonElement; panel: HTMLDivElement }>;
 };
 
 function getDateFormatter(locale: string): Intl.DateTimeFormat {
@@ -175,201 +175,161 @@ function createLegacyDays(data: readonly LegacyParsedDay[]): Day[] {
   });
 }
 
-function buildChevron(): SVGSVGElement {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('aria-hidden', 'true');
-  svg.classList.add('day-card__chevron');
-  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  path.setAttribute('fill', 'currentColor');
-  path.setAttribute('d', 'M9.29 6.71a1 1 0 0 0 0 1.41L13.17 12l-3.88 3.88a1 1 0 1 0 1.41 1.41l4.59-4.59a1 1 0 0 0 0-1.41L10.7 6.7a1 1 0 0 0-1.41.01z');
-  svg.appendChild(path);
-  return svg;
-}
-
-function buildNotesToggle(exerciseId: string): HTMLButtonElement {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'exercise-item__toggle';
-  btn.setAttribute('aria-expanded', 'false');
-  btn.dataset.exerciseId = exerciseId;
-  const label = document.createElement('span');
-  label.className = 'sr-only';
-  label.textContent = t('program.ex.more');
-  const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  icon.setAttribute('viewBox', '0 0 24 24');
-  icon.setAttribute('aria-hidden', 'true');
-  const circle = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  circle.setAttribute('fill', 'currentColor');
-  circle.setAttribute('d', 'M12 2a10 10 0 1 0 10 10A10.011 10.011 0 0 0 12 2zm0 15a1.25 1.25 0 1 1 1.25-1.25A1.252 1.252 0 0 1 12 17zm1-4.75h-2V7h2z');
-  icon.appendChild(circle);
-  btn.appendChild(label);
-  btn.appendChild(icon);
-  return btn;
-}
-
 function isBodyweightEquipment(equipment: string | null | undefined): boolean {
-  if (!equipment) return true;
+  if (!equipment) {
+    return true;
+  }
   return /body\s*weight|вага\s*тіла|own\s*weight/i.test(equipment);
 }
 
-export function renderExerciseList(
-  exercises: Exercise[] | null | undefined,
-  locale: string,
-  isExpanded: boolean,
-  dayId: string
-): HTMLDivElement {
-  const list = document.createElement('div');
+function collectExerciseMeta(exercise: Exercise, locale: string): string[] {
+  const metaPieces: string[] = [];
+  if (typeof exercise.sets === 'number' && exercise.reps) {
+    metaPieces.push(fmtSetsReps(exercise.sets, exercise.reps));
+  } else if (exercise.reps) {
+    metaPieces.push(exercise.reps);
+  }
+  if (exercise.weight) {
+    metaPieces.push(fmtWeight(exercise.weight.value, exercise.weight.unit, locale));
+  }
+  const equipment = exercise.equipment?.trim();
+  if (!exercise.weight && isBodyweightEquipment(equipment ?? null)) {
+    metaPieces.push(t('program.ex.bodyweight'));
+  }
+  if (equipment) {
+    metaPieces.push(equipment);
+  }
+  return metaPieces;
+}
+
+function createExerciseItem(exercise: Exercise, index: number, locale: string): HTMLLIElement {
+  const item = document.createElement('li');
+  item.className = 'exercise-item';
+
+  const order = document.createElement('span');
+  order.className = 'exercise-index';
+  order.textContent = `${index + 1}.`;
+  item.appendChild(order);
+
+  const body = document.createElement('div');
+  body.className = 'exercise-body';
+
+  const name = document.createElement('div');
+  name.className = 'exercise-name';
+  name.textContent = exercise.name;
+  body.appendChild(name);
+
+  const metaPieces = collectExerciseMeta(exercise, locale);
+  if (metaPieces.length > 0) {
+    const meta = document.createElement('div');
+    meta.className = 'exercise-meta';
+    meta.textContent = metaPieces.join(' | ');
+    body.appendChild(meta);
+  }
+
+  if (exercise.notes) {
+    const notes = document.createElement('div');
+    notes.className = 'exercise-notes';
+    notes.textContent = exercise.notes;
+    body.appendChild(notes);
+  }
+
+  item.appendChild(body);
+  return item;
+}
+
+function renderWorkoutDay(
+  day: Day,
+  locale: string
+): { container: HTMLElement; entry: { button: HTMLButtonElement; panel: HTMLDivElement } } {
+  const container = document.createElement('article');
+  container.className = 'program-day';
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'day-toggle';
+  button.dataset.dayId = day.id;
+  button.id = `day-${day.id}`;
+  button.setAttribute('aria-expanded', 'false');
+  button.textContent = t('program.day', { n: day.index, title: day.title });
+  container.appendChild(button);
+
+  const panel = document.createElement('div');
+  panel.className = 'day-panel';
+  panel.id = `panel-${day.id}`;
+  panel.setAttribute('aria-labelledby', button.id);
+  panel.setAttribute('aria-hidden', 'true');
+  panel.hidden = true;
+
+  const list = document.createElement('ul');
   list.className = 'exercise-list';
-  list.dataset.dayPanel = dayId;
-  list.setAttribute('role', 'region');
-  list.setAttribute('aria-hidden', String(!isExpanded));
-  if (isExpanded) {
-    list.classList.add('exercise-list--expanded');
-  }
-  const fragment = document.createDocumentFragment();
-  (exercises ?? []).forEach((exercise, index) => {
-    const row = document.createElement('div');
-    row.className = 'exercise-item';
-    row.dataset.exerciseId = exercise.id;
-
-    const order = document.createElement('span');
-    order.className = 'exercise-item__index';
-    order.textContent = String(index + 1);
-    row.appendChild(order);
-
-    const body = document.createElement('div');
-    body.className = 'exercise-item__body';
-    const name = document.createElement('div');
-    name.className = 'exercise-item__name';
-    name.textContent = exercise.name;
-    body.appendChild(name);
-
-    const metaPieces: string[] = [];
-    if (typeof exercise.sets === 'number' && exercise.reps) {
-      metaPieces.push(fmtSetsReps(exercise.sets, exercise.reps));
-    } else if (exercise.reps) {
-      metaPieces.push(exercise.reps);
-    }
-    if (exercise.weight) {
-      metaPieces.push(fmtWeight(exercise.weight.value, exercise.weight.unit, locale));
-    } else if (isBodyweightEquipment(exercise.equipment)) {
-      metaPieces.push(t('program.ex.bodyweight'));
-    }
-    if (exercise.equipment) {
-      metaPieces.push(exercise.equipment);
-    }
-
-    if (metaPieces.length > 0) {
-      const meta = document.createElement('div');
-      meta.className = 'exercise-item__meta';
-      meta.textContent = metaPieces.join(' | ');
-      body.appendChild(meta);
-    }
-    row.appendChild(body);
-
-    if (exercise.notes) {
-      const toggle = buildNotesToggle(exercise.id);
-      toggle.setAttribute('aria-controls', `notes-${exercise.id}`);
-      row.appendChild(toggle);
-
-      const notes = document.createElement('div');
-      notes.id = `notes-${exercise.id}`;
-      notes.className = 'exercise-notes';
-      notes.textContent = exercise.notes;
-      notes.hidden = true;
-      fragment.appendChild(row);
-      fragment.appendChild(notes);
-    } else {
-      fragment.appendChild(row);
-    }
+  (day.exercises ?? []).forEach((exercise, index) => {
+    list.appendChild(createExerciseItem(exercise, index, locale));
   });
-  list.appendChild(fragment);
-  return list;
+  panel.appendChild(list);
+  container.appendChild(panel);
+
+  button.setAttribute('aria-controls', panel.id);
+
+  return { container, entry: { button, panel } };
 }
 
-export function renderDayCard(day: Day, isExpanded: boolean): HTMLButtonElement {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'day-card';
-  btn.dataset.dayId = day.id;
-  btn.id = `day-${day.id}`;
-  btn.setAttribute('aria-expanded', String(isExpanded));
-  if (isExpanded) {
-    btn.classList.add('day-card--expanded');
-  }
-  if (day.type === 'rest') {
-    btn.classList.add('day-card--rest');
-    btn.disabled = true;
-  }
+function renderRestDay(day: Day): HTMLElement {
+  const container = document.createElement('article');
+  container.className = 'program-day program-day--rest';
 
-  const title = document.createElement('div');
-  title.className = 'day-card__title';
-  if (day.type === 'rest') {
-    title.textContent = t('program.day.rest');
-  } else {
-    title.textContent = t('program.day', { n: day.index, title: day.title });
-  }
-  const textWrap = document.createElement('div');
-  textWrap.className = 'day-card__text';
-  textWrap.appendChild(title);
+  const label = document.createElement('div');
+  label.className = 'day-rest';
+  label.textContent = t('program.day', { n: day.index, title: t('program.day.rest') });
+  container.appendChild(label);
 
-  const subtitleValue = (day as { subtitle?: string | null }).subtitle;
-  if (day.type === 'workout' && subtitleValue && subtitleValue.trim() && subtitleValue.trim() !== day.title.trim()) {
-    const subtitle = document.createElement('div');
-    subtitle.className = 'day-card__subtitle';
-    subtitle.textContent = subtitleValue;
-    textWrap.appendChild(subtitle);
-  }
-
-  btn.appendChild(textWrap);
-
-  if (day.type === 'workout') {
-    btn.appendChild(buildChevron());
-  }
-
-  return btn;
+  return container;
 }
 
-export function renderWeekList(
+export function renderProgramDays(
   program: Program,
   locale: string,
   expandedDays: Set<string>
 ): RenderedProgram {
   const fragment = document.createDocumentFragment();
-  const dayPanels = new Map<string, HTMLDivElement>();
+  const days = new Map<string, { button: HTMLButtonElement; panel: HTMLDivElement }>();
   const weeks = ensureWeeks(program);
-  for (const week of weeks) {
+
+  weeks.forEach((week) => {
     const section = document.createElement('section');
     section.className = 'week';
 
     const heading = document.createElement('h2');
+    heading.className = 'week-title';
     heading.textContent = t('program.week', { n: week.index });
     section.appendChild(heading);
 
-    for (const day of week.days) {
-      const isExpanded = expandedDays.has(day.id);
-      const card = renderDayCard(day, isExpanded);
-      section.appendChild(card);
-
+    week.days.forEach((day) => {
       if (day.type === 'workout') {
-        const list = renderExerciseList(day.exercises ?? [], locale, isExpanded, day.id);
-        list.id = `panel-${day.id}`;
-        list.setAttribute('aria-labelledby', card.id);
-        card.setAttribute('aria-controls', list.id);
-        if (isExpanded) {
-          list.style.maxHeight = `${Math.max(list.scrollHeight, 1)}px`;
-        }
-        section.appendChild(list);
-        dayPanels.set(day.id, list);
+        const renderedDay = renderWorkoutDay(day, locale);
+        const isExpanded = expandedDays.has(day.id);
+        renderedDay.entry.button.setAttribute('aria-expanded', String(isExpanded));
+        renderedDay.entry.button.classList.toggle('day-toggle--expanded', isExpanded);
+        renderedDay.entry.panel.hidden = !isExpanded;
+        renderedDay.entry.panel.setAttribute('aria-hidden', String(!isExpanded));
+        section.appendChild(renderedDay.container);
+        days.set(day.id, renderedDay.entry);
+      } else {
+        section.appendChild(renderRestDay(day));
       }
-    }
+    });
+
     fragment.appendChild(section);
-  }
-  return { fragment, dayPanels };
+  });
+
+  return { fragment, days };
 }
 
-export function renderLegacyProgram(text: string, locale: Locale, expandedDays: Set<string>): RenderedProgram {
+export function renderLegacyProgram(
+  text: string,
+  locale: Locale,
+  expandedDays: Set<string>
+): RenderedProgram {
   const parsed = parseLegacyDays(text);
   if (parsed.length === 0) {
     const fragment = document.createDocumentFragment();
@@ -378,7 +338,7 @@ export function renderLegacyProgram(text: string, locale: Locale, expandedDays: 
       paragraph.textContent = text.trim();
       fragment.appendChild(paragraph);
     }
-    return { fragment, dayPanels: new Map() };
+    return { fragment, days: new Map() };
   }
   const legacyDays = createLegacyDays(parsed);
   const program: Program = {
@@ -393,5 +353,5 @@ export function renderLegacyProgram(text: string, locale: Locale, expandedDays: 
     ],
     days: legacyDays
   };
-  return renderWeekList(program, locale, expandedDays);
+  return renderProgramDays(program, locale, expandedDays);
 }
