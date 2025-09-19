@@ -64,8 +64,8 @@ function ensureWeeks(program: Program): Week[] {
 }
 
 const LEGACY_DAY_HEADERS = [
-  /^\s*День\s*(\d+)\s*[—–-:]?\s*(.+)?$/i,
-  /^\s*Day\s*(\d+)\s*[—–-:]?\s*(.+)?$/i
+  /^\s*День\s*(\d+)\s*(?:—|–|:|-)?\s*(.+)?$/i,
+  /^\s*Day\s*(\d+)\s*(?:—|–|:|-)?\s*(.+)?$/i
 ];
 
 const REST_TOKENS = [/rest/i, /відпочинок/i, /отдых/i];
