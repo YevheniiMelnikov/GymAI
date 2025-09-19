@@ -12,5 +12,13 @@
   "sort_oldest": "Sort: Oldest",
   "show_ai": "Show AI workout plans",
   "back": "Back",
-  "open_from_telegram": "Open this page from Telegram."
+  "open_from_telegram": "Open this page from Telegram.",
+
+  "program.title": "Workout Program",
+  "program.created": "Created: {date}",
+  "program.view_history": "View History",
+  "program.week": "Week {n}",
+  "program.day": "Day {n} — {title}",
+  "program.day.rest": "Rest Day",
+  "retry": "Retry"
 }
