@@ -1,16 +1,18 @@
-import { t } from '../i18n/i18n';
-import type { HistoryResp } from '../api/types';
+import { applyLang, t } from '../i18n/i18n';
+import type { HistoryResp, Locale } from '../api/types';
 import { goToProgram } from '../router';
-import { readInitData } from '../telegram';
+import { readInitData, readLocale } from '../telegram';
 
 const content = document.getElementById('content') as HTMLElement | null;
 const dateChip = document.getElementById('program-date') as HTMLDivElement | null;
 
-async function getHistory(): Promise<HistoryResp> {
+async function getHistory(locale: Locale): Promise<HistoryResp> {
   const headers: Record<string, string> = {};
   const initData = readInitData();
   if (initData) headers['X-Telegram-InitData'] = initData;
-  const resp = await fetch('/api/programs/', { headers });
+  const url = new URL('api/programs/', window.location.href);
+  url.searchParams.set('locale', locale);
+  const resp = await fetch(url.toString(), { headers });
   if (!resp.ok) throw new Error('unexpected_error');
   return (await resp.json()) as HistoryResp;
 }
@@ -21,12 +23,8 @@ export async function renderHistoryView(): Promise<void> {
   content.innerHTML = '';
 
   const historyButton = document.getElementById('history-button') as HTMLButtonElement | null;
-
-  // локализация кнопки
   if (historyButton) {
-    historyButton.textContent = t('back');
-    historyButton.disabled = false;
-    historyButton.onclick = () => goToProgram();
+    historyButton.disabled = true;
   }
   if (dateChip) dateChip.hidden = true;
 
@@ -42,7 +40,22 @@ export async function renderHistoryView(): Promise<void> {
   content.appendChild(wrap);
 
   try {
-    const data = await getHistory();
+    const requestLocale = readLocale();
+    const data = await getHistory(requestLocale);
+    const lang = await applyLang(data.language ?? requestLocale);
+
+    const resolveSource = (): 'direct' | 'subscription' => {
+      const raw = new URL(window.location.href).searchParams.get('source');
+      return raw === 'subscription' ? 'subscription' : 'direct';
+    };
+
+    if (historyButton) {
+      historyButton.textContent = t('back');
+      historyButton.disabled = false;
+      historyButton.onclick = () => goToProgram(resolveSource());
+    }
+    h2.textContent = t('history');
+
     const items = data.programs ?? [];
     if (items.length === 0) {
       const p = document.createElement('p');
@@ -54,13 +67,24 @@ export async function renderHistoryView(): Promise<void> {
         const li = document.createElement('li');
         const a = document.createElement('a');
         a.href = '#';
-        a.textContent = `${new Date(it.created_at * 1000).toLocaleString()}`;
-        a.onclick = (e) => { e.preventDefault(); goToProgram('direct'); };
+        a.textContent = new Date(it.created_at * 1000).toLocaleString(lang);
+        a.onclick = (e) => {
+          e.preventDefault();
+          const url = new URL(window.location.href);
+          url.searchParams.set('id', String(it.id));
+          history.replaceState({}, '', url.toString());
+          goToProgram('direct');
+        };
         li.appendChild(a);
         ul.appendChild(li);
       });
     }
   } catch {
+    if (historyButton) {
+      historyButton.textContent = t('back');
+      historyButton.disabled = false;
+      historyButton.onclick = () => goToProgram();
+    }
     const err = document.createElement('div');
     err.className = 'error-block';
     err.textContent = t('unexpected_error');

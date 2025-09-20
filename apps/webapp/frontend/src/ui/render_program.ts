@@ -50,7 +50,13 @@ function renderDay(day: Day, locale: string): HTMLElement {
   if (day.type === 'rest') {
     h3.textContent = t('program.day.rest');
   } else {
-    h3.textContent = t('program.day', { n: day.index, title: day.title ?? '' });
+    const customTitle = day.title?.trim();
+    if (customTitle && customTitle.length > 0) {
+      h3.textContent = customTitle;
+    } else {
+      const fallback = t('program.day', { n: day.index, title: '' }).replace(/([\s—–-])+$/, '');
+      h3.textContent = fallback;
+    }
   }
   section.appendChild(h3);
 

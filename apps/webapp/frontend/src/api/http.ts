@@ -1,5 +1,20 @@
 import { Locale, Program, ProgramResp, ProgramStructuredResponse } from './types';
 
+const KNOWN_LOCALES: readonly Locale[] = ['en', 'ru', 'uk'];
+const LOCALE_ALIASES: Record<string, Locale> = { ua: 'uk' };
+
+function normalizeLocale(raw: string | null | undefined, fallback: Locale): Locale {
+  if (!raw) return fallback;
+  const lower = raw.toLowerCase();
+  if (lower in LOCALE_ALIASES) {
+    return LOCALE_ALIASES[lower];
+  }
+  if ((KNOWN_LOCALES as readonly string[]).includes(lower)) {
+    return lower as Locale;
+  }
+  return fallback;
+}
+
 export class HttpError extends Error {
   readonly status: number;
   constructor(status: number, message: string) {
@@ -89,8 +104,11 @@ export async function getProgram(
 
   const data = await getJSON<ProgramResp>(url.toString(), { headers, signal: opts.signal });
 
+  const fromResponse = (data as { language?: string | null }).language;
+  const resolvedLocale = normalizeLocale(fromResponse ?? (data as { locale?: string }).locale, locale);
+
   if (isStructuredProgram(data)) {
-    const programLocale = (data.locale as Locale) ?? locale;
+    const programLocale = normalizeLocale(data.locale, resolvedLocale);
     return {
       kind: 'structured',
       program: {
@@ -112,5 +130,5 @@ export async function getProgram(
     createdAt = createdAtRaw;
   }
 
-  return { kind: 'legacy', programText: data.program, locale, createdAt };
+  return { kind: 'legacy', programText: data.program, locale: resolvedLocale, createdAt };
 }
