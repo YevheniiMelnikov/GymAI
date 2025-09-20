@@ -58,6 +58,21 @@ type ExercisePresentation = {
 };
 
 const LEADING_NUMBER_PATTERN = /^\s*\d+(?:\.\d+)*\s*[).:\-–—]?\s*/;
+const NOISE_TOKEN_PATTERN = /\bset\s+\d+\b/i;
+
+function isNoiseToken(value: string): boolean {
+  const normalized = value.trim();
+  if (normalized.length === 0) {
+    return true;
+  }
+
+  if (!NOISE_TOKEN_PATTERN.test(normalized)) {
+    return false;
+  }
+
+  const cleaned = normalized.replace(/\bset\s+\d+\b/gi, '').trim();
+  return cleaned.length === 0;
+}
 
 function extractExercisePresentation(name: string): ExercisePresentation {
   const raw = name.trim();
@@ -74,7 +89,7 @@ function extractExercisePresentation(name: string): ExercisePresentation {
   const cleanedTitle = primary.replace(LEADING_NUMBER_PATTERN, '').trim();
   const title = cleanedTitle.length > 0 ? cleanedTitle : primary;
 
-  const extraDetails = segments.filter((segment) => !/^set\s+\d+/i.test(segment));
+  const extraDetails = segments.filter((segment) => !isNoiseToken(segment));
   return { title, extraDetails };
 }
 
@@ -82,7 +97,7 @@ function sanitizeNote(value: string | null | undefined): string | null {
   if (!value) return null;
   const trimmed = value.trim();
   if (trimmed.length === 0) return null;
-  if (/^set\s+\d+$/i.test(trimmed)) return null;
+  if (isNoiseToken(trimmed)) return null;
   return trimmed;
 }
 
@@ -97,7 +112,17 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
   summary.className = 'program-exercise-summary';
   const presentation = extractExercisePresentation(ex.name);
   const title = presentation.title.length > 0 ? presentation.title : ex.name;
-  summary.textContent = `${index + 1}. ${title}`;
+
+  const indexLabel = document.createElement('span');
+  indexLabel.className = 'program-exercise-index';
+  indexLabel.textContent = String(index + 1);
+
+  const titleLabel = document.createElement('span');
+  titleLabel.className = 'program-exercise-title';
+  titleLabel.textContent = title;
+
+  summary.appendChild(indexLabel);
+  summary.appendChild(titleLabel);
   details.appendChild(summary);
 
   const metaParts: string[] = [...presentation.extraDetails];
@@ -115,10 +140,12 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
 
   const note = sanitizeNote(ex.notes);
 
-  if (metaParts.length > 0) {
+  const meaningfulMeta = metaParts.filter((part) => !isNoiseToken(part));
+
+  if (meaningfulMeta.length > 0) {
     const meta = document.createElement('div');
     meta.className = 'program-exercise-meta';
-    meta.textContent = metaParts.join(', ');
+    meta.textContent = meaningfulMeta.join(', ');
     content.appendChild(meta);
   }
 
