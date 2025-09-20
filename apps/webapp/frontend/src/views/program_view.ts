@@ -1,8 +1,8 @@
 import { getProgram, HttpError } from '../api/http';
 import type { Locale } from '../api/types';
-import { t } from '../i18n/i18n';
+import { applyLang, t } from '../i18n/i18n';
 import { renderLegacyProgram, renderProgramDays, fmtDate } from '../ui/render_program';
-import { readInitData, readLocale } from '../telegram';
+import { readInitData } from '../telegram';
 
 type Ctx = {
   root: HTMLElement;
@@ -24,10 +24,12 @@ function getProgramIdFromURL(): string | null {
   return u.searchParams.get('id');
 }
 
-export async function mountProgramView(ctx: Ctx): Promise<Cleanup> {
+export async function mountProgramView(
+  ctx: Ctx,
+  source: 'direct' | 'subscription'
+): Promise<Cleanup> {
   const { content, dateEl } = ctx;
   const initData: string = readInitData();
-  const locale: Locale = readLocale();
 
   const controller = new AbortController();
   setBusy(content, true);
@@ -36,7 +38,6 @@ export async function mountProgramView(ctx: Ctx): Promise<Cleanup> {
 
   try {
     const programId = getProgramIdFromURL();
-    const source: 'direct' | 'subscription' = programId ? 'direct' : 'subscription';
 
     // ВАЖНО: вызываем по старой сигнатуре — 2 аргумента (id, opts)
     const load = await getProgram(programId ?? '', {
@@ -44,6 +45,9 @@ export async function mountProgramView(ctx: Ctx): Promise<Cleanup> {
       source,
       signal: controller.signal
     });
+
+    const appliedLocale: Locale = await applyLang(load.locale);
+    const locale: Locale = appliedLocale;
 
     // Рендер
     content.innerHTML = '';
@@ -53,7 +57,10 @@ export async function mountProgramView(ctx: Ctx): Promise<Cleanup> {
           date: fmtDate(load.program.created_at, locale)
         });
       }
-      const rendered = renderProgramDays(load.program, locale);
+      const rendered = renderProgramDays(
+        { ...load.program, locale },
+        locale
+      );
       content.appendChild(rendered.fragment);
     } else {
       if (load.createdAt) {

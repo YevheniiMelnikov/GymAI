@@ -1,5 +1,20 @@
 import { Locale, Program, ProgramResp, ProgramStructuredResponse } from './types';
 
+const KNOWN_LOCALES: readonly Locale[] = ['en', 'ru', 'uk'];
+const LOCALE_ALIASES: Record<string, Locale> = { ua: 'uk' };
+
+function normalizeLocale(raw: string | null | undefined, fallback: Locale): Locale {
+  if (!raw) return fallback;
+  const lower = raw.toLowerCase();
+  if (lower in LOCALE_ALIASES) {
+    return LOCALE_ALIASES[lower];
+  }
+  if ((KNOWN_LOCALES as readonly string[]).includes(lower)) {
+    return lower as Locale;
+  }
+  return fallback;
+}
+
 export class HttpError extends Error {
   readonly status: number;
   constructor(status: number, message: string) {
@@ -76,14 +91,24 @@ export async function getProgram(
     opts = a;
   }
 
-  const url = `/api/program/${encodeURIComponent(programId)}?locale=${locale}&source=${opts.source}`;
+  const params = new URLSearchParams({ locale, source: opts.source });
+  if (programId) {
+    params.set('program_id', programId);
+  }
+  const url = new URL('api/program/', window.location.href);
+  params.forEach((value, key) => {
+    url.searchParams.set(key, value);
+  });
   const headers: Record<string, string> = {};
   if (opts.initData) headers['X-Telegram-InitData'] = opts.initData;
 
-  const data = await getJSON<ProgramResp>(url, { headers, signal: opts.signal });
+  const data = await getJSON<ProgramResp>(url.toString(), { headers, signal: opts.signal });
+
+  const fromResponse = (data as { language?: string | null }).language;
+  const resolvedLocale = normalizeLocale(fromResponse ?? (data as { locale?: string }).locale, locale);
 
   if (isStructuredProgram(data)) {
-    const programLocale = (data.locale as Locale) ?? locale;
+    const programLocale = normalizeLocale(data.locale, resolvedLocale);
     return {
       kind: 'structured',
       program: {
@@ -105,5 +130,5 @@ export async function getProgram(
     createdAt = createdAtRaw;
   }
 
-  return { kind: 'legacy', programText: data.program, locale, createdAt };
+  return { kind: 'legacy', programText: data.program, locale: resolvedLocale, createdAt };
 }

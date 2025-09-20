@@ -49,12 +49,15 @@ async function handleRoute(route: Route, ctx: {
     ctx.historyButton.onclick = () => goToHistory();
   }
 
-  const dispose = await mountProgramView({
-    root: ctx.root,
-    content: ctx.content,
-    dateEl: ctx.dateEl,
-    button: ctx.historyButton,
-  });
+  const dispose = await mountProgramView(
+    {
+      root: ctx.root,
+      content: ctx.content,
+      dateEl: ctx.dateEl,
+      button: ctx.historyButton,
+    },
+    route.source
+  );
   cleanup.current = dispose;
 }
 

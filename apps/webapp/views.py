@@ -156,6 +156,12 @@ def _format_program_text(raw_exercises: Any) -> str:
 async def program_data(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
+    source_raw = request.GET.get("source", "direct")
+    source: str = str(source_raw or "direct")
+    if source not in {"direct", "subscription"}:
+        logger.warning(f"Unsupported program source={source}")
+        source = "direct"
+
     program_id, pid_error = _parse_program_id(request)
     if pid_error:
         return pid_error
@@ -169,22 +175,34 @@ async def program_data(request: HttpRequest) -> JsonResponse:
         return auth_error
     assert client is not None
 
-    global ProgramRepository
+    global ProgramRepository, SubscriptionRepository
 
     client_id = int(getattr(client, "id", 0))
-    if program_id is not None:
-        program_obj = cast(
-            Program | None,
-            await _call_repo(ProgramRepository.get_by_id, client_id, program_id),
+
+    if source == "subscription":
+        subscription_obj: Subscription | None = cast(
+            Subscription | None,
+            await _call_repo(SubscriptionRepository.get_latest, client_id),
         )
-    else:
-        program_obj = cast(Program | None, await _call_repo(ProgramRepository.get_latest, client_id))
+        if subscription_obj is None:
+            logger.warning(f"Subscription not found for client_profile_id={client.id}")
+            return JsonResponse({"error": "not_found"}, status=404)
+
+        text: str = _format_program_text(subscription_obj.exercises)
+        return JsonResponse({"program": text, "language": lang})
+
+    program_obj: Program | None = cast(
+        Program | None,
+        await _call_repo(ProgramRepository.get_by_id, client_id, program_id)
+        if program_id is not None
+        else await _call_repo(ProgramRepository.get_latest, client_id),
+    )
 
     if program_obj is None:
         logger.warning(f"Program not found for client_profile_id={client.id} program_id={program_id}")
         return JsonResponse({"error": "not_found"}, status=404)
 
-    text: str = _format_program_text(program_obj.exercises_by_day)
+    text = _format_program_text(program_obj.exercises_by_day)
     return JsonResponse(
         {
             "program": text,
