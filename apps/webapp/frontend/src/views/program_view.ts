@@ -57,10 +57,7 @@ export async function mountProgramView(
           date: fmtDate(load.program.created_at, locale)
         });
       }
-      const rendered = renderProgramDays(
-        { ...load.program, locale },
-        locale
-      );
+      const rendered = renderProgramDays({ ...load.program, locale });
       content.appendChild(rendered.fragment);
     } else {
       if (load.createdAt) {
