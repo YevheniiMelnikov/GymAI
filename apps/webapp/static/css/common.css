@@ -259,6 +259,7 @@ main#app{
   transition: background-color .25s ease, color .25s ease;
 }
 .program-day summary::-webkit-details-marker{ display: none; }
+.program-day summary::marker{ display: none; }
 .program-day-summary::after{
   content: '';
   width: 9px;
@@ -306,6 +307,8 @@ main#app{
   overflow: hidden;
   transition: border-color .2s ease, box-shadow .2s ease;
 }
+.program-exercise-details summary::-webkit-details-marker{ display: none; }
+.program-exercise-details summary::marker{ display: none; }
 .program-exercise-summary{
   list-style: none;
   padding: 10px 14px;
@@ -338,7 +341,16 @@ main#app{
 .program-exercise-details[open] .program-exercise-summary::after{
   transform: rotate(45deg);
 }
-.program-exercise-details summary::-webkit-details-marker{ display: none; }
+.program-exercise-details-static{
+  border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+}
+.program-exercise-summary-static{
+  cursor: default;
+  pointer-events: none;
+}
+.program-exercise-summary-static::after{
+  content: none;
+}
 .program-exercise-summary:focus-visible{
   outline: 2px solid color-mix(in oklab, var(--accent) 54%, transparent);
   outline-offset: 2px;

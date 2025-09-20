@@ -32,10 +32,14 @@ function parseLegacyExerciseLine(line: string): LegacyExerciseParts {
   const withoutMarker = trimmed.replace(/^(?:\d+[.)]\s+|\d+\s*[–—-]\s+|[-–—•*+]\s+)/, '');
   const base = withoutMarker.length > 0 ? withoutMarker : trimmed;
 
+  const presentation = extractExercisePresentation(base);
+  if (presentation.extraDetails.length > 0) {
+    return { name: presentation.title, details: presentation.extraDetails.join(', ') };
+  }
+
   const separators: Array<{ readonly pattern: RegExp; readonly offset: number }> = [
     { pattern: /:/, offset: 1 },
-    { pattern: /\s[–—-]\s/, offset: 3 },
-    { pattern: /\|/, offset: 1 }
+    { pattern: /\s[–—-]\s/, offset: 3 }
   ];
 
   for (const { pattern, offset } of separators) {
@@ -49,7 +53,7 @@ function parseLegacyExerciseLine(line: string): LegacyExerciseParts {
     }
   }
 
-  return { name: base, details: null };
+  return { name: presentation.title, details: null };
 }
 
 type ExercisePresentation = {
@@ -59,6 +63,11 @@ type ExercisePresentation = {
 
 const LEADING_NUMBER_PATTERN = /^\s*\d+(?:\.\d+)*\s*[).:\-–—]?\s*/;
 const NOISE_TOKEN_PATTERN = /\bset\s+\d+\b/i;
+const NOISE_TOKEN_GLOBAL_PATTERN = /\bset\s+\d+\b/gi;
+
+function stripNoiseTokens(value: string): string {
+  return value.replace(NOISE_TOKEN_GLOBAL_PATTERN, ' ').replace(/\s{2,}/g, ' ').trim();
+}
 
 function isNoiseToken(value: string): boolean {
   const normalized = value.trim();
@@ -75,14 +84,19 @@ function isNoiseToken(value: string): boolean {
 }
 
 function extractExercisePresentation(name: string): ExercisePresentation {
-  const raw = name.trim();
+  const raw = stripNoiseTokens(name.trim());
   if (raw.length === 0) {
     return { title: '', extraDetails: [] };
   }
 
-  const segments = raw
+  const normalized = raw
+    .replace(/\s[–—-]\s/g, ' | ')
+    .replace(/\s*[:：]\s*/g, ' | ')
+    .replace(/[|¦│]/g, '|');
+
+  const segments = normalized
     .split('|')
-    .map((segment) => segment.trim())
+    .map((segment) => stripNoiseTokens(segment))
     .filter((segment) => segment.length > 0);
 
   const primary = segments.shift() ?? raw;
@@ -90,12 +104,13 @@ function extractExercisePresentation(name: string): ExercisePresentation {
   const title = cleanedTitle.length > 0 ? cleanedTitle : primary;
 
   const extraDetails = segments.filter((segment) => !isNoiseToken(segment));
-  return { title, extraDetails };
+  const uniqueDetails = Array.from(new Set(extraDetails));
+  return { title, extraDetails: uniqueDetails };
 }
 
 function sanitizeNote(value: string | null | undefined): string | null {
   if (!value) return null;
-  const trimmed = value.trim();
+  const trimmed = stripNoiseTokens(value);
   if (trimmed.length === 0) return null;
   if (isNoiseToken(trimmed)) return null;
   return trimmed;
@@ -158,8 +173,12 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
 
   if (content.childElementCount > 0) {
     details.appendChild(content);
+    li.appendChild(details);
+    return li;
   }
 
+  details.classList.add('program-exercise-details-static');
+  summary.classList.add('program-exercise-summary-static');
   li.appendChild(details);
   return li;
 }
