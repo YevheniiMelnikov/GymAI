@@ -11,23 +11,15 @@
 </head>
 <body>
   <main id="app">
-    <header class="app-header">
-      <h1 id="page-title"></h1>
-      <div id="program-date" hidden aria-live="polite"></div>
-    </header>
-
-    <section id="content" aria-live="polite" aria-busy="false"></section>
-
-    <footer class="history-footer">
-      <button type="button" id="history-button" class="primary-button" disabled>
-        View History
-      </button>
-    </footer>
+    <div id="program-date" aria-live="polite"></div>
+    <div id="program-origin" aria-live="polite"></div>
+    <div id="content" aria-live="polite">Loading...</div>
+    <div id="controls"></div>
   </main>
 
   <noscript>This page requires JavaScript. Please open it inside Telegram.</noscript>
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script type="module" defer src="{% static 'js/index.js' %}"></script>
+  <script type="module" defer src="{% static 'js/index.js' %}?v=2"></script>
 </body>
 </html>

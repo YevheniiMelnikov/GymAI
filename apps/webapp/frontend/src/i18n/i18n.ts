@@ -1,6 +1,3 @@
-// Language mapping and i18n loader
-// Accept legacy values we may get from backend: eng, ru, ua, en, ru, uk
-
 export type LangCode = 'en' | 'ru' | 'uk';
 export const LANG_MAP: Record<string, LangCode> = { eng: 'en', en: 'en', ru: 'ru', ua: 'uk', uk: 'uk' };
 
@@ -57,8 +54,19 @@ export function t<K extends TranslationKey>(key: K, vars?: TemplateVars): string
   return interpolate(template, vars);
 }
 
-export async function applyLang(raw: string | undefined): Promise<LangCode> {
-  const code: LangCode = LANG_MAP[raw ?? ''] ?? 'en';
+export async function applyLang(): Promise<LangCode>;
+export async function applyLang(raw: string | undefined): Promise<LangCode>;
+export async function applyLang(raw?: string): Promise<LangCode> {
+  let incoming = raw;
+  try {
+    const tg = (window as any).Telegram?.WebApp;
+    if (!incoming && tg?.initDataUnsafe?.user?.language_code) {
+      incoming = tg.initDataUnsafe.user.language_code;
+    }
+  } catch {
+  }
+
+  const code: LangCode = LANG_MAP[incoming ?? ''] ?? 'en';
   document.documentElement.lang = code;
   await loadMessages(code);
   return code;

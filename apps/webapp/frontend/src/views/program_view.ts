@@ -1,153 +1,89 @@
-import { getProgram, HttpError, LoadedProgram, statusToMessage } from '../api/http';
-import { Locale, Program } from '../api/types';
-import { applyLang, t } from '../i18n/i18n';
-import { RenderedProgram, fmtDate, renderLegacyProgram, renderProgramDays } from '../ui/render_program';
-import { ProgramRoute, goToHistory } from '../router';
+import { getProgram, HttpError } from '../api/http';
+import type { Locale } from '../api/types';
+import { t } from '../i18n/i18n';
+import { renderLegacyProgram, renderProgramDays, fmtDate } from '../ui/render_program';
 
-const content = document.getElementById('content') as HTMLElement | null;
-const dateBlock = document.getElementById('program-date') as HTMLElement | null;
-const historyButton = document.getElementById('history-button') as HTMLButtonElement | null;
-const titleEl = document.getElementById('page-title') as HTMLElement | null;
+type Ctx = {
+  root: HTMLElement;
+  content: HTMLElement;
+  dateEl: HTMLElement;
+  titleEl?: HTMLElement | null;
+  button?: HTMLButtonElement | null;
+};
 
-const tg = (window as any).Telegram?.WebApp;
-const initData: string = tg?.initData || '';
+function setBusy(node: HTMLElement, busy: boolean) {
+  if (busy) node.setAttribute('aria-busy', 'true');
+  else node.removeAttribute('aria-busy');
+}
 
-let rendered: RenderedProgram | null = null;
-
-function getCurrentLocale(): Locale {
-  const lang = document.documentElement.lang as Locale | string;
-  if (lang === 'ru' || lang === 'uk' || lang === 'en') {
-    return lang;
+function getInitData(): string {
+  try {
+    const tg = (window as any).Telegram?.WebApp;
+    return tg?.initData || '';
+  } catch {
+    return '';
   }
+}
+
+function getLocale(): Locale {
+  try {
+    const tg = (window as any).Telegram?.WebApp;
+    const lc = tg?.initDataUnsafe?.user?.language_code;
+    if (lc === 'ru' || lc === 'uk' || lc === 'en') return lc;
+  } catch {}
   return 'en';
 }
 
-function ensureHandlers(): void {
-  if (historyButton && !historyButton.dataset.bound) {
-    historyButton.dataset.bound = 'true';
-    historyButton.addEventListener('click', goToHistory);
-  }
+function getProgramIdFromURL(): string | null {
+  const u = new URL(location.href);
+  return u.searchParams.get('id');
 }
 
-function clearContent(): void {
-  if (content) content.innerHTML = '';
-}
-
-function renderSkeleton(count = 3): void {
-  if (!content) return;
-  content.setAttribute('aria-busy', 'true');
-  clearContent();
-  for (let i = 0; i < count; i++) {
-    const ph = document.createElement('div');
-    ph.className = 'skeleton-card';
-    content.appendChild(ph);
-  }
-}
-
-function showError(message: string, retry: () => void): void {
-  if (!content) return;
-  clearContent();
-  content.setAttribute('aria-busy', 'false');
-  const block = document.createElement('div');
-  block.className = 'error-block';
-  const text = document.createElement('p');
-  text.textContent = message;
-  block.appendChild(text);
-  const retryBtn = document.createElement('button');
-  retryBtn.type = 'button';
-  retryBtn.textContent = t('retry');
-  retryBtn.addEventListener('click', retry);
-  block.appendChild(retryBtn);
-  content.appendChild(block);
-}
-
-function updateMeta(program: Program, locale: Locale): void {
-  if (titleEl) {
-    const named = (program as { title?: string | null }).title;
-    titleEl.textContent = named?.trim() || t('program.title');
-  }
-  if (dateBlock) {
-    if (program.created_at) {
-      const formatted = fmtDate(program.created_at, locale);
-      dateBlock.textContent = t('program.created', { date: formatted });
-      dateBlock.hidden = false;
-    } else {
-      dateBlock.textContent = '';
-      dateBlock.hidden = true;
-    }
-  }
-  if (historyButton) {
-    historyButton.textContent = t('program.view_history');
-    historyButton.disabled = false;
-  }
-}
-
-function resetMeta(): void {
-  if (titleEl) titleEl.textContent = t('program.title');
-  if (dateBlock) {
-    dateBlock.textContent = '';
-    dateBlock.hidden = true;
-  }
-  if (historyButton) {
-    historyButton.textContent = t('program.view_history');
-    historyButton.disabled = true;
-  }
-}
-
-function renderProgramContent(program: Program): void {
-  if (!content) return;
-  clearContent();
-  rendered = renderProgramDays(program, program.locale);
-  content.setAttribute('aria-busy', 'false');
-  content.appendChild(rendered.fragment);
-}
-
-function renderLegacyContent(text: string, locale: Locale): void {
-  if (!content) return;
-  clearContent();
-  rendered = renderLegacyProgram(text, locale);
-  content.setAttribute('aria-busy', 'false');
-  content.appendChild(rendered.fragment);
-}
-
-async function loadProgram(route: ProgramRoute, signal: AbortSignal): Promise<LoadedProgram> {
-  const locale = getCurrentLocale();
-  const loaded = await getProgram(route.programId ?? '', locale, {
-    initData,
-    source: route.source,
-    signal
-  });
-  await applyLang(loaded.locale);
-  document.title = t('program.title');
-  return loaded;
-}
-
-export async function renderProgramView(route: ProgramRoute): Promise<void> {
-  if (!content) return;
-  ensureHandlers();
-  resetMeta();
-  renderSkeleton();
+export async function mountProgramView(ctx: Ctx) {
+  const { content, dateEl } = ctx;
+  const initData = getInitData();
+  const locale = getLocale();
 
   const controller = new AbortController();
+  setBusy(content, true);
 
   try {
-    const loaded = await loadProgram(route, controller.signal);
-    if (loaded.kind === 'structured') {
-      updateMeta(loaded.program, loaded.locale);
-      renderProgramContent(loaded.program);
-    } else {
-      updateMeta(
-        { id: 'legacy', created_at: loaded.createdAt ?? null, locale: loaded.locale, weeks: [], days: [] },
-        loaded.locale
-      );
-      renderLegacyContent(loaded.programText, loaded.locale);
-    }
-  } catch (error) {
-    if ((error as { name?: string } | null)?.name === 'AbortError') return;
-    resetMeta();
-    const message = error instanceof HttpError ? error.message : statusToMessage(500);
-    showError(message, () => {
-      void renderProgramView(route);
+    const programId = getProgramIdFromURL();
+    const source: 'direct' | 'subscription' = programId ? 'direct' : 'subscription';
+
+    // ВАЖНО: вызываем по старой сигнатуре — 2 аргумента (id, opts)
+    const load = await getProgram(programId ?? '', {
+      initData,
+      source,
+      signal: controller.signal
     });
+
+    // Рендер
+    content.innerHTML = '';
+    if (load.kind === 'structured') {
+      if (load.program.created_at) {
+        dateEl.textContent = t('program.created', {
+          date: fmtDate(load.program.created_at, locale)
+        });
+      }
+      const rendered = renderProgramDays(load.program, locale);
+      content.appendChild(rendered.fragment);
+    } else {
+      if (load.createdAt) {
+        dateEl.textContent = t('program.created', {
+          date: fmtDate(load.createdAt, locale)
+        });
+      }
+      const rendered = renderLegacyProgram(load.programText, locale);
+      content.appendChild(rendered.fragment);
+    }
+  } catch (e) {
+    let key = 'unexpected_error';
+    if (e instanceof HttpError) key = e.message;
+    content.innerHTML = `<div>${t(key as any)}</div>`;
+  } finally {
+    setBusy(content, false);
   }
+
+  return () => controller.abort();
 }

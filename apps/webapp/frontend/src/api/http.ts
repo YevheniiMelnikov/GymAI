@@ -46,9 +46,36 @@ function isStructuredProgram(data: ProgramResp): data is ProgramStructuredRespon
 
 export async function getProgram(
   programId: string,
+  opts: GetProgramOpts
+): Promise<LoadedProgram>;
+export async function getProgram(
+  programId: string,
   locale: Locale,
   opts: GetProgramOpts
+): Promise<LoadedProgram>;
+export async function getProgram(
+  programId: string,
+  a: Locale | GetProgramOpts,
+  b?: GetProgramOpts
 ): Promise<LoadedProgram> {
+  let locale: Locale = 'en';
+  let opts: GetProgramOpts;
+
+  if (typeof a === 'string') {
+    locale = a;
+    opts = b as GetProgramOpts;
+  } else {
+    try {
+      const tg = (window as any).Telegram?.WebApp;
+      const lc = tg?.initDataUnsafe?.user?.language_code;
+      if (lc && (['en', 'ru', 'uk'] as Locale[]).includes(lc)) {
+        locale = lc as Locale;
+      }
+    } catch {
+    }
+    opts = a;
+  }
+
   const url = `/api/program/${encodeURIComponent(programId)}?locale=${locale}&source=${opts.source}`;
   const headers: Record<string, string> = {};
   if (opts.initData) headers['X-Telegram-InitData'] = opts.initData;
@@ -56,7 +83,7 @@ export async function getProgram(
   const data = await getJSON<ProgramResp>(url, { headers, signal: opts.signal });
 
   if (isStructuredProgram(data)) {
-    const programLocale = data.locale ?? locale;
+    const programLocale = (data.locale as Locale) ?? locale;
     return {
       kind: 'structured',
       program: {
