@@ -71,6 +71,24 @@ async def _call_repo(func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
     return cast(T, result)
 
 
+def _read_init_data(request: HttpRequest) -> str:
+    init_data_raw = request.GET.get("init_data", "")
+    init_data: str = str(init_data_raw or "")
+    if init_data:
+        return init_data
+
+    headers = getattr(request, "headers", None)
+    if headers is not None:
+        header_value = headers.get("X-Telegram-InitData")
+        if header_value:
+            return str(header_value)
+
+    meta_value = request.META.get("HTTP_X_TELEGRAM_INITDATA")
+    if isinstance(meta_value, str):
+        return meta_value
+    return ""
+
+
 async def _auth_and_get_client(
     request: HttpRequest,
 ) -> Tuple[_ClientProfile | None, str, JsonResponse | None, int]:
@@ -79,7 +97,7 @@ async def _auth_and_get_client(
 
     Returns (client | None, language, error_response | None, tg_id).
     """
-    init_data: str = str(request.GET.get("init_data", ""))
+    init_data: str = _read_init_data(request)
     logger.debug(f"Webapp request: init_data length={len(init_data)}")
     lang: str = "eng"
     try:
