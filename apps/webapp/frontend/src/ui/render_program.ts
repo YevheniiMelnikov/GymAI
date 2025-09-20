@@ -22,6 +22,36 @@ function ensureWeeks(program: Program): Week[] {
   return [{ index: 1, days: program.days }];
 }
 
+type LegacyExerciseParts = {
+  readonly name: string;
+  readonly details: string | null;
+};
+
+function parseLegacyExerciseLine(line: string): LegacyExerciseParts {
+  const trimmed = line.trim();
+  const withoutMarker = trimmed.replace(/^(?:\d+[.)]\s+|\d+\s*[–—-]\s+|[-–—•*+]\s+)/, '');
+  const base = withoutMarker.length > 0 ? withoutMarker : trimmed;
+
+  const separators: Array<{ readonly pattern: RegExp; readonly offset: number }> = [
+    { pattern: /:/, offset: 1 },
+    { pattern: /\s[–—-]\s/, offset: 3 },
+    { pattern: /\|/, offset: 1 }
+  ];
+
+  for (const { pattern, offset } of separators) {
+    const match = base.match(pattern);
+    if (!match || match.index === undefined) continue;
+    const splitIndex = match.index;
+    const name = base.slice(0, splitIndex).trim();
+    const details = base.slice(splitIndex + offset).trim();
+    if (name.length > 0 && details.length > 0) {
+      return { name, details };
+    }
+  }
+
+  return { name: base, details: null };
+}
+
 function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
   const li = document.createElement('li');
   li.className = 'program-exercise';
@@ -131,20 +161,25 @@ export function renderLegacyProgram(text: string, _locale: Locale): RenderedProg
     const lines = block.split(/\n/).map((l) => l.trim()).filter(Boolean);
     if (lines.length === 0) return;
 
+    const exercises = lines.slice(1).map((line, i) => {
+      const parsed = parseLegacyExerciseLine(line);
+      return {
+        id: `ex-${idx + 1}-${i + 1}`,
+        name: parsed.name,
+        sets: null,
+        reps: null,
+        weight: null,
+        equipment: null,
+        notes: parsed.details
+      } satisfies Exercise;
+    });
+
     const fakeDay = {
       id: `legacy-${idx + 1}`,
       index: idx + 1,
       type: 'workout' as const,
       title: lines[0],
-      exercises: lines.slice(1).map((line, i) => ({
-        id: `ex-${idx + 1}-${i + 1}`,
-        name: line,
-        sets: null,
-        reps: null,
-        weight: null,
-        equipment: null,
-        notes: null
-      }))
+      exercises
     } satisfies Day;
     fragment.appendChild(renderDay(fakeDay));
   });
