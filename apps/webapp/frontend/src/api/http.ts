@@ -80,11 +80,14 @@ export async function getProgram(
   if (programId) {
     params.set('program_id', programId);
   }
-  const url = `/api/program/?${params.toString()}`;
+  const url = new URL('api/program/', window.location.href);
+  params.forEach((value, key) => {
+    url.searchParams.set(key, value);
+  });
   const headers: Record<string, string> = {};
   if (opts.initData) headers['X-Telegram-InitData'] = opts.initData;
 
-  const data = await getJSON<ProgramResp>(url, { headers, signal: opts.signal });
+  const data = await getJSON<ProgramResp>(url.toString(), { headers, signal: opts.signal });
 
   if (isStructuredProgram(data)) {
     const programLocale = (data.locale as Locale) ?? locale;
