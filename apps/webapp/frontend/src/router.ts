@@ -33,7 +33,11 @@ function emit() {
   listeners.forEach((cb) => cb(r));
 }
 
-export function onRouteChange(cb: NavCb) {
+export function initRouter(): void {
+  emit();
+}
+
+export function onRouteChange(cb: NavCb): void {
   listeners.push(cb);
 }
 
