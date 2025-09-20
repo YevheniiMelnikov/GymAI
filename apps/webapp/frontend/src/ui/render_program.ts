@@ -22,55 +22,88 @@ function ensureWeeks(program: Program): Week[] {
   return [{ index: 1, days: program.days }];
 }
 
-function createExerciseItem(ex: Exercise, index: number, locale: string): HTMLLIElement {
+function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
   const li = document.createElement('li');
-  li.textContent = `${index + 1}. ${ex.name}`;
-  const meta: string[] = [];
-  if (ex.sets && ex.reps) meta.push(`${ex.sets}×${ex.reps}`);
-  else if (ex.reps) meta.push(String(ex.reps));
-  if (ex.weight) meta.push(`${ex.weight.value} ${ex.weight.unit}`);
-  if (ex.equipment) meta.push(ex.equipment);
-  if (ex.notes) meta.push(ex.notes);
-  if (meta.length > 0) {
-    const small = document.createElement('div');
-    small.style.color = 'var(--muted)';
-    small.style.fontSize = '13px';
-    small.textContent = meta.join(' | ');
-    li.appendChild(document.createElement('br'));
-    li.appendChild(small);
+  li.className = 'program-exercise';
+
+  const details = document.createElement('details');
+  details.className = 'program-exercise-details';
+
+  const summary = document.createElement('summary');
+  summary.className = 'program-exercise-summary';
+  summary.textContent = `${index + 1}. ${ex.name}`;
+  details.appendChild(summary);
+
+  const metaParts: string[] = [];
+  if (ex.sets !== null && ex.sets !== undefined && ex.sets !== '') {
+    metaParts.push(`Sets: ${String(ex.sets)}`);
   }
+  if (ex.reps !== null && ex.reps !== undefined && ex.reps !== '') {
+    metaParts.push(`Reps: ${String(ex.reps)}`);
+  }
+  if (ex.weight) metaParts.push(`Weight: ${ex.weight.value} ${ex.weight.unit}`);
+  if (ex.equipment) metaParts.push(`Equipment: ${ex.equipment}`);
+
+  const content = document.createElement('div');
+  content.className = 'program-exercise-content';
+
+  if (metaParts.length > 0) {
+    const meta = document.createElement('div');
+    meta.className = 'program-exercise-meta';
+    meta.textContent = metaParts.join(' | ');
+    content.appendChild(meta);
+  }
+
+  if (ex.notes) {
+    const notes = document.createElement('p');
+    notes.className = 'program-exercise-notes';
+    notes.textContent = ex.notes;
+    content.appendChild(notes);
+  }
+
+  if (content.childElementCount > 0) {
+    details.appendChild(content);
+  }
+
+  li.appendChild(details);
   return li;
 }
 
-function renderDay(day: Day, locale: string): HTMLElement {
-  const section = document.createElement('article');
-  section.className = 'program-day';
+function renderDay(day: Day): HTMLElement {
+  const details = document.createElement('details');
+  details.className = 'program-day';
 
-  const h3 = document.createElement('h3');
+  const summary = document.createElement('summary');
+  summary.className = 'program-day-summary';
+
   if (day.type === 'rest') {
-    h3.textContent = t('program.day.rest');
+    summary.textContent = t('program.day.rest');
+    details.classList.add('program-day-rest');
   } else {
     const customTitle = day.title?.trim();
     if (customTitle && customTitle.length > 0) {
-      h3.textContent = customTitle;
+      summary.textContent = customTitle;
     } else {
       const fallback = t('program.day', { n: day.index, title: '' }).replace(/([\s—–-])+$/, '');
-      h3.textContent = fallback;
+      summary.textContent = fallback;
     }
   }
-  section.appendChild(h3);
+
+  details.appendChild(summary);
 
   if (day.type === 'workout' && day.exercises) {
-    const ul = document.createElement('ul');
+    const list = document.createElement('ul');
+    list.className = 'program-day-list';
     day.exercises.forEach((ex, idx) => {
-      ul.appendChild(createExerciseItem(ex, idx, locale));
+      list.appendChild(createExerciseItem(ex, idx));
     });
-    section.appendChild(ul);
+    details.appendChild(list);
   }
-  return section;
+
+  return details;
 }
 
-export function renderProgramDays(program: Program, locale: string): RenderedProgram {
+export function renderProgramDays(program: Program): RenderedProgram {
   const fragment = document.createDocumentFragment();
   const weeks = ensureWeeks(program);
   weeks.forEach((week) => {
@@ -82,7 +115,7 @@ export function renderProgramDays(program: Program, locale: string): RenderedPro
     wrap.appendChild(h2);
 
     week.days.forEach((day) => {
-      wrap.appendChild(renderDay(day, locale));
+      wrap.appendChild(renderDay(day));
     });
 
     fragment.appendChild(wrap);
@@ -90,7 +123,7 @@ export function renderProgramDays(program: Program, locale: string): RenderedPro
   return { fragment };
 }
 
-export function renderLegacyProgram(text: string, locale: Locale): RenderedProgram {
+export function renderLegacyProgram(text: string, _locale: Locale): RenderedProgram {
   const fragment = document.createDocumentFragment();
   const parts = text.split(/\n\s*\n/).filter((p) => p.trim().length > 0);
 
@@ -113,7 +146,7 @@ export function renderLegacyProgram(text: string, locale: Locale): RenderedProgr
         notes: null
       }))
     } satisfies Day;
-    fragment.appendChild(renderDay(fakeDay, locale));
+    fragment.appendChild(renderDay(fakeDay));
   });
 
   return { fragment };

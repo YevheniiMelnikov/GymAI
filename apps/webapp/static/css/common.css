@@ -233,18 +233,64 @@ main#app{
   font-weight: 600;
 }
 
-.program-day + .program-day{ margin-top: 10px; }
-.program-day h3{
-  margin: 0 0 6px;
+.program-day{
+  margin: 10px 0 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  overflow: hidden;
+}
+.program-day:first-of-type{ margin-top: 0; }
+.program-day-summary{
+  list-style: none;
+  padding: 12px 14px;
+  margin: 0;
   font-size: 15px;
   font-weight: 600;
+  cursor: pointer;
 }
-.program-day ul{
+.program-day summary::-webkit-details-marker{ display: none; }
+.program-day[open] .program-day-summary{
+  border-bottom: 1px solid var(--border);
+}
+.program-day-rest summary{ cursor: default; }
+.program-day-list{
   list-style: none;
-  padding: 0;
+  padding: 10px 14px 14px;
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
-.program-day li{ padding: 4px 0; }
+.program-exercise-details{
+  border: 1px solid var(--border);
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: color-mix(in oklab, var(--bg) 96%, var(--border) 4%);
+}
+.program-exercise-summary{
+  list-style: none;
+  padding: 10px 12px;
+  margin: 0;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+}
+.program-exercise-details summary::-webkit-details-marker{ display: none; }
+.program-exercise-content{
+  padding: 0 12px 12px;
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.program-exercise-meta{
+  font-weight: 500;
+}
+.program-exercise-notes{
+  margin: 0;
+  line-height: 1.4;
+}
 
 /* History list (если используется на /history) */
 .history-list{
