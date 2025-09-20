@@ -52,6 +52,40 @@ function parseLegacyExerciseLine(line: string): LegacyExerciseParts {
   return { name: base, details: null };
 }
 
+type ExercisePresentation = {
+  readonly title: string;
+  readonly extraDetails: readonly string[];
+};
+
+const LEADING_NUMBER_PATTERN = /^\s*\d+(?:\.\d+)*\s*[).:\-–—]?\s*/;
+
+function extractExercisePresentation(name: string): ExercisePresentation {
+  const raw = name.trim();
+  if (raw.length === 0) {
+    return { title: '', extraDetails: [] };
+  }
+
+  const segments = raw
+    .split('|')
+    .map((segment) => segment.trim())
+    .filter((segment) => segment.length > 0);
+
+  const primary = segments.shift() ?? raw;
+  const cleanedTitle = primary.replace(LEADING_NUMBER_PATTERN, '').trim();
+  const title = cleanedTitle.length > 0 ? cleanedTitle : primary;
+
+  const extraDetails = segments.filter((segment) => !/^set\s+\d+/i.test(segment));
+  return { title, extraDetails };
+}
+
+function sanitizeNote(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return null;
+  if (/^set\s+\d+$/i.test(trimmed)) return null;
+  return trimmed;
+}
+
 function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
   const li = document.createElement('li');
   li.className = 'program-exercise';
@@ -61,10 +95,12 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
 
   const summary = document.createElement('summary');
   summary.className = 'program-exercise-summary';
-  summary.textContent = `${index + 1}. ${ex.name}`;
+  const presentation = extractExercisePresentation(ex.name);
+  const title = presentation.title.length > 0 ? presentation.title : ex.name;
+  summary.textContent = `${index + 1}. ${title}`;
   details.appendChild(summary);
 
-  const metaParts: string[] = [];
+  const metaParts: string[] = [...presentation.extraDetails];
   if (ex.sets !== null && ex.sets !== undefined && ex.sets !== '') {
     metaParts.push(`Sets: ${String(ex.sets)}`);
   }
@@ -77,17 +113,19 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
   const content = document.createElement('div');
   content.className = 'program-exercise-content';
 
+  const note = sanitizeNote(ex.notes);
+
   if (metaParts.length > 0) {
     const meta = document.createElement('div');
     meta.className = 'program-exercise-meta';
-    meta.textContent = metaParts.join(' | ');
+    meta.textContent = metaParts.join(', ');
     content.appendChild(meta);
   }
 
-  if (ex.notes) {
+  if (note) {
     const notes = document.createElement('p');
     notes.className = 'program-exercise-notes';
-    notes.textContent = ex.notes;
+    notes.textContent = note;
     content.appendChild(notes);
   }
 
