@@ -76,7 +76,11 @@ export async function getProgram(
     opts = a;
   }
 
-  const url = `/api/program/${encodeURIComponent(programId)}?locale=${locale}&source=${opts.source}`;
+  const params = new URLSearchParams({ locale, source: opts.source });
+  if (programId) {
+    params.set('program_id', programId);
+  }
+  const url = `/api/program/?${params.toString()}`;
   const headers: Record<string, string> = {};
   if (opts.initData) headers['X-Telegram-InitData'] = opts.initData;
 
