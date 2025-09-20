@@ -24,7 +24,10 @@ function getProgramIdFromURL(): string | null {
   return u.searchParams.get('id');
 }
 
-export async function mountProgramView(ctx: Ctx): Promise<Cleanup> {
+export async function mountProgramView(
+  ctx: Ctx,
+  source: 'direct' | 'subscription'
+): Promise<Cleanup> {
   const { content, dateEl } = ctx;
   const initData: string = readInitData();
   const locale: Locale = readLocale();
@@ -36,7 +39,6 @@ export async function mountProgramView(ctx: Ctx): Promise<Cleanup> {
 
   try {
     const programId = getProgramIdFromURL();
-    const source: 'direct' | 'subscription' = programId ? 'direct' : 'subscription';
 
     // ВАЖНО: вызываем по старой сигнатуре — 2 аргумента (id, opts)
     const load = await getProgram(programId ?? '', {
