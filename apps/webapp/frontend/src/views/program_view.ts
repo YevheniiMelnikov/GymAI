@@ -2,6 +2,7 @@ import { getProgram, HttpError } from '../api/http';
 import type { Locale } from '../api/types';
 import { t } from '../i18n/i18n';
 import { renderLegacyProgram, renderProgramDays, fmtDate } from '../ui/render_program';
+import { readInitData, readLocale } from '../telegram';
 
 type Ctx = {
   root: HTMLElement;
@@ -11,27 +12,11 @@ type Ctx = {
   button?: HTMLButtonElement | null;
 };
 
+type Cleanup = () => void;
+
 function setBusy(node: HTMLElement, busy: boolean) {
   if (busy) node.setAttribute('aria-busy', 'true');
   else node.removeAttribute('aria-busy');
-}
-
-function getInitData(): string {
-  try {
-    const tg = (window as any).Telegram?.WebApp;
-    return tg?.initData || '';
-  } catch {
-    return '';
-  }
-}
-
-function getLocale(): Locale {
-  try {
-    const tg = (window as any).Telegram?.WebApp;
-    const lc = tg?.initDataUnsafe?.user?.language_code;
-    if (lc === 'ru' || lc === 'uk' || lc === 'en') return lc;
-  } catch {}
-  return 'en';
 }
 
 function getProgramIdFromURL(): string | null {
@@ -39,13 +24,15 @@ function getProgramIdFromURL(): string | null {
   return u.searchParams.get('id');
 }
 
-export async function mountProgramView(ctx: Ctx) {
+export async function mountProgramView(ctx: Ctx): Promise<Cleanup> {
   const { content, dateEl } = ctx;
-  const initData = getInitData();
-  const locale = getLocale();
+  const initData: string = readInitData();
+  const locale: Locale = readLocale();
 
   const controller = new AbortController();
   setBusy(content, true);
+  dateEl.hidden = false;
+  dateEl.textContent = '';
 
   try {
     const programId = getProgramIdFromURL();

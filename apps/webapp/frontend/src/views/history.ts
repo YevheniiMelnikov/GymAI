@@ -1,13 +1,16 @@
-import { applyLang, t } from '../i18n/i18n';
-import { HistoryResp } from '../api/types';
+import { t } from '../i18n/i18n';
+import type { HistoryResp } from '../api/types';
 import { goToProgram } from '../router';
+import { readInitData } from '../telegram';
 
 const content = document.getElementById('content') as HTMLElement | null;
 const dateChip = document.getElementById('program-date') as HTMLDivElement | null;
-const historyButton = document.getElementById('history-button') as HTMLButtonElement | null;
 
 async function getHistory(): Promise<HistoryResp> {
-  const resp = await fetch('/api/history/');
+  const headers: Record<string, string> = {};
+  const initData = readInitData();
+  if (initData) headers['X-Telegram-InitData'] = initData;
+  const resp = await fetch('/api/programs/', { headers });
   if (!resp.ok) throw new Error('unexpected_error');
   return (await resp.json()) as HistoryResp;
 }
@@ -16,6 +19,8 @@ export async function renderHistoryView(): Promise<void> {
   if (!content) return;
   content.setAttribute('aria-busy', 'true');
   content.innerHTML = '';
+
+  const historyButton = document.getElementById('history-button') as HTMLButtonElement | null;
 
   // локализация кнопки
   if (historyButton) {
@@ -61,6 +66,6 @@ export async function renderHistoryView(): Promise<void> {
     err.textContent = t('unexpected_error');
     content.appendChild(err);
   } finally {
-    content.setAttribute('aria-busy', 'false');
+    content.removeAttribute('aria-busy');
   }
 }
