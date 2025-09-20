@@ -54,6 +54,48 @@ def test_program_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
     asyncio.run(runner())
 
 
+def test_program_data_header_init_data(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        captured: dict[str, str] = {}
+
+        def fake_verify(data: str) -> dict[str, object]:
+            captured["value"] = data
+            return {"user": {"id": 1}}
+
+        monkeypatch.setattr(views, "verify_init_data", fake_verify)
+        monkeypatch.setattr(
+            views.ProfileRepository,
+            "get_by_telegram_id",
+            lambda _tg_id: SimpleNamespace(id=1, language="eng"),
+        )
+        monkeypatch.setattr(
+            views.ClientProfileRepository,
+            "get_by_profile_id",
+            lambda _id: SimpleNamespace(id=1),
+        )
+        monkeypatch.setattr(
+            views.ProgramRepository,
+            "get_latest",
+            lambda _id: SimpleNamespace(
+                exercises_by_day=[],
+                created_at=datetime.fromtimestamp(1),
+                coach_type=CoachType.human,
+            ),
+        )
+
+        request: HttpRequest = HttpRequest()
+        request.method = "GET"
+        request.GET = {}
+        request.META = {}
+        request.META["HTTP_X_TELEGRAM_INITDATA"] = "header_data"
+
+        response: JsonResponse = await views.program_data(request)
+        assert response.status_code == 200
+        assert captured.get("value") == "header_data"
+
+    asyncio.run(runner())
+
+
 def test_program_data_with_id(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
         monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})

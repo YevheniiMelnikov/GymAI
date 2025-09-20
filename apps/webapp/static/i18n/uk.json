@@ -12,5 +12,13 @@
   "sort_oldest": "Сортування: старі",
   "show_ai": "Показувати плани ШІ",
   "back": "Назад",
-  "open_from_telegram": "Відкрийте цю сторінку в Telegram."
+  "open_from_telegram": "Відкрийте цю сторінку в Telegram.",
+
+  "program.title": "Програма тренувань",
+  "program.created": "Створено: {date}",
+  "program.view_history": "Переглянути історію",
+  "program.week": "Тиждень {n}",
+  "program.day": "День {n} — {title}",
+  "program.day.rest": "День відпочинку",
+  "retry": "Спробувати ще раз"
 }

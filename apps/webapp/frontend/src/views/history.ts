@@ -1,91 +1,95 @@
-import { API, getJSON, statusToMessage } from '../api/http';
-import { HistoryResp, HistoryItem } from '../api/types';
-import { applyLang, t, formatDate } from '../i18n/i18n';
-import { createButton, createToggle } from '../ui/components';
+import { applyLang, t } from '../i18n/i18n';
+import type { HistoryResp, Locale } from '../api/types';
+import { goToProgram } from '../router';
+import { readInitData, readLocale } from '../telegram';
 
-const content = document.getElementById('content');
-const controls = document.getElementById('controls');
-const tg = (window as any).Telegram?.WebApp;
-const initData: string = tg?.initData || '';
-let showAI = true;
-let items: HistoryItem[] = [];
+const content = document.getElementById('content') as HTMLElement | null;
+const dateChip = document.getElementById('program-date') as HTMLDivElement | null;
 
-function setText(txt: string): void {
-  if (content) content.textContent = txt;
+async function getHistory(locale: Locale): Promise<HistoryResp> {
+  const headers: Record<string, string> = {};
+  const initData = readInitData();
+  if (initData) headers['X-Telegram-InitData'] = initData;
+  const url = new URL('api/programs/', window.location.href);
+  url.searchParams.set('locale', locale);
+  const resp = await fetch(url.toString(), { headers });
+  if (!resp.ok) throw new Error('unexpected_error');
+  return (await resp.json()) as HistoryResp;
 }
 
-function render(): void {
+export async function renderHistoryView(): Promise<void> {
   if (!content) return;
+  content.setAttribute('aria-busy', 'true');
   content.innerHTML = '';
-  const filtered = items.filter((p) => showAI || p.coach_type !== 'ai_coach');
-  if (filtered.length === 0) {
-    setText(t('no_programs'));
-    return;
-  }
-  const list = document.createElement('ul');
-  list.className = 'history-list';
-  for (const p of filtered) {
-    const li = document.createElement('li');
-    const link = document.createElement('a');
-    link.textContent = formatDate(p.created_at, document.documentElement.lang || 'en');
-    link.href = '#';
-    link.addEventListener('click', (e) => {
-      e.preventDefault();
-      const url = new URL(window.location.toString());
-      url.searchParams.delete('page');
-      url.searchParams.set('program_id', String(p.id));
-      url.searchParams.delete('type');
-      window.location.href = url.toString();
-    });
-    li.appendChild(link);
-    if (p.coach_type === 'ai_coach') {
-      const badge = document.createElement('span');
-      badge.textContent = t('ai_label');
-      badge.className = 'ai-label';
-      li.appendChild(badge);
-    }
-    list.appendChild(li);
-  }
-  content.appendChild(list);
-}
 
-export async function renderHistory(): Promise<void> {
-    if (!initData) {
-      await applyLang('eng');
-      setText(t('open_from_telegram'));
-      return;
-    }
-    const q = new URLSearchParams();
-    q.set('init_data', initData);
-    const url = `${API.programs}?${q.toString()}`;
-    const res = await getJSON<HistoryResp>(url);
-    if (!res.ok) {
-      setText(statusToMessage(res.status));
-      return;
-    }
-    const data = res.data;
-    await applyLang(data.language);
-    if (controls) {
-      controls.innerHTML = '';
-      const backBtn = createButton(t('back'), () => {
-        const cur = new URL(window.location.toString());
-        const prevId = cur.searchParams.get('current_id');
-        cur.searchParams.delete('page');
-        cur.searchParams.delete('current_id');
-        if (prevId) cur.searchParams.set('program_id', prevId);
-        window.location.href = cur.toString();
-      });
-      const toggle = createToggle(true, (state) => {
-        showAI = state;
-        render();
-      });
-      controls.appendChild(backBtn);
-      controls.appendChild(toggle);
-    }
-    if (data.error === 'service_unavailable') {
-      setText(t('service_unavailable'));
-      return;
-    }
-    items = (data.programs || []).sort((a, b) => b.created_at - a.created_at);
-    render();
+  const historyButton = document.getElementById('history-button') as HTMLButtonElement | null;
+  if (historyButton) {
+    historyButton.disabled = true;
   }
+  if (dateChip) dateChip.hidden = true;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'week';
+  const h2 = document.createElement('h2');
+  h2.textContent = t('history');
+  wrap.appendChild(h2);
+
+  const ul = document.createElement('ul');
+  ul.className = 'history-list';
+  wrap.appendChild(ul);
+  content.appendChild(wrap);
+
+  try {
+    const requestLocale = readLocale();
+    const data = await getHistory(requestLocale);
+    const lang = await applyLang(data.language ?? requestLocale);
+
+    const resolveSource = (): 'direct' | 'subscription' => {
+      const raw = new URL(window.location.href).searchParams.get('source');
+      return raw === 'subscription' ? 'subscription' : 'direct';
+    };
+
+    if (historyButton) {
+      historyButton.textContent = t('back');
+      historyButton.disabled = false;
+      historyButton.onclick = () => goToProgram(resolveSource());
+    }
+    h2.textContent = t('history');
+
+    const items = data.programs ?? [];
+    if (items.length === 0) {
+      const p = document.createElement('p');
+      p.className = 'history-empty';
+      p.textContent = t('no_programs');
+      content.appendChild(p);
+    } else {
+      items.forEach((it) => {
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.href = '#';
+        a.textContent = new Date(it.created_at * 1000).toLocaleString(lang);
+        a.onclick = (e) => {
+          e.preventDefault();
+          const url = new URL(window.location.href);
+          url.searchParams.set('id', String(it.id));
+          history.replaceState({}, '', url.toString());
+          goToProgram('direct');
+        };
+        li.appendChild(a);
+        ul.appendChild(li);
+      });
+    }
+  } catch {
+    if (historyButton) {
+      historyButton.textContent = t('back');
+      historyButton.disabled = false;
+      historyButton.onclick = () => goToProgram();
+    }
+    const err = document.createElement('div');
+    err.className = 'error-block';
+    err.textContent = t('unexpected_error');
+    content.appendChild(err);
+  } finally {
+    content.removeAttribute('aria-busy');
+  }
+}

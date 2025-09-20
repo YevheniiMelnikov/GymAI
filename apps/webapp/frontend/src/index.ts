@@ -1,34 +1,89 @@
 import { applyLang, t } from './i18n/i18n';
-import { getRoute } from './router';
+import { initRouter, onRouteChange, Route, goToHistory } from './router';
+import { mountProgramView } from './views/program_view';
+import { renderHistoryView } from './views/history';
 
-declare const Telegram: any;
+type CleanupFn = () => void;
 
-const tg = Telegram?.WebApp;
-const initData: string = tg?.initData || '';
+function ensureHistoryButton(): HTMLButtonElement | null {
+  const controls = document.getElementById('controls') as HTMLDivElement | null;
+  if (!controls) return null;
 
-async function route(): Promise<void> {
-  const info = getRoute();
-  if (info.route === 'history') {
-    const { renderHistory } = await import('./views/history');
-    await renderHistory();
-    return;
-  }
-  const { renderProgramView } = await import('./views/program_view');
-  await renderProgramView(info.id, info.type);
+  controls.innerHTML = '';
+  const footer = document.createElement('div');
+  footer.className = 'history-footer';
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.id = 'history-button';
+  button.className = 'primary-button';
+  button.disabled = true;
+  footer.appendChild(button);
+
+  controls.appendChild(footer);
+  return button;
 }
 
-void (async () => {
-  const initialLang = (
-    Telegram?.WebApp?.initDataUnsafe?.user?.language_code ?? 'en'
-  ).replace('ua', 'uk');
-  await applyLang(initialLang);
-  try {
-    (Telegram?.WebApp)?.ready?.();
-  } catch {}
-  if (!initData) {
-    const content = document.getElementById('content');
-    if (content) content.textContent = t('open_from_telegram');
+async function handleRoute(route: Route, ctx: {
+  root: HTMLElement;
+  content: HTMLElement;
+  dateEl: HTMLElement;
+  historyButton: HTMLButtonElement | null;
+}, cleanup: { current?: CleanupFn }): Promise<void> {
+  if (cleanup.current) {
+    cleanup.current();
+    cleanup.current = undefined;
+  }
+
+  if (route.kind === 'history') {
+    if (ctx.historyButton) {
+      ctx.historyButton.disabled = true;
+    }
+    await renderHistoryView();
     return;
   }
-  await route();
-})();
+
+  if (ctx.historyButton) {
+    ctx.historyButton.textContent = t('program.view_history');
+    ctx.historyButton.disabled = false;
+    ctx.historyButton.onclick = () => goToHistory();
+  }
+
+  const dispose = await mountProgramView(
+    {
+      root: ctx.root,
+      content: ctx.content,
+      dateEl: ctx.dateEl,
+      button: ctx.historyButton,
+    },
+    route.source
+  );
+  cleanup.current = dispose;
+}
+
+async function bootstrap(): Promise<void> {
+  const root = document.getElementById('app') as HTMLElement | null;
+  const content = document.getElementById('content') as HTMLElement | null;
+  const dateEl = document.getElementById('program-date') as HTMLElement | null;
+  if (!root || !content || !dateEl) return;
+
+  try {
+    await applyLang();
+  } catch {
+  }
+
+  const historyButton = ensureHistoryButton();
+  const cleanup: { current?: CleanupFn } = {};
+
+  onRouteChange((route) => {
+    void handleRoute(
+      route,
+      { root, content, dateEl, historyButton },
+      cleanup
+    );
+  });
+
+  initRouter();
+}
+
+bootstrap();

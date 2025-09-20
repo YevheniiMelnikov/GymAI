@@ -12,5 +12,13 @@
   "sort_oldest": "Сортировка: старые",
   "show_ai": "Показывать планы ИИ",
   "back": "Назад",
-  "open_from_telegram": "Откройте эту страницу в Telegram."
+  "open_from_telegram": "Откройте эту страницу в Telegram.",
+
+  "program.title": "Программа тренировок",
+  "program.created": "Создано: {date}",
+  "program.view_history": "Посмотреть историю",
+  "program.week": "Неделя {n}",
+  "program.day": "День {n} — {title}",
+  "program.day.rest": "День отдыха",
+  "retry": "Повторить"
 }

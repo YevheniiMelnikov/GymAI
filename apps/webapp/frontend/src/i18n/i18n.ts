@@ -1,11 +1,7 @@
-// Language mapping and i18n loader
-// Accept legacy values we may get from backend: eng, ru, ua, en, ru, uk
-
 export type LangCode = 'en' | 'ru' | 'uk';
 export const LANG_MAP: Record<string, LangCode> = { eng: 'en', en: 'en', ru: 'ru', ua: 'uk', uk: 'uk' };
 
-let messages: Record<string, string> = {};
-export const fallbackEn: Record<string, string> = {
+export const fallbackEn = {
   history: 'History',
   created: 'Created',
   ai_label: 'AI',
@@ -19,25 +15,58 @@ export const fallbackEn: Record<string, string> = {
   sort_oldest: 'Sort: Oldest',
   show_ai: 'Show AI workout plans',
   back: 'Back',
-  open_from_telegram: 'Open this page from Telegram.'
-};
+  open_from_telegram: 'Open this page from Telegram.',
+  'program.title': 'Workout Program',
+  'program.created': 'Created: {date}',
+  'program.view_history': 'View History',
+  'program.week': 'Week {n}',
+  'program.day': 'Day {n} — {title}',
+  'program.day.rest': 'Rest Day',
+  retry: 'Retry'
+} as const;
+
+export type TranslationKey = keyof typeof fallbackEn;
+export type TemplateVars = Record<string, string | number>;
+
+type Messages = Partial<Record<TranslationKey, string>>;
+let messages: Messages = {};
 
 async function loadMessages(code: LangCode): Promise<void> {
   const base = (window as any).__STATIC_PREFIX__ || '/static/';
   try {
     const res = await fetch(`${base}i18n/${code}.json`, { cache: 'no-store' });
-    messages = res.ok ? await res.json() : fallbackEn;
+    messages = res.ok ? ((await res.json()) as Messages) : { ...fallbackEn };
   } catch {
-    messages = fallbackEn;
+    messages = { ...fallbackEn };
   }
 }
 
-export function t<K extends keyof typeof fallbackEn>(key: K): string {
-  return (messages[key] ?? fallbackEn[key]) as string;
+function interpolate(template: string, vars?: TemplateVars): string {
+  if (!vars) return template;
+  return template.replace(/\{(\w+)\}/g, (_, key: string) => {
+    const value = vars[key];
+    return value === undefined || value === null ? '' : String(value);
+  });
 }
 
-export async function applyLang(raw: string | undefined): Promise<LangCode> {
-  const code: LangCode = LANG_MAP[raw ?? ''] ?? 'en';
+export function t<K extends TranslationKey>(key: K, vars?: TemplateVars): string {
+  const template = messages[key] ?? fallbackEn[key];
+  return interpolate(template, vars);
+}
+
+export async function applyLang(): Promise<LangCode>;
+export async function applyLang(raw: string | undefined): Promise<LangCode>;
+export async function applyLang(raw?: string): Promise<LangCode> {
+  let incoming = raw;
+  try {
+    const tg = (window as any).Telegram?.WebApp;
+    if (!incoming && tg?.initDataUnsafe?.user?.language_code) {
+      incoming = tg.initDataUnsafe.user.language_code;
+    }
+  } catch {
+  }
+
+  const code: LangCode = LANG_MAP[incoming ?? ''] ?? 'en';
   document.documentElement.lang = code;
   await loadMessages(code);
   return code;
