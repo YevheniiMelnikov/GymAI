@@ -11,6 +11,7 @@ type TelegramInitData = {
 type TelegramWebApp = {
   initData?: string;
   initDataUnsafe?: TelegramInitData;
+  ready?: () => void;
 };
 
 type TelegramNamespace = {
@@ -28,6 +29,49 @@ function resolveTelegram(): TelegramWebApp | null {
   } catch {
     return null;
   }
+}
+
+let readyPromise: Promise<TelegramWebApp | null> | null = null;
+let readyCalled = false;
+
+function notifyReady(app: TelegramWebApp): void {
+  if (readyCalled) return;
+  readyCalled = true;
+  try {
+    app.ready?.();
+  } catch {
+  }
+}
+
+export function whenTelegramReady(): Promise<TelegramWebApp | null> {
+  if (readyPromise) return readyPromise;
+
+  readyPromise = new Promise((resolve) => {
+    const initial = resolveTelegram();
+    if (initial) {
+      notifyReady(initial);
+      resolve(initial);
+      return;
+    }
+
+    let attempts = 0;
+    const interval = window.setInterval(() => {
+      attempts += 1;
+      const app = resolveTelegram();
+      if (!app) {
+        if (attempts >= 60) {
+          window.clearInterval(interval);
+          resolve(null);
+        }
+        return;
+      }
+      window.clearInterval(interval);
+      notifyReady(app);
+      resolve(app);
+    }, 50);
+  });
+
+  return readyPromise;
 }
 
 export function readInitData(): string {

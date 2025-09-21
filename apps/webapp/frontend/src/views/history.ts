@@ -1,7 +1,7 @@
 import { applyLang, t } from '../i18n/i18n';
 import type { HistoryResp, Locale } from '../api/types';
 import { goToProgram } from '../router';
-import { readInitData, readLocale } from '../telegram';
+import { readInitData, readLocale, whenTelegramReady } from '../telegram';
 
 const content = document.getElementById('content') as HTMLElement | null;
 const dateChip = document.getElementById('program-date') as HTMLDivElement | null;
@@ -40,6 +40,7 @@ export async function renderHistoryView(): Promise<void> {
   content.appendChild(wrap);
 
   try {
+    await whenTelegramReady();
     const requestLocale = readLocale();
     const data = await getHistory(requestLocale);
     const lang = await applyLang(data.language ?? requestLocale);

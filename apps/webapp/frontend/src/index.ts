@@ -2,6 +2,7 @@ import { applyLang, t } from './i18n/i18n';
 import { initRouter, onRouteChange, Route, goToHistory } from './router';
 import { mountProgramView } from './views/program_view';
 import { renderHistoryView } from './views/history';
+import { whenTelegramReady } from './telegram';
 
 type CleanupFn = () => void;
 
@@ -66,6 +67,8 @@ async function bootstrap(): Promise<void> {
   const content = document.getElementById('content') as HTMLElement | null;
   const dateEl = document.getElementById('program-date') as HTMLElement | null;
   if (!root || !content || !dateEl) return;
+
+  await whenTelegramReady();
 
   try {
     await applyLang();

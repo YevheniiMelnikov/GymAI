@@ -2,7 +2,7 @@ import { getProgram, HttpError } from '../api/http';
 import type { Locale } from '../api/types';
 import { applyLang, t } from '../i18n/i18n';
 import { renderLegacyProgram, renderProgramDays, fmtDate } from '../ui/render_program';
-import { readInitData } from '../telegram';
+import { readInitData, whenTelegramReady } from '../telegram';
 
 type Ctx = {
   root: HTMLElement;
@@ -29,6 +29,7 @@ export async function mountProgramView(
   source: 'direct' | 'subscription'
 ): Promise<Cleanup> {
   const { content, dateEl } = ctx;
+  await whenTelegramReady();
   const initData: string = readInitData();
 
   const controller = new AbortController();
