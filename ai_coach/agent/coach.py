@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 import inspect
-from typing import Any, Optional, TypeVar, cast
+from typing import Any, Optional, overload
 
 from openai import AsyncOpenAI  # pyrefly: ignore[import-error]
 from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
@@ -50,10 +50,6 @@ class ProgramAdapter:
         if data.get("split_number") is None:
             data["split_number"] = len(getattr(payload, "exercises_by_day", []))
         return Program.model_validate(data)
-
-
-TAgentModel = TypeVar("TAgentModel", bound=BaseModel)
-TWorkoutModel = TypeVar("TWorkoutModel", Program, Subscription)
 
 
 class CoachAgent:
@@ -135,15 +131,25 @@ class CoachAgent:
         return cls._agent
 
     @staticmethod
+    @overload
+    def _normalize_output(raw: Any, expected: type[Program]) -> Program: ...
+
+    @staticmethod
+    @overload
+    def _normalize_output(raw: Any, expected: type[Subscription]) -> Subscription: ...
+
+    @staticmethod
+    @overload
+    def _normalize_output(raw: Any, expected: type[QAResponse]) -> QAResponse: ...
+
+    @staticmethod
     def _normalize_output(
         raw: Any,
-        expected: type[TAgentModel],
-    ) -> TAgentModel:
+        expected: type[BaseModel],
+    ) -> BaseModel:
         value = getattr(raw, "output", raw)
         if isinstance(value, expected):
             return value
-        if not issubclass(expected, BaseModel):
-            raise TypeError("Unsupported expected model type")
         return expected.model_validate(value)
 
     @staticmethod
@@ -170,9 +176,9 @@ class CoachAgent:
         period: str | None = None,
         workout_days: list[str] | None = None,
         wishes: str | None = None,
-        output_type: type[TWorkoutModel],
+        output_type: type[Program] | type[Subscription],
         instructions: str | None = None,
-    ) -> TWorkoutModel:
+    ) -> Program | Subscription:
         agent = cls._get_agent()
         deps.mode = CoachMode.program if output_type is Program else CoachMode.subscription
         today = date.today().isoformat()
@@ -205,7 +211,11 @@ class CoachAgent:
             output_type=output_type,
             message_history=history,
         )
-        return cls._normalize_output(raw_result, output_type)
+        if output_type is Program:
+            return cls._normalize_output(raw_result, Program)
+        if output_type is Subscription:
+            return cls._normalize_output(raw_result, Subscription)
+        raise ValueError("Unsupported output type for workout plan")
 
     @classmethod
     async def update_workout_plan(
@@ -216,9 +226,9 @@ class CoachAgent:
         deps: AgentDeps,
         *,
         workout_type: WorkoutType | None = None,
-        output_type: type[TWorkoutModel] | None = None,
+        output_type: type[Program] | type[Subscription] = Subscription,
         instructions: str | None = None,
-    ) -> TWorkoutModel:
+    ) -> Program | Subscription:
         agent = cls._get_agent()
         deps.mode = CoachMode.update
         context_lines: list[str] = []
@@ -237,17 +247,17 @@ class CoachAgent:
         history = cls._message_history(deps.client_id)
         if inspect.isawaitable(history):
             history = await history
-        resolved_output = cast(
-            type[TWorkoutModel],
-            output_type if output_type is not None else Subscription,
-        )
         raw_result = await agent.run(
             user_prompt,
             deps=deps,
-            output_type=resolved_output,
+            output_type=output_type,
             message_history=history,
         )
-        return cls._normalize_output(raw_result, resolved_output)
+        if output_type is Program:
+            return cls._normalize_output(raw_result, Program)
+        if output_type is Subscription:
+            return cls._normalize_output(raw_result, Subscription)
+        raise ValueError("Unsupported output type for workout plan")
 
     @classmethod
     async def answer_question(

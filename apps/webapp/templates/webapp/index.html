@@ -8,17 +8,6 @@
   <title>Program</title>
   <link rel="stylesheet" href="{% static 'css/common.css' %}" />
   <script>window.__STATIC_PREFIX__ = "{% get_static_prefix %}";</script>
-  <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
-  <script>
-    window.addEventListener('error', (event) => {
-      console.log('[window.error]', event.message, event.filename, event.lineno);
-    });
-    window.addEventListener('unhandledrejection', (event) => {
-      console.log('[unhandled]', event.reason);
-    });
-    console.log('UA:', navigator.userAgent);
-    console.log('TMA available:', !!(window.Telegram && window.Telegram.WebApp));
-  </script>
 </head>
 <body>
   <main id="app">
@@ -30,6 +19,7 @@
 
   <noscript>This page requires JavaScript. Please open it inside Telegram.</noscript>
 
-  <script type="module" defer src="{% static 'js/index.js' %}?v=2"></script>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script defer src="{% static 'js/index.js' %}?v=3"></script>
 </body>
 </html>

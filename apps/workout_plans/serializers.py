@@ -45,19 +45,19 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         model = Subscription
         fields = "__all__"
 
-    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+    def validate(self, data: dict[str, Any]) -> dict[str, Any]:  # pyrefly: ignore[bad-override]
         user = self.context["request"].user
 
         if not user.is_authenticated:
             raise ValidationError(["User is not authenticated"])
 
-        if "client_profile" not in attrs:
+        if "client_profile" not in data:
             if not hasattr(user, "profile"):
                 raise ValidationError(["User profile not found"])
-            attrs["client_profile"] = user.profile.client_profile
+            data["client_profile"] = user.profile.client_profile
 
         if not self.instance:
-            if Subscription.objects.filter(client_profile=attrs["client_profile"], enabled=True).exists():  # type: ignore[attr-defined]
+            if Subscription.objects.filter(client_profile=data["client_profile"], enabled=True).exists():  # type: ignore[attr-defined]
                 raise ValidationError(["User already has an active subscription"])
 
-        return attrs
+        return data
