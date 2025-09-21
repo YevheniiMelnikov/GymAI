@@ -1,21 +1,11 @@
+import { apiGet } from '../api/http';
 import { applyLang, t } from '../i18n/i18n';
 import type { HistoryResp, Locale } from '../api/types';
 import { goToProgram } from '../router';
-import { readInitData, readLocale, whenTelegramReady } from '../telegram';
+import { readLocale, whenTelegramReady } from '../telegram';
 
 const content = document.getElementById('content') as HTMLElement | null;
 const dateChip = document.getElementById('program-date') as HTMLDivElement | null;
-
-async function getHistory(locale: Locale): Promise<HistoryResp> {
-  const headers: Record<string, string> = {};
-  const initData = readInitData();
-  if (initData) headers['X-Telegram-InitData'] = initData;
-  const url = new URL('api/programs/', window.location.href);
-  url.searchParams.set('locale', locale);
-  const resp = await fetch(url.toString(), { headers });
-  if (!resp.ok) throw new Error('unexpected_error');
-  return (await resp.json()) as HistoryResp;
-}
 
 export async function renderHistoryView(): Promise<void> {
   if (!content) return;
@@ -42,7 +32,9 @@ export async function renderHistoryView(): Promise<void> {
   try {
     await whenTelegramReady();
     const requestLocale = readLocale();
-    const data = await getHistory(requestLocale);
+    const data = await apiGet<HistoryResp>('api/programs/', {
+      query: { locale: requestLocale },
+    });
     const lang = await applyLang(data.language ?? requestLocale);
 
     const resolveSource = (): 'direct' | 'subscription' => {

@@ -1,3 +1,4 @@
+import { readInitData } from '../telegram';
 import { Locale, Program, ProgramResp, ProgramStructuredResponse } from './types';
 
 const KNOWN_LOCALES: readonly Locale[] = ['en', 'ru', 'uk'];
@@ -41,12 +42,54 @@ export type LoadedProgram =
   | { kind: 'structured'; program: Program; locale: Locale }
   | { kind: 'legacy'; programText: string; locale: Locale; createdAt?: string | null };
 
-export async function getJSON<T>(url: string, options: RequestInit = {}): Promise<T> {
-  const resp = await fetch(url, options);
+type QueryValue = string | number | boolean | null | undefined;
+
+type ApiRequestOptions = {
+  initData?: string | null;
+  signal?: AbortSignal;
+  headers?: HeadersInit;
+  query?: Record<string, QueryValue>;
+  method?: string;
+  body?: BodyInit | null;
+};
+
+function buildUrl(path: string, query?: Record<string, QueryValue>): URL {
+  const url = new URL(path, window.location.href);
+  if (!query) return url;
+  Object.entries(query).forEach(([key, value]) => {
+    if (value === null || value === undefined) return;
+    url.searchParams.set(key, String(value));
+  });
+  return url;
+}
+
+function createHeaders(initData: string | null | undefined, extra?: HeadersInit): Headers {
+  const headers = new Headers(extra ?? {});
+  headers.set('Content-Type', 'application/json');
+  if (!headers.has('X-Telegram-InitData')) {
+    headers.set('X-Telegram-InitData', initData ?? readInitData());
+  }
+  return headers;
+}
+
+async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+  const url = buildUrl(path, options.query);
+  const headers = createHeaders(options.initData ?? null, options.headers);
+  const resp = await fetch(url.toString(), {
+    method: options.method ?? 'GET',
+    body: options.body ?? null,
+    credentials: 'include',
+    headers,
+    signal: options.signal,
+  });
   if (!resp.ok) {
     throw new HttpError(resp.status, statusToMessage(resp.status));
   }
   return (await resp.json()) as T;
+}
+
+export async function apiGet<T>(path: string, options: Omit<ApiRequestOptions, 'method' | 'body'> = {}): Promise<T> {
+  return apiRequest<T>(path, { ...options, method: 'GET', body: null });
 }
 
 type GetProgramOpts = {
@@ -91,18 +134,15 @@ export async function getProgram(
     opts = a;
   }
 
-  const params = new URLSearchParams({ locale, source: opts.source });
-  if (programId) {
-    params.set('program_id', programId);
-  }
-  const url = new URL('api/program/', window.location.href);
-  params.forEach((value, key) => {
-    url.searchParams.set(key, value);
+  const data = await apiGet<ProgramResp>('api/program/', {
+    initData: opts.initData,
+    signal: opts.signal,
+    query: {
+      locale,
+      source: opts.source,
+      program_id: programId || undefined,
+    },
   });
-  const headers: Record<string, string> = {};
-  if (opts.initData) headers['X-Telegram-InitData'] = opts.initData;
-
-  const data = await getJSON<ProgramResp>(url.toString(), { headers, signal: opts.signal });
 
   const fromResponse = (data as { language?: string | null }).language;
   const resolvedLocale = normalizeLocale(fromResponse ?? (data as { locale?: string }).locale, locale);

@@ -3,6 +3,7 @@ import { initRouter, onRouteChange, Route, goToHistory } from './router';
 import { mountProgramView } from './views/program_view';
 import { renderHistoryView } from './views/history';
 import { whenTelegramReady } from './telegram';
+import { renderFatal } from './ui/fatal';
 
 type CleanupFn = () => void;
 
@@ -68,7 +69,23 @@ async function bootstrap(): Promise<void> {
   const dateEl = document.getElementById('program-date') as HTMLElement | null;
   if (!root || !content || !dateEl) return;
 
-  await whenTelegramReady();
+  const fatal = (reason: unknown, message?: string): void => {
+    console.error('Fatal webapp error', reason);
+    renderFatal(root, message ?? 'Unable to start the application. Please try again later.', reason);
+  };
+
+  window.addEventListener('unhandledrejection', (event) => {
+    fatal(event.reason);
+  });
+  window.addEventListener('error', (event) => {
+    fatal(event.error ?? event.message);
+  });
+
+  const telegramReady = await whenTelegramReady();
+  if (!telegramReady) {
+    fatal('telegram_unavailable', 'Telegram WebApp is not available. Close and reopen the Mini App.');
+    return;
+  }
 
   try {
     await applyLang();

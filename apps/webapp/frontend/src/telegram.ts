@@ -54,18 +54,18 @@ export function whenTelegramReady(): Promise<TelegramWebApp | null> {
       return;
     }
 
-    let attempts = 0;
+    const timeout = window.setTimeout(() => {
+      window.clearInterval(interval);
+      resolve(null);
+    }, 3000);
+
     const interval = window.setInterval(() => {
-      attempts += 1;
       const app = resolveTelegram();
       if (!app) {
-        if (attempts >= 60) {
-          window.clearInterval(interval);
-          resolve(null);
-        }
         return;
       }
       window.clearInterval(interval);
+      window.clearTimeout(timeout);
       notifyReady(app);
       resolve(app);
     }, 50);
