@@ -127,8 +127,7 @@ main#app{
   font-weight: 700;
 }
 
-/* chips (дата/происхождение) */
-#program-date,
+/* chips (origin) */
 #program-origin{
   display:inline-flex;
   align-items:center;
@@ -141,6 +140,13 @@ main#app{
   color: var(--muted);
   letter-spacing: .02em;
   width:max-content;
+}
+#program-date{
+  display:block;
+  font-size: 12.5px;
+  color: var(--muted);
+  letter-spacing: .02em;
+  margin-bottom: 6px;
 }
 #program-origin.ai-label{
   color: color-mix(in oklab, var(--accent) 84%, var(--text));
