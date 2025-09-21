@@ -42,7 +42,8 @@ export type LoadedProgram =
   | { kind: 'legacy'; programText: string; locale: Locale; createdAt?: string | null };
 
 export async function getJSON<T>(url: string, options: RequestInit = {}): Promise<T> {
-  const resp = await fetch(url, options);
+  const init: RequestInit = { credentials: 'include', ...options };
+  const resp = await fetch(url, init);
   if (!resp.ok) {
     throw new HttpError(resp.status, statusToMessage(resp.status));
   }

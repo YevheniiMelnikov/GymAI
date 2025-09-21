@@ -128,8 +128,7 @@ main#app{
 }
 
 /* chips (дата/происхождение) */
-#program-date,
-#program-origin{
+#program-date{
   display:inline-flex;
   align-items:center;
   gap:8px;
@@ -141,12 +140,6 @@ main#app{
   color: var(--muted);
   letter-spacing: .02em;
   width:max-content;
-}
-#program-origin.ai-label{
-  color: color-mix(in oklab, var(--accent) 84%, var(--text));
-  background: color-mix(in oklab, var(--accent) 16%, var(--bg));
-  border-color: color-mix(in oklab, var(--accent) 28%, var(--border));
-  font-weight: 700;
 }
 
 /* Content area */

@@ -1,5 +1,6 @@
 import { applyLang, t } from './i18n/i18n';
 import { initRouter, onRouteChange, Route, goToHistory } from './router';
+import { waitForTelegram } from './telegram';
 import { mountProgramView } from './views/program_view';
 import { renderHistoryView } from './views/history';
 
@@ -72,6 +73,13 @@ async function bootstrap(): Promise<void> {
   } catch {
   }
 
+  const telegram = await waitForTelegram();
+  if (!telegram) {
+    dateEl.hidden = true;
+    content.textContent = t('open_from_telegram');
+    return;
+  }
+
   const historyButton = ensureHistoryButton();
   const cleanup: { current?: CleanupFn } = {};
 
@@ -84,6 +92,7 @@ async function bootstrap(): Promise<void> {
   });
 
   initRouter();
+  telegram.expand?.();
 }
 
 bootstrap();

@@ -11,6 +11,8 @@ type TelegramInitData = {
 type TelegramWebApp = {
   initData?: string;
   initDataUnsafe?: TelegramInitData;
+  ready?: () => void;
+  expand?: () => void;
 };
 
 type TelegramNamespace = {
@@ -28,6 +30,33 @@ function resolveTelegram(): TelegramWebApp | null {
   } catch {
     return null;
   }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+const TELEGRAM_READY_TIMEOUT = 3_000;
+const TELEGRAM_READY_POLL_INTERVAL = 50;
+
+export async function waitForTelegram(
+  timeout: number = TELEGRAM_READY_TIMEOUT
+): Promise<TelegramWebApp | null> {
+  const deadline = Date.now() + Math.max(timeout, TELEGRAM_READY_POLL_INTERVAL);
+  while (Date.now() <= deadline) {
+    const telegram = resolveTelegram();
+    if (telegram) {
+      try {
+        telegram.ready?.();
+      } catch {
+      }
+      return telegram;
+    }
+    await delay(TELEGRAM_READY_POLL_INTERVAL);
+  }
+  return null;
 }
 
 export function readInitData(): string {
