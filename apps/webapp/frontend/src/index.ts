@@ -1,5 +1,5 @@
 import { applyLang, t } from './i18n/i18n';
-import { initRouter, onRouteChange, Route, goToHistory } from './router';
+import { initRouter, onRouteChange, Route, goToHistory, goToProgram } from './router';
 import { mountProgramView } from './views/program_view';
 import { renderHistoryView } from './views/history';
 
@@ -34,18 +34,8 @@ function resolveSourceFromLocation(): 'direct' | 'subscription' {
   }
 }
 
-function isHistoryRoute(): boolean {
-  try {
-    const u = new URL(window.location.href);
-    if (u.hash.toLowerCase().includes('history')) return true;
-    if (u.pathname.endsWith('/history')) return true;
-    if ((u.searchParams.get('page') || '').toLowerCase() === 'history') return true;
-  } catch {}
-  return false;
-}
-
 async function handleRoute(
-  _route: Route,
+  route: Route,
   ctx: {
     root: HTMLElement;
     content: HTMLElement;
@@ -59,11 +49,12 @@ async function handleRoute(
   }
   cleanup.current = undefined;
 
-  if (isHistoryRoute()) {
+  if (route.kind === 'history') {
+    const source = resolveSourceFromLocation();
     if (ctx.historyButton) {
       ctx.historyButton.textContent = t('back');
       ctx.historyButton.disabled = false;
-      ctx.historyButton.onclick = () => goToHistory();
+      ctx.historyButton.onclick = () => goToProgram(source);
     }
     await renderHistoryView();
     return;
@@ -75,7 +66,6 @@ async function handleRoute(
     ctx.historyButton.onclick = () => goToHistory();
   }
 
-  const source = resolveSourceFromLocation();
   const dispose = await mountProgramView(
     {
       root: ctx.root,
@@ -83,7 +73,7 @@ async function handleRoute(
       dateEl: ctx.dateEl,
       button: ctx.historyButton,
     },
-    source
+    route.source
   );
   cleanup.current = dispose;
 }

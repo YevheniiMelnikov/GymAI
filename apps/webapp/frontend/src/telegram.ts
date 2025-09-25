@@ -37,8 +37,15 @@ export function readInitData(): string {
 
 const LOCALE_MAP: Record<string, Locale> = { en: 'en', ru: 'ru', uk: 'uk' };
 
+function normalizeLocale(raw?: string): Locale | null {
+  if (!raw) return null;
+  const normalized = raw.toLowerCase();
+  if (normalized in LOCALE_MAP) return LOCALE_MAP[normalized];
+  const [base] = normalized.split('-');
+  return LOCALE_MAP[base] ?? null;
+}
+
 export function readLocale(fallback: Locale = 'en'): Locale {
   const raw = getWebApp()?.initDataUnsafe?.user?.language_code;
-  if (raw && raw in LOCALE_MAP) return LOCALE_MAP[raw];
-  return fallback;
+  return normalizeLocale(raw) ?? fallback;
 }

@@ -1,6 +1,15 @@
 export type LangCode = 'en' | 'ru' | 'uk';
 export const LANG_MAP: Record<string, LangCode> = { eng: 'en', en: 'en', ru: 'ru', ua: 'uk', uk: 'uk' };
 
+function resolveLangCode(raw?: string): LangCode {
+  if (!raw) return 'en';
+  const normalized = raw.toLowerCase();
+  const direct = LANG_MAP[normalized];
+  if (direct) return direct;
+  const [base] = normalized.split('-');
+  return LANG_MAP[base] ?? 'en';
+}
+
 export const fallbackEn = {
   history: 'History',
   created: 'Created',
@@ -66,7 +75,7 @@ export async function applyLang(raw?: string): Promise<LangCode> {
   } catch {
   }
 
-  const code: LangCode = LANG_MAP[incoming ?? ''] ?? 'en';
+  const code = resolveLangCode(incoming);
   document.documentElement.lang = code;
   await loadMessages(code);
   return code;
