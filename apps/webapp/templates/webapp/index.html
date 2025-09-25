@@ -12,13 +12,16 @@
 <body>
   <main id="app">
     <div id="program-date" aria-live="polite"></div>
-    <div id="content" aria-live="polite">Loading...</div>
+    <div id="content" aria-live="polite" aria-busy="true"></div>
     <div id="controls"></div>
   </main>
 
   <noscript>This page requires JavaScript. Please open it inside Telegram.</noscript>
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script>
+    try { window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.ready(); } catch {}
+  </script>
   <script src="{% static 'js/index.js' %}" defer></script>
 </body>
 </html>
