@@ -52,18 +52,19 @@ async function handleRoute(
   if (route.kind === 'history') {
     const source = resolveSourceFromLocation();
     if (ctx.historyButton) {
+      ctx.historyButton.disabled = true;
+    }
+    await renderHistoryView();
+    if (ctx.historyButton) {
       ctx.historyButton.textContent = t('back');
       ctx.historyButton.disabled = false;
       ctx.historyButton.onclick = () => goToProgram(source);
     }
-    await renderHistoryView();
     return;
   }
 
   if (ctx.historyButton) {
-    ctx.historyButton.textContent = t('program.view_history');
-    ctx.historyButton.disabled = false;
-    ctx.historyButton.onclick = () => goToHistory();
+    ctx.historyButton.disabled = true;
   }
 
   const dispose = await mountProgramView(
@@ -76,6 +77,12 @@ async function handleRoute(
     route.source
   );
   cleanup.current = dispose;
+
+  if (ctx.historyButton) {
+    ctx.historyButton.textContent = t('program.view_history');
+    ctx.historyButton.disabled = false;
+    ctx.historyButton.onclick = () => goToHistory();
+  }
 }
 
 async function bootstrap(): Promise<void> {
