@@ -80,21 +80,13 @@ Sources are located in `bot/` with the entrypoint `bot/main.py`.
 
 Local development options:
 
-* With Docker Compose (recommended for API/DB/Redis): `task localrun` starts Postgres, Redis, API, and local Nginx on [http://localhost:9090](http://localhost:9090).
+* With Docker Compose (recommended for API/DB/Redis): `task localrun` starts Postgres, Redis, API, local Nginx on [http://localhost:9090](http://localhost:9090), and the Cloudflare tunnel service.
 * Run the bot locally from your IDE or terminal:
 
   * Ensure Redis and API are up (via `task localrun`).
   * Start the bot: `uv run python -m bot.main`.
   * Local Nginx forwards webhooks to `host.docker.internal:8088` as configured in `docker/nginx.local.conf`.
-
-**Note on ngrok for local webhooks:**
-
-* Run ngrok on the same port exposed by local Nginx. This port is configured via `HOST_NGINX_PORT` in `docker/.env` (default 8000).
-* Example:
-
-  * Windows (PowerShell): `ngrok http $Env:HOST_NGINX_PORT`
-  * Linux/macOS: `ngrok http $HOST_NGINX_PORT`
-* Use the generated HTTPS URL as `WEBHOOK_HOST` in `docker/.env` so Telegram can reach your bot.
+  * Expose the local stack to Telegram via the bundled Cloudflare tunnel. Provide `CF_TUNNEL_TOKEN` in `docker/.env`; `task localrun` (or `docker compose -f docker/docker-compose-local.yml up cloudflared`) will launch the `cloudflared` service and publish a public URL accessible through Cloudflare Zero Trust. Use that URL as `WEBHOOK_HOST`.
 
 > To run bot locally FULLY with docker set `DOCKER_BOT_START=true`
 
@@ -318,6 +310,7 @@ Create `docker/.env` from `docker/.env.example` and set the following minimum va
 * `API_KEY` – internal API key for bot/API communication (generate from Django container)
 * `BOT_TOKEN` – Telegram bot token
 * `WEBHOOK_HOST` – base URL for webhooks (e.g., `http://localhost:9090` for local Nginx)
+* `CF_TUNNEL_TOKEN` – Cloudflare Zero Trust token for the bundled `cloudflared` tunnel service
 
 > **Important:** To enable Google services (Sheets/Drive/Docs), you **must** place a file named `google_creds.json` at the **project root**. This file is bind-mounted into containers at `/app/google_creds.json` and should be referenced by `GOOGLE_APPLICATION_CREDENTIALS`.
 

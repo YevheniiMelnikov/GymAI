@@ -25,15 +25,56 @@ function getProgramIdFromURL(): string | null {
   return u.searchParams.get('id');
 }
 
+function normalizeDateNode(rawEl: HTMLElement, root: HTMLElement): HTMLElement {
+  let dateEl: HTMLElement = rawEl;
+
+  if (dateEl instanceof HTMLButtonElement) {
+    const span = document.createElement('span');
+    span.id = dateEl.id;
+    span.className = dateEl.className;
+    while (dateEl.firstChild) span.appendChild(dateEl.firstChild);
+    dateEl.replaceWith(span);
+    dateEl = span;
+  }
+
+  dateEl.classList.remove('chip', 'badge', 'pill', 'tag');
+
+  const wrapper = dateEl.closest<HTMLElement>('.chip, .badge, .pill, .tag, button');
+  if (wrapper && wrapper !== dateEl && root.contains(wrapper)) {
+    wrapper.classList.remove('chip', 'badge', 'pill', 'tag');
+    wrapper.style.border = 'none';
+    wrapper.style.borderRadius = '0';
+    wrapper.style.boxShadow = 'none';
+    wrapper.style.background = 'transparent';
+    wrapper.style.padding = '0';
+    if (wrapper.contains(dateEl)) {
+      wrapper.replaceWith(dateEl);
+    }
+  }
+
+  dateEl.setAttribute('role', 'text');
+  dateEl.style.border = 'none';
+  dateEl.style.borderRadius = '0';
+  dateEl.style.boxShadow = 'none';
+  dateEl.style.background = 'transparent';
+  dateEl.style.padding = '0';
+
+  return dateEl;
+}
+
 export async function mountProgramView(
   ctx: Ctx,
   source: 'direct' | 'subscription'
 ): Promise<Cleanup> {
-  const { content, dateEl } = ctx;
+  const { root, content } = ctx;
+  let { dateEl } = ctx;
   const initData: string = readInitData();
 
   const controller = new AbortController();
   setBusy(content, true);
+
+  dateEl = normalizeDateNode(dateEl, root);
+
   dateEl.hidden = false;
   dateEl.textContent = '';
 
@@ -45,21 +86,26 @@ export async function mountProgramView(
     const locale: Locale = appliedLocale;
 
     content.innerHTML = '';
+
     if (load.kind === 'structured') {
       if (load.program.created_at) {
-        dateEl.textContent = t('program.created', { date: fmtDate(load.program.created_at, locale) });
+        dateEl.textContent = t('program.created', {
+          date: fmtDate(load.program.created_at, locale),
+        });
       }
       const rendered = renderProgramDays(load.program);
       content.appendChild(rendered.fragment);
     } else {
       if (load.createdAt) {
-        dateEl.textContent = t('program.created', { date: fmtDate(load.createdAt, locale) });
+        dateEl.textContent = t('program.created', {
+          date: fmtDate(load.createdAt, locale),
+        });
       }
       const rendered = renderLegacyProgram(load.programText, locale);
       content.appendChild(rendered.fragment);
     }
 
-    tmeReady(); // убираем «Loading…» поверх
+    tmeReady();
   } catch (e) {
     let key = 'unexpected_error';
     if (e instanceof HttpError) key = e.message;

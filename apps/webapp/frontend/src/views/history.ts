@@ -22,10 +22,6 @@ export async function renderHistoryView(): Promise<void> {
   content.setAttribute('aria-busy', 'true');
   content.innerHTML = '';
 
-  const historyButton = document.getElementById('history-button') as HTMLButtonElement | null;
-  if (historyButton) {
-    historyButton.disabled = true;
-  }
   if (dateChip) dateChip.hidden = true;
 
   const wrap = document.createElement('div');
@@ -49,11 +45,6 @@ export async function renderHistoryView(): Promise<void> {
       return raw === 'subscription' ? 'subscription' : 'direct';
     };
 
-    if (historyButton) {
-      historyButton.textContent = t('back');
-      historyButton.disabled = false;
-      historyButton.onclick = () => goToProgram(resolveSource());
-    }
     h2.textContent = t('history');
 
     const items = data.programs ?? [];
@@ -80,11 +71,6 @@ export async function renderHistoryView(): Promise<void> {
       });
     }
   } catch {
-    if (historyButton) {
-      historyButton.textContent = t('back');
-      historyButton.disabled = false;
-      historyButton.onclick = () => goToProgram();
-    }
     const err = document.createElement('div');
     err.className = 'error-block';
     err.textContent = t('unexpected_error');
