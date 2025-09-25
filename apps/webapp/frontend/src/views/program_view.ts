@@ -3,6 +3,7 @@ import type { Locale } from '../api/types';
 import { applyLang, t } from '../i18n/i18n';
 import { renderLegacyProgram, renderProgramDays, fmtDate } from '../ui/render_program';
 import { readInitData } from '../telegram';
+import { tmeReady } from '../telegram';
 
 type Ctx = {
   root: HTMLElement;
@@ -38,43 +39,36 @@ export async function mountProgramView(
 
   try {
     const programId = getProgramIdFromURL();
-
-    // ВАЖНО: вызываем по старой сигнатуре — 2 аргумента (id, opts)
-    const load = await getProgram(programId ?? '', {
-      initData,
-      source,
-      signal: controller.signal
-    });
+    const load = await getProgram(programId ?? '', { initData, source, signal: controller.signal });
 
     const appliedLocale: Locale = await applyLang(load.locale);
     const locale: Locale = appliedLocale;
 
-    // Рендер
     content.innerHTML = '';
     if (load.kind === 'structured') {
       if (load.program.created_at) {
-        dateEl.textContent = t('program.created', {
-          date: fmtDate(load.program.created_at, locale)
-        });
+        dateEl.textContent = t('program.created', { date: fmtDate(load.program.created_at, locale) });
       }
-      const rendered = renderProgramDays({ ...load.program, locale });
+      const rendered = renderProgramDays(load.program);
       content.appendChild(rendered.fragment);
     } else {
       if (load.createdAt) {
-        dateEl.textContent = t('program.created', {
-          date: fmtDate(load.createdAt, locale)
-        });
+        dateEl.textContent = t('program.created', { date: fmtDate(load.createdAt, locale) });
       }
       const rendered = renderLegacyProgram(load.programText, locale);
       content.appendChild(rendered.fragment);
     }
+
+    tmeReady(); // убираем «Loading…» поверх
   } catch (e) {
     let key = 'unexpected_error';
     if (e instanceof HttpError) key = e.message;
-    content.innerHTML = `<div>${t(key as any)}</div>`;
+    content.innerHTML = `<div class="notice">${t(key as any)}</div>`;
   } finally {
     setBusy(content, false);
   }
 
-  return () => controller.abort();
+  return () => {
+    controller.abort();
+  };
 }

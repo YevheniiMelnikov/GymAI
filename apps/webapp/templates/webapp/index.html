@@ -12,7 +12,6 @@
 <body>
   <main id="app">
     <div id="program-date" aria-live="polite"></div>
-    <div id="program-origin" aria-live="polite"></div>
     <div id="content" aria-live="polite">Loading...</div>
     <div id="controls"></div>
   </main>
@@ -20,6 +19,6 @@
   <noscript>This page requires JavaScript. Please open it inside Telegram.</noscript>
 
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <script type="module" defer src="{% static 'js/index.js' %}?v=2"></script>
+  <script src="{% static 'js/index.js' %}" defer></script>
 </body>
 </html>

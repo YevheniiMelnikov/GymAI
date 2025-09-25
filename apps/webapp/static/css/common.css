@@ -13,7 +13,6 @@
   font-display: swap;
 }
 
-/* (Optional) Euclid Circular A */
 @font-face {
   font-family: "Euclid Circular A";
   src: url("../fonts/EuclidCircularA-Regular.woff2") format("woff2");
@@ -37,7 +36,6 @@
 }
 
 :root{
-  /* Telegram theme bindings */
   --bg: var(--tg-theme-bg-color, #ffffff);
   --surface: var(--tg-theme-secondary-bg-color, #f4f6f8);
   --text: var(--tg-theme-text-color, #1f2328);
@@ -84,7 +82,6 @@ body{
     max(12px, env(safe-area-inset-right))
     max(16px, env(safe-area-inset-bottom))
     max(12px, env(safe-area-inset-left));
-  /* мягкий фон с акцентной “дымкой” сверху */
   background:
     radial-gradient(1200px 800px at 50% -10%,
       color-mix(in oklab, var(--accent) 6%, transparent), transparent)
@@ -127,20 +124,18 @@ main#app{
   font-weight: 700;
 }
 
-/* chips (дата/происхождение) */
 #program-date,
-#program-origin{
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  padding:6px 10px;
-  border-radius:999px;
-  background: color-mix(in oklab, var(--bg) 70%, var(--surface));
-  border: 1px solid var(--border);
+#program-origin {
+  display: block;
+  margin: 0 0 8px 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   font-size: 12.5px;
   color: var(--muted);
   letter-spacing: .02em;
-  width:max-content;
+  width: auto;
 }
 #program-origin.ai-label{
   color: color-mix(in oklab, var(--accent) 84%, var(--text));
@@ -169,7 +164,6 @@ main#app{
   color: var(--text);
 }
 
-/* alert/notice блоки внутри контента (loading/error) */
 .notice{
   border: 1px dashed var(--border);
   border-radius: 10px;
@@ -178,7 +172,6 @@ main#app{
   color: var(--text);
 }
 
-/* Footer / history button */
 .history-footer{
   margin-top: auto;
   padding-top: var(--spacing);
@@ -186,7 +179,6 @@ main#app{
   justify-content: center;
 }
 
-/*красивая кнопка истории*/
 .primary-button,
 #history-btn,
 .history-footer button{
@@ -224,7 +216,6 @@ main#app{
   opacity:.6; cursor:not-allowed;
 }
 
-/* Minimal support styles for program view (список дней) */
 .week{ margin-top: 8px; }
 .week + .week{ margin-top: 14px; }
 .week h2{
@@ -386,7 +377,6 @@ main#app{
   to{ opacity: 1; transform: translateY(0); }
 }
 
-/* History list (если используется на /history) */
 .history-list{
   list-style: none;
   padding: 0;
@@ -409,7 +399,6 @@ main#app{
 }
 .history-list li:hover .history-link{ color: var(--link); }
 
-/* Scrollbar (desktop) */
 .history-list::-webkit-scrollbar{ width: 10px; }
 .history-list::-webkit-scrollbar-thumb{
   background-color: color-mix(in oklab, var(--text) 18%, transparent);
@@ -418,11 +407,9 @@ main#app{
 }
 .history-list::-webkit-scrollbar-track{ background: transparent; }
 
-/* Links */
 a{ color: var(--link); }
 a:hover{ opacity: .9; }
 
-/* subtle separators on the main card */
 main#app::before,
 main#app::after{
   content:"";
@@ -432,13 +419,11 @@ main#app::after{
   background: linear-gradient(90deg, transparent, var(--border), transparent);
 }
 
-/* Small screens */
 @media (max-width: 420px){
   main#app{ padding: 14px; }
   .history-footer{ padding-bottom: env(safe-area-inset-bottom); }
 }
 
-/* Print */
 @media print{
   body{ background:#fff; color:#000; }
   main#app{ box-shadow:none; border-color:#ddd; }

@@ -43,6 +43,7 @@ services:
     entrypoint: /bin/sh
     command: -lc 'if [ "${DOCKER_BOT_START}" = "true" ]; then exec /app/docker/entrypoint.sh python -m bot.main; else echo "bot disabled (DOCKER_BOT_START!=true)"; exec sleep infinity; fi'
     restart: unless-stopped
+    networks: [internal]
 
   db:
     image: pgvector/pgvector:pg17
@@ -64,6 +65,7 @@ services:
       start_period: 10s
     ports:
       - ${HOST_PG_PORT:-5432}:5432
+    networks: [internal]
 
   redis:
     image: redis:7-alpine
@@ -76,6 +78,7 @@ services:
       retries: 10
     ports:
       - ${HOST_REDIS_PORT:-6379}:6379
+    networks: [internal]
 
   api:
     image: *app_image
@@ -112,6 +115,7 @@ services:
       - ../google_creds.json:/app/google_creds.json:ro
     ports:
       - ${HOST_API_PORT:-8000}:${API_PORT:-8000}
+    networks: [internal]
 
   celery_worker:
     image: *app_image
@@ -131,6 +135,7 @@ services:
       -Q default,maintenance
       -P threads
     restart: unless-stopped
+    networks: [internal]
 
   ai_coach:
     image: *coach_image
@@ -170,6 +175,7 @@ services:
       bash -lc "uvicorn ai_coach.api:app --host 0.0.0.0 --port ${COACH_PORT:-9000}"
     ports:
       - ${HOST_COACH_PORT:-9000}:${COACH_PORT:-9000}
+    networks: [internal]
 
   nginx:
     image: nginx:alpine
@@ -185,6 +191,24 @@ services:
     depends_on:
       api:
         condition: service_started
+    networks: [internal]
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    environment:
+      - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
+    volumes:
+      - ./cloudflared-config.yaml:/etc/cloudflared/config.yml:ro
+    depends_on:
+      - nginx
+    networks: [internal]
+
+networks:
+  internal:
+    driver: bridge
 
 volumes:
   pgdata:
