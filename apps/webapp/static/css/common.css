@@ -135,11 +135,8 @@ main#app{
   letter-spacing: .02em;
   width: auto;
 }
-
 #program-date::before,
-#program-date::after {
-  content: none !important;
-}
+#program-date::after { content: none !important; }
 
 #program-origin {
   display: block;
@@ -160,6 +157,7 @@ main#app{
   font-weight: 700;
 }
 
+/* Content */
 #content{
   white-space: normal;
   background: var(--bg);
@@ -256,6 +254,39 @@ main#app{
   opacity:.6; cursor:not-allowed;
 }
 
+.history-footer #history-button,
+.history-footer button#history-button.primary-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: #2d74ff !important;
+  color: #fff !important;
+  font-weight: 600;
+  border-radius: 16px;
+  padding: 16px 20px;
+  font-size: 16px;
+  min-height: 56px;
+  box-shadow: 0 6px 16px rgba(45,116,255,.35);
+}
+
+.history-footer #history-button::before,
+.history-footer button#history-button.primary-button::before {
+  content: "";
+  width: 20px;
+  height: 20px;
+  display: inline-block;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 3v5h5'/><path d='M3 12a9 9 0 1 0 9-9'/><path d='M12 7v5l3 3'/></svg>");
+}
+
+.history-footer #history-button.back::before,
+.history-footer button#history-button.back.primary-button::before {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='15 18 9 12 15 6'/></svg>");
+}
+
 .week{ margin-top: 8px; }
 .week + .week{ margin-top: 14px; }
 .week h2{
@@ -322,6 +353,7 @@ main#app{
   pointer-events: none;
 }
 .program-day-rest .program-day-summary::after{ display: none; }
+
 .program-day-list{
   list-style: none;
   padding: 12px 16px 18px;
@@ -379,9 +411,7 @@ main#app{
   cursor: default;
   pointer-events: none;
 }
-.program-exercise-summary-static::after{
-  content: none;
-}
+.program-exercise-summary-static::after{ content: none; }
 .program-exercise-summary:focus-visible{
   outline: 2px solid color-mix(in oklab, var(--accent) 54%, transparent);
   outline-offset: 2px;
@@ -391,10 +421,7 @@ main#app{
   font-weight: 600;
   color: color-mix(in oklab, var(--text) 92%, var(--muted));
 }
-.program-exercise-title{
-  flex: 1;
-  text-align: left;
-}
+.program-exercise-title{ flex: 1; text-align: left; }
 .program-exercise-content{
   padding: 0 14px 14px;
   font-size: 13px;
@@ -404,22 +431,14 @@ main#app{
   gap: 6px;
   animation: accordion-in .24s ease;
 }
-.program-exercise-meta{
-  font-weight: 500;
-}
-.program-exercise-notes{
-  margin: 0;
-  line-height: 1.4;
-}
+.program-exercise-meta{ font-weight: 500; }
+.program-exercise-notes{ margin: 0; line-height: 1.4; }
 
 @keyframes accordion-in{
   from{ opacity: 0; transform: translateY(-6px); }
   to{ opacity: 1; transform: translateY(0); }
 }
-
-@keyframes spin{
-  to{ transform: rotate(360deg); }
-}
+@keyframes spin{ to{ transform: rotate(360deg); } }
 
 .history-list{
   list-style: none;
@@ -434,7 +453,9 @@ main#app{
 .history-list li + li{ border-top: 1px solid var(--border); }
 .history-list li{
   padding: 12px 14px;
-  display: flex; align-items: center; gap: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .history-list .history-link{
   color: var(--text);
