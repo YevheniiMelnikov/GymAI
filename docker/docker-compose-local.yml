@@ -193,15 +193,15 @@ services:
         condition: service_started
     networks: [internal]
 
-  cloudflared:
+  cloudflare:
     image: cloudflare/cloudflared:latest
-    container_name: cloudflared
+    container_name: cloudflare
     restart: unless-stopped
-    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    command: tunnel --no-autoupdate --config /etc/cloudflare/config.yml run
     environment:
       - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
     volumes:
-      - ./cloudflared-config.yaml:/etc/cloudflared/config.yml:ro
+      - ./cloudflare-config.yml:/etc/cloudflare/config.yml:ro
     depends_on:
       - nginx
     networks: [internal]
