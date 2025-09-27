@@ -190,7 +190,7 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       api:
-        condition: service_started
+        condition: service_healthy
     networks: [internal]
 
   cloudflare:
