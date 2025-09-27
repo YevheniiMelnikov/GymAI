@@ -41,9 +41,11 @@ async function handleRoute(
     content: HTMLElement;
     dateEl: HTMLElement;
     historyButton: HTMLButtonElement | null;
+    titleEl: HTMLElement | null;
   },
   cleanup: { current?: CleanupFn }
 ): Promise<void> {
+  const { historyButton, titleEl } = ctx;
   if (cleanup.current) {
     try { cleanup.current(); } catch {}
   }
@@ -51,20 +53,20 @@ async function handleRoute(
 
   if (route.kind === 'history') {
     const source = resolveSourceFromLocation();
-    if (ctx.historyButton) {
-      ctx.historyButton.disabled = true;
+    if (historyButton) {
+      historyButton.disabled = true;
     }
-    await renderHistoryView();
-    if (ctx.historyButton) {
-      ctx.historyButton.textContent = t('back');
-      ctx.historyButton.disabled = false;
-      ctx.historyButton.onclick = () => goToProgram(source);
+    await renderHistoryView(titleEl ?? undefined);
+    if (historyButton) {
+      historyButton.textContent = t('back');
+      historyButton.disabled = false;
+      historyButton.onclick = () => goToProgram(source);
     }
     return;
   }
 
-  if (ctx.historyButton) {
-    ctx.historyButton.disabled = true;
+  if (historyButton) {
+    historyButton.disabled = true;
   }
 
   const dispose = await mountProgramView(
@@ -72,16 +74,17 @@ async function handleRoute(
       root: ctx.root,
       content: ctx.content,
       dateEl: ctx.dateEl,
-      button: ctx.historyButton,
+      button: historyButton,
+      titleEl,
     },
     route.source
   );
   cleanup.current = dispose;
 
-  if (ctx.historyButton) {
-    ctx.historyButton.textContent = t('program.view_history');
-    ctx.historyButton.disabled = false;
-    ctx.historyButton.onclick = () => goToHistory();
+  if (historyButton) {
+    historyButton.textContent = t('program.view_history');
+    historyButton.disabled = false;
+    historyButton.onclick = () => goToHistory();
   }
 }
 
@@ -89,6 +92,7 @@ async function bootstrap(): Promise<void> {
   const root = document.getElementById('app') as HTMLElement | null;
   const content = document.getElementById('content') as HTMLElement | null;
   const dateEl = document.getElementById('program-date') as HTMLElement | null;
+  const titleEl = document.getElementById('page-title') as HTMLElement | null;
   if (!root || !content || !dateEl) return;
 
   try { await applyLang(); } catch {}
@@ -97,7 +101,7 @@ async function bootstrap(): Promise<void> {
   const cleanup: { current?: CleanupFn } = {};
 
   onRouteChange((route) => {
-    void handleRoute(route, { root, content, dateEl, historyButton }, cleanup);
+    void handleRoute(route, { root, content, dateEl, historyButton, titleEl }, cleanup);
   });
 
   initRouter();

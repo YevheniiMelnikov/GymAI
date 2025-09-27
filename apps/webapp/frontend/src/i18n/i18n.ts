@@ -31,7 +31,9 @@ export const fallbackEn = {
   'program.week': 'Week {n}',
   'program.day': 'Day {n} — {title}',
   'program.day.rest': 'Rest Day',
-  retry: 'Retry'
+  retry: 'Retry',
+  'page.program': 'Program',
+  'page.history': 'History'
 } as const;
 
 export type TranslationKey = keyof typeof fallbackEn;

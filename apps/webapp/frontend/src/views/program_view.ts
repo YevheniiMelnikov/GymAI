@@ -66,11 +66,14 @@ export async function mountProgramView(
   ctx: Ctx,
   source: 'direct' | 'subscription'
 ): Promise<Cleanup> {
-  const { root, content } = ctx;
+  const { root, content, titleEl } = ctx;
   let { dateEl } = ctx;
   const initData: string = readInitData();
 
   const controller = new AbortController();
+  if (titleEl) {
+    titleEl.textContent = t('page.program');
+  }
   setBusy(content, true);
 
   dateEl = normalizeDateNode(dateEl, root);
@@ -83,6 +86,9 @@ export async function mountProgramView(
     const load = await getProgram(programId ?? '', { initData, source, signal: controller.signal });
 
     const appliedLocale: Locale = await applyLang(load.locale);
+    if (titleEl) {
+      titleEl.textContent = t('page.program');
+    }
     const locale: Locale = appliedLocale;
 
     content.innerHTML = '';

@@ -76,15 +76,8 @@ html, body { height: 100%; }
 
 body{
   margin: 0;
-  padding:
-    max(10px, env(safe-area-inset-top))
-    max(12px, env(safe-area-inset-right))
-    max(16px, env(safe-area-inset-bottom))
-    max(12px, env(safe-area-inset-left));
-  background:
-    radial-gradient(1200px 800px at 50% -10%,
-      color-mix(in oklab, var(--accent) 6%, transparent), transparent)
-    var(--surface);
+  min-height: 100dvh;
+  background: var(--bg);
   color: var(--text);
   font-family: "Inter","Euclid Circular A",
     -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",
@@ -97,34 +90,39 @@ body{
 }
 
 main#app{
-  max-width: 860px;
-  margin: 0 auto;
-  background: linear-gradient(180deg, color-mix(in oklab, var(--bg) 98%, transparent), var(--bg));
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: clamp(14px, 2vw, 22px);
+  width: 100%;
+  min-height: 100dvh;
+  background: var(--bg);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding:
+    calc(clamp(14px, 2vw, 22px) + max(10px, env(safe-area-inset-top)))
+    calc(clamp(14px, 2vw, 22px) + max(12px, env(safe-area-inset-right)))
+    calc(clamp(14px, 2vw, 22px) + max(16px, env(safe-area-inset-bottom)))
+    calc(clamp(14px, 2vw, 22px) + max(12px, env(safe-area-inset-left)));
   display: flex;
   flex-direction: column;
-  min-height: calc(100dvh - 2 * max(10px, env(safe-area-inset-top)));
+  gap: var(--spacing);
 }
 
 .app-header{
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 8px;
+  align-items: center;
+  justify-content: center;
+  padding-top: 4px;
 }
 
 #page-title{
   margin: 0;
-  font-size: clamp(18px, 3.6vw, 22px);
+  font-size: clamp(20px, 4.2vw, 26px);
   font-weight: 700;
+  text-align: center;
 }
 
 #program-date {
   display: block;
-  margin: 0 0 8px 0;
+  margin: 0;
   padding: 0 !important;
   background: none !important;
   border: none !important;
@@ -137,6 +135,10 @@ main#app{
 }
 #program-date::before,
 #program-date::after { content: none !important; }
+
+#controls {
+  margin-top: auto;
+}
 
 #program-origin {
   display: block;
@@ -166,7 +168,7 @@ main#app{
   padding: clamp(14px, 2.2vw, 18px);
   font-size: clamp(14px, 1.5vw, 15.5px);
   line-height: 1.6;
-  margin-top: var(--spacing);
+  margin: 0;
   width: 100%;
   min-height: 120px;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.04);

@@ -20,5 +20,8 @@
   "program.week": "Тиждень {n}",
   "program.day": "День {n} — {title}",
   "program.day.rest": "День відпочинку",
-  "retry": "Спробувати ще раз"
+  "retry": "Спробувати ще раз",
+
+  "page.program": "програма",
+  "page.history": "історія"
 }
