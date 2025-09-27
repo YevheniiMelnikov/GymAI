@@ -3,12 +3,20 @@ import type { Locale } from './api/types';
 type TelegramUser = { language_code?: string };
 type TelegramInitData = { user?: TelegramUser };
 
+type TelegramThemeParams = {
+  bg_color?: string;
+  secondary_bg_color?: string;
+};
+
 type TelegramWebApp = {
   initData?: string;
   initDataUnsafe?: TelegramInitData;
   ready?: () => void;
   expand?: () => void;
   platform?: string;
+  setBackgroundColor?: (color: string) => void;
+  setHeaderColor?: (color: string | 'bg_color' | 'secondary_bg_color') => void;
+  themeParams?: TelegramThemeParams;
 };
 
 type TelegramNamespace = { WebApp?: TelegramWebApp };
@@ -29,6 +37,29 @@ export function tmeReady(): void {
 
 export function tmeExpand(): void {
   try { getWebApp()?.expand?.(); } catch {}
+}
+
+const HEX_COLOR_PATTERN = /^#?(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+
+function normalizeHexColor(value: string | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return null;
+  if (!HEX_COLOR_PATTERN.test(trimmed)) return null;
+  return trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+}
+
+export function tmeMatchBackground(): void {
+  const webApp = getWebApp();
+  if (!webApp) return;
+
+  const primary = normalizeHexColor(webApp.themeParams?.bg_color);
+  const fallback = normalizeHexColor(webApp.themeParams?.secondary_bg_color);
+  const color = primary ?? fallback;
+  if (!color) return;
+
+  try { webApp.setBackgroundColor?.(color); } catch {}
+  try { webApp.setHeaderColor?.('secondary_bg_color'); } catch {}
 }
 
 export function readInitData(): string {

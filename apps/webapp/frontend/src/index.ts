@@ -2,6 +2,7 @@ import { applyLang, t } from './i18n/i18n';
 import { initRouter, onRouteChange, Route, goToHistory, goToProgram } from './router';
 import { mountProgramView } from './views/program_view';
 import { renderHistoryView } from './views/history';
+import { tmeExpand, tmeMatchBackground } from './telegram';
 
 type CleanupFn = () => void;
 
@@ -96,6 +97,9 @@ async function bootstrap(): Promise<void> {
   if (!root || !content || !dateEl) return;
 
   try { await applyLang(); } catch {}
+
+  tmeExpand();
+  tmeMatchBackground();
 
   const historyButton = ensureHistoryButton();
   const cleanup: { current?: CleanupFn } = {};

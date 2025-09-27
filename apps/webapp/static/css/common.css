@@ -104,13 +104,14 @@ main#app{
   box-shadow: none;
   flex: 1 0 auto;
   padding:
-    calc(clamp(14px, 2vw, 22px) + max(10px, env(safe-area-inset-top)))
-    calc(clamp(14px, 2vw, 22px) + max(12px, env(safe-area-inset-right)))
-    calc(clamp(14px, 2vw, 22px) + max(16px, env(safe-area-inset-bottom)))
-    calc(clamp(14px, 2vw, 22px) + max(12px, env(safe-area-inset-left)));
+    calc(clamp(18px, 2.4vw, 28px) + max(10px, env(safe-area-inset-top)))
+    calc(clamp(18px, 2.4vw, 28px) + max(12px, env(safe-area-inset-right)))
+    calc(clamp(18px, 2.4vw, 28px) + max(16px, env(safe-area-inset-bottom)))
+    calc(clamp(18px, 2.4vw, 28px) + max(12px, env(safe-area-inset-left)));
   display: flex;
   flex-direction: column;
-  gap: var(--spacing);
+  align-items: stretch;
+  gap: clamp(18px, 2.4vw, 26px);
 }
 
 .app-header{
@@ -118,11 +119,12 @@ main#app{
   align-items: center;
   justify-content: center;
   padding-top: 4px;
+  text-align: center;
 }
 
 #page-title{
   margin: 0;
-  font-size: clamp(22px, 6vw, 30px);
+  font-size: clamp(26px, 6vw, 34px);
   font-weight: 700;
   text-align: center;
 }
@@ -142,6 +144,10 @@ main#app{
 }
 #program-date::before,
 #program-date::after { content: none !important; }
+
+#program-date:not(:empty){
+  margin-bottom: clamp(6px, 1.4vw, 12px);
+}
 
 #controls {
   margin-top: auto;
@@ -169,16 +175,18 @@ main#app{
 /* Content */
 #content{
   white-space: normal;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: clamp(14px, 2.2vw, 18px);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
   font-size: clamp(14px, 1.5vw, 15.5px);
   line-height: 1.6;
   margin: 0;
   width: 100%;
   min-height: 120px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.04);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(20px, 2.8vw, 28px);
   position: relative;
 }
 #content[aria-busy="true"]{ opacity:.7; }
@@ -221,7 +229,7 @@ main#app{
 
 .history-footer{
   margin-top: auto;
-  padding-top: var(--spacing);
+  padding-top: clamp(18px, 2.4vw, 26px);
   display: flex;
   justify-content: center;
 }
@@ -296,38 +304,40 @@ main#app{
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='15 18 9 12 15 6'/></svg>");
 }
 
-.week{ margin-top: 8px; }
-.week + .week{ margin-top: 14px; }
+.week{
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(14px, 2.2vw, 20px);
+}
+.week + .week{ margin-top: clamp(24px, 3.4vw, 36px); }
 .week h2{
-  margin: 0 0 8px;
-  font-size: 16px;
-  font-weight: 600;
+  margin: 0;
+  font-size: clamp(18px, 2.4vw, 21px);
+  font-weight: 700;
 }
 
 .program-day{
-  margin: 12px 0 0;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(180deg,
-    color-mix(in oklab, var(--bg) 90%, transparent),
-    color-mix(in oklab, var(--surface) 94%, transparent));
-  box-shadow: var(--shadow);
-  border: 1px solid color-mix(in oklab, var(--border) 78%, transparent);
-  overflow: hidden;
-  transition: box-shadow .25s ease, border-color .25s ease;
+  margin: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  padding: 0;
 }
-.program-day:first-of-type{ margin-top: 0; }
+.program-day + .program-day{ margin-top: clamp(18px, 2.6vw, 26px); }
 .program-day-summary{
   list-style: none;
-  padding: 14px 18px;
+  padding: 0;
   margin: 0;
-  font-size: 15px;
+  font-size: clamp(16px, 2.3vw, 18px);
   font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 12px;
   background: transparent;
-  transition: background-color .25s ease, color .25s ease;
+  transition: color .25s ease;
 }
 .program-day summary::-webkit-details-marker{ display: none; }
 .program-day summary::marker{ display: none; }
@@ -341,14 +351,8 @@ main#app{
   transition: transform .25s ease;
   margin-left: auto;
 }
-.program-day[open] .program-day-summary{
-  background: color-mix(in oklab, var(--bg) 94%, transparent);
-  border-bottom: 1px solid var(--border);
-}
-.program-day[open]{
-  box-shadow: var(--shadow-strong);
-  border-color: color-mix(in oklab, var(--border) 84%, transparent);
-}
+.program-day-summary:hover{ color: color-mix(in oklab, var(--text) 84%, var(--link)); }
+.program-day[open] .program-day-summary{ color: color-mix(in oklab, var(--text) 86%, var(--link)); }
 .program-day[open] .program-day-summary::after{
   transform: rotate(45deg);
 }
@@ -365,33 +369,32 @@ main#app{
 
 .program-day-list{
   list-style: none;
-  padding: 12px 16px 18px;
-  margin: 0;
+  padding: 0;
+  margin: clamp(12px, 1.8vw, 18px) 0 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: clamp(10px, 1.6vw, 16px);
   animation: accordion-in .26s ease;
 }
 .program-exercise-details{
-  border: 1px solid color-mix(in oklab, var(--border) 82%, transparent);
-  border-radius: calc(var(--radius-sm) - 3px);
-  background: color-mix(in oklab, var(--bg) 98%, var(--border) 2%);
+  border: none;
+  border-radius: 0;
+  background: transparent;
   overflow: hidden;
-  transition: border-color .2s ease, box-shadow .2s ease;
 }
 .program-exercise-details summary::-webkit-details-marker{ display: none; }
 .program-exercise-details summary::marker{ display: none; }
 .program-exercise-summary{
   list-style: none;
-  padding: 10px 14px;
+  padding: clamp(6px, 1.4vw, 10px) 0;
   margin: 0;
   font-weight: 600;
-  font-size: 14px;
+  font-size: clamp(14px, 2vw, 15px);
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 10px;
-  transition: background-color .2s ease, color .2s ease;
+  transition: color .2s ease;
 }
 .program-exercise-summary::after{
   content: '';
@@ -403,18 +406,13 @@ main#app{
   transition: transform .2s ease;
   margin-left: auto;
 }
-.program-exercise-details[open]{
-  border-color: color-mix(in oklab, var(--accent) 34%, var(--border));
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 28%, transparent);
-}
-.program-exercise-details[open] .program-exercise-summary{
-  background: color-mix(in oklab, var(--accent) 12%, transparent);
-}
+.program-exercise-summary:hover{ color: color-mix(in oklab, var(--text) 86%, var(--link)); }
+.program-exercise-details[open] .program-exercise-summary{ color: color-mix(in oklab, var(--text) 80%, var(--link)); }
 .program-exercise-details[open] .program-exercise-summary::after{
   transform: rotate(45deg);
 }
 .program-exercise-details-static{
-  border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+  border: none;
 }
 .program-exercise-summary-static{
   cursor: default;
@@ -429,10 +427,11 @@ main#app{
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   color: color-mix(in oklab, var(--text) 92%, var(--muted));
+  min-width: 24px;
 }
 .program-exercise-title{ flex: 1; text-align: left; }
 .program-exercise-content{
-  padding: 0 14px 14px;
+  padding: clamp(6px, 1.4vw, 10px) 0 0 clamp(24px, 3vw, 32px);
   font-size: 13px;
   color: var(--muted);
   display: flex;
@@ -452,16 +451,15 @@ main#app{
 .history-list{
   list-style: none;
   padding: 0;
-  margin: var(--spacing) 0 0;
+  margin: clamp(16px, 2.4vw, 24px) 0 0;
   max-height: 64vh;
   overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(12px, 2vw, 18px);
 }
-.history-list li + li{ border-top: 1px solid var(--border); }
 .history-list li{
-  padding: 12px 14px;
+  padding: 0;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -485,7 +483,7 @@ a{ color: var(--link); }
 a:hover{ opacity: .9; }
 
 @media (max-width: 420px){
-  main#app{ padding: 14px; }
+  main#app{ padding: 18px; }
   .history-footer{ padding-bottom: env(safe-area-inset-bottom); }
 }
 
