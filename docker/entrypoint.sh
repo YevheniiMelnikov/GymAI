@@ -19,11 +19,11 @@ if [ "${RUN_MIGRATIONS}" = "true" ]; then
 
   echo "▶ Ensuring AI coach..."
   python apps/manage.py ensure_ai_coach || echo "▶ ensure_ai_coach failed"
-
-  echo "▶ Collecting static files..."
-  rm -rf /app/staticfiles/js /app/staticfiles/css || true
-  python apps/manage.py collectstatic --noinput || echo "Skipping collectstatic"
 fi
+
+echo "▶ Collecting static files..."
+rm -rf /app/staticfiles/js /app/staticfiles/css || true
+python apps/manage.py collectstatic --noinput || echo "Skipping collectstatic"
 
 echo "▶ Starting: $@"
 exec "$@"
