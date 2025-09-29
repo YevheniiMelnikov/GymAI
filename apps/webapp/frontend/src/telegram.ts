@@ -60,6 +60,11 @@ export function tmeMatchBackground(): void {
 
   try { webApp.setBackgroundColor?.(color); } catch {}
   try { webApp.setHeaderColor?.('secondary_bg_color'); } catch {}
+
+  try {
+    document.documentElement.style.backgroundColor = color;
+    document.body.style.backgroundColor = color;
+  } catch {}
 }
 
 export function readInitData(): string {
