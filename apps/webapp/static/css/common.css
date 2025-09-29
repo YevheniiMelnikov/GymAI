@@ -146,7 +146,7 @@ main#app{
 #program-date::after { content: none !important; }
 
 #program-date:not(:empty){
-  margin-bottom: clamp(6px, 1.4vw, 12px);
+  margin-top: clamp(16px, 2.4vw, 22px);
 }
 
 #controls {
@@ -322,18 +322,19 @@ main#app{
   border-radius: clamp(18px, 3.6vw, 26px);
   background: color-mix(in oklab, var(--surface) 96%, transparent);
   box-shadow: 0 14px 32px color-mix(in oklab, var(--text) 9%, transparent);
-  border: none;
-  padding: clamp(18px, 2.6vw, 24px) clamp(22px, 3.2vw, 30px);
-  transition: background .25s ease, box-shadow .3s ease;
+  border: 1px solid color-mix(in oklab, var(--text) 16%, transparent);
+  padding: 0;
+  transition: background .25s ease, box-shadow .3s ease, border-color .25s ease;
 }
 .program-day + .program-day{ margin-top: clamp(16px, 2.4vw, 22px); }
 .program-day[open]{
   background: color-mix(in oklab, var(--surface) 98%, transparent);
   box-shadow: 0 18px 40px color-mix(in oklab, var(--text) 11%, transparent);
+  border-color: color-mix(in oklab, var(--text) 26%, transparent);
 }
 .program-day-summary{
   list-style: none;
-  padding: 0;
+  padding: clamp(18px, 2.6vw, 24px) clamp(22px, 3.2vw, 30px);
   margin: 0;
   font-size: clamp(16px, 2.3vw, 18px);
   font-weight: 600;
@@ -374,24 +375,24 @@ main#app{
 
 .program-day-list{
   list-style: none;
-  padding: 0;
-  margin: clamp(14px, 2vw, 20px) 0 0;
+  padding: 0 clamp(22px, 3.2vw, 30px) clamp(18px, 2.6vw, 24px);
+  margin: clamp(6px, 1.4vw, 12px) 0 0;
   display: flex;
   flex-direction: column;
   gap: clamp(10px, 1.6vw, 16px);
   animation: accordion-in .26s ease;
 }
 .program-exercise-details{
-  border: none;
-  border-radius: 0;
-  background: transparent;
+  border: 1px solid color-mix(in oklab, var(--text) 12%, transparent);
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--bg) 98%, transparent);
   overflow: hidden;
 }
 .program-exercise-details summary::-webkit-details-marker{ display: none; }
 .program-exercise-details summary::marker{ display: none; }
 .program-exercise-summary{
   list-style: none;
-  padding: clamp(6px, 1.4vw, 10px) 0;
+  padding: clamp(8px, 1.6vw, 12px) clamp(16px, 2.6vw, 22px);
   margin: 0;
   font-weight: 600;
   font-size: clamp(14px, 2vw, 15px);
@@ -417,7 +418,9 @@ main#app{
   transform: rotate(45deg);
 }
 .program-exercise-details-static{
-  border: none;
+  border: 1px solid color-mix(in oklab, var(--text) 12%, transparent);
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--bg) 98%, transparent);
 }
 .program-exercise-summary-static{
   cursor: default;
@@ -436,7 +439,11 @@ main#app{
 }
 .program-exercise-title{ flex: 1; text-align: left; }
 .program-exercise-content{
-  padding: clamp(6px, 1.4vw, 10px) 0 0 clamp(24px, 3vw, 32px);
+  padding:
+    clamp(6px, 1.4vw, 10px)
+    clamp(16px, 2.6vw, 22px)
+    clamp(14px, 2.4vw, 18px)
+    clamp(24px, 3vw, 32px);
   font-size: 13px;
   color: var(--muted);
   display: flex;
