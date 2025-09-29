@@ -62,6 +62,14 @@ export function tmeMatchBackground(): void {
   try { webApp.setHeaderColor?.('secondary_bg_color'); } catch {}
 
   try {
+    if (primary) {
+      document.documentElement.style.setProperty('--tg-theme-bg-color', primary);
+    }
+    if (fallback) {
+      document.documentElement.style.setProperty('--tg-theme-secondary-bg-color', fallback);
+    } else if (primary) {
+      document.documentElement.style.setProperty('--tg-theme-secondary-bg-color', primary);
+    }
     document.documentElement.style.backgroundColor = color;
     document.body.style.backgroundColor = color;
   } catch {}

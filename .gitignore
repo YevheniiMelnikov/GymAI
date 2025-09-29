@@ -169,6 +169,7 @@ staticfiles/
 
 # Webapp build outputs
 apps/webapp/static/js/*
-!apps/webapp/static/js/.gitignore
+!apps/webapp/static/js/index.js
+!apps/webapp/static/js/index.js.map
 /docker/nginx.conf.template
 /docker/nginx.local.conf.template

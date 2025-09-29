@@ -98,10 +98,7 @@ body{
 main#app{
   width: 100%;
   min-height: 100dvh;
-  background: var(--bg);
-  border: none;
-  border-radius: 0;
-  box-shadow: none;
+  background: transparent;
   flex: 1 0 auto;
   padding:
     calc(clamp(18px, 2.4vw, 28px) + max(10px, env(safe-area-inset-top)))
@@ -151,6 +148,9 @@ main#app{
 
 #controls {
   margin-top: auto;
+  border: none;
+  background: transparent;
+  box-shadow: none;
 }
 
 #program-origin {
@@ -232,6 +232,8 @@ main#app{
   padding-top: clamp(18px, 2.4vw, 26px);
   display: flex;
   justify-content: center;
+  border: none;
+  background: transparent;
 }
 
 .primary-button,
@@ -250,20 +252,18 @@ main#app{
   min-height: 48px;
   font-size: 15.5px;
   cursor: pointer;
-  transition: transform .06s ease, box-shadow .2s ease, background .2s ease, opacity .2s ease;
-  box-shadow: 0 2px 12px color-mix(in oklab, var(--accent) 20%, transparent);
+  transition: transform .06s ease, background .2s ease, opacity .2s ease;
+  box-shadow: none;
 }
 .primary-button:hover,
 #history-btn:hover,
 .history-footer button:hover{
   transform: translateY(-1px);
-  box-shadow: 0 8px 18px color-mix(in oklab, var(--accent) 26%, transparent);
 }
 .primary-button:active,
 #history-btn:active,
 .history-footer button:active{
   transform: translateY(0);
-  box-shadow: 0 3px 10px color-mix(in oklab, var(--accent) 20%, transparent);
 }
 .primary-button:disabled,
 #history-btn:disabled,
@@ -284,7 +284,7 @@ main#app{
   padding: 16px 20px;
   font-size: 16px;
   min-height: 56px;
-  box-shadow: 0 6px 16px rgba(45,116,255,.35);
+  box-shadow: none;
 }
 
 .history-footer #history-button::before,
@@ -319,19 +319,12 @@ main#app{
 
 .program-day{
   margin: 0;
-  border-radius: clamp(18px, 3.6vw, 26px);
-  background: color-mix(in oklab, var(--surface) 96%, transparent);
-  box-shadow: 0 14px 32px color-mix(in oklab, var(--text) 9%, transparent);
-  border: 1px solid color-mix(in oklab, var(--text) 16%, transparent);
+  border: none;
+  border-radius: 0;
+  background: transparent;
   padding: 0;
-  transition: background .25s ease, box-shadow .3s ease, border-color .25s ease;
 }
 .program-day + .program-day{ margin-top: clamp(16px, 2.4vw, 22px); }
-.program-day[open]{
-  background: color-mix(in oklab, var(--surface) 98%, transparent);
-  box-shadow: 0 18px 40px color-mix(in oklab, var(--text) 11%, transparent);
-  border-color: color-mix(in oklab, var(--text) 26%, transparent);
-}
 .program-day-summary{
   list-style: none;
   padding: clamp(18px, 2.6vw, 24px) clamp(22px, 3.2vw, 30px);
@@ -342,8 +335,9 @@ main#app{
   display: flex;
   align-items: center;
   gap: 12px;
+  border-radius: clamp(16px, 3vw, 22px);
   background: transparent;
-  transition: color .25s ease;
+  transition: color .25s ease, background .25s ease;
 }
 .program-day summary::-webkit-details-marker{ display: none; }
 .program-day summary::marker{ display: none; }
@@ -357,8 +351,14 @@ main#app{
   transition: transform .25s ease;
   margin-left: auto;
 }
-.program-day-summary:hover{ color: color-mix(in oklab, var(--text) 84%, var(--link)); }
-.program-day[open] .program-day-summary{ color: color-mix(in oklab, var(--text) 86%, var(--link)); }
+.program-day-summary:hover{
+  color: color-mix(in oklab, var(--text) 84%, var(--link));
+  background: color-mix(in oklab, var(--surface) 72%, transparent);
+}
+.program-day[open] .program-day-summary{
+  color: color-mix(in oklab, var(--text) 86%, var(--link));
+  background: color-mix(in oklab, var(--surface) 64%, transparent);
+}
 .program-day[open] .program-day-summary::after{
   transform: rotate(45deg);
 }
@@ -383,9 +383,9 @@ main#app{
   animation: accordion-in .26s ease;
 }
 .program-exercise-details{
-  border: 1px solid color-mix(in oklab, var(--text) 12%, transparent);
-  border-radius: 10px;
-  background: color-mix(in oklab, var(--bg) 98%, transparent);
+  border: none;
+  border-radius: clamp(12px, 2.4vw, 16px);
+  background: transparent;
   overflow: hidden;
 }
 .program-exercise-details summary::-webkit-details-marker{ display: none; }
@@ -400,7 +400,8 @@ main#app{
   display: flex;
   align-items: center;
   gap: 10px;
-  transition: color .2s ease;
+  border-radius: clamp(12px, 2.4vw, 16px);
+  transition: color .2s ease, background .2s ease;
 }
 .program-exercise-summary::after{
   content: '';
@@ -412,15 +413,21 @@ main#app{
   transition: transform .2s ease;
   margin-left: auto;
 }
-.program-exercise-summary:hover{ color: color-mix(in oklab, var(--text) 86%, var(--link)); }
-.program-exercise-details[open] .program-exercise-summary{ color: color-mix(in oklab, var(--text) 80%, var(--link)); }
+.program-exercise-summary:hover{
+  color: color-mix(in oklab, var(--text) 86%, var(--link));
+  background: color-mix(in oklab, var(--surface) 68%, transparent);
+}
+.program-exercise-details[open] .program-exercise-summary{
+  color: color-mix(in oklab, var(--text) 80%, var(--link));
+  background: color-mix(in oklab, var(--surface) 58%, transparent);
+}
 .program-exercise-details[open] .program-exercise-summary::after{
   transform: rotate(45deg);
 }
 .program-exercise-details-static{
-  border: 1px solid color-mix(in oklab, var(--text) 12%, transparent);
-  border-radius: 10px;
-  background: color-mix(in oklab, var(--bg) 98%, transparent);
+  border: none;
+  border-radius: clamp(12px, 2.4vw, 16px);
+  background: transparent;
 }
 .program-exercise-summary-static{
   cursor: default;
@@ -450,6 +457,7 @@ main#app{
   flex-direction: column;
   gap: 6px;
   animation: accordion-in .24s ease;
+  background: transparent;
 }
 .program-exercise-meta{ font-weight: 500; }
 .program-exercise-notes{ margin: 0; line-height: 1.4; }
