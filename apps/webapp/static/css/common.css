@@ -123,8 +123,9 @@ main#app{
 h1.page-title,
 #page-title{
   margin: 0;
-  font-size: clamp(22px, 4.5vw, 28px);
+  font-size: clamp(22px, 4vw, 26px);
   font-weight: 700;
+  line-height: 1.2;
   text-align: center;
 }
 
@@ -310,7 +311,7 @@ h1.page-title,
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: clamp(10px, 1.8vw, 16px);
+  gap: clamp(6px, 1.2vw, 12px);
 }
 .week + .week{ margin-top: clamp(24px, 3.4vw, 36px); }
 .week h2{
@@ -322,15 +323,18 @@ h1.page-title,
 .program-day,
 .program-day-card{
   margin: 0;
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in oklab, var(--text) 18%, transparent);
   border-radius: clamp(16px, 3vw, 22px);
-  background: color-mix(in oklab, var(--surface) 82%, transparent);
+  background: color-mix(in oklab, var(--surface) 90%, transparent);
+  box-shadow: 0 1px 4px color-mix(in oklab, var(--text) 10%, transparent);
   padding: 0;
   overflow: hidden;
   transition: border-color .25s ease, background .25s ease, box-shadow .25s ease;
 }
 .program-day + .program-day,
-.program-day-card + .program-day-card{ margin-top: clamp(10px, 1.8vw, 16px); }
+.program-day-card + .program-day-card{ margin-top: clamp(6px, 1.2vw, 12px); }
+.week > .program-day + .program-day,
+.week > .program-day-card + .program-day-card{ margin-top: 0; }
 .program-day-summary,
 .program-day button,
 .program-day a,
@@ -369,9 +373,18 @@ h1.page-title,
   color: color-mix(in oklab, var(--text) 84%, var(--link));
   background: color-mix(in oklab, var(--surface) 72%, transparent);
 }
+.program-day:is(:hover, :focus-within),
+.program-day-card:is(:hover, :focus-within){
+  border-color: color-mix(in oklab, var(--link) 34%, transparent);
+  box-shadow: 0 4px 14px color-mix(in oklab, var(--text) 16%, transparent);
+}
 .program-day[open] .program-day-summary{
   color: color-mix(in oklab, var(--text) 86%, var(--link));
   background: color-mix(in oklab, var(--surface) 64%, transparent);
+}
+.program-day[open]{
+  border-color: color-mix(in oklab, var(--link) 36%, transparent);
+  box-shadow: 0 4px 16px color-mix(in oklab, var(--text) 18%, transparent);
 }
 .program-day[open] .program-day-summary::after{
   transform: rotate(45deg);
