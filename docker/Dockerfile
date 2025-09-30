@@ -14,6 +14,7 @@ WORKDIR /app/apps/webapp
 COPY apps/webapp/package*.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
 COPY apps/webapp/frontend ./frontend
+COPY apps/webapp/scripts ./scripts
 COPY apps/webapp/static ./static
 RUN npm run build \
  && echo "== build output in ./static ==" \
