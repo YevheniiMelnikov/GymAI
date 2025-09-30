@@ -17,12 +17,16 @@ async function getHistory(locale: Locale): Promise<HistoryResp> {
   return (await resp.json()) as HistoryResp;
 }
 
-export async function renderHistoryView(): Promise<void> {
+export async function renderHistoryView(titleEl?: HTMLElement | null): Promise<void> {
   if (!content) return;
   content.setAttribute('aria-busy', 'true');
   content.innerHTML = '';
 
   if (dateChip) dateChip.hidden = true;
+
+  if (titleEl) {
+    titleEl.textContent = t('page.history');
+  }
 
   const wrap = document.createElement('div');
   wrap.className = 'week';
@@ -39,6 +43,10 @@ export async function renderHistoryView(): Promise<void> {
     const requestLocale = readLocale();
     const data = await getHistory(requestLocale);
     const lang = await applyLang(data.language ?? requestLocale);
+
+    if (titleEl) {
+      titleEl.textContent = t('page.history');
+    }
 
     const resolveSource = (): 'direct' | 'subscription' => {
       const raw = new URL(window.location.href).searchParams.get('source');
