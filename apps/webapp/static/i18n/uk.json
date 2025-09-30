@@ -16,7 +16,7 @@
 
   "program.title": "Програма тренувань",
   "program.created": "Створено: {date}",
-  "program.view_history": "Переглянути історію",
+  "program.view_history": "Історія",
   "program.week": "Тиждень {n}",
   "program.day": "День {n} — {title}",
   "program.day.rest": "День відпочинку",

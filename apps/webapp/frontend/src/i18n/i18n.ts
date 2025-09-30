@@ -27,7 +27,7 @@ export const fallbackEn = {
   open_from_telegram: 'Open this page from Telegram.',
   'program.title': 'Workout Program',
   'program.created': 'Created: {date}',
-  'program.view_history': 'View History',
+  'program.view_history': 'History',
   'program.week': 'Week {n}',
   'program.day': 'Day {n} — {title}',
   'program.day.rest': 'Rest Day',
