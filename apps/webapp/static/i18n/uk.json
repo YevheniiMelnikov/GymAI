@@ -22,6 +22,13 @@
   "program.day.rest": "День відпочинку",
   "retry": "Спробувати ще раз",
 
+  "tabs.switch_label": "Перемикач розділів",
+  "tabs.program": "Програма",
+  "tabs.subscriptions": "Підписки",
+  "subscriptions.title": "Підписки",
+  "subscriptions.empty": "Тут поки що порожньо",
+
   "page.program": "Програма",
-  "page.history": "Історія"
+  "page.history": "Історія",
+  "page.subscriptions": "Підписки"
 }

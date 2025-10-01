@@ -22,6 +22,13 @@
   "program.day.rest": "День отдыха",
   "retry": "Повторить",
 
+  "tabs.switch_label": "Переключатель разделов",
+  "tabs.program": "Программа",
+  "tabs.subscriptions": "Подписки",
+  "subscriptions.title": "Подписки",
+  "subscriptions.empty": "Пока пусто",
+
   "page.program": "Программа",
-  "page.history": "История"
+  "page.history": "История",
+  "page.subscriptions": "Подписки"
 }
