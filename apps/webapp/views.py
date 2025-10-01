@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Awaitable, Callable, Tuple, TypeVar, TYPE_CHECKING, cast, Protocol
 
@@ -19,6 +20,12 @@ from .utils import (
     ensure_container_ready,
     normalize_day_exercises,
 )
+
+STATIC_VERSION_FILE: Path = Path(__file__).resolve().parents[2] / "VERSION"
+try:
+    STATIC_VERSION: str = STATIC_VERSION_FILE.read_text(encoding="utf-8").strip()
+except FileNotFoundError:
+    STATIC_VERSION = "dev"
 
 
 class _Profile(Protocol):
@@ -279,7 +286,7 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
 
 def index(request: HttpRequest) -> HttpResponse:
     logger.info(f"Webapp hit: {request.method} {request.get_full_path()}")
-    return render(request, "webapp/index.html")
+    return render(request, "webapp/index.html", {"static_version": STATIC_VERSION})
 
 
 def ping(request: HttpRequest) -> HttpResponse:

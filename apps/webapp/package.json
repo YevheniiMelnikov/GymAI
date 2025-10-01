@@ -7,7 +7,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p frontend/tsconfig.json",
-    "build": "npm run typecheck && node ./scripts/build.mjs",
-    "watch": "node ./scripts/build.mjs --watch"
+    "build": "npm run typecheck && esbuild frontend/src/index.ts --bundle --format=iife --target=es2017 --platform=browser --sourcemap --minify --outfile=static/js/index.js",
+    "watch": "esbuild frontend/src/index.ts --bundle --format=iife --target=es2017 --platform=browser --sourcemap --outfile=static/js/index.js --watch"
   }
 }
