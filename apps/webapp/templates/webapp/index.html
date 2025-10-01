@@ -26,6 +26,6 @@
   <script>
     try { window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.ready(); } catch {}
   </script>
-  <script src="{% static 'js/index.js' %}" defer></script>
+  <script src="{% static 'js/index.js' %}?v={{ static_version }}" defer></script>
 </body>
 </html>

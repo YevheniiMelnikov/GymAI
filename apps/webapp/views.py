@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import inspect
+import os
+import time
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -22,10 +24,20 @@ from .utils import (
 )
 
 STATIC_VERSION_FILE: Path = Path(__file__).resolve().parents[2] / "VERSION"
-try:
-    STATIC_VERSION: str = STATIC_VERSION_FILE.read_text(encoding="utf-8").strip()
-except FileNotFoundError:
-    STATIC_VERSION = "dev"
+
+
+def _resolve_static_version() -> str:
+    env_value: str | None = os.getenv("STATIC_VERSION")
+    if STATIC_VERSION_FILE.exists():
+        version: str = STATIC_VERSION_FILE.read_text(encoding="utf-8").strip()
+        if version:
+            return version
+    if env_value:
+        return env_value
+    return str(int(time.time()))
+
+
+STATIC_VERSION: str = _resolve_static_version()
 
 
 class _Profile(Protocol):
