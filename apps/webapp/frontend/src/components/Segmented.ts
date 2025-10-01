@@ -18,20 +18,32 @@ export function renderSegmented(
   wrapper.setAttribute('aria-label', t('tabs.switch_label'));
 
   const buttons: HTMLButtonElement[] = [];
+  let currentActive: SegmentId = active;
+
+  const updateActiveState = (next: SegmentId): void => {
+    currentActive = next;
+    buttons.forEach((button) => {
+      const isActive = button.dataset.tab === next;
+      button.setAttribute('aria-selected', String(isActive));
+      button.tabIndex = isActive ? 0 : -1;
+      button.classList.toggle('is-active', isActive);
+    });
+  };
 
   SEGMENTS.forEach((id, index) => {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'segmented__tab';
     button.setAttribute('role', 'tab');
+    button.dataset.tab = id;
+    button.setAttribute('aria-selected', 'false');
+    button.tabIndex = -1;
 
-    const isActive = id === active;
-    button.setAttribute('aria-selected', String(isActive));
-    button.tabIndex = isActive ? 0 : -1;
     button.textContent = t(id === 'program' ? 'tabs.program' : 'tabs.subscriptions');
 
     button.addEventListener('click', () => {
-      if (id !== active) {
+      if (id !== currentActive) {
+        updateActiveState(id);
         onChange(id);
       }
     });
@@ -47,7 +59,8 @@ export function renderSegmented(
 
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        if (id !== active) {
+        if (id !== currentActive) {
+          updateActiveState(id);
           onChange(id);
         }
       }
@@ -57,5 +70,6 @@ export function renderSegmented(
     wrapper.appendChild(button);
   });
 
+  updateActiveState(currentActive);
   container.appendChild(wrapper);
 }
