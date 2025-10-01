@@ -72,7 +72,7 @@ export async function mountProgramView(
 
   const controller = new AbortController();
   if (titleEl) {
-    titleEl.textContent = t('page.program');
+    titleEl.textContent = t('program.title');
   }
   setBusy(content, true);
 
@@ -87,7 +87,7 @@ export async function mountProgramView(
 
     const appliedLocale: Locale = await applyLang(load.locale);
     if (titleEl) {
-      titleEl.textContent = t('page.program');
+      titleEl.textContent = t('program.title');
     }
     const locale: Locale = appliedLocale;
 

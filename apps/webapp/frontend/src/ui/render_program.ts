@@ -194,13 +194,7 @@ function renderDay(day: Day): HTMLElement {
     summary.textContent = t('program.day.rest');
     details.classList.add('program-day-rest');
   } else {
-    const customTitle = day.title?.trim();
-    if (customTitle && customTitle.length > 0) {
-      summary.textContent = customTitle;
-    } else {
-      const fallback = t('program.day', { n: day.index, title: '' }).replace(/([\s—–-])+$/, '');
-      summary.textContent = fallback;
-    }
+    summary.textContent = t('program.day', { n: day.index });
   }
 
   details.appendChild(summary);

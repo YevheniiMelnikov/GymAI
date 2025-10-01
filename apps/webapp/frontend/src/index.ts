@@ -140,7 +140,7 @@ async function bootstrap(): Promise<void> {
     }
 
     if (titleEl) {
-      titleEl.textContent = t('page.subscriptions');
+      titleEl.textContent = t('program.title');
     }
     dateEl.hidden = true;
     dateEl.textContent = '';
