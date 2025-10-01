@@ -39,7 +39,17 @@ export function renderSegmented(
     button.setAttribute('aria-selected', 'false');
     button.tabIndex = -1;
 
-    button.textContent = t(id === 'program' ? 'tabs.program' : 'tabs.subscriptions');
+    const labelKey = id === 'program' ? 'tabs.program' : 'tabs.subscriptions';
+    const updateLabel = (): void => {
+      button.textContent = t(labelKey);
+    };
+
+    updateLabel();
+    if (typeof queueMicrotask === 'function') {
+      queueMicrotask(updateLabel);
+    } else {
+      void Promise.resolve().then(updateLabel);
+    }
 
     button.addEventListener('click', () => {
       if (id !== currentActive) {

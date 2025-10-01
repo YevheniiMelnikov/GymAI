@@ -84,8 +84,8 @@ export async function applyLang(raw?: string): Promise<LangCode> {
   }
 
   const code = resolveLangCode(incoming);
-  document.documentElement.lang = code;
   await loadMessages(code);
+  document.documentElement.lang = code;
   return code;
 }
 
