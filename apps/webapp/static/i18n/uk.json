@@ -14,14 +14,21 @@
   "back": "Назад",
   "open_from_telegram": "Відкрийте цю сторінку в Telegram.",
 
-  "program.title": "Програма тренувань",
+  "program.title": "Мої тренування",
   "program.created": "Створено: {date}",
-  "program.view_history": "Переглянути історію",
+  "program.view_history": "Історія",
   "program.week": "Тиждень {n}",
-  "program.day": "День {n} — {title}",
+  "program.day": "День {n}",
   "program.day.rest": "День відпочинку",
   "retry": "Спробувати ще раз",
 
+  "tabs.switch_label": "Перемикач розділів",
+  "tabs.program": "Програми",
+  "tabs.subscriptions": "Підписки",
+  "subscriptions.title": "Підписки",
+  "subscriptions.empty": "Тут поки що порожньо",
+
   "page.program": "Програма",
-  "page.history": "Історія"
+  "page.history": "Історія",
+  "page.subscriptions": "Підписки"
 }

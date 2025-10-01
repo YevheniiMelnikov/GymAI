@@ -1,5 +1,7 @@
 # syntax=docker/dockerfile:1.7
 
+ARG STATIC_VERSION=dev
+
 FROM python:3.12-slim AS py-base
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -14,6 +16,7 @@ WORKDIR /app/apps/webapp
 COPY apps/webapp/package*.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci
 COPY apps/webapp/frontend ./frontend
+COPY apps/webapp/scripts ./scripts
 COPY apps/webapp/static ./static
 RUN npm run build \
  && echo "== build output in ./static ==" \
@@ -52,9 +55,11 @@ RUN --mount=type=cache,target=/root/.cache/uv bash -lc '\
   '
 
 FROM py-base AS py-runtime
+ARG STATIC_VERSION
 COPY --from=deps-app /usr/local /usr/local
 COPY . /app
-RUN chmod 0755 /app/docker/entrypoint.sh \
+RUN echo "${STATIC_VERSION:-dev}" > /app/VERSION \
+ && chmod 0755 /app/docker/entrypoint.sh \
  && sed -i 's/\r$//' /app/docker/entrypoint.sh \
  && apt-get update \
  && apt-get install -y --no-install-recommends curl libpq5 \
@@ -66,9 +71,11 @@ COPY --from=webbuild /app/apps/webapp/static /app/apps/webapp/static
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
 
 FROM py-base AS coach-runtime
+ARG STATIC_VERSION
 COPY --from=deps-coach /usr/local /usr/local
 COPY . /app
-RUN chmod 0755 /app/docker/entrypoint.sh \
+RUN echo "${STATIC_VERSION:-dev}" > /app/VERSION \
+ && chmod 0755 /app/docker/entrypoint.sh \
  && sed -i 's/\r$//' /app/docker/entrypoint.sh \
  && apt-get update \
  && apt-get install -y --no-install-recommends curl libpq5 \

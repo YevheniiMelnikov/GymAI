@@ -1,5 +1,6 @@
 export type LangCode = 'en' | 'ru' | 'uk';
 export const LANG_MAP: Record<string, LangCode> = { eng: 'en', en: 'en', ru: 'ru', ua: 'uk', uk: 'uk' };
+export const LANG_CHANGED_EVENT = 'app:lang-changed';
 
 function resolveLangCode(raw?: string): LangCode {
   if (!raw) return 'en';
@@ -25,15 +26,21 @@ export const fallbackEn = {
   show_ai: 'Show AI workout plans',
   back: 'Back',
   open_from_telegram: 'Open this page from Telegram.',
-  'program.title': 'Workout Program',
+  'program.title': 'My Workouts',
   'program.created': 'Created: {date}',
-  'program.view_history': 'View History',
+  'program.view_history': 'History',
   'program.week': 'Week {n}',
-  'program.day': 'Day {n} — {title}',
+  'program.day': 'Day {n}',
   'program.day.rest': 'Rest Day',
   retry: 'Retry',
+  'tabs.switch_label': 'Section switcher',
+  'tabs.program': 'Programs',
+  'tabs.subscriptions': 'Subscriptions',
+  'subscriptions.title': 'Subscriptions',
+  'subscriptions.empty': 'No subscriptions yet',
   'page.program': 'Program',
-  'page.history': 'History'
+  'page.history': 'History',
+  'page.subscriptions': 'Subscriptions'
 } as const;
 
 export type TranslationKey = keyof typeof fallbackEn;
@@ -78,8 +85,12 @@ export async function applyLang(raw?: string): Promise<LangCode> {
   }
 
   const code = resolveLangCode(incoming);
-  document.documentElement.lang = code;
   await loadMessages(code);
+  document.documentElement.lang = code;
+  try {
+    window.dispatchEvent(new CustomEvent(LANG_CHANGED_EVENT, { detail: { code } }));
+  } catch {
+  }
   return code;
 }
 

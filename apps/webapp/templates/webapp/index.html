@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="light dark" />
   <title>Program</title>
-  <link rel="stylesheet" href="{% static 'css/common.css' %}" />
+  <link rel="stylesheet" href="{% static 'css/common.css' %}?v={{ static_version }}" />
   <script>window.__STATIC_PREFIX__ = "{% get_static_prefix %}";</script>
 </head>
 <body>
@@ -14,6 +14,7 @@
     <header class="app-header" role="presentation">
       <h1 id="page-title"></h1>
     </header>
+    <nav id="segmented" aria-hidden="true"></nav>
     <div id="content" aria-live="polite" aria-busy="true"></div>
     <div id="program-date" aria-live="polite"></div>
     <div id="controls"></div>
@@ -25,6 +26,6 @@
   <script>
     try { window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.ready(); } catch {}
   </script>
-  <script src="{% static 'js/index.js' %}" defer></script>
+  <script src="{% static 'js/index.js' %}?v={{ static_version }}" defer></script>
 </body>
 </html>
