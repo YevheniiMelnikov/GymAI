@@ -1,5 +1,6 @@
 export type LangCode = 'en' | 'ru' | 'uk';
 export const LANG_MAP: Record<string, LangCode> = { eng: 'en', en: 'en', ru: 'ru', ua: 'uk', uk: 'uk' };
+export const LANG_CHANGED_EVENT = 'app:lang-changed';
 
 function resolveLangCode(raw?: string): LangCode {
   if (!raw) return 'en';
@@ -86,6 +87,10 @@ export async function applyLang(raw?: string): Promise<LangCode> {
   const code = resolveLangCode(incoming);
   await loadMessages(code);
   document.documentElement.lang = code;
+  try {
+    window.dispatchEvent(new CustomEvent(LANG_CHANGED_EVENT, { detail: { code } }));
+  } catch {
+  }
   return code;
 }
 

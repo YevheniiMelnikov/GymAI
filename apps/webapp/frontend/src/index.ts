@@ -82,6 +82,7 @@ async function bootstrap(): Promise<void> {
 
   const historyButton = ensureHistoryButton();
   const cleanup: { current?: CleanupFn } = {};
+  let segmentedCleanup: (() => void) | undefined;
   const segmentState: { current: Segment; renderToken: number; lastRoute: ProgramRoute | null } = {
     current: ensureSegmentHash(),
     renderToken: 0,
@@ -104,7 +105,8 @@ async function bootstrap(): Promise<void> {
     const token = segmentState.renderToken;
 
     if (segmented) {
-      renderSegmented(segmented, segment, (next) => {
+      segmentedCleanup?.();
+      segmentedCleanup = renderSegmented(segmented, segment, (next) => {
         if (next !== segmentState.current) {
           updateHashForSegment(next);
         }
@@ -163,6 +165,8 @@ async function bootstrap(): Promise<void> {
     segmentState.lastRoute = null;
     segmentState.renderToken += 1;
     if (segmented) {
+      segmentedCleanup?.();
+      segmentedCleanup = undefined;
       segmented.setAttribute('aria-hidden', 'true');
       segmented.innerHTML = '';
     }

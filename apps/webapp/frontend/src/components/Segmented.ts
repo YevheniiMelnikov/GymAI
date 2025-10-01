@@ -1,24 +1,34 @@
-import { t } from '../i18n/i18n';
+import { LANG_CHANGED_EVENT, t } from '../i18n/i18n';
 
 export type SegmentId = 'program' | 'subscriptions';
 export type SegmentChangeHandler = (next: SegmentId) => void;
 
 const SEGMENTS: SegmentId[] = ['program', 'subscriptions'];
 
+type CleanupFn = () => void;
+
 export function renderSegmented(
   container: HTMLElement,
   active: SegmentId,
   onChange: SegmentChangeHandler
-): void {
+): CleanupFn {
   container.innerHTML = '';
 
   const wrapper = document.createElement('div');
   wrapper.className = 'segmented';
   wrapper.setAttribute('role', 'tablist');
-  wrapper.setAttribute('aria-label', t('tabs.switch_label'));
 
   const buttons: HTMLButtonElement[] = [];
   let currentActive: SegmentId = active;
+
+  const refreshLabels = (): void => {
+    wrapper.setAttribute('aria-label', t('tabs.switch_label'));
+    buttons.forEach((button) => {
+      const id = (button.dataset.tab as SegmentId) ?? 'program';
+      const key = id === 'program' ? 'tabs.program' : 'tabs.subscriptions';
+      button.textContent = t(key);
+    });
+  };
 
   const updateActiveState = (next: SegmentId): void => {
     currentActive = next;
@@ -40,16 +50,7 @@ export function renderSegmented(
     button.tabIndex = -1;
 
     const labelKey = id === 'program' ? 'tabs.program' : 'tabs.subscriptions';
-    const updateLabel = (): void => {
-      button.textContent = t(labelKey);
-    };
-
-    updateLabel();
-    if (typeof queueMicrotask === 'function') {
-      queueMicrotask(updateLabel);
-    } else {
-      void Promise.resolve().then(updateLabel);
-    }
+    button.textContent = t(labelKey);
 
     button.addEventListener('click', () => {
       if (id !== currentActive) {
@@ -80,6 +81,21 @@ export function renderSegmented(
     wrapper.appendChild(button);
   });
 
+  refreshLabels();
+  if (typeof queueMicrotask === 'function') {
+    queueMicrotask(refreshLabels);
+  } else {
+    void Promise.resolve().then(refreshLabels);
+  }
+
+  const langListener = (): void => {
+    refreshLabels();
+  };
+  window.addEventListener(LANG_CHANGED_EVENT, langListener);
+
   updateActiveState(currentActive);
   container.appendChild(wrapper);
+  return () => {
+    window.removeEventListener(LANG_CHANGED_EVENT, langListener);
+  };
 }
