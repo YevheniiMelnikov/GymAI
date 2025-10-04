@@ -58,7 +58,7 @@ services:
       retries: 10
 
   rabbitmq:
-    image: rabbitmq:3.13-management
+    image: rabbitmq:4.1.4-management
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-rabbitmq}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rabbitmq}
