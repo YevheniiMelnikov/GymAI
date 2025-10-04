@@ -152,20 +152,26 @@ FastAPI service under `/ask/`.
 
 ## Redis
 
-Redis runs with `appendonly.aof` and LRU eviction. Configuration is stored in `docker/redis.conf`.
+Redis keeps acting as the cache layer and Celery result backend. The production Docker Compose stack enables AOF persistence and mounts a volume so scheduled `redis_backup` jobs can export real data snapshots. The local stack still runs an in-memory Redis instance for convenience.
+
+---
+
+## RabbitMQ
+
+RabbitMQ is the Celery broker. Credentials and the vhost are configurable through `RABBITMQ_USER`, `RABBITMQ_PASSWORD`, and `RABBITMQ_VHOST`. `RABBITMQ_URL` can be set directly; otherwise it is constructed from the individual parts. The management UI is exposed on port `15672` by default in Docker Compose and authenticates with the same `RABBITMQ_USER`/`RABBITMQ_PASSWORD` values (defaults `rabbitmq`/`rabbitmq`).
 
 ---
 
 ## Celery
 
-Background tasks are processed by Celery workers. Docker Compose includes two services (`celery` and `beat`) for this purpose. When running the worker outside of Docker make sure Redis is reachable and update the `REDIS_URL` in your `docker/.env` file accordingly. You may also need to set `BOT_INTERNAL_URL` so Celery can reach the bot API.
+Background tasks are processed by Celery workers. Docker Compose includes two services (`celery` and `beat`) for this purpose. When running the worker outside of Docker make sure RabbitMQ and Redis are reachable and set `RABBITMQ_URL` and `REDIS_URL` accordingly. You may also need to set `BOT_INTERNAL_URL` so Celery can reach the bot API.
 
 ```bash
 PYTHONPATH=. celery -A config.celery:celery_app worker \
-    -l info -Q default,maintenance -P threads
+    -l info -Q default,critical,maintenance -P threads
 ```
 
-If Celery prints connection errors such as `Error -2 connecting to redis:6379`, verify that `REDIS_URL` points to your local Redis instance.
+If Celery prints connection errors, verify that `RABBITMQ_URL` and `REDIS_URL` point to reachable services.
 
 ### Scheduled tasks
 

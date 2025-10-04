@@ -8,6 +8,7 @@ x-common-env: &common_env
     PYTHONUNBUFFERED: 1
     PYTHONDONTWRITEBYTECODE: 1
     REDIS_URL: ${REDIS_URL}
+    RABBITMQ_URL: ${RABBITMQ_URL}
     POSTGRES_DB: ${DB_NAME}
     POSTGRES_USER: ${DB_USER}
     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:- password}
@@ -20,6 +21,8 @@ x-common-env: &common_env
     - staticfiles:/app/staticfiles
   depends_on:
     redis:
+      condition: service_healthy
+    rabbitmq:
       condition: service_healthy
     db:
       condition: service_healthy
@@ -45,12 +48,29 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-rabbitmq}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rabbitmq}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
+    ports:
+      - ${HOST_RABBITMQ_PORT:-5672}:5672
+      - ${HOST_RABBITMQ_MANAGEMENT_PORT:-15672}:15672
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   api:
     image: *app_image
@@ -99,7 +119,7 @@ services:
         EXTRAS: ""
     <<: *common_env
     entrypoint: /app/docker/entrypoint.sh
-    command: celery -A config.celery:celery_app worker -l info -Q default,maintenance -P threads
+    command: celery -A config.celery:celery_app worker -l info -Q default,critical,maintenance -P threads
     restart: unless-stopped
 
   beat:
@@ -203,3 +223,4 @@ volumes:
   pgdata:
   staticfiles:
   data_storage:
+  redisdata:
