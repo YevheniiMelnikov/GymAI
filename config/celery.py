@@ -1,7 +1,8 @@
-from celery import Celery
 from datetime import datetime, timedelta
 
+from celery import Celery
 from celery.schedules import crontab, schedule
+from kombu import Exchange, Queue
 
 from config.app_settings import settings
 
@@ -16,17 +17,72 @@ def knowledge_refresh_now() -> datetime:
     return beat_nowfun()
 
 
+dead_letter_exchange = Exchange("critical.dlx", type="topic", durable=True)
+critical_exchange = Exchange("critical", type="direct", durable=True)
+default_exchange = Exchange("default", type="direct", durable=True)
+maintenance_exchange = Exchange("maintenance", type="direct", durable=True)
+
 celery_config = {
-    "broker_url": settings.REDIS_URL,
+    "broker_url": settings.RABBITMQ_URL,
     "result_backend": settings.REDIS_URL,
     "timezone": settings.TIME_ZONE,
     "task_serializer": "json",
     "accept_content": ["json"],
     "task_acks_late": True,
     "worker_max_tasks_per_child": 100,
+    "worker_prefetch_multiplier": 1,
     "task_time_limit": 600,
     "worker_pool": "threads",
+    "broker_connection_retry_on_startup": True,
+    "broker_heartbeat": 30,
     "beat_schedule_filename": "/app/celerybeat-schedule",
+    "task_default_queue": "default",
+    "task_default_exchange": "default",
+    "task_default_exchange_type": "direct",
+    "task_default_routing_key": "default",
+    "task_default_delivery_mode": "persistent",
+    "task_queues": (
+        Queue("default", default_exchange, routing_key="default", durable=True),
+        Queue(
+            "critical",
+            critical_exchange,
+            routing_key="critical",
+            durable=True,
+            queue_arguments={
+                "x-dead-letter-exchange": dead_letter_exchange.name,
+                "x-message-ttl": 600_000,
+                "x-max-priority": 10,
+            },
+        ),
+        Queue("maintenance", maintenance_exchange, routing_key="maintenance", durable=True),
+        Queue("critical.dlq", dead_letter_exchange, routing_key="#", durable=True),
+    ),
+    "task_routes": {
+        "core.tasks.charge_due_subscriptions": {
+            "queue": "critical",
+            "routing_key": "critical",
+        },
+        "core.tasks.deactivate_expired_subscriptions": {
+            "queue": "critical",
+            "routing_key": "critical",
+        },
+        "core.tasks.warn_low_credits": {
+            "queue": "critical",
+            "routing_key": "critical",
+        },
+        "apps.payments.tasks.process_payment_webhook": {
+            "queue": "critical",
+            "routing_key": "critical",
+        },
+        "apps.payments.tasks.send_payment_message": {
+            "queue": "critical",
+            "routing_key": "critical",
+        },
+        "apps.payments.tasks.send_client_request": {
+            "queue": "critical",
+            "routing_key": "critical",
+        },
+    },
     "beat_schedule": {
         "pg_backup": {
             "task": "core.tasks.pg_backup",
@@ -46,14 +102,17 @@ celery_config = {
         "deactivate_subs": {
             "task": "core.tasks.deactivate_expired_subscriptions",
             "schedule": crontab(hour=1, minute=0),
+            "options": {"queue": "critical"},
         },
         "warn_low_credits": {
             "task": "core.tasks.warn_low_credits",
             "schedule": crontab(hour=0, minute=0),
+            "options": {"queue": "critical"},
         },
         "charge_due_subscriptions": {
             "task": "core.tasks.charge_due_subscriptions",
             "schedule": crontab(hour=0, minute=30),
+            "options": {"queue": "critical"},
         },
         "export-coach-payouts-monthly": {
             "task": "core.tasks.export_coach_payouts",

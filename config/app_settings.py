@@ -2,7 +2,7 @@ import json
 import os
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Annotated
-from urllib.parse import SplitResult, urlsplit, urlunsplit
+from urllib.parse import SplitResult, quote, quote_plus, urlsplit, urlunsplit
 from uuid import NAMESPACE_DNS, uuid5
 
 from pydantic import Field, field_validator, model_validator
@@ -65,6 +65,12 @@ class Settings(BaseSettings):
     LOG_LEVEL: Annotated[str, Field(default="INFO")]
 
     REDIS_URL: Annotated[str, Field(default="redis://redis:6379")]
+    RABBITMQ_URL: Annotated[str | None, Field(default=None)]
+    RABBITMQ_HOST: Annotated[str, Field(default="rabbitmq")]
+    RABBITMQ_PORT: Annotated[str, Field(default="5672")]
+    RABBITMQ_USER: Annotated[str, Field(default="rabbitmq")]
+    RABBITMQ_PASSWORD: Annotated[str, Field(default="rabbitmq")]
+    RABBITMQ_VHOST: Annotated[str, Field(default="/")]
     HOST_REDIS_PORT: Annotated[str, Field(default="6379")]
     DOCKER_BOT_START: Annotated[bool, Field(default=False)]
 
@@ -160,6 +166,14 @@ class Settings(BaseSettings):
             normalized = (self.REDIS_URL or "").strip().lower()
             if not normalized or normalized.startswith("redis://redis"):
                 self.REDIS_URL = "redis://127.0.0.1:6379"
+
+        if not self.RABBITMQ_URL:
+            encoded_user: str = quote_plus(self.RABBITMQ_USER)
+            encoded_password: str = quote_plus(self.RABBITMQ_PASSWORD)
+            encoded_vhost: str = quote(self.RABBITMQ_VHOST, safe="")
+            self.RABBITMQ_URL = (
+                f"amqp://{encoded_user}:{encoded_password}@{self.RABBITMQ_HOST}:{self.RABBITMQ_PORT}/{encoded_vhost}"
+            )
 
         return self
 
