@@ -371,19 +371,13 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
 
     if not await _claim_plan_request(request_id, "create", attempt=attempt):
         logger.info(
-            "ai_generate_plan_duplicate client_id=%s plan_type=%s request_id=%s",
-            client_id,
-            plan_type.value,
-            request_id,
+            f"ai_generate_plan_duplicate client_id={client_id} plan_type={plan_type.value} request_id={request_id}"
         )
         return
 
-    logger.debug(
-        "ai_generate_plan started client_id=%s plan_type=%s request_id=%s attempt=%s",
-        client_id,
-        plan_type.value,
-        request_id,
-        attempt,
+    logger.info(
+        f"ai_generate_plan started client_id={client_id} plan_type={plan_type.value} "
+        f"request_id={request_id} attempt={attempt}"
     )
 
     try:
@@ -399,12 +393,8 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
         )
     except Exception as exc:  # noqa: BLE001
         logger.error(
-            "ai_generate_plan failed client_id=%s plan_type=%s request_id=%s attempt=%s error=%s",
-            client_id,
-            plan_type.value,
-            request_id,
-            attempt,
-            exc,
+            f"ai_generate_plan failed client_id={client_id} plan_type={plan_type.value} "
+            f"request_id={request_id} attempt={attempt} error={exc}"
         )
         if attempt >= getattr(task, "max_retries", 0):
             await _notify_error(
@@ -418,10 +408,7 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
 
     if plan is None:
         logger.error(
-            "ai_generate_plan returned empty client_id=%s plan_type=%s request_id=%s",
-            client_id,
-            plan_type.value,
-            request_id,
+            f"ai_generate_plan returned empty client_id={client_id} plan_type={plan_type.value} request_id={request_id}"
         )
         await _notify_error(
             client_id=client_id,
@@ -449,12 +436,7 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
     }
 
     await _notify_ai_plan_ready(notify_payload)
-    logger.debug(
-        "ai_generate_plan completed client_id=%s plan_type=%s request_id=%s",
-        client_id,
-        plan_type.value,
-        request_id,
-    )
+    logger.info(f"ai_generate_plan completed client_id={client_id} plan_type={plan_type.value} request_id={request_id}")
 
 
 async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> None:
@@ -469,19 +451,13 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
 
     if not await _claim_plan_request(request_id, "update", attempt=attempt):
         logger.info(
-            "ai_update_plan_duplicate client_id=%s plan_type=%s request_id=%s",
-            client_id,
-            plan_type.value,
-            request_id,
+            f"ai_update_plan_duplicate client_id={client_id} plan_type={plan_type.value} request_id={request_id}"
         )
         return
 
-    logger.debug(
-        "ai_update_plan started client_id=%s plan_type=%s request_id=%s attempt=%s",
-        client_id,
-        plan_type.value,
-        request_id,
-        attempt,
+    logger.info(
+        f"ai_update_plan started client_id={client_id} plan_type={plan_type.value} "
+        f"request_id={request_id} attempt={attempt}"
     )
 
     try:
@@ -496,12 +472,8 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
         )
     except Exception as exc:  # noqa: BLE001
         logger.error(
-            "ai_update_plan failed client_id=%s plan_type=%s request_id=%s attempt=%s error=%s",
-            client_id,
-            plan_type.value,
-            request_id,
-            attempt,
-            exc,
+            f"ai_update_plan failed client_id={client_id} plan_type={plan_type.value} "
+            f"request_id={request_id} attempt={attempt} error={exc}"
         )
         if attempt >= getattr(task, "max_retries", 0):
             await _notify_error(
@@ -515,10 +487,7 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
 
     if plan is None:
         logger.error(
-            "ai_update_plan returned empty client_id=%s plan_type=%s request_id=%s",
-            client_id,
-            plan_type.value,
-            request_id,
+            f"ai_update_plan returned empty client_id={client_id} plan_type={plan_type.value} request_id={request_id}"
         )
         await _notify_error(
             client_id=client_id,
@@ -546,12 +515,7 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
     }
 
     await _notify_ai_plan_ready(notify_payload)
-    logger.debug(
-        "ai_update_plan completed client_id=%s plan_type=%s request_id=%s",
-        client_id,
-        plan_type.value,
-        request_id,
-    )
+    logger.info(f"ai_update_plan completed client_id={client_id} plan_type={plan_type.value} request_id={request_id}")
 
 
 @app.task(

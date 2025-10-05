@@ -45,6 +45,9 @@ def _suppress_third_party_logs():
         "urllib3": "WARNING",
         "asyncio": "WARNING",
         "aiogram": "WARNING",
+        "amqp": "WARNING",
+        "amqp.connection": "WARNING",
+        "kombu.connection": "WARNING",
     }
 
     for logger_name, level in suppress_map.items():

@@ -1,4 +1,6 @@
+from celery.result import AsyncResult
 from loguru import logger
+
 
 from core.cache import Cache
 from core.enums import WorkoutPlanType, WorkoutType
@@ -113,20 +115,19 @@ async def enqueue_workout_plan_generation(
     }
 
     try:
-        generate_ai_workout_plan.delay(payload)  # pyrefly: ignore[not-callable]
+        async_result: AsyncResult = generate_ai_workout_plan.apply_async(
+            args=(payload,),
+            queue="ai_coach",
+            routing_key="ai_coach",
+        )  # pyrefly: ignore[not-callable]
         logger.debug(
-            "queued_workout_plan_generation client_id=%s plan_type=%s request_id=%s",
-            client.id,
-            plan_type.value,
-            request_id,
+            f"queued_workout_plan_generation client_id={client.id} plan_type={plan_type.value} "
+            f"request_id={request_id} task_id={async_result.id}"
         )
     except Exception as exc:  # noqa: BLE001
         logger.error(
-            "Celery dispatch failed client_id=%s plan_type=%s request_id=%s error=%s",
-            client.id,
-            plan_type.value,
-            request_id,
-            exc,
+            f"Celery dispatch failed client_id={client.id} plan_type={plan_type.value} "
+            f"request_id={request_id} error={exc}"
         )
         return False
     return True
@@ -161,20 +162,19 @@ async def enqueue_workout_plan_update(
     }
 
     try:
-        update_ai_workout_plan.delay(payload)  # pyrefly: ignore[not-callable]
+        async_result: AsyncResult = update_ai_workout_plan.apply_async(
+            args=(payload,),
+            queue="ai_coach",
+            routing_key="ai_coach",
+        )  # pyrefly: ignore[not-callable]
         logger.debug(
-            "queued_workout_plan_update client_id=%s plan_type=%s request_id=%s",
-            client_id,
-            plan_type.value,
-            request_id,
+            f"queued_workout_plan_update client_id={client_id} plan_type={plan_type.value} "
+            f"request_id={request_id} task_id={async_result.id}"
         )
     except Exception as exc:  # noqa: BLE001
         logger.error(
-            "Celery dispatch failed client_id=%s plan_type=%s request_id=%s error=%s",
-            client_id,
-            plan_type.value,
-            request_id,
-            exc,
+            f"Celery dispatch failed client_id={client_id} plan_type={plan_type.value} "
+            f"request_id={request_id} error={exc}"
         )
         return False
     return True
