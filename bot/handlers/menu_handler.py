@@ -14,6 +14,7 @@ from bot.keyboards import (
     gift_kb,
     yes_no_kb,
     workout_type_kb,
+    program_view_kb,
 )
 from bot.states import States
 from bot.texts.text_manager import msg_text
@@ -21,7 +22,7 @@ from config.app_settings import settings
 from core.cache import Cache
 from core.enums import CoachType, SubscriptionPeriod
 from core.schemas import Coach, Client, Profile
-from bot.utils.chat import contact_client, process_feedback_content, send_program
+from bot.utils.chat import contact_client, process_feedback_content, send_message
 from bot.utils.menus import (
     show_main_menu,
     show_exercises_menu,
@@ -41,7 +42,7 @@ from bot.utils.menus import has_human_coach_subscription
 from bot.utils.profiles import assign_coach, get_assigned_coach
 from bot.utils.workout_plans import manage_program, cancel_subscription
 from bot.utils.other import generate_order_id
-from bot.utils.bot import del_msg, answer_msg
+from bot.utils.bot import del_msg, answer_msg, get_webapp_url
 from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
 from core.services import APIService
 from bot.keyboards import payment_kb
@@ -292,8 +293,15 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
                 f"AI program generation failed for client {client.id}",
             )
             return
-        program_text = await format_program(exercises, day=0)
-        await send_program(client, profile.language, program_text, state, bot)
+
+        await send_message(
+            recipient=client,
+            text=msg_text("new_program", profile.language),
+            bot=bot,
+            state=state,
+            reply_markup=program_view_kb(profile.language, get_webapp_url("program")),
+            include_incoming_message=False,
+        )
         await state.update_data(
             exercises=[d.model_dump() for d in exercises],
             split=len(exercises),
@@ -372,9 +380,15 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
             f"AI subscription generation failed for client {client.id}",
         )
         return
-    program_text = await format_program(exercises, day=0)
     bot = cast(Bot, callback_query.bot)
-    await send_program(client, lang, program_text, state, bot)
+    await send_message(
+        recipient=client,
+        text=msg_text("new_program", lang),
+        bot=bot,
+        state=state,
+        reply_markup=program_view_kb(lang, get_webapp_url("program")),
+        include_incoming_message=False,
+    )
     await state.update_data(
         exercises=[d.model_dump() for d in exercises],
         split=len(exercises),

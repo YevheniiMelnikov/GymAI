@@ -7,8 +7,8 @@ from aiogram.types import CallbackQuery, Message, FSInputFile, InputFile
 from pathlib import Path
 
 from bot.texts import msg_text
-from bot.utils.bot import answer_msg, get_webapp_url, del_msg
-from bot.keyboards import new_coach_kb, incoming_request_kb, client_msg_bk, program_view_kb
+from bot.utils.bot import answer_msg, del_msg
+from bot.keyboards import new_coach_kb, incoming_request_kb, client_msg_bk
 from bot.states import States
 from config.app_settings import settings
 from core.cache import Cache
@@ -283,21 +283,3 @@ async def process_feedback_content(message: Message, profile: Profile, bot: Bot)
 
     await answer_msg(message, msg_text("invalid_content", profile.language))
     return False
-
-
-async def send_program(client: Client, client_lang: str, program_text: str, state: FSMContext, bot: Bot) -> None:
-    await send_message(
-        recipient=client,
-        text=msg_text("new_program", client_lang),
-        bot=bot,
-        state=state,
-        include_incoming_message=False,
-    )
-    await send_message(
-        recipient=client,
-        text=msg_text("program_page", client_lang).format(program=program_text, day=1),
-        bot=bot,
-        state=state,
-        reply_markup=program_view_kb(client_lang, get_webapp_url("program")),
-        include_incoming_message=False,
-    )

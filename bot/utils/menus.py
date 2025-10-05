@@ -25,13 +25,13 @@ from core.exceptions import (
     ProgramNotFoundError,
     SubscriptionNotFoundError,
 )
-from core.schemas import Client, Coach, Profile, Subscription, Program, DayExercises
+from core.schemas import Client, Coach, Profile, Subscription, Program
 from bot.utils.text import (
     get_client_page,
     get_profile_attributes,
     get_translated_week_day,
 )
-from bot.utils.exercises import format_program, format_full_program
+from bot.utils.exercises import format_full_program
 from config.app_settings import settings
 from bot.utils.bot import del_msg, answer_msg, get_webapp_url
 from core.services import get_avatar_manager
@@ -499,21 +499,13 @@ async def show_ai_services(callback_query: CallbackQuery, profile: Profile, stat
 
 
 async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, profile: Profile) -> None:
-    data = await state.get_data()
-    exercises_data = data.get("exercises", [])
-    exercises = [DayExercises.model_validate(e) for e in exercises_data]
-
-    program = await format_program(exercises, day=0)
-    days = data.get("days", [])
-    week_day = get_translated_week_day(profile.language, days[0]).lower() if days else ""
-
     message = cast(Message, callback_query.message)
     assert message
     language = cast(str, profile.language)
 
     await answer_msg(
         message,
-        msg_text("program_page", language).format(program=program, day=week_day),
+        msg_text("new_program", language),
         reply_markup=program_view_kb(language, get_webapp_url("program")),
         disable_web_page_preview=True,
     )
@@ -563,10 +555,9 @@ async def manage_subscription(callback_query: CallbackQuery, lang: str, profile_
         )
         await state.set_state(States.program_manage)
     else:
-        program_text = await format_program(subscription.exercises, 0)
         await answer_msg(
             message,
-            msg_text("program_page", lang).format(program=program_text, day=week_day),
+            msg_text("new_program", lang),
             reply_markup=kb.subscription_manage_kb(lang),
             disable_web_page_preview=True,
         )
@@ -613,10 +604,6 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
 
     data = await state.get_data()
     current_day = data.get("day_index", 0)
-    exercises = data.get("exercises", [])
-
-    if exercises and isinstance(exercises[0], dict):
-        exercises = [DayExercises.model_validate(d) for d in exercises]
 
     split_number = data.get("split")
     assert split_number is not None
@@ -641,18 +628,11 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
 
     await state.update_data(day_index=current_day)
 
-    program_text = await format_program(exercises, current_day)
-    days = data.get("days", [])
-    next_day = (
-        get_translated_week_day(profile.language, days[current_day]).lower()
-        if data.get("subscription")
-        else current_day + 1
-    )
     with suppress(TelegramBadRequest):
         message = callback_query.message
         if message and isinstance(message, Message):
             await message.edit_text(
-                msg_text("program_page", profile.language).format(program=program_text, day=next_day),
+                msg_text("new_program", profile.language),
                 reply_markup=reply_markup,
                 disable_web_page_preview=True,
             )
