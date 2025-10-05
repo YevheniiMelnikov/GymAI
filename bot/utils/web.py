@@ -33,18 +33,21 @@ async def setup_app(app: "web.Application", bot: "Bot", dp: "Dispatcher") -> Non
         internal_client_request,
         internal_send_daily_survey,
         internal_send_workout_result,
+        internal_ai_coach_plan_ready,
         internal_export_coach_payouts,
         internal_prune_cognee,
     )
 
     path = settings.WEBHOOK_PATH.rstrip("/")
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=path)
+    app["dp"] = dp
     app.router.add_get(f"{path}/__ping", ping_handler)
     app.router.add_post("/internal/payments/process/", internal_payment_handler)
     app.router.add_post("/internal/payments/send_message/", internal_send_payment_message)
     app.router.add_post("/internal/payments/client_request/", internal_client_request)
     app.router.add_post("/internal/tasks/send_daily_survey/", internal_send_daily_survey)
     app.router.add_post("/internal/tasks/send_workout_result/", internal_send_workout_result)
+    app.router.add_post("/internal/tasks/ai_plan_ready/", internal_ai_coach_plan_ready)
     app.router.add_post("/internal/tasks/export_coach_payouts/", internal_export_coach_payouts)
     app.router.add_post("/internal/tasks/prune_cognee/", internal_prune_cognee)
     setup_application(app, dp, bot=bot)

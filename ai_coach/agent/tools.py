@@ -31,11 +31,21 @@ async def tool_search_knowledge(
     from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 
     client_id = ctx.deps.client_id
-    logger.debug(f"tool_search_knowledge client_id={client_id} query='{query[:80]}' k={k}")
+    normalized_query = query.strip()
+    logger.debug(f"tool_search_knowledge client_id={client_id} query='{normalized_query[:80]}' k={k}")
+    if ctx.deps.last_knowledge_query == normalized_query and ctx.deps.last_knowledge_empty:
+        logger.info("knowledge_search_repeat client_id=%s query='%s'", client_id, normalized_query[:80])
+        raise ModelRetry(
+            "Previous knowledge search returned no results. Provide more context or ask a different question before retrying."
+        )
     try:
-        result = await KnowledgeBase.search(query, client_id, k)
+        result = await KnowledgeBase.search(normalized_query, client_id, k)
     except Exception as e:  # pragma: no cover - forward to model
         raise ModelRetry(f"Knowledge search failed: {e}. Refine the query and retry.") from e
+    ctx.deps.last_knowledge_query = normalized_query
+    ctx.deps.last_knowledge_empty = len(result) == 0
+    if ctx.deps.last_knowledge_empty:
+        logger.info("knowledge_search_empty client_id=%s query='%s'", client_id, normalized_query[:80])
     logger.debug(f"tool_search_knowledge results={len(result)}")
     return result
 
