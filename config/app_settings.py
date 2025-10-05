@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     DEFAULT_LANG: Annotated[str, Field(default="ua")]
     ADMIN_LANG: Annotated[str, Field(default="ru")]
     LOG_LEVEL: Annotated[str, Field(default="INFO")]
+    LOG_VERBOSE_CELERY: Annotated[bool, Field(default=False)]
 
     REDIS_URL: Annotated[str, Field(default="redis://redis:6379")]
     RABBITMQ_URL: Annotated[str | None, Field(default=None)]

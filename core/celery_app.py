@@ -78,6 +78,11 @@ CELERY_TASK_ROUTES: dict[str, dict[str, str]] = {
     **AI_COACH_TASK_ROUTES,
 }
 
+CELERY_INCLUDE: tuple[str, ...] = (
+    "core.tasks",
+    "apps.payments.tasks",
+)
+
 app = Celery("gymbot", broker=_broker_url(), backend=_redis_backend_url())
 app.conf.update(
     task_serializer="json",
@@ -97,10 +102,12 @@ app.conf.update(
     task_create_missing_queues=True,
     task_queues=CELERY_QUEUES,
     task_routes=CELERY_TASK_ROUTES,
+    include=list(CELERY_INCLUDE),
 )
 
 __all__ = [
     "app",
     "CELERY_QUEUES",
     "CELERY_TASK_ROUTES",
+    "CELERY_INCLUDE",
 ]

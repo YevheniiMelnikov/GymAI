@@ -50,10 +50,19 @@ class DummyRedis:
 async def test_enqueue_workout_plan_generation_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, Any] = {}
 
+    class DummyResult:
+        def __init__(self, payload: dict[str, Any]) -> None:
+            self.id = "dummy-id"
+            self.payload = payload
+
     class DummyTask:
         @staticmethod
-        def delay(payload: dict[str, Any]) -> None:  # pyrefly: ignore[valid-type]
+        def apply_async(*, args: tuple[dict[str, Any]], queue: str, routing_key: str) -> DummyResult:
+            assert queue == "ai_coach"
+            assert routing_key == "ai_coach"
+            payload = args[0]
             captured.update(payload)
+            return DummyResult(payload)
 
     monkeypatch.setattr("core.tasks.generate_ai_workout_plan", DummyTask)
 
@@ -87,10 +96,19 @@ async def test_enqueue_workout_plan_generation_dispatch(monkeypatch: pytest.Monk
 async def test_enqueue_workout_plan_update_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, Any] = {}
 
+    class DummyResult:
+        def __init__(self, payload: dict[str, Any]) -> None:
+            self.id = "dummy-id"
+            self.payload = payload
+
     class DummyTask:
         @staticmethod
-        def delay(payload: dict[str, Any]) -> None:  # pyrefly: ignore[valid-type]
+        def apply_async(*, args: tuple[dict[str, Any]], queue: str, routing_key: str) -> DummyResult:
+            assert queue == "ai_coach"
+            assert routing_key == "ai_coach"
+            payload = args[0]
             captured.update(payload)
+            return DummyResult(payload)
 
     monkeypatch.setattr("core.tasks.update_ai_workout_plan", DummyTask)
 

@@ -10,6 +10,7 @@ from .tasks import (
     internal_ai_coach_plan_ready,
     internal_prune_cognee,
 )
+from .debug import internal_celery_debug
 
 __all__ = (
     "internal_payment_handler",
@@ -20,4 +21,5 @@ __all__ = (
     "internal_send_workout_result",
     "internal_ai_coach_plan_ready",
     "internal_prune_cognee",
+    "internal_celery_debug",
 )
