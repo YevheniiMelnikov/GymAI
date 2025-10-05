@@ -3,11 +3,10 @@ from datetime import datetime, timedelta
 
 from celery.schedules import crontab, schedule
 
-from loguru import logger
 
 from config.app_settings import settings
 from core.celery_app import CELERY_QUEUES, CELERY_TASK_ROUTES, app
-from core.celery_signals import REQUIRED_TASK_NAMES, setup_celery_signals
+from core.celery_signals import setup_celery_signals
 
 
 def beat_nowfun() -> datetime:
@@ -103,17 +102,5 @@ celery_app.conf.update(celery_config)
 
 celery_app.autodiscover_tasks(["core", "apps.payments"])
 setup_celery_signals()
-
-missing_tasks: list[str] = [name for name in REQUIRED_TASK_NAMES if name not in celery_app.tasks]
-if missing_tasks:
-    available_tasks: list[str] = sorted(celery_app.tasks.keys())
-    logger.error(
-        "Celery startup failed missing_tasks=%s available_tasks=%s routes=%s queues=%s",
-        missing_tasks,
-        available_tasks,
-        celery_app.conf.task_routes,
-        [queue.name for queue in CELERY_QUEUES],
-    )
-    raise RuntimeError(f"Missing Celery tasks: {', '.join(missing_tasks)}")
 
 __all__ = ("celery_app",)
