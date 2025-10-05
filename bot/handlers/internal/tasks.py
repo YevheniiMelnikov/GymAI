@@ -1,23 +1,43 @@
 from datetime import datetime, timedelta
+from decimal import Decimal
+from uuid import uuid4
 
 from aiohttp import web
 from aiogram import Bot
+from aiogram.enums import ParseMode
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.storage.base import StorageKey
 from loguru import logger
 
-from bot.keyboards import workout_survey_kb
+from bot.keyboards import program_view_kb, workout_survey_kb
+from bot.states import States
 from bot.texts.text_manager import msg_text
 from bot.utils.profiles import get_clients_to_survey
 from config.app_settings import settings
 from core.exceptions import SubscriptionNotFoundError
 from core.containers import get_container
 from core.cache import Cache
-from core.enums import CoachType, WorkoutPlanType
+from core.enums import CoachType, SubscriptionPeriod, WorkoutPlanType
 from bot.utils.chat import send_message
-from aiogram.enums import ParseMode
+from bot.utils.bot import get_webapp_url
 from core.services import APIService
-from bot.utils.ai_coach import process_workout_plan_result
-from core.schemas import Subscription
+from bot.utils.ai_coach import enqueue_workout_plan_update
+from core.schemas import Program, Profile, Subscription
 from cognee.api.v1.prune import prune  # pyrefly: ignore[import-error]
+from core.utils.redis_lock import get_redis_client
+
+
+async def _claim_plan_delivery(request_id: str) -> bool:
+    if not request_id:
+        return True
+    try:
+        client = get_redis_client()
+        key = f"ai:plan:delivered:{request_id}"
+        ok = await client.set(key, "1", nx=True, ex=settings.AI_PLAN_DEDUP_TTL)
+        return bool(ok)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("ai_plan_delivery_dedupe_skip request_id=%s error=%s", request_id, exc)
+        return True
 
 
 async def internal_send_daily_survey(request: web.Request) -> web.Response:
@@ -79,6 +99,7 @@ async def internal_send_workout_result(request: web.Request) -> web.Response:
     client_id = payload.get("client_id")
     client_workout_feedback = payload.get("text")
     expected_workout_result = payload.get("program")
+    request_id = payload.get("request_id") or uuid4().hex
 
     if not coach_id or not client_id or client_workout_feedback is None:
         return web.json_response({"detail": "Missing parameters"}, status=400)
@@ -91,39 +112,25 @@ async def internal_send_workout_result(request: web.Request) -> web.Response:
     if coach.coach_type == CoachType.ai_coach:
         client = await Cache.client.get_client(int(client_id))
         profile = await APIService.profile.get_profile(client.profile)
-        updated_subscription = await process_workout_plan_result(
+        language = profile.language if profile else settings.DEFAULT_LANG
+        queued = await enqueue_workout_plan_update(
             client_id=int(client_id),
-            expected_workout_result=expected_workout_result,
+            client_profile_id=client.profile,
+            expected_workout_result=str(expected_workout_result or ""),
             feedback=str(client_workout_feedback),
-            language=profile.language if profile else settings.DEFAULT_LANG,
+            language=language,
             plan_type=WorkoutPlanType.SUBSCRIPTION,
+            workout_type=None,
+            request_id=request_id,
         )
-        if profile is not None and isinstance(updated_subscription, Subscription) and updated_subscription.exercises:
-            exercises = updated_subscription.exercises
-        else:
-            logger.error("AI workout update produced no exercises")
-            return web.json_response({"result": "AI workout update produced no exercises"})
-
-        try:
-            subscription = await Cache.workout.get_latest_subscription(client_id)
-        except SubscriptionNotFoundError:
-            logger.error(f"No subscription found for client_id={client_id}")
-            return web.json_response({"result": f"No subscription found for client_id={client_id}"})
-
-        serialized = [day.model_dump() for day in exercises]
-        subscription_data = subscription.model_dump()
-        subscription_data.update(client_profile=client_id, exercises=serialized)
-
-        await APIService.workout.update_subscription(subscription.id, subscription_data)
-        await Cache.workout.update_subscription(
-            client_id,
-            {"exercises": serialized, "client_profile": client_id},
-        )
-        await bot.send_message(
-            chat_id=profile.tg_id,
-            text=msg_text("program_updated", profile.language),
-            parse_mode=ParseMode.HTML,
-        )
+        if not queued:
+            logger.error(
+                "AI workout update dispatch failed client_id=%s request_id=%s",
+                client_id,
+                request_id,
+            )
+            return web.json_response({"detail": "dispatch_failed"}, status=503)
+        return web.json_response({"result": "queued", "request_id": request_id})
     else:
         await send_message(
             recipient=coach,
@@ -134,6 +141,228 @@ async def internal_send_workout_result(request: web.Request) -> web.Response:
         )
 
     return web.json_response({"result": "ok"})
+
+
+async def internal_ai_coach_plan_ready(request: web.Request) -> web.Response:
+    if request.headers.get("Authorization") != f"Api-Key {settings.API_KEY}":
+        return web.json_response({"detail": "Forbidden"}, status=403)
+
+    try:
+        payload = await request.json()
+    except Exception:
+        return web.json_response({"detail": "Invalid JSON"}, status=400)
+
+    raw_request_id = payload.get("request_id")
+    request_id = str(raw_request_id or "")
+    status = str(payload.get("status", "success"))
+    action = str(payload.get("action", "create"))
+
+    try:
+        plan_type = WorkoutPlanType(payload["plan_type"])
+    except Exception:
+        return web.json_response({"detail": "Invalid plan_type"}, status=400)
+
+    client_id_raw = payload.get("client_id")
+    if client_id_raw is None:
+        return web.json_response({"detail": "Missing client_id"}, status=400)
+
+    client_id = int(client_id_raw)
+
+    try:
+        client = await Cache.client.get_client(client_id)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"Client fetch failed client_id={client_id} request_id={request_id}: {exc}")
+        return web.json_response({"detail": "Client not found"}, status=404)
+
+    profile: Profile | None = await APIService.profile.get_profile(client.profile)
+    if profile is None:
+        logger.error(f"Profile missing for client_id={client_id} request_id={request_id}")
+        return web.json_response({"detail": "Profile not found"}, status=404)
+
+    if not await _claim_plan_delivery(request_id):
+        logger.info(
+            "ai_plan_delivery_duplicate action=%s plan_type=%s client_id=%s request_id=%s",
+            action,
+            plan_type.value,
+            client_id,
+            request_id,
+        )
+        return web.json_response({"result": "duplicate_ignored"})
+
+    bot: Bot = request.app["bot"]
+    dispatcher = request.app.get("dp")
+    if dispatcher is None:
+        logger.error("Dispatcher not available for AI coach plan delivery")
+        return web.json_response({"detail": "Dispatcher unavailable"}, status=503)
+
+    storage = dispatcher.storage
+    state_key = StorageKey(bot_id=bot.id, chat_id=profile.tg_id, user_id=profile.tg_id)
+    state = FSMContext(storage=storage, key=state_key)
+
+    state_data = await state.get_data()
+    if request_id and state_data.get("last_request_id") == request_id:
+        logger.info(
+            "ai_plan_state_duplicate action=%s plan_type=%s client_id=%s request_id=%s",
+            action,
+            plan_type.value,
+            client_id,
+            request_id,
+        )
+        return web.json_response({"result": "duplicate_ignored"})
+
+    if status != "success":
+        error_reason = payload.get("error", "unknown_error")
+        message = msg_text("coach_agent_error", profile.language).format(tg=settings.TG_SUPPORT_CONTACT)
+        await bot.send_message(
+            chat_id=profile.tg_id,
+            text=message,
+        )
+        await bot.send_message(
+            settings.ADMIN_ID,
+            (
+                "AI plan failed action=%s plan_type=%s client_id=%s request_id=%s reason=%s"
+                % (action, plan_type.value, client_id, request_id, error_reason)
+            ),
+        )
+        return web.json_response({"result": "notified"})
+
+    plan_payload = payload.get("plan")
+    if not isinstance(plan_payload, dict):
+        logger.error(f"Plan payload missing client_id={client_id} request_id={request_id}")
+        return web.json_response({"detail": "Invalid plan payload"}, status=400)
+
+    profile_dump = profile.model_dump()
+    client_dump = client.model_dump()
+
+    await state.clear()
+    base_state: dict[str, object] = {"profile": profile_dump, "client": client_dump}
+    if request_id:
+        base_state["last_request_id"] = request_id
+    await state.update_data(**base_state)
+
+    if plan_type is WorkoutPlanType.PROGRAM:
+        program = Program.model_validate(plan_payload)
+        saved_program = await APIService.workout.save_program(
+            client_profile_id=client.profile,
+            exercises=program.exercises_by_day,
+            split_number=program.split_number or len(program.exercises_by_day),
+            wishes=program.wishes or "",
+        )
+        await Cache.workout.save_program(client.profile, saved_program.model_dump(mode="json"))
+        exercises_dump = [day.model_dump() for day in saved_program.exercises_by_day]
+        await state.update_data(
+            exercises=exercises_dump,
+            split=len(exercises_dump),
+            day_index=0,
+            client=True,
+        )
+        await state.set_state(States.program_view)
+        await bot.send_message(
+            chat_id=profile.tg_id,
+            text=msg_text("new_program", profile.language),
+            reply_markup=program_view_kb(profile.language, get_webapp_url("program")),
+            disable_notification=True,
+        )
+        return web.json_response({"result": "delivered"})
+
+    subscription = Subscription.model_validate(plan_payload)
+    serialized_exercises = [day.model_dump() for day in subscription.exercises]
+
+    if action == "update":
+        try:
+            current = await Cache.workout.get_latest_subscription(client.profile)
+        except SubscriptionNotFoundError:
+            logger.error(f"Subscription missing for update client_id={client_id} request_id={request_id}")
+            return web.json_response({"detail": "Subscription not found"}, status=404)
+
+        subscription_data = current.model_dump()
+        subscription_data.update(
+            client_profile=client.profile,
+            exercises=serialized_exercises,
+            workout_days=subscription.workout_days,
+            wishes=subscription.wishes,
+        )
+        await APIService.workout.update_subscription(current.id, subscription_data)
+        await Cache.workout.update_subscription(
+            client.profile,
+            {
+                "exercises": serialized_exercises,
+                "client_profile": client.profile,
+                "workout_days": subscription.workout_days,
+                "wishes": subscription.wishes,
+            },
+        )
+        update_payload = {
+            "exercises": serialized_exercises,
+            "split": len(serialized_exercises),
+            "day_index": 0,
+            "client": True,
+            "subscription": True,
+            "days": subscription.workout_days,
+        }
+        if request_id:
+            update_payload["last_request_id"] = request_id
+        await state.update_data(**update_payload)
+        await state.set_state(States.program_view)
+        await bot.send_message(
+            chat_id=profile.tg_id,
+            text=msg_text("program_updated", profile.language),
+            parse_mode=ParseMode.HTML,
+        )
+        return web.json_response({"result": "updated"})
+
+    try:
+        period_enum = SubscriptionPeriod(subscription.period)
+    except ValueError:
+        period_enum = SubscriptionPeriod.one_month
+
+    price = Decimal(subscription.price)
+    if price <= 0:
+        price = Decimal(settings.REGULAR_AI_SUBSCRIPTION_PRICE)
+
+    subscription_id = await APIService.workout.create_subscription(
+        client_profile_id=client.profile,
+        workout_days=subscription.workout_days,
+        wishes=subscription.wishes,
+        amount=price,
+        period=period_enum,
+        exercises=serialized_exercises,
+    )
+    if subscription_id is None:
+        logger.error(
+            "Subscription create failed client_id=%s request_id=%s plan_type=%s",
+            client_id,
+            request_id,
+            plan_type.value,
+        )
+        return web.json_response({"detail": "subscription_create_failed"}, status=502)
+
+    subscription_dump = subscription.model_dump(mode="json")
+    subscription_dump.update(
+        id=subscription_id,
+        client_profile=client.profile,
+        exercises=serialized_exercises,
+    )
+    await Cache.workout.save_subscription(client.profile, subscription_dump)
+    update_payload = {
+        "exercises": serialized_exercises,
+        "split": len(serialized_exercises),
+        "day_index": 0,
+        "client": True,
+        "subscription": True,
+        "days": subscription.workout_days,
+    }
+    if request_id:
+        update_payload["last_request_id"] = request_id
+    await state.update_data(**update_payload)
+    await state.set_state(States.program_view)
+    await bot.send_message(
+        chat_id=profile.tg_id,
+        text=msg_text("new_program", profile.language),
+        reply_markup=program_view_kb(profile.language, get_webapp_url("program")),
+        disable_notification=True,
+    )
+    return web.json_response({"result": "delivered"})
 
 
 async def internal_prune_cognee(request: web.Request) -> web.Response:

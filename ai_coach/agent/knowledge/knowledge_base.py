@@ -53,6 +53,7 @@ class KnowledgeBase:
     _user: Any | None = None
     _list_data_supports_user: bool | None = None
     _has_datasets_module: bool | None = None
+    _warned_missing_user: bool = False
 
     GLOBAL_DATASET: str = os.environ.get("COGNEE_GLOBAL_DATASET", "external_docs")
     _CLIENT_DATASET_NAMESPACE: UUID | None = None
@@ -186,6 +187,13 @@ class KnowledgeBase:
         """Return recent chat messages for a client."""
         dataset: str = cls._resolve_dataset_alias(cls._dataset_name(client_id))
         user: Any | None = await cls._get_cognee_user()
+        if user is None:
+            if not cls._warned_missing_user:
+                logger.warning("History fetch skipped client_id=%s: default user unavailable", client_id)
+                cls._warned_missing_user = True
+            else:
+                logger.debug("History fetch skipped client_id=%s: default user unavailable", client_id)
+            return []
         try:
             await cls._ensure_dataset_exists(dataset, user)
         except Exception as exc:  # pragma: no cover - non-critical indexing failure
@@ -249,6 +257,9 @@ class KnowledgeBase:
     async def _ensure_dataset_exists(cls, name: str, user: Any | None) -> None:
         """Create dataset if it does not exist for the given user."""
         user_ns = cls._to_user_or_none(user)
+        if user_ns is None:
+            logger.debug(f"Dataset ensure skipped dataset={name}: user context unavailable")
+            return
         try:
             from cognee.modules.data.methods import (  # type: ignore
                 get_authorized_dataset_by_name,

@@ -1,10 +1,11 @@
 from datetime import datetime, timedelta
 
-from celery import Celery
+
 from celery.schedules import crontab, schedule
 from kombu import Exchange, Queue
 
 from config.app_settings import settings
+from core.celery_app import app
 
 
 def beat_nowfun() -> datetime:
@@ -56,6 +57,7 @@ celery_config = {
         ),
         Queue("maintenance", maintenance_exchange, routing_key="maintenance", durable=True),
         Queue("critical.dlq", dead_letter_exchange, routing_key="#", durable=True),
+        Queue("ai_coach", default_exchange, routing_key="ai_coach", durable=True),
     ),
     "task_routes": {
         "core.tasks.charge_due_subscriptions": {
@@ -140,7 +142,24 @@ celery_config = {
     },
 }
 
-celery_app = Celery("gym_bot", config_source=celery_config)
+celery_app = app
+celery_app.conf.update(celery_config)
+
+existing_routes = dict(celery_app.conf.task_routes or {})
+existing_routes.update(
+    {
+        "core.tasks.generate_ai_workout_plan": {
+            "queue": "ai_coach",
+            "routing_key": "ai_coach",
+        },
+        "core.tasks.update_ai_workout_plan": {
+            "queue": "ai_coach",
+            "routing_key": "ai_coach",
+        },
+    }
+)
+celery_app.conf.task_routes = existing_routes
+
 celery_app.autodiscover_tasks(["core", "apps.payments"])
 
 __all__ = ("celery_app",)

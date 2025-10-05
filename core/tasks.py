@@ -5,9 +5,11 @@ import asyncio
 from datetime import datetime, timedelta, date
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal, ROUND_HALF_UP
-from typing import cast
+from typing import Any, cast
 
-from celery import shared_task
+from celery import Task
+
+from core.celery_app import app
 from loguru import logger
 import httpx
 
@@ -17,7 +19,8 @@ from core.services import APIService
 from bot.texts.text_manager import msg_text
 from apps.payments.tasks import send_payment_message
 from bot.utils.profiles import get_assigned_coach
-from core.enums import CoachType, SubscriptionPeriod
+from core.enums import CoachType, SubscriptionPeriod, WorkoutPlanType, WorkoutType
+from core.schemas import Program, Subscription
 from core.utils.redis_lock import redis_try_lock, get_redis_client
 
 
@@ -40,7 +43,7 @@ os.makedirs(_pg_dir, exist_ok=True)
 os.makedirs(_redis_dir, exist_ok=True)
 
 
-@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyrefly: ignore[not-callable]
+@app.task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyrefly: ignore[not-callable]
 def pg_backup(self):
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
     path = os.path.join(_pg_dir, f"{settings.DB_NAME}_backup_{ts}.dump")
@@ -66,7 +69,7 @@ def pg_backup(self):
         raise
 
 
-@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyrefly: ignore[not-callable]
+@app.task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyrefly: ignore[not-callable]
 def redis_backup(self):
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
     tmp_path = f"/tmp/redis_backup_{ts}.rdb"
@@ -84,7 +87,7 @@ def redis_backup(self):
             os.remove(tmp_path)
 
 
-@shared_task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyrefly: ignore[not-callable]
+@app.task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyrefly: ignore[not-callable]
 def cleanup_backups(self):
     cutoff = datetime.now() - timedelta(days=settings.BACKUP_RETENTION_DAYS)
     for root in (_pg_dir, _redis_dir):
@@ -97,7 +100,7 @@ def cleanup_backups(self):
 # ---------- Billing ----------
 
 
-@shared_task(
+@app.task(
     bind=True,
     autoretry_for=(Exception,),
     retry_backoff=180,
@@ -130,7 +133,7 @@ def deactivate_expired_subscriptions(self):
     logger.info("deactivate_expired_subscriptions completed")
 
 
-@shared_task(
+@app.task(
     bind=True,
     autoretry_for=(Exception,),
     retry_backoff=180,
@@ -164,7 +167,7 @@ def warn_low_credits(self):
     logger.info("warn_low_credits completed")
 
 
-@shared_task(
+@app.task(
     bind=True,
     autoretry_for=(Exception,),
     retry_backoff=180,
@@ -218,7 +221,7 @@ def charge_due_subscriptions(self):
 # ---------- Bot calls ----------
 
 
-@shared_task(
+@app.task(
     bind=True,
     autoretry_for=(httpx.HTTPError,),
     retry_backoff=180,
@@ -243,7 +246,7 @@ _CONNECT_TIMEOUT = 10.0
 _READ_TIMEOUT = 30.0
 
 
-@shared_task(
+@app.task(
     bind=True,
     autoretry_for=(httpx.HTTPError,),
     retry_backoff=180,
@@ -263,7 +266,7 @@ def send_daily_survey(self):
         raise self.retry(exc=exc)
 
 
-@shared_task(
+@app.task(
     bind=True,
     autoretry_for=(httpx.HTTPError,),
     retry_backoff=180,
@@ -291,7 +294,289 @@ def send_workout_result(self, coach_profile_id: int, client_profile_id: int, tex
 # ---------- AI coach ----------
 
 
-@shared_task(
+async def _claim_plan_request(request_id: str, action: str, *, attempt: int) -> bool:
+    if not request_id or attempt > 0:
+        return True
+    try:
+        client = get_redis_client()
+        key = f"ai:plan:{action}:{request_id}"
+        ok = await client.set(key, "1", nx=True, ex=settings.AI_PLAN_DEDUP_TTL)
+        return bool(ok)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "ai_plan_idempotency_skip action=%s request_id=%s error=%s",
+            action,
+            request_id,
+            exc,
+        )
+        return True
+
+
+async def _notify_ai_plan_ready(payload: dict[str, Any]) -> None:
+    url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/ai_plan_ready/"
+    headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+            resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        logger.warning(
+            "ai_plan_notify_failed request_id=%s status=%s error=%s",
+            payload.get("request_id"),
+            getattr(exc.response, "status_code", None),
+            exc,
+        )
+        raise
+
+
+def _parse_workout_type(raw: Any) -> WorkoutType | None:
+    if not raw:
+        return None
+    try:
+        return WorkoutType(str(raw))
+    except ValueError:
+        return None
+
+
+async def _notify_error(
+    *,
+    client_id: int,
+    plan_type: WorkoutPlanType,
+    request_id: str,
+    action: str,
+    error: str,
+) -> None:
+    await _notify_ai_plan_ready(
+        {
+            "client_id": client_id,
+            "plan_type": plan_type.value,
+            "status": "error",
+            "action": action,
+            "request_id": request_id,
+            "error": error,
+        }
+    )
+
+
+async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> None:
+    client_id = int(payload["client_id"])
+    request_id = str(payload.get("request_id", ""))
+    wishes = str(payload.get("wishes", ""))
+    language = str(payload.get("language", settings.DEFAULT_LANG))
+    period = payload.get("period")
+    workout_days = payload.get("workout_days") or []
+    plan_type = WorkoutPlanType(payload.get("plan_type", WorkoutPlanType.PROGRAM.value))
+    workout_type = _parse_workout_type(payload.get("workout_type"))
+    attempt = getattr(task.request, "retries", 0)
+
+    if not await _claim_plan_request(request_id, "create", attempt=attempt):
+        logger.info(
+            "ai_generate_plan_duplicate client_id=%s plan_type=%s request_id=%s",
+            client_id,
+            plan_type.value,
+            request_id,
+        )
+        return
+
+    logger.debug(
+        "ai_generate_plan started client_id=%s plan_type=%s request_id=%s attempt=%s",
+        client_id,
+        plan_type.value,
+        request_id,
+        attempt,
+    )
+
+    try:
+        plan = await APIService.ai_coach.create_workout_plan(
+            plan_type,
+            client_id=client_id,
+            language=language,
+            period=str(period) if period else None,
+            workout_days=list(workout_days),
+            wishes=wishes,
+            workout_type=workout_type,
+            request_id=request_id or None,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "ai_generate_plan failed client_id=%s plan_type=%s request_id=%s attempt=%s error=%s",
+            client_id,
+            plan_type.value,
+            request_id,
+            attempt,
+            exc,
+        )
+        if attempt >= getattr(task, "max_retries", 0):
+            await _notify_error(
+                client_id=client_id,
+                plan_type=plan_type,
+                request_id=request_id,
+                action="create",
+                error=str(exc),
+            )
+        raise
+
+    if plan is None:
+        logger.error(
+            "ai_generate_plan returned empty client_id=%s plan_type=%s request_id=%s",
+            client_id,
+            plan_type.value,
+            request_id,
+        )
+        await _notify_error(
+            client_id=client_id,
+            plan_type=plan_type,
+            request_id=request_id,
+            action="create",
+            error="empty_plan",
+        )
+        return
+
+    if plan_type is WorkoutPlanType.PROGRAM:
+        program = Program.model_validate(plan)
+        plan_payload = program.model_dump(mode="json")
+    else:
+        subscription = Subscription.model_validate(plan)
+        plan_payload = subscription.model_dump(mode="json")
+
+    notify_payload = {
+        "client_id": client_id,
+        "plan_type": plan_type.value,
+        "status": "success",
+        "action": "create",
+        "request_id": request_id,
+        "plan": plan_payload,
+    }
+
+    await _notify_ai_plan_ready(notify_payload)
+    logger.debug(
+        "ai_generate_plan completed client_id=%s plan_type=%s request_id=%s",
+        client_id,
+        plan_type.value,
+        request_id,
+    )
+
+
+async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> None:
+    client_id = int(payload["client_id"])
+    language = str(payload.get("language", settings.DEFAULT_LANG))
+    request_id = str(payload.get("request_id", ""))
+    expected_workout = str(payload.get("expected_workout_result", ""))
+    feedback = str(payload.get("feedback", ""))
+    plan_type = WorkoutPlanType(payload.get("plan_type", WorkoutPlanType.SUBSCRIPTION.value))
+    workout_type = _parse_workout_type(payload.get("workout_type"))
+    attempt = getattr(task.request, "retries", 0)
+
+    if not await _claim_plan_request(request_id, "update", attempt=attempt):
+        logger.info(
+            "ai_update_plan_duplicate client_id=%s plan_type=%s request_id=%s",
+            client_id,
+            plan_type.value,
+            request_id,
+        )
+        return
+
+    logger.debug(
+        "ai_update_plan started client_id=%s plan_type=%s request_id=%s attempt=%s",
+        client_id,
+        plan_type.value,
+        request_id,
+        attempt,
+    )
+
+    try:
+        plan = await APIService.ai_coach.update_workout_plan(
+            plan_type,
+            client_id=client_id,
+            language=language,
+            expected_workout=expected_workout or None,
+            feedback=feedback or None,
+            workout_type=workout_type,
+            request_id=request_id or None,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "ai_update_plan failed client_id=%s plan_type=%s request_id=%s attempt=%s error=%s",
+            client_id,
+            plan_type.value,
+            request_id,
+            attempt,
+            exc,
+        )
+        if attempt >= getattr(task, "max_retries", 0):
+            await _notify_error(
+                client_id=client_id,
+                plan_type=plan_type,
+                request_id=request_id,
+                action="update",
+                error=str(exc),
+            )
+        raise
+
+    if plan is None:
+        logger.error(
+            "ai_update_plan returned empty client_id=%s plan_type=%s request_id=%s",
+            client_id,
+            plan_type.value,
+            request_id,
+        )
+        await _notify_error(
+            client_id=client_id,
+            plan_type=plan_type,
+            request_id=request_id,
+            action="update",
+            error="empty_plan",
+        )
+        return
+
+    if plan_type is WorkoutPlanType.PROGRAM:
+        program = Program.model_validate(plan)
+        plan_payload = program.model_dump(mode="json")
+    else:
+        subscription = Subscription.model_validate(plan)
+        plan_payload = subscription.model_dump(mode="json")
+
+    notify_payload = {
+        "client_id": client_id,
+        "plan_type": plan_type.value,
+        "status": "success",
+        "action": "update",
+        "request_id": request_id,
+        "plan": plan_payload,
+    }
+
+    await _notify_ai_plan_ready(notify_payload)
+    logger.debug(
+        "ai_update_plan completed client_id=%s plan_type=%s request_id=%s",
+        client_id,
+        plan_type.value,
+        request_id,
+    )
+
+
+@app.task(
+    bind=True,
+    autoretry_for=(httpx.HTTPError, Exception),
+    retry_backoff=30,
+    retry_jitter=True,
+    max_retries=5,
+)
+def generate_ai_workout_plan(self, payload: dict[str, Any]) -> None:  # pyrefly: ignore[valid-type]
+    asyncio.run(_generate_ai_workout_plan_impl(payload, self))
+
+
+@app.task(
+    bind=True,
+    autoretry_for=(httpx.HTTPError, Exception),
+    retry_backoff=30,
+    retry_jitter=True,
+    max_retries=5,
+)
+def update_ai_workout_plan(self, payload: dict[str, Any]) -> None:  # pyrefly: ignore[valid-type]
+    asyncio.run(_update_ai_workout_plan_impl(payload, self))
+
+
+@app.task(
     bind=True,
     autoretry_for=(Exception,),
     retry_backoff=180,
@@ -340,7 +625,7 @@ def refresh_external_knowledge(self):
         logger.info("refresh_external_knowledge completed")
 
 
-@shared_task(
+@app.task(
     bind=True,
     autoretry_for=(httpx.HTTPError,),
     retry_backoff=180,

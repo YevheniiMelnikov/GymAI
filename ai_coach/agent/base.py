@@ -13,6 +13,8 @@ class AgentDeps:
     allow_save: bool = True
     client_name: str | None = None
     mode: CoachMode | None = None
+    last_knowledge_query: str | None = None
+    last_knowledge_empty: bool = False
 
 
 class CoachAgentProtocol(Protocol):
