@@ -34,7 +34,7 @@ async def tool_search_knowledge(
     normalized_query = query.strip()
     logger.debug(f"tool_search_knowledge client_id={client_id} query='{normalized_query[:80]}' k={k}")
     if ctx.deps.last_knowledge_query == normalized_query and ctx.deps.last_knowledge_empty:
-        logger.info("knowledge_search_repeat client_id=%s query='%s'", client_id, normalized_query[:80])
+        logger.info(f"knowledge_search_repeat client_id={client_id} query='{normalized_query[:80]}'")
         raise ModelRetry(
             "Previous knowledge search returned no results. Provide more context or ask a different question before retrying."
         )
@@ -45,7 +45,7 @@ async def tool_search_knowledge(
     ctx.deps.last_knowledge_query = normalized_query
     ctx.deps.last_knowledge_empty = len(result) == 0
     if ctx.deps.last_knowledge_empty:
-        logger.info("knowledge_search_empty client_id=%s query='%s'", client_id, normalized_query[:80])
+        logger.info(f"knowledge_search_empty client_id={client_id} query='{normalized_query[:80]}'")
     logger.debug(f"tool_search_knowledge results={len(result)}")
     return result
 

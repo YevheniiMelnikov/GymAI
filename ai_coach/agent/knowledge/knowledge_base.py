@@ -189,10 +189,10 @@ class KnowledgeBase:
         user: Any | None = await cls._get_cognee_user()
         if user is None:
             if not cls._warned_missing_user:
-                logger.warning("History fetch skipped client_id=%s: default user unavailable", client_id)
+                logger.warning(f"History fetch skipped client_id={client_id}: default user unavailable")
                 cls._warned_missing_user = True
             else:
-                logger.debug("History fetch skipped client_id=%s: default user unavailable", client_id)
+                logger.debug(f"History fetch skipped client_id={client_id}: default user unavailable")
             return []
         try:
             await cls._ensure_dataset_exists(dataset, user)

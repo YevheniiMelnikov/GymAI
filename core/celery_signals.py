@@ -57,23 +57,19 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
         registered_ok = all(name in worker.app.tasks for name in REQUIRED_TASK_NAMES)
 
     logger.info(
-        "celery_ready hostname=%s queues=%s registered_ok=%s missing=%s",
-        worker.hostname,
-        queue_names,
-        registered_ok,
-        registered_missing,
+        f"celery_ready hostname={worker.hostname} queues={queue_names} "
+        f"registered_ok={registered_ok} missing={registered_missing}"
     )
 
     if "ai_coach" not in queue_names:
-        logger.error("ai_coach queue missing on worker hostname=%s queues=%s", worker.hostname, queue_names)
+        logger.error(f"ai_coach queue missing on worker hostname={worker.hostname} queues={queue_names}")
         raise SystemExit("ai_coach queue is not registered on this worker")
 
     if not registered_ok:
         logger.error(
-            "celery tasks missing hostname=%s missing=%s available=%s",
-            worker.hostname,
-            registered_missing,
-            sorted(worker.app.tasks.keys()),
+            "celery tasks missing "
+            f"hostname={worker.hostname} missing={registered_missing} "
+            f"available={sorted(worker.app.tasks.keys())}"
         )
         raise SystemExit("Required Celery tasks are not registered")
 
@@ -83,13 +79,7 @@ def _on_task_prerun(task_id: str, task: Task, **_: Any) -> None:
         return
     request_id, retries = _extract_request_context(task)
     _TASK_START_TIMES[task_id] = time.perf_counter()
-    logger.info(
-        "celery_task_start name=%s task_id=%s request_id=%s retries=%s",
-        task.name,
-        task_id,
-        request_id,
-        retries,
-    )
+    logger.info(f"celery_task_start name={task.name} task_id={task_id} request_id={request_id} retries={retries}")
 
 
 def _on_task_postrun(task_id: str, task: Task, state: str, retval: Any, **_: Any) -> None:
@@ -100,14 +90,11 @@ def _on_task_postrun(task_id: str, task: Task, state: str, retval: Any, **_: Any
     if start_time is not None:
         duration_ms = (time.perf_counter() - start_time) * 1000
     request_id, retries = _extract_request_context(task)
+    duration_value: float = duration_ms or 0.0
     logger.info(
-        "celery_task_done name=%s task_id=%s request_id=%s retries=%s state=%s duration_ms=%.2f",
-        task.name,
-        task_id,
-        request_id,
-        retries,
-        state,
-        duration_ms or 0.0,
+        "celery_task_done "
+        f"name={task.name} task_id={task_id} request_id={request_id} "
+        f"retries={retries} state={state} duration_ms={duration_value:.2f}"
     )
 
 

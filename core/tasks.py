@@ -303,12 +303,7 @@ async def _claim_plan_request(request_id: str, action: str, *, attempt: int) -> 
         ok = await client.set(key, "1", nx=True, ex=settings.AI_PLAN_DEDUP_TTL)
         return bool(ok)
     except Exception as exc:  # noqa: BLE001
-        logger.warning(
-            "ai_plan_idempotency_skip action=%s request_id=%s error=%s",
-            action,
-            request_id,
-            exc,
-        )
+        logger.warning(f"ai_plan_idempotency_skip action={action} request_id={request_id} error={exc!s}")
         return True
 
 
@@ -320,12 +315,9 @@ async def _notify_ai_plan_ready(payload: dict[str, Any]) -> None:
             resp = await client.post(url, json=payload, headers=headers)
             resp.raise_for_status()
     except httpx.HTTPError as exc:
-        logger.warning(
-            "ai_plan_notify_failed request_id=%s status=%s error=%s",
-            payload.get("request_id"),
-            getattr(exc.response, "status_code", None),
-            exc,
-        )
+        status_code = getattr(exc.response, "status_code", None)
+        request_id = payload.get("request_id")
+        logger.warning(f"ai_plan_notify_failed request_id={request_id} status={status_code} error={exc!s}")
         raise
 
 

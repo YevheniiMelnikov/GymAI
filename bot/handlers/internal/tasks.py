@@ -36,7 +36,7 @@ async def _claim_plan_delivery(request_id: str) -> bool:
         ok = await client.set(key, "1", nx=True, ex=settings.AI_PLAN_DEDUP_TTL)
         return bool(ok)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("ai_plan_delivery_dedupe_skip request_id=%s error=%s", request_id, exc)
+        logger.warning(f"ai_plan_delivery_dedupe_skip request_id={request_id} error={exc!s}")
         return True
 
 
@@ -124,11 +124,7 @@ async def internal_send_workout_result(request: web.Request) -> web.Response:
             request_id=request_id,
         )
         if not queued:
-            logger.error(
-                "AI workout update dispatch failed client_id=%s request_id=%s",
-                client_id,
-                request_id,
-            )
+            logger.error(f"AI workout update dispatch failed client_id={client_id} request_id={request_id}")
             return web.json_response({"detail": "dispatch_failed"}, status=503)
         return web.json_response({"result": "queued", "request_id": request_id})
     else:
@@ -181,11 +177,9 @@ async def internal_ai_coach_plan_ready(request: web.Request) -> web.Response:
 
     if not await _claim_plan_delivery(request_id):
         logger.info(
-            "ai_plan_delivery_duplicate action=%s plan_type=%s client_id=%s request_id=%s",
-            action,
-            plan_type.value,
-            client_id,
-            request_id,
+            "ai_plan_delivery_duplicate "
+            f"action={action} plan_type={plan_type.value} "
+            f"client_id={client_id} request_id={request_id}"
         )
         return web.json_response({"result": "duplicate_ignored"})
 
@@ -202,11 +196,9 @@ async def internal_ai_coach_plan_ready(request: web.Request) -> web.Response:
     state_data = await state.get_data()
     if request_id and state_data.get("last_request_id") == request_id:
         logger.info(
-            "ai_plan_state_duplicate action=%s plan_type=%s client_id=%s request_id=%s",
-            action,
-            plan_type.value,
-            client_id,
-            request_id,
+            "ai_plan_state_duplicate "
+            f"action={action} plan_type={plan_type.value} "
+            f"client_id={client_id} request_id={request_id}"
         )
         return web.json_response({"result": "duplicate_ignored"})
 
@@ -217,13 +209,13 @@ async def internal_ai_coach_plan_ready(request: web.Request) -> web.Response:
             chat_id=profile.tg_id,
             text=message,
         )
-        await bot.send_message(
-            settings.ADMIN_ID,
-            (
-                "AI plan failed action=%s plan_type=%s client_id=%s request_id=%s reason=%s"
-                % (action, plan_type.value, client_id, request_id, error_reason)
-            ),
+        admin_message = (
+            "AI plan failed "
+            f"action={action} plan_type={plan_type.value} "
+            f"client_id={client_id} request_id={request_id} "
+            f"reason={error_reason}"
         )
+        await bot.send_message(settings.ADMIN_ID, admin_message)
         return web.json_response({"result": "notified"})
 
     plan_payload = payload.get("plan")
@@ -330,10 +322,7 @@ async def internal_ai_coach_plan_ready(request: web.Request) -> web.Response:
     )
     if subscription_id is None:
         logger.error(
-            "Subscription create failed client_id=%s request_id=%s plan_type=%s",
-            client_id,
-            request_id,
-            plan_type.value,
+            f"Subscription create failed client_id={client_id} request_id={request_id} plan_type={plan_type.value}"
         )
         return web.json_response({"detail": "subscription_create_failed"}, status=502)
 
