@@ -27,8 +27,8 @@ def setup_celery_signals() -> None:
     _SIGNALS_ATTACHED = True
 
 
-def _on_after_setup_task_logger(logger_: logging.Logger, **_: Any) -> None:
-    logger_.setLevel(logging.INFO)
+def _on_after_setup_task_logger(logger: logging.Logger, **_: Any) -> None:
+    logger.setLevel(logging.INFO)
 
 
 def _on_worker_ready(sender: Any, **_: Any) -> None:
