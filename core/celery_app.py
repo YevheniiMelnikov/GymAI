@@ -110,4 +110,5 @@ __all__ = [
     "CELERY_QUEUES",
     "CELERY_TASK_ROUTES",
     "CELERY_INCLUDE",
+    "default_exchange",
 ]

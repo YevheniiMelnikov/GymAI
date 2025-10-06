@@ -3,6 +3,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 
 from config.app_settings import settings
+from core.queues import ensure_ai_coach_queue
 
 if TYPE_CHECKING:
     from aiohttp import web
@@ -38,6 +39,8 @@ async def setup_app(app: "web.Application", bot: "Bot", dp: "Dispatcher") -> Non
         internal_prune_cognee,
         internal_celery_debug,
     )
+
+    ensure_ai_coach_queue()
 
     path = settings.WEBHOOK_PATH.rstrip("/")
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=path)
