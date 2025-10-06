@@ -53,6 +53,11 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/internal/debug/ping")
+async def internal_ping() -> dict[str, bool]:
+    return {"ok": True}
+
+
 @app.post("/ask/", response_model=Program | Subscription | QAResponse | list[str] | None)
 async def ask(data: AICoachRequest, request: Request) -> Program | Subscription | QAResponse | list[str] | None:
     mode = data.mode if isinstance(data.mode, CoachMode) else CoachMode(data.mode)

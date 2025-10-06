@@ -2,10 +2,11 @@ from datetime import datetime, timedelta
 
 
 from celery.schedules import crontab, schedule
-from kombu import Exchange, Queue
+
 
 from config.app_settings import settings
-from core.celery_app import app
+from core.celery_app import CELERY_QUEUES, CELERY_TASK_ROUTES, app
+from core.celery_signals import setup_celery_signals
 
 
 def beat_nowfun() -> datetime:
@@ -17,11 +18,6 @@ def knowledge_refresh_now() -> datetime:
     """Backward-compat alias for old pickled beat schedules."""
     return beat_nowfun()
 
-
-dead_letter_exchange = Exchange("critical.dlx", type="topic", durable=True)
-critical_exchange = Exchange("critical", type="direct", durable=True)
-default_exchange = Exchange("default", type="direct", durable=True)
-maintenance_exchange = Exchange("maintenance", type="direct", durable=True)
 
 celery_config = {
     "broker_url": settings.RABBITMQ_URL,
@@ -42,49 +38,8 @@ celery_config = {
     "task_default_exchange_type": "direct",
     "task_default_routing_key": "default",
     "task_default_delivery_mode": "persistent",
-    "task_queues": (
-        Queue("default", default_exchange, routing_key="default", durable=True),
-        Queue(
-            "critical",
-            critical_exchange,
-            routing_key="critical",
-            durable=True,
-            queue_arguments={
-                "x-dead-letter-exchange": dead_letter_exchange.name,
-                "x-message-ttl": 600_000,
-                "x-max-priority": 10,
-            },
-        ),
-        Queue("maintenance", maintenance_exchange, routing_key="maintenance", durable=True),
-        Queue("critical.dlq", dead_letter_exchange, routing_key="#", durable=True),
-        Queue("ai_coach", default_exchange, routing_key="ai_coach", durable=True),
-    ),
-    "task_routes": {
-        "core.tasks.charge_due_subscriptions": {
-            "queue": "critical",
-            "routing_key": "critical",
-        },
-        "core.tasks.deactivate_expired_subscriptions": {
-            "queue": "critical",
-            "routing_key": "critical",
-        },
-        "core.tasks.warn_low_credits": {
-            "queue": "critical",
-            "routing_key": "critical",
-        },
-        "apps.payments.tasks.process_payment_webhook": {
-            "queue": "critical",
-            "routing_key": "critical",
-        },
-        "apps.payments.tasks.send_payment_message": {
-            "queue": "critical",
-            "routing_key": "critical",
-        },
-        "apps.payments.tasks.send_client_request": {
-            "queue": "critical",
-            "routing_key": "critical",
-        },
-    },
+    "task_queues": CELERY_QUEUES,
+    "task_routes": CELERY_TASK_ROUTES,
     "beat_schedule": {
         "pg_backup": {
             "task": "core.tasks.pg_backup",
@@ -145,21 +100,7 @@ celery_config = {
 celery_app = app
 celery_app.conf.update(celery_config)
 
-existing_routes = dict(celery_app.conf.task_routes or {})
-existing_routes.update(
-    {
-        "core.tasks.generate_ai_workout_plan": {
-            "queue": "ai_coach",
-            "routing_key": "ai_coach",
-        },
-        "core.tasks.update_ai_workout_plan": {
-            "queue": "ai_coach",
-            "routing_key": "ai_coach",
-        },
-    }
-)
-celery_app.conf.task_routes = existing_routes
-
 celery_app.autodiscover_tasks(["core", "apps.payments"])
+setup_celery_signals()
 
 __all__ = ("celery_app",)

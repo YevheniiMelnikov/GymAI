@@ -303,12 +303,7 @@ async def _claim_plan_request(request_id: str, action: str, *, attempt: int) -> 
         ok = await client.set(key, "1", nx=True, ex=settings.AI_PLAN_DEDUP_TTL)
         return bool(ok)
     except Exception as exc:  # noqa: BLE001
-        logger.warning(
-            "ai_plan_idempotency_skip action=%s request_id=%s error=%s",
-            action,
-            request_id,
-            exc,
-        )
+        logger.warning(f"ai_plan_idempotency_skip action={action} request_id={request_id} error={exc!s}")
         return True
 
 
@@ -320,12 +315,9 @@ async def _notify_ai_plan_ready(payload: dict[str, Any]) -> None:
             resp = await client.post(url, json=payload, headers=headers)
             resp.raise_for_status()
     except httpx.HTTPError as exc:
-        logger.warning(
-            "ai_plan_notify_failed request_id=%s status=%s error=%s",
-            payload.get("request_id"),
-            getattr(exc.response, "status_code", None),
-            exc,
-        )
+        status_code = getattr(exc.response, "status_code", None)
+        request_id = payload.get("request_id")
+        logger.warning(f"ai_plan_notify_failed request_id={request_id} status={status_code} error={exc!s}")
         raise
 
 
@@ -371,19 +363,13 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
 
     if not await _claim_plan_request(request_id, "create", attempt=attempt):
         logger.info(
-            "ai_generate_plan_duplicate client_id=%s plan_type=%s request_id=%s",
-            client_id,
-            plan_type.value,
-            request_id,
+            f"ai_generate_plan_duplicate client_id={client_id} plan_type={plan_type.value} request_id={request_id}"
         )
         return
 
-    logger.debug(
-        "ai_generate_plan started client_id=%s plan_type=%s request_id=%s attempt=%s",
-        client_id,
-        plan_type.value,
-        request_id,
-        attempt,
+    logger.info(
+        f"ai_generate_plan started client_id={client_id} plan_type={plan_type.value} "
+        f"request_id={request_id} attempt={attempt}"
     )
 
     try:
@@ -399,12 +385,8 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
         )
     except Exception as exc:  # noqa: BLE001
         logger.error(
-            "ai_generate_plan failed client_id=%s plan_type=%s request_id=%s attempt=%s error=%s",
-            client_id,
-            plan_type.value,
-            request_id,
-            attempt,
-            exc,
+            f"ai_generate_plan failed client_id={client_id} plan_type={plan_type.value} "
+            f"request_id={request_id} attempt={attempt} error={exc}"
         )
         if attempt >= getattr(task, "max_retries", 0):
             await _notify_error(
@@ -418,10 +400,7 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
 
     if plan is None:
         logger.error(
-            "ai_generate_plan returned empty client_id=%s plan_type=%s request_id=%s",
-            client_id,
-            plan_type.value,
-            request_id,
+            f"ai_generate_plan returned empty client_id={client_id} plan_type={plan_type.value} request_id={request_id}"
         )
         await _notify_error(
             client_id=client_id,
@@ -449,12 +428,7 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
     }
 
     await _notify_ai_plan_ready(notify_payload)
-    logger.debug(
-        "ai_generate_plan completed client_id=%s plan_type=%s request_id=%s",
-        client_id,
-        plan_type.value,
-        request_id,
-    )
+    logger.info(f"ai_generate_plan completed client_id={client_id} plan_type={plan_type.value} request_id={request_id}")
 
 
 async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> None:
@@ -469,19 +443,13 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
 
     if not await _claim_plan_request(request_id, "update", attempt=attempt):
         logger.info(
-            "ai_update_plan_duplicate client_id=%s plan_type=%s request_id=%s",
-            client_id,
-            plan_type.value,
-            request_id,
+            f"ai_update_plan_duplicate client_id={client_id} plan_type={plan_type.value} request_id={request_id}"
         )
         return
 
-    logger.debug(
-        "ai_update_plan started client_id=%s plan_type=%s request_id=%s attempt=%s",
-        client_id,
-        plan_type.value,
-        request_id,
-        attempt,
+    logger.info(
+        f"ai_update_plan started client_id={client_id} plan_type={plan_type.value} "
+        f"request_id={request_id} attempt={attempt}"
     )
 
     try:
@@ -496,12 +464,8 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
         )
     except Exception as exc:  # noqa: BLE001
         logger.error(
-            "ai_update_plan failed client_id=%s plan_type=%s request_id=%s attempt=%s error=%s",
-            client_id,
-            plan_type.value,
-            request_id,
-            attempt,
-            exc,
+            f"ai_update_plan failed client_id={client_id} plan_type={plan_type.value} "
+            f"request_id={request_id} attempt={attempt} error={exc}"
         )
         if attempt >= getattr(task, "max_retries", 0):
             await _notify_error(
@@ -515,10 +479,7 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
 
     if plan is None:
         logger.error(
-            "ai_update_plan returned empty client_id=%s plan_type=%s request_id=%s",
-            client_id,
-            plan_type.value,
-            request_id,
+            f"ai_update_plan returned empty client_id={client_id} plan_type={plan_type.value} request_id={request_id}"
         )
         await _notify_error(
             client_id=client_id,
@@ -546,16 +507,13 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
     }
 
     await _notify_ai_plan_ready(notify_payload)
-    logger.debug(
-        "ai_update_plan completed client_id=%s plan_type=%s request_id=%s",
-        client_id,
-        plan_type.value,
-        request_id,
-    )
+    logger.info(f"ai_update_plan completed client_id={client_id} plan_type={plan_type.value} request_id={request_id}")
 
 
 @app.task(
     bind=True,
+    queue="ai_coach",
+    routing_key="ai_coach",
     autoretry_for=(httpx.HTTPError, Exception),
     retry_backoff=30,
     retry_jitter=True,
@@ -567,6 +525,8 @@ def generate_ai_workout_plan(self, payload: dict[str, Any]) -> None:  # pyrefly:
 
 @app.task(
     bind=True,
+    queue="ai_coach",
+    routing_key="ai_coach",
     autoretry_for=(httpx.HTTPError, Exception),
     retry_backoff=30,
     retry_jitter=True,
@@ -574,6 +534,40 @@ def generate_ai_workout_plan(self, payload: dict[str, Any]) -> None:  # pyrefly:
 )
 def update_ai_workout_plan(self, payload: dict[str, Any]) -> None:  # pyrefly: ignore[valid-type]
     asyncio.run(_update_ai_workout_plan_impl(payload, self))
+
+
+@app.task(
+    bind=True,
+    queue="ai_coach",
+    routing_key="ai_coach",
+)
+def ai_coach_echo(self, payload: dict[str, Any]) -> dict[str, Any]:
+    payload_descriptor: str
+    if isinstance(payload, dict):
+        payload_descriptor = ",".join(sorted(str(key) for key in payload.keys()))
+    else:
+        payload_descriptor = type(payload).__name__
+    logger.info(f"ai_coach_echo started task_id={self.request.id} payload_descriptor={payload_descriptor}")
+    return {"ok": True, "echo": payload}
+
+
+@app.task(
+    bind=True,
+    queue="ai_coach",
+    routing_key="ai_coach",
+)
+def ai_coach_worker_report(self) -> dict[str, Any]:
+    broker_url = str(getattr(app.conf, "broker_url", ""))
+    backend_url = str(getattr(app.conf, "result_backend", ""))
+    hostname = getattr(self.request, "hostname", None)
+    logger.info(f"ai_coach_worker_report hostname={hostname} broker={broker_url} backend={backend_url}")
+    queues = [queue.name for queue in getattr(app.conf, "task_queues", [])]
+    return {
+        "broker": broker_url,
+        "backend": backend_url,
+        "hostname": hostname,
+        "queues": queues,
+    }
 
 
 @app.task(

@@ -3,6 +3,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 
 from config.app_settings import settings
+from core.queues import ensure_ai_coach_queue
 
 if TYPE_CHECKING:
     from aiohttp import web
@@ -36,7 +37,16 @@ async def setup_app(app: "web.Application", bot: "Bot", dp: "Dispatcher") -> Non
         internal_ai_coach_plan_ready,
         internal_export_coach_payouts,
         internal_prune_cognee,
+        internal_celery_debug,
+        internal_celery_queue_depth,
+        internal_celery_result,
+        internal_celery_submit_echo,
+        internal_celery_worker_report,
+        internal_celery_purge_ai_coach,
+        internal_celery_smoke,
     )
+
+    ensure_ai_coach_queue()
 
     path = settings.WEBHOOK_PATH.rstrip("/")
     SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=path)
@@ -50,6 +60,13 @@ async def setup_app(app: "web.Application", bot: "Bot", dp: "Dispatcher") -> Non
     app.router.add_post("/internal/tasks/ai_plan_ready/", internal_ai_coach_plan_ready)
     app.router.add_post("/internal/tasks/export_coach_payouts/", internal_export_coach_payouts)
     app.router.add_post("/internal/tasks/prune_cognee/", internal_prune_cognee)
+    app.router.add_get("/internal/celery/debug/", internal_celery_debug)
+    app.router.add_get("/internal/celery/result/", internal_celery_result)
+    app.router.add_get("/internal/celery/queue_depth/", internal_celery_queue_depth)
+    app.router.add_post("/internal/celery/submit_echo/", internal_celery_submit_echo)
+    app.router.add_get("/internal/celery/worker_report/", internal_celery_worker_report)
+    app.router.add_post("/internal/celery/purge_ai_coach/", internal_celery_purge_ai_coach)
+    app.router.add_post("/internal/celery/smoke/", internal_celery_smoke)
     setup_application(app, dp, bot=bot)
 
 

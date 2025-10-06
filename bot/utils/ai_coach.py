@@ -1,6 +1,11 @@
+from celery.result import AsyncResult
 from loguru import logger
 
+
+from config.app_settings import settings
 from core.cache import Cache
+from core.celery_app import app as celery_app
+from core.debug_celery import trace_publish
 from core.enums import WorkoutPlanType, WorkoutType
 from core.schemas import Client, DayExercises, Program, Subscription
 from core.services.internal import APIService
@@ -112,21 +117,40 @@ async def enqueue_workout_plan_generation(
         "request_id": request_id,
     }
 
+    task_name: str = generate_ai_workout_plan.name
+    broker_url = str(getattr(celery_app.conf, "broker_url", ""))
+    payload_descriptor = ",".join(sorted(payload.keys()))
+    logger.debug(
+        f"dispatch_generate_plan request_id={request_id} client_id={client.id} broker={broker_url} "
+        f"payload_keys={payload_descriptor}"
+    )
+
     try:
-        generate_ai_workout_plan.delay(payload)  # pyrefly: ignore[not-callable]
+        if settings.LOG_VERBOSE_CELERY:
+            task_id = trace_publish(
+                celery_app,
+                queue_name="ai_coach",
+                exchange_name="default",
+                routing_key="ai_coach",
+                task_name=task_name,
+                payload=payload,
+            )
+        else:
+            async_result: AsyncResult = celery_app.send_task(  # pyrefly: ignore[not-callable]
+                task_name,
+                args=(payload,),
+                queue="ai_coach",
+                routing_key="ai_coach",
+            )
+            task_id = async_result.id
         logger.debug(
-            "queued_workout_plan_generation client_id=%s plan_type=%s request_id=%s",
-            client.id,
-            plan_type.value,
-            request_id,
+            f"queued_workout_plan_generation client_id={client.id} plan_type={plan_type.value} "
+            f"request_id={request_id} task_id={task_id}"
         )
     except Exception as exc:  # noqa: BLE001
         logger.error(
-            "Celery dispatch failed client_id=%s plan_type=%s request_id=%s error=%s",
-            client.id,
-            plan_type.value,
-            request_id,
-            exc,
+            f"Celery dispatch failed client_id={client.id} plan_type={plan_type.value} "
+            f"request_id={request_id} error={exc}"
         )
         return False
     return True
@@ -160,21 +184,40 @@ async def enqueue_workout_plan_update(
         "request_id": request_id,
     }
 
+    task_name: str = update_ai_workout_plan.name
+    broker_url = str(getattr(celery_app.conf, "broker_url", ""))
+    payload_descriptor = ",".join(sorted(payload.keys()))
+    logger.debug(
+        f"dispatch_update_plan request_id={request_id} client_id={client_id} broker={broker_url} "
+        f"payload_keys={payload_descriptor}"
+    )
+
     try:
-        update_ai_workout_plan.delay(payload)  # pyrefly: ignore[not-callable]
+        if settings.LOG_VERBOSE_CELERY:
+            task_id = trace_publish(
+                celery_app,
+                queue_name="ai_coach",
+                exchange_name="default",
+                routing_key="ai_coach",
+                task_name=task_name,
+                payload=payload,
+            )
+        else:
+            async_result: AsyncResult = celery_app.send_task(  # pyrefly: ignore[not-callable]
+                task_name,
+                args=(payload,),
+                queue="ai_coach",
+                routing_key="ai_coach",
+            )
+            task_id = async_result.id
         logger.debug(
-            "queued_workout_plan_update client_id=%s plan_type=%s request_id=%s",
-            client_id,
-            plan_type.value,
-            request_id,
+            f"queued_workout_plan_update client_id={client_id} plan_type={plan_type.value} "
+            f"request_id={request_id} task_id={task_id}"
         )
     except Exception as exc:  # noqa: BLE001
         logger.error(
-            "Celery dispatch failed client_id=%s plan_type=%s request_id=%s error=%s",
-            client_id,
-            plan_type.value,
-            request_id,
-            exc,
+            f"Celery dispatch failed client_id={client_id} plan_type={plan_type.value} "
+            f"request_id={request_id} error={exc}"
         )
         return False
     return True

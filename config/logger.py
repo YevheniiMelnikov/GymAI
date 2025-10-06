@@ -26,8 +26,8 @@ def configure_loguru():
     _suppress_third_party_logs()
 
 
-def _suppress_third_party_logs():
-    suppress_map = {
+def _suppress_third_party_logs() -> None:
+    base_suppress_map: dict[str, str] = {
         "cognee": "WARNING",
         "cognee.shared.logging_utils": "ERROR",
         "litellm": "WARNING",
@@ -45,10 +45,26 @@ def _suppress_third_party_logs():
         "urllib3": "WARNING",
         "asyncio": "WARNING",
         "aiogram": "WARNING",
+        "amqp": "WARNING",
+        "amqp.connection": "WARNING",
+        "kombu.connection": "WARNING",
     }
 
-    for logger_name, level in suppress_map.items():
-        logging.getLogger(logger_name).setLevel(level)
+    celery_verbose_map: dict[str, str] = {
+        "amqp": "INFO",
+        "amqp.connection": "INFO",
+        "kombu.connection": "INFO",
+        "celery": "INFO",
+        "celery.app.trace": "INFO",
+    }
+
+    for logger_name, level in base_suppress_map.items():
+        effective_level: str = celery_verbose_map.get(logger_name, level) if settings.LOG_VERBOSE_CELERY else level
+        logging.getLogger(logger_name).setLevel(effective_level)
+
+    if settings.LOG_VERBOSE_CELERY:
+        for logger_name, level in celery_verbose_map.items():
+            logging.getLogger(logger_name).setLevel(level)
 
     # silence noisy info logs from libraries using the root logger
     logging.getLogger().setLevel("WARNING")
