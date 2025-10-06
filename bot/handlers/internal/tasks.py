@@ -247,6 +247,13 @@ async def internal_ai_coach_plan_ready(request: web.Request) -> web.Response:
         logger.error(f"Plan payload missing client_id={client_id} request_id={request_id}")
         return web.json_response({"detail": "Invalid plan payload"}, status=400)
 
+    plan_keys = ",".join(sorted(plan_payload.keys()))
+    logger.info(
+        f"ai_plan_payload action={action} status={status} plan_type={plan_type.value} "
+        f"client_id={client_id} profile_id={client_profile_id} request_id={request_id} "
+        f"plan_fields={plan_keys} plan_size={len(plan_payload)}"
+    )
+
     profile_dump = profile.model_dump()
     client_dump = client.model_dump()
 

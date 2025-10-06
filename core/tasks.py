@@ -310,14 +310,19 @@ async def _claim_plan_request(request_id: str, action: str, *, attempt: int) -> 
 async def _notify_ai_plan_ready(payload: dict[str, Any]) -> None:
     url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/ai_plan_ready/"
     headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
+    request_id = str(payload.get("request_id", ""))
+    action = str(payload.get("action", ""))
+    logger.info(f"ai_plan_notify_start action={action} request_id={request_id} url={url}")
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(url, json=payload, headers=headers)
             resp.raise_for_status()
+        logger.info(f"ai_plan_notify_done action={action} request_id={request_id} status={resp.status_code}")
     except httpx.HTTPError as exc:
         status_code = getattr(exc.response, "status_code", None)
-        request_id = payload.get("request_id")
-        logger.warning(f"ai_plan_notify_failed request_id={request_id} status={status_code} error={exc!s}")
+        logger.warning(
+            f"ai_plan_notify_failed action={action} request_id={request_id} status={status_code} error={exc!s}"
+        )
         raise
 
 

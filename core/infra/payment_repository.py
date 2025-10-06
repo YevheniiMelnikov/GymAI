@@ -8,7 +8,12 @@ from pydantic import ValidationError
 
 from core.enums import PaymentStatus
 from core.schemas import Payment, Subscription
-from core.services.internal.api_client import APIClient, APISettings
+from core.services.internal.api_client import (
+    APIClient,
+    APIClientHTTPError,
+    APIClientTransportError,
+    APISettings,
+)
 
 
 class HTTPPaymentRepository(APIClient):
@@ -32,9 +37,12 @@ class HTTPPaymentRepository(APIClient):
                 headers={"Authorization": f"Api-Key {self.api_key}"},
             )
             return status_code, response if response is not None else {}
-        except Exception as e:  # noqa: BLE001
-            logger.error(f"API {method.upper()} request to {endpoint} failed: {e}")
-            return 500, {}
+        except APIClientHTTPError as exc:
+            logger.error(f"API {method.upper()} request to {endpoint} failed: {exc}")
+            return (exc.status if exc.status else 500), {}
+        except APIClientTransportError as exc:
+            logger.error(f"API {method.upper()} transport failure to {endpoint}: {exc}")
+            return 503, {}
 
     async def create_payment(self, client_profile_id: int, service_type: str, order_id: str, amount: Decimal) -> bool:
         status_code, _ = await self._handle_payment_api_request(

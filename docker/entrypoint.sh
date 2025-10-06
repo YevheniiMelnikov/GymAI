@@ -3,6 +3,7 @@ set -e
 
 export PYTHONPATH=/app
 export DJANGO_SETTINGS_MODULE=config.settings
+ROLE="${SERVICE_ROLE:-web}"
 
 if [ "${RUN_MIGRATIONS}" = "true" ]; then
   echo "▶ Checking for migration conflicts..."
@@ -21,9 +22,13 @@ if [ "${RUN_MIGRATIONS}" = "true" ]; then
   python apps/manage.py ensure_ai_coach || echo "▶ ensure_ai_coach failed"
 fi
 
-echo "▶ Collecting static files..."
-rm -rf /app/staticfiles/js /app/staticfiles/css || true
-python apps/manage.py collectstatic --noinput || echo "Skipping collectstatic"
+if [ "$ROLE" = "web" ]; then
+  echo "▶ Collecting static files..."
+  rm -rf /app/staticfiles/js /app/staticfiles/css || true
+  python apps/manage.py collectstatic --noinput || echo "Skipping collectstatic"
+else
+  echo "▶ Skipping collectstatic for role $ROLE"
+fi
 
 echo "▶ Starting: $@"
 exec "$@"

@@ -1,11 +1,28 @@
-from json import JSONDecodeError
+from __future__ import annotations
+
 import asyncio
-from typing import Optional, Any, Protocol
 from decimal import Decimal
+from json import JSONDecodeError
+from typing import Any, Optional, Protocol
+
 import httpx
 from loguru import logger
 
 from core.exceptions import UserServiceError
+
+
+class APIClientHTTPError(UserServiceError):
+    def __init__(self, status: int, text: str, *, method: str, url: str) -> None:
+        self.status = status
+        self.text = text
+        super().__init__(
+            f"HTTP {status} on {method.upper()} {url}: {text}" if text else f"HTTP {status} on {method.upper()} {url}"
+        )
+
+
+class APIClientTransportError(UserServiceError):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
 
 
 class APISettings(Protocol):
@@ -73,62 +90,91 @@ class APIClient:
         data: Optional[dict] = None,
         headers: Optional[dict] = None,
         timeout: int | None = None,
-    ) -> tuple[int, Optional[dict]]:
+        *,
+        allow_statuses: set[int] | None = None,
+        client: httpx.AsyncClient | None = None,
+    ) -> tuple[int, Any | None]:
         headers = headers or {}
         if self.use_default_auth and self.api_key:
             headers.setdefault("Authorization", f"Bearer {self.api_key}")
 
-        delay = self.initial_delay
+        request_client = client or getattr(self, "client", None)
+        if request_client is None:
+            raise APIClientTransportError(f"HTTP client is not configured for request {method.upper()} {url}")
+
         data = self._json_safe(data)
-        timeout = timeout or self.default_timeout
+        timeout_value = timeout or self.default_timeout or None
+        allowed = allow_statuses or set()
+        attempts = max(1, self.max_retries)
+        delay = self.initial_delay
 
-        for attempt in range(1, self.max_retries + 1):
+        for attempt in range(1, attempts + 1):
             try:
-                resp = await self.client.request(method, url, json=data, headers=headers, timeout=timeout)
+                response = await request_client.request(
+                    method,
+                    url,
+                    json=data,
+                    headers=headers,
+                    timeout=timeout_value,
+                )
 
-                if resp.is_success:
-                    if resp.headers.get("content-type", "").startswith("application/json"):
-                        try:
-                            return resp.status_code, resp.json()
-                        except JSONDecodeError:
-                            logger.warning(f"Failed to decode JSON from response for {url}")
-                            return resp.status_code, None
-                    return resp.status_code, None
+                if response.status_code in allowed:
+                    return response.status_code, self._parse_response_json(response)
 
-                error_data: Optional[dict]
-                if resp.headers.get("content-type", "").startswith("application/json"):
-                    try:
-                        error_data = resp.json()
-                    except JSONDecodeError:
-                        error_data = {"error": resp.text}
-                else:
-                    error_data = {"error": resp.text}
+                try:
+                    response.raise_for_status()
+                except httpx.HTTPStatusError as exc:
+                    status = exc.response.status_code if exc.response else response.status_code
+                    body = exc.response.text if exc.response else ""
+                    if status in {429} or status >= 500:
+                        if attempt < attempts:
+                            logger.warning(
+                                f"Retrying {method.upper()} {url} after HTTP {status} (attempt {attempt}/{attempts})"
+                            )
+                            await self._sleep(delay)
+                            delay = self._next_delay(delay)
+                            continue
+                    raise APIClientHTTPError(status, body, method=method, url=url) from exc
 
-                if resp.status_code == 404:
-                    return resp.status_code, error_data
+                return response.status_code, self._parse_response_json(response)
 
-                if resp.status_code == 403:
-                    logger.error(
-                        f"Request to {url} failed with HTTP=403 Forbidden. Verify API key. Response: {error_data}"
-                    )
-                else:
-                    logger.error(f"Request to {url} failed with HTTP={resp.status_code}, response: {error_data}")
+            except httpx.RequestError as exc:
+                if attempt >= attempts:
+                    raise APIClientTransportError(f"{type(exc).__name__} on {method.upper()} {url}: {exc}") from exc
+                logger.warning(
+                    f"Retrying {method.upper()} {url} after transport error {type(exc).__name__} "
+                    f"(attempt {attempt}/{attempts})"
+                )
+                await self._sleep(delay)
+                delay = self._next_delay(delay)
 
-                if resp.status_code >= 500 or resp.status_code == 429:
-                    raise httpx.HTTPStatusError("Retryable error", request=resp.request, response=resp)
-                return resp.status_code, error_data
+            except Exception as exc:  # noqa: BLE001
+                logger.exception(f"Unexpected error during {method.upper()} {url}: {exc}")
+                raise APIClientTransportError(f"Unexpected error on {method.upper()} {url}: {exc}") from exc
 
-            except (httpx.HTTPStatusError, httpx.HTTPError) as e:
-                logger.warning(f"Attempt {attempt} failed: {type(e).__name__}: {e!r}. Retrying in {delay:.1f}s...")
-                if attempt == self.max_retries:
-                    raise UserServiceError(
-                        f"Request to {url} failed after {attempt} attempts: {type(e).__name__}: {e!r}"
-                    ) from e
-                await asyncio.sleep(delay)
-                delay = min(delay * self.backoff_factor, self.max_delay)
+        raise APIClientTransportError(f"Exhausted retries for {method.upper()} {url}")
 
-            except Exception as e:  # noqa: BLE001
-                logger.exception("Unexpected error occurred")
-                raise UserServiceError(f"Unexpected error: {e}") from e
+    @staticmethod
+    async def _sleep(delay: float) -> None:
+        if delay > 0:
+            await asyncio.sleep(delay)
 
-        return 500, None
+    def _next_delay(self, current: float) -> float:
+        if current <= 0:
+            return self.initial_delay or 0.0
+        next_delay = current * self.backoff_factor
+        if self.max_delay:
+            next_delay = min(next_delay, self.max_delay)
+        return next_delay
+
+    @staticmethod
+    def _parse_response_json(response: httpx.Response) -> Any | None:
+        content_type = response.headers.get("content-type", "")
+        if content_type.startswith("application/json"):
+            try:
+                payload = response.json()
+            except JSONDecodeError:
+                logger.warning(f"Failed to decode JSON response from {response.request.url}")
+                return None
+            return payload
+        return None

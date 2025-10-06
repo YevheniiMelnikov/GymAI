@@ -7,11 +7,11 @@ from urllib.parse import urljoin, urlsplit
 import httpx
 from loguru import logger
 
-from core.exceptions import UserServiceError
 from ai_coach.schemas import AICoachRequest
 from ai_coach.types import CoachMode
+from core.exceptions import UserServiceError
 from core.schemas import Program, Subscription, QAResponse
-from .api_client import APIClient
+from .api_client import APIClient, APIClientHTTPError, APIClientTransportError
 from ...enums import WorkoutPlanType, WorkoutType
 
 
@@ -141,28 +141,47 @@ class AiCoachService(APIClient):
         request_id: str | None,
         extra_headers: dict[str, str] | None = None,
     ) -> Any | None:
-        url = urljoin(self.base_url, "ask/")
         headers: dict[str, str] = {}
         if request_id:
             headers["X-Request-ID"] = request_id
         if extra_headers:
             headers.update(extra_headers)
         logger.debug(f"AI coach ask request_id={request_id} client_id={payload.client_id}")
-        ping_url = urljoin(self.base_url, "internal/debug/ping")
-        try:
-            ping_status, _ = await self._api_request("get", ping_url, timeout=5)
-            logger.debug(f"AI coach ping request_id={request_id} status={ping_status} url={ping_url}")
-        except UserServiceError as exc:
-            logger.warning(f"AI coach ping failed request_id={request_id} url={ping_url} error={exc}")
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(f"AI coach ping raised unexpected error request_id={request_id} url={ping_url} error={exc}")
-        status, data = await self._api_request(
-            "post",
-            url,
-            payload.model_dump(exclude_none=True),
-            headers=headers or None,
-            timeout=self.settings.AI_COACH_TIMEOUT,
-        )
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=self.settings.AI_COACH_TIMEOUT) as client:
+            ping_path = "internal/debug/ping"
+            ping_url = urljoin(self.base_url, ping_path)
+            try:
+                ping_status, _ = await self._api_request(
+                    "get",
+                    ping_path,
+                    timeout=5,
+                    client=client,
+                )
+                logger.debug(
+                    f"AI coach ping request_id={request_id} status={ping_status} url={ping_url}"
+                )
+            except APIClientTransportError as exc:
+                logger.warning(
+                    f"AI coach ping transport error request_id={request_id} url={ping_url} error={exc}"
+                )
+            except APIClientHTTPError as exc:
+                logger.warning(
+                    f"AI coach ping failed request_id={request_id} status={exc.status} url={ping_url} error={exc.text}"
+                )
+
+            try:
+                status, data = await self._api_request(
+                    "post",
+                    "ask/",
+                    payload.model_dump(exclude_none=True),
+                    headers=headers or None,
+                    timeout=self.settings.AI_COACH_TIMEOUT,
+                    client=client,
+                )
+            except (APIClientHTTPError, APIClientTransportError):
+                logger.error(f"AI coach request failed request_id={request_id} client_id={payload.client_id}")
+                raise
+
         logger.debug(f"AI coach ask response request_id={request_id} HTTP={status}: {data}")
         if status == 200:
             return data
@@ -170,25 +189,36 @@ class AiCoachService(APIClient):
         return None
 
     async def refresh_knowledge(self) -> None:
-        url = urljoin(self.base_url, "knowledge/refresh/")
         token = base64.b64encode(
             f"{self.settings.AI_COACH_REFRESH_USER}:{self.settings.AI_COACH_REFRESH_PASSWORD}".encode()
         ).decode()
         headers = {"Authorization": f"Basic {token}"}
         try:
-            status, _ = await self._api_request("post", url, headers=headers, timeout=self.settings.AI_COACH_TIMEOUT)
-        except UserServiceError as exc:
+            async with httpx.AsyncClient(base_url=self.base_url, timeout=self.settings.AI_COACH_TIMEOUT) as client:
+                status, _ = await self._api_request(
+                    "post",
+                    "knowledge/refresh/",
+                    headers=headers,
+                    timeout=self.settings.AI_COACH_TIMEOUT,
+                    client=client,
+                )
+        except (APIClientHTTPError, APIClientTransportError) as exc:
             logger.error(f"Knowledge refresh request failed: {exc}")
-            raise
+            raise UserServiceError(str(exc)) from exc
         if status != 200:
             logger.error(f"Knowledge refresh failed HTTP={status}")
             raise UserServiceError(f"Knowledge refresh failed HTTP={status}")
 
     async def health(self, timeout: float = 3.0) -> bool:
-        url = urljoin(self.base_url, "health/")
         try:
-            status, _ = await self._api_request("get", url, timeout=int(timeout))
-        except UserServiceError as exc:
+            async with httpx.AsyncClient(base_url=self.base_url, timeout=self.settings.AI_COACH_TIMEOUT) as client:
+                status, _ = await self._api_request(
+                    "get",
+                    "health/",
+                    timeout=int(timeout),
+                    client=client,
+                )
+        except (APIClientHTTPError, APIClientTransportError) as exc:
             logger.debug(f"AI coach health check failed: {exc}")
             return False
         return status == 200

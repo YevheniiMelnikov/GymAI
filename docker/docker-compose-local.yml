@@ -148,6 +148,8 @@ services:
         EXTRAS: ""
     container_name: celery_worker
     <<: *common_env
+    environment:
+      SERVICE_ROLE: celery
     entrypoint: /app/docker/entrypoint.sh
     command: >
       celery -A config.celery:celery_app worker

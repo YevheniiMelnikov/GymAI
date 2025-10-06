@@ -5,7 +5,12 @@ from loguru import logger
 
 from core.encryptor import Encryptor
 from core.schemas import Client, Coach, Profile
-from core.services.internal.api_client import APIClient, APISettings
+from core.services.internal.api_client import (
+    APIClient,
+    APIClientHTTPError,
+    APIClientTransportError,
+    APISettings,
+)
 
 
 class HTTPProfileRepository(APIClient):
@@ -23,15 +28,36 @@ class HTTPProfileRepository(APIClient):
 
     async def get_profile(self, profile_id: int) -> Profile | None:
         url = self._build_url(f"api/v1/profiles/{profile_id}/")
-        status, data = await self._api_request("get", url, headers={"Authorization": f"Api-Key {self.api_key}"})
+        try:
+            status, data = await self._api_request(
+                "get",
+                url,
+                headers={"Authorization": f"Api-Key {self.api_key}"},
+                allow_statuses={404},
+            )
+        except (APIClientHTTPError, APIClientTransportError) as exc:
+            logger.error(f"Profile lookup failed id={profile_id}: {exc}")
+            return None
         if status == 200 and data:
             return self._parse_profile(data)
-        logger.info(f"Profile id={profile_id} not found. HTTP={status}")
+        if status == 404:
+            logger.info(f"Profile id={profile_id} not found. HTTP={status}")
+            return None
+        logger.error(f"Profile lookup unexpected status id={profile_id} HTTP={status}")
         return None
 
     async def get_profile_by_tg_id(self, tg_id: int) -> Profile | None:
         url = self._build_url(f"api/v1/profiles/tg/{tg_id}/")
-        status, data = await self._api_request("get", url, headers={"Authorization": f"Api-Key {self.api_key}"})
+        try:
+            status, data = await self._api_request(
+                "get",
+                url,
+                headers={"Authorization": f"Api-Key {self.api_key}"},
+                allow_statuses={404},
+            )
+        except (APIClientHTTPError, APIClientTransportError) as exc:
+            logger.error(f"Profile by tg lookup failed tg_id={tg_id}: {exc}")
+            return None
         if status == 200 and data:
             return self._parse_profile(data)
         return None
@@ -39,9 +65,13 @@ class HTTPProfileRepository(APIClient):
     async def create_profile(self, tg_id: int, role: str, language: str) -> Profile | None:
         url = self._build_url("api/v1/profiles/")
         payload = {"tg_id": tg_id, "role": role, "language": language}
-        status_code, data = await self._api_request(
-            "post", url, payload, headers={"Authorization": f"Api-Key {self.api_key}"}
-        )
+        try:
+            status_code, data = await self._api_request(
+                "post", url, payload, headers={"Authorization": f"Api-Key {self.api_key}"}
+            )
+        except (APIClientHTTPError, APIClientTransportError) as exc:
+            logger.error(f"Failed to create profile tg_id={tg_id}: {exc}")
+            return None
         if status_code == 201 and data:
             logger.info(f"Profile created tg_id={tg_id}")
             return self._parse_profile(data)
@@ -51,7 +81,11 @@ class HTTPProfileRepository(APIClient):
     async def delete_profile(self, profile_id: int, token: str | None = None) -> bool:
         url = self._build_url(f"api/v1/profiles/{profile_id}/delete/")
         headers = {"Authorization": f"Token {token}"} if token else {}
-        status_code, _ = await self._api_request("delete", url, headers=headers)
+        try:
+            status_code, _ = await self._api_request("delete", url, headers=headers, allow_statuses={404})
+        except (APIClientHTTPError, APIClientTransportError) as exc:
+            logger.error(f"Failed to delete profile {profile_id}: {exc}")
+            return False
         if status_code == 204:
             logger.info(f"Successfully deleted profile {profile_id}")
             return True
@@ -63,7 +97,11 @@ class HTTPProfileRepository(APIClient):
 
     async def update_profile(self, profile_id: int, data: dict[str, Any]) -> bool:
         url = self._build_url(f"api/v1/profiles/{profile_id}/")
-        status, _ = await self._api_request("put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"})
+        try:
+            status, _ = await self._api_request("put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"})
+        except (APIClientHTTPError, APIClientTransportError) as exc:
+            logger.error(f"Failed to update profile id={profile_id}: {exc}")
+            return False
         if status in (200, 204):
             logger.info(f"Profile id={profile_id} updated")
             return True
@@ -75,9 +113,13 @@ class HTTPProfileRepository(APIClient):
         payload: dict[str, Any] = {"profile": profile_id}
         if data:
             payload.update(data)
-        status, resp = await self._api_request(
-            "post", url, payload, headers={"Authorization": f"Api-Key {self.api_key}"}
-        )
+        try:
+            status, resp = await self._api_request(
+                "post", url, payload, headers={"Authorization": f"Api-Key {self.api_key}"}
+            )
+        except (APIClientHTTPError, APIClientTransportError) as exc:
+            logger.error(f"Failed to create ClientProfile profile_id={profile_id}: {exc}")
+            return None
         if status == 201 and resp:
             logger.info(f"ClientProfile created profile_id={profile_id}")
             return Client.model_validate(resp)
@@ -87,7 +129,13 @@ class HTTPProfileRepository(APIClient):
     async def update_client_profile(self, client_profile_id: int, data: dict[str, Any]) -> bool:
         url = self._build_url(f"api/v1/client-profiles/pk/{client_profile_id}/")
         data = {k: v for k, v in data.items() if k != "profile"}
-        status, _ = await self._api_request("patch", url, data, headers={"Authorization": f"Api-Key {self.api_key}"})
+        try:
+            status, _ = await self._api_request(
+                "patch", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
+            )
+        except (APIClientHTTPError, APIClientTransportError) as exc:
+            logger.error(f"Failed to update ClientProfile {client_profile_id}: {exc}")
+            return False
         if status in (200, 204):
             logger.info(f"ClientProfile {client_profile_id} updated")
             return True
@@ -124,9 +172,13 @@ class HTTPProfileRepository(APIClient):
         if payload.get("payment_details"):
             payload["payment_details"] = self.encrypter.encrypt(payload["payment_details"])
 
-        status, resp = await self._api_request(
-            "post", url, payload, headers={"Authorization": f"Api-Key {self.api_key}"}
-        )
+        try:
+            status, resp = await self._api_request(
+                "post", url, payload, headers={"Authorization": f"Api-Key {self.api_key}"}
+            )
+        except (APIClientHTTPError, APIClientTransportError) as exc:
+            logger.error(f"Failed to create CoachProfile profile_id={profile_id}: {exc}")
+            return None
         if status == 201 and resp:
             logger.info(f"Created coach profile for profile_id={profile_id}")
             return Coach.model_validate(resp)
@@ -143,7 +195,13 @@ class HTTPProfileRepository(APIClient):
 
         if "payment_details" in data and data["payment_details"]:
             data["payment_details"] = self.encrypter.encrypt(data["payment_details"])
-        status, _ = await self._api_request("patch", url, data, headers={"Authorization": f"Api-Key {self.api_key}"})
+        try:
+            status, _ = await self._api_request(
+                "patch", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
+            )
+        except (APIClientHTTPError, APIClientTransportError) as exc:
+            logger.error(f"Failed to update CoachProfile {coach_id}: {exc}")
+            return False
         if status in (200, 204):
             logger.info(f"CoachProfile {coach_id} updated")
             return True
@@ -152,14 +210,32 @@ class HTTPProfileRepository(APIClient):
 
     async def _get_by_profile(self, tail: str, model):
         url = self._build_url(tail)
-        status, data = await self._api_request("get", url, headers={"Authorization": f"Api-Key {self.api_key}"})
+        try:
+            status, data = await self._api_request(
+                "get",
+                url,
+                headers={"Authorization": f"Api-Key {self.api_key}"},
+                allow_statuses={404},
+            )
+        except (APIClientHTTPError, APIClientTransportError) as exc:
+            logger.error(f"Failed to fetch profile resource tail={tail}: {exc}")
+            return None
         if status == 200 and data:
             return model.model_validate(data)
         return None
 
     async def get_client(self, client_id: int) -> Client | None:
         url = self._build_url(f"api/v1/client-profiles/pk/{client_id}/")
-        status, data = await self._api_request("get", url, headers={"Authorization": f"Api-Key {self.api_key}"})
+        try:
+            status, data = await self._api_request(
+                "get",
+                url,
+                headers={"Authorization": f"Api-Key {self.api_key}"},
+                allow_statuses={404},
+            )
+        except (APIClientHTTPError, APIClientTransportError) as exc:
+            logger.error(f"Failed to fetch client id={client_id}: {exc}")
+            return None
         if status == 200 and data:
             return Client.model_validate(data)
         return None
@@ -180,11 +256,15 @@ class HTTPProfileRepository(APIClient):
 
     async def list_coach_profiles(self) -> list[Coach]:
         url = self._build_url("api/v1/coach-profiles/")
-        status, data = await self._api_request(
-            "get",
-            url,
-            headers={"Authorization": f"Api-Key {self.api_key}"},
-        )
+        try:
+            status, data = await self._api_request(
+                "get",
+                url,
+                headers={"Authorization": f"Api-Key {self.api_key}"},
+            )
+        except (APIClientHTTPError, APIClientTransportError) as exc:
+            logger.error(f"Failed to fetch coaches list: {exc}")
+            return []
 
         if status != 200:
             logger.error(f"Failed to fetch coaches list. HTTP={status}")
