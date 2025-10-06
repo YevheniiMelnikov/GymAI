@@ -520,6 +520,8 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
 
 @app.task(
     bind=True,
+    queue="ai_coach",
+    routing_key="ai_coach",
     autoretry_for=(httpx.HTTPError, Exception),
     retry_backoff=30,
     retry_jitter=True,
@@ -531,6 +533,8 @@ def generate_ai_workout_plan(self, payload: dict[str, Any]) -> None:  # pyrefly:
 
 @app.task(
     bind=True,
+    queue="ai_coach",
+    routing_key="ai_coach",
     autoretry_for=(httpx.HTTPError, Exception),
     retry_backoff=30,
     retry_jitter=True,
@@ -538,6 +542,21 @@ def generate_ai_workout_plan(self, payload: dict[str, Any]) -> None:  # pyrefly:
 )
 def update_ai_workout_plan(self, payload: dict[str, Any]) -> None:  # pyrefly: ignore[valid-type]
     asyncio.run(_update_ai_workout_plan_impl(payload, self))
+
+
+@app.task(
+    bind=True,
+    queue="ai_coach",
+    routing_key="ai_coach",
+)
+def ai_coach_echo(self, payload: dict[str, Any]) -> dict[str, Any]:
+    payload_descriptor: str
+    if isinstance(payload, dict):
+        payload_descriptor = ",".join(sorted(str(key) for key in payload.keys()))
+    else:
+        payload_descriptor = type(payload).__name__
+    logger.info(f"ai_coach_echo started task_id={self.request.id} payload_descriptor={payload_descriptor}")
+    return {"ok": True, "echo": payload}
 
 
 @app.task(

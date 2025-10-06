@@ -71,6 +71,7 @@ CRITICAL_TASK_ROUTES: dict[str, dict[str, str]] = {
 AI_COACH_TASK_ROUTES: dict[str, dict[str, str]] = {
     "core.tasks.generate_ai_workout_plan": {"queue": "ai_coach", "routing_key": "ai_coach"},
     "core.tasks.update_ai_workout_plan": {"queue": "ai_coach", "routing_key": "ai_coach"},
+    "core.tasks.ai_coach_echo": {"queue": "ai_coach", "routing_key": "ai_coach"},
 }
 
 CELERY_TASK_ROUTES: dict[str, dict[str, str]] = {

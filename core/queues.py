@@ -28,10 +28,8 @@ def ensure_ai_coach_queue() -> None:
             bound_queue = AI_COACH_QUEUE(connection)
             bound_queue.declare()
             logger.info(
-                "ensure_ai_coach_queue: declared queue=%s exchange=%s routing_key=%s",
-                AI_COACH_QUEUE.name,
-                default_exchange.name,
-                AI_COACH_QUEUE.routing_key,
+                f"ensure_ai_coach_queue: declared queue={AI_COACH_QUEUE.name} "
+                f"exchange={default_exchange.name} routing_key={AI_COACH_QUEUE.routing_key}"
             )
     except Exception as exc:  # pragma: no cover - connectivity issues
         logger.opt(exception=exc).error("ensure_ai_coach_queue: declare failed for broker=%s", broker_url)

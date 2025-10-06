@@ -10,7 +10,12 @@ from .tasks import (
     internal_ai_coach_plan_ready,
     internal_prune_cognee,
 )
-from .debug import internal_celery_debug
+from .debug import (
+    internal_celery_debug,
+    internal_celery_queue_depth,
+    internal_celery_result,
+    internal_celery_submit_echo,
+)
 
 __all__ = (
     "internal_payment_handler",
@@ -22,4 +27,7 @@ __all__ = (
     "internal_ai_coach_plan_ready",
     "internal_prune_cognee",
     "internal_celery_debug",
+    "internal_celery_result",
+    "internal_celery_queue_depth",
+    "internal_celery_submit_echo",
 )

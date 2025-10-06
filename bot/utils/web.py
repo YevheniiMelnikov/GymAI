@@ -38,6 +38,9 @@ async def setup_app(app: "web.Application", bot: "Bot", dp: "Dispatcher") -> Non
         internal_export_coach_payouts,
         internal_prune_cognee,
         internal_celery_debug,
+        internal_celery_queue_depth,
+        internal_celery_result,
+        internal_celery_submit_echo,
     )
 
     ensure_ai_coach_queue()
@@ -55,6 +58,9 @@ async def setup_app(app: "web.Application", bot: "Bot", dp: "Dispatcher") -> Non
     app.router.add_post("/internal/tasks/export_coach_payouts/", internal_export_coach_payouts)
     app.router.add_post("/internal/tasks/prune_cognee/", internal_prune_cognee)
     app.router.add_get("/internal/celery/debug/", internal_celery_debug)
+    app.router.add_get("/internal/celery/result/", internal_celery_result)
+    app.router.add_get("/internal/celery/queue_depth/", internal_celery_queue_depth)
+    app.router.add_post("/internal/celery/submit_echo/", internal_celery_submit_echo)
     setup_application(app, dp, bot=bot)
 
 
