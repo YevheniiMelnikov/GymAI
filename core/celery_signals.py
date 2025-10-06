@@ -76,7 +76,7 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
 
     if "ai_coach" not in queue_names:
         logger.error(f"ai_coach queue missing on worker hostname={worker.hostname} queues={queue_names}")
-        raise SystemExit("ai_coach queue is not registered on this worker")
+        return
 
     if not registered_ok:
         logger.error(
@@ -84,7 +84,7 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
             f"hostname={worker.hostname} missing={registered_missing} "
             f"available={sorted(worker.app.tasks.keys())}"
         )
-        raise SystemExit("Required Celery tasks are not registered")
+        return
 
 
 def _on_task_prerun(task_id: str, task: Task, **_: Any) -> None:
