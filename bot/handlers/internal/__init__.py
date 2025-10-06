@@ -15,6 +15,9 @@ from .debug import (
     internal_celery_queue_depth,
     internal_celery_result,
     internal_celery_submit_echo,
+    internal_celery_worker_report,
+    internal_celery_purge_ai_coach,
+    internal_celery_smoke,
 )
 
 __all__ = (
@@ -30,4 +33,7 @@ __all__ = (
     "internal_celery_result",
     "internal_celery_queue_depth",
     "internal_celery_submit_echo",
+    "internal_celery_worker_report",
+    "internal_celery_purge_ai_coach",
+    "internal_celery_smoke",
 )

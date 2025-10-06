@@ -553,6 +553,25 @@ def ai_coach_echo(self, payload: dict[str, Any]) -> dict[str, Any]:
 
 @app.task(
     bind=True,
+    queue="ai_coach",
+    routing_key="ai_coach",
+)
+def ai_coach_worker_report(self) -> dict[str, Any]:
+    broker_url = str(getattr(app.conf, "broker_url", ""))
+    backend_url = str(getattr(app.conf, "result_backend", ""))
+    hostname = getattr(self.request, "hostname", None)
+    logger.info(f"ai_coach_worker_report hostname={hostname} broker={broker_url} backend={backend_url}")
+    queues = [queue.name for queue in getattr(app.conf, "task_queues", [])]
+    return {
+        "broker": broker_url,
+        "backend": backend_url,
+        "hostname": hostname,
+        "queues": queues,
+    }
+
+
+@app.task(
+    bind=True,
     autoretry_for=(Exception,),
     retry_backoff=180,
     retry_jitter=True,

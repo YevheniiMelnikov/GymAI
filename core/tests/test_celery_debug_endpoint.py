@@ -5,6 +5,9 @@ from typing import Any
 
 import pytest
 
+pytest.importorskip("aiohttp")
+pytest.importorskip("celery")
+
 try:  # pragma: no cover - fallback for environments without kombu installed
     from kombu.exceptions import ChannelError
 except ModuleNotFoundError:  # pragma: no cover - test fallback
@@ -20,6 +23,9 @@ from bot.handlers.internal.debug import (
     internal_celery_queue_depth,
     internal_celery_result,
     internal_celery_submit_echo,
+    internal_celery_worker_report,
+    internal_celery_purge_ai_coach,
+    internal_celery_smoke,
 )
 from config.app_settings import settings
 
@@ -235,3 +241,118 @@ async def test_internal_celery_submit_echo_invalid_payload() -> None:
     assert response.status == 400
     payload = json.loads(response.body.decode())
     assert payload["detail"] == "Invalid JSON"
+
+
+@pytest.mark.asyncio
+async def test_internal_celery_worker_report_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    class DummyResult:
+        def __init__(self) -> None:
+            self.id = "worker-report"
+            self.state = "SUCCESS"
+            self._ready = True
+            self.result = {"ok": True}
+
+        def ready(self) -> bool:
+            return self._ready
+
+    class DummySendResult:
+        def __init__(self, task_id: str) -> None:
+            self.id = task_id
+
+    monkeypatch.setattr(
+        "bot.handlers.internal.debug.app.send_task",
+        lambda name, queue=None, routing_key=None: DummySendResult("worker-report"),
+    )
+    monkeypatch.setattr("bot.handlers.internal.debug.AsyncResult", lambda task_id, app=None: DummyResult())
+
+    request = DummyRequest({"Authorization": f"Api-Key {settings.API_KEY}"})
+    response = await internal_celery_worker_report(request)  # type: ignore[arg-type]
+    assert response.status == 200
+    payload = json.loads(response.body.decode())
+    assert payload["task_id"] == "worker-report"
+    assert payload["ready"] is True
+    assert payload["state"] == "SUCCESS"
+
+
+@pytest.mark.asyncio
+async def test_internal_celery_purge_ai_coach(monkeypatch: pytest.MonkeyPatch) -> None:
+    class DummyChannel:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def queue_purge(self, queue: str) -> int:
+            assert queue == "ai_coach"
+            return 3
+
+        def close(self) -> None:
+            self.closed = True
+
+    class DummyConnection:
+        def __init__(self, url: str) -> None:
+            self.url = url
+
+        def __enter__(self) -> "DummyConnection":
+            return self
+
+        def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> None:
+            return None
+
+        def channel(self) -> DummyChannel:
+            return DummyChannel()
+
+    monkeypatch.setattr("bot.handlers.internal.debug.Connection", DummyConnection)
+    monkeypatch.setattr("bot.handlers.internal.debug.AI_COACH_QUEUE", type("Q", (), {"name": "ai_coach"})())
+    monkeypatch.setattr(
+        "bot.handlers.internal.debug.app.conf", "broker_url", "amqp://guest:guest@localhost//", raising=False
+    )
+
+    request = DummyRequest({"Authorization": f"Api-Key {settings.API_KEY}"})
+    response = await internal_celery_purge_ai_coach(request)  # type: ignore[arg-type]
+    assert response.status == 200
+    payload = json.loads(response.body.decode())
+    assert payload["purged"] == 3
+    assert payload["queue"] == "ai_coach"
+
+
+@pytest.mark.asyncio
+async def test_internal_celery_smoke(monkeypatch: pytest.MonkeyPatch) -> None:
+    class DummyResult:
+        def __init__(self, task_id: str) -> None:
+            self.id = task_id
+            self.state = "SUCCESS"
+            self._ready = True
+            self.result = {"echo": True}
+
+        def ready(self) -> bool:
+            return self._ready
+
+    class DummySendResult:
+        def __init__(self, task_id: str) -> None:
+            self.id = task_id
+
+    queue_stats: list[tuple[int, int]] = [(1, 0), (0, 1)]
+
+    def _queue_depth_stub(_broker_url: str) -> tuple[int, int]:
+        return queue_stats.pop(0)
+
+    monkeypatch.setattr("bot.handlers.internal.debug._queue_depth", _queue_depth_stub)
+    monkeypatch.setattr(
+        "bot.handlers.internal.debug.app.send_task",
+        lambda name, args=None, queue=None, routing_key=None: DummySendResult("smoke-task"),
+    )
+    monkeypatch.setattr(
+        "bot.handlers.internal.debug.AsyncResult",
+        lambda task_id, app=None: DummyResult(task_id),
+    )
+    monkeypatch.setattr(
+        "bot.handlers.internal.debug.app.conf", "broker_url", "amqp://guest:guest@localhost//", raising=False
+    )
+
+    request = DummyRequest({"Authorization": f"Api-Key {settings.API_KEY}"})
+    response = await internal_celery_smoke(request)  # type: ignore[arg-type]
+    assert response.status == 200
+    payload = json.loads(response.body.decode())
+    assert payload["task_id"] == "smoke-task"
+    assert payload["ready"] is True
+    assert payload["queue"]["before"] == {"messages": 1, "consumers": 0}
+    assert payload["queue"]["after"] == {"messages": 0, "consumers": 1}

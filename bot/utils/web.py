@@ -41,6 +41,9 @@ async def setup_app(app: "web.Application", bot: "Bot", dp: "Dispatcher") -> Non
         internal_celery_queue_depth,
         internal_celery_result,
         internal_celery_submit_echo,
+        internal_celery_worker_report,
+        internal_celery_purge_ai_coach,
+        internal_celery_smoke,
     )
 
     ensure_ai_coach_queue()
@@ -61,6 +64,9 @@ async def setup_app(app: "web.Application", bot: "Bot", dp: "Dispatcher") -> Non
     app.router.add_get("/internal/celery/result/", internal_celery_result)
     app.router.add_get("/internal/celery/queue_depth/", internal_celery_queue_depth)
     app.router.add_post("/internal/celery/submit_echo/", internal_celery_submit_echo)
+    app.router.add_get("/internal/celery/worker_report/", internal_celery_worker_report)
+    app.router.add_post("/internal/celery/purge_ai_coach/", internal_celery_purge_ai_coach)
+    app.router.add_post("/internal/celery/smoke/", internal_celery_smoke)
     setup_application(app, dp, bot=bot)
 
 

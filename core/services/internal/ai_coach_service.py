@@ -2,7 +2,7 @@
 import base64
 from enum import Enum
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 from loguru import logger
@@ -20,6 +20,11 @@ class AiCoachService(APIClient):
         super().__init__(client, settings)
         self.base_url = settings.AI_COACH_URL
         self.use_default_auth = False
+        parsed = urlsplit(self.base_url)
+        logger.info(
+            "AI coach service configured "
+            f"base_url={self.base_url} scheme={parsed.scheme} host={parsed.hostname} port={parsed.port}"
+        )
 
     async def ask_ai(
         self,
@@ -143,6 +148,14 @@ class AiCoachService(APIClient):
         if extra_headers:
             headers.update(extra_headers)
         logger.debug(f"AI coach ask request_id={request_id} client_id={payload.client_id}")
+        ping_url = urljoin(self.base_url, "internal/debug/ping")
+        try:
+            ping_status, _ = await self._api_request("get", ping_url, timeout=5)
+            logger.debug(f"AI coach ping request_id={request_id} status={ping_status} url={ping_url}")
+        except UserServiceError as exc:
+            logger.warning(f"AI coach ping failed request_id={request_id} url={ping_url} error={exc}")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"AI coach ping raised unexpected error request_id={request_id} url={ping_url} error={exc}")
         status, data = await self._api_request(
             "post",
             url,

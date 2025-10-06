@@ -4,6 +4,8 @@ import logging
 import time
 from typing import Any, Iterable, Mapping, MutableMapping, cast
 
+from urllib.parse import urlparse
+
 from celery import Task, signals
 from loguru import logger
 
@@ -56,9 +58,14 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
     else:
         registered_ok = all(name in worker.app.tasks for name in REQUIRED_TASK_NAMES)
 
+    broker_url = str(getattr(worker.app.conf, "broker_url", ""))
+    parsed = urlparse(broker_url)
+    scheme_host = f"{parsed.scheme}://{parsed.hostname}" if parsed.scheme else (parsed.hostname or "")
+    vhost = parsed.path or "/"
+
     logger.info(
-        f"celery_ready hostname={worker.hostname} queues={queue_names} "
-        f"registered_ok={registered_ok} missing={registered_missing}"
+        f"celery_ready hostname={worker.hostname} broker={broker_url} scheme_host={scheme_host} "
+        f"vhost={vhost} queues={queue_names} registered_ok={registered_ok} missing={registered_missing}"
     )
 
     if "ai_coach" not in queue_names:
