@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Any, Iterable, Mapping, MutableMapping, cast
 
@@ -74,8 +75,12 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
         f"vhost={vhost} queues={queue_names} registered_ok={registered_ok} missing={registered_missing}"
     )
 
+    strict_mode = os.getenv("CELERY_STRICT", "0") == "1"
+
     if "ai_coach" not in queue_names:
         logger.error(f"ai_coach queue missing on worker hostname={worker.hostname} queues={queue_names}")
+        if strict_mode:
+            raise SystemExit("ai_coach queue missing")
         return
 
     if not registered_ok:
@@ -84,6 +89,8 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
             f"hostname={worker.hostname} missing={registered_missing} "
             f"available={sorted(worker.app.tasks.keys())}"
         )
+        if strict_mode:
+            raise SystemExit("required celery tasks missing")
         return
 
 

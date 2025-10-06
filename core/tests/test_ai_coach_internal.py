@@ -7,11 +7,12 @@ import pytest
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from bot.handlers.internal.tasks import internal_ai_coach_plan_ready
+from bot.handlers.internal.tasks import _resolve_client_and_profile, internal_ai_coach_plan_ready
 from bot.states import States
 from bot.utils.ai_coach import enqueue_workout_plan_generation, enqueue_workout_plan_update
 from config.app_settings import settings
 from core.enums import WorkoutPlanType, WorkoutType, ProfileRole, SubscriptionPeriod
+from core.exceptions import ClientNotFoundError
 from core.schemas import Client, DayExercises, Exercise, Program, Profile, Subscription
 
 
@@ -44,6 +45,85 @@ class DummyRedis:
             return False
         self.store[key] = value
         return True
+
+
+@pytest.mark.asyncio
+async def test_resolve_client_and_profile_from_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = Client.model_validate({"id": 1, "profile": 2, "credits": 0, "assigned_to": []})
+
+    calls: list[int] = []
+
+    async def fake_get_client(profile_id: int, *, use_fallback: bool = True) -> Client:
+        calls.append(profile_id)
+        return client
+
+    async def fail_get_client_by_profile_id(_: int) -> Client | None:
+        raise AssertionError("should not call profile lookup")
+
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.get_client", fake_get_client)
+    monkeypatch.setattr(
+        "bot.handlers.internal.tasks.APIService.profile.get_client_by_profile_id",
+        fail_get_client_by_profile_id,
+    )
+    result_client, profile_id = await _resolve_client_and_profile(client.id, client.profile)
+    assert result_client == client
+    assert profile_id == client.profile
+    assert calls == [client.profile]
+
+
+@pytest.mark.asyncio
+async def test_resolve_client_and_profile_fetches_when_cache_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = Client.model_validate({"id": 3, "profile": 4, "credits": 0, "assigned_to": []})
+
+    async def missing_cache(_: int, *, use_fallback: bool = True) -> Client:
+        raise ClientNotFoundError(4)
+
+    async def fetch_by_profile(profile_id: int) -> Client | None:
+        assert profile_id == client.profile
+        return client
+
+    saved: dict[str, Any] = {}
+
+    async def save_client(profile_id: int, payload: dict[str, Any]) -> None:
+        saved.update({"profile_id": profile_id, "payload": payload})
+
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.get_client", missing_cache)
+    monkeypatch.setattr(
+        "bot.handlers.internal.tasks.APIService.profile.get_client_by_profile_id",
+        fetch_by_profile,
+    )
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.save_client", save_client)
+
+    result_client, profile_id = await _resolve_client_and_profile(client.id, client.profile)
+    assert result_client == client
+    assert profile_id == client.profile
+    assert saved["profile_id"] == client.profile
+
+
+@pytest.mark.asyncio
+async def test_resolve_client_and_profile_without_profile_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = Client.model_validate({"id": 6, "profile": 7, "credits": 0, "assigned_to": []})
+
+    async def fail_cache(_: int, *, use_fallback: bool = True) -> Client:
+        raise AssertionError("cache should not be used without profile id")
+
+    async def fetch_client_by_id(client_id: int) -> Client | None:
+        assert client_id == client.id
+        return client
+
+    saved: dict[str, Any] = {}
+
+    async def save_client(profile_id: int, payload: dict[str, Any]) -> None:
+        saved.update({"profile_id": profile_id, "payload": payload})
+
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.get_client", fail_cache)
+    monkeypatch.setattr("bot.handlers.internal.tasks.APIService.profile.get_client", fetch_client_by_id)
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.save_client", save_client)
+
+    result_client, profile_id = await _resolve_client_and_profile(client.id, None)
+    assert result_client == client
+    assert profile_id == client.profile
+    assert saved["profile_id"] == client.profile
 
 
 @pytest.mark.asyncio

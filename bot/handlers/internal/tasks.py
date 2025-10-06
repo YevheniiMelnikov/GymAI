@@ -22,7 +22,7 @@ from bot.utils.chat import send_message
 from bot.utils.bot import get_webapp_url
 from core.services import APIService
 from bot.utils.ai_coach import enqueue_workout_plan_update
-from core.schemas import Program, Profile, Subscription
+from core.schemas import Client, Program, Profile, Subscription
 from cognee.api.v1.prune import prune  # pyrefly: ignore[import-error]
 from core.utils.redis_lock import get_redis_client
 
@@ -38,6 +38,32 @@ async def _claim_plan_delivery(request_id: str) -> bool:
     except Exception as exc:  # noqa: BLE001
         logger.warning(f"ai_plan_delivery_dedupe_skip request_id={request_id} error={exc!s}")
         return True
+
+
+async def _resolve_client_and_profile(
+    client_id: int,
+    client_profile_id: int | None,
+) -> tuple[Client, int]:
+    profile_id = client_profile_id
+    client: Client | None = None
+
+    if profile_id is not None:
+        try:
+            client = await Cache.client.get_client(profile_id)
+        except ClientNotFoundError:
+            client = await APIService.profile.get_client_by_profile_id(profile_id)
+            if client is not None:
+                await Cache.client.save_client(profile_id, client.model_dump(mode="json"))
+        if client is not None:
+            return client, profile_id
+
+    client = await APIService.profile.get_client(client_id)
+    if client is None:
+        raise ClientNotFoundError(client_id)
+
+    profile_id = client.profile
+    await Cache.client.save_client(profile_id, client.model_dump(mode="json"))
+    return client, profile_id
 
 
 async def internal_send_daily_survey(request: web.Request) -> web.Response:
@@ -170,29 +196,26 @@ async def internal_ai_coach_plan_ready(request: web.Request) -> web.Response:
         except (TypeError, ValueError):
             return web.json_response({"detail": "Invalid client_profile_id"}, status=400)
 
+    logger.info(
+        f"ai_plan_callback_received action={action} status={status} plan_type={plan_type.value} "
+        f"client_id={client_id} profile_id={client_profile_id} request_id={request_id}"
+    )
+
     try:
-        if client_profile_id is not None:
-            client = await Cache.client.get_client(client_profile_id)
-        else:
-            client = await Cache.client.get_client(client_id)
+        client, resolved_profile_id = await _resolve_client_and_profile(client_id, client_profile_id)
     except ClientNotFoundError:
-        client = None
+        logger.error(f"Client fetch failed client_id={client_id} request_id={request_id}: not found")
+        return web.json_response({"detail": "Client not found"}, status=404)
     except Exception as exc:  # noqa: BLE001
-        logger.warning(f"Client cache lookup failed client_id={client_id} request_id={request_id}: {exc}")
-        client = None
+        logger.error(f"Client lookup failed client_id={client_id} request_id={request_id}: {exc}")
+        return web.json_response({"detail": "Client lookup failed"}, status=500)
 
-    if client is None:
-        client = await APIService.profile.get_client(client_id)
-        if client is None:
-            logger.error(f"Client fetch failed client_id={client_id} request_id={request_id}: not found")
-            return web.json_response({"detail": "Client not found"}, status=404)
-        await Cache.client.save_client(client.profile, client.model_dump(mode="json"))
-
-    if client_profile_id is not None and client.profile != client_profile_id:
+    if client_profile_id is not None and resolved_profile_id != client_profile_id:
         logger.warning(
-            f"client_profile_mismatch client_id={client_id} payload_profile={client_profile_id} actual={client.profile}"
+            "client_profile_mismatch "
+            f"client_id={client_id} payload_profile={client_profile_id} actual={resolved_profile_id}"
         )
-    client_profile_id = client.profile
+    client_profile_id = resolved_profile_id
 
     profile: Profile | None = await APIService.profile.get_profile(client.profile)
     if profile is None:

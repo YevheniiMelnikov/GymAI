@@ -9,6 +9,44 @@ from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
+def normalize_service_host(
+    url: str,
+    new_host: str,
+    *,
+    default_scheme: str = "http",
+    force: bool = False,
+) -> str:
+    """Replace localhost-like hosts with the provided service host."""
+
+    raw = url.strip()
+    if not raw:
+        return url
+
+    try:
+        has_scheme = "://" in raw
+        candidate = raw if has_scheme else f"{default_scheme}://{raw}"
+        parsed = urlsplit(candidate)
+    except Exception:
+        return url
+
+    host = parsed.hostname or ""
+    if not force and host not in {"localhost", "127.0.0.1", ""}:
+        return url
+
+    scheme = parsed.scheme or default_scheme
+    userinfo = ""
+    if parsed.username:
+        userinfo = parsed.username
+        if parsed.password:
+            userinfo = f"{userinfo}:{parsed.password}"
+        userinfo = f"{userinfo}@"
+
+    port = f":{parsed.port}" if parsed.port else ""
+    path = parsed.path or "/"
+    normalized = urlunsplit((scheme, f"{userinfo}{new_host}{port}", path, parsed.query, parsed.fragment))
+    return normalized
+
+
 class Settings(BaseSettings):
     PAYMENT_CHECK_INTERVAL: int = 60
     MIN_BIRTH_YEAR: int = 1940
@@ -141,32 +179,6 @@ class Settings(BaseSettings):
     def _compute_derived_fields(self) -> "Settings":
         in_docker: bool = os.path.exists("/.dockerenv") or os.getenv("KUBERNETES_SERVICE_HOST") is not None
 
-        def _fix_host(url: str, new_host: str, *, default_scheme: str = "http", force: bool = False) -> str:
-            try:
-                parsed = urlsplit(url)
-                netloc_raw: str = parsed.netloc or parsed.path
-                userinfo: str | None
-                host_port: str
-                if "@" in netloc_raw:
-                    userinfo, host_port = netloc_raw.rsplit("@", 1)
-                else:
-                    userinfo, host_port = None, netloc_raw
-                host: str
-                port: str | None
-                if ":" in host_port:
-                    host, port = host_port.split(":", 1)
-                else:
-                    host, port = host_port, None
-                if force or host in {"localhost", "127.0.0.1", ""}:
-                    scheme: str = parsed.scheme or default_scheme
-                    replacement: str = f"{new_host}:{port}" if port else new_host
-                    netloc: str = f"{userinfo}@{replacement}" if userinfo else replacement
-                    path: str = parsed.path or "/"
-                    return urlunsplit((scheme, netloc, path, parsed.query, parsed.fragment))
-            except Exception:
-                return url
-            return url
-
         # WEBHOOK_URL
         if not self.WEBHOOK_URL:
             self.WEBHOOK_URL = f"{self.WEBHOOK_HOST}{self.WEBHOOK_PATH}"
@@ -206,18 +218,18 @@ class Settings(BaseSettings):
         if in_docker:
             rabbitmq_host_override: str = os.getenv("RABBITMQ_SERVICE_HOST", self.RABBITMQ_HOST or "rabbitmq")
             if self.RABBITMQ_URL:
-                self.RABBITMQ_URL = _fix_host(
+                self.RABBITMQ_URL = normalize_service_host(
                     self.RABBITMQ_URL,
                     rabbitmq_host_override,
                     default_scheme="amqp",
                 )
             if self.AI_COACH_URL:
                 ai_coach_host: str = os.getenv("AI_COACH_SERVICE_HOST", "ai_coach")
-                self.AI_COACH_URL = _fix_host(self.AI_COACH_URL, ai_coach_host)
+                self.AI_COACH_URL = normalize_service_host(self.AI_COACH_URL, ai_coach_host)
             if self.BOT_INTERNAL_URL:
                 bot_service_host: str = os.getenv("BOT_SERVICE_HOST", "host.docker.internal")
                 force_override: bool = not self.DOCKER_BOT_START
-                self.BOT_INTERNAL_URL = _fix_host(
+                self.BOT_INTERNAL_URL = normalize_service_host(
                     self.BOT_INTERNAL_URL,
                     bot_service_host,
                     force=force_override,

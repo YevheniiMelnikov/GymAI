@@ -105,7 +105,7 @@ class APIClient:
         data = self._json_safe(data)
         timeout_value = timeout or self.default_timeout or None
         allowed = allow_statuses or set()
-        attempts = max(1, self.max_retries)
+        attempts = max(1, self.max_retries + 1)
         delay = self.initial_delay
 
         for attempt in range(1, attempts + 1):

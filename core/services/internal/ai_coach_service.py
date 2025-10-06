@@ -157,13 +157,9 @@ class AiCoachService(APIClient):
                     timeout=5,
                     client=client,
                 )
-                logger.debug(
-                    f"AI coach ping request_id={request_id} status={ping_status} url={ping_url}"
-                )
+                logger.debug(f"AI coach ping request_id={request_id} status={ping_status} url={ping_url}")
             except APIClientTransportError as exc:
-                logger.warning(
-                    f"AI coach ping transport error request_id={request_id} url={ping_url} error={exc}"
-                )
+                logger.warning(f"AI coach ping transport error request_id={request_id} url={ping_url} error={exc}")
             except APIClientHTTPError as exc:
                 logger.warning(
                     f"AI coach ping failed request_id={request_id} status={exc.status} url={ping_url} error={exc.text}"
