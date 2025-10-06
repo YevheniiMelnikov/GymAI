@@ -8,8 +8,6 @@ from uuid import NAMESPACE_DNS, uuid5
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
-from loguru import logger
-
 
 class Settings(BaseSettings):
     PAYMENT_CHECK_INTERVAL: int = 60
@@ -143,7 +141,7 @@ class Settings(BaseSettings):
     def _compute_derived_fields(self) -> "Settings":
         in_docker: bool = os.path.exists("/.dockerenv") or os.getenv("KUBERNETES_SERVICE_HOST") is not None
 
-        def _fix_host(url: str, new_host: str, *, default_scheme: str = "http") -> str:
+        def _fix_host(url: str, new_host: str, *, default_scheme: str = "http", force: bool = False) -> str:
             try:
                 parsed = urlsplit(url)
                 netloc_raw: str = parsed.netloc or parsed.path
@@ -159,7 +157,7 @@ class Settings(BaseSettings):
                     host, port = host_port.split(":", 1)
                 else:
                     host, port = host_port, None
-                if host in {"localhost", "127.0.0.1", ""}:
+                if force or host in {"localhost", "127.0.0.1", ""}:
                     scheme: str = parsed.scheme or default_scheme
                     replacement: str = f"{new_host}:{port}" if port else new_host
                     netloc: str = f"{userinfo}@{replacement}" if userinfo else replacement
@@ -218,7 +216,12 @@ class Settings(BaseSettings):
                 self.AI_COACH_URL = _fix_host(self.AI_COACH_URL, ai_coach_host)
             if self.BOT_INTERNAL_URL:
                 bot_service_host: str = os.getenv("BOT_SERVICE_HOST", "host.docker.internal")
-                self.BOT_INTERNAL_URL = _fix_host(self.BOT_INTERNAL_URL, bot_service_host)
+                force_override: bool = not self.DOCKER_BOT_START
+                self.BOT_INTERNAL_URL = _fix_host(
+                    self.BOT_INTERNAL_URL,
+                    bot_service_host,
+                    force=force_override,
+                )
 
         return self
 
@@ -279,26 +282,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()  # noqa  # pyrefly: ignore[missing-argument]
-
-
-def _mask_url_credentials(raw_url: str | None) -> str | None:
-    if not raw_url:
-        return raw_url
-    try:
-        parsed_url: SplitResult = urlsplit(raw_url)
-        if parsed_url.username or parsed_url.password:
-            host: str = parsed_url.hostname or ""
-            port_segment: str = f":{parsed_url.port}" if parsed_url.port else ""
-            netloc: str = f"{host}{port_segment}" if host else parsed_url.netloc
-            return urlunsplit((parsed_url.scheme, netloc, parsed_url.path, parsed_url.query, parsed_url.fragment))
-    except Exception:
-        return raw_url
-    return raw_url
-
-
-_is_docker_env: bool = os.path.exists("/.dockerenv") or os.getenv("KUBERNETES_SERVICE_HOST") is not None
-masked_broker_url: str | None = _mask_url_credentials(settings.RABBITMQ_URL)
-logger.info(
-    f"settings_effective broker_url={masked_broker_url} ai_coach_url={settings.AI_COACH_URL} "
-    f"bot_internal_url={settings.BOT_INTERNAL_URL} in_docker={_is_docker_env}"
-)

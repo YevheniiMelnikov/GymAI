@@ -47,6 +47,12 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
         consumer = worker.consumer
         queues_iter: Iterable[Any] = getattr(consumer, "queues", [])
         queue_names = sorted({str(getattr(queue, "name", "")) for queue in queues_iter if getattr(queue, "name", "")})
+        if not queue_names and getattr(consumer, "task_consumer", None) is not None:
+            task_consumer = consumer.task_consumer
+            task_queues: Iterable[Any] = getattr(task_consumer, "queues", [])
+            queue_names = sorted(
+                {str(getattr(queue, "name", "")) for queue in task_queues if getattr(queue, "name", "")}
+            )
 
     registered_missing: list[str] = []
     registered_ok: bool = False

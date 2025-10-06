@@ -5,7 +5,7 @@ from typing import Final
 from kombu import Connection, Queue
 from loguru import logger
 
-from core.celery_app import CELERY_QUEUES, app, default_exchange
+from core.celery_app import CELERY_QUEUES, app
 
 _ai_coach_queue: Queue | None = next(
     (queue for queue in CELERY_QUEUES if queue.name == "ai_coach"),
@@ -27,10 +27,6 @@ def ensure_ai_coach_queue() -> None:
         with Connection(broker_url) as connection:
             bound_queue = AI_COACH_QUEUE(connection)
             bound_queue.declare()
-            logger.info(
-                f"ensure_ai_coach_queue: declared queue={AI_COACH_QUEUE.name} "
-                f"exchange={default_exchange.name} routing_key={AI_COACH_QUEUE.routing_key}"
-            )
     except Exception as exc:  # pragma: no cover - connectivity issues
         logger.opt(exception=exc).error(f"ensure_ai_coach_queue: declare failed for broker={broker_url}")
 
