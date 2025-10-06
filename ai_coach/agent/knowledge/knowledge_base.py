@@ -303,12 +303,29 @@ class KnowledgeBase:
             try:
                 rows = await list_data(dataset, user=user_ns)
             except TypeError:
-                logger.debug("cognee.datasets.list_data does not accept 'user', retrying without it")
-                cls._list_data_supports_user = False
+                logger.debug("cognee.datasets.list_data does not accept 'user' keyword, retrying positional")
+                try:
+                    rows = await list_data(dataset, user_ns)
+                except TypeError:
+                    cls._list_data_supports_user = False
+                else:
+                    cls._list_data_supports_user = True
+                    return list(rows)
             else:
                 cls._list_data_supports_user = True
                 return list(rows)
-        rows = await list_data(dataset)
+        try:
+            rows = await list_data(dataset)
+        except AttributeError as exc:
+            if user_ns is not None and "id" in str(exc):
+                logger.debug("cognee.datasets.list_data requires user context, retrying positional call")
+                try:
+                    rows = await list_data(dataset, user_ns)
+                except Exception as retry_exc:  # pragma: no cover - defensive retry
+                    raise RuntimeError("Dataset listing failed with user context") from retry_exc
+                cls._list_data_supports_user = True
+                return list(rows)
+            raise
         return list(rows)
 
     @staticmethod

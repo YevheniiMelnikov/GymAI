@@ -14,7 +14,7 @@ from bot.states import States
 from bot.texts.text_manager import msg_text
 from bot.utils.profiles import get_clients_to_survey
 from config.app_settings import settings
-from core.exceptions import SubscriptionNotFoundError
+from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
 from core.containers import get_container
 from core.cache import Cache
 from core.enums import CoachType, SubscriptionPeriod, WorkoutPlanType
@@ -163,12 +163,36 @@ async def internal_ai_coach_plan_ready(request: web.Request) -> web.Response:
         return web.json_response({"detail": "Missing client_id"}, status=400)
 
     client_id = int(client_id_raw)
+    client_profile_id: int | None = None
+    if "client_profile_id" in payload:
+        try:
+            client_profile_id = int(payload["client_profile_id"])
+        except (TypeError, ValueError):
+            return web.json_response({"detail": "Invalid client_profile_id"}, status=400)
 
     try:
-        client = await Cache.client.get_client(client_id)
+        if client_profile_id is not None:
+            client = await Cache.client.get_client(client_profile_id)
+        else:
+            client = await Cache.client.get_client(client_id)
+    except ClientNotFoundError:
+        client = None
     except Exception as exc:  # noqa: BLE001
-        logger.error(f"Client fetch failed client_id={client_id} request_id={request_id}: {exc}")
-        return web.json_response({"detail": "Client not found"}, status=404)
+        logger.warning(f"Client cache lookup failed client_id={client_id} request_id={request_id}: {exc}")
+        client = None
+
+    if client is None:
+        client = await APIService.profile.get_client(client_id)
+        if client is None:
+            logger.error(f"Client fetch failed client_id={client_id} request_id={request_id}: not found")
+            return web.json_response({"detail": "Client not found"}, status=404)
+        await Cache.client.save_client(client.profile, client.model_dump(mode="json"))
+
+    if client_profile_id is not None and client.profile != client_profile_id:
+        logger.warning(
+            f"client_profile_mismatch client_id={client_id} payload_profile={client_profile_id} actual={client.profile}"
+        )
+    client_profile_id = client.profile
 
     profile: Profile | None = await APIService.profile.get_profile(client.profile)
     if profile is None:

@@ -337,21 +337,33 @@ async def _notify_error(
     request_id: str,
     action: str,
     error: str,
+    client_profile_id: int | None,
 ) -> None:
-    await _notify_ai_plan_ready(
-        {
-            "client_id": client_id,
-            "plan_type": plan_type.value,
-            "status": "error",
-            "action": action,
-            "request_id": request_id,
-            "error": error,
-        }
-    )
+    payload: dict[str, Any] = {
+        "client_id": client_id,
+        "plan_type": plan_type.value,
+        "status": "error",
+        "action": action,
+        "request_id": request_id,
+        "error": error,
+    }
+    if client_profile_id is not None:
+        payload["client_profile_id"] = client_profile_id
+    await _notify_ai_plan_ready(payload)
 
 
 async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> None:
     client_id = int(payload["client_id"])
+    client_profile_id_raw = payload.get("client_profile_id")
+    client_profile_id: int | None
+    try:
+        client_profile_id = int(client_profile_id_raw) if client_profile_id_raw is not None else None
+    except (TypeError, ValueError):
+        logger.warning(
+            f"ai_generate_plan invalid_profile_id client_id={client_id} "
+            f"raw={client_profile_id_raw!r} request_id={payload.get('request_id', '')}"
+        )
+        client_profile_id = None
     request_id = str(payload.get("request_id", ""))
     wishes = str(payload.get("wishes", ""))
     language = str(payload.get("language", settings.DEFAULT_LANG))
@@ -395,6 +407,7 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
                 request_id=request_id,
                 action="create",
                 error=str(exc),
+                client_profile_id=client_profile_id,
             )
         raise
 
@@ -408,6 +421,7 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
             request_id=request_id,
             action="create",
             error="empty_plan",
+            client_profile_id=client_profile_id,
         )
         return
 
@@ -426,6 +440,8 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
         "request_id": request_id,
         "plan": plan_payload,
     }
+    if client_profile_id is not None:
+        notify_payload["client_profile_id"] = client_profile_id
 
     await _notify_ai_plan_ready(notify_payload)
     logger.info(f"ai_generate_plan completed client_id={client_id} plan_type={plan_type.value} request_id={request_id}")
@@ -433,6 +449,16 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
 
 async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> None:
     client_id = int(payload["client_id"])
+    client_profile_id_raw = payload.get("client_profile_id")
+    client_profile_id: int | None
+    try:
+        client_profile_id = int(client_profile_id_raw) if client_profile_id_raw is not None else None
+    except (TypeError, ValueError):
+        logger.warning(
+            f"ai_update_plan invalid_profile_id client_id={client_id} "
+            f"raw={client_profile_id_raw!r} request_id={payload.get('request_id', '')}"
+        )
+        client_profile_id = None
     language = str(payload.get("language", settings.DEFAULT_LANG))
     request_id = str(payload.get("request_id", ""))
     expected_workout = str(payload.get("expected_workout_result", ""))
@@ -474,6 +500,7 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
                 request_id=request_id,
                 action="update",
                 error=str(exc),
+                client_profile_id=client_profile_id,
             )
         raise
 
@@ -487,6 +514,7 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
             request_id=request_id,
             action="update",
             error="empty_plan",
+            client_profile_id=client_profile_id,
         )
         return
 
@@ -505,6 +533,8 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
         "request_id": request_id,
         "plan": plan_payload,
     }
+    if client_profile_id is not None:
+        notify_payload["client_profile_id"] = client_profile_id
 
     await _notify_ai_plan_ready(notify_payload)
     logger.info(f"ai_update_plan completed client_id={client_id} plan_type={plan_type.value} request_id={request_id}")
