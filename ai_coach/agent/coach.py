@@ -179,8 +179,9 @@ class CoachAgent:
             context_lines.append(prompt)
         if period:
             context_lines.append(f"Period: {period}")
-        if workout_days:
-            context_lines.append(f"Workout days: {', '.join(workout_days)}")
+        effective_days = workout_days or ["Пн", "Ср", "Пт", "Сб"]
+        if effective_days:
+            context_lines.append(f"Workout days: {', '.join(effective_days)}")
         if wishes:
             context_lines.append(f"Wishes: {wishes}")
         mode = "program" if output_type is Program else "subscription"
@@ -200,6 +201,7 @@ class CoachAgent:
             deps=deps,
             output_type=output_type,
             message_history=history,
+            model_settings=ModelSettings(response_format={"type": "json_object"}, temperature=0.2),
         )
         return cls._normalize_output(raw_result, output_type)
 
@@ -238,6 +240,7 @@ class CoachAgent:
             deps=deps,
             output_type=output_type,
             message_history=history,
+            model_settings=ModelSettings(response_format={"type": "json_object"}, temperature=0.2),
         )
         return cls._normalize_output(raw_result, output_type)
 

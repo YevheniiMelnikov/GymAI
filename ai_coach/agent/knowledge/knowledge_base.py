@@ -132,6 +132,10 @@ class KnowledgeBase:
     @classmethod
     async def search(cls, query: str, client_id: int, k: int | None = None) -> list[str]:
         """Search across client and global datasets."""
+        normalized = query.strip()
+        if not normalized:
+            logger.debug(f"Knowledge search skipped client_id={client_id}: empty query")
+            return []
         user = await cls._get_cognee_user()
         await cls._ensure_profile_indexed(client_id, user)
         datasets = [cls._dataset_name(client_id), cls.GLOBAL_DATASET]
@@ -143,7 +147,7 @@ class KnowledgeBase:
             }
             if k is not None:
                 params["top_k"] = k
-            return await cognee.search(query, **params)
+            return await cognee.search(normalized, **params)
         except (PermissionDeniedError, DatasetNotFoundError) as e:
             logger.warning(f"Search issue client_id={client_id}: {e}")
         except Exception as e:

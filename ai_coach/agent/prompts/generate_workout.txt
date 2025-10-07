@@ -9,5 +9,6 @@ Rules:
 {workout_rules}
 
 Instructions:
+- Produce a single JSON object matching the ProgramPayload schema with no surrounding text.
 - Include estimated working weight (kg) for each weighted exercise.
 - Respond strictly in {language}.

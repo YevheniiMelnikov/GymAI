@@ -14,6 +14,8 @@ from core.enums import WorkoutPlanType, SubscriptionPeriod
 from config.app_settings import settings
 from core.schemas import Program, QAResponse, Subscription
 
+DEFAULT_WORKOUT_DAYS: list[str] = ["Пн", "Ср", "Пт", "Сб"]
+
 CoachAction = Callable[[AskCtx], Awaitable[Program | Subscription | QAResponse | list[str] | None]]
 
 DISPATCH: dict[CoachMode, CoachAction] = {
@@ -72,11 +74,13 @@ async def ask(data: AICoachRequest, request: Request) -> Program | Subscription 
         else SubscriptionPeriod(data.period or SubscriptionPeriod.one_month.value)
     )
 
+    workout_days = data.workout_days or DEFAULT_WORKOUT_DAYS
+
     ctx: AskCtx = {
         "prompt": data.prompt,
         "client_id": data.client_id,
         "period": period.value,
-        "workout_days": data.workout_days or [],
+        "workout_days": workout_days,
         "expected_workout": data.expected_workout or "",
         "feedback": data.feedback or "",
         "wishes": data.wishes or "",
@@ -131,16 +135,18 @@ async def ask(data: AICoachRequest, request: Request) -> Program | Subscription 
         logger.exception(f"/ask agent validation error: {e}")
         raise HTTPException(status_code=422, detail="Invalid response") from e
     except Exception as e:  # pragma: no cover - log unexpected errors
-        logger.exception(f"/ask agent failed, falling back to KnowledgeBase: {e}")
-        try:
-            responses = await KnowledgeBase.search(data.prompt or "", client_id=data.client_id)
-            logger.debug(
-                f"/ask completed request_id={data.request_id} client_id={data.client_id} responses={responses}"
-            )
-            return responses
-        except Exception as e:  # pragma: no cover - log unexpected errors
-            logger.exception(f"/ask failed: {e}")
-            raise HTTPException(status_code=503, detail="Service unavailable") from e
+        logger.exception(f"/ask agent failed: {e}")
+        if mode == CoachMode.ask_ai:
+            try:
+                responses = await KnowledgeBase.search(data.prompt or "", client_id=data.client_id)
+                logger.debug(
+                    f"/ask completed request_id={data.request_id} client_id={data.client_id} responses={responses}"
+                )
+                return responses
+            except Exception as inner_exc:  # pragma: no cover - log unexpected errors
+                logger.exception(f"/ask fallback failed: {inner_exc}")
+                raise HTTPException(status_code=503, detail="Service unavailable") from inner_exc
+        raise HTTPException(status_code=503, detail="Service unavailable") from e
 
 
 @app.post("/knowledge/refresh/")
