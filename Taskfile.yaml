@@ -18,7 +18,17 @@ tasks:
     cmds:
       - |
         set -euo pipefail
-        docker compose -f docker/docker-compose-local.yml up --build
+        if [ -f .env ]; then
+          set -a
+          . .env
+          set +a
+        fi
+        compose_file="docker/docker-compose-local.yml"
+        if [ -n "${CF_TUNNEL_TOKEN:-}" ]; then
+          docker compose -f "$compose_file" --profile cloudflare up --build
+        else
+          docker compose -f "$compose_file" up --build
+        fi
 
   lint:
     desc: Run linters (ruff + pyrefly)

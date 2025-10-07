@@ -80,13 +80,13 @@ Sources are located in `bot/` with the entrypoint `bot/main.py`.
 
 Local development options:
 
-* With Docker Compose (recommended for API/DB/Redis): `task localrun` starts Postgres, Redis, API, local Nginx on [http://localhost:9090](http://localhost:9090), and automatically adds the Cloudflare tunnel when a token is present.
+* With Docker Compose (recommended for API/DB/Redis): `task localrun` starts Postgres, Redis, API, local Nginx on [http://localhost:9090](http://localhost:9090). If a Cloudflare token is present the command automatically enables the tunnel profile.
 * Run the bot locally from your IDE or terminal:
 
   * Ensure Redis and API are up (via `task localrun`).
   * Start the bot: `uv run python -m bot.main`.
   * Local Nginx forwards webhooks to `host.docker.internal:8088` as configured in `docker/nginx.local.conf`.
-* (Optional) Expose the local stack to Telegram via the bundled Cloudflare tunnel. Set `CF_TUNNEL_TOKEN` in `docker/.env` and the `cloudflare` container will boot automatically alongside the rest of the stack. When the token is absent the container idles without starting the tunnel. Use the published URL as `WEBHOOK_HOST` when tunnelling Telegram webhooks.
+* (Optional) Expose the local stack to Telegram via the bundled Cloudflare tunnel. Set `CF_TUNNEL_TOKEN` in `.env` and `task localrun` will include the `cloudflare` profile automatically. Without the token the tunnel container is skipped entirely. Use the published URL as `WEBHOOK_HOST` when tunnelling Telegram webhooks.
 
 > To run bot locally FULLY with docker set `DOCKER_BOT_START=true`
 
