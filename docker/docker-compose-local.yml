@@ -219,21 +219,14 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: cloudflare
     restart: unless-stopped
-    command:
-      - tunnel
-      - --no-autoupdate
-      - --config
-      - /etc/cloudflare/config.yml
-      - run
+    command: tunnel --no-autoupdate --config /etc/cloudflare/config.yml run
     environment:
-      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN:-}
+      - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
     volumes:
       - ./cloudflare-config.yml:/etc/cloudflare/config.yml:ro
     depends_on:
       - nginx
     networks: [internal]
-    profiles:
-      - cloudflare
 
 networks:
   internal:
