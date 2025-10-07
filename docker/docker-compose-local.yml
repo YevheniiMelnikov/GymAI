@@ -223,7 +223,7 @@ services:
       - /bin/sh
       - -c
     command: |
-      if [ -z "${TUNNEL_TOKEN}" ]; then
+      if [ -z "$${TUNNEL_TOKEN}" ]; then
         echo "Cloudflare tunnel disabled: set CF_TUNNEL_TOKEN to expose local webhooks.";
         sleep infinity;
       else
