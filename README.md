@@ -86,7 +86,7 @@ Local development options:
   * Ensure Redis and API are up (via `task localrun`).
   * Start the bot: `uv run python -m bot.main`.
   * Local Nginx forwards webhooks to `host.docker.internal:8088` as configured in `docker/nginx.local.conf`.
-* (Optional) Expose the local stack to Telegram via the bundled Cloudflare tunnel. When you set `CF_TUNNEL_TOKEN` in `docker/.env`, `task localrun` automatically enables the `cloudflare` compose profile (equivalent to running `docker compose -f docker/docker-compose-local.yml --profile cloudflare up`). Without the token the profile is skipped, so the tunnel container is never scheduled. Use the published URL as `WEBHOOK_HOST` when tunnelling Telegram webhooks.
+* (Optional) Expose the local stack to Telegram via the bundled Cloudflare tunnel. Set `CF_TUNNEL_TOKEN` in `docker/.env` and the `cloudflare` container will boot automatically alongside the rest of the stack. When the token is absent the container idles without starting the tunnel. Use the published URL as `WEBHOOK_HOST` when tunnelling Telegram webhooks.
 
 > To run bot locally FULLY with docker set `DOCKER_BOT_START=true`
 
@@ -316,7 +316,7 @@ Create `docker/.env` from `docker/.env.example` and set the following minimum va
 * `API_KEY` – internal API key for bot/API communication (generate from Django container)
 * `BOT_TOKEN` – Telegram bot token
 * `WEBHOOK_HOST` – base URL for webhooks (e.g., `http://localhost:9090` for local Nginx)
-* `CF_TUNNEL_TOKEN` – (optional, local development) Cloudflare Zero Trust token for the bundled `cloudflare` tunnel service; set it and run Compose with the `cloudflare` profile (handled automatically by `task localrun`).
+* `CF_TUNNEL_TOKEN` – (optional, local development) Cloudflare Zero Trust token for the bundled `cloudflare` tunnel service; set it to make the tunnel container establish a connection automatically.
 
 > **Important:** To enable Google services (Sheets/Drive/Docs), you **must** place a file named `google_creds.json` at the **project root**. This file is bind-mounted into containers at `/app/google_creds.json` and should be referenced by `GOOGLE_APPLICATION_CREDENTIALS`.
 

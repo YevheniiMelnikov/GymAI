@@ -219,15 +219,23 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: cloudflare
     restart: unless-stopped
-    command: tunnel --no-autoupdate --config /etc/cloudflare/config.yml run
+    entrypoint: /bin/sh
+    command:
+      - -ec
+      - |
+        if [ -z "${CF_TUNNEL_TOKEN:-}" ]; then
+          echo "Cloudflare tunnel disabled (CF_TUNNEL_TOKEN not set)"
+          exec tail -f /dev/null
+        fi
+        export TUNNEL_TOKEN="${CF_TUNNEL_TOKEN}"
+        exec cloudflared tunnel --no-autoupdate --config /etc/cloudflare/config.yml run
     environment:
-      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN:-}
+      CF_TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN:-}
     volumes:
       - ./cloudflare-config.yml:/etc/cloudflare/config.yml:ro
     depends_on:
       - nginx
     networks: [internal]
-    profiles: [cloudflare]
 
 networks:
   internal:
