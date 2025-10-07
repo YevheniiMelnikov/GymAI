@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import datetime
 import inspect
 from typing import Any, Optional
+
+from zoneinfo import ZoneInfo
 
 from openai import AsyncOpenAI  # pyrefly: ignore[import-error]
 from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
@@ -171,7 +173,7 @@ class CoachAgent:
     ) -> Program | Subscription:
         agent = cls._get_agent()
         deps.mode = CoachMode.program if output_type is Program else CoachMode.subscription
-        today = date.today().isoformat()
+        today = datetime.now(ZoneInfo(settings.TIME_ZONE)).date().isoformat()
         context_lines: list[str] = []
         if workout_type:
             context_lines.append(f"Workout type: {workout_type.value}")
