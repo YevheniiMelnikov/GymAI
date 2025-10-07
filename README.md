@@ -86,7 +86,7 @@ Local development options:
   * Ensure Redis and API are up (via `task localrun`).
   * Start the bot: `uv run python -m bot.main`.
   * Local Nginx forwards webhooks to `host.docker.internal:8088` as configured in `docker/nginx.local.conf`.
-  * Expose the local stack to Telegram via the bundled Cloudflare tunnel. Provide `CF_TUNNEL_TOKEN` in `docker/.env`; `task localrun` (or `docker compose -f docker/docker-compose-local.yml up cloudflare`) will launch the `cloudflare` service and publish a public URL accessible through Cloudflare Zero Trust. Use that URL as `WEBHOOK_HOST`.
+* (Optional) Expose the local stack to Telegram via the bundled Cloudflare tunnel. When you set `CF_TUNNEL_TOKEN` in `docker/.env`, `task localrun` (or `docker compose -f docker/docker-compose-local.yml up cloudflare`) starts the `cloudflare` service and publishes a public URL through Cloudflare Zero Trust. Without the token the service stays idle, so nothing breaks in environments where Cloudflare is not required. Use the published URL as `WEBHOOK_HOST` when tunnelling Telegram webhooks.
 
 > To run bot locally FULLY with docker set `DOCKER_BOT_START=true`
 
@@ -316,7 +316,7 @@ Create `docker/.env` from `docker/.env.example` and set the following minimum va
 * `API_KEY` – internal API key for bot/API communication (generate from Django container)
 * `BOT_TOKEN` – Telegram bot token
 * `WEBHOOK_HOST` – base URL for webhooks (e.g., `http://localhost:9090` for local Nginx)
-* `CF_TUNNEL_TOKEN` – Cloudflare Zero Trust token for the bundled `cloudflare` tunnel service
+* `CF_TUNNEL_TOKEN` – (optional, local development) Cloudflare Zero Trust token for the bundled `cloudflare` tunnel service
 
 > **Important:** To enable Google services (Sheets/Drive/Docs), you **must** place a file named `google_creds.json` at the **project root**. This file is bind-mounted into containers at `/app/google_creds.json` and should be referenced by `GOOGLE_APPLICATION_CREDENTIALS`.
 

@@ -219,9 +219,18 @@ services:
     image: cloudflare/cloudflared:latest
     container_name: cloudflare
     restart: unless-stopped
-    command: tunnel --no-autoupdate --config /etc/cloudflare/config.yml run
+    entrypoint:
+      - /bin/sh
+      - -c
+    command: |
+      if [ -z "${TUNNEL_TOKEN}" ]; then
+        echo "Cloudflare tunnel disabled: set CF_TUNNEL_TOKEN to expose local webhooks.";
+        sleep infinity;
+      else
+        exec cloudflared tunnel --no-autoupdate --config /etc/cloudflare/config.yml run;
+      fi
     environment:
-      - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
+      - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN:-}
     volumes:
       - ./cloudflare-config.yml:/etc/cloudflare/config.yml:ro
     depends_on:
