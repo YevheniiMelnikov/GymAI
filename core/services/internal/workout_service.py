@@ -2,8 +2,11 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 from urllib.parse import urljoin
+from zoneinfo import ZoneInfo
+
 from loguru import logger
 
+from config.app_settings import settings
 from core.services.internal.api_client import APIClient, APIClientHTTPError, APIClientTransportError
 from core.exceptions import UserServiceError
 from core.schemas import Program, DayExercises, Subscription
@@ -107,7 +110,7 @@ class WorkoutService(APIClient):
             "price": str(amount),
             "workout_days": workout_days,
             "period": period.value,
-            "payment_date": datetime.today().strftime("%Y-%m-%d"),
+            "payment_date": datetime.now(ZoneInfo(settings.TIME_ZONE)).date().isoformat(),
             "wishes": wishes,
             "exercises": exercises or [],
         }

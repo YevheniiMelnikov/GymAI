@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from aiohttp import web
 from aiogram import Bot
@@ -81,7 +82,8 @@ async def internal_send_daily_survey(request: web.Request) -> web.Response:
         logger.info("No clients to survey today")
         return web.json_response({"result": "no_clients"})
 
-    yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
+    now = datetime.now(ZoneInfo(settings.TIME_ZONE))
+    yesterday = (now - timedelta(days=1)).strftime("%A").lower()
 
     for client_profile in clients:
         try:

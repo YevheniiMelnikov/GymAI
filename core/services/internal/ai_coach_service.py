@@ -97,7 +97,7 @@ class AiCoachService(APIClient):
         if data is None:
             return None
         if plan_type is WorkoutPlanType.PROGRAM:
-            return await self._normalize_program_response(
+            return self._validate_program_response(
                 data,
                 client_id=client_id,
                 request_id=request_id,
@@ -137,7 +137,7 @@ class AiCoachService(APIClient):
         if data is None:
             return None
         if plan_type is WorkoutPlanType.PROGRAM:
-            return await self._normalize_program_response(
+            return self._validate_program_response(
                 data,
                 client_id=client_id,
                 request_id=request_id,
@@ -145,7 +145,7 @@ class AiCoachService(APIClient):
             )
         return Subscription.model_validate(data)
 
-    async def _normalize_program_response(
+    def _validate_program_response(
         self,
         data: Any,
         *,
@@ -162,26 +162,7 @@ class AiCoachService(APIClient):
                 f"ai_coach_invalid_program_payload client_id={client_id} request_id={request_id} "
                 f"context={context} error={exc}"
             )
-            fallback = await self._fetch_latest_program(client_id=client_id, request_id=request_id)
-            if fallback is not None:
-                return fallback
             raise UserServiceError("AI coach returned an invalid program payload") from exc
-
-    async def _fetch_latest_program(self, *, client_id: int, request_id: str | None) -> Program | None:
-        try:
-            from core.services import APIService  # local import to avoid circular dependency
-
-            latest = await APIService.workout.get_latest_program(client_id)
-        except Exception as exc:  # noqa: BLE001 - log and swallow fallback errors
-            logger.error(f"ai_coach_program_fallback_failed client_id={client_id} request_id={request_id} error={exc}")
-            return None
-        if latest is None:
-            logger.warning(f"ai_coach_program_fallback_missing client_id={client_id} request_id={request_id}")
-            return None
-        logger.info(
-            f"ai_coach_program_fallback_used client_id={client_id} request_id={request_id} program_id={latest.id}"
-        )
-        return latest
 
     async def _post_ask(
         self,
