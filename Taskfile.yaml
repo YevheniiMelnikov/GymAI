@@ -16,7 +16,13 @@ tasks:
     env:
       COMPOSE_BAKE: 1
     cmds:
-      - docker compose -f docker/docker-compose-local.yml up --build
+      - |
+        set -euo pipefail
+        PROFILE_ARGS=""
+        if [ -n "${CF_TUNNEL_TOKEN:-}" ]; then
+          PROFILE_ARGS="--profile cloudflare"
+        fi
+        docker compose -f docker/docker-compose-local.yml $PROFILE_ARGS up --build
 
   lint:
     desc: Run linters (ruff + pyrefly)
