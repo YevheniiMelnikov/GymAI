@@ -2,11 +2,10 @@ import os
 import shutil
 import subprocess
 import asyncio
-import time
 from datetime import datetime, timedelta, date
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Any, Final, cast
+from typing import Any, cast
 
 from celery import Task
 
@@ -17,7 +16,6 @@ import httpx
 from config.app_settings import settings
 from core.cache import Cache
 from core.services import APIService
-from core.services.internal.api_client import APIClientTransportError
 from bot.texts.text_manager import msg_text
 from apps.payments.tasks import send_payment_message
 from bot.utils.profiles import get_assigned_coach
@@ -40,8 +38,6 @@ def _next_payment_date(period: SubscriptionPeriod = SubscriptionPeriod.one_month
 _dumps_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dumps")
 _pg_dir = os.path.join(_dumps_dir, "postgres")
 _redis_dir = os.path.join(_dumps_dir, "redis")
-
-_RECENT_PLAN_MARGIN_SECONDS: Final[float] = 30.0
 
 os.makedirs(_pg_dir, exist_ok=True)
 os.makedirs(_redis_dir, exist_ok=True)
@@ -312,22 +308,26 @@ async def _claim_plan_request(request_id: str, action: str, *, attempt: int) -> 
 
 
 async def _notify_ai_plan_ready(payload: dict[str, Any]) -> None:
-    url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/ai_plan_ready/"
-    headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
+    base_url: str = settings.BOT_INTERNAL_URL.rstrip("/")
+    url: str = f"{base_url}/internal/tasks/ai_plan_ready/"
+    headers: dict[str, str] = {"Authorization": f"Api-Key {settings.API_KEY}"}
     request_id = str(payload.get("request_id", ""))
     action = str(payload.get("action", ""))
     logger.info(f"ai_plan_notify_start action={action} request_id={request_id} url={url}")
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            resp.raise_for_status()
-        logger.info(f"ai_plan_notify_done action={action} request_id={request_id} status={resp.status_code}")
-    except httpx.HTTPError as exc:
-        status_code = getattr(exc.response, "status_code", None)
+            response: httpx.Response = await client.post(url, json=payload, headers=headers)
+            response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        status_code: int | None = exc.response.status_code if exc.response is not None else None
         logger.warning(
             f"ai_plan_notify_failed action={action} request_id={request_id} status={status_code} error={exc!s}"
         )
         raise
+    except httpx.TransportError as exc:
+        logger.error(f"ai_plan_notify_transport_error action={action} request_id={request_id} error={exc!r}")
+        raise
+    logger.info(f"ai_plan_notify_done action={action} request_id={request_id} status={response.status_code}")
 
 
 def _parse_workout_type(raw: Any) -> WorkoutType | None:
@@ -359,37 +359,6 @@ async def _notify_error(
     if client_profile_id is not None:
         payload["client_profile_id"] = client_profile_id
     await _notify_ai_plan_ready(payload)
-
-
-async def _recover_plan_after_timeout(
-    *,
-    client_profile_id: int | None,
-    plan_type: WorkoutPlanType,
-    started_at: float,
-) -> Program | Subscription | None:
-    if client_profile_id is None:
-        logger.warning("ai_generate_plan_timeout_no_profile")
-        return None
-
-    threshold = started_at - _RECENT_PLAN_MARGIN_SECONDS
-
-    if plan_type is WorkoutPlanType.PROGRAM:
-        program = await APIService.workout.get_latest_program(client_profile_id)
-        if program and program.created_at >= threshold:
-            logger.info(
-                f"ai_generate_plan_timeout_recovered client_profile_id={client_profile_id} program_id={program.id}"
-            )
-            return program
-        if program:
-            logger.warning(
-                f"ai_generate_plan_timeout_stale_program client_profile_id={client_profile_id} program_id={program.id}"
-            )
-        return None
-
-    logger.warning(
-        f"ai_generate_plan_timeout_no_fallback client_profile_id={client_profile_id} plan_type={plan_type.value}"
-    )
-    return None
 
 
 async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> None:
@@ -424,7 +393,6 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
         f"request_id={request_id} attempt={attempt}"
     )
 
-    started_at = time.time()
     try:
         plan = await APIService.ai_coach.create_workout_plan(
             plan_type,
@@ -436,27 +404,6 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
             workout_type=workout_type,
             request_id=request_id or None,
         )
-    except APIClientTransportError:
-        logger.warning(
-            f"ai_generate_plan_timeout client_id={client_id} plan_type={plan_type.value} request_id={request_id}"
-        )
-        plan = await _recover_plan_after_timeout(
-            client_profile_id=client_profile_id,
-            plan_type=plan_type,
-            started_at=started_at,
-        )
-        if plan is None:
-            raise
-        if isinstance(plan, Program):
-            logger.info(
-                f"ai_generate_plan_timeout_plan_reused client_id={client_id} plan_type={plan_type.value} "
-                f"request_id={request_id} program_id={plan.id}"
-            )
-        else:
-            logger.info(
-                f"ai_generate_plan_timeout_plan_reused client_id={client_id} plan_type={plan_type.value} "
-                f"request_id={request_id}"
-            )
     except Exception as exc:  # noqa: BLE001
         logger.error(
             f"ai_generate_plan failed client_id={client_id} plan_type={plan_type.value} "
