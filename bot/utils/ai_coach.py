@@ -283,14 +283,19 @@ async def _watch_plan_delivery(
 
         raw_backoff = getattr(notify_ai_plan_ready_task, "retry_backoff", 0) or 0
         notify_retries = int(getattr(notify_ai_plan_ready_task, "max_retries", 0) or 0)
-        notify_backoff = int(raw_backoff) if isinstance(raw_backoff, (int, float)) else 0
+        if isinstance(raw_backoff, (int, float)) and raw_backoff > 0:
+            notify_backoff = int(raw_backoff)
     except Exception:
         notify_backoff = 0
         notify_retries = 0
-    notify_window = notify_backoff * notify_retries
-    buffer = 120
-    computed_timeout = settings.AI_COACH_TIMEOUT + notify_window + buffer
-    timeout = max(poll_interval, settings.AI_PLAN_NOTIFY_TIMEOUT, computed_timeout)
+    if notify_backoff <= 0:
+        notify_backoff = 30
+    notify_window = notify_backoff * max(notify_retries, 0)
+    timeout = max(
+        settings.AI_PLAN_NOTIFY_TIMEOUT,
+        settings.AI_COACH_TIMEOUT + notify_window + 120,
+        poll_interval,
+    )
     elapsed = 0
     logger.debug(f"ai_plan_watch_start action={action} request_id={request_id} timeout={timeout}")
     try:
@@ -316,26 +321,8 @@ async def _watch_plan_delivery(
                 return
             await asyncio.sleep(poll_interval)
             elapsed += poll_interval
-        failure_detail_raw = await client.get(failure_key)
-        if isinstance(failure_detail_raw, (bytes, bytearray)):
-            failure_detail = failure_detail_raw.decode("utf-8", errors="replace")
-        else:
-            failure_detail = failure_detail_raw
-        if not failure_detail:
-            failure_detail = "timeout"
-            await client.set(
-                failure_key,
-                failure_detail,
-                ex=settings.AI_PLAN_NOTIFY_FAILURE_TTL,
-                nx=True,
-            )
-        await _notify_plan_failure(
-            bot=bot,
-            chat_id=chat_id,
-            language=language,
-            action=action,
-            request_id=request_id,
-            detail=str(failure_detail),
+        logger.warning(
+            f"ai_plan_watch_timeout action={action} request_id={request_id} elapsed={elapsed} timeout={timeout}"
         )
     except Exception as exc:  # noqa: BLE001
         logger.error(f"ai_plan_watch_failed action={action} request_id={request_id} error={exc!s}")
