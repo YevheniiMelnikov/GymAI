@@ -225,8 +225,8 @@ class KnowledgeBase:
         user_ns: Any | None = cls._to_user_or_none(user)
         try:
             data = await cls._fetch_dataset_rows(list_data_callable, dataset, user_ns)
-        except Exception as e:
-            logger.warning(f"History fetch failed client_id={client_id}: {e}")
+        except Exception:
+            logger.info(f"No message history found for client_id={client_id}")
             return []
         messages: list[str] = []
         for item in data:
