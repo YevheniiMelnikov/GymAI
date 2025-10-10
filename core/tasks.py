@@ -16,6 +16,7 @@ import httpx
 from config.app_settings import settings
 from core.cache import Cache
 from core.services import APIService
+from core.services.internal.api_client import APIClientHTTPError, APIClientTransportError
 from bot.texts.text_manager import msg_text
 from apps.payments.tasks import send_payment_message
 from bot.utils.profiles import get_assigned_coach
@@ -307,6 +308,14 @@ async def _claim_plan_request(request_id: str, action: str, *, attempt: int) -> 
         return True
 
 
+class AIPlanNotificationError(Exception):
+    def __init__(self, *, action: str, request_id: str, detail: str) -> None:
+        self.action: str = action
+        self.request_id: str = request_id
+        self.detail: str = detail
+        super().__init__(f"AI plan notification failed: {detail}")
+
+
 async def _notify_ai_plan_ready(payload: dict[str, Any]) -> None:
     base_url: str = settings.BOT_INTERNAL_URL.rstrip("/")
     url: str = f"{base_url}/internal/tasks/ai_plan_ready/"
@@ -320,13 +329,13 @@ async def _notify_ai_plan_ready(payload: dict[str, Any]) -> None:
             response.raise_for_status()
     except httpx.HTTPStatusError as exc:
         status_code: int | None = exc.response.status_code if exc.response is not None else None
-        logger.warning(
-            f"ai_plan_notify_failed action={action} request_id={request_id} status={status_code} error={exc!s}"
-        )
-        raise
+        detail: str = f"status={status_code} error={exc!s}"
+        logger.error(f"ai_plan_notify_failed action={action} request_id={request_id} {detail}")
+        raise AIPlanNotificationError(action=action, request_id=request_id, detail=detail) from exc
     except httpx.TransportError as exc:
-        logger.error(f"ai_plan_notify_transport_error action={action} request_id={request_id} error={exc!r}")
-        raise
+        detail: str = f"transport_error={exc!r}"
+        logger.error(f"ai_plan_notify_transport_error action={action} request_id={request_id} {detail}")
+        raise AIPlanNotificationError(action=action, request_id=request_id, detail=detail) from exc
     logger.info(f"ai_plan_notify_done action={action} request_id={request_id} status={response.status_code}")
 
 
@@ -410,28 +419,40 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
             f"request_id={request_id} attempt={attempt} error={exc}"
         )
         if attempt >= getattr(task, "max_retries", 0):
-            await _notify_error(
-                client_id=client_id,
-                plan_type=plan_type,
-                request_id=request_id,
-                action="create",
-                error=str(exc),
-                client_profile_id=client_profile_id,
-            )
+            try:
+                await _notify_error(
+                    client_id=client_id,
+                    plan_type=plan_type,
+                    request_id=request_id,
+                    action="create",
+                    error=str(exc),
+                    client_profile_id=client_profile_id,
+                )
+            except AIPlanNotificationError as notify_exc:
+                logger.error(
+                    f"ai_generate_plan_error_notification_failed client_id={client_id} "
+                    f"plan_type={plan_type.value} request_id={request_id} detail={notify_exc.detail}"
+                )
         raise
 
     if plan is None:
         logger.error(
             f"ai_generate_plan returned empty client_id={client_id} plan_type={plan_type.value} request_id={request_id}"
         )
-        await _notify_error(
-            client_id=client_id,
-            plan_type=plan_type,
-            request_id=request_id,
-            action="create",
-            error="empty_plan",
-            client_profile_id=client_profile_id,
-        )
+        try:
+            await _notify_error(
+                client_id=client_id,
+                plan_type=plan_type,
+                request_id=request_id,
+                action="create",
+                error="empty_plan",
+                client_profile_id=client_profile_id,
+            )
+        except AIPlanNotificationError as notify_exc:
+            logger.error(
+                f"ai_generate_plan_empty_notification_failed client_id={client_id} "
+                f"plan_type={plan_type.value} request_id={request_id} detail={notify_exc.detail}"
+            )
         return
 
     if plan_type is WorkoutPlanType.PROGRAM:
@@ -452,7 +473,14 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
     if client_profile_id is not None:
         notify_payload["client_profile_id"] = client_profile_id
 
-    await _notify_ai_plan_ready(notify_payload)
+    try:
+        await _notify_ai_plan_ready(notify_payload)
+    except AIPlanNotificationError as exc:
+        logger.error(
+            f"ai_generate_plan_notification_failed client_id={client_id} plan_type={plan_type.value} "
+            f"request_id={request_id} detail={exc.detail}"
+        )
+        raise
     logger.info(f"ai_generate_plan completed client_id={client_id} plan_type={plan_type.value} request_id={request_id}")
 
 
@@ -503,28 +531,40 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
             f"request_id={request_id} attempt={attempt} error={exc}"
         )
         if attempt >= getattr(task, "max_retries", 0):
-            await _notify_error(
-                client_id=client_id,
-                plan_type=plan_type,
-                request_id=request_id,
-                action="update",
-                error=str(exc),
-                client_profile_id=client_profile_id,
-            )
+            try:
+                await _notify_error(
+                    client_id=client_id,
+                    plan_type=plan_type,
+                    request_id=request_id,
+                    action="update",
+                    error=str(exc),
+                    client_profile_id=client_profile_id,
+                )
+            except AIPlanNotificationError as notify_exc:
+                logger.error(
+                    f"ai_update_plan_error_notification_failed client_id={client_id} "
+                    f"plan_type={plan_type.value} request_id={request_id} detail={notify_exc.detail}"
+                )
         raise
 
     if plan is None:
         logger.error(
             f"ai_update_plan returned empty client_id={client_id} plan_type={plan_type.value} request_id={request_id}"
         )
-        await _notify_error(
-            client_id=client_id,
-            plan_type=plan_type,
-            request_id=request_id,
-            action="update",
-            error="empty_plan",
-            client_profile_id=client_profile_id,
-        )
+        try:
+            await _notify_error(
+                client_id=client_id,
+                plan_type=plan_type,
+                request_id=request_id,
+                action="update",
+                error="empty_plan",
+                client_profile_id=client_profile_id,
+            )
+        except AIPlanNotificationError as notify_exc:
+            logger.error(
+                f"ai_update_plan_empty_notification_failed client_id={client_id} "
+                f"plan_type={plan_type.value} request_id={request_id} detail={notify_exc.detail}"
+            )
         return
 
     if plan_type is WorkoutPlanType.PROGRAM:
@@ -545,7 +585,14 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
     if client_profile_id is not None:
         notify_payload["client_profile_id"] = client_profile_id
 
-    await _notify_ai_plan_ready(notify_payload)
+    try:
+        await _notify_ai_plan_ready(notify_payload)
+    except AIPlanNotificationError as exc:
+        logger.error(
+            f"ai_update_plan_notification_failed client_id={client_id} plan_type={plan_type.value} "
+            f"request_id={request_id} detail={exc.detail}"
+        )
+        raise
     logger.info(f"ai_update_plan completed client_id={client_id} plan_type={plan_type.value} request_id={request_id}")
 
 
@@ -553,7 +600,7 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
     bind=True,
     queue="ai_coach",
     routing_key="ai_coach",
-    autoretry_for=(httpx.HTTPError, Exception),
+    autoretry_for=(APIClientHTTPError, APIClientTransportError),
     retry_backoff=30,
     retry_jitter=True,
     max_retries=5,
@@ -566,7 +613,7 @@ def generate_ai_workout_plan(self, payload: dict[str, Any]) -> None:  # pyrefly:
     bind=True,
     queue="ai_coach",
     routing_key="ai_coach",
-    autoretry_for=(httpx.HTTPError, Exception),
+    autoretry_for=(APIClientHTTPError, APIClientTransportError),
     retry_backoff=30,
     retry_jitter=True,
     max_retries=5,
