@@ -33,6 +33,8 @@ async def tool_search_knowledge(
     client_id = ctx.deps.client_id
     normalized_query = query.strip()
     logger.debug(f"tool_search_knowledge client_id={client_id} query='{normalized_query[:80]}' k={k}")
+    if not normalized_query:
+        raise ModelRetry("Knowledge search requires a non-empty query. Summarize the client's goal before retrying.")
     if ctx.deps.last_knowledge_query == normalized_query and ctx.deps.last_knowledge_empty:
         logger.info(f"knowledge_search_repeat client_id={client_id} query='{normalized_query[:80]}'")
         raise ModelRetry(

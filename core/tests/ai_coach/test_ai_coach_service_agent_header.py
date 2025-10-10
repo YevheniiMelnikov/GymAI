@@ -2,6 +2,8 @@ import asyncio
 import httpx
 import pytest
 
+from core.enums import WorkoutPlanType
+from core.exceptions import UserServiceError
 from core.services.internal.ai_coach_service import AiCoachService
 
 
@@ -16,9 +18,11 @@ def test_agent_header(monkeypatch: pytest.MonkeyPatch) -> None:
             self,
             method: str,
             url: str,
-            payload: dict[str, object],
+            payload: dict[str, object] | None = None,
             headers: dict[str, str] | None = None,
             timeout: float | None = None,
+            *,
+            client: httpx.AsyncClient | None = None,
         ) -> tuple[int, dict[str, object]]:
             self.sent_headers = headers
             return 200, {}
@@ -30,3 +34,29 @@ def test_agent_header(monkeypatch: pytest.MonkeyPatch) -> None:
             assert service.sent_headers["X-Agent"] == "pydanticai"
 
     asyncio.run(runner())
+
+
+@pytest.mark.asyncio
+async def test_create_program_invalid_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_post(
+        self,
+        payload: object,
+        *,
+        request_id: str | None,
+        extra_headers: dict[str, str] | None = None,
+    ) -> list[object]:
+        return []
+
+    monkeypatch.setattr(AiCoachService, "_post_ask", fake_post)
+
+    async with httpx.AsyncClient() as client:
+        service = AiCoachService(client, DummySettings())
+        with pytest.raises(UserServiceError) as exc_info:
+            await service.create_workout_plan(
+                WorkoutPlanType.PROGRAM,
+                client_id=1,
+                language="ua",
+                request_id="test",
+            )
+
+    assert "invalid program payload" in str(exc_info.value)

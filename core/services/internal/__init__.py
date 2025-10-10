@@ -4,12 +4,19 @@ from typing import Any, Callable
 
 
 class _ServiceProxy:
-    def __init__(self, factory: Callable[[], Any]) -> None:
+    def __init__(self, factory: Callable[[], Any], *, cache_instance: bool = True) -> None:
         self._factory = factory
+        self._cache_instance = cache_instance
         self._instance: Any | None = None
         self._lock = asyncio.Lock()
 
     async def _get_instance(self) -> Any:
+        if not self._cache_instance:
+            obj = self._factory()
+            if inspect.isawaitable(obj):
+                obj = await obj
+            return obj
+
         if self._instance is None:
             async with self._lock:
                 if self._instance is None:
@@ -45,11 +52,11 @@ class _APIServiceProxy:
             raise RuntimeError("Container provider is not configured")
         return self._provider()
 
-    def _proxy(self, name: str) -> _ServiceProxy:
+    def _proxy(self, name: str, *, cache_instance: bool = True) -> _ServiceProxy:
         if name not in self._proxies:
             container = self._container()
             factory = getattr(container, f"{name}_service")
-            self._proxies[name] = _ServiceProxy(factory)
+            self._proxies[name] = _ServiceProxy(factory, cache_instance=cache_instance)
         return self._proxies[name]
 
     @property
@@ -66,7 +73,7 @@ class _APIServiceProxy:
 
     @property
     def ai_coach(self) -> _ServiceProxy:
-        return self._proxy("ai_coach")
+        return self._proxy("ai_coach", cache_instance=False)
 
 
 APIService = _APIServiceProxy()

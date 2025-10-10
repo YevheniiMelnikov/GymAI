@@ -7,11 +7,12 @@ import pytest
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from bot.handlers.internal.tasks import internal_ai_coach_plan_ready
+from bot.handlers.internal.tasks import _resolve_client_and_profile, internal_ai_coach_plan_ready
 from bot.states import States
 from bot.utils.ai_coach import enqueue_workout_plan_generation, enqueue_workout_plan_update
 from config.app_settings import settings
 from core.enums import WorkoutPlanType, WorkoutType, ProfileRole, SubscriptionPeriod
+from core.exceptions import ClientNotFoundError
 from core.schemas import Client, DayExercises, Exercise, Program, Profile, Subscription
 
 
@@ -44,6 +45,85 @@ class DummyRedis:
             return False
         self.store[key] = value
         return True
+
+
+@pytest.mark.asyncio
+async def test_resolve_client_and_profile_from_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = Client.model_validate({"id": 1, "profile": 2, "credits": 0, "assigned_to": []})
+
+    calls: list[int] = []
+
+    async def fake_get_client(profile_id: int, *, use_fallback: bool = True) -> Client:
+        calls.append(profile_id)
+        return client
+
+    async def fail_get_client_by_profile_id(_: int) -> Client | None:
+        raise AssertionError("should not call profile lookup")
+
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.get_client", fake_get_client)
+    monkeypatch.setattr(
+        "bot.handlers.internal.tasks.APIService.profile.get_client_by_profile_id",
+        fail_get_client_by_profile_id,
+    )
+    result_client, profile_id = await _resolve_client_and_profile(client.id, client.profile)
+    assert result_client == client
+    assert profile_id == client.profile
+    assert calls == [client.profile]
+
+
+@pytest.mark.asyncio
+async def test_resolve_client_and_profile_fetches_when_cache_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = Client.model_validate({"id": 3, "profile": 4, "credits": 0, "assigned_to": []})
+
+    async def missing_cache(_: int, *, use_fallback: bool = True) -> Client:
+        raise ClientNotFoundError(4)
+
+    async def fetch_by_profile(profile_id: int) -> Client | None:
+        assert profile_id == client.profile
+        return client
+
+    saved: dict[str, Any] = {}
+
+    async def save_client(profile_id: int, payload: dict[str, Any]) -> None:
+        saved.update({"profile_id": profile_id, "payload": payload})
+
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.get_client", missing_cache)
+    monkeypatch.setattr(
+        "bot.handlers.internal.tasks.APIService.profile.get_client_by_profile_id",
+        fetch_by_profile,
+    )
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.save_client", save_client)
+
+    result_client, profile_id = await _resolve_client_and_profile(client.id, client.profile)
+    assert result_client == client
+    assert profile_id == client.profile
+    assert saved["profile_id"] == client.profile
+
+
+@pytest.mark.asyncio
+async def test_resolve_client_and_profile_without_profile_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = Client.model_validate({"id": 6, "profile": 7, "credits": 0, "assigned_to": []})
+
+    async def fail_cache(_: int, *, use_fallback: bool = True) -> Client:
+        raise AssertionError("cache should not be used without profile id")
+
+    async def fetch_client_by_id(client_id: int) -> Client | None:
+        assert client_id == client.id
+        return client
+
+    saved: dict[str, Any] = {}
+
+    async def save_client(profile_id: int, payload: dict[str, Any]) -> None:
+        saved.update({"profile_id": profile_id, "payload": payload})
+
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.get_client", fail_cache)
+    monkeypatch.setattr("bot.handlers.internal.tasks.APIService.profile.get_client", fetch_client_by_id)
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.save_client", save_client)
+
+    result_client, profile_id = await _resolve_client_and_profile(client.id, None)
+    assert result_client == client
+    assert profile_id == client.profile
+    assert saved["profile_id"] == client.profile
 
 
 @pytest.mark.asyncio
@@ -88,6 +168,7 @@ async def test_enqueue_workout_plan_generation_dispatch(monkeypatch: pytest.Monk
 
     assert queued is True
     assert captured["client_id"] == client.id
+    assert captured["client_profile_id"] == client.profile
     assert captured["plan_type"] == WorkoutPlanType.PROGRAM.value
     assert captured["workout_days"] == ["mon", "wed"]
 
@@ -125,6 +206,7 @@ async def test_enqueue_workout_plan_update_dispatch(monkeypatch: pytest.MonkeyPa
 
     assert queued is True
     assert captured["client_id"] == 5
+    assert captured["client_profile_id"] == 9
     assert captured["plan_type"] == WorkoutPlanType.SUBSCRIPTION.value
     assert captured["expected_workout_result"] == "squats"
 
@@ -157,8 +239,14 @@ async def test_internal_ai_plan_ready_program(monkeypatch: pytest.MonkeyPatch) -
         wishes="",
     )
 
-    async def fake_get_client(_: int) -> Client:
+    cache_calls: list[int] = []
+
+    async def fake_get_client(profile_id: int, *, use_fallback: bool = True) -> Client:
+        cache_calls.append(profile_id)
         return client
+
+    async def fake_cache_save_client(*_: Any, **__: Any) -> None:
+        return None
 
     async def fake_get_profile(_: int) -> Profile | None:
         return profile
@@ -185,6 +273,7 @@ async def test_internal_ai_plan_ready_program(monkeypatch: pytest.MonkeyPatch) -
         saved_cache.update({"client_profile_id": client_profile_id, "data": data})
 
     monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.get_client", fake_get_client)
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.save_client", fake_cache_save_client)
     monkeypatch.setattr("bot.handlers.internal.tasks.APIService.profile.get_profile", fake_get_profile)
     monkeypatch.setattr("bot.handlers.internal.tasks.APIService.workout.save_program", fake_save_program)
     monkeypatch.setattr("bot.handlers.internal.tasks.Cache.workout.save_program", fake_cache_save_program)
@@ -208,6 +297,7 @@ async def test_internal_ai_plan_ready_program(monkeypatch: pytest.MonkeyPatch) -
     request = DummyRequest(
         {
             "client_id": client.id,
+            "client_profile_id": client.profile,
             "plan_type": WorkoutPlanType.PROGRAM.value,
             "status": "success",
             "action": "create",
@@ -221,6 +311,7 @@ async def test_internal_ai_plan_ready_program(monkeypatch: pytest.MonkeyPatch) -
     assert response.status == 200
     assert saved_args["client_profile_id"] == client.profile
     assert saved_cache["client_profile_id"] == client.profile
+    assert cache_calls == [client.profile]
     assert bot.sent[0]["text"] == "new_program:en"
     key = StorageKey(bot_id=bot.id, chat_id=profile.tg_id, user_id=profile.tg_id)
     assert await storage.get_state(key) == States.program_view.state
@@ -273,7 +364,10 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
         payment_date="2024-01-01",
     )
 
-    async def fake_get_client(_: int) -> Client:
+    cache_calls: list[int] = []
+
+    async def fake_get_client(profile_id: int, *, use_fallback: bool = True) -> Client:
+        cache_calls.append(profile_id)
         return client
 
     async def fake_get_profile(_: int) -> Profile | None:
@@ -285,6 +379,9 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
     updated_payload: dict[str, Any] = {}
     cache_updates: dict[str, Any] = {}
 
+    async def fake_cache_save_client(*_: Any, **__: Any) -> None:
+        return None
+
     async def fake_update_subscription(sub_id: int, data: dict[str, Any]) -> None:
         updated_payload.update({"id": sub_id, "data": data})
 
@@ -292,6 +389,7 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
         cache_updates.update(data)
 
     monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.get_client", fake_get_client)
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.save_client", fake_cache_save_client)
     monkeypatch.setattr("bot.handlers.internal.tasks.APIService.profile.get_profile", fake_get_profile)
     monkeypatch.setattr("bot.handlers.internal.tasks.Cache.workout.get_latest_subscription", fake_get_subscription)
     monkeypatch.setattr("bot.handlers.internal.tasks.APIService.workout.update_subscription", fake_update_subscription)
@@ -308,6 +406,7 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
     request = DummyRequest(
         {
             "client_id": client.id,
+            "client_profile_id": client.profile,
             "plan_type": WorkoutPlanType.SUBSCRIPTION.value,
             "status": "success",
             "action": "update",
@@ -321,6 +420,7 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
     assert response.status == 200
     assert updated_payload["id"] == existing_subscription.id
     assert cache_updates["client_profile"] == client.profile
+    assert cache_calls == [client.profile]
     assert bot.sent[0]["text"] == "program_updated:en"
     key = StorageKey(bot_id=bot.id, chat_id=profile.tg_id, user_id=profile.tg_id)
     assert await storage.get_state(key) == States.program_view.state
@@ -360,13 +460,19 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
         payment_date="2024-01-01",
     )
 
-    async def fake_get_client(_: int) -> Client:
+    cache_calls: list[int] = []
+
+    async def fake_get_client(profile_id: int, *, use_fallback: bool = True) -> Client:
+        cache_calls.append(profile_id)
         return client
 
     async def fake_get_profile(_: int) -> Profile | None:
         return profile
 
     created_payload: dict[str, Any] = {}
+
+    async def fake_cache_save_client(*_: Any, **__: Any) -> None:
+        return None
 
     async def fake_create_subscription(
         client_profile_id: int,
@@ -394,6 +500,7 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
         saved_subscription.update({"client_profile_id": client_profile_id, "data": data})
 
     monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.get_client", fake_get_client)
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.save_client", fake_cache_save_client)
     monkeypatch.setattr("bot.handlers.internal.tasks.APIService.profile.get_profile", fake_get_profile)
     monkeypatch.setattr("bot.handlers.internal.tasks.APIService.workout.create_subscription", fake_create_subscription)
     monkeypatch.setattr("bot.handlers.internal.tasks.Cache.workout.save_subscription", fake_cache_save_subscription)
@@ -417,6 +524,7 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
     request = DummyRequest(
         {
             "client_id": client.id,
+            "client_profile_id": client.profile,
             "plan_type": WorkoutPlanType.SUBSCRIPTION.value,
             "status": "success",
             "action": "create",
@@ -431,6 +539,7 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
     assert response.status == 200
     assert created_payload["client_profile_id"] == client.profile
     assert saved_subscription["client_profile_id"] == client.profile
+    assert cache_calls == [client.profile]
     assert saved_subscription["data"]["id"] == 42
     assert bot.sent[0]["text"] == "new_program:en"
     key = StorageKey(bot_id=bot.id, chat_id=profile.tg_id, user_id=profile.tg_id)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Any, Iterable, Mapping, MutableMapping, cast
 
@@ -27,8 +28,8 @@ def setup_celery_signals() -> None:
     _SIGNALS_ATTACHED = True
 
 
-def _on_after_setup_task_logger(logger_: logging.Logger, **_: Any) -> None:
-    logger_.setLevel(logging.INFO)
+def _on_after_setup_task_logger(logger: logging.Logger, **_: Any) -> None:
+    logger.setLevel(logging.INFO)
 
 
 def _on_worker_ready(sender: Any, **_: Any) -> None:
@@ -47,6 +48,12 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
         consumer = worker.consumer
         queues_iter: Iterable[Any] = getattr(consumer, "queues", [])
         queue_names = sorted({str(getattr(queue, "name", "")) for queue in queues_iter if getattr(queue, "name", "")})
+        if not queue_names and getattr(consumer, "task_consumer", None) is not None:
+            task_consumer = consumer.task_consumer
+            task_queues: Iterable[Any] = getattr(task_consumer, "queues", [])
+            queue_names = sorted(
+                {str(getattr(queue, "name", "")) for queue in task_queues if getattr(queue, "name", "")}
+            )
 
     registered_missing: list[str] = []
     registered_ok: bool = False
@@ -68,9 +75,13 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
         f"vhost={vhost} queues={queue_names} registered_ok={registered_ok} missing={registered_missing}"
     )
 
+    strict_mode = os.getenv("CELERY_STRICT", "0") == "1"
+
     if "ai_coach" not in queue_names:
         logger.error(f"ai_coach queue missing on worker hostname={worker.hostname} queues={queue_names}")
-        raise SystemExit("ai_coach queue is not registered on this worker")
+        if strict_mode:
+            raise SystemExit("ai_coach queue missing")
+        return
 
     if not registered_ok:
         logger.error(
@@ -78,7 +89,9 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
             f"hostname={worker.hostname} missing={registered_missing} "
             f"available={sorted(worker.app.tasks.keys())}"
         )
-        raise SystemExit("Required Celery tasks are not registered")
+        if strict_mode:
+            raise SystemExit("required celery tasks missing")
+        return
 
 
 def _on_task_prerun(task_id: str, task: Task, **_: Any) -> None:

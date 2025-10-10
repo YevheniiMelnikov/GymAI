@@ -1115,6 +1115,13 @@ core_services_pkg.APIService = types.SimpleNamespace(
     workout=types.SimpleNamespace(),
     ai_coach=types.SimpleNamespace(),
 )
+
+
+async def _noop_async(*_args: Any, **_kwargs: Any) -> None:
+    return None
+
+
+core_services_pkg.APIService.workout.get_latest_program = _noop_async
 core_services_pkg.get_gif_manager = lambda: types.SimpleNamespace(find_gif=lambda *a, **k: None)
 core_services_pkg.get_avatar_manager = lambda: types.SimpleNamespace(bucket_name="")
 sys.modules.setdefault("core.services", core_services_pkg)

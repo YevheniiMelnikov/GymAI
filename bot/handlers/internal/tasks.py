@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 from aiohttp import web
 from aiogram import Bot
@@ -14,7 +15,7 @@ from bot.states import States
 from bot.texts.text_manager import msg_text
 from bot.utils.profiles import get_clients_to_survey
 from config.app_settings import settings
-from core.exceptions import SubscriptionNotFoundError
+from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
 from core.containers import get_container
 from core.cache import Cache
 from core.enums import CoachType, SubscriptionPeriod, WorkoutPlanType
@@ -22,7 +23,7 @@ from bot.utils.chat import send_message
 from bot.utils.bot import get_webapp_url
 from core.services import APIService
 from bot.utils.ai_coach import enqueue_workout_plan_update
-from core.schemas import Program, Profile, Subscription
+from core.schemas import Client, Program, Profile, Subscription
 from cognee.api.v1.prune import prune  # pyrefly: ignore[import-error]
 from core.utils.redis_lock import get_redis_client
 
@@ -40,6 +41,32 @@ async def _claim_plan_delivery(request_id: str) -> bool:
         return True
 
 
+async def _resolve_client_and_profile(
+    client_id: int,
+    client_profile_id: int | None,
+) -> tuple[Client, int]:
+    profile_id = client_profile_id
+    client: Client | None = None
+
+    if profile_id is not None:
+        try:
+            client = await Cache.client.get_client(profile_id)
+        except ClientNotFoundError:
+            client = await APIService.profile.get_client_by_profile_id(profile_id)
+            if client is not None:
+                await Cache.client.save_client(profile_id, client.model_dump(mode="json"))
+        if client is not None:
+            return client, profile_id
+
+    client = await APIService.profile.get_client(client_id)
+    if client is None:
+        raise ClientNotFoundError(client_id)
+
+    profile_id = client.profile
+    await Cache.client.save_client(profile_id, client.model_dump(mode="json"))
+    return client, profile_id
+
+
 async def internal_send_daily_survey(request: web.Request) -> web.Response:
     if request.headers.get("Authorization") != f"Api-Key {settings.API_KEY}":
         return web.json_response({"detail": "Forbidden"}, status=403)
@@ -55,7 +82,8 @@ async def internal_send_daily_survey(request: web.Request) -> web.Response:
         logger.info("No clients to survey today")
         return web.json_response({"result": "no_clients"})
 
-    yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
+    now = datetime.now(ZoneInfo(settings.TIME_ZONE))
+    yesterday = (now - timedelta(days=1)).strftime("%A").lower()
 
     for client_profile in clients:
         try:
@@ -163,12 +191,33 @@ async def internal_ai_coach_plan_ready(request: web.Request) -> web.Response:
         return web.json_response({"detail": "Missing client_id"}, status=400)
 
     client_id = int(client_id_raw)
+    client_profile_id: int | None = None
+    if "client_profile_id" in payload:
+        try:
+            client_profile_id = int(payload["client_profile_id"])
+        except (TypeError, ValueError):
+            return web.json_response({"detail": "Invalid client_profile_id"}, status=400)
+
+    logger.info(
+        f"ai_plan_callback_received action={action} status={status} plan_type={plan_type.value} "
+        f"client_id={client_id} profile_id={client_profile_id} request_id={request_id}"
+    )
 
     try:
-        client = await Cache.client.get_client(client_id)
-    except Exception as exc:  # noqa: BLE001
-        logger.error(f"Client fetch failed client_id={client_id} request_id={request_id}: {exc}")
+        client, resolved_profile_id = await _resolve_client_and_profile(client_id, client_profile_id)
+    except ClientNotFoundError:
+        logger.error(f"Client fetch failed client_id={client_id} request_id={request_id}: not found")
         return web.json_response({"detail": "Client not found"}, status=404)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"Client lookup failed client_id={client_id} request_id={request_id}: {exc}")
+        return web.json_response({"detail": "Client lookup failed"}, status=500)
+
+    if client_profile_id is not None and resolved_profile_id != client_profile_id:
+        logger.warning(
+            "client_profile_mismatch "
+            f"client_id={client_id} payload_profile={client_profile_id} actual={resolved_profile_id}"
+        )
+    client_profile_id = resolved_profile_id
 
     profile: Profile | None = await APIService.profile.get_profile(client.profile)
     if profile is None:
@@ -222,6 +271,13 @@ async def internal_ai_coach_plan_ready(request: web.Request) -> web.Response:
     if not isinstance(plan_payload, dict):
         logger.error(f"Plan payload missing client_id={client_id} request_id={request_id}")
         return web.json_response({"detail": "Invalid plan payload"}, status=400)
+
+    plan_keys = ",".join(sorted(plan_payload.keys()))
+    logger.info(
+        f"ai_plan_payload action={action} status={status} plan_type={plan_type.value} "
+        f"client_id={client_id} profile_id={client_profile_id} request_id={request_id} "
+        f"plan_fields={plan_keys} plan_size={len(plan_payload)}"
+    )
 
     profile_dump = profile.model_dump()
     client_dump = client.model_dump()

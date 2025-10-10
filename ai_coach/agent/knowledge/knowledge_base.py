@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 import os
 from dataclasses import asdict, is_dataclass
 from hashlib import sha256
@@ -52,6 +53,7 @@ class KnowledgeBase:
     _cognify_locks: LockCache = LockCache()
     _user: Any | None = None
     _list_data_supports_user: bool | None = None
+    _list_data_requires_user: bool | None = None
     _has_datasets_module: bool | None = None
     _warned_missing_user: bool = False
 
@@ -130,6 +132,10 @@ class KnowledgeBase:
     @classmethod
     async def search(cls, query: str, client_id: int, k: int | None = None) -> list[str]:
         """Search across client and global datasets."""
+        normalized = query.strip()
+        if not normalized:
+            logger.debug(f"Knowledge search skipped client_id={client_id}: empty query")
+            return []
         user = await cls._get_cognee_user()
         await cls._ensure_profile_indexed(client_id, user)
         datasets = [cls._dataset_name(client_id), cls.GLOBAL_DATASET]
@@ -141,7 +147,7 @@ class KnowledgeBase:
             }
             if k is not None:
                 params["top_k"] = k
-            return await cognee.search(query, **params)
+            return await cognee.search(normalized, **params)
         except (PermissionDeniedError, DatasetNotFoundError) as e:
             logger.warning(f"Search issue client_id={client_id}: {e}")
         except Exception as e:
@@ -219,8 +225,8 @@ class KnowledgeBase:
         user_ns: Any | None = cls._to_user_or_none(user)
         try:
             data = await cls._fetch_dataset_rows(list_data_callable, dataset, user_ns)
-        except Exception as e:
-            logger.warning(f"History fetch failed client_id={client_id}: {e}")
+        except Exception:
+            logger.info(f"No message history found for client_id={client_id}")
             return []
         messages: list[str] = []
         for item in data:
@@ -292,6 +298,22 @@ class KnowledgeBase:
         return cls._CLIENT_DATASET_NAMESPACE
 
     @classmethod
+    def _describe_list_data(cls, list_data: Callable[..., Awaitable[Iterable[Any]]]) -> tuple[bool | None, bool | None]:
+        try:
+            signature = inspect.signature(list_data)
+        except (TypeError, ValueError):
+            return None, None
+        parameter = signature.parameters.get("user")
+        if parameter is None:
+            return False, False
+        supports_keyword = parameter.kind in (
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            inspect.Parameter.KEYWORD_ONLY,
+        )
+        requires_user = parameter.default is inspect._empty
+        return supports_keyword, requires_user
+
+    @classmethod
     async def _fetch_dataset_rows(
         cls,
         list_data: Callable[..., Awaitable[Iterable[Any]]],
@@ -299,16 +321,47 @@ class KnowledgeBase:
         user_ns: Any | None,
     ) -> list[Any]:
         """Fetch dataset rows, gracefully handling legacy signatures."""
+        if user_ns is not None:
+            if cls._list_data_supports_user is None or cls._list_data_requires_user is None:
+                supports, requires = cls._describe_list_data(list_data)
+                if supports is not None:
+                    cls._list_data_supports_user = supports
+                if requires is not None:
+                    cls._list_data_requires_user = requires
+
         if user_ns is not None and cls._list_data_supports_user is not False:
             try:
                 rows = await list_data(dataset, user=user_ns)
             except TypeError:
-                logger.debug("cognee.datasets.list_data does not accept 'user', retrying without it")
+                logger.debug("cognee.datasets.list_data rejected keyword 'user', retrying without keyword")
                 cls._list_data_supports_user = False
+                if cls._list_data_requires_user:
+                    logger.debug("cognee.datasets.list_data requires user context, retrying positional call")
+                    rows = await list_data(dataset, user_ns)
+                    cls._list_data_supports_user = True
+                    return list(rows)
             else:
                 cls._list_data_supports_user = True
                 return list(rows)
-        rows = await list_data(dataset)
+
+        if user_ns is not None and cls._list_data_requires_user:
+            logger.debug("cognee.datasets.list_data requires user context, retrying positional call")
+            rows = await list_data(dataset, user_ns)
+            cls._list_data_supports_user = True
+            return list(rows)
+
+        try:
+            rows = await list_data(dataset)
+        except TypeError as exc:
+            if user_ns is not None:
+                logger.debug(
+                    f"cognee.datasets.list_data raised {exc.__class__.__name__}: retrying with positional user"
+                )
+                rows = await list_data(dataset, user_ns)
+                cls._list_data_supports_user = True
+                cls._list_data_requires_user = True
+                return list(rows)
+            raise
         return list(rows)
 
     @staticmethod
