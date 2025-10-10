@@ -1,5 +1,4 @@
 import asyncio
-from typing import Optional
 
 from aiogram import Bot
 from celery.result import AsyncResult
@@ -260,12 +259,7 @@ async def _notify_plan_failure(
         await bot.send_message(chat_id=chat_id, text=message)
     except Exception as exc:  # noqa: BLE001
         logger.error(f"ai_plan_failure_user_message_failed request_id={request_id} error={exc!s}")
-
-    admin_message = f"AI plan delivery failed action={action} request_id={request_id} detail={detail}"
-    try:
-        await bot.send_message(settings.ADMIN_ID, admin_message)
-    except Exception as exc:  # noqa: BLE001
-        logger.error(f"ai_plan_failure_admin_message_failed request_id={request_id} error={exc!s}")
+    logger.error(f"ai_plan_failure_notified action={action} request_id={request_id} detail={detail}")
 
 
 async def _watch_plan_delivery(
@@ -282,7 +276,21 @@ async def _watch_plan_delivery(
     delivered_key = f"ai:plan:delivered:{request_id}"
     failure_key = f"ai:plan:notify_failed:{request_id}"
     poll_interval = max(1, settings.AI_PLAN_NOTIFY_POLL_INTERVAL)
-    timeout = max(poll_interval, settings.AI_PLAN_NOTIFY_TIMEOUT)
+    notify_backoff = 0
+    notify_retries = 0
+    try:
+        from core.tasks import notify_ai_plan_ready_task  # local import to avoid circular deps
+
+        raw_backoff = getattr(notify_ai_plan_ready_task, "retry_backoff", 0) or 0
+        notify_retries = int(getattr(notify_ai_plan_ready_task, "max_retries", 0) or 0)
+        notify_backoff = int(raw_backoff) if isinstance(raw_backoff, (int, float)) else 0
+    except Exception:
+        notify_backoff = 0
+        notify_retries = 0
+    notify_window = notify_backoff * notify_retries
+    buffer = 120
+    computed_timeout = settings.AI_COACH_TIMEOUT + notify_window + buffer
+    timeout = max(poll_interval, settings.AI_PLAN_NOTIFY_TIMEOUT, computed_timeout)
     elapsed = 0
     logger.debug(f"ai_plan_watch_start action={action} request_id={request_id} timeout={timeout}")
     try:
@@ -291,25 +299,33 @@ async def _watch_plan_delivery(
             if delivered:
                 logger.debug(f"ai_plan_watch_done action={action} request_id={request_id} status=delivered")
                 return
-            failure_detail_raw: Optional[str] = await client.get(failure_key)
-            if failure_detail_raw:
+            failure_detail_raw = await client.get(failure_key)
+            if isinstance(failure_detail_raw, (bytes, bytearray)):
+                failure_detail = failure_detail_raw.decode("utf-8", errors="replace")
+            else:
+                failure_detail = failure_detail_raw
+            if failure_detail:
                 await _notify_plan_failure(
                     bot=bot,
                     chat_id=chat_id,
                     language=language,
                     action=action,
                     request_id=request_id,
-                    detail=failure_detail_raw,
+                    detail=str(failure_detail),
                 )
                 return
             await asyncio.sleep(poll_interval)
             elapsed += poll_interval
         failure_detail_raw = await client.get(failure_key)
-        if not failure_detail_raw:
-            failure_detail_raw = "timeout"
+        if isinstance(failure_detail_raw, (bytes, bytearray)):
+            failure_detail = failure_detail_raw.decode("utf-8", errors="replace")
+        else:
+            failure_detail = failure_detail_raw
+        if not failure_detail:
+            failure_detail = "timeout"
             await client.set(
                 failure_key,
-                failure_detail_raw,
+                failure_detail,
                 ex=settings.AI_PLAN_NOTIFY_FAILURE_TTL,
                 nx=True,
             )
@@ -319,7 +335,7 @@ async def _watch_plan_delivery(
             language=language,
             action=action,
             request_id=request_id,
-            detail=failure_detail_raw,
+            detail=str(failure_detail),
         )
     except Exception as exc:  # noqa: BLE001
         logger.error(f"ai_plan_watch_failed action={action} request_id={request_id} error={exc!s}")
