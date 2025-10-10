@@ -22,7 +22,7 @@ from core.enums import CoachType, SubscriptionPeriod, WorkoutPlanType
 from bot.utils.chat import send_message
 from bot.utils.bot import get_webapp_url
 from core.services import APIService
-from bot.utils.ai_coach import enqueue_workout_plan_update
+from bot.utils.ai_coach import enqueue_workout_plan_update, schedule_ai_plan_notification_watch
 from core.schemas import Client, Program, Profile, Subscription
 from cognee.api.v1.prune import prune  # pyrefly: ignore[import-error]
 from core.utils.redis_lock import get_redis_client
@@ -154,6 +154,14 @@ async def internal_send_workout_result(request: web.Request) -> web.Response:
         if not queued:
             logger.error(f"AI workout update dispatch failed client_id={client_id} request_id={request_id}")
             return web.json_response({"detail": "dispatch_failed"}, status=503)
+        if profile:
+            schedule_ai_plan_notification_watch(
+                bot=bot,
+                chat_id=profile.tg_id,
+                language=language,
+                action="update",
+                request_id=request_id,
+            )
         return web.json_response({"result": "queued", "request_id": request_id})
     else:
         await send_message(

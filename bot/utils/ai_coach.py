@@ -1,7 +1,11 @@
+import asyncio
+from typing import Optional
+
+from aiogram import Bot
 from celery.result import AsyncResult
 from loguru import logger
 
-
+from bot.texts.text_manager import msg_text
 from config.app_settings import settings
 from core.cache import Cache
 from core.celery_app import app as celery_app
@@ -9,6 +13,7 @@ from core.debug_celery import trace_publish
 from core.enums import WorkoutPlanType, WorkoutType
 from core.schemas import Client, DayExercises, Program, Subscription
 from core.services.internal import APIService
+from core.utils.redis_lock import get_redis_client
 
 
 async def generate_workout_plan(
@@ -221,3 +226,126 @@ async def enqueue_workout_plan_update(
         )
         return False
     return True
+
+
+async def _notify_plan_failure(
+    *,
+    bot: Bot,
+    chat_id: int,
+    language: str,
+    action: str,
+    request_id: str,
+    detail: str,
+) -> None:
+    client = get_redis_client()
+    reported_key = f"ai:plan:failure_notified:{request_id}"
+    try:
+        reported = bool(
+            await client.set(
+                reported_key,
+                "1",
+                nx=True,
+                ex=settings.AI_PLAN_NOTIFY_FAILURE_TTL,
+            )
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"ai_plan_failure_flag_skip request_id={request_id} error={exc!s}")
+        reported = True
+    if not reported:
+        logger.info(f"ai_plan_failure_notification_skipped request_id={request_id} already_reported=1")
+        return
+
+    message = msg_text("coach_agent_error", language).format(tg=settings.TG_SUPPORT_CONTACT)
+    try:
+        await bot.send_message(chat_id=chat_id, text=message)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"ai_plan_failure_user_message_failed request_id={request_id} error={exc!s}")
+
+    admin_message = f"AI plan delivery failed action={action} request_id={request_id} detail={detail}"
+    try:
+        await bot.send_message(settings.ADMIN_ID, admin_message)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"ai_plan_failure_admin_message_failed request_id={request_id} error={exc!s}")
+
+
+async def _watch_plan_delivery(
+    *,
+    bot: Bot,
+    chat_id: int,
+    language: str,
+    action: str,
+    request_id: str,
+) -> None:
+    if not request_id:
+        return
+    client = get_redis_client()
+    delivered_key = f"ai:plan:delivered:{request_id}"
+    failure_key = f"ai:plan:notify_failed:{request_id}"
+    poll_interval = max(1, settings.AI_PLAN_NOTIFY_POLL_INTERVAL)
+    timeout = max(poll_interval, settings.AI_PLAN_NOTIFY_TIMEOUT)
+    elapsed = 0
+    logger.debug(f"ai_plan_watch_start action={action} request_id={request_id} timeout={timeout}")
+    try:
+        while elapsed < timeout:
+            delivered = bool(await client.exists(delivered_key))
+            if delivered:
+                logger.debug(f"ai_plan_watch_done action={action} request_id={request_id} status=delivered")
+                return
+            failure_detail_raw: Optional[str] = await client.get(failure_key)
+            if failure_detail_raw:
+                await _notify_plan_failure(
+                    bot=bot,
+                    chat_id=chat_id,
+                    language=language,
+                    action=action,
+                    request_id=request_id,
+                    detail=failure_detail_raw,
+                )
+                return
+            await asyncio.sleep(poll_interval)
+            elapsed += poll_interval
+        failure_detail_raw = await client.get(failure_key)
+        if not failure_detail_raw:
+            failure_detail_raw = "timeout"
+            await client.set(
+                failure_key,
+                failure_detail_raw,
+                ex=settings.AI_PLAN_NOTIFY_FAILURE_TTL,
+                nx=True,
+            )
+        await _notify_plan_failure(
+            bot=bot,
+            chat_id=chat_id,
+            language=language,
+            action=action,
+            request_id=request_id,
+            detail=failure_detail_raw,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"ai_plan_watch_failed action={action} request_id={request_id} error={exc!s}")
+
+
+def schedule_ai_plan_notification_watch(
+    *,
+    bot: Bot,
+    chat_id: int,
+    language: str,
+    action: str,
+    request_id: str,
+) -> None:
+    if not request_id:
+        return
+
+    async def _runner() -> None:
+        try:
+            await _watch_plan_delivery(
+                bot=bot,
+                chat_id=chat_id,
+                language=language,
+                action=action,
+                request_id=request_id,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.error(f"ai_plan_watch_runner_failed action={action} request_id={request_id} error={exc!s}")
+
+    asyncio.create_task(_runner(), name=f"ai-plan-watch-{request_id}")

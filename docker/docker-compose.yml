@@ -121,7 +121,7 @@ services:
     entrypoint: /app/docker/entrypoint.sh
     command: celery -A config.celery:celery_app worker -l info -Q default,critical,maintenance,ai_coach -P threads
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "host.docker.internal:172.17.0.1"
     restart: unless-stopped
 
   beat:
