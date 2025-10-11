@@ -290,7 +290,12 @@ async def _watch_plan_delivery(
         notify_retries = 0
     if notify_backoff <= 0:
         notify_backoff = 30
-    notify_window = notify_backoff * max(notify_retries, 0)
+    notify_window = 0
+    if notify_retries > 0:
+        step = notify_backoff
+        for _ in range(notify_retries):
+            notify_window += step
+            step *= 2
     timeout = max(
         settings.AI_PLAN_NOTIFY_TIMEOUT,
         settings.AI_COACH_TIMEOUT + notify_window + 120,
@@ -323,6 +328,14 @@ async def _watch_plan_delivery(
             elapsed += poll_interval
         logger.warning(
             f"ai_plan_watch_timeout action={action} request_id={request_id} elapsed={elapsed} timeout={timeout}"
+        )
+        await _notify_plan_failure(
+            bot=bot,
+            chat_id=chat_id,
+            language=language,
+            action=action,
+            request_id=request_id,
+            detail="timeout",
         )
     except Exception as exc:  # noqa: BLE001
         logger.error(f"ai_plan_watch_failed action={action} request_id={request_id} error={exc!s}")
