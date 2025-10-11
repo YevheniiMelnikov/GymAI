@@ -46,7 +46,7 @@ from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
 from core.services import APIService
 from bot.keyboards import payment_kb
 from bot.utils.credits import available_packages
-from bot.utils.ai_coach import enqueue_workout_plan_generation
+from bot.utils.ai_coach import enqueue_workout_plan_generation, schedule_ai_plan_notification_watch
 from core.enums import WorkoutPlanType, WorkoutType
 from bot.utils.credits import available_ai_services
 from core.utils.idempotency import acquire_once
@@ -245,7 +245,8 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
             return
 
         logger.debug(
-            f"Program generation started for client_id={client.id} ttl={settings.LLM_COOLDOWN} request_id={request_id}"
+            "AI coach plan generation started plan_type=program "
+            f"client_id={client.id} request_id={request_id} ttl={settings.LLM_COOLDOWN}"
         )
 
     await APIService.profile.adjust_client_credits(profile.id, -required)
@@ -278,9 +279,14 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
                 callback_query,
                 msg_text("coach_agent_error", profile.language).format(tg=settings.TG_SUPPORT_CONTACT),
             )
-            await bot.send_message(
-                settings.ADMIN_ID,
-                f"AI program generation dispatch failed for client {client.id}",
+            logger.error(f"ai_plan_dispatch_failed plan_type=program client_id={client.id} request_id={request_id}")
+        else:
+            schedule_ai_plan_notification_watch(
+                bot=bot,
+                chat_id=profile.tg_id,
+                language=profile.language,
+                action="create",
+                request_id=request_id,
             )
         return
 
@@ -305,6 +311,7 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     profile = Profile.model_validate(data.get("profile"))
     lang = profile.language or settings.DEFAULT_LANG
     days: list[str] = data.get("workout_days", [])
+    bot = cast(Bot, callback_query.bot)
 
     if callback_query.data != "complete":
         data_val = callback_query.data
@@ -347,11 +354,15 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
             callback_query,
             msg_text("coach_agent_error", lang).format(tg=settings.TG_SUPPORT_CONTACT),
         )
-        bot = cast(Bot, callback_query.bot)
-        await bot.send_message(
-            settings.ADMIN_ID,
-            f"AI subscription generation dispatch failed for client {client.id}",
-        )
+        logger.error(f"ai_plan_dispatch_failed plan_type=subscription client_id={client.id} request_id={request_id}")
+        return
+    schedule_ai_plan_notification_watch(
+        bot=bot,
+        chat_id=profile.tg_id,
+        language=lang,
+        action="create",
+        request_id=request_id,
+    )
 
 
 @menu_router.callback_query(States.profile)
