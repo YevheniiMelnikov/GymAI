@@ -1,7 +1,9 @@
 """Common authentication helpers for internal endpoints."""
+
 from __future__ import annotations
 
 import hmac
+from ipaddress import ip_address, ip_network
 from functools import wraps
 from typing import Awaitable, Callable, TypeVar
 
@@ -26,11 +28,38 @@ def _client_ip(request: web.Request) -> str | None:
 
 
 def _is_ip_allowed(request: web.Request) -> tuple[bool, str | None]:
-    allowlist = [ip for ip in settings.INTERNAL_IP_ALLOWLIST if ip]
+    allowlist = [entry.strip() for entry in settings.INTERNAL_IP_ALLOWLIST if entry.strip()]
     client_ip = _client_ip(request)
     if not allowlist:
         return True, client_ip
-    return client_ip in allowlist, client_ip
+    if not client_ip:
+        return False, client_ip
+    try:
+        client_address = ip_address(client_ip)
+    except ValueError:
+        logger.debug(f"internal_auth_invalid_ip client_ip={client_ip}")
+        return False, client_ip
+
+    for candidate in allowlist:
+        try:
+            if "/" in candidate:
+                network = ip_network(candidate, strict=False)
+                if client_address in network:
+                    return True, client_ip
+            else:
+                if client_address == ip_address(candidate):
+                    return True, client_ip
+        except ValueError:
+            logger.debug(f"internal_auth_invalid_allowlist_entry entry={candidate}")
+            continue
+    return False, client_ip
+
+
+def _extract_api_key(request: web.Request) -> str:
+    header = request.headers.get("Authorization", "")
+    if header.lower().startswith("api-key "):
+        return header.split(" ", 1)[1].strip()
+    return ""
 
 
 def require_internal_auth(handler: Handler) -> Handler:
@@ -40,37 +69,45 @@ def require_internal_auth(handler: Handler) -> Handler:
             return await handler(request, *args, **kwargs)
 
         allowed_ip, client_ip = _is_ip_allowed(request)
-        expected_key = settings.INTERNAL_API_KEY or ""
-        provided_key = request.headers.get("X-Internal-Api-Key", "")
-        has_expected_key = bool(expected_key)
-        has_provided_key = bool(provided_key)
+        expected_internal_key = (settings.INTERNAL_API_KEY or "").strip()
+        provided_internal_key = (request.headers.get("X-Internal-Api-Key", "") or "").strip()
+        provided_auth_key = _extract_api_key(request)
+        has_any_key = bool(provided_internal_key or provided_auth_key)
 
-        if not allowed_ip:
-            logger.warning(
-                f"internal_auth_denied path={request.rel_url} client_ip={client_ip or 'unknown'} "
-                f"has_internal_key={has_provided_key} reason=ip_not_allowed"
-            )
-            payload = {"code": "unauthorized", "message": "Unauthorized"}
-            return web.json_response(payload, status=401)
+        if expected_internal_key:
+            key_valid = False
+            if provided_internal_key and hmac.compare_digest(provided_internal_key, expected_internal_key):
+                key_valid = True
+            elif provided_auth_key and hmac.compare_digest(provided_auth_key, expected_internal_key):
+                key_valid = True
 
-        if has_expected_key:
-            if has_provided_key and hmac.compare_digest(provided_key, expected_key):
+            if not key_valid:
+                reason = "missing_key" if not has_any_key else "key_mismatch"
+                logger.warning(
+                    f"internal_auth_denied path={request.rel_url} client_ip={client_ip or 'unknown'} "
+                    f"has_key={has_any_key} allowed_ip={allowed_ip} reason={reason}"
+                )
+                payload = {"code": "unauthorized", "message": "Unauthorized"}
+                return web.json_response(payload, status=401)
+
+            return await handler(request, *args, **kwargs)
+
+        api_key = (settings.API_KEY or "").strip()
+        if api_key:
+            if provided_internal_key and hmac.compare_digest(provided_internal_key, api_key):
                 return await handler(request, *args, **kwargs)
-            reason = "missing_key" if not has_provided_key else "key_mismatch"
-            logger.warning(
-                f"internal_auth_denied path={request.rel_url} client_ip={client_ip or 'unknown'} "
-                f"has_internal_key={has_provided_key} reason={reason}"
-            )
-            payload = {"code": "unauthorized", "message": "Unauthorized"}
-            return web.json_response(payload, status=401)
-
-        authorization = request.headers.get("Authorization", "")
-        if authorization.startswith("Api-Key "):
-            fallback_key = authorization.split(" ", 1)[1].strip()
-            api_key = settings.API_KEY or ""
-            if fallback_key and api_key and hmac.compare_digest(fallback_key, api_key):
+            if provided_auth_key and hmac.compare_digest(provided_auth_key, api_key):
                 return await handler(request, *args, **kwargs)
 
-        return await handler(request, *args, **kwargs)
+        if allowed_ip:
+            return await handler(request, *args, **kwargs)
+
+        reason = "ip_not_allowed" if client_ip else "missing_ip"
+        logger.warning(
+            f"internal_auth_denied path={request.rel_url} client_ip={client_ip or 'unknown'} "
+            f"has_key={has_any_key} allowed_ip={allowed_ip} reason={reason}"
+        )
+        payload = {"code": "unauthorized", "message": "Unauthorized"}
+        return web.json_response(payload, status=401)
 
     return wrapped  # type: ignore[return-value]

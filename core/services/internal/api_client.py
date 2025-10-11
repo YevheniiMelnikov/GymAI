@@ -93,6 +93,7 @@ class APIClient:
         *,
         allow_statuses: set[int] | None = None,
         client: httpx.AsyncClient | None = None,
+        retry_server_errors: bool = True,
     ) -> tuple[int, Any | None]:
         headers = headers or {}
         if self.use_default_auth and self.api_key:
@@ -126,7 +127,8 @@ class APIClient:
                 except httpx.HTTPStatusError as exc:
                     status = exc.response.status_code if exc.response else response.status_code
                     body = exc.response.text if exc.response else ""
-                    if status in {429} or status >= 500:
+                    retryable = status == 429 or (retry_server_errors and status >= 500)
+                    if retryable:
                         if attempt < attempts:
                             logger.warning(
                                 f"Retrying {method.upper()} {url} after HTTP {status} (attempt {attempt}/{attempts})"

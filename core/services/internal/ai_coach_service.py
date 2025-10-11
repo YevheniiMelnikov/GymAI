@@ -203,6 +203,7 @@ class AiCoachService(APIClient):
                     headers=headers or None,
                     timeout=self.settings.AI_COACH_TIMEOUT,
                     client=client,
+                    retry_server_errors=False,
                 )
             except (APIClientHTTPError, APIClientTransportError):
                 logger.error(f"AI coach request failed request_id={request_id} client_id={payload.client_id}")

@@ -69,27 +69,6 @@ async def test_internal_auth_rejects_wrong_key(monkeypatch: pytest.MonkeyPatch) 
 
 
 @pytest.mark.asyncio
-async def test_internal_auth_rejects_disallowed_ip(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "DEBUG", False)
-    monkeypatch.setattr(settings, "INTERNAL_API_KEY", "secret")
-    monkeypatch.setattr(settings, "API_KEY", "external")
-    monkeypatch.setattr(settings, "INTERNAL_IP_ALLOWLIST", ["10.0.0.1"])
-
-    @require_internal_auth
-    async def handler(request: web.Request) -> web.Response:
-        return web.json_response({"ok": True})
-
-    request = make_mocked_request(
-        "POST",
-        "/internal/tasks/ai_plan_ready/",
-        headers={"X-Internal-Api-Key": "secret"},
-        transport=DummyTransport("10.0.0.2"),
-    )
-    response = await _call(handler, request)
-    assert response.status == 401
-
-
-@pytest.mark.asyncio
 async def test_internal_auth_without_key_uses_ip_allowlist(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "DEBUG", False)
     monkeypatch.setattr(settings, "INTERNAL_API_KEY", None)
@@ -126,6 +105,69 @@ async def test_internal_auth_authorization_fallback(monkeypatch: pytest.MonkeyPa
         "/internal/tasks/ai_plan_ready/",
         headers={"Authorization": "Api-Key external"},
         transport=DummyTransport("10.0.0.1"),
+    )
+    response = await _call(handler, request)
+    assert response.status == 200
+
+
+@pytest.mark.asyncio
+async def test_internal_auth_allows_key_without_ip_match(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "DEBUG", False)
+    monkeypatch.setattr(settings, "INTERNAL_API_KEY", "secret")
+    monkeypatch.setattr(settings, "API_KEY", "external")
+    monkeypatch.setattr(settings, "INTERNAL_IP_ALLOWLIST", ["10.0.0.1"])
+
+    @require_internal_auth
+    async def handler(request: web.Request) -> web.Response:
+        return web.json_response({"ok": True})
+
+    request = make_mocked_request(
+        "POST",
+        "/internal/tasks/ai_plan_ready/",
+        headers={"X-Internal-Api-Key": "secret"},
+        transport=DummyTransport("10.0.0.9"),
+    )
+    response = await _call(handler, request)
+    assert response.status == 200
+
+
+@pytest.mark.asyncio
+async def test_internal_auth_requires_ip_or_key_when_unsecured(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "DEBUG", False)
+    monkeypatch.setattr(settings, "INTERNAL_API_KEY", None)
+    monkeypatch.setattr(settings, "API_KEY", "external")
+    monkeypatch.setattr(settings, "INTERNAL_IP_ALLOWLIST", ["10.0.0.1"])
+
+    @require_internal_auth
+    async def handler(request: web.Request) -> web.Response:
+        return web.json_response({"ok": True})
+
+    request = make_mocked_request(
+        "POST",
+        "/internal/tasks/ai_plan_ready/",
+        headers={},
+        transport=DummyTransport("10.0.0.9"),
+    )
+    response = await _call(handler, request)
+    assert response.status == 401
+
+
+@pytest.mark.asyncio
+async def test_internal_auth_supports_cidr_allowlist(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "DEBUG", False)
+    monkeypatch.setattr(settings, "INTERNAL_API_KEY", None)
+    monkeypatch.setattr(settings, "API_KEY", "external")
+    monkeypatch.setattr(settings, "INTERNAL_IP_ALLOWLIST", ["10.0.0.0/24"])
+
+    @require_internal_auth
+    async def handler(request: web.Request) -> web.Response:
+        return web.json_response({"ok": True})
+
+    request = make_mocked_request(
+        "POST",
+        "/internal/tasks/ai_plan_ready/",
+        headers={},
+        transport=DummyTransport("10.0.0.55"),
     )
     response = await _call(handler, request)
     assert response.status == 200
