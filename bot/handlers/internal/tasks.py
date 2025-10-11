@@ -133,11 +133,6 @@ async def _process_ai_plan_ready(
     client_profile_id: int | None,
 ) -> None:
     try:
-        logger.info(
-            f"ai_plan_callback_received action={action} status={status} plan_type={plan_type.value} "
-            f"client_id={client_id} profile_hint={client_profile_id} request_id={request_id}"
-        )
-
         payload_profile_id = client_profile_id
         client, resolved_profile_id, resolved_client_profile_id = await _resolve_client_and_profile(
             client_id, client_profile_id
@@ -147,8 +142,8 @@ async def _process_ai_plan_ready(
             resolved_client_profile_id,
         }:
             logger.warning(
-                "client_profile_payload_mismatch "
-                f"client_id={client_id} payload={payload_profile_id} profile_id={resolved_profile_id} "
+                "AI coach callback profile mismatch "
+                f"client_id={client_id} payload_profile={payload_profile_id} profile_id={resolved_profile_id} "
                 f"client_profile_id={resolved_client_profile_id}"
             )
         client_profile_id = resolved_client_profile_id
@@ -160,10 +155,9 @@ async def _process_ai_plan_ready(
             return
 
         if not await _claim_plan_delivery(request_id):
-            logger.info(
-                "ai_plan_delivery_duplicate "
-                f"action={action} plan_type={plan_type.value} "
-                f"client_id={client_id} request_id={request_id}"
+            logger.debug(
+                "AI coach plan callback ignored because delivery already claimed "
+                f"plan_type={plan_type.value} client_id={client_id} request_id={request_id}"
             )
             return
 
@@ -180,10 +174,9 @@ async def _process_ai_plan_ready(
 
         state_data = await state.get_data()
         if request_id and state_data.get("last_request_id") == request_id:
-            logger.info(
-                "ai_plan_state_duplicate "
-                f"action={action} plan_type={plan_type.value} "
-                f"client_id={client_id} request_id={request_id}"
+            logger.debug(
+                "AI coach plan callback ignored because FSM already handled request "
+                f"plan_type={plan_type.value} client_id={client_id} request_id={request_id}"
             )
             return
 
@@ -191,9 +184,8 @@ async def _process_ai_plan_ready(
             error_reason = str(payload.get("error", "unknown_error"))
             await _mark_plan_failure(request_id, error_reason)
             logger.error(
-                "ai_plan_callback_error "
-                f"action={action} plan_type={plan_type.value} client_id={client_id} "
-                f"request_id={request_id} reason={error_reason}"
+                "AI coach plan callback returned failure "
+                f"plan_type={plan_type.value} client_id={client_id} request_id={request_id} reason={error_reason}"
             )
             return
 
@@ -202,14 +194,6 @@ async def _process_ai_plan_ready(
             await _mark_plan_failure(request_id, "plan_payload_missing")
             logger.error(f"Plan payload missing client_id={client_id} request_id={request_id}")
             return
-
-        plan_keys = ",".join(sorted(plan_payload_raw.keys()))
-        logger.info(
-            f"ai_plan_payload action={action} status={status} plan_type={plan_type.value} "
-            f"client_id={client_id} profile_id={resolved_profile_id} client_profile_id={client_profile_id} "
-            f"request_id={request_id} "
-            f"plan_fields={plan_keys} plan_size={len(plan_payload_raw)}"
-        )
 
         profile_dump = profile.model_dump()
         client_dump = client.model_dump()
@@ -277,8 +261,8 @@ async def _process_ai_plan_ready(
                 return
             await _mark_plan_delivered(request_id)
             logger.info(
-                f"ai_plan_program_delivered action={action} client_id={client_id} "
-                f"request_id={request_id} program_id={saved_program.id}"
+                "AI coach plan generation finished plan_type=program "
+                f"client_id={client_id} request_id={request_id} program_id={saved_program.id}"
             )
             return
 
@@ -336,7 +320,10 @@ async def _process_ai_plan_ready(
                 await _mark_plan_failure(request_id, f"subscription_update_send_failed:{exc!s}")
                 return
             await _mark_plan_delivered(request_id)
-            logger.info(f"ai_plan_subscription_updated client_id={client_id} request_id={request_id}")
+            logger.info(
+                "AI coach plan generation finished plan_type=subscription-update "
+                f"client_id={client_id} request_id={request_id} subscription_id={current.id}"
+            )
             return
 
         try:
@@ -397,9 +384,8 @@ async def _process_ai_plan_ready(
             return
         await _mark_plan_delivered(request_id)
         logger.info(
-            "ai_plan_subscription_created "
-            f"client_id={client_id} request_id={request_id} "
-            f"subscription_id={subscription_id}"
+            "AI coach plan generation finished plan_type=subscription-create "
+            f"client_id={client_id} request_id={request_id} subscription_id={subscription_id}"
         )
     except ClientNotFoundError:
         await _mark_plan_failure(request_id, "client_not_found")
@@ -407,9 +393,8 @@ async def _process_ai_plan_ready(
     except Exception as exc:  # noqa: BLE001
         await _mark_plan_failure(request_id, f"handler_exception:{exc!s}")
         logger.exception(
-            "ai_plan_ready_handler_failed "
-            f"action={action} plan_type={plan_type.value} client_id={client_id} "
-            f"request_id={request_id} err={exc!s}"
+            "AI coach plan callback processing failed "
+            f"plan_type={plan_type.value} client_id={client_id} request_id={request_id} error={exc!s}"
         )
 
 

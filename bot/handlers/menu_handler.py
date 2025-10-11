@@ -245,7 +245,8 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
             return
 
         logger.debug(
-            f"Program generation started for client_id={client.id} ttl={settings.LLM_COOLDOWN} request_id={request_id}"
+            "AI coach plan generation started plan_type=program "
+            f"client_id={client.id} request_id={request_id} ttl={settings.LLM_COOLDOWN}"
         )
 
     await APIService.profile.adjust_client_credits(profile.id, -required)

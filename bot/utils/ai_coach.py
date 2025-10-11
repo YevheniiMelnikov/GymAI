@@ -302,12 +302,10 @@ async def _watch_plan_delivery(
         poll_interval,
     )
     elapsed = 0
-    logger.debug(f"ai_plan_watch_start action={action} request_id={request_id} timeout={timeout}")
     try:
         while elapsed < timeout:
             delivered = bool(await client.exists(delivered_key))
             if delivered:
-                logger.debug(f"ai_plan_watch_done action={action} request_id={request_id} status=delivered")
                 return
             failure_detail_raw = await client.get(failure_key)
             if isinstance(failure_detail_raw, (bytes, bytearray)):
@@ -327,7 +325,8 @@ async def _watch_plan_delivery(
             await asyncio.sleep(poll_interval)
             elapsed += poll_interval
         logger.warning(
-            f"ai_plan_watch_timeout action={action} request_id={request_id} elapsed={elapsed} timeout={timeout}"
+            "AI coach plan delivery timed out "
+            f"action={action} request_id={request_id} elapsed={elapsed} timeout={timeout}"
         )
         await _notify_plan_failure(
             bot=bot,
@@ -338,7 +337,7 @@ async def _watch_plan_delivery(
             detail="timeout",
         )
     except Exception as exc:  # noqa: BLE001
-        logger.error(f"ai_plan_watch_failed action={action} request_id={request_id} error={exc!s}")
+        logger.error(f"AI coach plan delivery watch failed action={action} request_id={request_id} error={exc!s}")
 
 
 def schedule_ai_plan_notification_watch(
