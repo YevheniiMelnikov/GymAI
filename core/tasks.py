@@ -316,6 +316,9 @@ async def _notify_ai_plan_ready(payload: dict[str, Any]) -> None:
     base_url: str = settings.BOT_INTERNAL_URL.rstrip("/")
     url: str = f"{base_url}/internal/tasks/ai_plan_ready/"
     headers: dict[str, str] = {"Authorization": f"Api-Key {settings.API_KEY}"}
+    internal_api_key: str | None = settings.INTERNAL_API_KEY
+    if internal_api_key:
+        headers["X-Internal-Api-Key"] = internal_api_key
     request_id = str(payload.get("request_id", ""))
     action = str(payload.get("action", ""))
     logger.info(f"ai_plan_notify_start action={action} request_id={request_id} url={url}")

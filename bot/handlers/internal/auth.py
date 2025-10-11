@@ -34,7 +34,7 @@ def require_internal_auth(handler: Handler) -> Handler:
         if expected_key and provided_key == expected_key and _is_ip_allowed(request):
             return await handler(request, *args, **kwargs)
 
-        logger.warning("internal_auth_denied path=%s has_key=%s", request.rel_url, bool(provided_key))
+        logger.warning(f"internal_auth_denied path={request.rel_url} has_key={bool(provided_key)}")
         payload = {"code": "unauthorized", "message": "Unauthorized"}
         return web.json_response(payload, status=401)
 
