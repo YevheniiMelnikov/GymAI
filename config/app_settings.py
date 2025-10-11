@@ -48,6 +48,7 @@ def normalize_service_host(
 
 
 class Settings(BaseSettings):
+    DEBUG: bool = False
     PAYMENT_CHECK_INTERVAL: int = 60
     MIN_BIRTH_YEAR: int = 1940
     MAX_BIRTH_YEAR: int = 2020
@@ -131,6 +132,8 @@ class Settings(BaseSettings):
     COGNEE_CLIENT_DATASET_NAMESPACE: Annotated[str | None, Field(default=None)]
 
     API_KEY: Annotated[str, Field(default="")]
+    INTERNAL_API_KEY: Annotated[str | None, Field(default=None)]
+    INTERNAL_IP_ALLOWLIST: Annotated[list[str], Field(default_factory=list)]
     SECRET_KEY: Annotated[str, Field(default="")]
     API_HOST: Annotated[str, Field(default="http://127.0.0.1")]
     HOST_API_PORT: Annotated[str, Field(default="8000")]

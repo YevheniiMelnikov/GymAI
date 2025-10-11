@@ -46,7 +46,7 @@ from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
 from core.services import APIService
 from bot.keyboards import payment_kb
 from bot.utils.credits import available_packages
-from bot.utils.ai_coach import enqueue_workout_plan_generation, schedule_ai_plan_notification_watch
+from bot.utils.ai_coach import enqueue_workout_plan_generation
 from core.enums import WorkoutPlanType, WorkoutType
 from bot.utils.credits import available_ai_services
 from core.utils.idempotency import acquire_once
@@ -254,7 +254,6 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
     await answer_msg(callback_query, msg_text("request_in_progress", profile.language))
     if isinstance(callback_query.message, Message):
         await show_main_menu(callback_query.message, profile, state)
-    bot = cast(Bot, callback_query.bot)
     assigned_coaches = [await Cache.coach.get_coach(coach_id) for coach_id in client.assigned_to]
     if any(coach.coach_type == CoachType.ai_coach for coach in assigned_coaches):
         pass  # already assigned to AI
@@ -280,14 +279,6 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
                 msg_text("coach_agent_error", profile.language).format(tg=settings.TG_SUPPORT_CONTACT),
             )
             logger.error(f"ai_plan_dispatch_failed plan_type=program client_id={client.id} request_id={request_id}")
-        else:
-            schedule_ai_plan_notification_watch(
-                bot=bot,
-                chat_id=profile.tg_id,
-                language=profile.language,
-                action="create",
-                request_id=request_id,
-            )
         return
 
     period_map = {
@@ -311,8 +302,6 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     profile = Profile.model_validate(data.get("profile"))
     lang = profile.language or settings.DEFAULT_LANG
     days: list[str] = data.get("workout_days", [])
-    bot = cast(Bot, callback_query.bot)
-
     if callback_query.data != "complete":
         data_val = callback_query.data
         if data_val is not None:
@@ -356,12 +345,12 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
         )
         logger.error(f"ai_plan_dispatch_failed plan_type=subscription client_id={client.id} request_id={request_id}")
         return
-    schedule_ai_plan_notification_watch(
-        bot=bot,
-        chat_id=profile.tg_id,
-        language=lang,
-        action="create",
-        request_id=request_id,
+    logger.info(
+        "ai_plan_generation_requested request_id=%s client_id=%s profile_id=%s plan_type=%s",
+        request_id,
+        client.id,
+        profile.id,
+        WorkoutPlanType.SUBSCRIPTION.value,
     )
 
 
