@@ -43,10 +43,10 @@ async def generate_workout_plan(
         return []
     if plan_type is WorkoutPlanType.PROGRAM:
         assert isinstance(plan, Program)
-        await Cache.workout.save_program(client.profile, plan.model_dump())
+        await Cache.workout.save_program(client.id, plan.model_dump())
         return plan.exercises_by_day
     assert isinstance(plan, Subscription)
-    await Cache.workout.save_subscription(client.profile, plan.model_dump())
+    await Cache.workout.save_subscription(client.id, plan.model_dump())
     return plan.exercises
 
 
@@ -111,7 +111,7 @@ async def enqueue_workout_plan_generation(
 
     payload: dict[str, object] = {
         "client_id": client.id,
-        "client_profile_id": client.profile,
+        "client_profile_id": client.id,
         "language": language,
         "plan_type": plan_type.value,
         "workout_type": workout_type.value,

@@ -74,35 +74,51 @@ async def _mark_plan_failure(request_id: str, detail: str) -> None:
 async def _resolve_client_and_profile(
     client_id: int,
     client_profile_id: int | None,
-) -> tuple[Client, int]:
-    profile_id = client_profile_id
+) -> tuple[Client, int, int]:
+    profile_hint = client_profile_id
     client: Client | None = None
 
-    if profile_id is not None:
+    if profile_hint is not None and profile_hint != client_id:
         try:
-            client = await Cache.client.get_client(profile_id)
+            client = await Cache.client.get_client(profile_hint)
         except ClientNotFoundError:
             try:
-                client = await APIService.profile.get_client_by_profile_id(profile_id)
+                client = await APIService.profile.get_client_by_profile_id(profile_hint)
             except Exception as exc:  # noqa: BLE001
-                logger.warning(f"get_client_by_profile_id_failed profile_id={profile_id} err={exc!s}")
+                logger.warning(f"get_client_by_profile_id_failed profile_id={profile_hint} err={exc!s}")
                 client = None
             else:
                 if client is not None:
-                    await Cache.client.save_client(profile_id, client.model_dump(mode="json"))
+                    await Cache.client.save_client(profile_hint, client.model_dump(mode="json"))
         except Exception as exc:  # noqa: BLE001
-            logger.warning(f"cache_get_client_failed profile_id={profile_id} err={exc!s}")
+            logger.warning(f"cache_get_client_failed profile_id={profile_hint} err={exc!s}")
             client = None
         if client is not None:
-            return client, profile_id
+            profile_id = client.profile
+            client_profile_pk = client.id
+            return client, profile_id, client_profile_pk
 
     client = await APIService.profile.get_client(client_id)
     if client is None:
         raise ClientNotFoundError(client_id)
 
     profile_id = client.profile
+    client_profile_pk = client.id
     await Cache.client.save_client(profile_id, client.model_dump(mode="json"))
-    return client, profile_id
+
+    if profile_hint is not None and profile_hint not in {profile_id, client_profile_pk}:
+        logger.warning(
+            "client_profile_hint_mismatch "
+            f"client_id={client_id} hint={profile_hint} profile_id={profile_id} "
+            f"client_profile_id={client_profile_pk}"
+        )
+    elif profile_hint == profile_id and profile_hint != client_profile_pk:
+        logger.info(
+            "client_profile_hint_profile_normalized "
+            f"client_id={client_id} profile_id={profile_id} client_profile_id={client_profile_pk}"
+        )
+
+    return client, profile_id, client_profile_pk
 
 
 async def _process_ai_plan_ready(
@@ -119,18 +135,25 @@ async def _process_ai_plan_ready(
     try:
         logger.info(
             f"ai_plan_callback_received action={action} status={status} plan_type={plan_type.value} "
-            f"client_id={client_id} profile_id={client_profile_id} request_id={request_id}"
+            f"client_id={client_id} profile_hint={client_profile_id} request_id={request_id}"
         )
 
-        client, resolved_profile_id = await _resolve_client_and_profile(client_id, client_profile_id)
-        if client_profile_id is not None and resolved_profile_id != client_profile_id:
+        payload_profile_id = client_profile_id
+        client, resolved_profile_id, resolved_client_profile_id = await _resolve_client_and_profile(
+            client_id, client_profile_id
+        )
+        if payload_profile_id is not None and payload_profile_id not in {
+            resolved_profile_id,
+            resolved_client_profile_id,
+        }:
             logger.warning(
-                "client_profile_mismatch "
-                f"client_id={client_id} payload_profile={client_profile_id} actual={resolved_profile_id}"
+                "client_profile_payload_mismatch "
+                f"client_id={client_id} payload={payload_profile_id} profile_id={resolved_profile_id} "
+                f"client_profile_id={resolved_client_profile_id}"
             )
-        client_profile_id = resolved_profile_id
+        client_profile_id = resolved_client_profile_id
 
-        profile: Profile | None = await APIService.profile.get_profile(client.profile)
+        profile: Profile | None = await APIService.profile.get_profile(resolved_profile_id)
         if profile is None:
             await _mark_plan_failure(request_id, "profile_not_found")
             logger.error(f"Profile missing for client_id={client_id} request_id={request_id}")
@@ -183,7 +206,8 @@ async def _process_ai_plan_ready(
         plan_keys = ",".join(sorted(plan_payload_raw.keys()))
         logger.info(
             f"ai_plan_payload action={action} status={status} plan_type={plan_type.value} "
-            f"client_id={client_id} profile_id={client_profile_id} request_id={request_id} "
+            f"client_id={client_id} profile_id={resolved_profile_id} client_profile_id={client_profile_id} "
+            f"request_id={request_id} "
             f"plan_fields={plan_keys} plan_size={len(plan_payload_raw)}"
         )
 
@@ -223,12 +247,12 @@ async def _process_ai_plan_ready(
             wishes = str(wishes_raw) if wishes_raw is not None else ""
 
             saved_program = await APIService.workout.save_program(
-                client_profile_id=client.profile,
+                client_profile_id=client_profile_id,
                 exercises=exercises_by_day,
                 split_number=split_value,
                 wishes=wishes,
             )
-            await Cache.workout.save_program(client.profile, saved_program.model_dump(mode="json"))
+            await Cache.workout.save_program(client_profile_id, saved_program.model_dump(mode="json"))
             exercises_dump = [day.model_dump() for day in saved_program.exercises_by_day]
             await state.update_data(
                 exercises=exercises_dump,
@@ -263,7 +287,7 @@ async def _process_ai_plan_ready(
 
         if action == "update":
             try:
-                current = await Cache.workout.get_latest_subscription(client.profile)
+                current = await Cache.workout.get_latest_subscription(client_profile_id)
             except SubscriptionNotFoundError:
                 await _mark_plan_failure(request_id, "subscription_missing")
                 logger.error(f"Subscription missing for update client_id={client_id} request_id={request_id}")
@@ -271,17 +295,17 @@ async def _process_ai_plan_ready(
 
             subscription_data = current.model_dump()
             subscription_data.update(
-                client_profile=client.profile,
+                client_profile=client_profile_id,
                 exercises=serialized_exercises,
                 workout_days=subscription.workout_days,
                 wishes=subscription.wishes,
             )
             await APIService.workout.update_subscription(current.id, subscription_data)
             await Cache.workout.update_subscription(
-                client.profile,
+                client_profile_id,
                 {
                     "exercises": serialized_exercises,
-                    "client_profile": client.profile,
+                    "client_profile": client_profile_id,
                     "workout_days": subscription.workout_days,
                     "wishes": subscription.wishes,
                 },
@@ -325,7 +349,7 @@ async def _process_ai_plan_ready(
             price = Decimal(settings.REGULAR_AI_SUBSCRIPTION_PRICE)
 
         subscription_id = await APIService.workout.create_subscription(
-            client_profile_id=client.profile,
+            client_profile_id=client_profile_id,
             workout_days=subscription.workout_days,
             wishes=subscription.wishes,
             amount=price,
@@ -342,10 +366,10 @@ async def _process_ai_plan_ready(
         subscription_dump = subscription.model_dump(mode="json")
         subscription_dump.update(
             id=subscription_id,
-            client_profile=client.profile,
+            client_profile=client_profile_id,
             exercises=serialized_exercises,
         )
-        await Cache.workout.save_subscription(client.profile, subscription_dump)
+        await Cache.workout.save_subscription(client_profile_id, subscription_dump)
         update_payload = {
             "subscription": True,
             "exercises": serialized_exercises,
@@ -463,9 +487,10 @@ async def internal_send_workout_result(request: web.Request) -> web.Response:
         client = await Cache.client.get_client(int(client_id))
         profile = await APIService.profile.get_profile(client.profile)
         language = profile.language if profile else settings.DEFAULT_LANG
+        client_profile_pk = client.id
         queued = await enqueue_workout_plan_update(
-            client_id=int(client_id),
-            client_profile_id=client.profile,
+            client_id=client_profile_pk,
+            client_profile_id=client_profile_pk,
             expected_workout_result=str(expected_workout_result or ""),
             feedback=str(client_workout_feedback),
             language=language,
