@@ -124,10 +124,6 @@ async def enqueue_workout_plan_generation(
     task_name: str = generate_ai_workout_plan.name
     broker_url = str(getattr(celery_app.conf, "broker_url", ""))
     payload_descriptor = ",".join(sorted(payload.keys()))
-    logger.debug(
-        f"dispatch_generate_plan request_id={request_id} client_id={client.id} broker={broker_url} "
-        f"payload_keys={payload_descriptor}"
-    )
 
     try:
         if settings.LOG_VERBOSE_CELERY:
@@ -147,10 +143,6 @@ async def enqueue_workout_plan_generation(
                 routing_key="ai_coach",
             )
             task_id = async_result.id
-        logger.debug(
-            f"queued_workout_plan_generation client_id={client.id} plan_type={plan_type.value} "
-            f"request_id={request_id} task_id={task_id}"
-        )
     except Exception as exc:  # noqa: BLE001
         logger.error(
             f"Celery dispatch failed client_id={client.id} plan_type={plan_type.value} "
