@@ -25,7 +25,7 @@ from bot.utils.chat import send_message
 from bot.utils.bot import get_webapp_url
 from core.services import APIService
 from bot.utils.ai_coach import enqueue_workout_plan_update, schedule_ai_plan_notification_watch
-from core.schemas import Client, Program, Profile, Subscription
+from core.schemas import Client, DayExercises, Profile, Subscription
 from cognee.api.v1.prune import prune  # pyrefly: ignore[import-error]
 from core.utils.redis_lock import get_redis_client
 
@@ -82,9 +82,17 @@ async def _resolve_client_and_profile(
         try:
             client = await Cache.client.get_client(profile_id)
         except ClientNotFoundError:
-            client = await APIService.profile.get_client_by_profile_id(profile_id)
-            if client is not None:
-                await Cache.client.save_client(profile_id, client.model_dump(mode="json"))
+            try:
+                client = await APIService.profile.get_client_by_profile_id(profile_id)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"get_client_by_profile_id_failed profile_id={profile_id} err={exc!s}")
+                client = None
+            else:
+                if client is not None:
+                    await Cache.client.save_client(profile_id, client.model_dump(mode="json"))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"cache_get_client_failed profile_id={profile_id} err={exc!s}")
+            client = None
         if client is not None:
             return client, profile_id
 
@@ -190,12 +198,36 @@ async def _process_ai_plan_ready(
         await state.update_data(**base_state)
 
         if plan_type is WorkoutPlanType.PROGRAM:
-            program = Program.model_validate(plan_payload_raw)
+            try:
+                raw_days = plan_payload_raw.get("exercises_by_day")
+                if not isinstance(raw_days, list):
+                    raw_days = plan_payload_raw.get("exercises")
+                if not isinstance(raw_days, list):
+                    raw_days = []
+                exercises_by_day: list[DayExercises] = [
+                    day if isinstance(day, DayExercises) else DayExercises.model_validate(day) for day in raw_days
+                ]
+            except Exception as exc:  # noqa: BLE001
+                await _mark_plan_failure(request_id, f"day_exercises_validation:{exc!s}")
+                logger.error(
+                    f"day_exercises_validation_failed client_id={client_id} request_id={request_id} err={exc!s}"
+                )
+                return
+
+            split_number = plan_payload_raw.get("split_number")
+            try:
+                split_value = int(split_number) if split_number is not None else len(exercises_by_day)
+            except (TypeError, ValueError):
+                split_value = len(exercises_by_day)
+
+            wishes_raw = plan_payload_raw.get("wishes")
+            wishes = str(wishes_raw) if wishes_raw is not None else ""
+
             saved_program = await APIService.workout.save_program(
                 client_profile_id=client.profile,
-                exercises=program.exercises_by_day,
-                split_number=program.split_number or len(program.exercises_by_day),
-                wishes=program.wishes or "",
+                exercises=exercises_by_day,
+                split_number=split_value,
+                wishes=wishes,
             )
             await Cache.workout.save_program(client.profile, saved_program.model_dump(mode="json"))
             exercises_dump = [day.model_dump() for day in saved_program.exercises_by_day]
