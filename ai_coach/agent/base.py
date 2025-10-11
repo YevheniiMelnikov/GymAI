@@ -1,9 +1,19 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
+from time import monotonic
 
 from core.schemas import Program, QAResponse, Subscription
 from core.enums import WorkoutType
 from ai_coach.types import CoachMode
+from config.app_settings import settings
+
+
+class AgentExecutionAborted(RuntimeError):
+    """Raised when an agent run must stop early."""
+
+    def __init__(self, message: str, *, reason: str) -> None:
+        super().__init__(message)
+        self.reason = reason
 
 
 @dataclass
@@ -15,6 +25,13 @@ class AgentDeps:
     mode: CoachMode | None = None
     last_knowledge_query: str | None = None
     last_knowledge_empty: bool = False
+    max_tool_calls: int = settings.AI_COACH_MAX_TOOL_CALLS
+    max_run_seconds: float = float(settings.AI_COACH_REQUEST_TIMEOUT)
+    tool_calls: int = 0
+    knowledge_base_empty: bool = False
+    fallback_used: bool = False
+    cached_history: list[str] | None = None
+    started_at: float = field(default_factory=monotonic)
 
 
 class CoachAgentProtocol(Protocol):

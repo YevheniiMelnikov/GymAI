@@ -97,7 +97,8 @@ async def enqueue_workout_plan_generation(
     period: str | None = None,
     workout_days: list[str] | None = None,
 ) -> bool:
-    client_profile_id = client.id
+    client_profile_raw = getattr(client, "profile", None)
+    client_profile_id = int(client_profile_raw) if client_profile_raw is not None else 0
     if client_profile_id <= 0:
         logger.error(f"ai_plan_generate_missing_profile client_id={client.id} request_id={request_id}")
         return False

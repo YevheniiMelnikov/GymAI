@@ -186,7 +186,7 @@ async def test_enqueue_workout_plan_generation_dispatch(monkeypatch: pytest.Monk
 
     assert queued is True
     assert captured["client_id"] == client.id
-    assert captured["client_profile_id"] == client.id
+    assert captured["client_profile_id"] == client.profile
     assert captured["plan_type"] == WorkoutPlanType.PROGRAM.value
     assert captured["workout_days"] == ["mon", "wed"]
 
@@ -315,7 +315,7 @@ async def test_internal_ai_plan_ready_program(monkeypatch: pytest.MonkeyPatch) -
     request = DummyRequest(
         {
             "client_id": client.id,
-            "client_profile_id": client.id,
+            "client_profile_id": client.profile,
             "plan_type": WorkoutPlanType.PROGRAM.value,
             "status": "success",
             "action": "create",
@@ -327,8 +327,8 @@ async def test_internal_ai_plan_ready_program(monkeypatch: pytest.MonkeyPatch) -
 
     response = await internal_ai_coach_plan_ready(request)
     assert response.status == 200
-    assert saved_args["client_profile_id"] == client.id
-    assert saved_cache["client_profile_id"] == client.id
+    assert saved_args["client_profile_id"] == client.profile
+    assert saved_cache["client_profile_id"] == client.profile
     assert cache_calls == [client.profile]
     assert bot.sent[0]["text"] == "new_program:en"
     key = StorageKey(bot_id=bot.id, chat_id=profile.tg_id, user_id=profile.tg_id)
@@ -424,7 +424,7 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
     request = DummyRequest(
         {
             "client_id": client.id,
-            "client_profile_id": client.id,
+            "client_profile_id": client.profile,
             "plan_type": WorkoutPlanType.SUBSCRIPTION.value,
             "status": "success",
             "action": "update",
@@ -542,7 +542,7 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
     request = DummyRequest(
         {
             "client_id": client.id,
-            "client_profile_id": client.id,
+            "client_profile_id": client.profile,
             "plan_type": WorkoutPlanType.SUBSCRIPTION.value,
             "status": "success",
             "action": "create",
@@ -555,8 +555,8 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
 
     response = await internal_ai_coach_plan_ready(request)
     assert response.status == 200
-    assert created_payload["client_profile_id"] == client.id
-    assert saved_subscription["client_profile_id"] == client.id
+    assert created_payload["client_profile_id"] == client.profile
+    assert saved_subscription["client_profile_id"] == client.profile
     assert cache_calls == [client.profile]
     assert saved_subscription["data"]["id"] == 42
     assert bot.sent[0]["text"] == "new_program:en"

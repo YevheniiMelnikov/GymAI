@@ -6,6 +6,7 @@ from typing import Awaitable, Callable, Any
 
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from ai_coach.agent import AgentDeps, CoachAgent  # pyrefly: ignore[missing-module-attribute]
+from ai_coach.agent.base import AgentExecutionAborted
 from core.services import APIService
 from ai_coach.application import app, security
 from ai_coach.schemas import AICoachRequest
@@ -121,6 +122,7 @@ async def ask(data: AICoachRequest, request: Request) -> Program | Subscription 
                 f"/ask agent completed request_id={data.request_id}"
                 f" client_id={data.client_id} mode=ask_ai"
                 f" answer_len={len(answer) if isinstance(answer, str) else 0} sources={len(sources)}"
+                f" steps_used={deps.tool_calls} kb_empty={deps.knowledge_base_empty}"
             )
             if isinstance(answer, str):
                 await KnowledgeBase.save_client_message(data.prompt or "", client_id=data.client_id)
@@ -128,9 +130,22 @@ async def ask(data: AICoachRequest, request: Request) -> Program | Subscription 
         else:
             logger.debug(
                 f"/ask agent completed request_id={data.request_id} client_id={data.client_id} mode={mode.value}"
+                f" steps_used={deps.tool_calls} kb_empty={deps.knowledge_base_empty}"
             )
         return result
 
+    except AgentExecutionAborted as exc:
+        reason_map = {
+            "max_tool_calls_exceeded": "tool budget exceeded",
+            "timeout": "request timed out",
+            "knowledge_base_empty": "knowledge base returned no data",
+        }
+        detail_reason = reason_map.get(exc.reason, exc.reason)
+        logger.warning(
+            f"/ask agent aborted request_id={data.request_id} client_id={data.client_id} "
+            f"mode={mode.value} reason={exc.reason} steps_used={deps.tool_calls}"
+        )
+        raise HTTPException(status_code=503, detail=f"AI coach aborted request: {detail_reason}") from exc
     except ValidationError as e:
         logger.exception(f"/ask agent validation error: {e}")
         raise HTTPException(status_code=422, detail="Invalid response") from e

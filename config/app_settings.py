@@ -1,7 +1,7 @@
 import json
 import os
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Annotated
+from typing import Annotated, Any
 from urllib.parse import SplitResult, quote, quote_plus, urlsplit, urlunsplit
 from uuid import NAMESPACE_DNS, uuid5
 
@@ -73,6 +73,8 @@ class Settings(BaseSettings):
     COACH_AGENT_RETRIES: int = 1
     COACH_AGENT_TIMEOUT: int = 60
     CHAT_HISTORY_LIMIT: int = 20
+    AI_COACH_MAX_TOOL_CALLS: Annotated[int, Field(default=8)]
+    AI_COACH_REQUEST_TIMEOUT: Annotated[int, Field(default=60)]
     AI_PLAN_DEDUP_TTL: Annotated[int, Field(default=3600)]
     AI_PLAN_NOTIFY_TIMEOUT: Annotated[int, Field(default=900)]
     AI_PLAN_NOTIFY_POLL_INTERVAL: Annotated[int, Field(default=30)]
@@ -180,6 +182,24 @@ class Settings(BaseSettings):
         "case_sensitive": True,
         "extra": "ignore",
     }
+
+    @field_validator("INTERNAL_IP_ALLOWLIST", mode="before")
+    @classmethod
+    def _normalize_ip_allowlist(cls, value: Any) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            candidates = value.split(",")
+        elif isinstance(value, (list, tuple, set)):
+            candidates = list(value)
+        else:
+            return []
+        result: list[str] = []
+        for candidate in candidates:
+            text = str(candidate).strip()
+            if text:
+                result.append(text)
+        return result
 
     @model_validator(mode="after")
     def _compute_derived_fields(self) -> "Settings":

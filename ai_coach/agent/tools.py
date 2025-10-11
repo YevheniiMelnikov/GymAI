@@ -2,6 +2,8 @@
 # ruff: noqa
 """Tool definitions for the coach agent."""
 
+from time import monotonic
+
 from loguru import logger
 from pydantic_ai import ModelRetry, RunContext  # pyrefly: ignore[import-error]
 from pydantic_ai.toolsets.function import FunctionToolset  # pyrefly: ignore[import-error]
@@ -12,13 +14,26 @@ from core.schemas import DayExercises, Program, Subscription
 from core.utils.short_url import short_url
 from core.enums import SubscriptionPeriod
 
-from .base import AgentDeps
+from .base import AgentDeps, AgentExecutionAborted
 
 from ..schemas import ProgramPayload
 from core.services import get_gif_manager
 
 
 toolset = FunctionToolset()
+
+
+def _prepare_tool(ctx: RunContext[AgentDeps], tool_name: str) -> AgentDeps:  # pyrefly: ignore[unsupported-operation]
+    deps = ctx.deps
+    elapsed = monotonic() - deps.started_at
+    if deps.max_run_seconds > 0 and elapsed > deps.max_run_seconds:
+        logger.warning(f"agent_tool_timeout client_id={deps.client_id} tool={tool_name} elapsed={elapsed:.2f}")
+        raise AgentExecutionAborted("AI coach request timed out", reason="timeout")
+    deps.tool_calls += 1
+    if deps.max_tool_calls > 0 and deps.tool_calls > deps.max_tool_calls:
+        logger.warning(f"agent_tool_limit_exceeded client_id={deps.client_id} tool={tool_name} steps={deps.tool_calls}")
+        raise AgentExecutionAborted("AI coach tool budget exhausted", reason="max_tool_calls_exceeded")
+    return deps
 
 
 @toolset.tool
@@ -30,24 +45,42 @@ async def tool_search_knowledge(
     """Search client and global knowledge with top-k limit."""
     from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 
-    client_id = ctx.deps.client_id
+    deps = _prepare_tool(ctx, "tool_search_knowledge")
+    client_id = deps.client_id
     normalized_query = query.strip()
     logger.debug(f"tool_search_knowledge client_id={client_id} query='{normalized_query[:80]}' k={k}")
     if not normalized_query:
         raise ModelRetry("Knowledge search requires a non-empty query. Summarize the client's goal before retrying.")
-    if ctx.deps.last_knowledge_query == normalized_query and ctx.deps.last_knowledge_empty:
-        logger.info(f"knowledge_search_repeat client_id={client_id} query='{normalized_query[:80]}'")
-        raise ModelRetry(
-            "Previous knowledge search returned no results. Provide more context or ask a different question before retrying."
+    if deps.knowledge_base_empty:
+        logger.warning(
+            f"knowledge_search_aborted client_id={client_id} query='{normalized_query[:80]}' reason=knowledge_base_empty"
         )
+        raise AgentExecutionAborted("Knowledge base returned no data", reason="knowledge_base_empty")
+    if deps.last_knowledge_query == normalized_query and deps.last_knowledge_empty:
+        logger.warning(
+            f"knowledge_search_repeat client_id={client_id} query='{normalized_query[:80]}' reason=empty_previous"
+        )
+        raise AgentExecutionAborted("Knowledge search already returned no results", reason="knowledge_base_empty")
     try:
         result = await KnowledgeBase.search(normalized_query, client_id, k)
     except Exception as e:  # pragma: no cover - forward to model
+        message = str(e)
+        if "Empty graph" in message or "EntityNotFound" in type(e).__name__:
+            deps.knowledge_base_empty = True
+            deps.last_knowledge_query = normalized_query
+            deps.last_knowledge_empty = True
+            logger.warning(
+                f"knowledge_search_empty client_id={client_id} query='{normalized_query[:80]}' detail={message}"
+            )
+            return []
         raise ModelRetry(f"Knowledge search failed: {e}. Refine the query and retry.") from e
-    ctx.deps.last_knowledge_query = normalized_query
-    ctx.deps.last_knowledge_empty = len(result) == 0
-    if ctx.deps.last_knowledge_empty:
-        logger.info(f"knowledge_search_empty client_id={client_id} query='{normalized_query[:80]}'")
+    deps.last_knowledge_query = normalized_query
+    deps.last_knowledge_empty = len(result) == 0
+    if deps.last_knowledge_empty:
+        deps.knowledge_base_empty = True
+        logger.warning(
+            f"knowledge_search_empty client_id={client_id} query='{normalized_query[:80]}' detail=no_results"
+        )
     logger.debug(f"tool_search_knowledge results={len(result)}")
     return result
 
@@ -60,10 +93,18 @@ async def tool_get_chat_history(
     """Load recent chat messages for context."""
     from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 
-    client_id = ctx.deps.client_id
+    deps = _prepare_tool(ctx, "tool_get_chat_history")
+    client_id = deps.client_id
     logger.debug(f"tool_get_chat_history client_id={client_id} limit={limit}")
     try:
-        return await KnowledgeBase.get_message_history(client_id, limit)
+        if deps.cached_history is None:
+            history = await KnowledgeBase.get_message_history(client_id, limit)
+            deps.cached_history = history
+        else:
+            history = deps.cached_history
+        if limit is None:
+            return list(history)
+        return list(history[:limit])
     except Exception as e:  # pragma: no cover - forward to model
         raise ModelRetry(f"Chat history unavailable: {e}. Try calling again.") from e
 
@@ -77,9 +118,10 @@ async def tool_save_program(
     from core.services import APIService
     from .coach import ProgramAdapter
 
-    if not ctx.deps.allow_save:
+    deps = _prepare_tool(ctx, "tool_save_program")
+    if not deps.allow_save:
         raise RuntimeError("saving not allowed in this mode")
-    client_id = ctx.deps.client_id
+    client_id = deps.client_id
     logger.debug(f"tool_save_program client_id={client_id}")
     program = ProgramAdapter.to_domain(plan)
     try:
@@ -102,7 +144,8 @@ async def tool_get_program_history(
     """Return client's previous programs."""
     from core.services import APIService
 
-    client_id = ctx.deps.client_id
+    deps = _prepare_tool(ctx, "tool_get_program_history")
+    client_id = deps.client_id
     logger.debug(f"tool_get_program_history client_id={client_id}")
     try:
         return await APIService.workout.get_all_programs(client_id)
@@ -116,7 +159,8 @@ async def tool_attach_gifs(
     exercises: list[DayExercises],
 ) -> list[DayExercises]:
     """Attach GIF links to exercises if available."""
-    client_id = ctx.deps.client_id
+    deps = _prepare_tool(ctx, "tool_attach_gifs")
+    client_id = deps.client_id
     logger.debug(f"tool_attach_gifs client_id={client_id}")
     try:
         gif_manager = get_gif_manager()
@@ -166,9 +210,10 @@ async def tool_create_subscription(
     from core.utils.billing import next_payment_date
     from config.app_settings import settings
 
-    if not ctx.deps.allow_save:
+    deps = _prepare_tool(ctx, "tool_create_subscription")
+    if not deps.allow_save:
         raise RuntimeError("saving not allowed in this mode")
-    client_id = ctx.deps.client_id
+    client_id = deps.client_id
     logger.debug(f"tool_create_subscription client_id={client_id} period={period} days={workout_days}")
     exercises_payload = [d.model_dump() for d in exercises]
     price_map = {
