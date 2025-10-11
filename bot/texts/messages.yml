@@ -293,6 +293,11 @@ program_updated:
   ru: "<b>Ваша программа была обновлена</b> ✅"
   ua: "<b>Ваша програма була оновлена</b> ✅"
 
+subscription_created:
+  eng: "<b>Your AI subscription plan is ready</b> ✅"
+  ru: "<b>Ваш план по подписке готов</b> ✅"
+  ua: "<b>Ваш план за підпискою готовий</b> ✅"
+
 program_history_page:
   eng: "<b>Program from {date}</b>\n<em>{program}</em>"
   ru: "<b>Программа от {date}</b>\n<em>{program}</em>"

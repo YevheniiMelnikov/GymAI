@@ -134,7 +134,6 @@ async def _process_ai_plan_ready(
                 f"action={action} plan_type={plan_type.value} "
                 f"client_id={client_id} request_id={request_id}"
             )
-            await _mark_plan_delivered(request_id)
             return
 
         bot: Bot = request.app["bot"]

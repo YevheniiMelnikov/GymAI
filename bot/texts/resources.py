@@ -231,6 +231,7 @@ class MessageText(AutoName):
     no_profiles_found = auto()
     new_program = auto()
     program_updated = auto()
+    subscription_created = auto()
     wait_for_verification = auto()
     not_verified = auto()
     gift = auto()

@@ -278,10 +278,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
                 callback_query,
                 msg_text("coach_agent_error", profile.language).format(tg=settings.TG_SUPPORT_CONTACT),
             )
-            await bot.send_message(
-                settings.ADMIN_ID,
-                f"AI program generation dispatch failed for client {client.id}",
-            )
+            logger.error(f"ai_plan_dispatch_failed plan_type=program client_id={client.id} request_id={request_id}")
         else:
             schedule_ai_plan_notification_watch(
                 bot=bot,
@@ -356,10 +353,7 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
             callback_query,
             msg_text("coach_agent_error", lang).format(tg=settings.TG_SUPPORT_CONTACT),
         )
-        await bot.send_message(
-            settings.ADMIN_ID,
-            f"AI subscription generation dispatch failed for client {client.id}",
-        )
+        logger.error(f"ai_plan_dispatch_failed plan_type=subscription client_id={client.id} request_id={request_id}")
         return
     schedule_ai_plan_notification_watch(
         bot=bot,
