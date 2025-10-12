@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Any, Protocol
 from time import monotonic
 
 from core.schemas import Program, QAResponse, Subscription
@@ -32,6 +32,8 @@ class AgentDeps:
     fallback_used: bool = False
     cached_history: list[str] | None = None
     started_at: float = field(default_factory=monotonic)
+    called_tools: set[str] = field(default_factory=set)
+    tool_cache: dict[str, Any] = field(default_factory=dict)
 
 
 class CoachAgentProtocol(Protocol):

@@ -175,6 +175,7 @@ class CoachAgent:
         deps.mode = CoachMode.program if output_type is Program else CoachMode.subscription
         if deps.mode in (CoachMode.program, CoachMode.subscription):
             deps.max_run_seconds = 0.0
+            deps.max_tool_calls = 0
         agent = cls._get_agent()
         logger.debug(
             f"agent.generate locale={deps.locale} mode={deps.mode.value} max_run_seconds={deps.max_run_seconds}"
@@ -211,7 +212,14 @@ class CoachAgent:
             message_history=history,
             model_settings=ModelSettings(response_format={"type": "json_object"}, temperature=0.2),
         )
-        return cls._normalize_output(raw_result, output_type)
+        normalized = cls._normalize_output(raw_result, output_type)
+        logger.debug(
+            "agent.done client_id=%s mode=%s tools_called=%s",
+            deps.client_id,
+            deps.mode.value if deps.mode else "unknown",
+            sorted(deps.called_tools),
+        )
+        return normalized
 
     @classmethod
     async def update_workout_plan(
