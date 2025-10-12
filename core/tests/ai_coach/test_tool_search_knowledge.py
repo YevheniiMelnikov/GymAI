@@ -2,7 +2,7 @@ import asyncio
 import pytest  # pyrefly: ignore[import-error]
 
 from ai_coach.agent import AgentDeps
-from ai_coach.agent.base import AgentExecutionAborted
+from ai_coach.exceptions import AgentExecutionAborted
 from ai_coach.agent.tools import tool_get_chat_history, tool_search_knowledge
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 

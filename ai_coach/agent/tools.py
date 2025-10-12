@@ -18,7 +18,8 @@ from core.utils.short_url import short_url
 from core.enums import SubscriptionPeriod
 from config.app_settings import settings
 
-from .base import AgentDeps, AgentExecutionAborted
+from .base import AgentDeps
+from ai_coach.exceptions import AgentExecutionAborted
 from ai_coach.types import CoachMode
 
 from ..schemas import ProgramPayload
@@ -81,8 +82,6 @@ def _prepare_tool(ctx: RunContext[AgentDeps], tool_name: str) -> AgentDeps:  # p
 def _log_tool_disabled(deps: AgentDeps, tool_name: str, *, reason: str) -> None:
     if tool_name in deps.disabled_tools:
         return
-    mode_value = deps.mode.value if deps.mode else "unknown"
-    logger.debug(f"{reason} client_id={deps.client_id} tool={tool_name} mode={mode_value}")
     deps.disabled_tools.add(tool_name)
 
 
@@ -95,7 +94,6 @@ def _start_tool(
         return deps, True, deps.tool_cache.get(tool_name)
     prepared = _prepare_tool(ctx, tool_name)
     prepared.called_tools.add(tool_name)
-    logger.debug(f"{tool_name} start client_id={prepared.client_id}")
     return prepared, False, None
 
 

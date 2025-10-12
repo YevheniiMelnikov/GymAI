@@ -7,7 +7,7 @@ from typing import Any, Awaitable, Callable, cast
 
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from ai_coach.agent import AgentDeps, CoachAgent  # pyrefly: ignore[missing-module-attribute]
-from ai_coach.agent.base import AgentExecutionAborted
+from ai_coach.exceptions import AgentExecutionAborted
 from core.services import APIService
 from ai_coach.application import app, security
 from ai_coach.schemas import AICoachRequest

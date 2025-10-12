@@ -8,14 +8,6 @@ from ai_coach.types import CoachMode
 from config.app_settings import settings
 
 
-class AgentExecutionAborted(RuntimeError):
-    """Raised when an agent run must stop early."""
-
-    def __init__(self, message: str, *, reason: str) -> None:
-        super().__init__(message)
-        self.reason = reason
-
-
 @dataclass
 class AgentDeps:
     client_id: int
