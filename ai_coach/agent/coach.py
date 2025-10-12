@@ -172,9 +172,13 @@ class CoachAgent:
         output_type: type[Program] | type[Subscription],
         instructions: str | None = None,
     ) -> Program | Subscription:
-        agent = cls._get_agent()
-        logger.debug(f"agent.generate locale={deps.locale}")
         deps.mode = CoachMode.program if output_type is Program else CoachMode.subscription
+        if deps.mode in (CoachMode.program, CoachMode.subscription):
+            deps.max_run_seconds = 0.0
+        agent = cls._get_agent()
+        logger.debug(
+            f"agent.generate locale={deps.locale} mode={deps.mode.value} max_run_seconds={deps.max_run_seconds}"
+        )
         today = datetime.now(ZoneInfo(settings.TIME_ZONE)).date().isoformat()
         context_lines: list[str] = []
         if workout_type:

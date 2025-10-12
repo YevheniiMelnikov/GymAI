@@ -17,6 +17,7 @@ from core.enums import SubscriptionPeriod
 from config.app_settings import settings
 
 from .base import AgentDeps, AgentExecutionAborted
+from ai_coach.types import CoachMode
 
 from ..schemas import ProgramPayload
 from core.services import get_gif_manager
@@ -49,7 +50,15 @@ def _prepare_tool(ctx: RunContext[AgentDeps], tool_name: str) -> AgentDeps:  # p
     deps = ctx.deps
     elapsed = monotonic() - deps.started_at
     if deps.max_run_seconds > 0 and elapsed > deps.max_run_seconds:
-        logger.info(f"agent_tool_timeout client_id={deps.client_id} tool={tool_name} elapsed={elapsed:.2f}")
+        mode_value = deps.mode.value if deps.mode else "unknown"
+        if deps.mode in (CoachMode.program, CoachMode.subscription):
+            logger.info(
+                f"agent_tool_timeout_nonfatal client_id={deps.client_id} tool={tool_name} elapsed={elapsed:.2f} mode={mode_value}"
+            )
+            return deps
+        logger.info(
+            f"agent_tool_timeout client_id={deps.client_id} tool={tool_name} elapsed={elapsed:.2f} mode={mode_value}"
+        )
         raise AgentExecutionAborted("AI coach request timed out", reason="timeout")
     deps.tool_calls += 1
     if deps.max_tool_calls > 0 and deps.tool_calls > deps.max_tool_calls:
