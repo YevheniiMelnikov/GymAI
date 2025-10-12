@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import datetime
 import inspect
 from typing import Any, Optional
+
+from zoneinfo import ZoneInfo
 
 from openai import AsyncOpenAI  # pyrefly: ignore[import-error]
 from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
 from pydantic import BaseModel
+from loguru import logger  # pyrefly: ignore[import-error]
 
 from config.app_settings import settings
 from core.enums import WorkoutType
@@ -24,7 +27,6 @@ from .prompts import (
 
 from .tools import toolset
 from ..schemas import ProgramPayload
-
 from pydantic_ai import Agent, RunContext  # pyrefly: ignore[import-error]
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart  # pyrefly: ignore[import-error]
 from pydantic_ai.models.openai import OpenAIChatModel  # pyrefly: ignore[import-error]
@@ -59,7 +61,8 @@ class CoachAgent:
 
     @staticmethod
     def _lang(deps: AgentDeps) -> str:
-        return deps.locale or getattr(settings, "DEFAULT_LANG", "en")
+        language: str = deps.locale or getattr(settings, "DEFAULT_LANG", "en")
+        return language
 
     @classmethod
     def _init_agent(cls) -> Any:
@@ -169,9 +172,12 @@ class CoachAgent:
         output_type: type[Program] | type[Subscription],
         instructions: str | None = None,
     ) -> Program | Subscription:
-        agent = cls._get_agent()
         deps.mode = CoachMode.program if output_type is Program else CoachMode.subscription
-        today = date.today().isoformat()
+        if deps.mode in (CoachMode.program, CoachMode.subscription):
+            deps.max_run_seconds = 0.0
+            deps.max_tool_calls = 8 if deps.mode is CoachMode.program else 6
+        agent = cls._get_agent()
+        today = datetime.now(ZoneInfo(settings.TIME_ZONE)).date().isoformat()
         context_lines: list[str] = []
         if workout_type:
             context_lines.append(f"Workout type: {workout_type.value}")
@@ -179,8 +185,9 @@ class CoachAgent:
             context_lines.append(prompt)
         if period:
             context_lines.append(f"Period: {period}")
-        if workout_days:
-            context_lines.append(f"Workout days: {', '.join(workout_days)}")
+        effective_days = workout_days or ["Пн", "Ср", "Пт", "Сб"]
+        if effective_days:
+            context_lines.append(f"Workout days: {', '.join(effective_days)}")
         if wishes:
             context_lines.append(f"Wishes: {wishes}")
         mode = "program" if output_type is Program else "subscription"
@@ -200,8 +207,16 @@ class CoachAgent:
             deps=deps,
             output_type=output_type,
             message_history=history,
+            model_settings=ModelSettings(response_format={"type": "json_object"}, temperature=0.2),
         )
-        return cls._normalize_output(raw_result, output_type)
+        normalized = cls._normalize_output(raw_result, output_type)
+        logger.debug(
+            "agent.done client_id=%s mode=%s tools_called=%s",
+            deps.client_id,
+            deps.mode.value if deps.mode else "unknown",
+            sorted(deps.called_tools),
+        )
+        return normalized
 
     @classmethod
     async def update_workout_plan(
@@ -238,6 +253,7 @@ class CoachAgent:
             deps=deps,
             output_type=output_type,
             message_history=history,
+            model_settings=ModelSettings(response_format={"type": "json_object"}, temperature=0.2),
         )
         return cls._normalize_output(raw_result, output_type)
 

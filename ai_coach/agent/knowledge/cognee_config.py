@@ -93,9 +93,7 @@ class CogneeConfig:
     @staticmethod
     def _patch_graph_relationship_ledger(ledger_cls: type) -> None:
         """Fix default ID generation for graph relationship ledger."""
-        ledger_cls.__table__.c.id.default = sa_schema.ColumnDefault(
-            uuid4
-        )  # pyrefly: ignore[missing-attribute, bad-argument-type]
+        ledger_cls.__table__.c.id.default = sa_schema.ColumnDefault(uuid4)  # noqa
 
     @staticmethod
     def _patch_litellm_embedding_engine(engine_cls: type) -> None:
@@ -107,8 +105,8 @@ class CogneeConfig:
             return await embedding(  # pyrefly: ignore[async-error]
                 model=model or settings.EMBEDDING_MODEL,
                 input=texts,
-                api_key=settings.LLM_API_KEY,
-                base_url=settings.LLM_API_URL or None,
+                api_key=settings.EMBEDDING_API_KEY,
+                base_url=settings.EMBEDDING_ENDPOINT,
                 dimensions=kwargs.get("dimensions"),
                 user=kwargs.get("user"),
                 extra_body=kwargs.get("extra_body"),

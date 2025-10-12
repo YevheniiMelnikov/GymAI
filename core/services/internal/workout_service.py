@@ -2,9 +2,12 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 from urllib.parse import urljoin
+from zoneinfo import ZoneInfo
+
 from loguru import logger
 
-from core.services.internal.api_client import APIClient
+from config.app_settings import settings
+from core.services.internal.api_client import APIClient, APIClientHTTPError, APIClientTransportError
 from core.exceptions import UserServiceError
 from core.schemas import Program, DayExercises, Subscription
 from core.enums import SubscriptionPeriod
@@ -57,7 +60,16 @@ class WorkoutService(APIClient):
 
     async def get_latest_program(self, client_profile_id: int) -> Program | None:
         url = urljoin(self.api_url, f"api/v1/programs/?client_profile={client_profile_id}")
-        status, data = await self._api_request("get", url, headers={"Authorization": f"Api-Key {self.api_key}"})
+        try:
+            status, data = await self._api_request(
+                "get",
+                url,
+                headers={"Authorization": f"Api-Key {self.api_key}"},
+                allow_statuses={404},
+            )
+        except (APIClientHTTPError, APIClientTransportError) as exc:
+            logger.error(f"Program lookup failed for client_profile={client_profile_id}: {exc}")
+            return None
 
         if status == 200:
             results = data
@@ -98,7 +110,7 @@ class WorkoutService(APIClient):
             "price": str(amount),
             "workout_days": workout_days,
             "period": period.value,
-            "payment_date": datetime.today().strftime("%Y-%m-%d"),
+            "payment_date": datetime.now(ZoneInfo(settings.TIME_ZONE)).date().isoformat(),
             "wishes": wishes,
             "exercises": exercises or [],
         }
@@ -115,7 +127,16 @@ class WorkoutService(APIClient):
 
     async def get_latest_subscription(self, client_profile_id: int) -> Subscription | None:
         url = urljoin(self.api_url, f"api/v1/subscriptions/?client_profile={client_profile_id}")
-        status, data = await self._api_request("get", url, headers={"Authorization": f"Api-Key {self.api_key}"})
+        try:
+            status, data = await self._api_request(
+                "get",
+                url,
+                headers={"Authorization": f"Api-Key {self.api_key}"},
+                allow_statuses={404},
+            )
+        except (APIClientHTTPError, APIClientTransportError) as exc:
+            logger.error(f"Subscription lookup failed for client_profile={client_profile_id}: {exc}")
+            return None
 
         if status == 200:
             results = data
@@ -146,7 +167,15 @@ class WorkoutService(APIClient):
 
     async def get_all_subscriptions(self, client_profile_id: int) -> list[Subscription]:
         url = urljoin(self.api_url, f"api/v1/subscriptions/?client_profile={client_profile_id}")
-        status, data = await self._api_request("get", url, headers={"Authorization": f"Api-Key {self.api_key}"})
+        try:
+            status, data = await self._api_request(
+                "get",
+                url,
+                headers={"Authorization": f"Api-Key {self.api_key}"},
+            )
+        except (APIClientHTTPError, APIClientTransportError) as exc:
+            logger.error(f"Failed to retrieve subscriptions for client_profile_id={client_profile_id}: {exc}")
+            return []
 
         if status == 200:
             results = data
@@ -169,7 +198,15 @@ class WorkoutService(APIClient):
 
     async def get_all_programs(self, client_profile_id: int) -> list[Program]:
         url = urljoin(self.api_url, f"api/v1/programs/?client_profile={client_profile_id}")
-        status, data = await self._api_request("get", url, headers={"Authorization": f"Api-Key {self.api_key}"})
+        try:
+            status, data = await self._api_request(
+                "get",
+                url,
+                headers={"Authorization": f"Api-Key {self.api_key}"},
+            )
+        except (APIClientHTTPError, APIClientTransportError) as exc:
+            logger.error(f"Failed to retrieve programs for client_profile_id={client_profile_id}: {exc}")
+            return []
 
         if status == 200:
             results = data

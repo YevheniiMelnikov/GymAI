@@ -305,7 +305,7 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext,
             coach.profile,
             client.profile,
             msg_text("workout_completed", coach_lang).format(name=client.name, program=program),
-        )
+        )  # TODO: REPLACE WITH WEBAPP
 
         message = cast(Message, callback_query.message)
         assert message is not None
@@ -338,7 +338,7 @@ async def workout_description(message: Message, state: FSMContext, bot: Bot):
             feedback=message.text,
             program=program,
         ),
-    )
+    )  # TODO: REPLACE WITH WEBAPP
 
     await answer_msg(message, msg_text("keep_going", profile.language))
     await show_main_menu(message, profile, state)

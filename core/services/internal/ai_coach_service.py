@@ -1,17 +1,20 @@
 # ai_coach_service.py
 import base64
+import json
 from enum import Enum
 from typing import Any
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 from loguru import logger
+from pydantic import ValidationError
 
-from core.exceptions import UserServiceError
 from ai_coach.schemas import AICoachRequest
 from ai_coach.types import CoachMode
+from core.exceptions import UserServiceError
 from core.schemas import Program, Subscription, QAResponse
-from .api_client import APIClient
+from core.ai_coach_fallback import fallback_plan
+from .api_client import APIClient, APIClientHTTPError, APIClientTransportError
 from ...enums import WorkoutPlanType, WorkoutType
 
 
@@ -20,6 +23,11 @@ class AiCoachService(APIClient):
         super().__init__(client, settings)
         self.base_url = settings.AI_COACH_URL
         self.use_default_auth = False
+        parsed = urlsplit(self.base_url)
+        logger.info(
+            "AI coach service configured "
+            f"base_url={self.base_url} scheme={parsed.scheme} host={parsed.hostname} port={parsed.port}"
+        )
 
     async def ask_ai(
         self,
@@ -91,7 +99,12 @@ class AiCoachService(APIClient):
         if data is None:
             return None
         if plan_type is WorkoutPlanType.PROGRAM:
-            return Program.model_validate(data)
+            return self._validate_program_response(
+                data,
+                client_id=client_id,
+                request_id=request_id,
+                context="create",
+            )
         return Subscription.model_validate(data)
 
     async def update_workout_plan(
@@ -126,8 +139,32 @@ class AiCoachService(APIClient):
         if data is None:
             return None
         if plan_type is WorkoutPlanType.PROGRAM:
-            return Program.model_validate(data)
+            return self._validate_program_response(
+                data,
+                client_id=client_id,
+                request_id=request_id,
+                context="update",
+            )
         return Subscription.model_validate(data)
+
+    def _validate_program_response(
+        self,
+        data: Any,
+        *,
+        client_id: int,
+        request_id: str | None,
+        context: str,
+    ) -> Program:
+        if isinstance(data, Program):
+            return data
+        try:
+            return Program.model_validate(data)
+        except (ValidationError, TypeError) as exc:
+            logger.warning(
+                f"ai_coach_invalid_program_payload client_id={client_id} request_id={request_id} "
+                f"context={context} error={exc}"
+            )
+            raise UserServiceError("AI coach returned an invalid program payload") from exc
 
     async def _post_ask(
         self,
@@ -136,46 +173,125 @@ class AiCoachService(APIClient):
         request_id: str | None,
         extra_headers: dict[str, str] | None = None,
     ) -> Any | None:
-        url = urljoin(self.base_url, "ask/")
         headers: dict[str, str] = {}
         if request_id:
             headers["X-Request-ID"] = request_id
         if extra_headers:
             headers.update(extra_headers)
-        logger.debug(f"AI coach ask request_id={request_id} client_id={payload.client_id}")
-        status, data = await self._api_request(
-            "post",
-            url,
-            payload.model_dump(exclude_none=True),
-            headers=headers or None,
-            timeout=self.settings.AI_COACH_TIMEOUT,
+        payload_dict: dict[str, Any] = payload.model_dump(exclude_none=True)
+        logger.debug(
+            f"ai_coach.ask POST client_id={payload.client_id} mode={payload.mode.value} "
+            f"language={payload_dict.get('language')}"
         )
+        logger.debug(f"AI coach ask request_id={request_id} client_id={payload.client_id}")
+        async with httpx.AsyncClient(base_url=self.base_url, timeout=self.settings.AI_COACH_TIMEOUT) as client:
+            ping_path = "internal/debug/ping"
+            ping_url = urljoin(self.base_url, ping_path)
+            try:
+                ping_status, _ = await self._api_request(
+                    "get",
+                    ping_path,
+                    timeout=5,
+                    client=client,
+                )
+                logger.debug(f"AI coach ping request_id={request_id} status={ping_status} url={ping_url}")
+            except APIClientTransportError as exc:
+                logger.warning(f"AI coach ping transport error request_id={request_id} url={ping_url} error={exc}")
+            except APIClientHTTPError as exc:
+                logger.warning(
+                    f"AI coach ping failed request_id={request_id} status={exc.status} url={ping_url} error={exc.text}"
+                )
+
+            try:
+                status, data = await self._api_request(
+                    "post",
+                    "ask/",
+                    payload_dict,
+                    headers=headers or None,
+                    timeout=self.settings.AI_COACH_TIMEOUT,
+                    client=client,
+                )
+            except APIClientHTTPError as exc:
+                logger.error(
+                    "AI coach request failed "
+                    f"request_id={request_id} client_id={payload.client_id} "
+                    f"status={exc.status} reason={exc.reason}"
+                )
+                if payload.mode in {CoachMode.program, CoachMode.subscription, CoachMode.update} and exc.reason in {
+                    "timeout",
+                    "knowledge_base_empty",
+                }:
+                    workout_type_value = (
+                        payload.workout_type.value
+                        if isinstance(payload.workout_type, WorkoutType)
+                        else payload.workout_type
+                    )
+                    fallback = fallback_plan(
+                        plan_type=payload.plan_type,
+                        client_profile_id=payload.client_id,
+                        workout_type=workout_type_value,
+                        wishes=payload.wishes,
+                        workout_days=payload.workout_days,
+                        period=payload.period,
+                    )
+                    logger.info(
+                        "AI coach fallback applied "
+                        f"request_id={request_id} client_id={payload.client_id} reason={exc.reason}"
+                    )
+                    return fallback
+                raise
+            except APIClientTransportError:
+                logger.error(f"AI coach request failed request_id={request_id} client_id={payload.client_id}")
+                raise
+
         logger.debug(f"AI coach ask response request_id={request_id} HTTP={status}: {data}")
         if status == 200:
             return data
-        logger.error(f"AI coach request failed HTTP={status}: {data}")
-        return None
+
+        reason: str | None = None
+        if isinstance(data, dict):
+            reason = data.get("reason") or data.get("detail")
+        text = json.dumps(data) if isinstance(data, (dict, list)) else str(data or "")
+        raise APIClientHTTPError(
+            status,
+            text,
+            method="post",
+            url="ask/",
+            retryable=False,
+            reason=reason if isinstance(reason, str) else None,
+        )
 
     async def refresh_knowledge(self) -> None:
-        url = urljoin(self.base_url, "knowledge/refresh/")
         token = base64.b64encode(
             f"{self.settings.AI_COACH_REFRESH_USER}:{self.settings.AI_COACH_REFRESH_PASSWORD}".encode()
         ).decode()
         headers = {"Authorization": f"Basic {token}"}
         try:
-            status, _ = await self._api_request("post", url, headers=headers, timeout=self.settings.AI_COACH_TIMEOUT)
-        except UserServiceError as exc:
+            async with httpx.AsyncClient(base_url=self.base_url, timeout=self.settings.AI_COACH_TIMEOUT) as client:
+                status, _ = await self._api_request(
+                    "post",
+                    "knowledge/refresh/",
+                    headers=headers,
+                    timeout=self.settings.AI_COACH_TIMEOUT,
+                    client=client,
+                )
+        except (APIClientHTTPError, APIClientTransportError) as exc:
             logger.error(f"Knowledge refresh request failed: {exc}")
-            raise
+            raise UserServiceError(str(exc)) from exc
         if status != 200:
             logger.error(f"Knowledge refresh failed HTTP={status}")
             raise UserServiceError(f"Knowledge refresh failed HTTP={status}")
 
     async def health(self, timeout: float = 3.0) -> bool:
-        url = urljoin(self.base_url, "health/")
         try:
-            status, _ = await self._api_request("get", url, timeout=int(timeout))
-        except UserServiceError as exc:
+            async with httpx.AsyncClient(base_url=self.base_url, timeout=self.settings.AI_COACH_TIMEOUT) as client:
+                status, _ = await self._api_request(
+                    "get",
+                    "health/",
+                    timeout=int(timeout),
+                    client=client,
+                )
+        except (APIClientHTTPError, APIClientTransportError) as exc:
             logger.debug(f"AI coach health check failed: {exc}")
             return False
         return status == 200

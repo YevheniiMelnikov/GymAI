@@ -148,13 +148,17 @@ services:
         EXTRAS: ""
     container_name: celery_worker
     <<: *common_env
+    environment:
+      SERVICE_ROLE: celery
     entrypoint: /app/docker/entrypoint.sh
     command: >
       celery -A config.celery:celery_app worker
       -l info
-      -Q default,critical,maintenance
+      -Q default,critical,maintenance,ai_coach
       -P threads
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks: [internal]
 
   ai_coach:

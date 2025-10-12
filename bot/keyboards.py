@@ -275,18 +275,9 @@ def select_days_kb(lang: str, selected_days: list) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons)
 
 
-def program_view_kb(lang: str, webapp_url: str | None = None) -> KbMarkup:
+def program_view_kb(lang: str, webapp_url: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
-
-    buttons = [
-        [builder.add("back", "previous"), builder.add("forward", "next")],
-        [builder.add("history", "history")],
-    ]
-
-    if webapp_url:
-        buttons.append([KbBtn(text=btn_text("view", lang), web_app=WebAppInfo(url=webapp_url))])
-
-    buttons.append([builder.add("quit", "quit")])
+    buttons = [[KbBtn(text=btn_text("view", lang), web_app=WebAppInfo(url=webapp_url))], [builder.add("quit", "quit")]]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
@@ -444,7 +435,8 @@ def payment_kb(lang: str, link: str, service_type: str) -> KbMarkup:
 def program_action_kb(lang: str, webapp_url: str | None = None) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
-        [builder.add("view", webapp_url=webapp_url), builder.add("new_program", "new_program")],
+        [builder.add("view", webapp_url=webapp_url)],
+        [builder.add("new_program", "new_program")],
         [builder.add("prev_menu", "back")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)

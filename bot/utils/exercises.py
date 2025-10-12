@@ -3,7 +3,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from loguru import logger
 
-from bot.utils.text import get_translated_week_day
 from bot.utils.bot import del_msg, answer_msg, delete_messages
 from bot.keyboards import program_edit_kb, program_manage_kb
 from bot.states import States
@@ -46,15 +45,8 @@ async def save_exercise(
 
     if data.get("subscription"):
         days: list[str] = data.get("days", [])
-        if day_index < len(days):
-            day_code = days[day_index]
-        else:
-            logger.warning(f"Invalid day_index {day_index} for days: {days}")
-            day_code = "monday"
-        day_label = get_translated_week_day(profile.language, day_code).lower()
         split_number = len(days)
     else:
-        day_label = day_index + 1
         split_raw = cast(int | None, data.get("split"))
         split_number: int = int(split_raw or 0)
         if not split_number:
@@ -69,8 +61,6 @@ async def save_exercise(
                 )
                 split_number = 1
 
-    program_text = await format_program(exercises, day_index)
-
     msg: Message | None = None
     if isinstance(input_data, CallbackQuery) and isinstance(input_data.message, Message):
         msg = input_data.message
@@ -83,7 +73,7 @@ async def save_exercise(
     exercise_msg = await answer_msg(msg, msg_text("enter_exercise", profile.language))
     program_msg = await answer_msg(
         msg,
-        msg_text("program_page", profile.language).format(program=program_text, day=day_label),
+        msg_text("new_program", profile.language),
         reply_markup=program_manage_kb(profile.language, split_number),
         disable_web_page_preview=True,
     )
@@ -114,13 +104,12 @@ async def update_exercise_data(message: Message, state: FSMContext, lang: str, u
     for k, v in updated_option.items():
         setattr(selected_ex, k, v)
 
-    program = await format_program(exercises, int(day_index))
     await state.update_data(exercises=exercises)
     await state.set_state(States.program_edit)
 
     await answer_msg(
         message,
-        msg_text("program_page", lang).format(program=program, day=int(day_index) + 1),
+        msg_text("new_program", lang),
         disable_web_page_preview=True,
     )
     await answer_msg(
@@ -159,9 +148,7 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
         return
 
     language = cast(str, profile.language or settings.DEFAULT_LANG)
-    week_day = get_translated_week_day(language, day).lower()
     day_index = subscription.workout_days.index(day)
-    program_text = await format_program(subscription.exercises, day_index)
 
     await state.update_data(
         exercises=subscription.exercises,
@@ -176,7 +163,7 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
     if callback_query.message and isinstance(callback_query.message, Message):
         await answer_msg(
             callback_query.message,
-            msg_text("program_page", language).format(program=program_text, day=week_day),
+            msg_text("new_program", language),
             disable_web_page_preview=True,
             reply_markup=program_edit_kb(language),
         )

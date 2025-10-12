@@ -21,7 +21,7 @@ from config.app_settings import settings
 from core.cache import Cache
 from core.enums import CoachType, SubscriptionPeriod
 from core.schemas import Coach, Client, Profile
-from bot.utils.chat import contact_client, process_feedback_content, send_program
+from bot.utils.chat import contact_client, process_feedback_content
 from bot.utils.menus import (
     show_main_menu,
     show_exercises_menu,
@@ -46,10 +46,9 @@ from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
 from core.services import APIService
 from bot.keyboards import payment_kb
 from bot.utils.credits import available_packages
-from bot.utils.ai_coach import generate_workout_plan
+from bot.utils.ai_coach import enqueue_workout_plan_generation
 from core.enums import WorkoutPlanType, WorkoutType
 from bot.utils.credits import available_ai_services
-from bot.utils.exercises import format_program
 from core.utils.idempotency import acquire_once
 
 menu_router = Router()
@@ -246,7 +245,8 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
             return
 
         logger.debug(
-            f"Program generation started for client_id={client.id} ttl={settings.LLM_COOLDOWN} request_id={request_id}"
+            "AI coach plan generation started plan_type=program "
+            f"client_id={client.id} request_id={request_id} ttl={settings.LLM_COOLDOWN}"
         )
 
     await APIService.profile.adjust_client_credits(profile.id, -required)
@@ -254,7 +254,6 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
     await answer_msg(callback_query, msg_text("request_in_progress", profile.language))
     if isinstance(callback_query.message, Message):
         await show_main_menu(callback_query.message, profile, state)
-    bot = cast(Bot, callback_query.bot)
     assigned_coaches = [await Cache.coach.get_coach(coach_id) for coach_id in client.assigned_to]
     if any(coach.coach_type == CoachType.ai_coach for coach in assigned_coaches):
         pass  # already assigned to AI
@@ -266,41 +265,20 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
             logger.error("AI coach not found when assigning to client")
 
     if service == "program":
-        try:
-            exercises = await generate_workout_plan(
-                client=client,
-                language=profile.language,
-                plan_type=WorkoutPlanType.PROGRAM,
-                workout_type=WorkoutType(data.get("workout_type", "")),
-                wishes=wishes,
-                request_id=request_id,
-            )
-        except Exception as e:  # noqa: BLE001
-            logger.exception(f"Program generation failed: {e} request_id={request_id}")
-            await answer_msg(
-                callback_query,
-                msg_text("coach_agent_error", profile.language).format(tg=settings.TG_SUPPORT_CONTACT),
-            )
-            return
-        if not exercises:
-            await answer_msg(
-                callback_query,
-                msg_text("coach_agent_error", profile.language).format(tg=settings.TG_SUPPORT_CONTACT),
-            )
-            await bot.send_message(
-                settings.ADMIN_ID,
-                f"AI program generation failed for client {client.id}",
-            )
-            return
-        program_text = await format_program(exercises, day=0)
-        await send_program(client, profile.language, program_text, state, bot)
-        await state.update_data(
-            exercises=[d.model_dump() for d in exercises],
-            split=len(exercises),
-            day_index=0,
-            client=True,
+        queued = await enqueue_workout_plan_generation(
+            client=client,
+            language=profile.language,
+            plan_type=WorkoutPlanType.PROGRAM,
+            workout_type=WorkoutType(data.get("workout_type", "")),
+            wishes=wishes,
+            request_id=request_id,
         )
-        await state.set_state(States.program_view)
+        if not queued:
+            await answer_msg(
+                callback_query,
+                msg_text("coach_agent_error", profile.language).format(tg=settings.TG_SUPPORT_CONTACT),
+            )
+            logger.error(f"ai_plan_dispatch_failed plan_type=program client_id={client.id} request_id={request_id}")
         return
 
     period_map = {
@@ -324,7 +302,6 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     profile = Profile.model_validate(data.get("profile"))
     lang = profile.language or settings.DEFAULT_LANG
     days: list[str] = data.get("workout_days", [])
-
     if callback_query.data != "complete":
         data_val = callback_query.data
         if data_val is not None:
@@ -351,7 +328,7 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     request_id = uuid4().hex
     await answer_msg(callback_query, msg_text("request_in_progress", lang))
     await show_main_menu(cast(Message, callback_query.message), profile, state)
-    exercises = await generate_workout_plan(
+    queued = await enqueue_workout_plan_generation(
         client=client,
         language=lang,
         plan_type=WorkoutPlanType.SUBSCRIPTION,
@@ -361,29 +338,20 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
         period=period,
         workout_days=days,
     )
-    if not exercises:
+    if not queued:
         await answer_msg(
             callback_query,
             msg_text("coach_agent_error", lang).format(tg=settings.TG_SUPPORT_CONTACT),
         )
-        bot = cast(Bot, callback_query.bot)
-        await bot.send_message(
-            settings.ADMIN_ID,
-            f"AI subscription generation failed for client {client.id}",
-        )
+        logger.error(f"ai_plan_dispatch_failed plan_type=subscription client_id={client.id} request_id={request_id}")
         return
-    program_text = await format_program(exercises, day=0)
-    bot = cast(Bot, callback_query.bot)
-    await send_program(client, lang, program_text, state, bot)
-    await state.update_data(
-        exercises=[d.model_dump() for d in exercises],
-        split=len(exercises),
-        day_index=0,
-        client=True,
-        subscription=True,
-        days=days,
+    logger.info(
+        "ai_plan_generation_requested request_id=%s client_id=%s profile_id=%s plan_type=%s",
+        request_id,
+        client.id,
+        profile.id,
+        WorkoutPlanType.SUBSCRIPTION.value,
     )
-    await state.set_state(States.program_view)
 
 
 @menu_router.callback_query(States.profile)

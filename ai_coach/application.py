@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 
@@ -12,6 +13,10 @@ from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from ai_coach.agent.knowledge.base_knowledge_loader import KnowledgeLoader
 from core.containers import create_container, set_container, get_container
 from core.services.internal import APIService
+
+
+logging.getLogger("OntologyAdapter").setLevel(logging.WARNING)
+logging.getLogger("CogneeGraph").setLevel(logging.ERROR)
 
 knowledge_ready_event: asyncio.Event | None = None
 

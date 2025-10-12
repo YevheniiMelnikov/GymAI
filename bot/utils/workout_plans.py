@@ -8,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from loguru import logger
 
-from bot.keyboards import program_edit_kb, program_manage_kb, subscription_view_kb
+from bot.keyboards import program_edit_kb, program_manage_kb, subscription_view_kb, program_view_kb
 from bot.states import States
 from config.app_settings import settings
 from core.cache import Cache
@@ -21,13 +21,12 @@ from core.exceptions import (
     ProfileNotFoundError,
 )
 from core.services import APIService
-from bot.utils.chat import send_message, send_program
+from bot.utils.chat import send_message
 from bot.utils.menus import show_main_menu, show_subscription_page, show_balance_menu
 from bot.utils.profiles import get_assigned_coach
 from core.enums import CoachType
 from bot.utils.text import get_translated_week_day
-from bot.utils.exercises import format_program
-from bot.utils.bot import del_msg, answer_msg, delete_messages
+from bot.utils.bot import del_msg, answer_msg, delete_messages, get_webapp_url
 from bot.keyboards import yes_no_kb
 from bot.utils.credits import uah_to_credits
 from bot.texts import msg_text, btn_text
@@ -120,8 +119,6 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bo
             await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
             return
     else:
-        program_text = await format_program(exercises, 0)
-
         try:
             current_program = await Cache.workout.get_latest_program(profile_id)
             wishes = current_program.wishes
@@ -146,7 +143,14 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bo
             await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
             return
 
-        await send_program(client, client_lang, program_text, state, bot)
+        await send_message(
+            recipient=client,
+            text=msg_text("new_program", client_lang),
+            bot=bot,
+            state=state,
+            reply_markup=program_view_kb(client_lang, get_webapp_url("program")),
+            include_incoming_message=False,
+        )
 
     await Cache.client.update_client(client.profile, {"status": ClientStatus.default})
 
@@ -284,13 +288,12 @@ async def manage_program(callback_query: CallbackQuery, profile: Profile, profil
         return
 
     if workout_program and getattr(workout_program, "exercises_by_day", None):
-        program_text = await format_program(workout_program.exercises_by_day, 0)
         program_msg = await answer_msg(
             message,
-            msg_text("program_page", profile.language).format(program=program_text, day=1),
+            msg_text("new_program", profile.language),
             reply_markup=program_edit_kb(profile.language),
             disable_web_page_preview=True,
-        )
+        )  # TODO: REPLACE WITH WEBAPP
 
         message_ids = []
         if program_msg:

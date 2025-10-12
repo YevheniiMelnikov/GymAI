@@ -337,10 +337,10 @@ function_mod = types.ModuleType("pydantic_ai.toolsets.function")
 
 
 class FunctionToolset:
-    def tool(self, func: Any | None = None):  # pragma: no cover - trivial
+    def tool(self, func: Any | None = None, **kwargs: Any):  # pragma: no cover - trivial
         if func is None:
 
-            def decorator(f):
+            def decorator(f: Any) -> Any:
                 return f
 
             return decorator
@@ -478,9 +478,24 @@ redis_async_mod = types.ModuleType("redis.asyncio")
 
 
 class DummyRedis:
+    def __init__(self) -> None:
+        self.storage: dict[str, str] = {}
+
     @classmethod
     def from_url(cls, *a, **k):
         return cls()
+
+    async def set(self, key: str, value: str, ex=None, nx: bool = False):  # type: ignore[no-untyped-def]
+        if nx and key in self.storage:
+            return False
+        self.storage[key] = value
+        return True
+
+    async def get(self, key: str):  # type: ignore[no-untyped-def]
+        return self.storage.get(key)
+
+    async def exists(self, key: str):  # type: ignore[no-untyped-def]
+        return 1 if key in self.storage else 0
 
     async def close(self):
         pass
@@ -1115,6 +1130,13 @@ core_services_pkg.APIService = types.SimpleNamespace(
     workout=types.SimpleNamespace(),
     ai_coach=types.SimpleNamespace(),
 )
+
+
+async def _noop_async(*_args: Any, **_kwargs: Any) -> None:
+    return None
+
+
+core_services_pkg.APIService.workout.get_latest_program = _noop_async
 core_services_pkg.get_gif_manager = lambda: types.SimpleNamespace(find_gif=lambda *a, **k: None)
 core_services_pkg.get_avatar_manager = lambda: types.SimpleNamespace(bucket_name="")
 sys.modules.setdefault("core.services", core_services_pkg)
