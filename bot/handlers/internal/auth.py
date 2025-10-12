@@ -72,37 +72,31 @@ def require_internal_auth(handler: Handler) -> Handler:
         expected_internal_key = (settings.INTERNAL_API_KEY or "").strip()
         provided_internal_key = (request.headers.get("X-Internal-Api-Key", "") or "").strip()
         provided_auth_key = _extract_api_key(request)
+        fallback_api_key = "" if expected_internal_key else (settings.API_KEY or "").strip()
         has_any_key = bool(provided_internal_key or provided_auth_key)
 
+        key_valid = False
         if expected_internal_key:
-            key_valid = False
             if provided_internal_key and hmac.compare_digest(provided_internal_key, expected_internal_key):
                 key_valid = True
             elif provided_auth_key and hmac.compare_digest(provided_auth_key, expected_internal_key):
                 key_valid = True
+        elif fallback_api_key:
+            if provided_internal_key and hmac.compare_digest(provided_internal_key, fallback_api_key):
+                key_valid = True
+            elif provided_auth_key and hmac.compare_digest(provided_auth_key, fallback_api_key):
+                key_valid = True
 
-            if not key_valid:
-                reason = "missing_key" if not has_any_key else "key_mismatch"
-                logger.warning(
-                    f"internal_auth_denied path={request.rel_url} client_ip={client_ip or 'unknown'} "
-                    f"has_key={has_any_key} allowed_ip={allowed_ip} reason={reason}"
-                )
-                payload = {"code": "unauthorized", "message": "Unauthorized"}
-                return web.json_response(payload, status=401)
-
+        if key_valid or allowed_ip:
             return await handler(request, *args, **kwargs)
 
-        api_key = (settings.API_KEY or "").strip()
-        if api_key:
-            if provided_internal_key and hmac.compare_digest(provided_internal_key, api_key):
-                return await handler(request, *args, **kwargs)
-            if provided_auth_key and hmac.compare_digest(provided_auth_key, api_key):
-                return await handler(request, *args, **kwargs)
+        reason = "ip_not_allowed"
+        key_expected = bool(expected_internal_key or fallback_api_key)
+        if key_expected:
+            reason = "missing_key" if not has_any_key else "key_mismatch"
+        elif not client_ip:
+            reason = "missing_ip"
 
-        if allowed_ip:
-            return await handler(request, *args, **kwargs)
-
-        reason = "ip_not_allowed" if client_ip else "missing_ip"
         logger.warning(
             f"internal_auth_denied path={request.rel_url} client_ip={client_ip or 'unknown'} "
             f"has_key={has_any_key} allowed_ip={allowed_ip} reason={reason}"

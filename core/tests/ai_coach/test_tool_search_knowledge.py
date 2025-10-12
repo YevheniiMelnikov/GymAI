@@ -34,7 +34,7 @@ def test_tool_search_knowledge_k(monkeypatch: pytest.MonkeyPatch) -> None:
     asyncio.run(runner())
 
 
-def test_tool_search_knowledge_duplicate_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_tool_search_knowledge_duplicate_returns_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
         async def fake_search(query: str, client_id: int, k: int) -> list[str]:
             return []
@@ -42,8 +42,8 @@ def test_tool_search_knowledge_duplicate_retry(monkeypatch: pytest.MonkeyPatch) 
         monkeypatch.setattr(KnowledgeBase, "search", fake_search)
         ctx = _Ctx()
         await tool_search_knowledge(ctx, "  hello  ")
-        with pytest.raises(AgentExecutionAborted):
-            await tool_search_knowledge(ctx, "hello")
+        result = await tool_search_knowledge(ctx, "hello")
+        assert result == []
 
     asyncio.run(runner())
 

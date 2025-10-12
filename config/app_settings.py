@@ -74,7 +74,11 @@ class Settings(BaseSettings):
     COACH_AGENT_TIMEOUT: int = 60
     CHAT_HISTORY_LIMIT: int = 20
     AI_COACH_MAX_TOOL_CALLS: Annotated[int, Field(default=8)]
-    AI_COACH_REQUEST_TIMEOUT: Annotated[int, Field(default=60)]
+    AI_COACH_REQUEST_TIMEOUT: Annotated[int, Field(default=180)]
+    AI_COACH_DEFAULT_TOOL_TIMEOUT: Annotated[float, Field(default=6.0)]
+    AI_COACH_SEARCH_TIMEOUT: Annotated[float, Field(default=8.0)]
+    AI_COACH_HISTORY_TIMEOUT: Annotated[float, Field(default=12.0)]
+    AI_COACH_PROGRAM_HISTORY_TIMEOUT: Annotated[float, Field(default=12.0)]
     AI_PLAN_DEDUP_TTL: Annotated[int, Field(default=3600)]
     AI_PLAN_NOTIFY_TIMEOUT: Annotated[int, Field(default=900)]
     AI_PLAN_NOTIFY_POLL_INTERVAL: Annotated[int, Field(default=30)]

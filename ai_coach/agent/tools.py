@@ -2,6 +2,7 @@
 # ruff: noqa
 """Tool definitions for the coach agent."""
 
+from asyncio import TimeoutError, wait_for
 from time import monotonic
 
 from loguru import logger
@@ -13,6 +14,7 @@ from core.exercises import exercise_dict
 from core.schemas import DayExercises, Program, Subscription
 from core.utils.short_url import short_url
 from core.enums import SubscriptionPeriod
+from config.app_settings import settings
 
 from .base import AgentDeps, AgentExecutionAborted
 
@@ -21,6 +23,17 @@ from core.services import get_gif_manager
 
 
 toolset = FunctionToolset()
+
+DEFAULT_TOOL_TIMEOUT: float = float(settings.AI_COACH_DEFAULT_TOOL_TIMEOUT)
+TOOL_TIMEOUTS: dict[str, float] = {
+    "tool_search_knowledge": float(settings.AI_COACH_SEARCH_TIMEOUT),
+    "tool_get_chat_history": float(settings.AI_COACH_HISTORY_TIMEOUT),
+    "tool_get_program_history": float(settings.AI_COACH_PROGRAM_HISTORY_TIMEOUT),
+}
+
+
+def _tool_timeout(tool_name: str) -> float:
+    return TOOL_TIMEOUTS.get(tool_name, DEFAULT_TOOL_TIMEOUT)
 
 
 def _prepare_tool(ctx: RunContext[AgentDeps], tool_name: str) -> AgentDeps:  # pyrefly: ignore[unsupported-operation]
@@ -46,23 +59,34 @@ async def tool_search_knowledge(
     from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 
     deps = _prepare_tool(ctx, "tool_search_knowledge")
+    timeout = _tool_timeout("tool_search_knowledge")
     client_id = deps.client_id
     normalized_query = query.strip()
     logger.debug(f"tool_search_knowledge client_id={client_id} query='{normalized_query[:80]}' k={k}")
     if not normalized_query:
         raise ModelRetry("Knowledge search requires a non-empty query. Summarize the client's goal before retrying.")
     if deps.knowledge_base_empty:
+        deps.last_knowledge_query = normalized_query
+        deps.last_knowledge_empty = True
         logger.warning(
             f"knowledge_search_aborted client_id={client_id} query='{normalized_query[:80]}' reason=knowledge_base_empty"
         )
-        raise AgentExecutionAborted("Knowledge base returned no data", reason="knowledge_base_empty")
+        return []
     if deps.last_knowledge_query == normalized_query and deps.last_knowledge_empty:
         logger.warning(
             f"knowledge_search_repeat client_id={client_id} query='{normalized_query[:80]}' reason=empty_previous"
         )
-        raise AgentExecutionAborted("Knowledge search already returned no results", reason="knowledge_base_empty")
+        return []
     try:
-        result = await KnowledgeBase.search(normalized_query, client_id, k)
+        result = await wait_for(KnowledgeBase.search(normalized_query, client_id, k), timeout=timeout)
+    except TimeoutError:
+        deps.knowledge_base_empty = True
+        deps.last_knowledge_query = normalized_query
+        deps.last_knowledge_empty = True
+        logger.warning(
+            f"knowledge_search_timeout client_id={client_id} query='{normalized_query[:80]}' timeout={timeout}"
+        )
+        return []
     except Exception as e:  # pragma: no cover - forward to model
         message = str(e)
         if "Empty graph" in message or "EntityNotFound" in type(e).__name__:
@@ -94,17 +118,22 @@ async def tool_get_chat_history(
     from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 
     deps = _prepare_tool(ctx, "tool_get_chat_history")
+    timeout = _tool_timeout("tool_get_chat_history")
     client_id = deps.client_id
     logger.debug(f"tool_get_chat_history client_id={client_id} limit={limit}")
     try:
         if deps.cached_history is None:
-            history = await KnowledgeBase.get_message_history(client_id, limit)
+            history = await wait_for(KnowledgeBase.get_message_history(client_id, limit), timeout=timeout)
             deps.cached_history = history
         else:
             history = deps.cached_history
         if limit is None:
             return list(history)
         return list(history[:limit])
+    except TimeoutError:
+        logger.warning(f"chat_history_timeout client_id={client_id} tool=tool_get_chat_history timeout={timeout}")
+        deps.cached_history = deps.cached_history or []
+        return list(deps.cached_history)
     except Exception as e:  # pragma: no cover - forward to model
         raise ModelRetry(f"Chat history unavailable: {e}. Try calling again.") from e
 
@@ -145,10 +174,14 @@ async def tool_get_program_history(
     from core.services import APIService
 
     deps = _prepare_tool(ctx, "tool_get_program_history")
+    timeout = _tool_timeout("tool_get_program_history")
     client_id = deps.client_id
     logger.debug(f"tool_get_program_history client_id={client_id}")
     try:
-        return await APIService.workout.get_all_programs(client_id)
+        return await wait_for(APIService.workout.get_all_programs(client_id), timeout=timeout)
+    except TimeoutError:
+        logger.warning(f"program_history_timeout client_id={client_id} tool=tool_get_program_history timeout={timeout}")
+        return []
     except Exception as e:  # pragma: no cover - forward to model
         raise ModelRetry(f"Program history unavailable: {e}. Try calling the tool again later.") from e
 

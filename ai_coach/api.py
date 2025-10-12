@@ -1,4 +1,5 @@
 from fastapi import Depends, HTTPException, Request  # pyrefly: ignore[import-error]
+from fastapi.responses import JSONResponse  # pyrefly: ignore[import-error]
 from fastapi.security import HTTPBasicCredentials  # pyrefly: ignore[import-error]
 from loguru import logger  # pyrefly: ignore[import-error]
 from pydantic import ValidationError  # pyrefly: ignore[import-error]
@@ -62,7 +63,9 @@ async def internal_ping() -> dict[str, bool]:
 
 
 @app.post("/ask/", response_model=Program | Subscription | QAResponse | list[str] | None)
-async def ask(data: AICoachRequest, request: Request) -> Program | Subscription | QAResponse | list[str] | None:
+async def ask(
+    data: AICoachRequest, request: Request
+) -> Program | Subscription | QAResponse | list[str] | None | JSONResponse:
     mode = data.mode if isinstance(data.mode, CoachMode) else CoachMode(data.mode)
     logger.debug(f"/ask received request_id={data.request_id} client_id={data.client_id} mode={mode.value}")
 
@@ -143,9 +146,12 @@ async def ask(data: AICoachRequest, request: Request) -> Program | Subscription 
         detail_reason = reason_map.get(exc.reason, exc.reason)
         logger.warning(
             f"/ask agent aborted request_id={data.request_id} client_id={data.client_id} "
-            f"mode={mode.value} reason={exc.reason} steps_used={deps.tool_calls}"
+            f"mode={mode.value} reason={exc.reason} detail={detail_reason} steps_used={deps.tool_calls}"
         )
-        raise HTTPException(status_code=503, detail=f"AI coach aborted request: {detail_reason}") from exc
+        return JSONResponse(
+            status_code=408,
+            content={"detail": "AI coach aborted request", "reason": exc.reason},
+        )
     except ValidationError as e:
         logger.exception(f"/ask agent validation error: {e}")
         raise HTTPException(status_code=422, detail="Invalid response") from e

@@ -497,6 +497,23 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
             workout_type=workout_type,
             request_id=request_id or None,
         )
+    except APIClientHTTPError as exc:
+        logger.error(
+            f"ai_generate_plan failed client_id={client_id} plan_type={plan_type.value} "
+            f"request_id={request_id} attempt={attempt} status={exc.status} retryable={exc.retryable} "
+            f"reason={exc.reason}"
+        )
+        if not exc.retryable:
+            await _notify_error(
+                client_id=client_id,
+                plan_type=plan_type,
+                request_id=request_id,
+                action="create",
+                error=exc.reason or f"http_{exc.status}",
+                client_profile_id=client_profile_id,
+            )
+            return
+        raise
     except Exception as exc:  # noqa: BLE001
         logger.error(
             f"ai_generate_plan failed client_id={client_id} plan_type={plan_type.value} "
@@ -590,6 +607,23 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
             workout_type=workout_type,
             request_id=request_id or None,
         )
+    except APIClientHTTPError as exc:
+        logger.error(
+            f"ai_update_plan failed client_id={client_id} plan_type={plan_type.value} "
+            f"request_id={request_id} attempt={attempt} status={exc.status} retryable={exc.retryable} "
+            f"reason={exc.reason}"
+        )
+        if not exc.retryable:
+            await _notify_error(
+                client_id=client_id,
+                plan_type=plan_type,
+                request_id=request_id,
+                action="update",
+                error=exc.reason or f"http_{exc.status}",
+                client_profile_id=client_profile_id,
+            )
+            return
+        raise
     except Exception as exc:  # noqa: BLE001
         logger.error(
             f"ai_update_plan failed client_id={client_id} plan_type={plan_type.value} "
@@ -676,7 +710,7 @@ def notify_ai_plan_ready_task(self, payload: dict[str, Any]) -> None:  # pyrefly
     bind=True,
     queue="ai_coach",
     routing_key="ai_coach",
-    autoretry_for=(APIClientHTTPError, APIClientTransportError),
+    autoretry_for=(APIClientTransportError,),
     retry_backoff=30,
     retry_jitter=True,
     max_retries=5,
@@ -685,15 +719,23 @@ def notify_ai_plan_ready_task(self, payload: dict[str, Any]) -> None:  # pyrefly
     soft_time_limit=AI_PLAN_SOFT_TIME_LIMIT,
     time_limit=AI_PLAN_TIME_LIMIT,
 )
-def generate_ai_workout_plan(self, payload: dict[str, Any]) -> dict[str, Any]:  # pyrefly: ignore[valid-type]
-    return asyncio.run(_generate_ai_workout_plan_impl(payload, self))
+def generate_ai_workout_plan(self, payload: dict[str, Any]) -> dict[str, Any] | None:  # pyrefly: ignore[valid-type]
+    try:
+        return asyncio.run(_generate_ai_workout_plan_impl(payload, self))
+    except APIClientHTTPError as exc:
+        retries = int(getattr(self.request, "retries", 0))
+        max_retries = int(getattr(self, "max_retries", 0) or 0)
+        if exc.retryable and retries < max_retries:
+            logger.warning(f"ai_generate_plan_retry status={exc.status} reason={exc.reason} attempt={retries}")
+            raise self.retry(exc=exc)
+        raise
 
 
 @app.task(
     bind=True,
     queue="ai_coach",
     routing_key="ai_coach",
-    autoretry_for=(APIClientHTTPError, APIClientTransportError),
+    autoretry_for=(APIClientTransportError,),
     retry_backoff=30,
     retry_jitter=True,
     max_retries=5,
@@ -702,8 +744,16 @@ def generate_ai_workout_plan(self, payload: dict[str, Any]) -> dict[str, Any]:  
     soft_time_limit=AI_PLAN_SOFT_TIME_LIMIT,
     time_limit=AI_PLAN_TIME_LIMIT,
 )
-def update_ai_workout_plan(self, payload: dict[str, Any]) -> dict[str, Any]:  # pyrefly: ignore[valid-type]
-    return asyncio.run(_update_ai_workout_plan_impl(payload, self))
+def update_ai_workout_plan(self, payload: dict[str, Any]) -> dict[str, Any] | None:  # pyrefly: ignore[valid-type]
+    try:
+        return asyncio.run(_update_ai_workout_plan_impl(payload, self))
+    except APIClientHTTPError as exc:
+        retries = int(getattr(self.request, "retries", 0))
+        max_retries = int(getattr(self, "max_retries", 0) or 0)
+        if exc.retryable and retries < max_retries:
+            logger.warning(f"ai_update_plan_retry status={exc.status} reason={exc.reason} attempt={retries}")
+            raise self.retry(exc=exc)
+        raise
 
 
 @app.task(

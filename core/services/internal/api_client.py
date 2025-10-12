@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from decimal import Decimal
-from json import JSONDecodeError
+from json import JSONDecodeError, loads
 from typing import Any, Optional, Protocol
 
 import httpx
@@ -12,9 +12,20 @@ from core.exceptions import UserServiceError
 
 
 class APIClientHTTPError(UserServiceError):
-    def __init__(self, status: int, text: str, *, method: str, url: str) -> None:
+    def __init__(
+        self,
+        status: int,
+        text: str,
+        *,
+        method: str,
+        url: str,
+        retryable: bool = False,
+        reason: str | None = None,
+    ) -> None:
         self.status = status
         self.text = text
+        self.retryable = retryable
+        self.reason = reason
         super().__init__(
             f"HTTP {status} on {method.upper()} {url}: {text}" if text else f"HTTP {status} on {method.upper()} {url}"
         )
@@ -127,7 +138,10 @@ class APIClient:
                 except httpx.HTTPStatusError as exc:
                     status = exc.response.status_code if exc.response else response.status_code
                     body = exc.response.text if exc.response else ""
-                    retryable = status == 429 or (retry_server_errors and status >= 500)
+                    reason = self._extract_reason(body)
+                    retryable = status == 429 or (
+                        retry_server_errors and status >= 500 and reason not in {"timeout", "knowledge_base_empty"}
+                    )
                     if retryable:
                         if attempt < attempts:
                             logger.warning(
@@ -136,7 +150,14 @@ class APIClient:
                             await self._sleep(delay)
                             delay = self._next_delay(delay)
                             continue
-                    raise APIClientHTTPError(status, body, method=method, url=url) from exc
+                    raise APIClientHTTPError(
+                        status,
+                        body,
+                        method=method,
+                        url=url,
+                        retryable=retryable,
+                        reason=reason,
+                    ) from exc
 
                 return response.status_code, self._parse_response_json(response)
 
@@ -179,4 +200,23 @@ class APIClient:
                 logger.warning(f"Failed to decode JSON response from {response.request.url}")
                 return None
             return payload
+        return None
+
+    @staticmethod
+    def _extract_reason(body: str) -> str | None:
+        if not body:
+            return None
+        try:
+            data = loads(body)
+        except JSONDecodeError:
+            return None
+        if isinstance(data, dict):
+            reason = data.get("reason")
+            if isinstance(reason, str):
+                return reason
+            detail = data.get("detail")
+            if isinstance(detail, dict):
+                nested_reason = detail.get("reason")
+                if isinstance(nested_reason, str):
+                    return nested_reason
         return None

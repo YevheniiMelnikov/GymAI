@@ -62,7 +62,7 @@ async def test_internal_auth_rejects_wrong_key(monkeypatch: pytest.MonkeyPatch) 
         "POST",
         "/internal/tasks/ai_plan_ready/",
         headers={"X-Internal-Api-Key": "wrong"},
-        transport=DummyTransport("10.0.0.1"),
+        transport=DummyTransport("10.0.0.9"),
     )
     response = await _call(handler, request)
     assert response.status == 401
