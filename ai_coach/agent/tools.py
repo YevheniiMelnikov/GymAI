@@ -73,7 +73,7 @@ async def tool_search_knowledge(
         )
         return []
     if deps.last_knowledge_query == normalized_query and deps.last_knowledge_empty:
-        logger.warning(
+        logger.info(
             f"knowledge_search_repeat client_id={client_id} query='{normalized_query[:80]}' reason=empty_previous"
         )
         return []
@@ -153,15 +153,22 @@ async def tool_save_program(
     client_id = deps.client_id
     logger.debug(f"tool_save_program client_id={client_id}")
     program = ProgramAdapter.to_domain(plan)
+    timeout: float = float(settings.AI_COACH_SAVE_TIMEOUT)
     try:
-        saved = await APIService.workout.save_program(
-            client_profile_id=client_id,
-            exercises=program.exercises_by_day,
-            split_number=program.split_number or len(program.exercises_by_day),
-            wishes=program.wishes or "",
+        saved = await wait_for(
+            APIService.workout.save_program(
+                client_profile_id=client_id,
+                exercises=program.exercises_by_day,
+                split_number=program.split_number or len(program.exercises_by_day),
+                wishes=program.wishes or "",
+            ),
+            timeout=timeout,
         )
         logger.debug(f"event=save_program.success program_id={saved.id} client_id={client_id}")
         return saved
+    except TimeoutError:
+        logger.warning(f"save_program_timeout client_id={client_id} timeout={timeout}")
+        return program
     except Exception as e:  # pragma: no cover - forward to model
         raise ModelRetry(f"Program saving failed: {e}. Ensure plan data is valid and retry.") from e
 
@@ -195,6 +202,12 @@ async def tool_attach_gifs(
     deps = _prepare_tool(ctx, "tool_attach_gifs")
     client_id = deps.client_id
     logger.debug(f"tool_attach_gifs client_id={client_id}")
+    if deps.max_run_seconds > 0:
+        remaining_budget: float = deps.max_run_seconds - (monotonic() - deps.started_at)
+        min_budget: float = float(settings.AI_COACH_ATTACH_GIFS_MIN_BUDGET)
+        if remaining_budget < min_budget:
+            logger.info(f"skip_attach_gifs client_id={client_id} reason=low_budget remaining={remaining_budget:.2f}")
+            return exercises
     try:
         gif_manager = get_gif_manager()
     except Exception as e:  # pragma: no cover - optional service
