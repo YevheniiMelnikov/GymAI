@@ -26,6 +26,7 @@ from .prompts import (
 
 from .tools import toolset
 from ..schemas import ProgramPayload
+from ai_coach.language import resolve_language_name
 
 from pydantic_ai import Agent, RunContext  # pyrefly: ignore[import-error]
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart  # pyrefly: ignore[import-error]
@@ -61,7 +62,8 @@ class CoachAgent:
 
     @staticmethod
     def _lang(deps: AgentDeps) -> str:
-        return deps.locale or getattr(settings, "DEFAULT_LANG", "en")
+        locale_raw: str = deps.locale or getattr(settings, "DEFAULT_LANG", "en")
+        return resolve_language_name(locale_raw)
 
     @classmethod
     def _init_agent(cls) -> Any:
