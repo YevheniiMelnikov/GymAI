@@ -10,6 +10,7 @@ from typing import Any, cast
 from celery import Task
 
 from core.celery_app import app
+from core.internal_http import build_internal_auth_headers, internal_request_timeout
 from loguru import logger
 import httpx
 
@@ -238,19 +239,19 @@ def charge_due_subscriptions(self):
 def export_coach_payouts(self):
     logger.info("export_coach_payouts started")
     url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/export_coach_payouts/"
-    headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
+    headers = build_internal_auth_headers(
+        internal_api_key=settings.INTERNAL_API_KEY,
+        fallback_api_key=settings.API_KEY,
+    )
+    timeout = internal_request_timeout(settings)
 
     try:
-        resp = httpx.post(url, headers=headers, timeout=15.0)
+        resp = httpx.post(url, headers=headers, timeout=timeout)
         resp.raise_for_status()
     except httpx.HTTPError as exc:
         logger.warning(f"Bot call failed for coach payouts: {exc}")
         raise self.retry(exc=exc)
     logger.info("export_coach_payouts completed")
-
-
-_CONNECT_TIMEOUT = 10.0
-_READ_TIMEOUT = 30.0
 
 
 @app.task(
@@ -262,10 +263,13 @@ _READ_TIMEOUT = 30.0
 )  # pyrefly: ignore[not-callable]
 def send_daily_survey(self):
     url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/send_daily_survey/"
-    headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
+    headers = build_internal_auth_headers(
+        internal_api_key=settings.INTERNAL_API_KEY,
+        fallback_api_key=settings.API_KEY,
+    )
+    timeout = internal_request_timeout(settings)
 
     try:
-        timeout = httpx.Timeout(_READ_TIMEOUT, connect=_CONNECT_TIMEOUT)
         resp = httpx.post(url, headers=headers, timeout=timeout)
         resp.raise_for_status()
     except httpx.HTTPError as exc:
@@ -283,7 +287,11 @@ def send_daily_survey(self):
 def send_workout_result(self, coach_profile_id: int, client_profile_id: int, text: str) -> None:
     """Forward workout survey results to the appropriate recipient."""
     url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/send_workout_result/"
-    headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
+    headers = build_internal_auth_headers(
+        internal_api_key=settings.INTERNAL_API_KEY,
+        fallback_api_key=settings.API_KEY,
+    )
+    timeout = internal_request_timeout(settings)
     payload = {
         "coach_id": coach_profile_id,
         "client_id": client_profile_id,
@@ -291,7 +299,7 @@ def send_workout_result(self, coach_profile_id: int, client_profile_id: int, tex
     }
 
     try:
-        resp = httpx.post(url, json=payload, timeout=15.0, headers=headers)
+        resp = httpx.post(url, json=payload, timeout=timeout, headers=headers)
         resp.raise_for_status()
     except httpx.HTTPError as exc:
         logger.warning(f"Bot call failed for workout result: {exc!s}")
@@ -315,15 +323,25 @@ async def _claim_plan_request(request_id: str, action: str, *, attempt: int) -> 
 async def _notify_ai_plan_ready(payload: dict[str, Any]) -> None:
     base_url: str = settings.BOT_INTERNAL_URL.rstrip("/")
     url: str = f"{base_url}/internal/tasks/ai_plan_ready/"
-    headers: dict[str, str] = {"Authorization": f"Api-Key {settings.API_KEY}"}
-    internal_api_key: str | None = settings.INTERNAL_API_KEY
-    if internal_api_key:
-        headers["X-Internal-Api-Key"] = internal_api_key
+    headers = build_internal_auth_headers(
+        internal_api_key=settings.INTERNAL_API_KEY,
+        fallback_api_key=settings.API_KEY,
+    )
+    timeout = internal_request_timeout(settings)
     request_id = str(payload.get("request_id", ""))
     action = str(payload.get("action", ""))
+    status = str(payload.get("status", ""))
+    state = AiPlanState.create()
+    if request_id:
+        if status == "success" and await state.is_delivered(request_id):
+            logger.debug(f"ai_plan_notify_skip_already_delivered action={action} request_id={request_id}")
+            return
+        if status != "success" and await state.is_failed(request_id):
+            logger.debug(f"ai_plan_notify_skip_already_failed action={action} request_id={request_id}")
+            return
     logger.info(f"ai_plan_notify_start action={action} request_id={request_id} url={url}")
     try:
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             response: httpx.Response = await client.post(url, json=payload, headers=headers)
             response.raise_for_status()
     except httpx.HTTPStatusError as exc:
@@ -335,9 +353,8 @@ async def _notify_ai_plan_ready(payload: dict[str, Any]) -> None:
         detail: str = f"transport_error={exc!r}"
         logger.error(f"ai_plan_notify_transport_error action={action} request_id={request_id} {detail}")
         raise
-    status = response.status_code
-    logger.info(f"ai_plan_notify_done action={action} request_id={request_id} status={status}")
-    state = AiPlanState.create()
+    status_code = response.status_code
+    logger.info(f"ai_plan_notify_done action={action} request_id={request_id} status={status_code}")
     if payload.get("status") == "success":
         await state.mark_delivered(request_id)
     else:
@@ -444,9 +461,6 @@ async def _notify_error(
     }
     if client_profile_id is not None:
         payload["client_profile_id"] = client_profile_id
-    state = AiPlanState.create()
-    if request_id:
-        await state.mark_failed(request_id, error)
     notify_ai_plan_ready_task.apply_async(
         args=[payload],
         queue="ai_coach",
@@ -850,10 +864,14 @@ def prune_cognee(self):
     """Remove cached Cognee data storage."""
     logger.info("prune_cognee started")
     url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/prune_cognee/"
-    headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
+    headers = build_internal_auth_headers(
+        internal_api_key=settings.INTERNAL_API_KEY,
+        fallback_api_key=settings.API_KEY,
+    )
+    timeout = internal_request_timeout(settings)
 
     try:
-        resp = httpx.post(url, headers=headers, timeout=30.0)
+        resp = httpx.post(url, headers=headers, timeout=timeout)
         resp.raise_for_status()
     except httpx.HTTPError as exc:
         logger.warning(f"Bot call failed for prune_cognee: {exc}")
