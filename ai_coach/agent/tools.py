@@ -84,18 +84,11 @@ def _start_tool(
     deps = ctx.deps
     if tool_name in deps.called_tools:
         mode_value = deps.mode.value if deps.mode else "unknown"
-        if deps.mode in (CoachMode.program, CoachMode.subscription):
-            logger.info(
-                "tool_repeat_blocked client_id=%s tool=%s mode=%s",
-                deps.client_id,
-                tool_name,
-                mode_value,
-            )
-            raise ModelRetry(
-                "This tool was already executed during plan generation. Continue with the collected information and finish the response without calling it again."
-            )
-        logger.debug(f"{tool_name} skip_repeat client_id={deps.client_id}")
         cached = deps.tool_cache.get(tool_name)
+        if deps.mode in (CoachMode.program, CoachMode.subscription):
+            logger.info(f"tool_repeat_skipped client_id={deps.client_id} tool={tool_name} mode={mode_value}")
+        else:
+            logger.debug(f"{tool_name} skip_repeat client_id={deps.client_id}")
         return deps, True, cached
     prepared = _prepare_tool(ctx, tool_name)
     prepared.called_tools.add(tool_name)
