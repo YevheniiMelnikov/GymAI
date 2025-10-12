@@ -1,312 +1,38 @@
-import os
-import shutil
-import subprocess
+"""AI coach Celery tasks and helpers."""
+
+from __future__ import annotations
+
 import asyncio
-from datetime import datetime, timedelta, date
-from dateutil.relativedelta import relativedelta
-from decimal import Decimal, ROUND_HALF_UP
-from typing import Any, cast
+from typing import Any
 
-from celery import Task
-
-from core.celery_app import app
-from core.internal_http import build_internal_auth_headers, internal_request_timeout
-from loguru import logger
 import httpx
+from celery import Task
+from loguru import logger
 
 from config.app_settings import settings
-from core.cache import Cache
 from core.ai_plan_state import AiPlanState
+from core.celery_app import app
+from core.enums import WorkoutPlanType, WorkoutType
+from core.internal_http import build_internal_auth_headers, internal_request_timeout
+from core.schemas import Program, Subscription
 from core.services import APIService
 from core.services.internal.api_client import APIClientHTTPError, APIClientTransportError
-from bot.texts.text_manager import msg_text
-from apps.payments.tasks import send_payment_message
-from bot.utils.profiles import get_assigned_coach
-from core.enums import CoachType, SubscriptionPeriod, WorkoutPlanType, WorkoutType
-from core.schemas import Program, Subscription
-from core.utils.redis_lock import redis_try_lock, get_redis_client
+from core.utils.redis_lock import get_redis_client, redis_try_lock
+
+__all__ = [
+    "handle_ai_plan_failure",
+    "notify_ai_plan_ready_task",
+    "generate_ai_workout_plan",
+    "update_ai_workout_plan",
+    "ai_coach_echo",
+    "ai_coach_worker_report",
+    "refresh_external_knowledge",
+]
 
 AI_PLAN_SOFT_TIME_LIMIT = settings.AI_COACH_TIMEOUT
 AI_PLAN_TIME_LIMIT = AI_PLAN_SOFT_TIME_LIMIT + 30
 AI_PLAN_NOTIFY_SOFT_LIMIT = settings.AI_PLAN_NOTIFY_TIMEOUT
 AI_PLAN_NOTIFY_TIME_LIMIT = AI_PLAN_NOTIFY_SOFT_LIMIT + 30
-
-
-def _next_payment_date(period: SubscriptionPeriod = SubscriptionPeriod.one_month) -> str:
-    today = date.today()
-    if period is SubscriptionPeriod.six_months:
-        next_date = cast(date, today + relativedelta(months=+6))  # pyrefly: ignore[redundant-cast]
-    else:
-        next_date = cast(date, today + relativedelta(months=+1))  # pyrefly: ignore[redundant-cast]
-    return next_date.isoformat()
-
-
-# ---------- Backups ----------
-
-_dumps_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dumps")
-_pg_dir = os.path.join(_dumps_dir, "postgres")
-_redis_dir = os.path.join(_dumps_dir, "redis")
-
-os.makedirs(_pg_dir, exist_ok=True)
-os.makedirs(_redis_dir, exist_ok=True)
-
-
-@app.task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyrefly: ignore[not-callable]
-def pg_backup(self):
-    ts = datetime.now().strftime("%Y%m%d%H%M%S")
-    path = os.path.join(_pg_dir, f"{settings.DB_NAME}_backup_{ts}.dump")
-    cmd = [
-        "pg_dump",
-        "-h",
-        settings.DB_HOST,
-        "-p",
-        settings.DB_PORT,
-        "-U",
-        settings.DB_USER,
-        "-F",
-        "c",
-        settings.DB_NAME,
-    ]
-    try:
-        with open(path, "wb") as f:
-            subprocess.run(cmd, stdout=f, check=True)
-        logger.info(f"Postgres backup saved {path}")
-    except Exception:
-        if os.path.exists(path):
-            os.remove(path)
-        raise
-
-
-@app.task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyrefly: ignore[not-callable]
-def redis_backup(self):
-    ts = datetime.now().strftime("%Y%m%d%H%M%S")
-    tmp_path = f"/tmp/redis_backup_{ts}.rdb"
-    final_dst = os.path.join(_redis_dir, f"redis_backup_{ts}.rdb")
-
-    try:
-        subprocess.run(
-            ["redis-cli", "-u", settings.REDIS_URL, "--rdb", tmp_path],
-            check=True,
-        )
-        shutil.move(tmp_path, final_dst)
-        logger.info(f"Redis backup saved {final_dst}")
-    finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
-
-
-@app.task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyrefly: ignore[not-callable]
-def cleanup_backups(self):
-    cutoff = datetime.now() - timedelta(days=settings.BACKUP_RETENTION_DAYS)
-    for root in (_pg_dir, _redis_dir):
-        for f in os.scandir(root):
-            if f.is_file() and datetime.fromtimestamp(f.stat().st_ctime) < cutoff:
-                os.remove(f.path)
-                logger.info(f"Deleted old backup {f.path}")
-
-
-# ---------- Billing ----------
-
-
-@app.task(
-    bind=True,
-    autoretry_for=(Exception,),
-    retry_backoff=180,
-    retry_jitter=True,
-    max_retries=3,
-)  # pyrefly: ignore[not-callable]
-def deactivate_expired_subscriptions(self):
-    logger.info("deactivate_expired_subscriptions started")
-
-    async def _impl() -> None:
-        today = datetime.now().date().isoformat()
-        subscriptions = await APIService.payment.get_expired_subscriptions(today)
-
-        for sub in subscriptions:
-            if not sub.id or not sub.client_profile:
-                logger.warning(f"Invalid subscription: {sub}")
-                continue
-            await APIService.workout.update_subscription(
-                sub.id, {"enabled": False, "client_profile": sub.client_profile}
-            )
-            await Cache.workout.update_subscription(sub.client_profile, {"enabled": False})
-            await Cache.payment.reset_status(sub.client_profile, "subscription")
-            logger.info(f"Subscription {sub.id} deactivated for user {sub.client_profile}")
-
-    try:
-        asyncio.run(_impl())
-    except Exception as exc:  # noqa: BLE001
-        logger.error(f"deactivate_expired_subscriptions failed: {exc}")
-        raise
-    logger.info("deactivate_expired_subscriptions completed")
-
-
-@app.task(
-    bind=True,
-    autoretry_for=(Exception,),
-    retry_backoff=180,
-    retry_jitter=True,
-    max_retries=3,
-)  # pyrefly: ignore[not-callable]
-def warn_low_credits(self):
-    logger.info("warn_low_credits started")
-
-    async def _impl() -> None:
-        tomorrow = (datetime.now() + timedelta(days=1)).date().isoformat()
-        subs = await APIService.payment.get_expired_subscriptions(tomorrow)
-        for sub in subs:
-            if not sub.client_profile:
-                continue
-            client = await Cache.client.get_client(sub.client_profile)
-            profile = await APIService.profile.get_profile(client.profile)
-            required = int(sub.price)
-            if client.credits < required:
-                lang = profile.language if profile else settings.DEFAULT_LANG
-                send_payment_message.delay(  # pyrefly: ignore[not-callable]
-                    sub.client_profile,
-                    msg_text("not_enough_credits", lang),
-                )
-
-    try:
-        asyncio.run(_impl())
-    except Exception as exc:  # noqa: BLE001
-        logger.error(f"warn_low_credits failed: {exc}")
-        raise
-    logger.info("warn_low_credits completed")
-
-
-@app.task(
-    bind=True,
-    autoretry_for=(Exception,),
-    retry_backoff=180,
-    retry_jitter=True,
-    max_retries=3,
-)  # pyrefly: ignore[not-callable]
-def charge_due_subscriptions(self):
-    logger.info("charge_due_subscriptions started")
-
-    async def _impl() -> None:
-        today = datetime.now().date().isoformat()
-        subs = await APIService.payment.get_expired_subscriptions(today)
-        for sub in subs:
-            if not sub.id or not sub.client_profile:
-                continue
-            client = await Cache.client.get_client(sub.client_profile)
-            required = int(sub.price)
-            if client.credits < required:
-                await APIService.workout.update_subscription(
-                    sub.id, {"enabled": False, "client_profile": sub.client_profile}
-                )
-                await Cache.workout.update_subscription(sub.client_profile, {"enabled": False})
-                await Cache.payment.reset_status(sub.client_profile, "subscription")
-                continue
-
-            await APIService.profile.adjust_client_credits(client.profile, -required)
-            await Cache.client.update_client(client.profile, {"credits": client.credits - required})
-            if client.assigned_to:
-                coach = await get_assigned_coach(client, coach_type=CoachType.human)
-                if coach:
-                    payout = (Decimal(sub.price) * settings.CREDIT_RATE_MAX_PACK).quantize(
-                        Decimal("0.01"), ROUND_HALF_UP
-                    )
-                    await APIService.profile.adjust_coach_payout_due(coach.profile, payout)
-                    new_due = (coach.payout_due or Decimal("0")) + payout
-                    await Cache.coach.update_coach(coach.profile, {"payout_due": str(new_due)})
-            period_str = getattr(sub, "period", SubscriptionPeriod.one_month.value)
-            period = SubscriptionPeriod(period_str)
-            next_date = _next_payment_date(period)
-            await APIService.workout.update_subscription(sub.id, {"payment_date": next_date})
-            await Cache.workout.update_subscription(sub.client_profile, {"payment_date": next_date})
-
-    try:
-        asyncio.run(_impl())
-    except Exception as exc:  # noqa: BLE001
-        logger.error(f"charge_due_subscriptions failed: {exc}")
-        raise
-    logger.info("charge_due_subscriptions completed")
-
-
-# ---------- Bot calls ----------
-
-
-@app.task(
-    bind=True,
-    autoretry_for=(httpx.HTTPError,),
-    retry_backoff=180,
-    retry_jitter=True,
-    max_retries=3,
-)  # pyrefly: ignore[not-callable]
-def export_coach_payouts(self):
-    logger.info("export_coach_payouts started")
-    url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/export_coach_payouts/"
-    headers = build_internal_auth_headers(
-        internal_api_key=settings.INTERNAL_API_KEY,
-        fallback_api_key=settings.API_KEY,
-    )
-    timeout = internal_request_timeout(settings)
-
-    try:
-        resp = httpx.post(url, headers=headers, timeout=timeout)
-        resp.raise_for_status()
-    except httpx.HTTPError as exc:
-        logger.warning(f"Bot call failed for coach payouts: {exc}")
-        raise self.retry(exc=exc)
-    logger.info("export_coach_payouts completed")
-
-
-@app.task(
-    bind=True,
-    autoretry_for=(httpx.HTTPError,),
-    retry_backoff=180,
-    retry_jitter=True,
-    max_retries=3,
-)  # pyrefly: ignore[not-callable]
-def send_daily_survey(self):
-    url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/send_daily_survey/"
-    headers = build_internal_auth_headers(
-        internal_api_key=settings.INTERNAL_API_KEY,
-        fallback_api_key=settings.API_KEY,
-    )
-    timeout = internal_request_timeout(settings)
-
-    try:
-        resp = httpx.post(url, headers=headers, timeout=timeout)
-        resp.raise_for_status()
-    except httpx.HTTPError as exc:
-        logger.warning(f"Bot call failed for daily survey: {exc!s}")
-        raise self.retry(exc=exc)
-
-
-@app.task(
-    bind=True,
-    autoretry_for=(httpx.HTTPError,),
-    retry_backoff=180,
-    retry_jitter=True,
-    max_retries=3,
-)  # pyrefly: ignore[not-callable]
-def send_workout_result(self, coach_profile_id: int, client_profile_id: int, text: str) -> None:
-    """Forward workout survey results to the appropriate recipient."""
-    url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/send_workout_result/"
-    headers = build_internal_auth_headers(
-        internal_api_key=settings.INTERNAL_API_KEY,
-        fallback_api_key=settings.API_KEY,
-    )
-    timeout = internal_request_timeout(settings)
-    payload = {
-        "coach_id": coach_profile_id,
-        "client_id": client_profile_id,
-        "text": text,
-    }
-
-    try:
-        resp = httpx.post(url, json=payload, timeout=timeout, headers=headers)
-        resp.raise_for_status()
-    except httpx.HTTPError as exc:
-        logger.warning(f"Bot call failed for workout result: {exc!s}")
-        raise self.retry(exc=exc)
-
-
-# ---------- AI coach ----------
 
 
 async def _claim_plan_request(request_id: str, action: str, *, attempt: int) -> bool:
@@ -468,7 +194,7 @@ async def _notify_error(
     )
 
 
-async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> None:
+async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> dict[str, Any] | None:
     client_id = int(payload["client_id"])
     client_profile_id_raw = payload.get("client_profile_id")
     client_profile_id: int | None
@@ -493,7 +219,7 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
         logger.info(
             f"ai_generate_plan_duplicate client_id={client_id} plan_type={plan_type.value} request_id={request_id}"
         )
-        return
+        return None
 
     logger.info(
         f"ai_generate_plan started client_id={client_id} plan_type={plan_type.value} "
@@ -526,7 +252,7 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
                 error=exc.reason or f"http_{exc.status}",
                 client_profile_id=client_profile_id,
             )
-            return
+            return None
         raise
     except Exception as exc:  # noqa: BLE001
         logger.error(
@@ -556,7 +282,7 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
             error="empty_plan",
             client_profile_id=client_profile_id,
         )
-        return
+        return None
 
     if plan_type is WorkoutPlanType.PROGRAM:
         program = Program.model_validate(plan)
@@ -580,7 +306,7 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
     return notify_payload
 
 
-async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> None:
+async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> dict[str, Any] | None:
     client_id = int(payload["client_id"])
     client_profile_id_raw = payload.get("client_profile_id")
     client_profile_id: int | None
@@ -592,10 +318,15 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
             f"raw={client_profile_id_raw!r} request_id={payload.get('request_id', '')}"
         )
         client_profile_id = None
-    language = str(payload.get("language", settings.DEFAULT_LANG))
     request_id = str(payload.get("request_id", ""))
-    expected_workout = str(payload.get("expected_workout_result", ""))
-    feedback = str(payload.get("feedback", ""))
+    language = str(payload.get("language", settings.DEFAULT_LANG))
+    expected_workout = payload.get("expected_workout")
+    if expected_workout is None:
+        expected_workout = payload.get("expected_workout_result")
+    expected_workout = str(expected_workout) if expected_workout is not None else None
+
+    feedback_val = payload.get("feedback")
+    feedback = str(feedback_val) if feedback_val is not None else None
     plan_type = WorkoutPlanType(payload.get("plan_type", WorkoutPlanType.SUBSCRIPTION.value))
     workout_type = _parse_workout_type(payload.get("workout_type"))
     attempt = getattr(task.request, "retries", 0)
@@ -604,7 +335,7 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
         logger.info(
             f"ai_update_plan_duplicate client_id={client_id} plan_type={plan_type.value} request_id={request_id}"
         )
-        return
+        return None
 
     logger.info(
         f"ai_update_plan started client_id={client_id} plan_type={plan_type.value} "
@@ -616,8 +347,8 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
             plan_type,
             client_id=client_id,
             language=language,
-            expected_workout=expected_workout or None,
-            feedback=feedback or None,
+            expected_workout=expected_workout,
+            feedback=feedback,
             workout_type=workout_type,
             request_id=request_id or None,
         )
@@ -636,7 +367,7 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
                 error=exc.reason or f"http_{exc.status}",
                 client_profile_id=client_profile_id,
             )
-            return
+            return None
         raise
     except Exception as exc:  # noqa: BLE001
         logger.error(
@@ -666,7 +397,7 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
             error="empty_plan",
             client_profile_id=client_profile_id,
         )
-        return
+        return None
 
     if plan_type is WorkoutPlanType.PROGRAM:
         program = Program.model_validate(plan)
@@ -735,7 +466,7 @@ def notify_ai_plan_ready_task(self, payload: dict[str, Any]) -> None:  # pyrefly
 )
 def generate_ai_workout_plan(self, payload: dict[str, Any]) -> dict[str, Any] | None:  # pyrefly: ignore[valid-type]
     try:
-        return asyncio.run(_generate_ai_workout_plan_impl(payload, self))
+        notify_payload = asyncio.run(_generate_ai_workout_plan_impl(payload, self))
     except APIClientHTTPError as exc:
         retries = int(getattr(self.request, "retries", 0))
         max_retries = int(getattr(self, "max_retries", 0) or 0)
@@ -743,6 +474,8 @@ def generate_ai_workout_plan(self, payload: dict[str, Any]) -> dict[str, Any] | 
             logger.warning(f"ai_generate_plan_retry status={exc.status} reason={exc.reason} attempt={retries}")
             raise self.retry(exc=exc)
         raise
+    else:
+        return notify_payload
 
 
 @app.task(
@@ -760,7 +493,7 @@ def generate_ai_workout_plan(self, payload: dict[str, Any]) -> dict[str, Any] | 
 )
 def update_ai_workout_plan(self, payload: dict[str, Any]) -> dict[str, Any] | None:  # pyrefly: ignore[valid-type]
     try:
-        return asyncio.run(_update_ai_workout_plan_impl(payload, self))
+        notify_payload = asyncio.run(_update_ai_workout_plan_impl(payload, self))
     except APIClientHTTPError as exc:
         retries = int(getattr(self.request, "retries", 0))
         max_retries = int(getattr(self, "max_retries", 0) or 0)
@@ -768,6 +501,8 @@ def update_ai_workout_plan(self, payload: dict[str, Any]) -> dict[str, Any] | No
             logger.warning(f"ai_update_plan_retry status={exc.status} reason={exc.reason} attempt={retries}")
             raise self.retry(exc=exc)
         raise
+    else:
+        return notify_payload
 
 
 @app.task(
@@ -811,7 +546,7 @@ def ai_coach_worker_report(self) -> dict[str, Any]:
     retry_jitter=True,
     max_retries=3,
 )
-def refresh_external_knowledge(self):
+def refresh_external_knowledge(self) -> None:
     """Refresh external knowledge and rebuild Cognee index."""
     logger.info("refresh_external_knowledge triggered")
 
@@ -851,29 +586,3 @@ def refresh_external_knowledge(self):
         raise
     else:
         logger.info("refresh_external_knowledge completed")
-
-
-@app.task(
-    bind=True,
-    autoretry_for=(httpx.HTTPError,),
-    retry_backoff=180,
-    retry_jitter=True,
-    max_retries=3,
-)  # pyrefly: ignore[not-callable]
-def prune_cognee(self):
-    """Remove cached Cognee data storage."""
-    logger.info("prune_cognee started")
-    url = f"{settings.BOT_INTERNAL_URL}/internal/tasks/prune_cognee/"
-    headers = build_internal_auth_headers(
-        internal_api_key=settings.INTERNAL_API_KEY,
-        fallback_api_key=settings.API_KEY,
-    )
-    timeout = internal_request_timeout(settings)
-
-    try:
-        resp = httpx.post(url, headers=headers, timeout=timeout)
-        resp.raise_for_status()
-    except httpx.HTTPError as exc:
-        logger.warning(f"Bot call failed for prune_cognee: {exc}")
-        raise self.retry(exc=exc)
-    logger.info("prune_cognee completed")

@@ -42,47 +42,47 @@ celery_config = {
     "task_routes": CELERY_TASK_ROUTES,
     "beat_schedule": {
         "pg_backup": {
-            "task": "core.tasks.pg_backup",
+            "task": "core.tasks.backups.pg_backup",
             "schedule": crontab(hour=2, minute=0),
             "options": {"queue": "maintenance"},
         },
         "redis_backup": {
-            "task": "core.tasks.redis_backup",
+            "task": "core.tasks.backups.redis_backup",
             "schedule": crontab(hour=2, minute=1),
             "options": {"queue": "maintenance"},
         },
         "cleanup_backups": {
-            "task": "core.tasks.cleanup_backups",
+            "task": "core.tasks.backups.cleanup_backups",
             "schedule": crontab(hour=2, minute=2),
             "options": {"queue": "maintenance"},
         },
         "deactivate_subs": {
-            "task": "core.tasks.deactivate_expired_subscriptions",
+            "task": "core.tasks.billing.deactivate_expired_subscriptions",
             "schedule": crontab(hour=1, minute=0),
             "options": {"queue": "critical"},
         },
         "warn_low_credits": {
-            "task": "core.tasks.warn_low_credits",
+            "task": "core.tasks.billing.warn_low_credits",
             "schedule": crontab(hour=0, minute=0),
             "options": {"queue": "critical"},
         },
         "charge_due_subscriptions": {
-            "task": "core.tasks.charge_due_subscriptions",
+            "task": "core.tasks.billing.charge_due_subscriptions",
             "schedule": crontab(hour=0, minute=30),
             "options": {"queue": "critical"},
         },
         "export-coach-payouts-monthly": {
-            "task": "core.tasks.export_coach_payouts",
+            "task": "core.tasks.bot_calls.export_coach_payouts",
             "schedule": crontab(day_of_month=1, hour=8, minute=0),
             "options": {"queue": "maintenance"},
         },
         "send_daily_survey": {
-            "task": "core.tasks.send_daily_survey",
+            "task": "core.tasks.bot_calls.send_daily_survey",
             "schedule": crontab(hour=9, minute=0),
             "options": {"queue": "maintenance"},
         },
         "refresh_external_knowledge": {
-            "task": "core.tasks.refresh_external_knowledge",
+            "task": "core.tasks.ai_coach.refresh_external_knowledge",
             "schedule": schedule(
                 run_every=timedelta(seconds=settings.KNOWLEDGE_REFRESH_INTERVAL),
                 nowfun=beat_nowfun,
@@ -90,7 +90,7 @@ celery_config = {
             "options": {"queue": "maintenance"},
         },
         "prune_cognee": {
-            "task": "core.tasks.prune_cognee",
+            "task": "core.tasks.bot_calls.prune_cognee",
             "schedule": crontab(hour=2, minute=10),
             "options": {"queue": "maintenance"},
         },

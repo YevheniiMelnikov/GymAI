@@ -162,7 +162,7 @@ async def test_enqueue_workout_plan_generation_dispatch(monkeypatch: pytest.Monk
             captured.update(payload)
             return DummyResult(payload)
 
-    monkeypatch.setattr("core.tasks.generate_ai_workout_plan", DummyTask)
+    monkeypatch.setattr("core.tasks.ai_coach.generate_ai_workout_plan", DummyTask)
 
     client = Client.model_validate(
         {
@@ -209,7 +209,7 @@ async def test_enqueue_workout_plan_update_dispatch(monkeypatch: pytest.MonkeyPa
             captured.update(payload)
             return DummyResult(payload)
 
-    monkeypatch.setattr("core.tasks.update_ai_workout_plan", DummyTask)
+    monkeypatch.setattr("core.tasks.ai_coach.update_ai_workout_plan", DummyTask)
 
     queued = await enqueue_workout_plan_update(
         client_id=5,

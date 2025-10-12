@@ -39,7 +39,15 @@ async def main() -> None:
     APIService.configure(get_container)
     container.config.bot_token.from_value(settings.BOT_TOKEN)  # type: ignore[attr-defined]
     container.config.parse_mode.from_value("HTML")  # type: ignore[attr-defined]
-    container.wire(modules=["bot.utils.other", "core.tasks"])
+    container.wire(
+        modules=[
+            "bot.utils.other",
+            "core.tasks.ai_coach",
+            "core.tasks.billing",
+            "core.tasks.bot_calls",
+            "core.tasks.backups",
+        ]
+    )
     init_result = container.init_resources()
     if init_result is not None:
         await init_result
