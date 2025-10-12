@@ -2,7 +2,10 @@ from types import SimpleNamespace
 
 import pytest  # pyrefly: ignore[import-error]
 
+from pydantic_ai import ModelRetry  # pyrefly: ignore[import-error]
+
 from ai_coach.agent import AgentDeps
+from ai_coach.types import CoachMode
 from ai_coach.agent.tools import tool_search_knowledge
 
 
@@ -17,9 +20,12 @@ async def test_tool_search_knowledge_skips_repeat(monkeypatch: pytest.MonkeyPatc
             return [f"result:{query}"]
 
     monkeypatch.setattr("ai_coach.agent.tools.KnowledgeBase", DummyKnowledgeBase)
-    ctx = SimpleNamespace(deps=AgentDeps(client_id=1))
+    deps = AgentDeps(client_id=1)
+    deps.mode = CoachMode.program
+    ctx = SimpleNamespace(deps=deps)
     first = await tool_search_knowledge(ctx, "Goal", k=2)
-    second = await tool_search_knowledge(ctx, "Different", k=3)
     assert first == ["result:Goal"]
-    assert second == first
+    with pytest.raises(ModelRetry) as exc:
+        await tool_search_knowledge(ctx, "Different", k=3)
+    assert "already executed" in str(exc.value)
     assert calls == ["Goal"]

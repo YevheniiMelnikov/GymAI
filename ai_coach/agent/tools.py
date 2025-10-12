@@ -83,6 +83,17 @@ def _start_tool(
 ) -> tuple[AgentDeps, bool, Any]:  # pyrefly: ignore[unsupported-operation]
     deps = ctx.deps
     if tool_name in deps.called_tools:
+        mode_value = deps.mode.value if deps.mode else "unknown"
+        if deps.mode in (CoachMode.program, CoachMode.subscription):
+            logger.info(
+                "tool_repeat_blocked client_id=%s tool=%s mode=%s",
+                deps.client_id,
+                tool_name,
+                mode_value,
+            )
+            raise ModelRetry(
+                "This tool was already executed during plan generation. Continue with the collected information and finish the response without calling it again."
+            )
         logger.debug(f"{tool_name} skip_repeat client_id={deps.client_id}")
         cached = deps.tool_cache.get(tool_name)
         return deps, True, cached
