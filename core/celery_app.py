@@ -48,12 +48,12 @@ CELERY_QUEUES: tuple[Queue, ...] = (
 )
 
 CRITICAL_TASK_ROUTES: dict[str, dict[str, str]] = {
-    "core.tasks.charge_due_subscriptions": {"queue": "critical", "routing_key": "critical"},
-    "core.tasks.deactivate_expired_subscriptions": {
+    "core.tasks.billing.charge_due_subscriptions": {"queue": "critical", "routing_key": "critical"},
+    "core.tasks.billing.deactivate_expired_subscriptions": {
         "queue": "critical",
         "routing_key": "critical",
     },
-    "core.tasks.warn_low_credits": {"queue": "critical", "routing_key": "critical"},
+    "core.tasks.billing.warn_low_credits": {"queue": "critical", "routing_key": "critical"},
     "apps.payments.tasks.process_payment_webhook": {
         "queue": "critical",
         "routing_key": "critical",
@@ -69,10 +69,19 @@ CRITICAL_TASK_ROUTES: dict[str, dict[str, str]] = {
 }
 
 AI_COACH_TASK_ROUTES: dict[str, dict[str, str]] = {
-    "core.tasks.generate_ai_workout_plan": {"queue": "ai_coach", "routing_key": "ai_coach"},
-    "core.tasks.update_ai_workout_plan": {"queue": "ai_coach", "routing_key": "ai_coach"},
-    "core.tasks.ai_coach_echo": {"queue": "ai_coach", "routing_key": "ai_coach"},
-    "core.tasks.ai_coach_worker_report": {"queue": "ai_coach", "routing_key": "ai_coach"},
+    "core.tasks.ai_coach.generate_ai_workout_plan": {
+        "queue": "ai_coach",
+        "routing_key": "ai_coach",
+    },
+    "core.tasks.ai_coach.update_ai_workout_plan": {
+        "queue": "ai_coach",
+        "routing_key": "ai_coach",
+    },
+    "core.tasks.ai_coach.ai_coach_echo": {"queue": "ai_coach", "routing_key": "ai_coach"},
+    "core.tasks.ai_coach.ai_coach_worker_report": {
+        "queue": "ai_coach",
+        "routing_key": "ai_coach",
+    },
 }
 
 CELERY_TASK_ROUTES: dict[str, dict[str, str]] = {
@@ -81,7 +90,10 @@ CELERY_TASK_ROUTES: dict[str, dict[str, str]] = {
 }
 
 CELERY_INCLUDE: tuple[str, ...] = (
-    "core.tasks",
+    "core.tasks.backups",
+    "core.tasks.billing",
+    "core.tasks.bot_calls",
+    "core.tasks.ai_coach",
     "apps.payments.tasks",
 )
 

@@ -54,7 +54,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     container.coach_resolver.override(providers.Factory(BotCoachResolver))
     set_container(container)
     APIService.configure(get_container)
-    container.wire(modules=["core.tasks"])
+    container.wire(modules=["core.tasks.ai_coach"])
     init_resources = container.init_resources()
     if init_resources is not None:
         await init_resources

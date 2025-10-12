@@ -22,7 +22,7 @@ from core.cache import Cache
 from core.enums import ClientStatus, CoachType
 from core.services import APIService
 from bot.utils.chat import contact_coach, send_message
-from core.tasks import send_workout_result
+from core.tasks.bot_calls import send_workout_result
 from bot.utils.exercises import update_exercise_data, save_exercise, format_program, create_exercise
 from bot.utils.menus import (
     show_main_menu,

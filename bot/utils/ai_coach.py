@@ -120,7 +120,7 @@ async def enqueue_workout_plan_generation(
         return False
 
     try:
-        from core.tasks import (
+        from core.tasks.ai_coach import (
             generate_ai_workout_plan,
             handle_ai_plan_failure,
             notify_ai_plan_ready_task,
@@ -189,7 +189,7 @@ async def enqueue_workout_plan_update(
         return False
 
     try:
-        from core.tasks import (
+        from core.tasks.ai_coach import (
             handle_ai_plan_failure,
             notify_ai_plan_ready_task,
             update_ai_workout_plan,

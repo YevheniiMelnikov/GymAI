@@ -137,7 +137,7 @@ _REQUIRED_SETTINGS: dict[str, Any] = {
 settings = _SettingsStub(**_REQUIRED_SETTINGS)
 sys.modules["config.app_settings"].settings = settings
 
-core_tasks = importlib.import_module("core.tasks")
+ai_coach_tasks = importlib.import_module("core.tasks.ai_coach")
 
 
 class DummyResponse:
@@ -146,10 +146,10 @@ class DummyResponse:
 
     def raise_for_status(self) -> None:
         if self.status_code >= 400:
-            raise core_tasks.httpx.HTTPStatusError(
+            raise ai_coach_tasks.httpx.HTTPStatusError(
                 "error",
-                request=core_tasks.httpx.Request("POST", "http://example.com"),
-                response=core_tasks.httpx.Response(self.status_code),
+                request=ai_coach_tasks.httpx.Request("POST", "http://example.com"),
+                response=ai_coach_tasks.httpx.Response(self.status_code),
             )
 
 
@@ -200,8 +200,8 @@ async def test_notify_ai_plan_ready_uses_internal_header(monkeypatch: pytest.Mon
     monkeypatch.setattr(settings, "INTERNAL_HTTP_CONNECT_TIMEOUT", 5.0)
     monkeypatch.setattr(settings, "INTERNAL_HTTP_READ_TIMEOUT", 12.0)
 
-    monkeypatch.setattr(core_tasks, "AiPlanState", SimpleNamespace(create=lambda: DummyState()))
-    monkeypatch.setattr(core_tasks.httpx, "AsyncClient", lambda **kwargs: DummyClient(recorder, **kwargs))
+    monkeypatch.setattr(ai_coach_tasks, "AiPlanState", SimpleNamespace(create=lambda: DummyState()))
+    monkeypatch.setattr(ai_coach_tasks.httpx, "AsyncClient", lambda **kwargs: DummyClient(recorder, **kwargs))
 
     payload = {
         "client_id": 1,
@@ -212,7 +212,7 @@ async def test_notify_ai_plan_ready_uses_internal_header(monkeypatch: pytest.Mon
         "plan": {"foo": "bar"},
     }
 
-    await core_tasks._notify_ai_plan_ready(payload)
+    await ai_coach_tasks._notify_ai_plan_ready(payload)
 
     assert recorder["headers"] == {"X-Internal-Api-Key": "secret"}
     timeout = recorder["timeout"]
@@ -233,8 +233,8 @@ async def test_notify_ai_plan_ready_fallback_authorization(monkeypatch: pytest.M
     monkeypatch.setattr(settings, "INTERNAL_HTTP_CONNECT_TIMEOUT", 3.0)
     monkeypatch.setattr(settings, "INTERNAL_HTTP_READ_TIMEOUT", 9.0)
 
-    monkeypatch.setattr(core_tasks, "AiPlanState", SimpleNamespace(create=lambda: DummyState()))
-    monkeypatch.setattr(core_tasks.httpx, "AsyncClient", lambda **kwargs: DummyClient(recorder, **kwargs))
+    monkeypatch.setattr(ai_coach_tasks, "AiPlanState", SimpleNamespace(create=lambda: DummyState()))
+    monkeypatch.setattr(ai_coach_tasks.httpx, "AsyncClient", lambda **kwargs: DummyClient(recorder, **kwargs))
 
     payload = {
         "client_id": 2,
@@ -245,7 +245,7 @@ async def test_notify_ai_plan_ready_fallback_authorization(monkeypatch: pytest.M
         "error": "oops",
     }
 
-    await core_tasks._notify_ai_plan_ready(payload)
+    await ai_coach_tasks._notify_ai_plan_ready(payload)
 
     assert recorder["headers"] == {"Authorization": "Api-Key fallback"}
 
@@ -263,7 +263,7 @@ async def test_notify_ai_plan_ready_skips_duplicate_delivery(monkeypatch: pytest
     monkeypatch.setattr(settings, "INTERNAL_HTTP_CONNECT_TIMEOUT", 1.0)
     monkeypatch.setattr(settings, "INTERNAL_HTTP_READ_TIMEOUT", 2.0)
 
-    monkeypatch.setattr(core_tasks, "AiPlanState", SimpleNamespace(create=lambda: state))
+    monkeypatch.setattr(ai_coach_tasks, "AiPlanState", SimpleNamespace(create=lambda: state))
 
     async def _noop_post(url: str, json: dict[str, Any], headers: dict[str, str]) -> DummyResponse:
         recorder["calls"] += 1
@@ -274,7 +274,7 @@ async def test_notify_ai_plan_ready_skips_duplicate_delivery(monkeypatch: pytest
             recorder["calls"] += 1
             return await _noop_post(url, json, headers)
 
-    monkeypatch.setattr(core_tasks.httpx, "AsyncClient", lambda **kwargs: CountingClient(recorder, **kwargs))
+    monkeypatch.setattr(ai_coach_tasks.httpx, "AsyncClient", lambda **kwargs: CountingClient(recorder, **kwargs))
 
     payload = {
         "client_id": 3,
@@ -285,7 +285,7 @@ async def test_notify_ai_plan_ready_skips_duplicate_delivery(monkeypatch: pytest
         "plan": {"foo": "bar"},
     }
 
-    await core_tasks._notify_ai_plan_ready(payload)
+    await ai_coach_tasks._notify_ai_plan_ready(payload)
 
     assert recorder["calls"] == 0
 
@@ -298,16 +298,16 @@ async def test_claim_plan_request_logs_duplicate(monkeypatch: pytest.MonkeyPatch
 
     dummy_logger_calls: list[str] = []
 
-    monkeypatch.setattr(core_tasks, "AiPlanState", SimpleNamespace(create=lambda: DuplicateState()))
+    monkeypatch.setattr(ai_coach_tasks, "AiPlanState", SimpleNamespace(create=lambda: DuplicateState()))
     monkeypatch.setattr(settings, "AI_PLAN_DEDUP_TTL", 10)
 
     class DummyLogger:
         def debug(self, message: str) -> None:
             dummy_logger_calls.append(message)
 
-    monkeypatch.setattr(core_tasks, "logger", DummyLogger())
+    monkeypatch.setattr(ai_coach_tasks, "logger", DummyLogger())
 
-    allowed = await core_tasks._claim_plan_request("req-4", "create", attempt=0)
+    allowed = await ai_coach_tasks._claim_plan_request("req-4", "create", attempt=0)
 
     assert allowed is False
     assert any("ai_plan_request_duplicate" in msg for msg in dummy_logger_calls)
