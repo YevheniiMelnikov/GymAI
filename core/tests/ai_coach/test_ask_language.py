@@ -1,5 +1,7 @@
 import asyncio
+from enum import Enum
 from typing import Any
+from types import SimpleNamespace
 
 import pytest  # pyrefly: ignore[import-error]
 from httpx import AsyncClient
@@ -145,3 +147,44 @@ def test_default_language_used_when_profile_missing(monkeypatch: pytest.MonkeyPa
 
     asyncio.run(runner())
     assert recorded.get("locale") == settings.DEFAULT_LANG
+
+
+def test_profile_language_enum_without_str(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorded: dict[str, str] = {}
+
+    class RawLanguage(Enum):
+        ua = "ua"
+
+    async def fake_generate(
+        prompt: str | None,
+        deps: Any,
+        *,
+        workout_type: Any = None,
+        **_: Any,
+    ) -> Program:
+        recorded["locale"] = getattr(deps, "locale")
+        return _sample_program()
+
+    async def fake_get_client(self: ProfileService, client_id: int) -> Client | None:
+        return Client(id=client_id, profile=50)
+
+    async def fake_get_profile(self: ProfileService, profile_id: int) -> Profile | None:
+        return SimpleNamespace(id=profile_id, role=ProfileRole.client, tg_id=1, language=RawLanguage.ua)
+
+    monkeypatch.setattr(CoachAgent, "generate_workout_plan", staticmethod(fake_generate))
+    monkeypatch.setattr(ProfileService, "get_client", fake_get_client)
+    monkeypatch.setattr(ProfileService, "get_profile", fake_get_profile)
+
+    async def runner() -> None:
+        status, _ = await _run_ask(
+            {
+                "client_id": 4,
+                "prompt": "p",
+                "mode": "program",
+                "workout_type": "home",
+            }
+        )
+        assert status == 200
+
+    asyncio.run(runner())
+    assert recorded.get("locale") == "ua"

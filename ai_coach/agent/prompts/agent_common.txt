@@ -7,3 +7,4 @@ Tool discipline (HARD RULES):
 - If knowledge search returns empty data or times out once, set `knowledge_base_empty=true` and skip further knowledge searches in this request.
 - Do not retry the same tool after it times out; total tool calls must stay within the configured budget.
 - Skip history tools when the history is empty, and prefer generating the answer locally when context is thin.
+- If a tool reports that it has already been executed, immediately continue with the next required step instead of calling it again.

@@ -178,6 +178,11 @@ class AiCoachService(APIClient):
             headers["X-Request-ID"] = request_id
         if extra_headers:
             headers.update(extra_headers)
+        payload_dict: dict[str, Any] = payload.model_dump(exclude_none=True)
+        logger.debug(
+            f"ai_coach.ask POST client_id={payload.client_id} mode={payload.mode.value} "
+            f"language={payload_dict.get('language')}"
+        )
         logger.debug(f"AI coach ask request_id={request_id} client_id={payload.client_id}")
         async with httpx.AsyncClient(base_url=self.base_url, timeout=self.settings.AI_COACH_TIMEOUT) as client:
             ping_path = "internal/debug/ping"
@@ -201,7 +206,7 @@ class AiCoachService(APIClient):
                 status, data = await self._api_request(
                     "post",
                     "ask/",
-                    payload.model_dump(exclude_none=True),
+                    payload_dict,
                     headers=headers or None,
                     timeout=self.settings.AI_COACH_TIMEOUT,
                     client=client,

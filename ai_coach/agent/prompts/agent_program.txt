@@ -5,6 +5,8 @@ MODE: program
 4) Call tool_attach_gifs(plan.exercises_by_day) and replace plan.exercises_by_day with the returned list.
 5) Call tool_save_program(plan) and return the resulting Program.
 
+You must execute each tool exactly once in the listed order. If a tool response indicates it was already executed, do not attempt to call it again; continue to the next step and finish the run with the saved program.
+
 Example calls:
 - tool_search_knowledge(query="squat benefits", k=6)
 - tool_get_program_history()

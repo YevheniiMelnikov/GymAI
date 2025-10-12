@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 from openai import AsyncOpenAI  # pyrefly: ignore[import-error]
 from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
 from pydantic import BaseModel
+from loguru import logger  # pyrefly: ignore[import-error]
 
 from config.app_settings import settings
 from core.enums import WorkoutType
@@ -26,8 +27,6 @@ from .prompts import (
 
 from .tools import toolset
 from ..schemas import ProgramPayload
-from ai_coach.language import resolve_language_name
-
 from pydantic_ai import Agent, RunContext  # pyrefly: ignore[import-error]
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart  # pyrefly: ignore[import-error]
 from pydantic_ai.models.openai import OpenAIChatModel  # pyrefly: ignore[import-error]
@@ -62,8 +61,8 @@ class CoachAgent:
 
     @staticmethod
     def _lang(deps: AgentDeps) -> str:
-        locale_raw: str = deps.locale or getattr(settings, "DEFAULT_LANG", "en")
-        return resolve_language_name(locale_raw)
+        language: str = deps.locale or getattr(settings, "DEFAULT_LANG", "en")
+        return language
 
     @classmethod
     def _init_agent(cls) -> Any:
@@ -173,8 +172,11 @@ class CoachAgent:
         output_type: type[Program] | type[Subscription],
         instructions: str | None = None,
     ) -> Program | Subscription:
-        agent = cls._get_agent()
         deps.mode = CoachMode.program if output_type is Program else CoachMode.subscription
+        if deps.mode in (CoachMode.program, CoachMode.subscription):
+            deps.max_run_seconds = 0.0
+            deps.max_tool_calls = 8 if deps.mode is CoachMode.program else 6
+        agent = cls._get_agent()
         today = datetime.now(ZoneInfo(settings.TIME_ZONE)).date().isoformat()
         context_lines: list[str] = []
         if workout_type:
@@ -207,7 +209,14 @@ class CoachAgent:
             message_history=history,
             model_settings=ModelSettings(response_format={"type": "json_object"}, temperature=0.2),
         )
-        return cls._normalize_output(raw_result, output_type)
+        normalized = cls._normalize_output(raw_result, output_type)
+        logger.debug(
+            "agent.done client_id=%s mode=%s tools_called=%s",
+            deps.client_id,
+            deps.mode.value if deps.mode else "unknown",
+            sorted(deps.called_tools),
+        )
+        return normalized
 
     @classmethod
     async def update_workout_plan(
