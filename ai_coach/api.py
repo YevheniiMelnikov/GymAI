@@ -19,6 +19,24 @@ from core.schemas import Client, Profile, Program, QAResponse, Subscription
 
 CoachAction = Callable[[AskCtx], Awaitable[Program | Subscription | QAResponse | list[str] | None]]
 
+
+def _to_language_code(raw: object, default: str) -> str:
+    """Normalize raw language values to a lowercase language code."""
+
+    if raw is None:
+        return default
+
+    value_obj: object = getattr(raw, "value", raw)
+    candidate: str = str(value_obj or "").strip()
+    if not candidate:
+        return default
+
+    normalized: str = candidate.lower()
+    if normalized.startswith("language."):
+        normalized = normalized.split(".", 1)[1]
+    return normalized or default
+
+
 DISPATCH: dict[CoachMode, CoachAction] = {
     CoachMode.program: lambda ctx: CoachAgent.generate_workout_plan(
         ctx.get("prompt"),
@@ -92,13 +110,17 @@ async def ask(
         except Exception:  # pragma: no cover - missing profile service
             profile = None
 
+    request_language: str | None = None
+    if data.language:
+        request_language = _to_language_code(data.language, settings.DEFAULT_LANG)
+
     profile_language: str | None = None
     if profile is not None:
         profile_language_raw = getattr(profile, "language", None)
         if profile_language_raw is not None:
-            profile_language = str(profile_language_raw)
+            profile_language = _to_language_code(profile_language_raw, settings.DEFAULT_LANG)
 
-    language: str = (data.language or None) or profile_language or settings.DEFAULT_LANG
+    language: str = request_language or profile_language or settings.DEFAULT_LANG
 
     ctx: AskCtx = {
         "prompt": data.prompt,
@@ -123,6 +145,8 @@ async def ask(
         client_name=client_name,
     )
     ctx["deps"] = deps
+
+    logger.debug(f"/ask ctx.language={language} deps.locale={deps.locale} mode={mode.value}")
 
     try:
         coach_agent_action = DISPATCH[mode]
