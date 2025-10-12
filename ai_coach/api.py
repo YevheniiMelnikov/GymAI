@@ -143,7 +143,7 @@ async def ask(
             "knowledge_base_empty": "knowledge base returned no data",
         }
         detail_reason = reason_map.get(exc.reason, exc.reason)
-        logger.warning(
+        logger.info(
             f"/ask agent aborted request_id={data.request_id} client_id={data.client_id} "
             f"mode={mode.value} reason={exc.reason} detail={detail_reason} steps_used={deps.tool_calls}"
         )

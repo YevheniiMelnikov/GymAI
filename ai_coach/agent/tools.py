@@ -36,15 +36,24 @@ def _tool_timeout(tool_name: str) -> float:
     return TOOL_TIMEOUTS.get(tool_name, DEFAULT_TOOL_TIMEOUT)
 
 
+def _looks_like_prompt(query: str) -> bool:
+    lowered = query.lower()
+    if "mode:" in lowered:
+        return True
+    if "you are an ai coach" in lowered:
+        return True
+    return False
+
+
 def _prepare_tool(ctx: RunContext[AgentDeps], tool_name: str) -> AgentDeps:  # pyrefly: ignore[unsupported-operation]
     deps = ctx.deps
     elapsed = monotonic() - deps.started_at
     if deps.max_run_seconds > 0 and elapsed > deps.max_run_seconds:
-        logger.warning(f"agent_tool_timeout client_id={deps.client_id} tool={tool_name} elapsed={elapsed:.2f}")
+        logger.info(f"agent_tool_timeout client_id={deps.client_id} tool={tool_name} elapsed={elapsed:.2f}")
         raise AgentExecutionAborted("AI coach request timed out", reason="timeout")
     deps.tool_calls += 1
     if deps.max_tool_calls > 0 and deps.tool_calls > deps.max_tool_calls:
-        logger.warning(f"agent_tool_limit_exceeded client_id={deps.client_id} tool={tool_name} steps={deps.tool_calls}")
+        logger.info(f"agent_tool_limit_exceeded client_id={deps.client_id} tool={tool_name} steps={deps.tool_calls}")
         raise AgentExecutionAborted("AI coach tool budget exhausted", reason="max_tool_calls_exceeded")
     return deps
 
@@ -65,15 +74,23 @@ async def tool_search_knowledge(
     logger.debug(f"tool_search_knowledge client_id={client_id} query='{normalized_query[:80]}' k={k}")
     if not normalized_query:
         raise ModelRetry("Knowledge search requires a non-empty query. Summarize the client's goal before retrying.")
+    if _looks_like_prompt(normalized_query):
+        deps.knowledge_base_empty = True
+        deps.last_knowledge_query = normalized_query
+        deps.last_knowledge_empty = True
+        logger.debug(
+            f"knowledge_search_skipped client_id={client_id} query='{normalized_query[:80]}' reason=prompt_guard"
+        )
+        return []
     if deps.knowledge_base_empty:
         deps.last_knowledge_query = normalized_query
         deps.last_knowledge_empty = True
-        logger.warning(
+        logger.info(
             f"knowledge_search_aborted client_id={client_id} query='{normalized_query[:80]}' reason=knowledge_base_empty"
         )
         return []
     if deps.last_knowledge_query == normalized_query and deps.last_knowledge_empty:
-        logger.info(
+        logger.debug(
             f"knowledge_search_repeat client_id={client_id} query='{normalized_query[:80]}' reason=empty_previous"
         )
         return []
@@ -83,9 +100,7 @@ async def tool_search_knowledge(
         deps.knowledge_base_empty = True
         deps.last_knowledge_query = normalized_query
         deps.last_knowledge_empty = True
-        logger.warning(
-            f"knowledge_search_timeout client_id={client_id} query='{normalized_query[:80]}' timeout={timeout}"
-        )
+        logger.info(f"knowledge_search_timeout client_id={client_id} query='{normalized_query[:80]}' timeout={timeout}")
         return []
     except Exception as e:  # pragma: no cover - forward to model
         message = str(e)
@@ -93,7 +108,7 @@ async def tool_search_knowledge(
             deps.knowledge_base_empty = True
             deps.last_knowledge_query = normalized_query
             deps.last_knowledge_empty = True
-            logger.warning(
+            logger.info(
                 f"knowledge_search_empty client_id={client_id} query='{normalized_query[:80]}' detail={message}"
             )
             return []
@@ -102,9 +117,7 @@ async def tool_search_knowledge(
     deps.last_knowledge_empty = len(result) == 0
     if deps.last_knowledge_empty:
         deps.knowledge_base_empty = True
-        logger.warning(
-            f"knowledge_search_empty client_id={client_id} query='{normalized_query[:80]}' detail=no_results"
-        )
+        logger.info(f"knowledge_search_empty client_id={client_id} query='{normalized_query[:80]}' detail=no_results")
     logger.debug(f"tool_search_knowledge results={len(result)}")
     return result
 
@@ -131,7 +144,7 @@ async def tool_get_chat_history(
             return list(history)
         return list(history[:limit])
     except TimeoutError:
-        logger.warning(f"chat_history_timeout client_id={client_id} tool=tool_get_chat_history timeout={timeout}")
+        logger.info(f"chat_history_timeout client_id={client_id} tool=tool_get_chat_history timeout={timeout}")
         deps.cached_history = deps.cached_history or []
         return list(deps.cached_history)
     except Exception as e:  # pragma: no cover - forward to model
@@ -167,7 +180,7 @@ async def tool_save_program(
         logger.debug(f"event=save_program.success program_id={saved.id} client_id={client_id}")
         return saved
     except TimeoutError:
-        logger.warning(f"save_program_timeout client_id={client_id} timeout={timeout}")
+        logger.info(f"save_program_timeout client_id={client_id} timeout={timeout}")
         return program
     except Exception as e:  # pragma: no cover - forward to model
         raise ModelRetry(f"Program saving failed: {e}. Ensure plan data is valid and retry.") from e
@@ -187,7 +200,7 @@ async def tool_get_program_history(
     try:
         return await wait_for(APIService.workout.get_all_programs(client_id), timeout=timeout)
     except TimeoutError:
-        logger.warning(f"program_history_timeout client_id={client_id} tool=tool_get_program_history timeout={timeout}")
+        logger.info(f"program_history_timeout client_id={client_id} tool=tool_get_program_history timeout={timeout}")
         return []
     except Exception as e:  # pragma: no cover - forward to model
         raise ModelRetry(f"Program history unavailable: {e}. Try calling the tool again later.") from e
@@ -211,7 +224,7 @@ async def tool_attach_gifs(
     try:
         gif_manager = get_gif_manager()
     except Exception as e:  # pragma: no cover - optional service
-        logger.warning(f"gif manager unavailable: {e}")
+        logger.info(f"gif manager unavailable: {e}")
         return exercises
 
     result: list[DayExercises] = []

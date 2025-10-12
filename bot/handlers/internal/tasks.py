@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -214,6 +215,13 @@ async def _process_ai_plan_ready(
                 wishes=wishes,
             )
             await Cache.workout.save_program(client_profile_id, saved_program.model_dump(mode="json"))
+            try:
+                await APIService.workout.get_latest_program(client_profile_id)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug(
+                    "warm_program_cache_failed "
+                    f"client_profile_id={client_profile_id} request_id={request_id} err={exc!s}"
+                )
             exercises_dump = [day.model_dump() for day in saved_program.exercises_by_day]
             await state.update_data(
                 exercises=exercises_dump,
@@ -519,24 +527,25 @@ async def internal_ai_coach_plan_ready(request: web.Request) -> web.Response:
             logger.error(f"ai_plan_ready_validation_failed request_id={request_id} reason=invalid_client_profile_id")
             return web.json_response({"detail": "Invalid client_profile_id"}, status=400)
 
-    try:
-        await _process_ai_plan_ready(
-            request=request,
-            payload=payload,
-            request_id=request_id,
-            status=status,
-            action=action,
-            plan_type=plan_type,
-            client_id=client_id,
-            client_profile_id=client_profile_id,
-        )
-    except Exception as exc:  # noqa: BLE001
-        logger.exception(f"ai_plan_ready_processing_failed action={action} request_id={request_id} err={exc!s}")
-        state = AiPlanState.create()
-        await state.mark_failed(request_id, f"runner_exception:{exc!s}")
-        return web.json_response({"detail": "processing_failed"}, status=500)
+    async def _runner() -> None:
+        try:
+            await _process_ai_plan_ready(
+                request=request,
+                payload=payload,
+                request_id=request_id,
+                status=status,
+                action=action,
+                plan_type=plan_type,
+                client_id=client_id,
+                client_profile_id=client_profile_id,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.exception(f"ai_plan_ready_runner_failed action={action} request_id={request_id} err={exc!s}")
+            state = AiPlanState.create()
+            await state.mark_failed(request_id, f"runner_exception:{exc!s}")
 
-    return web.json_response({"result": "processed"}, status=200)
+    asyncio.create_task(_runner(), name=f"ai-plan-ready-{request_id}")
+    return web.json_response({"result": "accepted"}, status=202)
 
 
 @require_internal_auth
