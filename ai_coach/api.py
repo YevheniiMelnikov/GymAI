@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse  # pyrefly: ignore[import-error]
 from fastapi.security import HTTPBasicCredentials  # pyrefly: ignore[import-error]
 from loguru import logger  # pyrefly: ignore[import-error]
 from pydantic import ValidationError  # pyrefly: ignore[import-error]
-from typing import Awaitable, Callable, Any
+from typing import Any, Awaitable, Callable
 
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from ai_coach.agent import AgentDeps, CoachAgent  # pyrefly: ignore[missing-module-attribute]
@@ -12,11 +12,10 @@ from core.services import APIService
 from ai_coach.application import app, security
 from ai_coach.schemas import AICoachRequest
 from ai_coach.types import AskCtx, CoachMode
-from core.enums import WorkoutPlanType, SubscriptionPeriod
+from core.ai_coach_fallback import FALLBACK_WORKOUT_DAYS, fallback_plan
+from core.enums import WorkoutPlanType, SubscriptionPeriod, WorkoutType
 from config.app_settings import settings
 from core.schemas import Program, QAResponse, Subscription
-
-DEFAULT_WORKOUT_DAYS: list[str] = ["Пн", "Ср", "Пт", "Сб"]
 
 CoachAction = Callable[[AskCtx], Awaitable[Program | Subscription | QAResponse | list[str] | None]]
 
@@ -78,7 +77,7 @@ async def ask(
         else SubscriptionPeriod(data.period or SubscriptionPeriod.one_month.value)
     )
 
-    workout_days = data.workout_days or DEFAULT_WORKOUT_DAYS
+    workout_days = data.workout_days or list(FALLBACK_WORKOUT_DAYS)
 
     ctx: AskCtx = {
         "prompt": data.prompt,
@@ -148,6 +147,34 @@ async def ask(
             f"/ask agent aborted request_id={data.request_id} client_id={data.client_id} "
             f"mode={mode.value} reason={exc.reason} detail={detail_reason} steps_used={deps.tool_calls}"
         )
+        fallback_result: Program | Subscription | None = None
+        if mode in {CoachMode.program, CoachMode.subscription, CoachMode.update}:
+            plan_type_raw = ctx.get("plan_type")
+            try:
+                plan_type_enum = (
+                    plan_type_raw if isinstance(plan_type_raw, WorkoutPlanType) else WorkoutPlanType(plan_type_raw)
+                )
+            except Exception:
+                plan_type_enum = WorkoutPlanType.PROGRAM
+            workout_type_raw = ctx.get("workout_type")
+            workout_type_value = (
+                workout_type_raw.value if isinstance(workout_type_raw, WorkoutType) else workout_type_raw
+            )
+            fallback_result = fallback_plan(
+                plan_type=plan_type_enum,
+                client_profile_id=data.client_id,
+                workout_type=workout_type_value,
+                wishes=ctx.get("wishes"),
+                workout_days=ctx.get("workout_days"),
+                period=ctx.get("period"),
+            )
+        if fallback_result is not None:
+            deps.fallback_used = True
+            logger.info(
+                f"/ask agent fallback request_id={data.request_id} client_id={data.client_id} "
+                f"mode={mode.value} reason={exc.reason} steps_used={deps.tool_calls}"
+            )
+            return fallback_result
         return JSONResponse(
             status_code=408,
             content={"detail": "AI coach aborted request", "reason": exc.reason},

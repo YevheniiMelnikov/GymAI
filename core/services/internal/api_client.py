@@ -161,6 +161,9 @@ class APIClient:
 
                 return response.status_code, self._parse_response_json(response)
 
+            except APIClientHTTPError:
+                raise
+
             except httpx.RequestError as exc:
                 if attempt >= attempts:
                     raise APIClientTransportError(f"{type(exc).__name__} on {method.upper()} {url}: {exc}") from exc
