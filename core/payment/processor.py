@@ -5,8 +5,6 @@ from typing import Dict
 
 from loguru import logger
 
-from bot.utils.credits import available_packages, uah_to_credits
-from bot.utils.profiles import get_assigned_coach
 from core.enums import CoachType, PaymentStatus
 from core.exceptions import ClientNotFoundError
 from core.schemas import Client, Payment
@@ -14,7 +12,6 @@ from core.services.gsheets_service import GSheetsService
 from core.services.internal.profile_service import ProfileService
 from core.services.internal.workout_service import WorkoutService
 
-from .notifications import PaymentNotifier
 from core.services.internal.payment_service import PaymentService
 from .strategies import (
     ClosedPayment,
@@ -23,7 +20,7 @@ from .strategies import (
     PendingPayment,
     SuccessPayment,
 )
-from .types import CacheProtocol
+from .types import CacheProtocol, CoachResolver, CreditService, PaymentNotifier
 
 
 class PaymentProcessor:
@@ -34,12 +31,16 @@ class PaymentProcessor:
         profile_service: ProfileService,
         workout_service: WorkoutService,
         notifier: PaymentNotifier,
+        credit_service: CreditService,
+        coach_resolver: CoachResolver,
         strategies: Dict[PaymentStatus, PaymentStrategy] | None = None,
     ) -> None:
         self.cache = cache
         self.payment_service = payment_service
         self.profile_service = profile_service
         self.workout_service = workout_service
+        self._credit_service = credit_service
+        self._coach_resolver = coach_resolver
         self.strategies = strategies or {
             PaymentStatus.SUCCESS: SuccessPayment(
                 cache,
@@ -75,7 +76,10 @@ class PaymentProcessor:
             if not client or not client.assigned_to:
                 logger.warning(f"Skip payment {payment.order_id}: client/coach missing")
                 return None
-            coach = await get_assigned_coach(client, coach_type=CoachType.human)
+            coach = await self._coach_resolver.get_assigned_coach(
+                client,
+                coach_type=CoachType.human,
+            )
             if not coach:
                 logger.error(f"Coach not found for payment {payment.order_id}")
                 return None
@@ -100,10 +104,7 @@ class PaymentProcessor:
             return None
 
     async def process_credit_topup(self, client: Client, amount: Decimal) -> None:
-        package_map = {p.price: p.credits for p in available_packages()}
-        credits = package_map.get(amount)
-        if credits is None:
-            credits = uah_to_credits(amount, apply_markup=False)
+        credits = self._credit_service.credits_for_amount(amount)
         await self.profile_service.adjust_client_credits(client.profile, credits)
         await self.cache.client.update_client(client.profile, {"credits": client.credits + credits})
 

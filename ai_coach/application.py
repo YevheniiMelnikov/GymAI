@@ -11,7 +11,10 @@ from loguru import logger
 
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from ai_coach.agent.knowledge.base_knowledge_loader import KnowledgeLoader
+from dependency_injector import providers
+
 from core.containers import create_container, set_container, get_container
+from core.infra.payment import BotCoachResolver, BotCreditService, TaskPaymentNotifier
 from core.services.internal import APIService
 
 
@@ -46,6 +49,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from ai_coach.agent.knowledge.gdrive_knowledge_loader import GDriveDocumentLoader
 
     container = create_container()
+    container.notifier.override(providers.Factory(TaskPaymentNotifier))
+    container.credit_service.override(providers.Factory(BotCreditService))
+    container.coach_resolver.override(providers.Factory(BotCoachResolver))
     set_container(container)
     APIService.configure(get_container)
     container.wire(modules=["core.tasks"])

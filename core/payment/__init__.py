@@ -1,6 +1,6 @@
 from .processor import PaymentProcessor
 from core.services.internal.payment_service import PaymentService
-from .notifications import PaymentNotifier, TaskPaymentNotifier
+from .types import PaymentNotifier
 from .strategies import (
     PaymentStrategy,
     SuccessPayment,
@@ -13,7 +13,6 @@ __all__ = [
     "PaymentProcessor",
     "PaymentService",
     "PaymentNotifier",
-    "TaskPaymentNotifier",
     "PaymentStrategy",
     "SuccessPayment",
     "FailurePayment",
