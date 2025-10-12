@@ -7,8 +7,7 @@ from core.enums import PaymentStatus
 from core.schemas import Client, Payment
 from core.services import ProfileService
 
-from .notifications import PaymentNotifier
-from .types import CacheProtocol
+from .types import CacheProtocol, PaymentNotifier
 
 CreditTopupFunc = Callable[[Client, Decimal], Awaitable[None]]
 

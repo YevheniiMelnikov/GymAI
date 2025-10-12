@@ -7,12 +7,13 @@ from dependency_injector import containers, providers
 
 from config.app_settings import settings
 from core.cache import Cache
-from core.payment import PaymentProcessor, PaymentService, TaskPaymentNotifier
+from core.infra.payment_repository import HTTPPaymentRepository
+from core.infra.profile_repository import HTTPProfileRepository
+from core.payment import PaymentProcessor, PaymentService
+from core.payment.types import CoachResolver, CreditService, PaymentNotifier
 from core.services.internal.ai_coach_service import AiCoachService
 from core.services.internal.profile_service import ProfileService
 from core.services.internal.workout_service import WorkoutService
-from core.infra.payment_repository import HTTPPaymentRepository
-from core.infra.profile_repository import HTTPProfileRepository
 
 
 def build_http_client(**_: Any) -> httpx.AsyncClient:
@@ -41,13 +42,19 @@ class App(containers.DeclarativeContainer):
     workout_service = providers.Factory(WorkoutService, client=http_client, settings=settings)
     ai_coach_service = providers.Factory(AiCoachService, client=http_client, settings=settings)
 
+    credit_service = providers.Dependency(instance_of=CreditService)
+    coach_resolver = providers.Dependency(instance_of=CoachResolver)
+    notifier = providers.Dependency(instance_of=PaymentNotifier)
+
     payment_processor = providers.Singleton(
         PaymentProcessor,
         cache=Cache,
         payment_service=payment_service,
         profile_service=profile_service,
         workout_service=workout_service,
-        notifier=providers.Factory(TaskPaymentNotifier),
+        notifier=notifier,
+        credit_service=credit_service,
+        coach_resolver=coach_resolver,
     )
 
     bot = providers.Singleton(
