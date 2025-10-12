@@ -179,7 +179,14 @@ async def fetch_user(profile: Profile) -> Client | Coach:
     raise ValueError(f"Unknown profile role: {profile.role}")
 
 
-async def answer_profile(cbq: TgCallbackQuery, profile: Profile, user: Coach | Client, text: str) -> None:
+async def answer_profile(
+    cbq: TgCallbackQuery,
+    profile: Profile,
+    user: Coach | Client,
+    text: str,
+    *,
+    show_balance: bool = False,
+) -> None:
     from bot.keyboards import profile_menu_kb
 
     message = cbq.message  # Optional[TgMessage]
@@ -197,7 +204,7 @@ async def answer_profile(cbq: TgCallbackQuery, profile: Profile, user: Coach | C
                     await message.answer_photo(
                         avatar,
                         caption=text,
-                        reply_markup=profile_menu_kb(profile.language),
+                        reply_markup=profile_menu_kb(profile.language, show_balance=show_balance),
                     )
                     return
                 except TelegramBadRequest:
@@ -208,7 +215,7 @@ async def answer_profile(cbq: TgCallbackQuery, profile: Profile, user: Coach | C
                 await message.answer_photo(
                     photo_url,
                     caption=text,
-                    reply_markup=profile_menu_kb(profile.language),
+                    reply_markup=profile_menu_kb(profile.language, show_balance=show_balance),
                 )
                 return
             except TelegramBadRequest:
@@ -221,7 +228,7 @@ async def answer_profile(cbq: TgCallbackQuery, profile: Profile, user: Coach | C
                 await message.answer_photo(
                     photo_url,
                     caption=text,
-                    reply_markup=profile_menu_kb(profile.language),
+                    reply_markup=profile_menu_kb(profile.language, show_balance=show_balance),
                 )
                 return
             except TelegramBadRequest:
@@ -236,7 +243,7 @@ async def answer_profile(cbq: TgCallbackQuery, profile: Profile, user: Coach | C
                 await message.answer_photo(
                     avatar_file,
                     caption=text,
-                    reply_markup=profile_menu_kb(profile.language),
+                    reply_markup=profile_menu_kb(profile.language, show_balance=show_balance),
                 )
                 return
             except TelegramBadRequest as e:
@@ -244,7 +251,7 @@ async def answer_profile(cbq: TgCallbackQuery, profile: Profile, user: Coach | C
         else:
             logger.error(f"Default avatar file not found: {file_path}")
 
-    await message.answer(text, reply_markup=profile_menu_kb(profile.language))
+    await message.answer(text, reply_markup=profile_menu_kb(profile.language, show_balance=show_balance))
 
 
 async def get_clients_to_survey() -> list[Profile]:

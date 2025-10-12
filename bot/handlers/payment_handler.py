@@ -18,7 +18,7 @@ from core.cache import Cache
 from core.cache.payment import PaymentCacheManager
 from core.enums import ClientStatus, PaymentStatus, SubscriptionPeriod
 from core.services import APIService
-from bot.utils.menus import show_main_menu, show_services_menu
+from bot.utils.menus import show_main_menu, show_my_workouts_menu
 from core.schemas import Coach, Client
 from apps.payments.tasks import send_client_request
 from bot.utils.workout_plans import cache_program_data, process_new_subscription
@@ -184,7 +184,7 @@ async def confirm_service(callback_query: CallbackQuery, state: FSMContext) -> N
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     if callback_query.data == "no":
-        await show_services_menu(callback_query, profile, state)
+        await show_my_workouts_menu(callback_query, profile, state)
         return
 
     service_type = data.get("service_type")

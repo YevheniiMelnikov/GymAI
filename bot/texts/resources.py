@@ -236,7 +236,6 @@ class MessageText(AutoName):
     not_verified = auto()
     gift = auto()
     select_service = auto()
-    services_menu = auto()
     set_mode_on = auto()
     set_mode_off = auto()
 
