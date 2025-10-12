@@ -13,6 +13,12 @@ from pydantic import ValidationError
 from bot.texts import TextManager
 from config.app_settings import settings
 
+_WEBAPP_SEGMENTS: dict[str, str] = {
+    "program": "#/program",
+    "subscription": "#/subscriptions",
+    "subscriptions": "#/subscriptions",
+}
+
 
 async def del_msg(msg_obj: Message | CallbackQuery | None) -> None:
     if msg_obj is None:
@@ -92,7 +98,11 @@ def get_webapp_url(page_type: str) -> str | None:
     parsed = urlparse(source)
     host = parsed.netloc or parsed.path.split("/")[0]
     base = f"{parsed.scheme or 'https'}://{host}"
-    return f"{base}/webapp/?type={page_type}"
+    fragment = _WEBAPP_SEGMENTS.get(page_type, "")
+    suffix = f"/webapp/?type={page_type}"
+    if fragment:
+        suffix = f"{suffix}{fragment}"
+    return f"{base}{suffix}"
 
 
 async def check_webhook_alive(ping_url: str, timeout_seconds: float = 5.0) -> bool:

@@ -71,3 +71,4 @@ class States(StatesGroup):
     confirm_service = State()
     ai_confirm_service = State()
     subscription_action_choice = State()
+    subscription_creation_choice = State()

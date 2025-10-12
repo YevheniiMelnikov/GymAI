@@ -213,6 +213,7 @@ class MessageText(AutoName):
     subscription_history_page = auto()
 
     select_action = auto()
+    subscription_creation_prompt = auto()
     follow_link = auto()
     main_menu = auto()
     help = auto()

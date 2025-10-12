@@ -208,6 +208,16 @@ def subscription_action_kb(lang: str, webapp_url: str | None = None) -> KbMarkup
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
+def subscription_creation_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [
+        [builder.add("ai_coach", "subscription_ai")],
+        [builder.add("choose_coach", "subscription_human")],
+        [builder.add("prev_menu", "back")],
+    ]
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
 def program_manage_kb(lang: str, workouts_per_week: int) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [

@@ -18,7 +18,7 @@ from core.cache import Cache
 from core.cache.payment import PaymentCacheManager
 from core.enums import ClientStatus, PaymentStatus, SubscriptionPeriod
 from core.services import APIService
-from bot.utils.menus import show_main_menu, show_my_workouts_menu
+from bot.utils.menus import show_main_menu, show_my_workouts_menu, show_balance_menu
 from core.schemas import Coach, Client
 from apps.payments.tasks import send_client_request
 from bot.utils.workout_plans import cache_program_data, process_new_subscription
@@ -101,11 +101,18 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext) -> No
 
 @payment_router.callback_query(States.handle_payment)
 async def handle_payment(callback_query: CallbackQuery, state: FSMContext) -> None:
-    if not callback_query.data == "done":
-        return
-
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
+    cb_data = callback_query.data or ""
+
+    if cb_data == "back":
+        await callback_query.answer()
+        await show_balance_menu(callback_query, profile, state)
+        return
+
+    if cb_data != "done":
+        return
+
     order_id = data.get("order_id")
     amount = data.get("amount")
     service_type = data.get("service_type")

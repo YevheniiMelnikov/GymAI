@@ -43,6 +43,11 @@ select_action:
   ru: "Выберите действие 👇"
   ua: "Оберіть дію 👇"
 
+subscription_creation_prompt:
+  eng: "Choose who will guide your subscription 👇"
+  ru: "Выберите, кто будет вести вашу подписку 👇"
+  ua: "Оберіть, хто вестиме вашу підписку 👇"
+
 start:
   eng: "Greetings! 👋"
   ru: "Приветствую! 👋"
@@ -535,9 +540,9 @@ unable_to_delete_profile:
   ua: "У вас на поточний момент є клієнти з активною підпискою. Якщо ви бажаєте видалити акаунт - напишіть нам через команду /feedback ✍️"
 
 follow_link:
-  eng: "Follow the link by clicking Pay 💰\nAfter payments, press Done 👌 to continue"
-  ru: "Перейдите по ссылке нажав Оплатить 💰\nПосле оплаты для продолжения нажмите Готово 👌"
-  ua: "Перейдіть за посиланням натиснувши Сплатити 💰\nПісля оплати для продовження натисніть Готово 👌"
+  eng: "Payment amount: {amount} UAH 💳\nFollow the link by clicking Pay 💰\nAfter payments, press Done 👌 to continue"
+  ru: "Сумма к оплате: {amount} грн 💳\nПерейдите по ссылке нажав Оплатить 💰\nПосле оплаты для продолжения нажмите Готово 👌"
+  ua: "Сума до сплати: {amount} грн 💳\nПерейдіть за посиланням натиснувши Сплатити 💰\nПісля оплати для продовження натисніть Готово 👌"
 
 workout_plan_delete_warning:
   eng: "The selected number of training days does not match the current number of training days. Your current training program will be reset. Continue? 🤔"

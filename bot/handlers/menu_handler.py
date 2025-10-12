@@ -118,7 +118,7 @@ async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
         await state.set_state(States.handle_payment)
         await answer_msg(
             callback_query,
-            msg_text("follow_link", profile.language),
+            msg_text("follow_link", profile.language).format(amount=format(pkg.price, "f")),
             reply_markup=payment_kb(profile.language, link, "credits"),
         )
     await del_msg(callback_query)
