@@ -35,6 +35,8 @@ TOOL_TIMEOUTS: dict[str, float] = {
     "tool_get_program_history": float(settings.AI_COACH_PROGRAM_HISTORY_TIMEOUT),
 }
 
+TOOL_REPEAT_REMINDER: str = "TOOL_ALREADY_USED: continue to the next step and finish without calling this tool again."
+
 
 def _tool_timeout(tool_name: str) -> float:
     return TOOL_TIMEOUTS.get(tool_name, DEFAULT_TOOL_TIMEOUT)
@@ -49,32 +51,26 @@ def _looks_like_prompt(query: str) -> bool:
     return False
 
 
+def _raise_tool_limit(deps: AgentDeps, tool_name: str) -> None:
+    mode_value = deps.mode.value if deps.mode else "unknown"
+    logger.info(
+        f"agent_tool_limit_exceeded client_id={deps.client_id} tool={tool_name} steps={deps.tool_calls} mode={mode_value}"
+    )
+    raise AgentExecutionAborted("AI coach tool budget exhausted", reason="max_tool_calls_exceeded")
+
+
 def _prepare_tool(ctx: RunContext[AgentDeps], tool_name: str) -> AgentDeps:  # pyrefly: ignore[unsupported-operation]
     deps = ctx.deps
     elapsed = monotonic() - deps.started_at
     if deps.max_run_seconds > 0 and elapsed > deps.max_run_seconds:
         mode_value = deps.mode.value if deps.mode else "unknown"
-        if deps.mode in (CoachMode.program, CoachMode.subscription):
-            logger.info(
-                f"agent_tool_timeout_nonfatal client_id={deps.client_id} tool={tool_name} elapsed={elapsed:.2f} mode={mode_value}"
-            )
-            return deps
         logger.info(
             f"agent_tool_timeout client_id={deps.client_id} tool={tool_name} elapsed={elapsed:.2f} mode={mode_value}"
         )
         raise AgentExecutionAborted("AI coach request timed out", reason="timeout")
     deps.tool_calls += 1
     if deps.max_tool_calls > 0 and deps.tool_calls > deps.max_tool_calls:
-        mode_value = deps.mode.value if deps.mode else "unknown"
-        if deps.mode in (CoachMode.program, CoachMode.subscription):
-            logger.info(
-                f"agent_tool_limit_nonfatal client_id={deps.client_id} tool={tool_name} steps={deps.tool_calls} mode={mode_value}"
-            )
-            return deps
-        logger.info(
-            f"agent_tool_limit_exceeded client_id={deps.client_id} tool={tool_name} steps={deps.tool_calls} mode={mode_value}"
-        )
-        raise AgentExecutionAborted("AI coach tool budget exhausted", reason="max_tool_calls_exceeded")
+        _raise_tool_limit(deps, tool_name)
     return deps
 
 
@@ -83,10 +79,21 @@ def _start_tool(
 ) -> tuple[AgentDeps, bool, Any]:  # pyrefly: ignore[unsupported-operation]
     deps = ctx.deps
     if tool_name in deps.called_tools:
+        if deps.final_result is not None:
+            deps.tool_calls += 1
+            if deps.max_tool_calls > 0 and deps.tool_calls > deps.max_tool_calls:
+                _raise_tool_limit(deps, tool_name)
         mode_value = deps.mode.value if deps.mode else "unknown"
         cached = deps.tool_cache.get(tool_name)
         if deps.mode in (CoachMode.program, CoachMode.subscription):
             logger.info(f"tool_repeat_skipped client_id={deps.client_id} tool={tool_name} mode={mode_value}")
+            if isinstance(cached, list):
+                cached_list = list(cached)
+                if TOOL_REPEAT_REMINDER not in cached_list:
+                    cached_list.append(TOOL_REPEAT_REMINDER)
+                return deps, True, cached_list
+            if cached is None:
+                return deps, True, [TOOL_REPEAT_REMINDER]
         else:
             logger.debug(f"{tool_name} skip_repeat client_id={deps.client_id}")
         return deps, True, cached
@@ -233,9 +240,11 @@ async def tool_save_program(
             timeout=timeout,
         )
         logger.debug(f"event=save_program.success program_id={saved.id} client_id={client_id}")
+        deps.final_result = saved
         return _cache_result(deps, tool_name, saved)
     except TimeoutError:
         logger.info(f"save_program_timeout client_id={client_id} timeout={timeout}")
+        deps.final_result = program
         return _cache_result(deps, tool_name, program)
     except Exception as e:  # pragma: no cover - forward to model
         raise ModelRetry(f"Program saving failed: {e}. Ensure plan data is valid and retry.") from e
@@ -314,11 +323,8 @@ async def tool_attach_gifs(
                     logger.debug(f"cache_gif_filename failed name={ex.name} err={e}")
             new_day.exercises.append(ex_copy)
         result.append(new_day)
-    logger.debug(
-        "tool_attach_gifs done client_id=%s first_name=%r",
-        client_id,
-        result[0].exercises[0].name if result and result[0].exercises else None,
-    )
+    first_exercise = result[0].exercises[0].name if result and result[0].exercises else None
+    logger.debug(f"tool_attach_gifs done client_id={client_id} first_name={first_exercise!r}")
     return _cache_result(deps, tool_name, result)
 
 
@@ -367,6 +373,7 @@ async def tool_create_subscription(
         logger.debug(f"event=create_subscription.success subscription_id={sub_id} payment_date={payment_date}")
         sub = await APIService.workout.get_latest_subscription(client_id)
         if sub is not None:
+            deps.final_result = sub
             return _cache_result(deps, tool_name, sub)
         data = {
             "id": sub_id,
@@ -380,7 +387,9 @@ async def tool_create_subscription(
             "exercises": exercises_payload,
             "payment_date": payment_date,
         }
-        return _cache_result(deps, tool_name, Subscription.model_validate(data))
+        subscription = Subscription.model_validate(data)
+        deps.final_result = subscription
+        return _cache_result(deps, tool_name, subscription)
     except ModelRetry:
         raise
     except Exception as e:  # pragma: no cover - forward to model

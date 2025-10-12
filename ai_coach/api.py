@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse  # pyrefly: ignore[import-error]
 from fastapi.security import HTTPBasicCredentials  # pyrefly: ignore[import-error]
 from loguru import logger  # pyrefly: ignore[import-error]
 from pydantic import ValidationError  # pyrefly: ignore[import-error]
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, cast
 
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from ai_coach.agent import AgentDeps, CoachAgent  # pyrefly: ignore[missing-module-attribute]
@@ -187,6 +187,20 @@ async def ask(
             f"/ask agent aborted request_id={data.request_id} client_id={data.client_id} "
             f"mode={mode.value} reason={exc.reason} detail={detail_reason} steps_used={deps.tool_calls}"
         )
+        if mode in {CoachMode.program, CoachMode.subscription}:
+            final_result = cast(Program | Subscription | None, deps.final_result)
+            if final_result is None:
+                for cache_key in ("tool_save_program", "tool_create_subscription"):
+                    cached_value = deps.tool_cache.get(cache_key)
+                    if cached_value is not None:
+                        final_result = cast(Program | Subscription, cached_value)
+                        break
+            if final_result is not None:
+                logger.info(
+                    f"/ask agent returning saved result request_id={data.request_id} client_id={data.client_id} "
+                    f"mode={mode.value} reason={exc.reason}"
+                )
+                return final_result
         fallback_result: Program | Subscription | None = None
         if mode in {CoachMode.program, CoachMode.subscription, CoachMode.update}:
             plan_type_raw = ctx.get("plan_type")

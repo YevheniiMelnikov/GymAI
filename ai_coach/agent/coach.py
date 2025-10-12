@@ -175,10 +175,11 @@ class CoachAgent:
         deps.mode = CoachMode.program if output_type is Program else CoachMode.subscription
         if deps.mode in (CoachMode.program, CoachMode.subscription):
             deps.max_run_seconds = 0.0
-            deps.max_tool_calls = 0
+            deps.max_tool_calls = 8 if deps.mode is CoachMode.program else 6
         agent = cls._get_agent()
         logger.debug(
-            f"agent.generate locale={deps.locale} mode={deps.mode.value} max_run_seconds={deps.max_run_seconds}"
+            f"agent.generate locale={deps.locale} mode={deps.mode.value} max_run_seconds={deps.max_run_seconds} "
+            f"max_tool_calls={deps.max_tool_calls}"
         )
         today = datetime.now(ZoneInfo(settings.TIME_ZONE)).date().isoformat()
         context_lines: list[str] = []

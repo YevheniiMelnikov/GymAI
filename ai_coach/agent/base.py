@@ -34,6 +34,7 @@ class AgentDeps:
     started_at: float = field(default_factory=monotonic)
     called_tools: set[str] = field(default_factory=set)
     tool_cache: dict[str, Any] = field(default_factory=dict)
+    final_result: Program | Subscription | None = None
 
 
 class CoachAgentProtocol(Protocol):
