@@ -36,6 +36,11 @@ TOOL_TIMEOUTS: dict[str, float] = {
     "tool_get_program_history": float(settings.AI_COACH_PROGRAM_HISTORY_TIMEOUT),
 }
 
+TOOL_ALLOWED_MODES: dict[str, set[CoachMode]] = {
+    "tool_save_program": {CoachMode.program, CoachMode.update},
+    "tool_create_subscription": {CoachMode.subscription},
+}
+
 
 def _tool_timeout(tool_name: str) -> float:
     return TOOL_TIMEOUTS.get(tool_name, DEFAULT_TOOL_TIMEOUT)
@@ -73,13 +78,20 @@ def _prepare_tool(ctx: RunContext[AgentDeps], tool_name: str) -> AgentDeps:  # p
     return deps
 
 
+def _log_tool_disabled(deps: AgentDeps, tool_name: str, *, reason: str) -> None:
+    if tool_name in deps.disabled_tools:
+        return
+    mode_value = deps.mode.value if deps.mode else "unknown"
+    logger.debug(f"{reason} client_id={deps.client_id} tool={tool_name} mode={mode_value}")
+    deps.disabled_tools.add(tool_name)
+
+
 def _start_tool(
     ctx: RunContext[AgentDeps], tool_name: str
 ) -> tuple[AgentDeps, bool, Any]:  # pyrefly: ignore[unsupported-operation]
     deps = ctx.deps
     if tool_name in deps.called_tools:
-        mode_value = deps.mode.value if deps.mode else "unknown"
-        logger.info(f"tool_repeat_skipped client_id={deps.client_id} tool={tool_name} mode={mode_value}")
+        _log_tool_disabled(deps, tool_name, reason="tool_repeat_skipped")
         return deps, True, deps.tool_cache.get(tool_name)
     prepared = _prepare_tool(ctx, tool_name)
     prepared.called_tools.add(tool_name)
@@ -99,11 +111,13 @@ def _single_use_prepare(
         ctx: RunContext[AgentDeps], tool_def: ToolDefinition
     ) -> ToolDefinition | None:  # pyrefly: ignore[unsupported-operation]
         deps = ctx.deps
-        if deps.mode in (CoachMode.program, CoachMode.subscription) and tool_name in deps.called_tools:
-            mode_value = deps.mode.value if deps.mode else "unknown"
-            logger.debug(
-                f"tool_disabled_after_first_call client_id={deps.client_id} tool={tool_name} mode={mode_value}"
-            )
+        allowed_modes = TOOL_ALLOWED_MODES.get(tool_name)
+        mode = deps.mode
+        if allowed_modes is not None and mode is not None and mode not in allowed_modes:
+            _log_tool_disabled(deps, tool_name, reason="tool_disabled_for_mode")
+            return None
+        if mode in (CoachMode.program, CoachMode.subscription) and tool_name in deps.called_tools:
+            _log_tool_disabled(deps, tool_name, reason="tool_disabled_after_first_call")
             return None
         return tool_def
 

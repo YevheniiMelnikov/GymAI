@@ -35,6 +35,7 @@ class AgentDeps:
     called_tools: set[str] = field(default_factory=set)
     tool_cache: dict[str, Any] = field(default_factory=dict)
     final_result: Program | Subscription | None = None
+    disabled_tools: set[str] = field(default_factory=set)
 
 
 class CoachAgentProtocol(Protocol):
