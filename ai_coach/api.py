@@ -15,7 +15,7 @@ from ai_coach.types import AskCtx, CoachMode
 from core.ai_coach_fallback import FALLBACK_WORKOUT_DAYS, fallback_plan
 from core.enums import WorkoutPlanType, SubscriptionPeriod, WorkoutType
 from config.app_settings import settings
-from core.schemas import Program, QAResponse, Subscription
+from core.schemas import Client, Profile, Program, QAResponse, Subscription
 
 CoachAction = Callable[[AskCtx], Awaitable[Program | Subscription | QAResponse | list[str] | None]]
 
@@ -77,7 +77,28 @@ async def ask(
         else SubscriptionPeriod(data.period or SubscriptionPeriod.one_month.value)
     )
 
-    workout_days = data.workout_days or list(FALLBACK_WORKOUT_DAYS)
+    workout_days: list[str] = data.workout_days or list(FALLBACK_WORKOUT_DAYS)
+
+    client: Client | None
+    try:
+        client = await APIService.profile.get_client(data.client_id)
+    except Exception:  # pragma: no cover - missing profile service
+        client = None
+
+    profile: Profile | None = None
+    if client is not None:
+        try:
+            profile = await APIService.profile.get_profile(int(client.profile))
+        except Exception:  # pragma: no cover - missing profile service
+            profile = None
+
+    profile_language: str | None = None
+    if profile is not None:
+        profile_language_raw = getattr(profile, "language", None)
+        if profile_language_raw is not None:
+            profile_language = str(profile_language_raw)
+
+    language: str = (data.language or None) or profile_language or settings.DEFAULT_LANG
 
     ctx: AskCtx = {
         "prompt": data.prompt,
@@ -87,22 +108,17 @@ async def ask(
         "expected_workout": data.expected_workout or "",
         "feedback": data.feedback or "",
         "wishes": data.wishes or "",
-        "language": data.language or settings.DEFAULT_LANG,
+        "language": language,
         "workout_type": data.workout_type,
         "plan_type": data.plan_type,
         "instructions": data.instructions,
     }
 
-    try:
-        client = await APIService.profile.get_client(data.client_id)
-    except Exception:  # pragma: no cover - missing profile service
-        client = None
-
     client_name = getattr(client, "name", None)
 
     deps = AgentDeps(
         client_id=data.client_id,
-        locale=ctx["language"],
+        locale=language,
         allow_save=mode != CoachMode.ask_ai,
         client_name=client_name,
     )

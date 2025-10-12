@@ -63,6 +63,13 @@ def _extract_api_key(request: web.Request) -> str:
 
 
 def require_internal_auth(handler: Handler) -> Handler:
+    """Validate bot internal requests with API key headers or IP allowlist.
+
+    When the allowlist is empty, every IP is accepted (useful in local/dev
+    environments). Set ``INTERNAL_API_KEY`` and/or the allowlist for
+    production deployments.
+    """
+
     @wraps(handler)
     async def wrapped(request: web.Request, *args, **kwargs):  # type: ignore[override]
         if settings.DEBUG:
