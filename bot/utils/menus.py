@@ -394,9 +394,9 @@ async def show_my_subscription_menu(
     except SubscriptionNotFoundError:
         subscription = None
 
-    await callback_query.answer()
+    webapp_url = get_webapp_url("subscription")
 
-    if force_new or not subscription or not subscription.enabled:
+    if force_new:
         file_path = Path(settings.BOT_PAYMENT_OPTIONS) / f"subscription_{language}.jpeg"
         subscription_img = FSInputFile(file_path)
         if not client_profile.assigned_to:
@@ -409,6 +409,7 @@ async def show_my_subscription_menu(
             return
         price_uah = coach.subscription_price or Decimal("0")
         credits = uah_to_credits(price_uah)
+        await callback_query.answer()
         await state.set_state(States.payment_choice)
         await answer_msg(
             message,
@@ -419,12 +420,24 @@ async def show_my_subscription_menu(
         await del_msg(cast(Message | CallbackQuery | None, message))
         return
 
-    if subscription.exercises:
+    if not subscription or not subscription.enabled:
+        await callback_query.answer()
         await state.set_state(States.subscription_action_choice)
         await answer_msg(
             message,
             msg_text("select_action", language),
-            reply_markup=kb.subscription_action_kb(language, get_webapp_url("subscription")),
+            reply_markup=kb.subscription_action_kb(language, webapp_url),
+        )
+        await del_msg(cast(Message | CallbackQuery | None, message))
+        return
+
+    if subscription.exercises:
+        await callback_query.answer()
+        await state.set_state(States.subscription_action_choice)
+        await answer_msg(
+            message,
+            msg_text("select_action", language),
+            reply_markup=kb.subscription_action_kb(language, webapp_url),
         )
         await del_msg(cast(Message | CallbackQuery | None, message))
         return

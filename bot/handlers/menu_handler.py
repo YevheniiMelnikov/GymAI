@@ -98,14 +98,22 @@ async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
         if not pkg:
             await callback_query.answer()
             return
+
+        try:
+            client: Client = await Cache.client.get_client(profile.id)
+        except ClientNotFoundError:
+            await callback_query.answer(msg_text("questionnaire_not_completed", profile.language), show_alert=True)
+            await del_msg(callback_query)
+            return
+
         order_id = generate_order_id()
-        await APIService.payment.create_payment(profile.id, "credits", order_id, pkg.price)
+        await APIService.payment.create_payment(client.id, "credits", order_id, pkg.price)
         link = await APIService.payment.get_payment_link(
             "pay",
             pkg.price,
             order_id,
             "credits",
-            profile.id,
+            client.id,
         )
         await state.set_state(States.handle_payment)
         await answer_msg(

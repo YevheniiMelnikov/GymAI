@@ -15,7 +15,14 @@ class PaymentService:
         gateway: PaymentGateway | None = None,
     ) -> None:
         self._repository = repository
-        self.gateway: PaymentGateway = gateway or LiqPayGateway(settings.PAYMENT_PUB_KEY, settings.PAYMENT_PRIVATE_KEY)
+        self.gateway: PaymentGateway = gateway or LiqPayGateway(
+            settings.PAYMENT_PUB_KEY,
+            settings.PAYMENT_PRIVATE_KEY,
+            server_url=settings.PAYMENT_CALLBACK_URL,
+            result_url=settings.BOT_LINK,
+            email=settings.EMAIL,
+            checkout_url=settings.CHECKOUT_URL,
+        )
 
     async def get_payment_link(
         self,

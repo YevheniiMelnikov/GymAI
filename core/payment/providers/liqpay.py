@@ -6,8 +6,6 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 from urllib.parse import urlencode, urljoin
 
-from django.conf import settings
-
 from core.payment.providers.payment_gateway import PaymentGateway
 
 
@@ -96,8 +94,21 @@ class LiqPay:
 
 
 class LiqPayGateway(PaymentGateway):
-    def __init__(self, public_key: str, private_key: str) -> None:
+    def __init__(
+        self,
+        public_key: str,
+        private_key: str,
+        *,
+        server_url: str | None = None,
+        result_url: str | None = None,
+        email: str | None = None,
+        checkout_url: str | None = None,
+    ) -> None:
         self.client = LiqPay(public_key, private_key)
+        self._server_url = server_url or ""
+        self._result_url = result_url or ""
+        self._email = email or ""
+        self._checkout_url = checkout_url or ""
 
     async def get_payment_link(
         self,
@@ -114,11 +125,14 @@ class LiqPayGateway(PaymentGateway):
             "description": f"{payment_type} payment from client {client_id}",
             "order_id": order_id,
             "version": "3",
-            "server_url": settings.PAYMENT_CALLBACK_URL,
-            "result_url": settings.BOT_LINK,
-            "rro_info": {"delivery_emails": [settings.EMAIL]},
         }
+        if self._server_url:
+            params["server_url"] = self._server_url
+        if self._result_url:
+            params["result_url"] = self._result_url
+        if self._email:
+            params["rro_info"] = {"delivery_emails": [self._email]}
         data: str = self.client.cnb_data(params)
         signature: str = self.client.cnb_signature(params)
-        checkout_url: str = str(settings.CHECKOUT_URL)
+        checkout_url: str = str(self._checkout_url)
         return urljoin(checkout_url, f"?{urlencode({'data': data, 'signature': signature})}")

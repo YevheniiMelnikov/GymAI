@@ -84,14 +84,12 @@ def profile_menu_kb(lang: str, show_balance: bool = False) -> KbMarkup:
         buttons.append([builder.add("balance_status", "balance")])
     buttons.extend(
         [
-            [
-                builder.add("edit", "profile_edit"),
-                builder.add("delete", "profile_delete"),
-            ],
+            [builder.add("edit", "profile_edit")],
+            [builder.add("delete", "profile_delete")],
             [builder.add("prev_menu", "back")],
         ]
     )
-    return KbMarkup(inline_keyboard=buttons)
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
 def edit_client_profile_kb(lang: str) -> KbMarkup:

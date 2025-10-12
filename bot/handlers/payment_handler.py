@@ -168,8 +168,8 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext) -> No
         }
         await Cache.workout.update_subscription(client.id, subscription_data)
 
-    await PaymentCacheManager.set_status(client.profile, service_type, PaymentStatus.PENDING)
-    await APIService.payment.create_payment(client.profile, service_type, order_id, amount)
+    await PaymentCacheManager.set_status(client.id, service_type, PaymentStatus.PENDING)
+    await APIService.payment.create_payment(client.id, service_type, order_id, amount)
     await callback_query.answer(msg_text("payment_in_progress", profile.language), show_alert=True)
 
     msg = callback_query.message
