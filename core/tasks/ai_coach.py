@@ -475,8 +475,6 @@ def generate_ai_workout_plan(self, payload: dict[str, Any]) -> dict[str, Any] | 
             raise self.retry(exc=exc)
         raise
     else:
-        if notify_payload:
-            notify_ai_plan_ready_task.apply_async(args=[notify_payload], queue="ai_coach", routing_key="ai_coach")
         return notify_payload
 
 
@@ -504,8 +502,6 @@ def update_ai_workout_plan(self, payload: dict[str, Any]) -> dict[str, Any] | No
             raise self.retry(exc=exc)
         raise
     else:
-        if notify_payload:
-            notify_ai_plan_ready_task.apply_async(args=[notify_payload], queue="ai_coach", routing_key="ai_coach")
         return notify_payload
 
 

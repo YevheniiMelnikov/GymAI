@@ -24,11 +24,8 @@ def test_ai_plan_tasks_notify_on_success(task_obj: Any, target_name: str, monkey
 
     notified: dict[str, Any] = {"called": False}
 
-    def fake_apply_async(*, args: list[dict[str, Any]], queue: str, routing_key: str) -> None:
+    def fake_apply_async(*args: Any, **kwargs: Any) -> None:
         notified["called"] = True
-        notified["args"] = args
-        notified["queue"] = queue
-        notified["routing_key"] = routing_key
 
     monkeypatch.setattr("core.tasks.ai_coach.notify_ai_plan_ready_task.apply_async", fake_apply_async)
 
@@ -47,10 +44,7 @@ def test_ai_plan_tasks_notify_on_success(task_obj: Any, target_name: str, monkey
     assert called["payload"] == payload
     assert called["task"] is task_obj
     assert called["coro_name"] == "fake_impl"
-    assert notified["called"] is True
-    assert notified["queue"] == "ai_coach"
-    assert notified["routing_key"] == "ai_coach"
-    assert notified["args"] == [result]
+    assert notified["called"] is False
     assert result == {"status": "success"}
 
 
@@ -75,7 +69,7 @@ def test_ai_plan_tasks_skip_notify_on_empty_payload(
 
     notified: dict[str, Any] = {"called": False}
 
-    def fake_apply_async(*, args: list[dict[str, Any]], queue: str, routing_key: str) -> None:
+    def fake_apply_async(*args: Any, **kwargs: Any) -> None:
         notified["called"] = True
 
     monkeypatch.setattr("core.tasks.ai_coach.notify_ai_plan_ready_task.apply_async", fake_apply_async)
