@@ -4,10 +4,11 @@
 
 from asyncio import TimeoutError, wait_for
 from time import monotonic
-from typing import Any, TypeVar, cast
+from typing import Any, Callable, Coroutine, TypeVar, cast
 
 from loguru import logger
 from pydantic_ai import ModelRetry, RunContext  # pyrefly: ignore[import-error]
+from pydantic_ai.tools import ToolDefinition  # pyrefly: ignore[import-error]
 from pydantic_ai.toolsets.function import FunctionToolset  # pyrefly: ignore[import-error]
 
 from core.cache import Cache
@@ -34,8 +35,6 @@ TOOL_TIMEOUTS: dict[str, float] = {
     "tool_get_chat_history": float(settings.AI_COACH_HISTORY_TIMEOUT),
     "tool_get_program_history": float(settings.AI_COACH_PROGRAM_HISTORY_TIMEOUT),
 }
-
-TOOL_REPEAT_REMINDER: str = "TOOL_ALREADY_USED: continue to the next step and finish without calling this tool again."
 
 
 def _tool_timeout(tool_name: str) -> float:
@@ -79,24 +78,9 @@ def _start_tool(
 ) -> tuple[AgentDeps, bool, Any]:  # pyrefly: ignore[unsupported-operation]
     deps = ctx.deps
     if tool_name in deps.called_tools:
-        if deps.final_result is not None:
-            deps.tool_calls += 1
-            if deps.max_tool_calls > 0 and deps.tool_calls > deps.max_tool_calls:
-                _raise_tool_limit(deps, tool_name)
         mode_value = deps.mode.value if deps.mode else "unknown"
-        cached = deps.tool_cache.get(tool_name)
-        if deps.mode in (CoachMode.program, CoachMode.subscription):
-            logger.info(f"tool_repeat_skipped client_id={deps.client_id} tool={tool_name} mode={mode_value}")
-            if isinstance(cached, list):
-                cached_list = list(cached)
-                if TOOL_REPEAT_REMINDER not in cached_list:
-                    cached_list.append(TOOL_REPEAT_REMINDER)
-                return deps, True, cached_list
-            if cached is None:
-                return deps, True, [TOOL_REPEAT_REMINDER]
-        else:
-            logger.debug(f"{tool_name} skip_repeat client_id={deps.client_id}")
-        return deps, True, cached
+        logger.info(f"tool_repeat_skipped client_id={deps.client_id} tool={tool_name} mode={mode_value}")
+        return deps, True, deps.tool_cache.get(tool_name)
     prepared = _prepare_tool(ctx, tool_name)
     prepared.called_tools.add(tool_name)
     logger.debug(f"{tool_name} start client_id={prepared.client_id}")
@@ -108,7 +92,25 @@ def _cache_result(deps: AgentDeps, tool_name: str, result: T) -> T:
     return result
 
 
-@toolset.tool
+def _single_use_prepare(
+    tool_name: str,
+) -> Callable[[RunContext[AgentDeps], ToolDefinition], Coroutine[Any, Any, ToolDefinition | None]]:
+    async def _prepare(
+        ctx: RunContext[AgentDeps], tool_def: ToolDefinition
+    ) -> ToolDefinition | None:  # pyrefly: ignore[unsupported-operation]
+        deps = ctx.deps
+        if deps.mode in (CoachMode.program, CoachMode.subscription) and tool_name in deps.called_tools:
+            mode_value = deps.mode.value if deps.mode else "unknown"
+            logger.debug(
+                f"tool_disabled_after_first_call client_id={deps.client_id} tool={tool_name} mode={mode_value}"
+            )
+            return None
+        return tool_def
+
+    return _prepare
+
+
+@toolset.tool(prepare=_single_use_prepare("tool_search_knowledge"))
 async def tool_search_knowledge(
     ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
     query: str,
@@ -176,7 +178,7 @@ async def tool_search_knowledge(
     return _cache_result(deps, tool_name, result)
 
 
-@toolset.tool
+@toolset.tool(prepare=_single_use_prepare("tool_get_chat_history"))
 async def tool_get_chat_history(
     ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
     limit: int = 20,
@@ -210,7 +212,7 @@ async def tool_get_chat_history(
         raise ModelRetry(f"Chat history unavailable: {e}. Try calling again.") from e
 
 
-@toolset.tool
+@toolset.tool(prepare=_single_use_prepare("tool_save_program"))
 async def tool_save_program(
     ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
     plan: "ProgramPayload",
@@ -250,7 +252,7 @@ async def tool_save_program(
         raise ModelRetry(f"Program saving failed: {e}. Ensure plan data is valid and retry.") from e
 
 
-@toolset.tool
+@toolset.tool(prepare=_single_use_prepare("tool_get_program_history"))
 async def tool_get_program_history(
     ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
 ) -> list[Program]:
@@ -275,7 +277,7 @@ async def tool_get_program_history(
         raise ModelRetry(f"Program history unavailable: {e}. Try calling the tool again later.") from e
 
 
-@toolset.tool
+@toolset.tool(prepare=_single_use_prepare("tool_attach_gifs"))
 async def tool_attach_gifs(
     ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
     exercises: list[DayExercises],
@@ -328,7 +330,7 @@ async def tool_attach_gifs(
     return _cache_result(deps, tool_name, result)
 
 
-@toolset.tool
+@toolset.tool(prepare=_single_use_prepare("tool_create_subscription"))
 async def tool_create_subscription(
     ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
     workout_days: list[str],

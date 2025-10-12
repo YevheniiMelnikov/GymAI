@@ -337,10 +337,10 @@ function_mod = types.ModuleType("pydantic_ai.toolsets.function")
 
 
 class FunctionToolset:
-    def tool(self, func: Any | None = None):  # pragma: no cover - trivial
+    def tool(self, func: Any | None = None, **kwargs: Any):  # pragma: no cover - trivial
         if func is None:
 
-            def decorator(f):
+            def decorator(f: Any) -> Any:
                 return f
 
             return decorator
