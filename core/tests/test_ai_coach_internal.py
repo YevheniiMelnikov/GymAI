@@ -7,7 +7,12 @@ import pytest
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from bot.handlers.internal.tasks import _resolve_client_and_profile, internal_ai_coach_plan_ready
+from bot.handlers.internal.tasks import (
+    _resolve_client_and_profile,
+    internal_ai_coach_plan_ready,
+    internal_export_coach_payouts,
+)
+from core.ai_plan_state import AiPlanState
 from bot.states import States
 from bot.utils.ai_coach import enqueue_workout_plan_generation, enqueue_workout_plan_update
 from config.app_settings import settings
@@ -25,10 +30,14 @@ class DummyBot:
         self.sent.append({"chat_id": chat_id, "text": text, "kwargs": kwargs})
 
 
+settings.INTERNAL_API_KEY = "test-internal-key"
+settings.DEBUG = False
+
+
 class DummyRequest:
     def __init__(self, payload: dict[str, Any], bot: DummyBot, storage: MemoryStorage) -> None:
         self._payload = payload
-        self.headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
+        self.headers = {"X-Internal-Api-Key": settings.INTERNAL_API_KEY or ""}
         self.app = {"bot": bot, "dp": SimpleNamespace(storage=storage)}
 
     async def json(self) -> dict[str, Any]:
@@ -45,6 +54,12 @@ class DummyRedis:
             return False
         self.store[key] = value
         return True
+
+    async def get(self, key: str) -> str | None:
+        return self.store.get(key)
+
+    async def exists(self, key: str) -> int:
+        return 1 if key in self.store else 0
 
 
 @pytest.mark.asyncio
@@ -171,7 +186,7 @@ async def test_enqueue_workout_plan_generation_dispatch(monkeypatch: pytest.Monk
 
     assert queued is True
     assert captured["client_id"] == client.id
-    assert captured["client_profile_id"] == client.id
+    assert captured["client_profile_id"] == client.profile
     assert captured["plan_type"] == WorkoutPlanType.PROGRAM.value
     assert captured["workout_days"] == ["mon", "wed"]
 
@@ -293,14 +308,14 @@ async def test_internal_ai_plan_ready_program(monkeypatch: pytest.MonkeyPatch) -
         lambda name: f"url:{name}",
     )
     dummy_redis = DummyRedis()
-    monkeypatch.setattr("bot.handlers.internal.tasks.get_redis_client", lambda: dummy_redis)
+    monkeypatch.setattr("bot.handlers.internal.tasks.AiPlanState.create", lambda: AiPlanState(dummy_redis))
 
     bot = DummyBot()
     storage = MemoryStorage()
     request = DummyRequest(
         {
             "client_id": client.id,
-            "client_profile_id": client.id,
+            "client_profile_id": client.profile,
             "plan_type": WorkoutPlanType.PROGRAM.value,
             "status": "success",
             "action": "create",
@@ -312,8 +327,8 @@ async def test_internal_ai_plan_ready_program(monkeypatch: pytest.MonkeyPatch) -
 
     response = await internal_ai_coach_plan_ready(request)
     assert response.status == 200
-    assert saved_args["client_profile_id"] == client.id
-    assert saved_cache["client_profile_id"] == client.id
+    assert saved_args["client_profile_id"] == client.profile
+    assert saved_cache["client_profile_id"] == client.profile
     assert cache_calls == [client.profile]
     assert bot.sent[0]["text"] == "new_program:en"
     key = StorageKey(bot_id=bot.id, chat_id=profile.tg_id, user_id=profile.tg_id)
@@ -402,14 +417,14 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
         lambda key, lang: f"{key}:{lang}",
     )
     dummy_redis = DummyRedis()
-    monkeypatch.setattr("bot.handlers.internal.tasks.get_redis_client", lambda: dummy_redis)
+    monkeypatch.setattr("bot.handlers.internal.tasks.AiPlanState.create", lambda: AiPlanState(dummy_redis))
 
     bot = DummyBot()
     storage = MemoryStorage()
     request = DummyRequest(
         {
             "client_id": client.id,
-            "client_profile_id": client.id,
+            "client_profile_id": client.profile,
             "plan_type": WorkoutPlanType.SUBSCRIPTION.value,
             "status": "success",
             "action": "update",
@@ -520,14 +535,14 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
         lambda name: f"url:{name}",
     )
     dummy_redis = DummyRedis()
-    monkeypatch.setattr("bot.handlers.internal.tasks.get_redis_client", lambda: dummy_redis)
+    monkeypatch.setattr("bot.handlers.internal.tasks.AiPlanState.create", lambda: AiPlanState(dummy_redis))
 
     bot = DummyBot()
     storage = MemoryStorage()
     request = DummyRequest(
         {
             "client_id": client.id,
-            "client_profile_id": client.id,
+            "client_profile_id": client.profile,
             "plan_type": WorkoutPlanType.SUBSCRIPTION.value,
             "status": "success",
             "action": "create",
@@ -540,8 +555,8 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
 
     response = await internal_ai_coach_plan_ready(request)
     assert response.status == 200
-    assert created_payload["client_profile_id"] == client.id
-    assert saved_subscription["client_profile_id"] == client.id
+    assert created_payload["client_profile_id"] == client.profile
+    assert saved_subscription["client_profile_id"] == client.profile
     assert cache_calls == [client.profile]
     assert saved_subscription["data"]["id"] == 42
     assert bot.sent[0]["text"] == "new_program:en"
@@ -550,3 +565,47 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
     data = await storage.get_data(key)
     assert data["subscription"] is True
     assert data["last_request_id"] == "req-sub"
+
+
+class FakeRequest:
+    def __init__(self, headers: dict[str, str]) -> None:
+        self.headers = headers
+        self.rel_url = "/internal/test"
+        self.transport = SimpleNamespace(get_extra_info=lambda name: ("127.0.0.1", 0))
+        self.app: dict[str, Any] = {}
+
+    async def json(self) -> dict[str, Any]:  # pragma: no cover - not used
+        return {}
+
+
+@pytest.mark.asyncio
+async def test_internal_auth_requires_key() -> None:
+    settings.DEBUG = False
+    settings.INTERNAL_API_KEY = "secret"
+    request = FakeRequest({})
+    response = await internal_export_coach_payouts(request)  # type: ignore[arg-type]
+    assert response.status == 401
+
+
+@pytest.mark.asyncio
+async def test_internal_auth_accepts_valid_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    settings.DEBUG = False
+    settings.INTERNAL_API_KEY = "secret"
+
+    class DummyProcessor:
+        def __init__(self) -> None:
+            self.called = False
+
+        async def export_coach_payouts(self) -> None:
+            self.called = True
+
+    processor = DummyProcessor()
+    monkeypatch.setattr(
+        "bot.handlers.internal.tasks.get_container",
+        lambda: SimpleNamespace(payment_processor=lambda: processor),
+    )
+
+    request = FakeRequest({"X-Internal-Api-Key": "secret"})
+    response = await internal_export_coach_payouts(request)  # type: ignore[arg-type]
+    assert response.status == 200
+    assert processor.called is True

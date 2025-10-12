@@ -1,16 +1,15 @@
 import asyncio
 import pytest  # pyrefly: ignore[import-error]
 
-from pydantic_ai import ModelRetry  # pyrefly: ignore[import-error]
-
 from ai_coach.agent import AgentDeps
-from ai_coach.agent.tools import tool_search_knowledge
+from ai_coach.agent.base import AgentExecutionAborted
+from ai_coach.agent.tools import tool_get_chat_history, tool_search_knowledge
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 
 
 class _Ctx:
-    def __init__(self):
-        self.deps = AgentDeps(client_id=1)
+    def __init__(self, *, deps: AgentDeps | None = None):
+        self.deps = deps or AgentDeps(client_id=1, max_tool_calls=10)
 
 
 def test_tool_search_knowledge_k(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -30,11 +29,12 @@ def test_tool_search_knowledge_k(monkeypatch: pytest.MonkeyPatch) -> None:
         assert called["client_id"] == 1
         assert ctx.deps.last_knowledge_query == "hi"
         assert ctx.deps.last_knowledge_empty is True
+        assert ctx.deps.knowledge_base_empty is True
 
     asyncio.run(runner())
 
 
-def test_tool_search_knowledge_duplicate_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_tool_search_knowledge_duplicate_returns_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
         async def fake_search(query: str, client_id: int, k: int) -> list[str]:
             return []
@@ -42,7 +42,45 @@ def test_tool_search_knowledge_duplicate_retry(monkeypatch: pytest.MonkeyPatch) 
         monkeypatch.setattr(KnowledgeBase, "search", fake_search)
         ctx = _Ctx()
         await tool_search_knowledge(ctx, "  hello  ")
-        with pytest.raises(ModelRetry):
-            await tool_search_knowledge(ctx, "hello")
+        result = await tool_search_knowledge(ctx, "hello")
+        assert result == []
+
+    asyncio.run(runner())
+
+
+def test_tool_budget_exceeded(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        async def fake_search(query: str, client_id: int, k: int) -> list[str]:
+            return ["result"]
+
+        async def fake_history(client_id: int, limit: int) -> list[str]:
+            return ["msg"]
+
+        monkeypatch.setattr(KnowledgeBase, "search", fake_search)
+        monkeypatch.setattr(KnowledgeBase, "get_message_history", fake_history)
+        deps = AgentDeps(client_id=1, max_tool_calls=1)
+        ctx = _Ctx(deps=deps)
+        await tool_search_knowledge(ctx, "hello")
+        with pytest.raises(AgentExecutionAborted):
+            await tool_get_chat_history(ctx)
+
+    asyncio.run(runner())
+
+
+def test_tool_get_chat_history_cached(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        calls: list[int] = []
+
+        async def fake_history(client_id: int, limit: int) -> list[str]:
+            calls.append(limit)
+            return ["msg1", "msg2", "msg3"]
+
+        monkeypatch.setattr(KnowledgeBase, "get_message_history", fake_history)
+        ctx = _Ctx()
+        first = await tool_get_chat_history(ctx, limit=2)
+        second = await tool_get_chat_history(ctx, limit=3)
+        assert first == ["msg1", "msg2"]
+        assert second == ["msg1", "msg2", "msg3"]
+        assert calls == [2]
 
     asyncio.run(runner())

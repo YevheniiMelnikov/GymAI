@@ -8,7 +8,6 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, cast
 
 from celery import Task
-from celery.result import AsyncResult
 
 from core.celery_app import app
 from loguru import logger
@@ -16,6 +15,7 @@ import httpx
 
 from config.app_settings import settings
 from core.cache import Cache
+from core.ai_plan_state import AiPlanState
 from core.services import APIService
 from core.services.internal.api_client import APIClientHTTPError, APIClientTransportError
 from bot.texts.text_manager import msg_text
@@ -24,6 +24,11 @@ from bot.utils.profiles import get_assigned_coach
 from core.enums import CoachType, SubscriptionPeriod, WorkoutPlanType, WorkoutType
 from core.schemas import Program, Subscription
 from core.utils.redis_lock import redis_try_lock, get_redis_client
+
+AI_PLAN_SOFT_TIME_LIMIT = settings.AI_COACH_TIMEOUT
+AI_PLAN_TIME_LIMIT = AI_PLAN_SOFT_TIME_LIMIT + 30
+AI_PLAN_NOTIFY_SOFT_LIMIT = settings.AI_PLAN_NOTIFY_TIMEOUT
+AI_PLAN_NOTIFY_TIME_LIMIT = AI_PLAN_NOTIFY_SOFT_LIMIT + 30
 
 
 def _next_payment_date(period: SubscriptionPeriod = SubscriptionPeriod.one_month) -> str:
@@ -299,20 +304,21 @@ def send_workout_result(self, coach_profile_id: int, client_profile_id: int, tex
 async def _claim_plan_request(request_id: str, action: str, *, attempt: int) -> bool:
     if not request_id or attempt > 0:
         return True
-    try:
-        client = get_redis_client()
-        key = f"ai:plan:{action}:{request_id}"
-        ok = await client.set(key, "1", nx=True, ex=settings.AI_PLAN_DEDUP_TTL)
-        return bool(ok)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(f"ai_plan_idempotency_skip action={action} request_id={request_id} error={exc!s}")
-        return True
+    state = AiPlanState.create()
+    claim_key = f"{action}:{request_id}"
+    claimed = await state.claim_delivery(claim_key, ttl_s=settings.AI_PLAN_DEDUP_TTL)
+    if not claimed:
+        logger.debug(f"ai_plan_request_duplicate action={action} request_id={request_id}")
+    return claimed
 
 
 async def _notify_ai_plan_ready(payload: dict[str, Any]) -> None:
     base_url: str = settings.BOT_INTERNAL_URL.rstrip("/")
     url: str = f"{base_url}/internal/tasks/ai_plan_ready/"
     headers: dict[str, str] = {"Authorization": f"Api-Key {settings.API_KEY}"}
+    internal_api_key: str | None = settings.INTERNAL_API_KEY
+    if internal_api_key:
+        headers["X-Internal-Api-Key"] = internal_api_key
     request_id = str(payload.get("request_id", ""))
     action = str(payload.get("action", ""))
     logger.info(f"ai_plan_notify_start action={action} request_id={request_id} url={url}")
@@ -329,25 +335,13 @@ async def _notify_ai_plan_ready(payload: dict[str, Any]) -> None:
         detail: str = f"transport_error={exc!r}"
         logger.error(f"ai_plan_notify_transport_error action={action} request_id={request_id} {detail}")
         raise
-    logger.info(f"ai_plan_notify_done action={action} request_id={request_id} status={response.status_code}")
-
-
-def _enqueue_ai_plan_notification(payload: dict[str, Any]) -> None:
-    request_id = str(payload.get("request_id", ""))
-    action = str(payload.get("action", ""))
-    async_result: AsyncResult = notify_ai_plan_ready_task.delay(payload)  # pyrefly: ignore[not-callable]
-    logger.info(f"ai_plan_notify_enqueued action={action} request_id={request_id} task_id={async_result.id}")
-
-
-async def _store_notification_failure_flag(request_id: str, detail: str) -> None:
-    if not request_id:
-        return
-    try:
-        client = get_redis_client()
-        key = f"ai:plan:notify_failed:{request_id}"
-        await client.set(key, detail, ex=settings.AI_PLAN_NOTIFY_FAILURE_TTL)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(f"ai_plan_notify_flag_failed request_id={request_id} error={exc!s}")
+    status = response.status_code
+    logger.info(f"ai_plan_notify_done action={action} request_id={request_id} status={status}")
+    state = AiPlanState.create()
+    if payload.get("status") == "success":
+        await state.mark_delivered(request_id)
+    else:
+        await state.mark_failed(request_id, str(payload.get("error", "unknown")))
 
 
 async def _handle_notify_failure(payload: dict[str, Any], exc: Exception) -> None:
@@ -355,10 +349,71 @@ async def _handle_notify_failure(payload: dict[str, Any], exc: Exception) -> Non
     action = str(payload.get("action", ""))
     client_id = payload.get("client_id")
     detail = f"{type(exc).__name__}: {exc!s}"
-    await _store_notification_failure_flag(request_id, detail)
+    state = AiPlanState.create()
+    await state.mark_failed(request_id, detail)
     logger.error(
         f"ai_plan_notify_gave_up action={action} client_id={client_id} request_id={request_id} detail={detail}"
     )
+
+
+def _extract_failure_detail(exc_info: tuple[Any, ...]) -> str:
+    for item in exc_info:
+        if isinstance(item, BaseException):
+            return f"{type(item).__name__}: {item!s}"
+        if isinstance(item, dict):
+            candidate = item.get("exc")
+            if isinstance(candidate, BaseException):
+                return f"{type(candidate).__name__}: {candidate!s}"
+            if candidate:
+                return str(candidate)
+        if isinstance(item, str) and item:
+            return item
+    return "task_failed"
+
+
+async def _handle_ai_plan_failure_impl(
+    payload: dict[str, Any],
+    action: str,
+    detail: str,
+) -> None:
+    client_id = int(payload.get("client_id", 0))
+    plan_type_raw = payload.get("plan_type", WorkoutPlanType.PROGRAM.value)
+    try:
+        plan_type = WorkoutPlanType(plan_type_raw)
+    except ValueError:
+        plan_type = WorkoutPlanType.PROGRAM
+    request_id = str(payload.get("request_id", ""))
+    client_profile_id_raw = payload.get("client_profile_id")
+    client_profile_id: int | None
+    try:
+        client_profile_id = int(client_profile_id_raw) if client_profile_id_raw is not None else None
+    except (TypeError, ValueError):
+        client_profile_id = None
+    reason = detail or "task_failed"
+    await _notify_error(
+        client_id=client_id,
+        plan_type=plan_type,
+        request_id=request_id,
+        action=action,
+        error=reason,
+        client_profile_id=client_profile_id,
+    )
+
+
+@app.task(
+    bind=True,
+    queue="ai_coach",
+    routing_key="ai_coach",
+    acks_late=True,
+    task_acks_on_failure_or_timeout=False,
+    soft_time_limit=AI_PLAN_NOTIFY_SOFT_LIMIT,
+    time_limit=AI_PLAN_NOTIFY_TIME_LIMIT,
+)
+def handle_ai_plan_failure(
+    self, payload: dict[str, Any], action: str, *exc_info: Any
+) -> None:  # pyrefly: ignore[valid-type]
+    detail = _extract_failure_detail(exc_info)
+    asyncio.run(_handle_ai_plan_failure_impl(payload, action, detail))
 
 
 def _parse_workout_type(raw: Any) -> WorkoutType | None:
@@ -389,7 +444,14 @@ async def _notify_error(
     }
     if client_profile_id is not None:
         payload["client_profile_id"] = client_profile_id
-    _enqueue_ai_plan_notification(payload)
+    state = AiPlanState.create()
+    if request_id:
+        await state.mark_failed(request_id, error)
+    notify_ai_plan_ready_task.apply_async(
+        args=[payload],
+        queue="ai_coach",
+        routing_key="ai_coach",
+    )
 
 
 async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> None:
@@ -435,6 +497,23 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
             workout_type=workout_type,
             request_id=request_id or None,
         )
+    except APIClientHTTPError as exc:
+        logger.error(
+            f"ai_generate_plan failed client_id={client_id} plan_type={plan_type.value} "
+            f"request_id={request_id} attempt={attempt} status={exc.status} retryable={exc.retryable} "
+            f"reason={exc.reason}"
+        )
+        if not exc.retryable:
+            await _notify_error(
+                client_id=client_id,
+                plan_type=plan_type,
+                request_id=request_id,
+                action="create",
+                error=exc.reason or f"http_{exc.status}",
+                client_profile_id=client_profile_id,
+            )
+            return
+        raise
     except Exception as exc:  # noqa: BLE001
         logger.error(
             f"ai_generate_plan failed client_id={client_id} plan_type={plan_type.value} "
@@ -483,8 +562,8 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
     if client_profile_id is not None:
         notify_payload["client_profile_id"] = client_profile_id
 
-    _enqueue_ai_plan_notification(notify_payload)
     logger.info(f"ai_generate_plan completed client_id={client_id} plan_type={plan_type.value} request_id={request_id}")
+    return notify_payload
 
 
 async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> None:
@@ -528,6 +607,23 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
             workout_type=workout_type,
             request_id=request_id or None,
         )
+    except APIClientHTTPError as exc:
+        logger.error(
+            f"ai_update_plan failed client_id={client_id} plan_type={plan_type.value} "
+            f"request_id={request_id} attempt={attempt} status={exc.status} retryable={exc.retryable} "
+            f"reason={exc.reason}"
+        )
+        if not exc.retryable:
+            await _notify_error(
+                client_id=client_id,
+                plan_type=plan_type,
+                request_id=request_id,
+                action="update",
+                error=exc.reason or f"http_{exc.status}",
+                client_profile_id=client_profile_id,
+            )
+            return
+        raise
     except Exception as exc:  # noqa: BLE001
         logger.error(
             f"ai_update_plan failed client_id={client_id} plan_type={plan_type.value} "
@@ -576,8 +672,8 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
     if client_profile_id is not None:
         notify_payload["client_profile_id"] = client_profile_id
 
-    _enqueue_ai_plan_notification(notify_payload)
     logger.info(f"ai_update_plan completed client_id={client_id} plan_type={plan_type.value} request_id={request_id}")
+    return notify_payload
 
 
 @app.task(
@@ -587,6 +683,10 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> N
     retry_backoff=30,
     retry_jitter=True,
     max_retries=8,
+    acks_late=True,
+    task_acks_on_failure_or_timeout=False,
+    soft_time_limit=AI_PLAN_NOTIFY_SOFT_LIMIT,
+    time_limit=AI_PLAN_NOTIFY_TIME_LIMIT,
 )
 def notify_ai_plan_ready_task(self, payload: dict[str, Any]) -> None:  # pyrefly: ignore[valid-type]
     request_id = str(payload.get("request_id", ""))
@@ -610,26 +710,50 @@ def notify_ai_plan_ready_task(self, payload: dict[str, Any]) -> None:  # pyrefly
     bind=True,
     queue="ai_coach",
     routing_key="ai_coach",
-    autoretry_for=(APIClientHTTPError, APIClientTransportError),
+    autoretry_for=(APIClientTransportError,),
     retry_backoff=30,
     retry_jitter=True,
     max_retries=5,
+    acks_late=True,
+    task_acks_on_failure_or_timeout=False,
+    soft_time_limit=AI_PLAN_SOFT_TIME_LIMIT,
+    time_limit=AI_PLAN_TIME_LIMIT,
 )
-def generate_ai_workout_plan(self, payload: dict[str, Any]) -> None:  # pyrefly: ignore[valid-type]
-    asyncio.run(_generate_ai_workout_plan_impl(payload, self))
+def generate_ai_workout_plan(self, payload: dict[str, Any]) -> dict[str, Any] | None:  # pyrefly: ignore[valid-type]
+    try:
+        return asyncio.run(_generate_ai_workout_plan_impl(payload, self))
+    except APIClientHTTPError as exc:
+        retries = int(getattr(self.request, "retries", 0))
+        max_retries = int(getattr(self, "max_retries", 0) or 0)
+        if exc.retryable and retries < max_retries:
+            logger.warning(f"ai_generate_plan_retry status={exc.status} reason={exc.reason} attempt={retries}")
+            raise self.retry(exc=exc)
+        raise
 
 
 @app.task(
     bind=True,
     queue="ai_coach",
     routing_key="ai_coach",
-    autoretry_for=(APIClientHTTPError, APIClientTransportError),
+    autoretry_for=(APIClientTransportError,),
     retry_backoff=30,
     retry_jitter=True,
     max_retries=5,
+    acks_late=True,
+    task_acks_on_failure_or_timeout=False,
+    soft_time_limit=AI_PLAN_SOFT_TIME_LIMIT,
+    time_limit=AI_PLAN_TIME_LIMIT,
 )
-def update_ai_workout_plan(self, payload: dict[str, Any]) -> None:  # pyrefly: ignore[valid-type]
-    asyncio.run(_update_ai_workout_plan_impl(payload, self))
+def update_ai_workout_plan(self, payload: dict[str, Any]) -> dict[str, Any] | None:  # pyrefly: ignore[valid-type]
+    try:
+        return asyncio.run(_update_ai_workout_plan_impl(payload, self))
+    except APIClientHTTPError as exc:
+        retries = int(getattr(self.request, "retries", 0))
+        max_retries = int(getattr(self, "max_retries", 0) or 0)
+        if exc.retryable and retries < max_retries:
+            logger.warning(f"ai_update_plan_retry status={exc.status} reason={exc.reason} attempt={retries}")
+            raise self.retry(exc=exc)
+        raise
 
 
 @app.task(

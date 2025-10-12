@@ -5,13 +5,11 @@ from core.containers import get_container
 from core.cache import Cache
 from aiogram import Bot
 from bot.utils.chat import send_message, client_request
-from config.app_settings import settings
+from .auth import require_internal_auth
 
 
+@require_internal_auth
 async def internal_payment_handler(request: web.Request) -> web.Response:
-    if request.headers.get("Authorization") != f"Api-Key {settings.API_KEY}":
-        return web.json_response({"detail": "Forbidden"}, status=403)
-
     try:
         payload = await request.json()
     except Exception:
@@ -32,10 +30,8 @@ async def internal_payment_handler(request: web.Request) -> web.Response:
         return web.json_response({"detail": str(e)}, status=500)
 
 
+@require_internal_auth
 async def internal_send_payment_message(request: web.Request) -> web.Response:
-    if request.headers.get("Authorization") != f"Api-Key {settings.API_KEY}":
-        return web.json_response({"detail": "Forbidden"}, status=403)
-
     try:
         payload = await request.json()
     except Exception:
@@ -66,10 +62,8 @@ async def internal_send_payment_message(request: web.Request) -> web.Response:
         return web.json_response({"detail": str(e)}, status=500)
 
 
+@require_internal_auth
 async def internal_client_request(request: web.Request) -> web.Response:
-    if request.headers.get("Authorization") != f"Api-Key {settings.API_KEY}":
-        return web.json_response({"detail": "Forbidden"}, status=403)
-
     try:
         payload = await request.json()
     except Exception:

@@ -1,5 +1,6 @@
 # ai_coach_service.py
 import base64
+import json
 from enum import Enum
 from typing import Any
 from urllib.parse import urljoin, urlsplit
@@ -12,6 +13,7 @@ from ai_coach.schemas import AICoachRequest
 from ai_coach.types import CoachMode
 from core.exceptions import UserServiceError
 from core.schemas import Program, Subscription, QAResponse
+from core.ai_coach_fallback import fallback_plan
 from .api_client import APIClient, APIClientHTTPError, APIClientTransportError
 from ...enums import WorkoutPlanType, WorkoutType
 
@@ -204,15 +206,55 @@ class AiCoachService(APIClient):
                     timeout=self.settings.AI_COACH_TIMEOUT,
                     client=client,
                 )
-            except (APIClientHTTPError, APIClientTransportError):
+            except APIClientHTTPError as exc:
+                logger.error(
+                    "AI coach request failed "
+                    f"request_id={request_id} client_id={payload.client_id} "
+                    f"status={exc.status} reason={exc.reason}"
+                )
+                if payload.mode in {CoachMode.program, CoachMode.subscription, CoachMode.update} and exc.reason in {
+                    "timeout",
+                    "knowledge_base_empty",
+                }:
+                    workout_type_value = (
+                        payload.workout_type.value
+                        if isinstance(payload.workout_type, WorkoutType)
+                        else payload.workout_type
+                    )
+                    fallback = fallback_plan(
+                        plan_type=payload.plan_type,
+                        client_profile_id=payload.client_id,
+                        workout_type=workout_type_value,
+                        wishes=payload.wishes,
+                        workout_days=payload.workout_days,
+                        period=payload.period,
+                    )
+                    logger.info(
+                        "AI coach fallback applied "
+                        f"request_id={request_id} client_id={payload.client_id} reason={exc.reason}"
+                    )
+                    return fallback
+                raise
+            except APIClientTransportError:
                 logger.error(f"AI coach request failed request_id={request_id} client_id={payload.client_id}")
                 raise
 
         logger.debug(f"AI coach ask response request_id={request_id} HTTP={status}: {data}")
         if status == 200:
             return data
-        logger.error(f"AI coach request failed HTTP={status}: {data}")
-        return None
+
+        reason: str | None = None
+        if isinstance(data, dict):
+            reason = data.get("reason") or data.get("detail")
+        text = json.dumps(data) if isinstance(data, (dict, list)) else str(data or "")
+        raise APIClientHTTPError(
+            status,
+            text,
+            method="post",
+            url="ask/",
+            retryable=False,
+            reason=reason if isinstance(reason, str) else None,
+        )
 
     async def refresh_knowledge(self) -> None:
         token = base64.b64encode(

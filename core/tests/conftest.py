@@ -478,9 +478,24 @@ redis_async_mod = types.ModuleType("redis.asyncio")
 
 
 class DummyRedis:
+    def __init__(self) -> None:
+        self.storage: dict[str, str] = {}
+
     @classmethod
     def from_url(cls, *a, **k):
         return cls()
+
+    async def set(self, key: str, value: str, ex=None, nx: bool = False):  # type: ignore[no-untyped-def]
+        if nx and key in self.storage:
+            return False
+        self.storage[key] = value
+        return True
+
+    async def get(self, key: str):  # type: ignore[no-untyped-def]
+        return self.storage.get(key)
+
+    async def exists(self, key: str):  # type: ignore[no-untyped-def]
+        return 1 if key in self.storage else 0
 
     async def close(self):
         pass

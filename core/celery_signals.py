@@ -78,7 +78,7 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
     strict_mode = os.getenv("CELERY_STRICT", "0") == "1"
 
     if "ai_coach" not in queue_names:
-        logger.error(f"ai_coach queue missing on worker hostname={worker.hostname} queues={queue_names}")
+        logger.warning(f"ai_coach queue missing on worker hostname={worker.hostname} queues={queue_names}")
         if strict_mode:
             raise SystemExit("ai_coach queue missing")
         return

@@ -1,7 +1,7 @@
 import json
 import os
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Annotated
+from typing import Annotated, Any
 from urllib.parse import SplitResult, quote, quote_plus, urlsplit, urlunsplit
 from uuid import NAMESPACE_DNS, uuid5
 
@@ -48,6 +48,7 @@ def normalize_service_host(
 
 
 class Settings(BaseSettings):
+    DEBUG: bool = False
     PAYMENT_CHECK_INTERVAL: int = 60
     MIN_BIRTH_YEAR: int = 1940
     MAX_BIRTH_YEAR: int = 2020
@@ -72,6 +73,14 @@ class Settings(BaseSettings):
     COACH_AGENT_RETRIES: int = 1
     COACH_AGENT_TIMEOUT: int = 60
     CHAT_HISTORY_LIMIT: int = 20
+    AI_COACH_MAX_TOOL_CALLS: Annotated[int, Field(default=5)]
+    AI_COACH_REQUEST_TIMEOUT: Annotated[int, Field(default=60)]
+    AI_COACH_DEFAULT_TOOL_TIMEOUT: Annotated[float, Field(default=3.0)]
+    AI_COACH_SEARCH_TIMEOUT: Annotated[float, Field(default=2.0)]
+    AI_COACH_HISTORY_TIMEOUT: Annotated[float, Field(default=6.0)]
+    AI_COACH_PROGRAM_HISTORY_TIMEOUT: Annotated[float, Field(default=6.0)]
+    AI_COACH_SAVE_TIMEOUT: Annotated[float, Field(default=30.0)]
+    AI_COACH_ATTACH_GIFS_MIN_BUDGET: Annotated[float, Field(default=10.0)]
     AI_PLAN_DEDUP_TTL: Annotated[int, Field(default=3600)]
     AI_PLAN_NOTIFY_TIMEOUT: Annotated[int, Field(default=900)]
     AI_PLAN_NOTIFY_POLL_INTERVAL: Annotated[int, Field(default=30)]
@@ -131,6 +140,8 @@ class Settings(BaseSettings):
     COGNEE_CLIENT_DATASET_NAMESPACE: Annotated[str | None, Field(default=None)]
 
     API_KEY: Annotated[str, Field(default="")]
+    INTERNAL_API_KEY: Annotated[str | None, Field(default=None)]
+    INTERNAL_IP_ALLOWLIST: Annotated[list[str], Field(default_factory=list)]
     SECRET_KEY: Annotated[str, Field(default="")]
     API_HOST: Annotated[str, Field(default="http://127.0.0.1")]
     HOST_API_PORT: Annotated[str, Field(default="8000")]
@@ -177,6 +188,24 @@ class Settings(BaseSettings):
         "case_sensitive": True,
         "extra": "ignore",
     }
+
+    @field_validator("INTERNAL_IP_ALLOWLIST", mode="before")
+    @classmethod
+    def _normalize_ip_allowlist(cls, value: Any) -> list[str]:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            candidates = value.split(",")
+        elif isinstance(value, (list, tuple, set)):
+            candidates = list(value)
+        else:
+            return []
+        result: list[str] = []
+        for candidate in candidates:
+            text = str(candidate).strip()
+            if text:
+                result.append(text)
+        return result
 
     @model_validator(mode="after")
     def _compute_derived_fields(self) -> "Settings":

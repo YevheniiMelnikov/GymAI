@@ -24,51 +24,11 @@ from core.enums import CoachType, SubscriptionPeriod, WorkoutPlanType
 from bot.utils.chat import send_message
 from bot.utils.bot import get_webapp_url
 from core.services import APIService
-from bot.utils.ai_coach import enqueue_workout_plan_update, schedule_ai_plan_notification_watch
+from bot.utils.ai_coach import enqueue_workout_plan_update
 from core.schemas import Client, DayExercises, Profile, Subscription
 from cognee.api.v1.prune import prune  # pyrefly: ignore[import-error]
-from core.utils.redis_lock import get_redis_client
-
-
-async def _claim_plan_delivery(request_id: str) -> bool:
-    if not request_id:
-        return True
-    try:
-        client = get_redis_client()
-        key = f"ai:plan:processed:{request_id}"
-        ok = await client.set(key, "1", nx=True, ex=settings.AI_PLAN_DEDUP_TTL)
-        return bool(ok)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(f"ai_plan_delivery_dedupe_skip request_id={request_id} error={exc!s}")
-        return True
-
-
-async def _mark_plan_delivered(request_id: str) -> None:
-    if not request_id:
-        return
-    try:
-        client = get_redis_client()
-        await client.set(
-            f"ai:plan:delivered:{request_id}",
-            "1",
-            ex=settings.AI_PLAN_DEDUP_TTL,
-        )
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(f"ai_plan_delivery_flag_set_failed request_id={request_id} error={exc!s}")
-
-
-async def _mark_plan_failure(request_id: str, detail: str) -> None:
-    if not request_id:
-        return
-    try:
-        client = get_redis_client()
-        await client.set(
-            f"ai:plan:notify_failed:{request_id}",
-            detail,
-            ex=settings.AI_PLAN_NOTIFY_FAILURE_TTL,
-        )
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(f"ai_plan_failure_flag_set_failed request_id={request_id} error={exc!s}")
+from core.ai_plan_state import AiPlanState
+from .auth import require_internal_auth
 
 
 async def _resolve_client_and_profile(
@@ -132,6 +92,9 @@ async def _process_ai_plan_ready(
     client_id: int,
     client_profile_id: int | None,
 ) -> None:
+    state_tracker = AiPlanState.create()
+    bot: Bot = request.app["bot"]
+    dispatcher = request.app.get("dp")
     try:
         payload_profile_id = client_profile_id
         client, resolved_profile_id, resolved_client_profile_id = await _resolve_client_and_profile(
@@ -150,21 +113,19 @@ async def _process_ai_plan_ready(
 
         profile: Profile | None = await APIService.profile.get_profile(resolved_profile_id)
         if profile is None:
-            await _mark_plan_failure(request_id, "profile_not_found")
+            await state_tracker.mark_failed(request_id, "profile_not_found")
             logger.error(f"Profile missing for client_id={client_id} request_id={request_id}")
             return
 
-        if not await _claim_plan_delivery(request_id):
+        if not await state_tracker.claim_delivery(request_id):
             logger.debug(
                 "AI coach plan callback ignored because delivery already claimed "
                 f"plan_type={plan_type.value} client_id={client_id} request_id={request_id}"
             )
             return
 
-        bot: Bot = request.app["bot"]
-        dispatcher = request.app.get("dp")
         if dispatcher is None:
-            await _mark_plan_failure(request_id, "dispatcher_missing")
+            await state_tracker.mark_failed(request_id, "dispatcher_missing")
             logger.error("Dispatcher not available for AI coach plan delivery")
             return
 
@@ -180,9 +141,26 @@ async def _process_ai_plan_ready(
             )
             return
 
+        async def notify_failure(detail: str) -> None:
+            first_attempt = await state_tracker.mark_failed(request_id, detail)
+            if not first_attempt:
+                logger.debug(
+                    f"ai_plan_failure_already_notified action={action} "
+                    f"client_id={client_id} request_id={request_id} detail={detail}"
+                )
+                return
+            message = msg_text("coach_agent_error", profile.language).format(tg=settings.TG_SUPPORT_CONTACT)
+            try:
+                await bot.send_message(chat_id=profile.tg_id, text=message)
+            except Exception as exc:  # noqa: BLE001
+                logger.error(
+                    f"ai_plan_failure_user_message_failed action={action} "
+                    f"client_id={client_id} request_id={request_id} error={exc!s}"
+                )
+
         if status != "success":
             error_reason = str(payload.get("error", "unknown_error"))
-            await _mark_plan_failure(request_id, error_reason)
+            await notify_failure(error_reason)
             logger.error(
                 "AI coach plan callback returned failure "
                 f"plan_type={plan_type.value} client_id={client_id} request_id={request_id} reason={error_reason}"
@@ -191,7 +169,7 @@ async def _process_ai_plan_ready(
 
         plan_payload_raw = payload.get("plan")
         if not isinstance(plan_payload_raw, dict):
-            await _mark_plan_failure(request_id, "plan_payload_missing")
+            await notify_failure("plan_payload_missing")
             logger.error(f"Plan payload missing client_id={client_id} request_id={request_id}")
             return
 
@@ -215,7 +193,7 @@ async def _process_ai_plan_ready(
                     day if isinstance(day, DayExercises) else DayExercises.model_validate(day) for day in raw_days
                 ]
             except Exception as exc:  # noqa: BLE001
-                await _mark_plan_failure(request_id, f"day_exercises_validation:{exc!s}")
+                await notify_failure(f"day_exercises_validation:{exc!s}")
                 logger.error(
                     f"day_exercises_validation_failed client_id={client_id} request_id={request_id} err={exc!s}"
                 )
@@ -237,6 +215,13 @@ async def _process_ai_plan_ready(
                 wishes=wishes,
             )
             await Cache.workout.save_program(client_profile_id, saved_program.model_dump(mode="json"))
+            try:
+                await APIService.workout.get_latest_program(client_profile_id)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug(
+                    "warm_program_cache_failed "
+                    f"client_profile_id={client_profile_id} request_id={request_id} err={exc!s}"
+                )
             exercises_dump = [day.model_dump() for day in saved_program.exercises_by_day]
             await state.update_data(
                 exercises=exercises_dump,
@@ -257,9 +242,9 @@ async def _process_ai_plan_ready(
                     f"ai_plan_program_send_failed action={action} client_id={client_id} "
                     f"request_id={request_id} error={exc!s}"
                 )
-                await _mark_plan_failure(request_id, f"program_send_failed:{exc!s}")
+                await notify_failure(f"program_send_failed:{exc!s}")
                 return
-            await _mark_plan_delivered(request_id)
+            await state_tracker.mark_delivered(request_id)
             logger.info(
                 "AI coach plan generation finished plan_type=program "
                 f"client_id={client_id} request_id={request_id} program_id={saved_program.id}"
@@ -273,7 +258,7 @@ async def _process_ai_plan_ready(
             try:
                 current = await Cache.workout.get_latest_subscription(client_profile_id)
             except SubscriptionNotFoundError:
-                await _mark_plan_failure(request_id, "subscription_missing")
+                await notify_failure("subscription_missing")
                 logger.error(f"Subscription missing for update client_id={client_id} request_id={request_id}")
                 return
 
@@ -317,9 +302,9 @@ async def _process_ai_plan_ready(
                     f"ai_plan_subscription_update_notify_failed client_id={client_id} "
                     f"request_id={request_id} error={exc!s}"
                 )
-                await _mark_plan_failure(request_id, f"subscription_update_send_failed:{exc!s}")
+                await notify_failure(f"subscription_update_send_failed:{exc!s}")
                 return
-            await _mark_plan_delivered(request_id)
+            await state_tracker.mark_delivered(request_id)
             logger.info(
                 "AI coach plan generation finished plan_type=subscription-update "
                 f"client_id={client_id} request_id={request_id} subscription_id={current.id}"
@@ -344,7 +329,7 @@ async def _process_ai_plan_ready(
             exercises=serialized_exercises,
         )
         if subscription_id is None:
-            await _mark_plan_failure(request_id, "subscription_create_failed")
+            await notify_failure("subscription_create_failed")
             logger.error(
                 f"Subscription create failed client_id={client_id} request_id={request_id} plan_type={plan_type.value}"
             )
@@ -380,28 +365,26 @@ async def _process_ai_plan_ready(
             logger.error(
                 f"ai_plan_subscription_create_notify_failed client_id={client_id} request_id={request_id} error={exc!s}"
             )
-            await _mark_plan_failure(request_id, f"subscription_create_send_failed:{exc!s}")
+            await notify_failure(f"subscription_create_send_failed:{exc!s}")
             return
-        await _mark_plan_delivered(request_id)
+        await state_tracker.mark_delivered(request_id)
         logger.info(
             "AI coach plan generation finished plan_type=subscription-create "
             f"client_id={client_id} request_id={request_id} subscription_id={subscription_id}"
         )
     except ClientNotFoundError:
-        await _mark_plan_failure(request_id, "client_not_found")
+        await state_tracker.mark_failed(request_id, "client_not_found")
         logger.error(f"Client fetch failed client_id={client_id} request_id={request_id}: not found")
     except Exception as exc:  # noqa: BLE001
-        await _mark_plan_failure(request_id, f"handler_exception:{exc!s}")
+        await state_tracker.mark_failed(request_id, f"handler_exception:{exc!s}")
         logger.exception(
             "AI coach plan callback processing failed "
             f"plan_type={plan_type.value} client_id={client_id} request_id={request_id} error={exc!s}"
         )
 
 
+@require_internal_auth
 async def internal_send_daily_survey(request: web.Request) -> web.Response:
-    if request.headers.get("Authorization") != f"Api-Key {settings.API_KEY}":
-        return web.json_response({"detail": "Forbidden"}, status=403)
-
     bot: Bot = request.app["bot"]
     try:
         clients = await get_clients_to_survey()
@@ -431,10 +414,8 @@ async def internal_send_daily_survey(request: web.Request) -> web.Response:
     return web.json_response({"result": "ok"})
 
 
+@require_internal_auth
 async def internal_export_coach_payouts(request: web.Request) -> web.Response:
-    if request.headers.get("Authorization") != f"Api-Key {settings.API_KEY}":
-        return web.json_response({"detail": "Forbidden"}, status=403)
-
     try:
         await get_container().payment_processor().export_coach_payouts()
         return web.json_response({"result": "ok"})
@@ -443,11 +424,9 @@ async def internal_export_coach_payouts(request: web.Request) -> web.Response:
         return web.json_response({"detail": str(e)}, status=500)
 
 
+@require_internal_auth
 async def internal_send_workout_result(request: web.Request) -> web.Response:
     """Forward workout survey result to a coach or AI system."""
-
-    if request.headers.get("Authorization") != f"Api-Key {settings.API_KEY}":
-        return web.json_response({"detail": "Forbidden"}, status=403)
 
     try:
         payload = await request.json()
@@ -473,9 +452,10 @@ async def internal_send_workout_result(request: web.Request) -> web.Response:
         profile = await APIService.profile.get_profile(client.profile)
         language = profile.language if profile else settings.DEFAULT_LANG
         client_profile_pk = client.id
+        client_profile_id = client.profile
         queued = await enqueue_workout_plan_update(
             client_id=client_profile_pk,
-            client_profile_id=client_profile_pk,
+            client_profile_id=client_profile_id,
             expected_workout_result=str(expected_workout_result or ""),
             feedback=str(client_workout_feedback),
             language=language,
@@ -486,14 +466,6 @@ async def internal_send_workout_result(request: web.Request) -> web.Response:
         if not queued:
             logger.error(f"AI workout update dispatch failed client_id={client_id} request_id={request_id}")
             return web.json_response({"detail": "dispatch_failed"}, status=503)
-        if profile:
-            schedule_ai_plan_notification_watch(
-                bot=bot,
-                chat_id=profile.tg_id,
-                language=language,
-                action="update",
-                request_id=request_id,
-            )
         return web.json_response({"result": "queued", "request_id": request_id})
     else:
         await send_message(
@@ -507,10 +479,8 @@ async def internal_send_workout_result(request: web.Request) -> web.Response:
     return web.json_response({"result": "ok"})
 
 
+@require_internal_auth
 async def internal_ai_coach_plan_ready(request: web.Request) -> web.Response:
-    if request.headers.get("Authorization") != f"Api-Key {settings.API_KEY}":
-        return web.json_response({"detail": "Forbidden"}, status=403)
-
     try:
         raw_payload = await request.json()
     except Exception:
@@ -571,17 +541,16 @@ async def internal_ai_coach_plan_ready(request: web.Request) -> web.Response:
             )
         except Exception as exc:  # noqa: BLE001
             logger.exception(f"ai_plan_ready_runner_failed action={action} request_id={request_id} err={exc!s}")
-            await _mark_plan_failure(request_id, f"runner_exception:{exc!s}")
+            state = AiPlanState.create()
+            await state.mark_failed(request_id, f"runner_exception:{exc!s}")
 
     asyncio.create_task(_runner(), name=f"ai-plan-ready-{request_id}")
     return web.json_response({"result": "accepted"}, status=202)
 
 
+@require_internal_auth
 async def internal_prune_cognee(request: web.Request) -> web.Response:
     """Trigger Cognee prune to cleanup local data storage."""
-
-    if request.headers.get("Authorization") != f"Api-Key {settings.API_KEY}":
-        return web.json_response({"detail": "Forbidden"}, status=403)
 
     try:
         await prune.prune_data()
