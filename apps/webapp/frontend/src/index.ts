@@ -19,10 +19,35 @@ function parseSegment(hash: string): Segment | null {
   return null;
 }
 
+function parseSegmentParam(param: string | null): Segment | null {
+  if (!param) return null;
+  const normalized = param.toLowerCase();
+  if (normalized === 'program') return 'program';
+  if (normalized === 'subscriptions') return 'subscriptions';
+  return null;
+}
+
+function segmentFromQuery(): Segment | null {
+  try {
+    const url = new URL(window.location.href);
+    return parseSegmentParam(url.searchParams.get('segment'));
+  } catch {
+    return null;
+  }
+}
+
 function ensureSegmentHash(): Segment {
   const parsed = parseSegment(location.hash);
   if (parsed) {
     return parsed;
+  }
+  const querySegment = segmentFromQuery();
+  if (querySegment) {
+    const target = SEGMENT_HASH[querySegment];
+    if (location.hash !== target) {
+      location.hash = target;
+    }
+    return querySegment;
   }
   location.hash = SEGMENT_HASH.program;
   return 'program';

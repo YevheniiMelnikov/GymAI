@@ -1,6 +1,6 @@
 from contextlib import suppress
-from typing import Optional
-from urllib.parse import urlparse
+from typing import NamedTuple, Optional
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
@@ -13,10 +13,18 @@ from pydantic import ValidationError
 from bot.texts import TextManager
 from config.app_settings import settings
 
-_WEBAPP_SEGMENTS: dict[str, str] = {
-    "program": "#/program",
-    "subscription": "#/subscriptions",
-    "subscriptions": "#/subscriptions",
+
+class _WebAppTarget(NamedTuple):
+    type_param: str
+    source: str | None
+    segment: str | None
+    fragment: str | None
+
+
+_WEBAPP_TARGETS: dict[str, _WebAppTarget] = {
+    "program": _WebAppTarget("program", "direct", "program", "#/program"),
+    "subscription": _WebAppTarget("program", "subscription", "subscriptions", "#/subscriptions"),
+    "subscriptions": _WebAppTarget("program", "subscription", "subscriptions", "#/subscriptions"),
 }
 
 
@@ -95,14 +103,27 @@ def get_webapp_url(page_type: str) -> str | None:
     if not source:
         logger.error("WEBAPP_PUBLIC_URL is not configured; webapp button hidden")
         return None
+
+    target = _WEBAPP_TARGETS.get(page_type, _WEBAPP_TARGETS["program"])
     parsed = urlparse(source)
-    host = parsed.netloc or parsed.path.split("/")[0]
-    base = f"{parsed.scheme or 'https'}://{host}"
-    fragment = _WEBAPP_SEGMENTS.get(page_type, "")
-    suffix = f"/webapp/?type={page_type}"
-    if fragment:
-        suffix = f"{suffix}{fragment}"
-    return f"{base}{suffix}"
+    query_params = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query_params["type"] = target.type_param
+
+    if target.source:
+        query_params["source"] = target.source
+    else:
+        query_params.pop("source", None)
+
+    if target.segment:
+        query_params["segment"] = target.segment
+    else:
+        query_params.pop("segment", None)
+
+    fragment = target.fragment or ""
+    new_query = urlencode(query_params)
+    path = parsed.path or "/webapp/"
+    updated = parsed._replace(path=path, query=new_query, fragment=fragment)
+    return urlunparse(updated)
 
 
 async def check_webhook_alive(ping_url: str, timeout_seconds: float = 5.0) -> bool:

@@ -1,6 +1,6 @@
 from contextlib import suppress
 from datetime import datetime
-from typing import cast
+from typing import Collection, cast
 
 from loguru import logger
 from aiogram import Bot
@@ -497,8 +497,13 @@ async def show_program_promo_page(
     await state.set_state(States.payment_choice)
 
 
-async def show_ai_services(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    language = cast(str, profile.language)
+async def show_ai_services(
+    callback_query: CallbackQuery,
+    profile: Profile,
+    state: FSMContext,
+    allowed_services: Collection[str] | None = None,
+) -> None:
+    language = cast(str, profile.language or "eng")
     client = await Cache.client.get_client(profile.id)
     if client.status == ClientStatus.initial:
         await callback_query.answer(msg_text("finish_registration_to_get_credits", language), show_alert=True)
@@ -506,6 +511,11 @@ async def show_ai_services(callback_query: CallbackQuery, profile: Profile, stat
         await callback_query.answer()
     file_path = Path(__file__).resolve().parent.parent / "images" / "ai_coach.png"
     services = available_ai_services()
+    if allowed_services is not None:
+        allowed_set = {name for name in allowed_services}
+        filtered_services = [service for service in services if service.name in allowed_set]
+        if filtered_services:
+            services = filtered_services
     await state.set_state(States.choose_ai_service)
     await answer_msg(
         callback_query,

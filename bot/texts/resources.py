@@ -26,7 +26,7 @@ class ButtonText(AutoName):
     delete = auto()
     cancel_subscription = auto()
     pay = auto()
-    new_program = auto()
+    new_workout_plan = auto()
     history = auto()
     tariff_plans = auto()
     start_plan = auto()
@@ -214,6 +214,7 @@ class MessageText(AutoName):
 
     select_action = auto()
     subscription_creation_prompt = auto()
+    program_creation_prompt = auto()
     follow_link = auto()
     main_menu = auto()
     help = auto()
