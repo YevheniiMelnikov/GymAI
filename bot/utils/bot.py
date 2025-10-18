@@ -98,7 +98,7 @@ async def set_bot_commands(bot: Bot, lang: Optional[str] = None) -> None:
     await bot.set_my_commands(commands)
 
 
-def get_webapp_url(page_type: str) -> str | None:
+def get_webapp_url(page_type: str, lang: str | None = None) -> str | None:
     source = settings.WEBAPP_PUBLIC_URL
     if not source:
         logger.error("WEBAPP_PUBLIC_URL is not configured; webapp button hidden")
@@ -119,7 +119,12 @@ def get_webapp_url(page_type: str) -> str | None:
     else:
         query_params.pop("segment", None)
 
-    fragment = target.fragment or ""
+    if lang:
+        query_params["lang"] = lang
+    else:
+        query_params.pop("lang", None)
+
+    fragment = (target.fragment or "").lstrip("#")
     new_query = urlencode(query_params)
     path = parsed.path or "/webapp/"
     updated = parsed._replace(path=path, query=new_query, fragment=fragment)

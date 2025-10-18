@@ -330,7 +330,7 @@ async def test_internal_ai_plan_ready_program(monkeypatch: pytest.MonkeyPatch) -
     assert saved_args["client_profile_id"] == client.profile
     assert saved_cache["client_profile_id"] == client.profile
     assert cache_calls == [client.profile]
-    assert bot.sent[0]["text"] == "new_program:en"
+    assert bot.sent[0]["text"] == "new_workout_plan:en"
     key = StorageKey(bot_id=bot.id, chat_id=profile.tg_id, user_id=profile.tg_id)
     assert await storage.get_state(key) == States.program_view.state
     data = await storage.get_data(key)
@@ -559,7 +559,7 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
     assert saved_subscription["client_profile_id"] == client.profile
     assert cache_calls == [client.profile]
     assert saved_subscription["data"]["id"] == 42
-    assert bot.sent[0]["text"] == "new_program:en"
+    assert bot.sent[0]["text"] == "new_workout_plan:en"
     key = StorageKey(bot_id=bot.id, chat_id=profile.tg_id, user_id=profile.tg_id)
     assert await storage.get_state(key) == States.program_view.state
     data = await storage.get_data(key)

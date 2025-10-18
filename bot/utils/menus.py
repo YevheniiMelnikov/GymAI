@@ -81,7 +81,7 @@ async def show_subscription_page(callback_query: CallbackQuery, state: FSMContex
                 price=subscription.price,
                 days=translated_week_days,
             ),
-            reply_markup=kb.show_subscriptions_kb(lang, get_webapp_url("subscription")),
+            reply_markup=kb.show_subscriptions_kb(lang, get_webapp_url("subscription", lang)),
         )
         await del_msg(message)
 
@@ -394,7 +394,7 @@ async def show_my_subscription_menu(
     except SubscriptionNotFoundError:
         subscription = None
 
-    webapp_url = get_webapp_url("subscription")
+    webapp_url = get_webapp_url("subscription", language)
 
     if force_new:
         file_path = Path(settings.BOT_PAYMENT_OPTIONS) / f"subscription_{language}.jpeg"
@@ -459,7 +459,7 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
     await answer_msg(
         message,
         msg_text("select_action", profile.language),
-        reply_markup=kb.program_action_kb(profile.language, get_webapp_url("program")),
+        reply_markup=kb.program_action_kb(profile.language, get_webapp_url("program", profile.language)),
     )
     await state.set_state(States.program_action_choice)
     await del_msg(cast(Message | CallbackQuery | None, message))
@@ -533,8 +533,8 @@ async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, 
 
     await answer_msg(
         message,
-        msg_text("new_program", language),
-        reply_markup=program_view_kb(language, get_webapp_url("program")),
+        msg_text("new_workout_plan", language),
+        reply_markup=program_view_kb(language, get_webapp_url("program", language)),
         disable_web_page_preview=True,
     )
 
@@ -585,7 +585,7 @@ async def manage_subscription(callback_query: CallbackQuery, lang: str, profile_
     else:
         await answer_msg(
             message,
-            msg_text("new_program", lang),
+            msg_text("new_workout_plan", lang),
             reply_markup=kb.subscription_manage_kb(lang),
             disable_web_page_preview=True,
         )
@@ -637,7 +637,7 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
     assert split_number is not None
 
     if data.get("client"):
-        reply_markup = program_view_kb(profile.language, get_webapp_url("program"))
+        reply_markup = program_view_kb(profile.language, get_webapp_url("program", profile.language))
         state_to_set = States.program_view
     else:
         reply_markup = (
@@ -660,7 +660,7 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
         message = callback_query.message
         if message and isinstance(message, Message):
             await message.edit_text(
-                msg_text("new_program", profile.language),
+                msg_text("new_workout_plan", profile.language),
                 reply_markup=reply_markup,
                 disable_web_page_preview=True,
             )

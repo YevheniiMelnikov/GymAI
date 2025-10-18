@@ -36,6 +36,16 @@ function segmentFromQuery(): Segment | null {
   }
 }
 
+function langFromQuery(): string | null {
+  try {
+    const url = new URL(window.location.href);
+    const raw = url.searchParams.get('lang');
+    return raw && raw.trim() ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
 function ensureSegmentHash(): Segment {
   const parsed = parseSegment(location.hash);
   if (parsed) {
@@ -51,6 +61,22 @@ function ensureSegmentHash(): Segment {
   }
   location.hash = SEGMENT_HASH.program;
   return 'program';
+}
+
+function syncRouteForSegment(route: ProgramRoute, segment: Segment): void {
+  try {
+    const url = new URL(window.location.href);
+    url.searchParams.set('segment', segment);
+    if (segment === 'program') {
+      url.searchParams.set('source', 'direct');
+    } else if (route.source === 'subscription') {
+      url.searchParams.set('source', 'subscription');
+    } else {
+      url.searchParams.delete('source');
+    }
+    history.replaceState({}, '', url.toString());
+  } catch {
+  }
 }
 
 function updateHashForSegment(segment: Segment): void {
@@ -97,8 +123,10 @@ async function bootstrap(): Promise<void> {
   const segmented = document.getElementById('segmented') as HTMLElement | null;
   if (!root || !content || !dateEl) return;
 
+  const queryLang = langFromQuery();
+
   try {
-    await applyLang();
+    await applyLang(queryLang ?? undefined);
   } catch {
   }
 
@@ -129,6 +157,8 @@ async function bootstrap(): Promise<void> {
     segmentState.renderToken += 1;
     const token = segmentState.renderToken;
 
+    syncRouteForSegment(route, segment);
+
     if (segmented) {
       segmentedCleanup?.();
       segmentedCleanup = renderSegmented(segmented, segment, (next) => {
@@ -148,7 +178,7 @@ async function bootstrap(): Promise<void> {
     if (segment === 'program') {
       const dispose = await renderProgram(
         { root, content, dateEl, button: historyButton, titleEl },
-        route.source
+        'direct'
       );
       if (segmentState.renderToken === token) {
         cleanup.current = dispose;

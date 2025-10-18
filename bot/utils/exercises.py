@@ -73,7 +73,7 @@ async def save_exercise(
     exercise_msg = await answer_msg(msg, msg_text("enter_exercise", profile.language))
     program_msg = await answer_msg(
         msg,
-        msg_text("new_program", profile.language),
+        msg_text("new_workout_plan", profile.language),
         reply_markup=program_manage_kb(profile.language, split_number),
         disable_web_page_preview=True,
     )
@@ -109,7 +109,7 @@ async def update_exercise_data(message: Message, state: FSMContext, lang: str, u
 
     await answer_msg(
         message,
-        msg_text("new_program", lang),
+        msg_text("new_workout_plan", lang),
         disable_web_page_preview=True,
     )
     await answer_msg(
@@ -163,7 +163,7 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
     if callback_query.message and isinstance(callback_query.message, Message):
         await answer_msg(
             callback_query.message,
-            msg_text("new_program", language),
+            msg_text("new_workout_plan", language),
             disable_web_page_preview=True,
             reply_markup=program_edit_kb(language),
         )

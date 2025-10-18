@@ -231,7 +231,7 @@ class MessageText(AutoName):
     out_of_range = auto()
     image_error = auto()
     no_profiles_found = auto()
-    new_program = auto()
+    new_workout_plan = auto()
     program_updated = auto()
     subscription_created = auto()
     wait_for_verification = auto()
