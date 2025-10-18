@@ -1,6 +1,6 @@
 from contextlib import suppress
 from datetime import datetime
-from typing import cast
+from typing import Collection, cast
 
 from loguru import logger
 from aiogram import Bot
@@ -81,7 +81,7 @@ async def show_subscription_page(callback_query: CallbackQuery, state: FSMContex
                 price=subscription.price,
                 days=translated_week_days,
             ),
-            reply_markup=kb.show_subscriptions_kb(lang, get_webapp_url("subscription")),
+            reply_markup=kb.show_subscriptions_kb(lang, get_webapp_url("subscription", lang)),
         )
         await del_msg(message)
 
@@ -139,18 +139,6 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext) 
     await state.set_state(States.main_menu)
     await answer_msg(message, msg_text("main_menu", profile.language), reply_markup=menu(profile.language))
     await del_msg(cast(Message | CallbackQuery | None, message))
-
-
-async def show_services_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    lang = cast(str, profile.language)
-    await callback_query.answer()
-    await state.set_state(States.services_menu)
-    await answer_msg(
-        callback_query,
-        msg_text("services_menu", lang),
-        reply_markup=kb.services_menu_kb(lang),
-    )
-    await del_msg(callback_query)
 
 
 async def show_balance_menu(callback_obj: CallbackQuery | Message, profile: Profile, state: FSMContext) -> None:
@@ -311,7 +299,13 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
         lang,
     ).format(**get_profile_attributes(role=profile.role, user=user, lang=lang))
 
-    await answer_profile(callback_query, profile, user, text)
+    await answer_profile(
+        callback_query,
+        profile,
+        user,
+        text,
+        show_balance=profile.role == "client",
+    )
     await state.set_state(States.profile)
     await del_msg(cast(Message | CallbackQuery | None, callback_query))
 
@@ -383,7 +377,13 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
     await del_msg(cast(Message | CallbackQuery | None, message))
 
 
-async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
+async def show_my_subscription_menu(
+    callback_query: CallbackQuery,
+    profile: Profile,
+    state: FSMContext,
+    *,
+    force_new: bool = False,
+) -> None:
     language = cast(str, profile.language)
     message = cast(Message, callback_query.message)
     assert message
@@ -394,20 +394,22 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
     except SubscriptionNotFoundError:
         subscription = None
 
-    if not subscription or not subscription.enabled:
+    webapp_url = get_webapp_url("subscription", language)
+
+    if force_new:
         file_path = Path(settings.BOT_PAYMENT_OPTIONS) / f"subscription_{language}.jpeg"
         subscription_img = FSInputFile(file_path)
         if not client_profile.assigned_to:
             await callback_query.answer(msg_text("client_not_assigned_to_coach", language), show_alert=True)
             return
 
-        await callback_query.answer()
         coach = await get_assigned_coach(client_profile, coach_type=CoachType.human)
         if coach is None:
             await callback_query.answer(msg_text("client_not_assigned_to_coach", language), show_alert=True)
             return
         price_uah = coach.subscription_price or Decimal("0")
         credits = uah_to_credits(price_uah)
+        await callback_query.answer()
         await state.set_state(States.payment_choice)
         await answer_msg(
             message,
@@ -416,15 +418,31 @@ async def show_my_subscription_menu(callback_query: CallbackQuery, profile: Prof
             reply_markup=kb.choose_payment_options_kb(language, "subscription"),
         )
         await del_msg(cast(Message | CallbackQuery | None, message))
-    else:
-        if subscription.exercises:
-            await state.update_data(exercises=subscription.exercises, subscription=True)
-            await show_subscription_page(callback_query, state, subscription)
-            return
+        return
 
-        else:
-            await callback_query.answer(msg_text("program_not_ready", language), show_alert=True)
-            return
+    if not subscription or not subscription.enabled:
+        await callback_query.answer()
+        await state.set_state(States.subscription_action_choice)
+        await answer_msg(
+            message,
+            msg_text("select_action", language),
+            reply_markup=kb.subscription_action_kb(language, webapp_url),
+        )
+        await del_msg(cast(Message | CallbackQuery | None, message))
+        return
+
+    if subscription.exercises:
+        await callback_query.answer()
+        await state.set_state(States.subscription_action_choice)
+        await answer_msg(
+            message,
+            msg_text("select_action", language),
+            reply_markup=kb.subscription_action_kb(language, webapp_url),
+        )
+        await del_msg(cast(Message | CallbackQuery | None, message))
+        return
+
+    await callback_query.answer(msg_text("program_not_ready", language), show_alert=True)
 
 
 async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
@@ -441,7 +459,7 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
     await answer_msg(
         message,
         msg_text("select_action", profile.language),
-        reply_markup=kb.program_action_kb(profile.language, get_webapp_url("program")),
+        reply_markup=kb.program_action_kb(profile.language, get_webapp_url("program", profile.language)),
     )
     await state.set_state(States.program_action_choice)
     await del_msg(cast(Message | CallbackQuery | None, message))
@@ -479,8 +497,13 @@ async def show_program_promo_page(
     await state.set_state(States.payment_choice)
 
 
-async def show_ai_services(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    language = cast(str, profile.language)
+async def show_ai_services(
+    callback_query: CallbackQuery,
+    profile: Profile,
+    state: FSMContext,
+    allowed_services: Collection[str] | None = None,
+) -> None:
+    language = cast(str, profile.language or "eng")
     client = await Cache.client.get_client(profile.id)
     if client.status == ClientStatus.initial:
         await callback_query.answer(msg_text("finish_registration_to_get_credits", language), show_alert=True)
@@ -488,6 +511,11 @@ async def show_ai_services(callback_query: CallbackQuery, profile: Profile, stat
         await callback_query.answer()
     file_path = Path(__file__).resolve().parent.parent / "images" / "ai_coach.png"
     services = available_ai_services()
+    if allowed_services is not None:
+        allowed_set = {name for name in allowed_services}
+        filtered_services = [service for service in services if service.name in allowed_set]
+        if filtered_services:
+            services = filtered_services
     await state.set_state(States.choose_ai_service)
     await answer_msg(
         callback_query,
@@ -505,8 +533,8 @@ async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, 
 
     await answer_msg(
         message,
-        msg_text("new_program", language),
-        reply_markup=program_view_kb(language, get_webapp_url("program")),
+        msg_text("new_workout_plan", language),
+        reply_markup=program_view_kb(language, get_webapp_url("program", language)),
         disable_web_page_preview=True,
     )
 
@@ -557,7 +585,7 @@ async def manage_subscription(callback_query: CallbackQuery, lang: str, profile_
     else:
         await answer_msg(
             message,
-            msg_text("new_program", lang),
+            msg_text("new_workout_plan", lang),
             reply_markup=kb.subscription_manage_kb(lang),
             disable_web_page_preview=True,
         )
@@ -609,7 +637,7 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
     assert split_number is not None
 
     if data.get("client"):
-        reply_markup = program_view_kb(profile.language, get_webapp_url("program"))
+        reply_markup = program_view_kb(profile.language, get_webapp_url("program", profile.language))
         state_to_set = States.program_view
     else:
         reply_markup = (
@@ -632,7 +660,7 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
         message = callback_query.message
         if message and isinstance(message, Message):
             await message.edit_text(
-                msg_text("new_program", profile.language),
+                msg_text("new_workout_plan", profile.language),
                 reply_markup=reply_markup,
                 disable_web_page_preview=True,
             )

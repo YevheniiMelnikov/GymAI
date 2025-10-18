@@ -1,4 +1,5 @@
 import { t } from '../i18n/i18n';
+import { tmeReady } from '../telegram';
 
 export async function renderSubscriptions(root: HTMLElement): Promise<void> {
   root.innerHTML = '';
@@ -26,4 +27,5 @@ export async function renderSubscriptions(root: HTMLElement): Promise<void> {
 
   container.append(heading, description);
   root.appendChild(container);
+  tmeReady();
 }

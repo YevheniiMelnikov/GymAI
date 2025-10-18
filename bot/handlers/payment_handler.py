@@ -18,7 +18,7 @@ from core.cache import Cache
 from core.cache.payment import PaymentCacheManager
 from core.enums import ClientStatus, PaymentStatus, SubscriptionPeriod
 from core.services import APIService
-from bot.utils.menus import show_main_menu, show_services_menu
+from bot.utils.menus import show_main_menu, show_my_workouts_menu, show_balance_menu
 from core.schemas import Coach, Client
 from apps.payments.tasks import send_client_request
 from bot.utils.workout_plans import cache_program_data, process_new_subscription
@@ -101,11 +101,18 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext) -> No
 
 @payment_router.callback_query(States.handle_payment)
 async def handle_payment(callback_query: CallbackQuery, state: FSMContext) -> None:
-    if not callback_query.data == "done":
-        return
-
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
+    cb_data = callback_query.data or ""
+
+    if cb_data == "back":
+        await callback_query.answer()
+        await show_balance_menu(callback_query, profile, state)
+        return
+
+    if cb_data != "done":
+        return
+
     order_id = data.get("order_id")
     amount = data.get("amount")
     service_type = data.get("service_type")
@@ -168,8 +175,8 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext) -> No
         }
         await Cache.workout.update_subscription(client.id, subscription_data)
 
-    await PaymentCacheManager.set_status(client.profile, service_type, PaymentStatus.PENDING)
-    await APIService.payment.create_payment(client.profile, service_type, order_id, amount)
+    await PaymentCacheManager.set_status(client.id, service_type, PaymentStatus.PENDING)
+    await APIService.payment.create_payment(client.id, service_type, order_id, amount)
     await callback_query.answer(msg_text("payment_in_progress", profile.language), show_alert=True)
 
     msg = callback_query.message
@@ -184,7 +191,7 @@ async def confirm_service(callback_query: CallbackQuery, state: FSMContext) -> N
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     if callback_query.data == "no":
-        await show_services_menu(callback_query, profile, state)
+        await show_my_workouts_menu(callback_query, profile, state)
         return
 
     service_type = data.get("service_type")

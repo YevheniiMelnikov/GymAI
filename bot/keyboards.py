@@ -21,7 +21,6 @@ def client_menu_kb(lang: str) -> KbMarkup:
     buttons = [
         [builder.add("my_profile", "my_profile")],
         [builder.add("my_program", "my_workouts")],
-        [builder.add("services", "services")],
         [builder.add("feedback", "feedback")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
@@ -78,16 +77,19 @@ def select_role_kb(lang: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons)
 
 
-def profile_menu_kb(lang: str) -> KbMarkup:
+def profile_menu_kb(lang: str, show_balance: bool = False) -> KbMarkup:
     builder = ButtonsBuilder(lang)
-    buttons = [
+    buttons: list[list[KbBtn]] = []
+    if show_balance:
+        buttons.append([builder.add("balance_status", "balance")])
+    buttons.extend(
         [
-            builder.add("edit", "profile_edit"),
-            builder.add("delete", "profile_delete"),
-        ],
-        [builder.add("prev_menu", "back")],
-    ]
-    return KbMarkup(inline_keyboard=buttons)
+            [builder.add("edit", "profile_edit")],
+            [builder.add("delete", "profile_delete")],
+            [builder.add("prev_menu", "back")],
+        ]
+    )
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
 def edit_client_profile_kb(lang: str) -> KbMarkup:
@@ -187,6 +189,8 @@ def select_service_kb(lang: str, has_coach: bool = False) -> KbMarkup:
     buttons = [
         [builder.add("subscription", "subscription")],
         [builder.add("program", "program")],
+        [builder.add("ai_coach", "ai_coach")],
+        [builder.add("choose_coach", "choose_coach")],
     ]
     if has_coach:
         buttons.append([builder.add("contact_coach", "contact")])
@@ -194,12 +198,31 @@ def select_service_kb(lang: str, has_coach: bool = False) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def services_menu_kb(lang: str) -> KbMarkup:
+def subscription_action_kb(lang: str, webapp_url: str | None = None) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons: list[list[KbBtn]] = []
+    if webapp_url:
+        buttons.append([builder.add("view", webapp_url=webapp_url)])
+    buttons.append([builder.add("new_workout_plan", "new_subscription")])
+    buttons.append([builder.add("prev_menu", "back")])
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
+def subscription_creation_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
-        [builder.add("ai_coach", "ai_coach")],
-        [builder.add("choose_coach", "choose_coach")],
-        [builder.add("balance_status", "balance")],
+        [builder.add("ai_coach", "subscription_ai")],
+        [builder.add("choose_coach", "subscription_human")],
+        [builder.add("prev_menu", "back")],
+    ]
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
+def program_creation_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [
+        [builder.add("ai_coach", "program_ai")],
+        [builder.add("choose_coach", "program_human")],
         [builder.add("prev_menu", "back")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
@@ -436,7 +459,7 @@ def program_action_kb(lang: str, webapp_url: str | None = None) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
         [builder.add("view", webapp_url=webapp_url)],
-        [builder.add("new_program", "new_program")],
+        [builder.add("new_workout_plan", "new_program")],
         [builder.add("prev_menu", "back")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)

@@ -145,10 +145,10 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bo
 
         await send_message(
             recipient=client,
-            text=msg_text("new_program", client_lang),
+            text=msg_text("new_workout_plan", client_lang),
             bot=bot,
             state=state,
-            reply_markup=program_view_kb(client_lang, get_webapp_url("program")),
+            reply_markup=program_view_kb(client_lang, get_webapp_url("program", client_lang)),
             include_incoming_message=False,
         )
 
@@ -290,7 +290,7 @@ async def manage_program(callback_query: CallbackQuery, profile: Profile, profil
     if workout_program and getattr(workout_program, "exercises_by_day", None):
         program_msg = await answer_msg(
             message,
-            msg_text("new_program", profile.language),
+            msg_text("new_workout_plan", profile.language),
             reply_markup=program_edit_kb(profile.language),
             disable_web_page_preview=True,
         )  # TODO: REPLACE WITH WEBAPP

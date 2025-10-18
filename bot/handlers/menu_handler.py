@@ -33,7 +33,6 @@ from bot.utils.menus import (
     show_my_profile_menu,
     show_subscription_history,
     clients_menu_pagination,
-    show_services_menu,
     show_balance_menu,
     show_ai_services,
 )
@@ -81,9 +80,6 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
     elif cb_data == "my_workouts":
         await show_my_workouts_menu(callback_query, profile, state)
 
-    elif cb_data == "services":
-        await show_services_menu(callback_query, profile, state)
-
 
 @menu_router.callback_query(States.choose_plan)
 async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
@@ -92,7 +88,7 @@ async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
     cb_data = callback_query.data or ""
 
     if cb_data == "back":
-        await show_services_menu(callback_query, profile, state)
+        await show_my_profile_menu(callback_query, profile, state)
         return
 
     if cb_data.startswith("plan_"):
@@ -102,59 +98,30 @@ async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
         if not pkg:
             await callback_query.answer()
             return
+
+        try:
+            client: Client = await Cache.client.get_client(profile.id)
+        except ClientNotFoundError:
+            await callback_query.answer(msg_text("questionnaire_not_completed", profile.language), show_alert=True)
+            await del_msg(callback_query)
+            return
+
         order_id = generate_order_id()
-        await APIService.payment.create_payment(profile.id, "credits", order_id, pkg.price)
+        await APIService.payment.create_payment(client.id, "credits", order_id, pkg.price)
         link = await APIService.payment.get_payment_link(
             "pay",
             pkg.price,
             order_id,
             "credits",
-            profile.id,
+            client.id,
         )
         await state.set_state(States.handle_payment)
         await answer_msg(
             callback_query,
-            msg_text("follow_link", profile.language),
+            msg_text("follow_link", profile.language).format(amount=format(pkg.price, "f")),
             reply_markup=payment_kb(profile.language, link, "credits"),
         )
     await del_msg(callback_query)
-
-
-@menu_router.callback_query(States.services_menu)
-async def services_menu(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
-    data = await state.get_data()
-    profile = Profile.model_validate(data.get("profile"))
-    cb_data = callback_query.data or ""
-
-    if cb_data == "back" and isinstance(callback_query.message, Message):
-        await show_main_menu(callback_query.message, profile, state)
-        return
-
-    if cb_data == "balance":
-        await show_balance_menu(callback_query, profile, state)
-        return
-
-    if cb_data == "ai_coach":
-        coach = await Cache.coach.get_ai_coach()
-        if not coach:
-            await callback_query.answer(msg_text("no_coaches", profile.language), show_alert=True)
-            return
-        client = await Cache.client.get_client(profile.id)
-        await state.update_data(ai_coach=coach.model_dump(mode="json"), client=client.model_dump())
-        await show_ai_services(callback_query, profile, state)
-        return
-
-    if cb_data == "choose_coach":
-        coaches = await Cache.coach.get_coaches()
-        if not coaches:
-            await callback_query.answer(msg_text("no_coaches", profile.language), show_alert=True)
-            return
-
-        await state.set_state(States.coach_selection)
-        await state.update_data(coaches=[coach.model_dump(mode="json") for coach in coaches])
-        message = cast(Message, callback_query.message)
-        await show_coaches_menu(message, coaches, bot)
-        return
 
 
 @menu_router.callback_query(States.choose_ai_service)
@@ -164,7 +131,7 @@ async def ai_service_choice(callback_query: CallbackQuery, state: FSMContext) ->
     cb_data = callback_query.data or ""
 
     if cb_data == "back":
-        await show_services_menu(callback_query, profile, state)
+        await show_my_workouts_menu(callback_query, profile, state)
         return
 
     if cb_data.startswith("ai_plan_"):
@@ -369,6 +336,8 @@ async def profile_menu(callback_query: CallbackQuery, state: FSMContext) -> None
 
     if cb_data == "profile_edit":
         await show_profile_editing_menu(message, profile, state)
+    elif cb_data == "balance":
+        await show_balance_menu(callback_query, profile, state)
     elif cb_data == "back":
         await show_main_menu(message, profile, state)
     else:

@@ -15,6 +15,8 @@ from bot.keyboards import (
     program_manage_kb,
     select_service_kb,
     workout_type_kb,
+    subscription_creation_kb,
+    program_creation_kb,
 )
 from bot.states import States
 from bot.texts.exercises import exercise_dict
@@ -35,6 +37,8 @@ from bot.utils.menus import (
     program_history_pagination,
     subscription_history_pagination,
     show_subscription_page,
+    show_coaches_menu,
+    show_ai_services,
 )
 from bot.utils.menus import has_human_coach_subscription
 from bot.utils.profiles import get_assigned_coach
@@ -45,14 +49,14 @@ from bot.utils.bot import del_msg, answer_msg, delete_messages
 from bot.utils.workout_plans import reset_workout_plan, save_workout_plan, next_day_workout_plan
 from core.schemas import DayExercises, Profile
 from bot.texts import msg_text, btn_text
-from core.exceptions import SubscriptionNotFoundError
+from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
 from core.services import get_gif_manager
 
 workout_router = Router()
 
 
 @workout_router.callback_query(States.select_service)
-async def select_service(callback_query: CallbackQuery, state: FSMContext):
+async def select_service(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     if callback_query.data == "subscription":
@@ -61,6 +65,39 @@ async def select_service(callback_query: CallbackQuery, state: FSMContext):
         await show_my_program_menu(callback_query, profile, state)
     elif callback_query.data == "contact":
         await contact_coach(callback_query, profile, state)
+    elif callback_query.data == "ai_coach":
+        coach = await Cache.coach.get_ai_coach()
+        if not coach:
+            await callback_query.answer(msg_text("no_coaches", profile.language), show_alert=True)
+            return
+        try:
+            client = await Cache.client.get_client(profile.id)
+        except ClientNotFoundError:
+            await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
+            await del_msg(callback_query)
+            return
+        await state.update_data(ai_coach=coach.model_dump(mode="json"), client=client.model_dump())
+        await show_ai_services(callback_query, profile, state)
+        return
+    elif callback_query.data == "choose_coach":
+        coaches = await Cache.coach.get_coaches()
+        if not coaches:
+            await callback_query.answer(msg_text("no_coaches", profile.language), show_alert=True)
+            return
+        try:
+            client = await Cache.client.get_client(profile.id)
+        except ClientNotFoundError:
+            client = None
+        if client and client.assigned_to:
+            human = await get_assigned_coach(client, coach_type=CoachType.human)
+            if human:
+                coaches = [c for c in coaches if c.profile != human.profile]
+        await state.set_state(States.coach_selection)
+        await state.update_data(coaches=[coach.model_dump(mode="json") for coach in coaches])
+        message = cast(Message, callback_query.message)
+        assert message is not None
+        await show_coaches_menu(message, coaches, bot)
+        return
     else:
         message = cast(Message, callback_query.message)
         assert message is not None
@@ -147,14 +184,158 @@ async def program_action_choice(callback_query: CallbackQuery, state: FSMContext
 
     elif cb_data == "new_program":
         await callback_query.answer()
+        language = cast(str, profile.language or "eng")
         await state.update_data(service_type="program")
-        await message.answer(
-            msg_text("workout_type", profile.language),
-            reply_markup=workout_type_kb(profile.language),
+        await state.set_state(States.program_creation_choice)
+        await answer_msg(
+            message,
+            msg_text("program_creation_prompt", language),
+            reply_markup=program_creation_kb(language),
         )
-        await state.set_state(States.workout_type)
 
     await del_msg(message)
+
+
+@workout_router.callback_query(States.program_creation_choice)
+async def program_creation_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    profile_data = data.get("profile")
+    if not profile_data:
+        return
+
+    profile = Profile.model_validate(profile_data)
+    message = callback_query.message
+    if message is None or not isinstance(message, Message):
+        return
+
+    cb_data = callback_query.data or ""
+    language = cast(str, profile.language or "eng")
+
+    if cb_data == "program_ai":
+        coach = await Cache.coach.get_ai_coach()
+        if not coach:
+            await callback_query.answer(msg_text("no_coaches", language), show_alert=True)
+            return
+        try:
+            client = await Cache.client.get_client(profile.id)
+        except ClientNotFoundError:
+            await callback_query.answer(msg_text("unexpected_error", language), show_alert=True)
+            await del_msg(callback_query)
+            return
+
+        await state.update_data(
+            ai_coach=coach.model_dump(mode="json"),
+            client=client.model_dump(),
+            service_type="program",
+        )
+        await show_ai_services(callback_query, profile, state, allowed_services=("program",))
+        return
+
+    if cb_data == "program_human":
+        await callback_query.answer()
+        await state.update_data(service_type="program")
+        await state.set_state(States.workout_type)
+        await answer_msg(
+            message,
+            msg_text("workout_type", language),
+            reply_markup=workout_type_kb(language),
+        )
+        await del_msg(message)
+        return
+
+    if cb_data == "back":
+        await callback_query.answer()
+        await show_my_program_menu(callback_query, profile, state)
+        return
+
+    await callback_query.answer()
+
+
+@workout_router.callback_query(States.subscription_action_choice)
+async def subscription_action_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    profile_data = data.get("profile")
+    if not profile_data:
+        return
+    profile = Profile.model_validate(profile_data)
+    message = callback_query.message
+    if message is None or not isinstance(message, Message):
+        return
+    cb_data = callback_query.data or ""
+    language = cast(str, profile.language or "eng")
+
+    if cb_data == "new_subscription":
+        await callback_query.answer()
+        await state.update_data(service_type="subscription")
+        await state.set_state(States.subscription_creation_choice)
+        await answer_msg(
+            message,
+            msg_text("subscription_creation_prompt", language),
+            reply_markup=subscription_creation_kb(language),
+        )
+        await del_msg(message)
+        return
+
+    if cb_data == "back":
+        await callback_query.answer()
+        await state.set_state(States.select_service)
+        has_coach: bool = await has_human_coach_subscription(profile.id)
+        await message.answer(
+            msg_text("select_service", language),
+            reply_markup=select_service_kb(language, has_coach),
+        )
+        await del_msg(message)
+
+
+@workout_router.callback_query(States.subscription_creation_choice)
+async def subscription_creation_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    profile_data = data.get("profile")
+    if not profile_data:
+        return
+
+    profile = Profile.model_validate(profile_data)
+    if callback_query.message is None or not isinstance(callback_query.message, Message):
+        return
+
+    cb_data = callback_query.data or ""
+    language = cast(str, profile.language or "eng")
+
+    if cb_data == "subscription_ai":
+        coach = await Cache.coach.get_ai_coach()
+        if not coach:
+            await callback_query.answer(msg_text("no_coaches", language), show_alert=True)
+            return
+        try:
+            client = await Cache.client.get_client(profile.id)
+        except ClientNotFoundError:
+            await callback_query.answer(msg_text("unexpected_error", language), show_alert=True)
+            await del_msg(callback_query)
+            return
+
+        await state.update_data(
+            ai_coach=coach.model_dump(mode="json"),
+            client=client.model_dump(),
+            service_type="subscription",
+        )
+        await show_ai_services(
+            callback_query,
+            profile,
+            state,
+            allowed_services=("subscription_1_month", "subscription_6_months"),
+        )
+        return
+
+    if cb_data == "subscription_human":
+        await show_my_subscription_menu(callback_query, profile, state, force_new=True)
+        return
+
+    if cb_data == "back":
+        await callback_query.answer()
+        await show_my_subscription_menu(callback_query, profile, state)
+        return
+
+    await callback_query.answer()
 
 
 @workout_router.message(States.program_manage)

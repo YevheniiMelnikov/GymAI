@@ -233,8 +233,8 @@ async def _process_ai_plan_ready(
             try:
                 await bot.send_message(
                     chat_id=profile.tg_id,
-                    text=msg_text("new_program", profile.language),
-                    reply_markup=program_view_kb(profile.language, get_webapp_url("program")),
+                    text=msg_text("new_workout_plan", profile.language),
+                    reply_markup=program_view_kb(profile.language, get_webapp_url("program", profile.language)),
                     disable_notification=True,
                 )
             except Exception as exc:  # noqa: BLE001
@@ -358,7 +358,7 @@ async def _process_ai_plan_ready(
             await bot.send_message(
                 chat_id=profile.tg_id,
                 text=msg_text("subscription_created", profile.language),
-                reply_markup=program_view_kb(profile.language, get_webapp_url("subscription")),
+                reply_markup=program_view_kb(profile.language, get_webapp_url("subscription", profile.language)),
                 disable_notification=True,
             )
         except Exception as exc:  # noqa: BLE001
