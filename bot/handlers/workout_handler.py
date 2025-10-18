@@ -1,9 +1,15 @@
+from base64 import b64encode
+from contextlib import suppress
+from pathlib import Path
 from typing import cast
+from uuid import uuid4
 
 from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
+from aiogram.types.input_file import FSInputFile
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.exceptions import TelegramBadRequest
 
 from loguru import logger
 
@@ -17,6 +23,7 @@ from bot.keyboards import (
     workout_type_kb,
     subscription_creation_kb,
     program_creation_kb,
+    ask_ai_prompt_kb,
 )
 from bot.states import States
 from bot.texts.exercises import exercise_dict
@@ -39,6 +46,7 @@ from bot.utils.menus import (
     show_subscription_page,
     show_coaches_menu,
     show_ai_services,
+    show_balance_menu,
 )
 from bot.utils.menus import has_human_coach_subscription
 from bot.utils.profiles import get_assigned_coach
@@ -47,10 +55,15 @@ from bot.utils.other import (
 )
 from bot.utils.bot import del_msg, answer_msg, delete_messages
 from bot.utils.workout_plans import reset_workout_plan, save_workout_plan, next_day_workout_plan
-from core.schemas import DayExercises, Profile
+from bot.utils.ai_coach import enqueue_ai_question
+from bot.utils.credits import available_ai_services
+from bot.utils.media import download_limited_file, get_ai_qa_image_limit
+from core.schemas import Client, DayExercises, Profile
 from bot.texts import msg_text, btn_text
 from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
+from config.app_settings import settings
 from core.services import get_gif_manager
+from core.ai_question_state import AiQuestionState
 
 workout_router = Router()
 
@@ -65,6 +78,57 @@ async def select_service(callback_query: CallbackQuery, state: FSMContext, bot: 
         await show_my_program_menu(callback_query, profile, state)
     elif callback_query.data == "contact":
         await contact_coach(callback_query, profile, state)
+    elif callback_query.data == "ask_ai":
+        try:
+            client = await Cache.client.get_client(profile.id)
+        except ClientNotFoundError:
+            await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
+            await del_msg(callback_query)
+            return
+        if client.status == ClientStatus.initial:
+            await callback_query.answer(msg_text("finish_registration_to_get_credits", profile.language), show_alert=True)
+            await del_msg(callback_query)
+            return
+
+        services = {service.name: service.credits for service in available_ai_services()}
+        cost = int(services.get("ask_ai", int(settings.ASK_AI_PRICE)))
+        if client.credits < cost:
+            await callback_query.answer(msg_text("not_enough_credits", profile.language), show_alert=True)
+            await show_balance_menu(callback_query, profile, state)
+            return
+
+        file_path = Path(__file__).resolve().parent.parent / "images" / "ai_coach.png"
+        keyboard = ask_ai_prompt_kb(profile.language)
+        await state.set_state(States.ask_ai_question)
+        prompt_text = msg_text("ask_ai_prompt", profile.language).format(cost=cost, balance=client.credits)
+        if file_path.exists():
+            prompt_message = await answer_msg(
+                callback_query,
+                caption=prompt_text,
+                photo=FSInputFile(file_path),
+                reply_markup=keyboard,
+            )
+        else:
+            logger.warning(
+                "event=ask_ai_prompt_image_missing path=%s client_id=%s",
+                file_path,
+                client.id,
+            )
+            prompt_message = await answer_msg(
+                callback_query,
+                prompt_text,
+                reply_markup=keyboard,
+            )
+        update_payload: dict[str, object] = {
+            "client": client.model_dump(),
+            "ask_ai_cost": cost,
+        }
+        if prompt_message is not None:
+            update_payload["ask_ai_prompt_id"] = prompt_message.message_id
+            update_payload["ask_ai_prompt_chat_id"] = prompt_message.chat.id
+        await state.update_data(**update_payload)
+        await del_msg(callback_query)
+        return
     elif callback_query.data == "ai_coach":
         coach = await Cache.coach.get_ai_coach()
         if not coach:
@@ -103,6 +167,159 @@ async def select_service(callback_query: CallbackQuery, state: FSMContext, bot: 
         assert message is not None
         await show_main_menu(message, profile, state)
         await del_msg(cast(Message | CallbackQuery | None, callback_query))
+
+
+@workout_router.callback_query(States.ask_ai_question)
+async def ask_ai_question_navigation(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+    data = await state.get_data()
+    profile_data = data.get("profile")
+    if not profile_data:
+        await callback_query.answer()
+        await del_msg(callback_query)
+        return
+    profile = Profile.model_validate(profile_data)
+    if callback_query.data != "ask_ai_back":
+        await callback_query.answer()
+        return
+
+    await callback_query.answer()
+    await state.update_data(ask_ai_prompt_id=None, ask_ai_prompt_chat_id=None, ask_ai_cost=None)
+    await del_msg(callback_query)
+    has_coach = await has_human_coach_subscription(profile.id)
+    await state.set_state(States.select_service)
+    await answer_msg(
+        callback_query,
+        msg_text("select_service", profile.language),
+        reply_markup=select_service_kb(profile.language, has_coach),
+    )
+
+
+@workout_router.message(States.ask_ai_question)
+async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot) -> None:
+    data = await state.get_data()
+    profile_data = data.get("profile")
+    if not profile_data:
+        await answer_msg(message, msg_text("unexpected_error", settings.DEFAULT_LANG))
+        await del_msg(message)
+        return
+
+    profile = Profile.model_validate(profile_data)
+    lang = profile.language or settings.DEFAULT_LANG
+
+    ask_ai_prompt_id = data.get("ask_ai_prompt_id")
+    ask_ai_prompt_chat_id = data.get("ask_ai_prompt_chat_id")
+    if ask_ai_prompt_id:
+        chat_id = int(ask_ai_prompt_chat_id or message.chat.id)
+        with suppress(TelegramBadRequest):
+            await bot.delete_message(chat_id, int(ask_ai_prompt_id))
+        await state.update_data(ask_ai_prompt_id=None, ask_ai_prompt_chat_id=None)
+
+    client_data = data.get("client")
+    if client_data is None:
+        try:
+            client = await Cache.client.get_client(profile.id)
+        except ClientNotFoundError:
+            await answer_msg(message, msg_text("unexpected_error", lang))
+            await del_msg(message)
+            return
+        await state.update_data(client=client.model_dump())
+    else:
+        client = Client.model_validate(client_data)
+
+    question_text = (message.text or message.caption or "").strip()
+    if not question_text:
+        await answer_msg(message, msg_text("invalid_content", lang))
+        await del_msg(message)
+        return
+
+    services = {service.name: service.credits for service in available_ai_services()}
+    default_cost = int(settings.ASK_AI_PRICE)
+    cost = int(data.get("ask_ai_cost") or services.get("ask_ai", default_cost))
+
+    if client.credits < cost:
+        await answer_msg(message, msg_text("not_enough_credits", lang))
+        await del_msg(message)
+        return
+
+    image_base64: str | None = None
+    image_mime: str | None = None
+    limit_bytes = get_ai_qa_image_limit()
+    limit_kb = max(1, limit_bytes // 1024)
+
+    if message.photo:
+        photo = message.photo[-1]
+        file_bytes, size_hint = await download_limited_file(bot, photo.file_id)
+        if file_bytes is None:
+            if size_hint and size_hint > limit_bytes:
+                await answer_msg(message, msg_text("ask_ai_image_too_large", lang).format(limit=limit_kb))
+            else:
+                await answer_msg(message, msg_text("unexpected_error", lang))
+            await del_msg(message)
+            return
+        image_base64 = b64encode(file_bytes).decode("ascii")
+        image_mime = "image/jpeg"
+    elif message.document and message.document.mime_type and message.document.mime_type.startswith("image/"):
+        document = message.document
+        file_bytes, size_hint = await download_limited_file(bot, document.file_id)
+        if file_bytes is None:
+            if size_hint and size_hint > limit_bytes:
+                await answer_msg(message, msg_text("ask_ai_image_too_large", lang).format(limit=limit_kb))
+            else:
+                await answer_msg(message, msg_text("unexpected_error", lang))
+            await del_msg(message)
+            return
+        image_base64 = b64encode(file_bytes).decode("ascii")
+        image_mime = document.mime_type
+
+    request_id = uuid4().hex
+    logger.info(f"event=ask_ai_enqueue request_id={request_id} client_id={client.id} profile_id={profile.id}")
+    queued = await enqueue_ai_question(
+        client=client,
+        profile=profile,
+        prompt=question_text,
+        language=profile.language,
+        request_id=request_id,
+        image_base64=image_base64,
+        image_mime=image_mime,
+    )
+
+    if not queued:
+        logger.error(f"event=ask_ai_enqueue_failed request_id={request_id} client_id={client.id}")
+        await answer_msg(
+            message,
+            msg_text("coach_agent_error", lang).format(tg=settings.TG_SUPPORT_CONTACT),
+        )
+        return
+
+    charge_state = AiQuestionState.create()
+    charged = await charge_state.mark_charged(request_id)
+    if charged:
+        await APIService.profile.adjust_client_credits(profile.id, -cost)
+        new_balance = client.credits - cost
+        await Cache.client.update_client(client.profile, {"credits": new_balance})
+        client = client.model_copy(update={"credits": new_balance})
+        logger.info(
+            f"event=ask_ai_charged request_id={request_id} client_id={client.id} cost={cost} balance={new_balance}"
+        )
+    else:
+        logger.warning(f"event=ask_ai_charge_skipped request_id={request_id} client_id={client.id}")
+
+    await state.update_data(
+        client=client.model_dump(),
+        last_request_id=request_id,
+        ask_ai_cost=cost,
+        ask_ai_prompt_id=None,
+        ask_ai_prompt_chat_id=None,
+    )
+
+    await answer_msg(message, msg_text("ask_ai_processing", lang))
+    has_coach = await has_human_coach_subscription(profile.id)
+    await state.set_state(States.select_service)
+    await answer_msg(
+        message,
+        msg_text("select_service", profile.language),
+        reply_markup=select_service_kb(profile.language, has_coach),
+    )
 
 
 @workout_router.message(States.workouts_number)

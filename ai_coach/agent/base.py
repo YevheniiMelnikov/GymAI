@@ -2,7 +2,8 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 from time import monotonic
 
-from core.schemas import Program, QAResponse, Subscription
+from core.schemas import Program, Subscription
+from core.schemas.qa import QAResponse
 from core.enums import WorkoutType
 from ai_coach.types import CoachMode
 from config.app_settings import settings

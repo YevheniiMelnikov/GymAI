@@ -12,7 +12,8 @@ from pydantic import ValidationError
 from ai_coach.schemas import AICoachRequest
 from ai_coach.types import CoachMode
 from core.exceptions import UserServiceError
-from core.schemas import Program, Subscription, QAResponse
+from core.schemas import Program, Subscription
+from core.schemas.qa import QAResponse
 from core.ai_coach_fallback import fallback_plan
 from .api_client import APIClient, APIClientHTTPError, APIClientTransportError
 from ...enums import WorkoutPlanType, WorkoutType
@@ -36,6 +37,7 @@ class AiCoachService(APIClient):
         client_id: int,
         language: str | Enum | None = None,
         request_id: str | None = None,
+        attachments: list[dict[str, str]] | None = None,
     ) -> QAResponse | None:
         payload = AICoachRequest(
             prompt=prompt,
@@ -43,6 +45,7 @@ class AiCoachService(APIClient):
             language=language.value if isinstance(language, Enum) else language,
             mode=CoachMode.ask_ai,
             request_id=request_id,
+            attachments=attachments,
         )
         data = await self._post_ask(payload, request_id=request_id)
         if data is None:
@@ -57,6 +60,7 @@ class AiCoachService(APIClient):
         language: str | Enum | None = None,
         request_id: str | None = None,
         use_agent_header: bool = False,
+        attachments: list[dict[str, str]] | None = None,
     ) -> QAResponse | None:
         payload = AICoachRequest(
             prompt=prompt,
@@ -64,6 +68,7 @@ class AiCoachService(APIClient):
             language=language.value if isinstance(language, Enum) else language,
             mode=CoachMode.ask_ai,
             request_id=request_id,
+            attachments=attachments,
         )
         headers = {"X-Agent": "pydanticai"} if use_agent_header else None
         data = await self._post_ask(payload, request_id=request_id, extra_headers=headers)

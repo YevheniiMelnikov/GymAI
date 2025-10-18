@@ -13,7 +13,8 @@ from loguru import logger  # pyrefly: ignore[import-error]
 
 from config.app_settings import settings
 from core.enums import WorkoutType
-from core.schemas import Program, QAResponse, Subscription
+from core.schemas import Program, Subscription
+from core.schemas.qa import QAResponse
 from core.enums import CoachType
 
 from .base import AgentDeps

@@ -8,7 +8,8 @@ import pytest
 import ai_coach.agent.knowledge.knowledge_base as knowledge_base_module
 from ai_coach.agent.coach import CoachAgent
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
-from core.schemas import Client, QAResponse
+from core.schemas import Client
+from core.schemas.qa import QAResponse
 
 
 def test_dataset_name_is_uuid() -> None:

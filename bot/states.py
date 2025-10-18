@@ -66,6 +66,7 @@ class States(StatesGroup):
     gift = State()
     select_service = State()
     choose_plan = State()
+    ask_ai_question = State()
     choose_ai_service = State()
     ai_workout_days = State()
     confirm_service = State()

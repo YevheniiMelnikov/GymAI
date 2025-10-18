@@ -189,12 +189,19 @@ def select_service_kb(lang: str, has_coach: bool = False) -> KbMarkup:
     buttons = [
         [builder.add("subscription", "subscription")],
         [builder.add("program", "program")],
+        [builder.add("ask_ai", "ask_ai")],
         [builder.add("ai_coach", "ai_coach")],
-        [builder.add("choose_coach", "choose_coach")],
     ]
+    buttons.append([builder.add("choose_coach", "choose_coach")])
     if has_coach:
         buttons.append([builder.add("contact_coach", "contact")])
     buttons.append([builder.add("prev_menu", "back")])
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
+def ask_ai_prompt_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [[builder.add("ask_ai_back", "ask_ai_back")]]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 

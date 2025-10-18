@@ -182,7 +182,11 @@ class Settings(BaseSettings):
     AI_PROGRAM_PRICE: Decimal = Decimal("350")
     REGULAR_AI_SUBSCRIPTION_PRICE: Decimal = Decimal("450")
     LARGE_AI_SUBSCRIPTION_PRICE: Decimal = Decimal("2000")
-    ASK_AI_PRICE: Decimal = Decimal("10")
+    ASK_AI_PRICE: Annotated[int, Field(default=10)]
+    AI_QA_IMAGE_MAX_BYTES: Annotated[int, Field(default=512_000)]
+    AI_QA_DEDUP_TTL: Annotated[int, Field(default=1800)]
+    AI_QA_MAX_RETRIES: Annotated[int, Field(default=5)]
+    AI_QA_RETRY_BACKOFF_S: Annotated[int, Field(default=30)]
 
     model_config = {
         "env_file": ".env",

@@ -183,7 +183,3 @@ class Payment(BaseModel):
         except Exception:
             return 0.0
 
-
-class QAResponse(BaseModel):
-    answer: str
-    sources: list[str] = []
