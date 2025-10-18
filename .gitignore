@@ -171,3 +171,4 @@ staticfiles/
 apps/webapp/static/js/
 /docker/nginx.conf.template
 /docker/nginx.local.conf.template
+diff*
