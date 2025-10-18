@@ -202,6 +202,7 @@ async function bootstrap(): Promise<void> {
     dateEl.hidden = true;
     dateEl.textContent = '';
     content.innerHTML = '';
+    content.removeAttribute('aria-busy');
     await renderSubscriptions(content);
     if (historyButton) {
       historyButton.textContent = t('program.view_history');
