@@ -1,6 +1,6 @@
 MODE: ask_ai
 1) Call tool_search_knowledge(query) (use top-6 results).
 2) Optionally call tool_get_program_history() if relevant.
-3) Synthesize a concise answer (≤6 sentences).
-4) Return QAResponse(answer).
+3) Synthesize a concise answer (≤6 sentences) that references the retrieved knowledge.
+4) Return QAResponse(answer=<final answer>, sources=<list of document titles or dataset identifiers used>).
 5) Never call saving tools.

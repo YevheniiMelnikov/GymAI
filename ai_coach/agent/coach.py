@@ -287,11 +287,13 @@ class CoachAgent:
                 message_history=history,
             )
         except UnexpectedModelBehavior as exc:
-            if deps.knowledge_base_empty:
-                logger.info(f"agent.ask knowledge_base_empty client_id={deps.client_id} detail={exc}")
-                raise AgentExecutionAborted(
-                    "AI coach knowledge base returned no data",
-                    reason="knowledge_base_empty",
-                ) from exc
-            raise
+            reason = "knowledge_base_empty" if deps.knowledge_base_empty else "model_empty_response"
+            detail = str(exc)
+            logger.info(f"agent.ask aborted client_id={deps.client_id} reason={reason} detail={detail}")
+            message = (
+                "AI coach knowledge base returned no data"
+                if reason == "knowledge_base_empty"
+                else "AI coach returned an empty model response"
+            )
+            raise AgentExecutionAborted(message, reason=reason) from exc
         return cls._normalize_output(raw_result, QAResponse)

@@ -25,7 +25,6 @@ from ai_coach.agent import (
 from ai_coach.schemas import AICoachRequest, ProgramPayload, SubscriptionPayload
 from ai_coach.types import CoachMode
 from ai_coach.application import app
-from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from core.enums import CoachType
 from ai_coach.exceptions import AgentExecutionAborted
 from pydantic_ai.exceptions import UnexpectedModelBehavior
@@ -117,6 +116,28 @@ def test_answer_question(monkeypatch: pytest.MonkeyPatch) -> None:
     asyncio.run(runner())
 
 
+def test_answer_question_model_empty_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        class DummyAgent:
+            async def run(
+                self,
+                prompt: str,
+                deps: AgentDeps,
+                output_type: type[QAResponse] | None = None,
+                model_settings: ModelSettings | None = None,
+                message_history: list | None = None,
+            ) -> QAResponse:
+                raise UnexpectedModelBehavior("Received empty model response")
+
+        monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: DummyAgent()))
+        deps = AgentDeps(client_id=1, locale="en", allow_save=False)
+        with pytest.raises(AgentExecutionAborted) as exc_info:
+            await CoachAgent.answer_question("question", deps)
+        assert exc_info.value.reason == "model_empty_response"
+
+    asyncio.run(runner())
+
+
 def test_answer_question_knowledge_base_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
         class DummyAgent:
@@ -139,24 +160,15 @@ def test_answer_question_knowledge_base_empty(monkeypatch: pytest.MonkeyPatch) -
     asyncio.run(runner())
 
 
-def test_ask_ai_legacy(monkeypatch) -> None:
-    async def fake_search(prompt: str, client_id: int) -> list[str]:
-        return ["legacy"]
-
-    async def noop(*args, **kwargs) -> None:
-        return None
-
+def test_ask_ai_runtime_error(monkeypatch) -> None:
     async def boom(prompt: str, deps: AgentDeps) -> QAResponse:
         raise RuntimeError("boom")
 
     monkeypatch.setattr(CoachAgent, "answer_question", staticmethod(boom))
-    monkeypatch.setattr(KnowledgeBase, "search", staticmethod(fake_search))
-    monkeypatch.setattr(KnowledgeBase, "save_client_message", staticmethod(noop))
-    monkeypatch.setattr(KnowledgeBase, "save_ai_message", staticmethod(noop))
 
     from fastapi.testclient import TestClient
 
     with TestClient(app) as client:
         resp = client.post("/ask/", json={"client_id": 1, "prompt": "hi", "mode": "ask_ai"})
-    assert resp.status_code == 200
-    assert resp.json() == ["legacy"]
+    assert resp.status_code == 503
+    assert resp.json()["detail"] == "Service unavailable"

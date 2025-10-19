@@ -42,6 +42,25 @@ def test_ask_ai_tool_error(monkeypatch: pytest.MonkeyPatch) -> None:
     asyncio.run(runner())
 
 
+def test_ask_ai_model_empty_response(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        async def fake_answer(prompt: str, deps: object) -> QAResponse:
+            raise AgentExecutionAborted("empty", reason="model_empty_response")
+
+        monkeypatch.setattr(CoachAgent, "answer_question", staticmethod(fake_answer))
+        async with AsyncClient(app=app, base_url="http://test") as ac:
+            resp = await ac.post(
+                "/ask/",
+                json={"client_id": 1, "prompt": "hello", "mode": "ask_ai"},
+                headers={"X-Agent": "pydanticai"},
+            )
+        assert resp.status_code == 408
+        payload = resp.json()
+        assert payload["reason"] == "model_empty_response"
+
+    asyncio.run(runner())
+
+
 def test_ask_ai_knowledge_base_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
         async def fake_answer(prompt: str, deps: object) -> QAResponse:

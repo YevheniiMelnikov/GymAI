@@ -206,6 +206,7 @@ async def ask(
             "max_tool_calls_exceeded": "tool budget exceeded",
             "timeout": "request timed out",
             "knowledge_base_empty": "knowledge base returned no data",
+            "model_empty_response": "model returned empty response",
         }
         detail_reason = reason_map.get(exc.reason, exc.reason)
         logger.info(
@@ -235,16 +236,6 @@ async def ask(
         raise HTTPException(status_code=422, detail="Invalid response") from e
     except Exception as e:  # pragma: no cover - log unexpected errors
         logger.exception(f"/ask agent failed: {e}")
-        if mode == CoachMode.ask_ai:
-            try:
-                responses = await KnowledgeBase.search(data.prompt or "", client_id=data.client_id)
-                logger.debug(
-                    f"/ask completed request_id={data.request_id} client_id={data.client_id} responses={responses}"
-                )
-                return responses
-            except Exception as inner_exc:  # pragma: no cover - log unexpected errors
-                logger.exception(f"/ask fallback failed: {inner_exc}")
-                raise HTTPException(status_code=503, detail="Service unavailable") from inner_exc
         raise HTTPException(status_code=503, detail="Service unavailable") from e
 
 
