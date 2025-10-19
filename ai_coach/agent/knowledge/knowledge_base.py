@@ -5,7 +5,7 @@ from dataclasses import asdict, is_dataclass
 from hashlib import sha256
 from types import SimpleNamespace
 from typing import Any, Awaitable, Callable, Iterable, Sequence, cast
-from uuid import NAMESPACE_DNS, UUID, uuid5
+from uuid import UUID
 
 from loguru import logger
 
@@ -57,9 +57,11 @@ class KnowledgeBase:
     _has_datasets_module: bool | None = None
     _warned_missing_user: bool = False
 
-    GLOBAL_DATASET: str = os.environ.get("COGNEE_GLOBAL_DATASET", "external_docs")
-    _CLIENT_DATASET_NAMESPACE: UUID | None = None
-    _CLIENT_ALIAS_PREFIX: str = "client_"
+    GLOBAL_DATASET: str = os.environ.get("COGNEE_GLOBAL_DATASET", "kb_global")
+    _CLIENT_ALIAS_PREFIX: str = "kb_client_"
+    _LEGACY_CLIENT_PREFIX: str = "client_"
+    _PROJECTION_CHECK_QUERY: str = "__knowledge_projection_health__"
+    _PROJECTION_BACKOFF_SECONDS: tuple[float, ...] = (0.5, 1.0, 2.0, 4.0)
 
     @classmethod
     async def initialize(cls, knowledge_loader: KnowledgeLoader | None = None) -> None:
@@ -154,7 +156,23 @@ class KnowledgeBase:
         user = await cls._get_cognee_user()
         await cls._ensure_profile_indexed(client_id, user)
         datasets = [cls._dataset_name(client_id), cls.GLOBAL_DATASET]
-        resolved_datasets = [cls._resolve_dataset_alias(d) for d in datasets]
+        resolved_datasets: list[str] = []
+        for alias in datasets:
+            resolved = cls._resolve_dataset_alias(alias)
+            try:
+                await cls._ensure_dataset_exists(resolved, user)
+            except Exception as ensure_exc:
+                logger.debug(
+                    f"knowledge_dataset_ensure_failed client_id={client_id} dataset={resolved} detail={ensure_exc}"
+                )
+            resolved_datasets.append(resolved)
+
+        query_hash = sha256(normalized.encode()).hexdigest()[:12]
+        datasets_hint = ",".join(resolved_datasets)
+        logger.debug(
+            f"knowledge_search_start client_id={client_id} query_hash={query_hash}"
+            f" datasets={datasets_hint} top_k={k if k is not None else 'default'}"
+        )
 
         async def _search(targets: list[str]) -> list[str]:
             params: dict[str, Any] = {
@@ -166,7 +184,9 @@ class KnowledgeBase:
             return await cognee.search(normalized, **params)
 
         try:
-            return await _search(resolved_datasets)
+            results = await _search(resolved_datasets)
+            logger.debug(f"knowledge_search_ok client_id={client_id} query_hash={query_hash} results={len(results)}")
+            return results
         except (PermissionDeniedError, DatasetNotFoundError) as exc:
             logger.warning(f"Search issue client_id={client_id}: {exc}")
             return []
@@ -190,7 +210,12 @@ class KnowledgeBase:
                     fallback_dataset = cls._resolve_dataset_alias(cls.GLOBAL_DATASET)
                     await cls._warm_up_datasets([fallback_dataset], user)
                     try:
-                        return await _search([fallback_dataset])
+                        results = await _search([fallback_dataset])
+                        logger.debug(
+                            f"knowledge_search_ok client_id={client_id} query_hash={query_hash}"
+                            f" results={len(results)} fallback=global"
+                        )
+                        return results
                     except Exception as final_exc:
                         if cls._is_graph_missing_error(final_exc):
                             fallback_entries = await cls._fallback_dataset_entries(
@@ -307,14 +332,24 @@ class KnowledgeBase:
     @classmethod
     def _resolve_dataset_alias(cls, name: str) -> str:
         """Map dataset alias to the canonical dataset identifier."""
-        if name.startswith(cls._CLIENT_ALIAS_PREFIX):
-            suffix = name[len(cls._CLIENT_ALIAS_PREFIX) :]
+        normalized = name.strip()
+        if not normalized:
+            return name
+        if normalized.startswith(cls._CLIENT_ALIAS_PREFIX):
+            suffix = normalized[len(cls._CLIENT_ALIAS_PREFIX) :]
             try:
                 client_id = int(suffix)
             except ValueError:
-                return name
+                return normalized
             return cls._dataset_name(client_id)
-        return name
+        if normalized.startswith(cls._LEGACY_CLIENT_PREFIX):
+            suffix = normalized[len(cls._LEGACY_CLIENT_PREFIX) :]
+            try:
+                client_id = int(suffix)
+            except ValueError:
+                return normalized
+            return cls._dataset_name(client_id)
+        return normalized
 
     @classmethod
     async def _ensure_dataset_exists(cls, name: str, user: Any | None) -> None:
@@ -336,23 +371,8 @@ class KnowledgeBase:
 
     @classmethod
     def _dataset_name(cls, client_id: int) -> str:
-        """Generate deterministic dataset identifier for a client profile."""
-        namespace = cls._client_namespace()
-        return str(uuid5(namespace, f"client-profile:{client_id}"))
-
-    @classmethod
-    def _client_namespace(cls) -> UUID:
-        if cls._CLIENT_DATASET_NAMESPACE is None:
-            raw = getattr(settings, "COGNEE_CLIENT_DATASET_NAMESPACE", None)
-            if not raw:
-                seed = getattr(settings, "SECRET_KEY", "") or getattr(settings, "SITE_NAME", "") or "gymbot"
-                base_namespace = uuid5(NAMESPACE_DNS, "gymbot.cognee")
-                raw = str(uuid5(base_namespace, seed))
-            try:
-                cls._CLIENT_DATASET_NAMESPACE = UUID(str(raw))
-            except ValueError as exc:  # pragma: no cover - configuration error
-                raise RuntimeError("Invalid COGNEE_CLIENT_DATASET_NAMESPACE value") from exc
-        return cls._CLIENT_DATASET_NAMESPACE
+        """Generate canonical dataset alias for a client profile."""
+        return f"{cls._CLIENT_ALIAS_PREFIX}{client_id}"
 
     @classmethod
     def _describe_list_data(cls, list_data: Callable[..., Awaitable[Iterable[Any]]]) -> tuple[bool | None, bool | None]:
@@ -463,7 +483,7 @@ class KnowledgeBase:
         lock = cls._cognify_locks.get(dataset)
         async with lock:
             ds = cls._resolve_dataset_alias(dataset)
-            await cognee.cognify(datasets=[ds], user=cls._to_user_or_none(user))  # pyrefly: ignore[bad-argument-type]
+            await cls._project_dataset(ds, user)
 
     @staticmethod
     def _log_task_exception(task: asyncio.Task[Any]) -> None:
@@ -503,6 +523,47 @@ class KnowledgeBase:
                 await cls._process_dataset(dataset, user)
             except Exception as exc:  # noqa: BLE001 - logging context is sufficient here
                 logger.warning(f"knowledge_dataset_warmup_failed dataset={dataset} detail={exc}")
+
+    @classmethod
+    async def _project_dataset(cls, dataset: str, user: Any | None) -> None:
+        """Run cognify and wait for the dataset projection to become available."""
+        user_ns = cls._to_user_or_none(user)
+        try:
+            await cognee.cognify(datasets=[dataset], user=user_ns)  # pyrefly: ignore[bad-argument-type]
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"knowledge_dataset_cognify_failed dataset={dataset} detail={exc}")
+            raise
+
+        if not cls._PROJECTION_BACKOFF_SECONDS:
+            return
+
+        for delay in cls._PROJECTION_BACKOFF_SECONDS:
+            if await cls._is_projection_ready(dataset, user_ns):
+                logger.debug(f"knowledge_dataset_projected dataset={dataset}")
+                return
+            await asyncio.sleep(delay)
+
+        if await cls._is_projection_ready(dataset, user_ns):
+            logger.debug(f"knowledge_dataset_projected dataset={dataset} after_timeout=True")
+            return
+        logger.warning(f"knowledge_dataset_projection_timeout dataset={dataset}")
+
+    @classmethod
+    async def _is_projection_ready(cls, dataset: str, user_ns: Any | None) -> bool:
+        """Return True if the dataset projection looks ready for querying."""
+        try:
+            await cognee.search(
+                cls._PROJECTION_CHECK_QUERY,
+                datasets=[dataset],
+                user=user_ns,
+                top_k=1,
+            )
+        except Exception as exc:  # noqa: BLE001
+            if cls._is_graph_missing_error(exc):
+                return False
+            logger.debug(f"knowledge_projection_probe_error dataset={dataset} detail={exc}")
+            return True
+        return True
 
     @classmethod
     async def _fallback_dataset_entries(
@@ -556,3 +617,70 @@ class KnowledgeBase:
             if text:
                 texts.append(str(text))
         return texts
+
+    @classmethod
+    async def debug_snapshot(cls, client_id: int | None = None) -> dict[str, Any]:
+        """Return diagnostic information about configured datasets."""
+        user = await cls._get_cognee_user()
+        aliases: list[str] = []
+        if client_id is not None:
+            aliases.append(cls._dataset_name(client_id))
+        aliases.append(cls.GLOBAL_DATASET)
+        seen: set[str] = set()
+        datasets_info: list[dict[str, Any]] = []
+        for alias in aliases:
+            if alias in seen:
+                continue
+            seen.add(alias)
+            info = await cls._build_dataset_snapshot(alias, user)
+            datasets_info.append(info)
+        return {"datasets": datasets_info}
+
+    @classmethod
+    async def _build_dataset_snapshot(cls, alias: str, user: Any | None) -> dict[str, Any]:
+        resolved = cls._resolve_dataset_alias(alias)
+        user_ns = cls._to_user_or_none(user)
+        info: dict[str, Any] = {
+            "alias": alias,
+            "resolved": resolved,
+            "id": resolved,
+            "documents": None,
+            "projected": None,
+            "last_error": None,
+        }
+        metadata = await cls._get_dataset_metadata(resolved, user)
+        if metadata is not None:
+            identifier = getattr(metadata, "id", None) or getattr(metadata, "dataset_id", None)
+            if identifier:
+                info["id"] = str(identifier)
+            updated_at = getattr(metadata, "updated_at", None) or getattr(metadata, "updatedAt", None)
+            if updated_at is not None:
+                info["updated_at"] = str(updated_at)
+        try:
+            entries = await cls._list_dataset_entries(resolved, user)
+        except Exception as exc:  # noqa: BLE001
+            info["last_error"] = str(exc)
+            entries = []
+        if entries:
+            info["documents"] = len(entries)
+        else:
+            info["documents"] = 0
+        try:
+            info["projected"] = await cls._is_projection_ready(resolved, user_ns)
+        except Exception as exc:  # noqa: BLE001
+            info["last_error"] = str(exc)
+        return info
+
+    @classmethod
+    async def _get_dataset_metadata(cls, dataset: str, user: Any | None) -> Any | None:
+        try:  # pragma: no cover - optional dependency
+            from cognee.modules.data.methods import get_authorized_dataset_by_name  # type: ignore
+        except Exception:
+            return None
+        try:
+            return await get_authorized_dataset_by_name(
+                dataset, cls._to_user_or_none(user), "read"
+            )  # pyrefly: ignore[bad-argument-type]
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"knowledge_dataset_metadata_failed dataset={dataset} detail={exc}")
+            return None

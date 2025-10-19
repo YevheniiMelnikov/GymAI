@@ -90,6 +90,16 @@ async def internal_ping() -> dict[str, bool]:
     return {"ok": True}
 
 
+@app.get("/internal/debug/knowledge")
+async def debug_knowledge(
+    client_id: int | None = None,
+    credentials: HTTPBasicCredentials = Depends(security),
+) -> dict[str, Any]:
+    _validate_refresh_credentials(credentials)
+    snapshot = await KnowledgeBase.debug_snapshot(client_id=client_id)
+    return snapshot
+
+
 @app.post("/ask/", response_model=Program | Subscription | QAResponse | list[str] | None)
 async def ask(
     data: AICoachRequest, request: Request
