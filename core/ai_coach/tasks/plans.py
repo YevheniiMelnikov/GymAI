@@ -1,7 +1,5 @@
 """AI coach Celery tasks and helpers."""
 
-from __future__ import annotations
-
 import asyncio
 from typing import Any
 
@@ -421,8 +419,6 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> d
 
     logger.info(f"ai_update_plan completed client_id={client_id} plan_type={plan_type.value} request_id={request_id}")
     return notify_payload
-
-
 
 
 @app.task(

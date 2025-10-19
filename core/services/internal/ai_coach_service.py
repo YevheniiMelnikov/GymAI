@@ -13,8 +13,8 @@ from ai_coach.schemas import AICoachRequest
 from ai_coach.types import CoachMode
 from core.exceptions import UserServiceError
 from core.schemas import Program, Subscription
-from core.schemas.qa import QAResponse
-from core.ai_coach_fallback import fallback_plan
+from core.schemas import QAResponse
+from core.ai_coach.fallback import fallback_plan
 from .api_client import APIClient, APIClientHTTPError, APIClientTransportError
 from ...enums import WorkoutPlanType, WorkoutType
 

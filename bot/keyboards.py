@@ -201,7 +201,7 @@ def select_service_kb(lang: str, has_coach: bool = False) -> KbMarkup:
 
 def ask_ai_prompt_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
-    buttons = [[builder.add("ask_ai_back", "ask_ai_back")]]
+    buttons = [[builder.add("prev_menu", "ask_ai_back")]]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 

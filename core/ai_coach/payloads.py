@@ -1,7 +1,5 @@
 """Validated payloads for AI coach Celery tasks."""
 
-from __future__ import annotations
-
 from pydantic import BaseModel, Field, field_validator
 
 from core.enums import WorkoutPlanType, WorkoutType

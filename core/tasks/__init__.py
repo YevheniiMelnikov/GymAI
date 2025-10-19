@@ -1,8 +1,6 @@
 """Celery task package for GymBot core domain."""
 
-from __future__ import annotations
-
-from core.tasks.ai_coach_plans import (
+from core.ai_coach.tasks.plans import (
     ai_coach_echo,
     ai_coach_worker_report,
     generate_ai_workout_plan,
@@ -11,7 +9,7 @@ from core.tasks.ai_coach_plans import (
     refresh_external_knowledge,
     update_ai_workout_plan,
 )
-from core.tasks.ai_coach_qa import (
+from core.ai_coach.tasks.qa import (
     ask_ai_question,
     handle_ai_question_failure,
     notify_ai_answer_ready_task,

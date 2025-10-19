@@ -16,7 +16,9 @@ def get_ai_qa_image_limit() -> int:
     return int(settings.AI_QA_IMAGE_MAX_BYTES)
 
 
-async def download_limited_file(bot: Bot, file_id: str, *, max_bytes: int | None = None) -> Tuple[bytes | None, int | None]:
+async def download_limited_file(
+    bot: Bot, file_id: str, *, max_bytes: int | None = None
+) -> Tuple[bytes | None, int | None]:
     """Download a Telegram file if it fits within the configured byte limit."""
 
     limit = max_bytes or get_ai_qa_image_limit()

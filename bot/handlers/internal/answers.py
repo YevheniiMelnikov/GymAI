@@ -16,7 +16,7 @@ from bot.handlers.internal.schemas import AiAnswerNotify
 from bot.states import States
 from bot.texts.text_manager import msg_text
 from config.app_settings import settings
-from core.ai_question_state import AiQuestionState
+from core.ai_coach import AiQuestionState
 from core.exceptions import ClientNotFoundError
 from core.services import APIService
 from core.schemas import Profile
@@ -43,11 +43,7 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
 
     state_tracker = AiQuestionState.create()
     if not await state_tracker.claim_delivery(payload.request_id):
-        logger.debug(
-            "event=ask_ai_answer_duplicate request_id=%s client_id=%s",
-            payload.request_id,
-            payload.client_id,
-        )
+        logger.debug(f"event=ask_ai_answer_duplicate request_id={payload.request_id} client_id={payload.client_id}")
         return web.json_response({"result": "ignored"}, status=202)
 
     try:
@@ -57,20 +53,14 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
     except ClientNotFoundError:
         await state_tracker.mark_failed(payload.request_id, "client_not_found")
         logger.error(
-            "event=ask_ai_answer_client_missing request_id=%s client_id=%s",
-            payload.request_id,
-            payload.client_id,
+            f"event=ask_ai_answer_client_missing request_id={payload.request_id} client_id={payload.client_id}"
         )
         return web.json_response({"detail": "client_not_found"}, status=404)
 
     profile: Profile | None = await APIService.profile.get_profile(profile_id)
     if profile is None:
         await state_tracker.mark_failed(payload.request_id, "profile_not_found")
-        logger.error(
-            "event=ask_ai_answer_profile_missing request_id=%s profile_id=%s",
-            payload.request_id,
-            profile_id,
-        )
+        logger.error(f"event=ask_ai_answer_profile_missing request_id={payload.request_id} profile_id={profile_id}")
         return web.json_response({"detail": "profile_not_found"}, status=404)
 
     bot: Bot = request.app["bot"]
@@ -101,47 +91,30 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
     if payload.status != "success":
         reason = payload.error or "unknown_error"
         await state_tracker.mark_failed(request_id, reason)
-        error_message = msg_text("ask_ai_error", language).format(tg=settings.TG_SUPPORT_CONTACT)
+        error_message = msg_text("coach_agent_error", language).format(tg=settings.TG_SUPPORT_CONTACT)
         try:
             await bot.send_message(chat_id=profile.tg_id, text=error_message)
         except Exception as exc:  # noqa: BLE001
             logger.error(
-                "event=ask_ai_error_message_failed request_id=%s profile_id=%s error=%s",
-                request_id,
-                profile.id,
-                exc,
+                f"event=ask_ai_error_message_failed request_id={request_id} profile_id={profile.id} error={exc!s}"
             )
         return web.json_response({"result": "error"}, status=202)
 
     answer_text = (payload.answer or "").strip()
     if not answer_text:
         await state_tracker.mark_failed(request_id, "empty_answer")
-        logger.error(
-            "event=ask_ai_answer_empty request_id=%s client_id=%s",
-            request_id,
-            payload.client_id,
-        )
-        fallback = msg_text("ask_ai_error", language).format(tg=settings.TG_SUPPORT_CONTACT)
+        logger.error(f"event=ask_ai_answer_empty request_id={request_id} client_id={payload.client_id}")
+        fallback = msg_text("coach_agent_error", language).format(tg=settings.TG_SUPPORT_CONTACT)
         try:
             await bot.send_message(chat_id=profile.tg_id, text=fallback)
         except Exception as exc:  # noqa: BLE001
             logger.error(
-                "event=ask_ai_empty_error_message_failed request_id=%s profile_id=%s error=%s",
-                request_id,
-                profile.id,
-                exc,
+                f"event=ask_ai_empty_error_message_failed request_id={request_id} profile_id={profile.id} error={exc!s}"
             )
         return web.json_response({"detail": "empty_answer"}, status=400)
 
     escaped_answer = html.escape(answer_text)
-    sections: list[str] = [msg_text("ask_ai_answer", language).format(answer=escaped_answer)]
-
-    sources = [source.strip() for source in payload.sources if source.strip()]
-    if sources:
-        bullet_list = "\n".join(f"• {html.escape(src)}" for src in sources)
-        sections.append(msg_text("ask_ai_sources", language).format(sources=bullet_list))
-
-    message_text = "\n\n".join(sections)
+    message_text = msg_text("ask_ai_answer", language).format(answer=escaped_answer)
 
     try:
         for chunk in _chunk_message(message_text):
@@ -153,19 +126,11 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
             )
     except Exception as exc:  # noqa: BLE001
         await state_tracker.mark_failed(request_id, f"send_failed:{exc!s}")
-        logger.error(
-            "event=ask_ai_answer_send_failed request_id=%s profile_id=%s error=%s",
-            request_id,
-            profile.id,
-            exc,
-        )
+        logger.error(f"event=ask_ai_answer_send_failed request_id={request_id} profile_id={profile.id} error={exc!s}")
         return web.json_response({"detail": "send_failed"}, status=500)
 
     await state_tracker.mark_delivered(request_id)
     logger.info(
-        "event=ask_ai_answer_delivered request_id=%s client_id=%s profile_id=%s",
-        request_id,
-        payload.client_id,
-        profile.id,
+        f"event=ask_ai_answer_delivered request_id={request_id} client_id={payload.client_id} profile_id={profile.id}"
     )
     return web.json_response({"result": "ok"})

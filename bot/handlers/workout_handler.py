@@ -1,4 +1,3 @@
-from base64 import b64encode
 from contextlib import suppress
 from pathlib import Path
 from typing import cast
@@ -57,13 +56,13 @@ from bot.utils.bot import del_msg, answer_msg, delete_messages
 from bot.utils.workout_plans import reset_workout_plan, save_workout_plan, next_day_workout_plan
 from bot.utils.ai_coach import enqueue_ai_question
 from bot.utils.credits import available_ai_services
-from bot.utils.media import download_limited_file, get_ai_qa_image_limit
-from core.schemas import Client, DayExercises, Profile
+from bot.utils.ask_ai import AskAiPreparationError, prepare_ask_ai_request
+from core.schemas import DayExercises, Profile
 from bot.texts import msg_text, btn_text
 from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
 from config.app_settings import settings
 from core.services import get_gif_manager
-from core.ai_question_state import AiQuestionState
+from core.ai_coach import AiQuestionState
 
 workout_router = Router()
 
@@ -86,7 +85,9 @@ async def select_service(callback_query: CallbackQuery, state: FSMContext, bot: 
             await del_msg(callback_query)
             return
         if client.status == ClientStatus.initial:
-            await callback_query.answer(msg_text("finish_registration_to_get_credits", profile.language), show_alert=True)
+            await callback_query.answer(
+                msg_text("finish_registration_to_get_credits", profile.language), show_alert=True
+            )
             await del_msg(callback_query)
             return
 
@@ -109,11 +110,7 @@ async def select_service(callback_query: CallbackQuery, state: FSMContext, bot: 
                 reply_markup=keyboard,
             )
         else:
-            logger.warning(
-                "event=ask_ai_prompt_image_missing path=%s client_id=%s",
-                file_path,
-                client.id,
-            )
+            logger.warning(f"event=ask_ai_prompt_image_missing path={file_path} client_id={client.id}")
             prompt_message = await answer_msg(
                 callback_query,
                 prompt_text,
@@ -214,62 +211,29 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
             await bot.delete_message(chat_id, int(ask_ai_prompt_id))
         await state.update_data(ask_ai_prompt_id=None, ask_ai_prompt_chat_id=None)
 
-    client_data = data.get("client")
-    if client_data is None:
-        try:
-            client = await Cache.client.get_client(profile.id)
-        except ClientNotFoundError:
-            await answer_msg(message, msg_text("unexpected_error", lang))
+    try:
+        preparation = await prepare_ask_ai_request(
+            message=message,
+            profile=profile,
+            state_data=data,
+            bot=bot,
+        )
+    except AskAiPreparationError as error:
+        response = msg_text(error.message_key, lang)
+        if error.params:
+            response = response.format(**error.params)
+        await answer_msg(message, response)
+        if error.delete_message:
             await del_msg(message)
-            return
-        await state.update_data(client=client.model_dump())
-    else:
-        client = Client.model_validate(client_data)
-
-    question_text = (message.text or message.caption or "").strip()
-    if not question_text:
-        await answer_msg(message, msg_text("invalid_content", lang))
-        await del_msg(message)
         return
 
-    services = {service.name: service.credits for service in available_ai_services()}
-    default_cost = int(settings.ASK_AI_PRICE)
-    cost = int(data.get("ask_ai_cost") or services.get("ask_ai", default_cost))
+    client = preparation.client
+    question_text = preparation.prompt
+    cost = preparation.cost
+    image_base64 = preparation.image_base64
+    image_mime = preparation.image_mime
 
-    if client.credits < cost:
-        await answer_msg(message, msg_text("not_enough_credits", lang))
-        await del_msg(message)
-        return
-
-    image_base64: str | None = None
-    image_mime: str | None = None
-    limit_bytes = get_ai_qa_image_limit()
-    limit_kb = max(1, limit_bytes // 1024)
-
-    if message.photo:
-        photo = message.photo[-1]
-        file_bytes, size_hint = await download_limited_file(bot, photo.file_id)
-        if file_bytes is None:
-            if size_hint and size_hint > limit_bytes:
-                await answer_msg(message, msg_text("ask_ai_image_too_large", lang).format(limit=limit_kb))
-            else:
-                await answer_msg(message, msg_text("unexpected_error", lang))
-            await del_msg(message)
-            return
-        image_base64 = b64encode(file_bytes).decode("ascii")
-        image_mime = "image/jpeg"
-    elif message.document and message.document.mime_type and message.document.mime_type.startswith("image/"):
-        document = message.document
-        file_bytes, size_hint = await download_limited_file(bot, document.file_id)
-        if file_bytes is None:
-            if size_hint and size_hint > limit_bytes:
-                await answer_msg(message, msg_text("ask_ai_image_too_large", lang).format(limit=limit_kb))
-            else:
-                await answer_msg(message, msg_text("unexpected_error", lang))
-            await del_msg(message)
-            return
-        image_base64 = b64encode(file_bytes).decode("ascii")
-        image_mime = document.mime_type
+    await state.update_data(client=client.model_dump())
 
     request_id = uuid4().hex
     logger.info(f"event=ask_ai_enqueue request_id={request_id} client_id={client.id} profile_id={profile.id}")
@@ -312,7 +276,7 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
         ask_ai_prompt_chat_id=None,
     )
 
-    await answer_msg(message, msg_text("ask_ai_processing", lang))
+    await answer_msg(message, msg_text("request_in_progress", lang))
     has_coach = await has_human_coach_subscription(profile.id)
     await state.set_state(States.select_service)
     await answer_msg(

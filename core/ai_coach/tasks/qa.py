@@ -1,7 +1,5 @@
 """Celery tasks for Ask AI question flow."""
 
-from __future__ import annotations
-
 import asyncio
 from typing import Any
 
@@ -10,10 +8,10 @@ from celery import Task
 from loguru import logger
 
 from config.app_settings import settings
-from core.ai_question_state import AiQuestionState
+from core.ai_coach import AiQuestionState
 from core.celery_app import app
 from core.internal_http import build_internal_auth_headers, internal_request_timeout
-from core.schemas.qa import QAResponse
+from core.schemas import QAResponse
 from core.services import APIService
 from core.services.internal.api_client import APIClientHTTPError, APIClientTransportError
 
@@ -33,7 +31,7 @@ async def _claim_answer_request(request_id: str, *, attempt: int) -> bool:
     if not request_id or attempt > 0:
         return True
     state = AiQuestionState.create()
-    claimed = await state.claim_delivery(request_id, ttl_s=settings.AI_QA_DEDUP_TTL)
+    claimed = await state.claim_task(request_id, ttl_s=settings.AI_QA_DEDUP_TTL)
     if not claimed:
         logger.debug(f"event=ask_ai_request_duplicate request_id={request_id}")
     return claimed
@@ -64,9 +62,7 @@ async def _notify_ai_answer_ready(payload: dict[str, Any]) -> None:
             response.raise_for_status()
     except httpx.HTTPStatusError as exc:
         status_code = exc.response.status_code if exc.response is not None else None
-        logger.error(
-            f"event=ask_ai_notify_http_error request_id={request_id} status={status} code={status_code}"
-        )
+        logger.error(f"event=ask_ai_notify_http_error request_id={request_id} status={status} code={status_code}")
         raise
     except httpx.TransportError as exc:
         logger.error(f"event=ask_ai_notify_transport_error request_id={request_id} error={exc}")
@@ -151,11 +147,10 @@ async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str
     try:
         client_profile_id = int(client_profile_id_raw) if client_profile_id_raw is not None else 0
     except (TypeError, ValueError):
+        request_hint = payload.get("request_id", "")
         logger.warning(
-            "event=ask_ai_invalid_profile client_id=%s raw=%r request_id=%s",
-            client_id,
-            client_profile_id_raw,
-            payload.get("request_id", ""),
+            f"event=ask_ai_invalid_profile client_id={client_id} "
+            f"raw={client_profile_id_raw!r} request_id={request_hint}"
         )
         client_profile_id = 0
 
@@ -181,7 +176,10 @@ async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str
         return None
 
     logger.info(
-        f"event=ask_ai_started client_id={client_id} request_id={request_id} attempt={attempt} attachments={len(attachments)}"
+        (
+            f"event=ask_ai_started client_id={client_id} request_id={request_id} "
+            f"attempt={attempt} attachments={len(attachments)}"
+        )
     )
 
     try:
@@ -207,9 +205,7 @@ async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str
             return None
         raise
     except Exception as exc:  # noqa: BLE001
-        logger.error(
-            f"event=ask_ai_failed client_id={client_id} request_id={request_id} attempt={attempt} error={exc}"
-        )
+        logger.error(f"event=ask_ai_failed client_id={client_id} request_id={request_id} attempt={attempt} error={exc}")
         if attempt >= getattr(task, "max_retries", 0):
             await _notify_ai_answer_error(
                 client_id=client_id,

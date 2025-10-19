@@ -1,12 +1,17 @@
 from celery import chain
-from pydantic import ValidationError
 from loguru import logger
+from pydantic import ValidationError
 
 from core.cache import Cache
 from core.enums import WorkoutPlanType, WorkoutType
 from core.schemas import Client, DayExercises, Program, Subscription, Profile
 from core.services.internal import APIService
-from core.ai_coach_payloads import AiAttachmentPayload, AiPlanGenerationPayload, AiPlanUpdatePayload, AiQuestionPayload
+from core.ai_coach import (
+    AiAttachmentPayload,
+    AiPlanGenerationPayload,
+    AiPlanUpdatePayload,
+    AiQuestionPayload,
+)
 
 
 async def generate_workout_plan(
@@ -162,6 +167,76 @@ async def enqueue_workout_plan_generation(
     return True
 
 
+def _build_ai_question_payload(
+    *,
+    client_id: int,
+    client_profile_id: int,
+    language: str,
+    prompt: str,
+    request_id: str,
+    image_base64: str | None,
+    image_mime: str | None,
+) -> AiQuestionPayload | None:
+    attachments: list[AiAttachmentPayload] = []
+    if image_base64 and image_mime:
+        attachments.append(AiAttachmentPayload(mime=image_mime, data_base64=image_base64))
+
+    try:
+        return AiQuestionPayload(
+            client_id=client_id,
+            client_profile_id=client_profile_id,
+            language=language,
+            prompt=prompt,
+            attachments=attachments,
+            request_id=request_id,
+        )
+    except ValidationError as exc:
+        logger.error(f"event=ask_ai_invalid_payload request_id={request_id} client_id={client_id} error={exc!s}")
+        return None
+
+
+def _dispatch_ai_question_task(
+    *,
+    payload_model: AiQuestionPayload,
+    request_id: str,
+    client_id: int,
+    client_profile_id: int,
+) -> str | None:
+    try:
+        from core.tasks.ai_coach import (  # Local import to avoid circular dependency
+            ask_ai_question,
+            handle_ai_question_failure,
+            notify_ai_answer_ready_task,
+        )
+    except Exception as exc:  # pragma: no cover - import failure
+        logger.error(f"event=ask_ai_task_import_failed request_id={request_id} error={exc!s}")
+        return None
+
+    payload = payload_model.model_dump(mode="json")
+    headers = {
+        "request_id": request_id,
+        "client_id": client_id,
+        "action": "ask_ai",
+    }
+    options = {"queue": "ai_coach", "routing_key": "ai_coach", "headers": headers}
+
+    ask_sig = ask_ai_question.s(payload).set(**options)
+    notify_sig = notify_ai_answer_ready_task.s().set(queue="ai_coach", routing_key="ai_coach", headers=headers)
+    failure_sig = handle_ai_question_failure.s(payload).set(queue="ai_coach", routing_key="ai_coach")
+
+    try:
+        async_result = chain(ask_sig, notify_sig).apply_async(link_error=[failure_sig])
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"event=ask_ai_dispatch_failed request_id={request_id} client_id={client_id} error={exc!s}")
+        return None
+
+    logger.info(
+        f"event=ask_ai_enqueued request_id={request_id} task_id={async_result.id} "
+        f"client_id={client_id} profile_id={client_profile_id}"
+    )
+    return async_result.id
+
+
 async def enqueue_ai_question(
     *,
     client: Client,
@@ -174,77 +249,31 @@ async def enqueue_ai_question(
 ) -> bool:
     client_profile_id = int(getattr(client, "profile", profile.id))
     if client_profile_id <= 0:
+        profile_hint = getattr(profile, "id", None)
         logger.error(
-            "event=ask_ai_invalid_profile request_id=%s client_id=%s profile_hint=%s",
-            request_id,
-            client.id,
-            getattr(profile, "id", None),
+            f"event=ask_ai_invalid_profile request_id={request_id} client_id={client.id} profile_hint={profile_hint}"
         )
         return False
 
-    attachments: list[AiAttachmentPayload] = []
-    if image_base64 and image_mime:
-        attachments.append(AiAttachmentPayload(mime=image_mime, data_base64=image_base64))
-
-    try:
-        payload_model = AiQuestionPayload(
-            client_id=client.id,
-            client_profile_id=client_profile_id,
-            language=language,
-            prompt=prompt,
-            attachments=attachments,
-            request_id=request_id,
-        )
-    except ValidationError as exc:
-        logger.error(
-            "event=ask_ai_invalid_payload request_id=%s client_id=%s error=%s",
-            request_id,
-            client.id,
-            exc,
-        )
-        return False
-
-    try:
-        from core.tasks.ai_coach import (
-            ask_ai_question,
-            handle_ai_question_failure,
-            notify_ai_answer_ready_task,
-        )
-    except Exception as exc:  # pragma: no cover - import failure
-        logger.error(f"event=ask_ai_task_import_failed request_id={request_id} error={exc}")
-        return False
-
-    payload = payload_model.model_dump(mode="json")
-    headers = {
-        "request_id": request_id,
-        "client_id": client.id,
-        "action": "ask_ai",
-    }
-    options = {"queue": "ai_coach", "routing_key": "ai_coach", "headers": headers}
-
-    ask_sig = ask_ai_question.s(payload).set(**options)
-    notify_sig = notify_ai_answer_ready_task.s().set(queue="ai_coach", routing_key="ai_coach", headers=headers)
-    failure_sig = handle_ai_question_failure.s(payload).set(queue="ai_coach", routing_key="ai_coach")
-
-    try:
-        async_result = chain(ask_sig, notify_sig).apply_async(link_error=[failure_sig])
-    except Exception as exc:  # noqa: BLE001
-        logger.error(
-            "event=ask_ai_dispatch_failed request_id=%s client_id=%s error=%s",
-            request_id,
-            client.id,
-            exc,
-        )
-        return False
-
-    logger.info(
-        "event=ask_ai_enqueued request_id=%s task_id=%s client_id=%s profile_id=%s",
-        request_id,
-        async_result.id,
-        client.id,
-        client_profile_id,
+    payload_model = _build_ai_question_payload(
+        client_id=client.id,
+        client_profile_id=client_profile_id,
+        language=language,
+        prompt=prompt,
+        request_id=request_id,
+        image_base64=image_base64,
+        image_mime=image_mime,
     )
-    return True
+    if payload_model is None:
+        return False
+
+    task_id = _dispatch_ai_question_task(
+        payload_model=payload_model,
+        request_id=request_id,
+        client_id=client.id,
+        client_profile_id=client_profile_id,
+    )
+    return task_id is not None
 
 
 async def enqueue_workout_plan_update(

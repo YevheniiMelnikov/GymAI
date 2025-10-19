@@ -12,11 +12,11 @@ from core.services import APIService
 from ai_coach.application import app, security
 from ai_coach.schemas import AICoachRequest
 from ai_coach.types import AskCtx, CoachMode
-from core.ai_coach_fallback import FALLBACK_WORKOUT_DAYS, fallback_plan
+from core.ai_coach.fallback import FALLBACK_WORKOUT_DAYS, fallback_plan
 from core.enums import WorkoutPlanType, SubscriptionPeriod, WorkoutType
 from config.app_settings import settings
 from core.schemas import Client, Profile, Program, Subscription
-from core.schemas.qa import QAResponse
+from core.schemas import QAResponse
 
 CoachAction = Callable[[AskCtx], Awaitable[Program | Subscription | QAResponse | list[str] | None]]
 
