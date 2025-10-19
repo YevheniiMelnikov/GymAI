@@ -105,7 +105,7 @@ def test_answer_question(monkeypatch: pytest.MonkeyPatch) -> None:
                 assert "MODE: ask_ai" in prompt
                 assert output_type is QAResponse
                 assert model_settings is not None
-                return QAResponse(answer="answer", sources=["s"])
+                return QAResponse(answer="answer")
 
         monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: DummyAgent()))
         deps = AgentDeps(client_id=1, locale="en", allow_save=False)

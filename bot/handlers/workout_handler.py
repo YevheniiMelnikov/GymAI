@@ -56,10 +56,10 @@ from bot.utils.bot import del_msg, answer_msg, delete_messages
 from bot.utils.workout_plans import reset_workout_plan, save_workout_plan, next_day_workout_plan
 from bot.utils.ai_coach import enqueue_ai_question
 from bot.utils.credits import available_ai_services
-from bot.utils.ask_ai import AskAiPreparationError, prepare_ask_ai_request
+from bot.utils.ask_ai import prepare_ask_ai_request
 from core.schemas import DayExercises, Profile
 from bot.texts import msg_text, btn_text
-from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
+from core.exceptions import AskAiPreparationError, ClientNotFoundError, SubscriptionNotFoundError
 from config.app_settings import settings
 from core.services import get_gif_manager
 from core.ai_coach import AiQuestionState

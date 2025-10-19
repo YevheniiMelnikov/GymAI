@@ -25,14 +25,14 @@ def test_resolve_dataset_alias_supports_legacy_prefix() -> None:
 
 
 def test_normalize_output_handles_agent_result() -> None:
-    qa = QAResponse(answer="ok", sources=["doc"])
+    qa = QAResponse(answer="ok")
     wrapped = SimpleNamespace(output=qa)
     result = CoachAgent._normalize_output(wrapped, QAResponse)
     assert result is qa
 
 
 def test_normalize_output_builds_model_from_mapping() -> None:
-    data = {"answer": "text", "sources": ["ref"]}
+    data = {"answer": "text"}
     result = CoachAgent._normalize_output(data, QAResponse)
     assert isinstance(result, QAResponse)
     assert result.answer == "text"

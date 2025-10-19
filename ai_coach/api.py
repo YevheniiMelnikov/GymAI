@@ -160,11 +160,10 @@ async def ask(
 
         if mode == CoachMode.ask_ai:
             answer = getattr(result, "answer", None)
-            sources = getattr(result, "sources", []) or []
             logger.debug(
                 f"/ask agent completed request_id={data.request_id}"
                 f" client_id={data.client_id} mode=ask_ai"
-                f" answer_len={len(answer) if isinstance(answer, str) else 0} sources={len(sources)}"
+                f" answer_len={len(answer) if isinstance(answer, str) else 0}"
                 f" steps_used={deps.tool_calls} kb_empty={deps.knowledge_base_empty}"
             )
             if isinstance(answer, str):

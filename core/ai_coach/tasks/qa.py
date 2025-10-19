@@ -226,14 +226,24 @@ async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str
         return None
 
     qa_response = response if isinstance(response, QAResponse) else QAResponse.model_validate(response)
+    sources = list(qa_response.sources)
+    if sources:
+        logger.info(
+            "event=ask_ai_sources request_id={} client_id={} count={} sources={}",
+            request_id,
+            client_id,
+            len(sources),
+            " | ".join(sources),
+        )
     notify_payload: dict[str, Any] = {
         "client_id": client_id,
         "client_profile_id": client_profile_id,
         "status": "success",
         "request_id": request_id,
         "answer": qa_response.answer,
-        "sources": qa_response.sources,
     }
+    if sources:
+        notify_payload["sources"] = sources
 
     logger.info(f"event=ask_ai_completed client_id={client_id} request_id={request_id}")
     return notify_payload

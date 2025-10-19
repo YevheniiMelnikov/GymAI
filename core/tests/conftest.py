@@ -595,7 +595,7 @@ class AsyncClient:
                         return types.SimpleNamespace(
                             status_code=200,
                             headers={},
-                            json=lambda: {"answer": result.answer, "sources": result.sources},
+                            json=lambda: {"answer": result.answer},
                             text="",
                             is_success=True,
                         )

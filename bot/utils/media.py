@@ -1,9 +1,6 @@
 """Helpers for working with Telegram media within bot flows."""
 
-from __future__ import annotations
-
 import io
-from typing import Tuple
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
@@ -18,7 +15,7 @@ def get_ai_qa_image_limit() -> int:
 
 async def download_limited_file(
     bot: Bot, file_id: str, *, max_bytes: int | None = None
-) -> Tuple[bytes | None, int | None]:
+) -> tuple[bytes | None, int | None]:
     """Download a Telegram file if it fits within the configured byte limit."""
 
     limit = max_bytes or get_ai_qa_image_limit()
@@ -31,7 +28,7 @@ async def download_limited_file(
     size_hint = getattr(file, "file_size", None)
     if size_hint and size_hint > limit:
         logger.info(
-            "event=ask_ai_attachment_rejected reason=size_hint file_id=%s size=%s limit=%s",
+            "event=ask_ai_attachment_rejected reason=size_hint file_id={} size={} limit={}",
             file_id,
             size_hint,
             limit,
@@ -48,7 +45,7 @@ async def download_limited_file(
     data = buffer.getvalue()
     if len(data) > limit:
         logger.info(
-            "event=ask_ai_attachment_rejected reason=download_size file_id=%s size=%s limit=%s",
+            "event=ask_ai_attachment_rejected reason=download_size file_id={} size={} limit={}",
             file_id,
             len(data),
             limit,
