@@ -30,7 +30,12 @@ if TYPE_CHECKING:
 _IMAGES_DIR = Path(__file__).resolve().parent.parent / "images"
 
 
-async def update_profile_data(message: TgMessage, state: FSMContext, role: str, bot: Bot) -> None:
+async def update_profile_data(
+    message: "TgMessage",
+    state: "FSMContext",
+    role: str,
+    bot: "Bot",
+) -> None:
     data = await state.get_data()
     await delete_messages(state)
 
@@ -178,7 +183,7 @@ async def fetch_user(profile: Profile) -> Client | Coach:
 
 
 async def answer_profile(
-    cbq: TgCallbackQuery,
+    cbq: "TgCallbackQuery",
     profile: Profile,
     user: Coach | Client,
     text: str,
