@@ -1,3 +1,6 @@
+from typing import Any
+
+
 class UserServiceError(Exception):
     def __init__(self, message: str, code: int = 500, details: str = ""):
         self.message = message
@@ -7,6 +10,14 @@ class UserServiceError(Exception):
 
     def __str__(self):
         return f"Error {self.code}: {self.message} - {self.details}"
+
+
+class AskAiPreparationError(Exception):
+    def __init__(self, message_key: str, *, params: dict[str, Any] | None = None, delete_message: bool = True) -> None:
+        super().__init__(message_key)
+        self.message_key = message_key
+        self.params = params or {}
+        self.delete_message = delete_message
 
 
 class ProfileNotFoundError(Exception):

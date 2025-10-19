@@ -1,8 +1,7 @@
 """Utilities for preparing Ask AI requests from user messages."""
 
-from dataclasses import dataclass
-from typing import Any
 from base64 import b64encode
+from typing import Any
 
 from aiogram import Bot
 from aiogram.types import Message
@@ -11,25 +10,9 @@ from bot.utils.credits import available_ai_services
 from bot.utils.media import download_limited_file, get_ai_qa_image_limit
 from config.app_settings import settings
 from core.cache import Cache
-from core.exceptions import ClientNotFoundError
+from core.ai_coach.models import AskAiPreparationResult
+from core.exceptions import AskAiPreparationError, ClientNotFoundError
 from core.schemas import Client, Profile
-
-
-@dataclass(slots=True)
-class AskAiPreparationResult:
-    client: Client
-    prompt: str
-    cost: int
-    image_base64: str | None
-    image_mime: str | None
-
-
-class AskAiPreparationError(Exception):
-    def __init__(self, message_key: str, *, params: dict[str, Any] | None = None, delete_message: bool = True) -> None:
-        super().__init__(message_key)
-        self.message_key = message_key
-        self.params = params or {}
-        self.delete_message = delete_message
 
 
 async def prepare_ask_ai_request(

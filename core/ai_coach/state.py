@@ -113,13 +113,3 @@ class AiQuestionState:
             await self.client.delete(*keys)
         except RedisError as exc:
             logger.warning(f"ai_question_clear_failed request_id={request_id} error={exc!s}")
-
-
-__all__ = [
-    "AI_QUESTION_CHARGED_KEY",
-    "AI_QUESTION_CLAIM_KEY",
-    "AI_QUESTION_DELIVERED_KEY",
-    "AI_QUESTION_FAILED_KEY",
-    "AI_QUESTION_TASK_CLAIM_KEY",
-    "AiQuestionState",
-]

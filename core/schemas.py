@@ -186,18 +186,3 @@ class Payment(BaseModel):
 class QAResponse(BaseModel):
     answer: str
     sources: list[str] = Field(default_factory=list)
-
-
-__all__ = [
-    "Client",
-    "Coach",
-    "DayExercises",
-    "Exercise",
-    "Payment",
-    "Profile",
-    "Program",
-    "QAResponse",
-    "Subscription",
-    "Price",
-    "NonNegativePrice",
-]

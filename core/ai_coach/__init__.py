@@ -1,6 +1,7 @@
 """AI coach domain utilities."""
 
 from .fallback import FALLBACK_WORKOUT_DAYS, fallback_plan
+from .models import AskAiPreparationResult
 from .payloads import (
     AiAttachmentPayload,
     AiPlanBasePayload,
@@ -18,6 +19,7 @@ from .state import (
 )
 
 __all__ = [
+    "AskAiPreparationResult",
     "AiAttachmentPayload",
     "AiPlanBasePayload",
     "AiPlanGenerationPayload",
