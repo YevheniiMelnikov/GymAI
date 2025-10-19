@@ -1,3 +1,4 @@
+import html
 from typing import Any, cast
 
 from aiogram import Bot
@@ -27,36 +28,26 @@ async def send_message(
     state: FSMContext | None = None,
     reply_markup=None,
     include_incoming_message: bool = True,
-    photo: str | InputFile | None = None,
-    video=None,
+    photo: str | InputFile | FSInputFile | None = None,
+    video: str | InputFile | FSInputFile | None = None,
     avatar_url: str | FSInputFile | None = None,
 ) -> None:
-    # AI COACH FLOW
-    if isinstance(recipient, Coach) and recipient.coach_type == CoachType.ai_coach:
-        sender_id: int | None = None
-        if state:
-            data = await state.get_data()
-            profile_data = data.get("profile")
-            if isinstance(profile_data, dict) and "id" in profile_data:
-                sender_id = int(profile_data["id"])
-            lang = data.get("lang")
-        else:
-            lang = None
-        _: Client | None = None
-        if sender_id is not None:
-            try:
-                _ = await Cache.client.get_client(sender_id)
-            except Exception:
-                pass
-        if lang is None and sender_id is not None:
-            try:
-                profile = await Cache.profile.get_profile(sender_id)
-                lang = profile.language
-            except Exception:
-                lang = settings.DEFAULT_LANG
+    def _resolve_media(
+        media: str | InputFile | FSInputFile | None,
+    ) -> str | InputFile | FSInputFile | None:
+        if media is None:
+            return None
+        return getattr(media, "file_id", media)
+
+    def _escape_html(value: str) -> str:
+        return html.escape(value, quote=False)
+
+    if isinstance(recipient, Coach) and recipient.coach_type != CoachType.human:
+        from loguru import logger
+
+        logger.error("send_message received non-human coach id %s", recipient.id)
         return
 
-    # REGULAR COACH FLOW
     if state:
         data = await state.get_data()
         language = cast(str, data.get("recipient_language", settings.DEFAULT_LANG))
@@ -72,32 +63,33 @@ async def send_message(
         logger.error(f"Profile not found for recipient id {recipient.id} in send_message")
         return
 
-    formatted_text = (
-        msg_text("incoming_message", language).format(name=sender_name, message=text)
-        if include_incoming_message
-        else text
-    )
+    if include_incoming_message:
+        try:
+            template = msg_text("incoming_message", language)
+        except Exception:
+            template = "<b>{name}</b>:\n{message}"
+        formatted_text = template.format(
+            name=_escape_html(sender_name),
+            message=_escape_html(text),
+        )
+    else:
+        formatted_text = _escape_html(text)
 
-    if video:
+    media_video = _resolve_media(video)
+    media_photo = _resolve_media(photo) or _resolve_media(avatar_url)
+
+    if media_video is not None:
         await bot.send_video(
             chat_id=recipient_profile.tg_id,
-            video=video.file_id,
+            video=media_video,
             caption=formatted_text,
             reply_markup=reply_markup,
             parse_mode=ParseMode.HTML,
         )
-    elif photo:
+    elif media_photo is not None:
         await bot.send_photo(
             chat_id=recipient_profile.tg_id,
-            photo=getattr(photo, "file_id", photo),
-            caption=formatted_text,
-            reply_markup=reply_markup,
-            parse_mode=ParseMode.HTML,
-        )
-    elif avatar_url:
-        await bot.send_photo(
-            chat_id=recipient_profile.tg_id,
-            photo=avatar_url,
+            photo=media_photo,
             caption=formatted_text,
             reply_markup=reply_markup,
             parse_mode=ParseMode.HTML,
