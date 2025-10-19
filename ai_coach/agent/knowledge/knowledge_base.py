@@ -4,7 +4,7 @@ import os
 from dataclasses import asdict, is_dataclass
 from hashlib import sha256
 from types import SimpleNamespace
-from typing import Any, Awaitable, Callable, Iterable, cast
+from typing import Any, Awaitable, Callable, Iterable, Sequence, cast
 from uuid import NAMESPACE_DNS, UUID, uuid5
 
 from loguru import logger
@@ -192,7 +192,21 @@ class KnowledgeBase:
                     try:
                         return await _search([fallback_dataset])
                     except Exception as final_exc:
-                        logger.error(f"knowledge_search_retry_failed client_id={client_id} detail={final_exc}")
+                        if cls._is_graph_missing_error(final_exc):
+                            fallback_entries = await cls._fallback_dataset_entries(
+                                resolved_datasets,
+                                user,
+                                top_k=k,
+                            )
+                            if fallback_entries:
+                                logger.info(
+                                    "knowledge_search_dataset_fallback client_id="
+                                    f"{client_id} results={len(fallback_entries)}"
+                                )
+                                return fallback_entries
+                            logger.warning(f"knowledge_search_dataset_fallback_empty client_id={client_id}")
+                        else:
+                            logger.error(f"knowledge_search_retry_failed client_id={client_id} detail={final_exc}")
                         return []
             logger.error(f"Unexpected search error client_id={client_id}: {message}")
             return []
@@ -489,3 +503,56 @@ class KnowledgeBase:
                 await cls._process_dataset(dataset, user)
             except Exception as exc:  # noqa: BLE001 - logging context is sufficient here
                 logger.warning(f"knowledge_dataset_warmup_failed dataset={dataset} detail={exc}")
+
+    @classmethod
+    async def _fallback_dataset_entries(
+        cls,
+        datasets: Sequence[str],
+        user: Any | None,
+        *,
+        top_k: int | None,
+    ) -> list[str]:
+        """Return raw dataset entries when graph search is unavailable."""
+        collected: list[str] = []
+        limit = top_k or 6
+        for dataset in datasets:
+            entries = await cls._list_dataset_entries(dataset, user)
+            for item in entries:
+                normalized = item.strip()
+                if not normalized:
+                    continue
+                collected.append(normalized)
+                if len(collected) >= limit:
+                    return collected
+        return collected
+
+    @classmethod
+    async def _list_dataset_entries(cls, dataset: str, user: Any | None) -> list[str]:
+        datasets_module = getattr(cognee, "datasets", None)
+        if datasets_module is None:
+            logger.debug(f"knowledge_dataset_list_skipped dataset={dataset}: datasets module missing")
+            return []
+        list_data = getattr(datasets_module, "list_data", None)
+        if not callable(list_data):
+            logger.debug(f"knowledge_dataset_list_skipped dataset={dataset}: list_data missing")
+            return []
+        try:
+            await cls._ensure_dataset_exists(dataset, user)
+        except Exception as exc:  # pragma: no cover - best effort to keep flow running
+            logger.debug(f"knowledge_dataset_list_ensure_failed dataset={dataset} detail={exc}")
+        user_ns = cls._to_user_or_none(user)
+        try:
+            rows = await cls._fetch_dataset_rows(
+                cast(Callable[..., Awaitable[Iterable[Any]]], list_data),
+                dataset,
+                user_ns,
+            )
+        except Exception as exc:  # noqa: BLE001 - dataset listing is best effort
+            logger.debug(f"knowledge_dataset_list_failed dataset={dataset} detail={exc}")
+            return []
+        texts: list[str] = []
+        for row in rows:
+            text = getattr(row, "text", None)
+            if text:
+                texts.append(str(text))
+        return texts
