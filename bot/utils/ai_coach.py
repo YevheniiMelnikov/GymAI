@@ -145,12 +145,12 @@ async def enqueue_workout_plan_generation(
     options = {"queue": "ai_coach", "routing_key": "ai_coach", "headers": headers}
 
     generate_sig = generate_ai_workout_plan.s(payload).set(**options)  # pyrefly: ignore[not-callable]
-    notify_sig = notify_ai_plan_ready_task.s().set(
+    notify_sig = notify_ai_plan_ready_task.s().set(  # pyrefly: ignore[not-callable]
         queue="ai_coach", routing_key="ai_coach", headers=headers
-    )  # pyrefly: ignore[not-callable]
-    failure_sig = handle_ai_plan_failure.s(payload, "create").set(
+    )
+    failure_sig = handle_ai_plan_failure.s(payload, "create").set(  # pyrefly: ignore[not-callable]
         queue="ai_coach", routing_key="ai_coach"
-    )  # pyrefly: ignore[not-callable]
+    )
 
     logger.debug(
         f"dispatch_generate_plan request_id={request_id} "
@@ -234,12 +234,12 @@ def _dispatch_ai_question_task(
     options = {"queue": "ai_coach", "routing_key": "ai_coach", "headers": headers}
 
     ask_sig = ask_ai_question.s(payload).set(**options)  # pyrefly: ignore[not-callable]
-    notify_sig = notify_ai_answer_ready_task.s().set(
+    notify_sig = notify_ai_answer_ready_task.s().set(  # pyrefly: ignore[not-callable]
         queue="ai_coach", routing_key="ai_coach", headers=headers
-    )  # pyrefly: ignore[not-callable]
-    failure_sig = handle_ai_question_failure.s(payload).set(
+    )
+    failure_sig = handle_ai_question_failure.s(payload).set(  # pyrefly: ignore[not-callable]
         queue="ai_coach", routing_key="ai_coach"
-    )  # pyrefly: ignore[not-callable]
+    )
 
     try:
         async_result = cast(AsyncResult, chain(ask_sig, notify_sig).apply_async(link_error=[failure_sig]))
@@ -250,8 +250,7 @@ def _dispatch_ai_question_task(
     task_id = cast(str | None, getattr(async_result, "id", None))
     if task_id is None:
         logger.error(
-            f"event=ask_ai_missing_task_id request_id={request_id} "
-            f"client_id={client_id} profile_id={client_profile_id}"
+            f"event=ask_ai_missing_task_id request_id={request_id} client_id={client_id} profile_id={client_profile_id}"
         )
         return None
     logger.info(
@@ -345,12 +344,12 @@ async def enqueue_workout_plan_update(
     options = {"queue": "ai_coach", "routing_key": "ai_coach", "headers": headers}
 
     update_sig = update_ai_workout_plan.s(payload).set(**options)  # pyrefly: ignore[not-callable]
-    notify_sig = notify_ai_plan_ready_task.s().set(
+    notify_sig = notify_ai_plan_ready_task.s().set(  # pyrefly: ignore[not-callable]
         queue="ai_coach", routing_key="ai_coach", headers=headers
-    )  # pyrefly: ignore[not-callable]
-    failure_sig = handle_ai_plan_failure.s(payload, "update").set(
+    )
+    failure_sig = handle_ai_plan_failure.s(payload, "update").set(  # pyrefly: ignore[not-callable]
         queue="ai_coach", routing_key="ai_coach"
-    )  # pyrefly: ignore[not-callable]
+    )
 
     logger.debug(
         f"dispatch_update_plan request_id={request_id} client_id={client_id} "
@@ -369,8 +368,7 @@ async def enqueue_workout_plan_update(
     task_id = cast(str | None, getattr(async_result, "id", None))
     if task_id is None:
         logger.error(
-            f"ai_plan_update_missing_task_id request_id={request_id} "
-            f"client_id={client_id} plan_type={plan_type.value}"
+            f"ai_plan_update_missing_task_id request_id={request_id} client_id={client_id} plan_type={plan_type.value}"
         )
         return False
     logger.info(

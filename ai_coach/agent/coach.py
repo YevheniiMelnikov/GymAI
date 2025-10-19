@@ -213,7 +213,10 @@ class CoachAgent:
             message_history=history,
             model_settings=ModelSettings(response_format={"type": "json_object"}, temperature=0.2),
         )
-        normalized = cls._normalize_output(raw_result, output_type)
+        if output_type is Program:
+            normalized = cls._normalize_output(raw_result, Program)
+        else:
+            normalized = cls._normalize_output(raw_result, Subscription)
         logger.debug(
             "agent.done client_id=%s mode=%s tools_called=%s",
             deps.client_id,
@@ -259,7 +262,9 @@ class CoachAgent:
             message_history=history,
             model_settings=ModelSettings(response_format={"type": "json_object"}, temperature=0.2),
         )
-        return cls._normalize_output(raw_result, output_type)
+        if output_type is Program:
+            return cls._normalize_output(raw_result, Program)
+        return cls._normalize_output(raw_result, Subscription)
 
     @classmethod
     async def answer_question(

@@ -20,9 +20,12 @@ def _redis_backend_url() -> str:
 
 def _broker_url() -> str:
     env_value = os.getenv("CELERY_BROKER_URL")
-    if env_value is not None:
+    if env_value:
         return env_value
-    return settings.RABBITMQ_URL
+    broker = settings.RABBITMQ_URL
+    if not broker:
+        raise RuntimeError("RABBITMQ_URL must be configured")
+    return broker
 
 
 dead_letter_exchange: Exchange = Exchange("critical.dlx", type="topic", durable=True)
