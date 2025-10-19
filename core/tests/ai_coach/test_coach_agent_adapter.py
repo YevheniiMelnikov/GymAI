@@ -109,6 +109,9 @@ def test_answer_question(monkeypatch: pytest.MonkeyPatch) -> None:
                 assert "MODE: ask_ai" in prompt
                 assert output_type is QAResponse
                 assert model_settings is not None
+                assert model_settings.max_tokens == 1024
+                assert model_settings.tool_choice == "none"
+                assert getattr(model_settings, "response_format", None) is None
                 return QAResponse(answer="answer")
 
         monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: DummyAgent()))
@@ -119,11 +122,18 @@ def test_answer_question(monkeypatch: pytest.MonkeyPatch) -> None:
     asyncio.run(runner())
 
 
-def test_supports_json_object_openrouter() -> None:
+def test_supports_json_object_whitelisted_model() -> None:
+    class DummyModel:
+        model_name = "openrouter/openai/gpt-4o-mini"
+
+    assert CoachAgent._supports_json_object(DummyModel()) is True
+
+
+def test_supports_json_object_rejects_unknown_model() -> None:
     class DummyModel:
         model_name = "openrouter/openai/gpt-5-nano"
 
-    assert CoachAgent._supports_json_object(DummyModel()) is True
+    assert CoachAgent._supports_json_object(DummyModel()) is False
 
 
 def test_extract_choice_content_tool_arguments() -> None:

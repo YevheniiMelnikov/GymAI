@@ -296,12 +296,23 @@ class CoachAgent:
                 f"kb_empty={deps.knowledge_base_empty}"
             )
         )
+        model = getattr(agent, "model", None)
+        response_format: dict[str, str] | None = None
+        if cls._supports_json_object(model):
+            response_format = {"type": "json_object"}
+        settings_kwargs: dict[str, Any] = {
+            "temperature": 0.3,
+            "max_tokens": 1024,
+            "tool_choice": "none",
+        }
+        if response_format is not None:
+            settings_kwargs["response_format"] = response_format
         try:
             raw_result = await agent.run(
                 user_prompt,
                 deps=deps,
                 output_type=QAResponse,
-                model_settings=ModelSettings(temperature=0.3, max_tokens=256),
+                model_settings=ModelSettings(**settings_kwargs),
                 message_history=history,
             )
         except UnexpectedModelBehavior as exc:
@@ -436,8 +447,15 @@ class CoachAgent:
         if not model_name:
             return False
         normalized = str(model_name).lower()
+        allowed_prefixes = (
+            "gpt-4o",
+            "gpt-4.1",
+            "gpt-4.2",
+            "o3-",
+            "o1-",
+        )
         for segment in normalized.split("/"):
-            if segment.startswith(("gpt-", "o3-", "o1-")):
+            if segment.startswith(allowed_prefixes):
                 return True
         return False
 
@@ -584,7 +602,7 @@ class CoachAgent:
                 {"role": "user", "content": user_prompt},
             ],
             "temperature": 0.25,
-            "max_tokens": 450,
+            "max_tokens": 1024,
             "tool_choice": "none",
         }
         if use_json:
@@ -619,7 +637,17 @@ class CoachAgent:
                         logger.debug("llm.parse client_id={} empty=False reason=tool_call".format(client_id))
                     return normalized
         if client_id is not None:
-            logger.debug(f"llm.parse client_id={client_id} empty=True reason=no_content")
+            finish_reason = ""
+            if choices:
+                finish_reason = str(getattr(choices[0], "finish_reason", "") or "")
+            preview = CoachAgent._message_preview(message)
+            logger.debug(
+                "llm.parse client_id={} empty=True reason=no_content finish_reason={} {}".format(
+                    client_id,
+                    finish_reason,
+                    preview,
+                )
+            )
         return ""
 
     @staticmethod
@@ -657,6 +685,38 @@ class CoachAgent:
             sanitized = {"answer": answer, "sources": sources}
             return json.dumps(sanitized)
         return text
+
+    @staticmethod
+    def _message_preview(message: Any) -> str:
+        if message is None:
+            return "message=None"
+        content = getattr(message, "content", None)
+        preview_text = ""
+        if isinstance(content, str):
+            preview_text = content.strip()
+        elif isinstance(content, Sequence) and not isinstance(content, (str, bytes)):
+            parts = [str(item) for item in content if item]
+            preview_text = " ".join(parts).strip()
+        elif content:
+            preview_text = str(content).strip()
+        preview_text = preview_text.replace("\n", " ")
+        if len(preview_text) > 120:
+            preview_text = f"{preview_text[:117]}..."
+        tool_calls = getattr(message, "tool_calls", None)
+        tool_summary = "tool_calls=0"
+        if isinstance(tool_calls, Sequence) and not isinstance(tool_calls, (str, bytes)):
+            names: list[str] = []
+            for call in tool_calls:
+                function = getattr(call, "function", None)
+                name = getattr(function, "name", None)
+                if name:
+                    names.append(str(name))
+            joined = ", ".join(names[:3])
+            tool_summary = f"tool_calls={len(tool_calls)}[{joined}]" if joined else f"tool_calls={len(tool_calls)}"
+        elif tool_calls:
+            tool_summary = "tool_calls=1"
+        preview_part = f"content_preview={preview_text!r}" if preview_text else "content_preview=''"
+        return f"{preview_part} {tool_summary}"
 
     @staticmethod
     def _parse_fallback_content(
