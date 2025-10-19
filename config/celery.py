@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 
 from celery.schedules import crontab, schedule
@@ -11,7 +11,7 @@ from core.celery_signals import setup_celery_signals
 
 def beat_nowfun() -> datetime:
     """Return current UTC time offset by the knowledge refresh start delay."""
-    return datetime.utcnow() + timedelta(seconds=settings.KNOWLEDGE_REFRESH_START_DELAY)
+    return datetime.now(tz=UTC) + timedelta(seconds=settings.KNOWLEDGE_REFRESH_START_DELAY)
 
 
 def knowledge_refresh_now() -> datetime:
@@ -98,7 +98,10 @@ celery_config = {
 }
 
 celery_app = app
-celery_app.conf.update(celery_config)
+celery_conf = getattr(celery_app, "conf", None)
+if celery_conf is None:
+    raise RuntimeError("Celery app configuration is not available")
+celery_conf.update(celery_config)
 
 celery_app.autodiscover_tasks(["core", "apps.payments"])
 setup_celery_signals()

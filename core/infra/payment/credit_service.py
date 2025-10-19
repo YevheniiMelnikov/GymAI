@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Callable, Iterable, Protocol
+from typing import Callable, Iterable, Protocol, cast
 
 from bot.utils.credits import available_packages, uah_to_credits
 
@@ -23,7 +23,8 @@ class BotCreditService(CreditService):
         packages_provider: PackageProvider | None = None,
         converter: CreditConverter | None = None,
     ) -> None:
-        self._packages_provider: PackageProvider = packages_provider or available_packages
+        provider = packages_provider if packages_provider is not None else available_packages
+        self._packages_provider = cast(PackageProvider, provider)
         if converter is None:
 
             def _convert(value: Decimal) -> int:

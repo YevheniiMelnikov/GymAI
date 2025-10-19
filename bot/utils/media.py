@@ -36,8 +36,13 @@ async def download_limited_file(
         return None, size_hint
 
     buffer = io.BytesIO()
+    file_path = getattr(file, "file_path", None)
+    if file_path is None:
+        logger.warning(f"event=ask_ai_download_missing_path file_id={file_id}")
+        return None, size_hint
+
     try:
-        await bot.download_file(file.file_path, buffer)
+        await bot.download_file(file_path, buffer)
     except TelegramBadRequest as exc:
         logger.warning(f"event=ask_ai_download_failed file_id={file_id} error={exc}")
         return None, size_hint

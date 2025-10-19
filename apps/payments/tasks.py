@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, Coroutine, cast
 
 import httpx
 
@@ -41,7 +41,8 @@ def _retryable_call(
     coro_factory: Callable[[], Awaitable[None]],
 ) -> None:
     try:
-        asyncio.run(coro_factory())
+        coroutine = coro_factory()
+        asyncio.run(cast(Coroutine[Any, Any, None], coroutine))
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code if exc.response is not None else None
         logger.warning(f"bot_call_failed status={status} description={description} error={exc}")

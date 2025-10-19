@@ -148,7 +148,11 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bo
             text=msg_text("new_workout_plan", client_lang),
             bot=bot,
             state=state,
-            reply_markup=program_view_kb(client_lang, get_webapp_url("program", client_lang)),
+            reply_markup=(
+                program_view_kb(client_lang, webapp_url)
+                if (webapp_url := get_webapp_url("program", client_lang)) is not None
+                else None
+            ),
             include_incoming_message=False,
         )
 

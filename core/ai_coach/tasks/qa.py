@@ -114,7 +114,7 @@ async def _notify_ai_answer_error(
     }
     if client_profile_id is not None and client_profile_id > 0:
         payload["client_profile_id"] = client_profile_id
-    notify_ai_answer_ready_task.apply_async(
+    notify_ai_answer_ready_task.apply_async(  # pyrefly: ignore[not-callable]
         args=[payload],
         queue="ai_coach",
         routing_key="ai_coach",

@@ -2,7 +2,8 @@ from enum import Enum, auto
 
 
 class AutoName(str, Enum):
-    def _generate_next_value_(name, start, count, last_values):
+    @staticmethod
+    def _generate_next_value_(name: str, start: int, count: int, last_values: list[str]) -> str:
         return name
 
 

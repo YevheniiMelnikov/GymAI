@@ -112,5 +112,17 @@ class InterceptHandler(logging.Handler):
             frame = frame.f_back
             depth += 1
 
-        if record.levelno >= logging.getLevelName(settings.LOG_LEVEL):
+        if record.levelno >= _resolve_level(settings.LOG_LEVEL):
             logger.opt(depth=depth, exception=record.exc_info).log(loguru_level, record.getMessage())
+
+
+def _resolve_level(level: int | str) -> int:
+    if isinstance(level, int):
+        return level
+
+    mapping = logging.getLevelNamesMapping()
+    resolved = mapping.get(level.upper())
+    if isinstance(resolved, int):
+        return resolved
+
+    raise ValueError(f"Unknown log level: {level}")

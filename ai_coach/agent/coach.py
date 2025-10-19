@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import inspect
-from typing import Any, Optional
+from typing import Any, Optional, TypeVar
 
 from zoneinfo import ZoneInfo
 
@@ -53,6 +53,9 @@ class ProgramAdapter:
         if data.get("split_number") is None:
             data["split_number"] = len(getattr(payload, "exercises_by_day", []))
         return Program.model_validate(data)
+
+
+TOutput = TypeVar("TOutput", bound=BaseModel)
 
 
 class CoachAgent:
@@ -137,14 +140,14 @@ class CoachAgent:
     @staticmethod
     def _normalize_output(
         raw: Any,
-        expected: type[Program] | type[Subscription] | type[QAResponse],
-    ) -> Program | Subscription | QAResponse:
+        expected: type[TOutput],
+    ) -> TOutput:
         value = getattr(raw, "output", raw)
         if isinstance(value, expected):
             return value
-        if issubclass(expected, BaseModel):
-            return expected.model_validate(value)
-        return expected(**value)
+        if not issubclass(expected, BaseModel):
+            raise TypeError(f"Unsupported output type: {expected!r}")
+        return expected.model_validate(value)
 
     @staticmethod
     async def _message_history(client_id: int) -> list[ModelMessage]:
@@ -210,7 +213,10 @@ class CoachAgent:
             message_history=history,
             model_settings=ModelSettings(response_format={"type": "json_object"}, temperature=0.2),
         )
-        normalized = cls._normalize_output(raw_result, output_type)
+        if output_type is Program:
+            normalized = cls._normalize_output(raw_result, Program)
+        else:
+            normalized = cls._normalize_output(raw_result, Subscription)
         logger.debug(
             "agent.done client_id=%s mode=%s tools_called=%s",
             deps.client_id,
@@ -256,7 +262,9 @@ class CoachAgent:
             message_history=history,
             model_settings=ModelSettings(response_format={"type": "json_object"}, temperature=0.2),
         )
-        return cls._normalize_output(raw_result, output_type)
+        if output_type is Program:
+            return cls._normalize_output(raw_result, Program)
+        return cls._normalize_output(raw_result, Subscription)
 
     @classmethod
     async def answer_question(

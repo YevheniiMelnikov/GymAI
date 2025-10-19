@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Protocol, cast
 
 from apps.payments.tasks import send_payment_message
 from bot.texts.text_manager import msg_text
@@ -18,7 +18,8 @@ class TaskPaymentNotifier(PaymentNotifier):
         self,
         task: _TaskInvoker | None = None,
     ) -> None:
-        self._task: _TaskInvoker = task or send_payment_message
+        task_impl = task if task is not None else cast(_TaskInvoker, send_payment_message)
+        self._task = task_impl
 
     def success(self, client_id: int, language: str) -> None:
         message = msg_text("payment_success", language)
