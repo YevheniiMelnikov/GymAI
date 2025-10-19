@@ -172,17 +172,28 @@ class KnowledgeBase:
             return []
         except Exception as exc:
             message = str(exc)
-            error_name = exc.__class__.__name__
-            if "Empty graph" in message or "EntityNotFound" in error_name or getattr(exc, "status_code", None) == 404:
+            if cls._is_graph_missing_error(exc):
+                datasets_hint = ",".join(resolved_datasets)
                 logger.warning(
-                    f"Knowledge search failed, retrying without client dataset client_id={client_id} error={message}"
+                    f"knowledge_search_graph_missing client_id={client_id} datasets={datasets_hint} detail={message}"
                 )
-                fallback_dataset = cls._resolve_dataset_alias(cls.GLOBAL_DATASET)
+                await cls._warm_up_datasets(resolved_datasets, user)
                 try:
-                    return await _search([fallback_dataset])
+                    return await _search(resolved_datasets)
                 except Exception as retry_exc:
-                    logger.error(f"Knowledge search retry failed client_id={client_id} error={retry_exc}")
-                    return []
+                    if not cls._is_graph_missing_error(retry_exc):
+                        logger.warning(
+                            f"knowledge_search_retry_non_graph_error client_id={client_id} detail={retry_exc}"
+                        )
+                        return []
+                    logger.warning(f"knowledge_search_retry_global_only client_id={client_id} detail={retry_exc}")
+                    fallback_dataset = cls._resolve_dataset_alias(cls.GLOBAL_DATASET)
+                    await cls._warm_up_datasets([fallback_dataset], user)
+                    try:
+                        return await _search([fallback_dataset])
+                    except Exception as final_exc:
+                        logger.error(f"knowledge_search_retry_failed client_id={client_id} detail={final_exc}")
+                        return []
             logger.error(f"Unexpected search error client_id={client_id}: {message}")
             return []
 
@@ -459,3 +470,22 @@ class KnowledgeBase:
         if getattr(user, "id", None):
             return user
         return None
+
+    @classmethod
+    def _is_graph_missing_error(cls, exc: Exception) -> bool:
+        message = str(exc)
+        if "Empty graph" in message or "empty graph" in message:
+            return True
+        if "EntityNotFound" in exc.__class__.__name__:
+            return True
+        status = getattr(exc, "status_code", None)
+        return status == 404
+
+    @classmethod
+    async def _warm_up_datasets(cls, datasets: list[str], user: Any | None) -> None:
+        """Ensure datasets are cognified before retrying a search."""
+        for dataset in datasets:
+            try:
+                await cls._process_dataset(dataset, user)
+            except Exception as exc:  # noqa: BLE001 - logging context is sufficient here
+                logger.warning(f"knowledge_dataset_warmup_failed dataset={dataset} detail={exc}")
