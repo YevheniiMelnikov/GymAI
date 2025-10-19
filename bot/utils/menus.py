@@ -531,10 +531,17 @@ async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, 
     assert message
     language = cast(str, profile.language)
 
+    webapp_url = get_webapp_url("program", language)
+    if webapp_url is None:
+        logger.warning(f"program_view_missing_webapp_url profile_id={profile.id} language={language}")
+        reply_markup = None
+    else:
+        reply_markup = program_view_kb(language, webapp_url)
+
     await answer_msg(
         message,
         msg_text("new_workout_plan", language),
-        reply_markup=program_view_kb(language, get_webapp_url("program", language)),
+        reply_markup=reply_markup,
         disable_web_page_preview=True,
     )
 
@@ -637,7 +644,12 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
     assert split_number is not None
 
     if data.get("client"):
-        reply_markup = program_view_kb(profile.language, get_webapp_url("program", profile.language))
+        webapp_url = get_webapp_url("program", profile.language)
+        if webapp_url is None:
+            logger.warning(f"program_pagination_missing_webapp_url profile_id={profile.id} language={profile.language}")
+            reply_markup = None
+        else:
+            reply_markup = program_view_kb(profile.language, webapp_url)
         state_to_set = States.program_view
     else:
         reply_markup = (

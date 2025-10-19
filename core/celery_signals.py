@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 import os
 import time
@@ -36,7 +34,17 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
     from celery.apps.worker import WorkController  # local import for typing only
 
     worker: WorkController = cast(WorkController, sender)
-    inspect = worker.app.control.inspect(destination=[worker.hostname])
+    app_obj = getattr(worker, "app", None)
+    if app_obj is None:
+        logger.error(f"celery_worker_missing_app hostname={getattr(worker, 'hostname', 'unknown')}")
+        return
+
+    control = getattr(app_obj, "control", None)
+    if control is None:
+        logger.error(f"celery_worker_missing_control hostname={worker.hostname}")
+        return
+
+    inspect = control.inspect(destination=[worker.hostname])
 
     queue_names: list[str] = []
     if inspect is not None:
@@ -57,15 +65,18 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
 
     registered_missing: list[str] = []
     registered_ok: bool = False
+    tasks_map = getattr(app_obj, "tasks", {})
+
     if inspect is not None:
         registered_map = inspect.registered() or inspect.registered_tasks() or {}
         worker_registered = set(registered_map.get(worker.hostname) or [])
         registered_missing = [name for name in REQUIRED_TASK_NAMES if name not in worker_registered]
         registered_ok = not registered_missing
     else:
-        registered_ok = all(name in worker.app.tasks for name in REQUIRED_TASK_NAMES)
+        registered_ok = all(name in tasks_map for name in REQUIRED_TASK_NAMES)
 
-    broker_url = str(getattr(worker.app.conf, "broker_url", ""))
+    conf = getattr(app_obj, "conf", None)
+    broker_url = str(getattr(conf, "broker_url", "")) if conf is not None else ""
     parsed = urlparse(broker_url)
     scheme_host = f"{parsed.scheme}://{parsed.hostname}" if parsed.scheme else (parsed.hostname or "")
     vhost = parsed.path or "/"
@@ -87,7 +98,7 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
         logger.error(
             "celery tasks missing "
             f"hostname={worker.hostname} missing={registered_missing} "
-            f"available={sorted(worker.app.tasks.keys())}"
+            f"available={sorted(tasks_map.keys())}"
         )
         if strict_mode:
             raise SystemExit("required celery tasks missing")

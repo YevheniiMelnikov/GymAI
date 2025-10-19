@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 from urllib.parse import urlsplit, urlunsplit
 
@@ -21,7 +19,10 @@ def _redis_backend_url() -> str:
 
 
 def _broker_url() -> str:
-    return os.getenv("CELERY_BROKER_URL") or settings.RABBITMQ_URL
+    env_value = os.getenv("CELERY_BROKER_URL")
+    if env_value is not None:
+        return env_value
+    return settings.RABBITMQ_URL
 
 
 dead_letter_exchange: Exchange = Exchange("critical.dlx", type="topic", durable=True)
@@ -98,7 +99,10 @@ CELERY_INCLUDE: tuple[str, ...] = (
 )
 
 app = Celery("gymbot", broker=_broker_url(), backend=_redis_backend_url())
-app.conf.update(
+app_conf = getattr(app, "conf", None)
+if app_conf is None:
+    raise RuntimeError("Celery configuration is not available")
+app_conf.update(
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",

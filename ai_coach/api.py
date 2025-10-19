@@ -188,7 +188,7 @@ async def ask(
             f"mode={mode.value} reason={exc.reason} detail={detail_reason} steps_used={deps.tool_calls}"
         )
         if mode in {CoachMode.program, CoachMode.subscription}:
-            final_result = cast(Program | Subscription | None, deps.final_result)
+            final_result = deps.final_result
             if final_result is None:
                 for cache_key in ("tool_save_program", "tool_create_subscription"):
                     cached_value = deps.tool_cache.get(cache_key)

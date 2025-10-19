@@ -1,6 +1,6 @@
 from contextlib import suppress
-from typing import NamedTuple, Optional
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from typing import NamedTuple, Optional, cast
+from urllib.parse import ParseResult, parse_qsl, urlencode, urlparse, urlunparse
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
@@ -105,7 +105,7 @@ def get_webapp_url(page_type: str, lang: str | None = None) -> str | None:
         return None
 
     target = _WEBAPP_TARGETS.get(page_type, _WEBAPP_TARGETS["program"])
-    parsed = urlparse(source)
+    parsed = cast(ParseResult, urlparse(source))
     query_params = dict(parse_qsl(parsed.query, keep_blank_values=True))
     query_params["type"] = target.type_param
 
@@ -128,7 +128,7 @@ def get_webapp_url(page_type: str, lang: str | None = None) -> str | None:
     new_query = urlencode(query_params)
     path = parsed.path or "/webapp/"
     updated = parsed._replace(path=path, query=new_query, fragment=fragment)
-    return urlunparse(updated)
+    return str(urlunparse(updated))
 
 
 async def check_webhook_alive(ping_url: str, timeout_seconds: float = 5.0) -> bool:
