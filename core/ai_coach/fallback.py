@@ -9,7 +9,7 @@ from core.schemas import DayExercises, Exercise, Program, Subscription
 
 FALLBACK_WORKOUT_DAYS: tuple[str, ...] = ("Пн", "Ср", "Пт", "Сб")
 
-_FALLBACK_ROUTINE: tuple[tuple[tuple[str, str, str], ...], ...] = (
+_ROUTINE: tuple[tuple[tuple[str, str, str], ...], ...] = (
     (
         ("Warm-up cardio", "1", "8-10 min"),
         ("Barbell back squat", "4", "6-10"),
@@ -57,10 +57,8 @@ def _build_day(day_name: str, template: tuple[tuple[str, str, str], ...], base_i
 
 def _build_days(workout_days: Sequence[str] | None) -> list[DayExercises]:
     days = _ensure_days(workout_days)
-    routine_length = len(_FALLBACK_ROUTINE)
-    return [
-        _build_day(day_name, _FALLBACK_ROUTINE[index % routine_length], index) for index, day_name in enumerate(days)
-    ]
+    routine_length = len(_ROUTINE)
+    return [_build_day(day_name, _ROUTINE[index % routine_length], index) for index, day_name in enumerate(days)]
 
 
 def fallback_plan(

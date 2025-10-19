@@ -1,7 +1,5 @@
 """Validated payloads for AI coach Celery tasks."""
 
-from __future__ import annotations
-
 from pydantic import BaseModel, Field, field_validator
 
 from core.enums import WorkoutPlanType, WorkoutType
@@ -86,3 +84,12 @@ class AiQuestionPayload(BaseModel):
         if not value:
             raise ValueError("request_id is required")
         return value
+
+
+__all__ = [
+    "AiAttachmentPayload",
+    "AiPlanBasePayload",
+    "AiPlanGenerationPayload",
+    "AiPlanUpdatePayload",
+    "AiQuestionPayload",
+]

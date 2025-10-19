@@ -1,4 +1,4 @@
-from core.ai_coach_fallback import FALLBACK_WORKOUT_DAYS, fallback_plan
+from core.ai_coach.fallback import FALLBACK_WORKOUT_DAYS, fallback_plan
 from core.enums import CoachType, WorkoutPlanType
 
 

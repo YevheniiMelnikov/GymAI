@@ -477,6 +477,28 @@ sys.modules.setdefault("sqlalchemy.exc", sqlalchemy_mod.exc)
 redis_async_mod = types.ModuleType("redis.asyncio")
 
 
+class DummyPipeline:
+    def __init__(self, client: "DummyRedis") -> None:
+        self._client = client
+        self._result = False
+
+    async def watch(self, *_a, **_k):  # type: ignore[no-untyped-def]
+        return None
+
+    async def reset(self):  # type: ignore[no-untyped-def]
+        self._result = False
+
+    def multi(self):  # type: ignore[no-untyped-def]
+        self._result = False
+
+    def pexpire(self, key: str, ttl_ms: int):  # type: ignore[no-untyped-def]
+        if key in self._client.storage:
+            self._result = True
+
+    async def execute(self):  # type: ignore[no-untyped-def]
+        return [self._result]
+
+
 class DummyRedis:
     def __init__(self) -> None:
         self.storage: dict[str, str] = {}
@@ -484,6 +506,9 @@ class DummyRedis:
     @classmethod
     def from_url(cls, *a, **k):
         return cls()
+
+    def pipeline(self):  # type: ignore[no-untyped-def]
+        return DummyPipeline(self)
 
     async def set(self, key: str, value: str, ex=None, nx: bool = False):  # type: ignore[no-untyped-def]
         if nx and key in self.storage:
@@ -527,6 +552,9 @@ class DummyRedis:
 
 redis_async_mod.Redis = DummyRedis
 redis_async_mod.from_url = lambda *a, **k: DummyRedis()
+redis_async_client_mod = types.ModuleType("redis.asyncio.client")
+redis_async_client_mod.Pipeline = DummyPipeline
+sys.modules.setdefault("redis.asyncio.client", redis_async_client_mod)
 sys.modules.setdefault("redis.asyncio", redis_async_mod)
 httpx_mod = types.ModuleType("httpx")
 

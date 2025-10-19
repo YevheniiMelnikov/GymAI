@@ -1,7 +1,5 @@
 """Helpers for idempotent AI question delivery tracking."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from typing import Final
 
@@ -13,6 +11,7 @@ from config.app_settings import settings
 from core.utils.redis_lock import get_redis_client
 
 AI_QUESTION_CLAIM_KEY: Final[str] = "ai:ask:claim:{request_id}"
+AI_QUESTION_TASK_CLAIM_KEY: Final[str] = "ai:ask:task:{request_id}"
 AI_QUESTION_DELIVERED_KEY: Final[str] = "ai:ask:delivered:{request_id}"
 AI_QUESTION_FAILED_KEY: Final[str] = "ai:ask:failed:{request_id}"
 AI_QUESTION_CHARGED_KEY: Final[str] = "ai:ask:charged:{request_id}"
@@ -34,6 +33,16 @@ class AiQuestionState:
             return bool(result)
         except RedisError as exc:
             logger.warning(f"ai_question_claim_skip request_id={request_id} error={exc!s}")
+            return True
+
+    async def claim_task(self, request_id: str, ttl_s: int | None = None) -> bool:
+        ttl = ttl_s or settings.AI_QA_DEDUP_TTL
+        key = AI_QUESTION_TASK_CLAIM_KEY.format(request_id=request_id)
+        try:
+            result = await self.client.set(key, "1", nx=True, ex=ttl)
+            return bool(result)
+        except RedisError as exc:
+            logger.warning(f"ai_question_task_claim_skip request_id={request_id} error={exc!s}")
             return True
 
     async def mark_delivered(self, request_id: str, ttl_s: int | None = None) -> None:
@@ -95,6 +104,7 @@ class AiQuestionState:
     async def clear(self, request_id: str) -> None:
         keys = [
             AI_QUESTION_CLAIM_KEY.format(request_id=request_id),
+            AI_QUESTION_TASK_CLAIM_KEY.format(request_id=request_id),
             AI_QUESTION_DELIVERED_KEY.format(request_id=request_id),
             AI_QUESTION_FAILED_KEY.format(request_id=request_id),
             AI_QUESTION_CHARGED_KEY.format(request_id=request_id),
@@ -103,3 +113,13 @@ class AiQuestionState:
             await self.client.delete(*keys)
         except RedisError as exc:
             logger.warning(f"ai_question_clear_failed request_id={request_id} error={exc!s}")
+
+
+__all__ = [
+    "AI_QUESTION_CHARGED_KEY",
+    "AI_QUESTION_CLAIM_KEY",
+    "AI_QUESTION_DELIVERED_KEY",
+    "AI_QUESTION_FAILED_KEY",
+    "AI_QUESTION_TASK_CLAIM_KEY",
+    "AiQuestionState",
+]
