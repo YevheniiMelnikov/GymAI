@@ -154,20 +154,37 @@ class KnowledgeBase:
         user = await cls._get_cognee_user()
         await cls._ensure_profile_indexed(client_id, user)
         datasets = [cls._dataset_name(client_id), cls.GLOBAL_DATASET]
-        datasets = [cls._resolve_dataset_alias(d) for d in datasets]
-        try:
+        resolved_datasets = [cls._resolve_dataset_alias(d) for d in datasets]
+
+        async def _search(targets: list[str]) -> list[str]:
             params: dict[str, Any] = {
-                "datasets": datasets,
+                "datasets": targets,
                 "user": cls._to_user_or_none(user),
             }
             if k is not None:
                 params["top_k"] = k
             return await cognee.search(normalized, **params)
-        except (PermissionDeniedError, DatasetNotFoundError) as e:
-            logger.warning(f"Search issue client_id={client_id}: {e}")
-        except Exception as e:
-            logger.error(f"Unexpected search error client_id={client_id}: {e}")
-        return []
+
+        try:
+            return await _search(resolved_datasets)
+        except (PermissionDeniedError, DatasetNotFoundError) as exc:
+            logger.warning(f"Search issue client_id={client_id}: {exc}")
+            return []
+        except Exception as exc:
+            message = str(exc)
+            error_name = exc.__class__.__name__
+            if "Empty graph" in message or "EntityNotFound" in error_name or getattr(exc, "status_code", None) == 404:
+                logger.warning(
+                    f"Knowledge search failed, retrying without client dataset client_id={client_id} error={message}"
+                )
+                fallback_dataset = cls._resolve_dataset_alias(cls.GLOBAL_DATASET)
+                try:
+                    return await _search([fallback_dataset])
+                except Exception as retry_exc:
+                    logger.error(f"Knowledge search retry failed client_id={client_id} error={retry_exc}")
+                    return []
+            logger.error(f"Unexpected search error client_id={client_id}: {message}")
+            return []
 
     @classmethod
     async def add_text(

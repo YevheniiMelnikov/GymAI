@@ -60,7 +60,11 @@ def test_empty_context_does_not_crash(monkeypatch):
 
         res = await KnowledgeBase.search("hello", client_id=42)
         expected_dataset = KnowledgeBase._dataset_name(42)
-        assert calls == [[expected_dataset, coach.KnowledgeBase.GLOBAL_DATASET]]
+        fallback_dataset = coach.KnowledgeBase._resolve_dataset_alias(coach.KnowledgeBase.GLOBAL_DATASET)
+        assert calls == [
+            [expected_dataset, coach.KnowledgeBase.GLOBAL_DATASET],
+            [fallback_dataset],
+        ]
         assert res == []
 
     asyncio.run(runner())
