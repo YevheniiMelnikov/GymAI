@@ -27,6 +27,8 @@ from ai_coach.types import CoachMode
 from ai_coach.application import app
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from core.enums import CoachType
+from ai_coach.exceptions import AgentExecutionAborted
+from pydantic_ai.exceptions import UnexpectedModelBehavior
 
 
 def _sample_program(**kwargs) -> ProgramPayload:
@@ -111,6 +113,28 @@ def test_answer_question(monkeypatch: pytest.MonkeyPatch) -> None:
         deps = AgentDeps(client_id=1, locale="en", allow_save=False)
         result = await CoachAgent.answer_question("question", deps)
         assert result.answer == "answer"
+
+    asyncio.run(runner())
+
+
+def test_answer_question_knowledge_base_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        class DummyAgent:
+            async def run(
+                self,
+                prompt: str,
+                deps: AgentDeps,
+                output_type: type[QAResponse] | None = None,
+                model_settings: ModelSettings | None = None,
+                message_history: list | None = None,
+            ) -> QAResponse:
+                raise UnexpectedModelBehavior("Received empty model response")
+
+        monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: DummyAgent()))
+        deps = AgentDeps(client_id=1, locale="en", allow_save=False, knowledge_base_empty=True)
+        with pytest.raises(AgentExecutionAborted) as exc_info:
+            await CoachAgent.answer_question("question", deps)
+        assert exc_info.value.reason == "knowledge_base_empty"
 
     asyncio.run(runner())
 

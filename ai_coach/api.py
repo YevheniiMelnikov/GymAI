@@ -170,12 +170,27 @@ async def ask(
 
         if mode == CoachMode.ask_ai:
             answer = getattr(result, "answer", None)
+            sources: list[str] = []
+            if isinstance(result, QAResponse):
+                sources = [src.strip() for src in result.sources if isinstance(src, str) and src.strip()]
+            else:
+                raw_sources = getattr(result, "sources", None)
+                if isinstance(raw_sources, list):
+                    for item in raw_sources:
+                        text = str(item).strip()
+                        if text:
+                            sources.append(text)
             logger.debug(
                 f"/ask agent completed request_id={data.request_id}"
                 f" client_id={data.client_id} mode=ask_ai"
                 f" answer_len={len(answer) if isinstance(answer, str) else 0}"
                 f" steps_used={deps.tool_calls} kb_empty={deps.knowledge_base_empty}"
             )
+            if sources:
+                logger.debug(
+                    f"/ask agent sources request_id={data.request_id} client_id={data.client_id} "
+                    f"count={len(sources)} sources={' | '.join(sources)}"
+                )
             if isinstance(answer, str):
                 await KnowledgeBase.save_client_message(data.prompt or "", client_id=data.client_id)
                 await KnowledgeBase.save_ai_message(answer, client_id=data.client_id)

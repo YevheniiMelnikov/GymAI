@@ -8,6 +8,7 @@ from openai import AsyncOpenAI  # pyrefly: ignore[import-error]
 from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
 from pydantic import BaseModel
 from loguru import logger  # pyrefly: ignore[import-error]
+from pydantic_ai.exceptions import UnexpectedModelBehavior  # pyrefly: ignore[import-error]
 
 from config.app_settings import settings
 from core.enums import WorkoutType
@@ -31,6 +32,7 @@ from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, Text
 from pydantic_ai.models.openai import OpenAIChatModel  # pyrefly: ignore[import-error]
 from ai_coach.types import CoachMode, MessageRole
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+from ai_coach.exceptions import AgentExecutionAborted
 
 
 class ProgramAdapter:
@@ -276,11 +278,20 @@ class CoachAgent:
         history = cls._message_history(deps.client_id)
         if inspect.isawaitable(history):
             history = await history
-        raw_result = await agent.run(
-            user_prompt,
-            deps=deps,
-            output_type=QAResponse,
-            model_settings=ModelSettings(temperature=0.3, max_tokens=256),
-            message_history=history,
-        )
+        try:
+            raw_result = await agent.run(
+                user_prompt,
+                deps=deps,
+                output_type=QAResponse,
+                model_settings=ModelSettings(temperature=0.3, max_tokens=256),
+                message_history=history,
+            )
+        except UnexpectedModelBehavior as exc:
+            if deps.knowledge_base_empty:
+                logger.info(f"agent.ask knowledge_base_empty client_id={deps.client_id} detail={exc}")
+                raise AgentExecutionAborted(
+                    "AI coach knowledge base returned no data",
+                    reason="knowledge_base_empty",
+                ) from exc
+            raise
         return cls._normalize_output(raw_result, QAResponse)
