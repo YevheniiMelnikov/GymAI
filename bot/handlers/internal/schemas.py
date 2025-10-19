@@ -1,7 +1,3 @@
-from __future__ import annotations
-
-from typing import List, Optional
-
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -9,10 +5,10 @@ class AiAnswerNotify(BaseModel):
     request_id: str
     status: str = "success"
     client_id: int
-    client_profile_id: Optional[int] = None
-    answer: Optional[str] = None
-    sources: List[str] = Field(default_factory=list)
-    error: Optional[str] = None
+    client_profile_id: int | None = None
+    answer: str | None = None
+    sources: list[str] = Field(default_factory=list)
+    error: str | None = None
 
     @field_validator("status", mode="before")
     @classmethod

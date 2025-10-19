@@ -185,4 +185,4 @@ class Payment(BaseModel):
 
 class QAResponse(BaseModel):
     answer: str
-    sources: list[str] = Field(default_factory=list)
+    sources: list[str] = Field(default_factory=list, exclude=True)

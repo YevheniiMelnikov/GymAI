@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import html
 from typing import Iterable
 
@@ -112,6 +110,15 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
                 f"event=ask_ai_empty_error_message_failed request_id={request_id} profile_id={profile.id} error={exc!s}"
             )
         return web.json_response({"detail": "empty_answer"}, status=400)
+
+    if payload.sources:
+        logger.info(
+            "event=ask_ai_answer_sources request_id={} client_id={} count={} sources={}",
+            request_id,
+            payload.client_id,
+            len(payload.sources),
+            " | ".join(payload.sources),
+        )
 
     escaped_answer = html.escape(answer_text)
     message_text = msg_text("ask_ai_answer", language).format(answer=escaped_answer)

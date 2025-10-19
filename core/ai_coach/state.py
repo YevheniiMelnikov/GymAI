@@ -54,7 +54,7 @@ class AiQuestionState:
             logger.warning(f"ai_question_mark_delivered_failed request_id={request_id} error={exc!s}")
 
     async def mark_failed(self, request_id: str, reason: str, ttl_s: int | None = None) -> bool:
-        ttl = ttl_s or settings.AI_PLAN_NOTIFY_FAILURE_TTL
+        ttl = ttl_s or settings.AI_QA_DEDUP_TTL
         key = AI_QUESTION_FAILED_KEY.format(request_id=request_id)
         try:
             result = await self.client.set(key, reason, ex=ttl, nx=True)

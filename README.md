@@ -111,44 +111,6 @@ Use the credentials from `docker/.env` (`DJANGO_ADMIN` / `DJANGO_PASSWORD`) to a
 
 ---
 
-## AI Coach API
-
-FastAPI service under `/ask/`.
-
-### Request
-
-```json
-{
-  "client_id": 1,
-  "prompt": "text",
-  "mode": "program | subscription | update | ask_ai",
-  "period": "1m",
-  "workout_days": ["Mon"],
-  "expected_workout": "...",
-  "feedback": "..."
-}
-```
-
-### Response
-
-* `mode=program` or `mode=update` → `Program`.
-* `mode=subscription` → `Subscription`.
-* `mode=ask_ai` → `QAResponse` `{ "answer": str, "sources": [str, ...] }`.
-
-
-**ask\_ai response example**
-
-```json
-{
-  "answer": "Drink water and rest between sets.",
-  "sources": [
-    "client: last session notes",
-    "global: hydration guidelines"
-  ]
-}
-```
-
----
 
 ## Redis
 
