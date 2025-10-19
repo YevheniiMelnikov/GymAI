@@ -8,17 +8,27 @@ from typing import Any, Awaitable, Callable, cast
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from ai_coach.agent import AgentDeps, CoachAgent  # pyrefly: ignore[missing-module-attribute]
 from ai_coach.exceptions import AgentExecutionAborted
+from core.exceptions import UserServiceError
 from core.services import APIService
 from ai_coach.application import app, security
 from ai_coach.schemas import AICoachRequest
 from ai_coach.types import AskCtx, CoachMode
-from core.ai_coach.fallback import FALLBACK_WORKOUT_DAYS, fallback_plan
-from core.enums import WorkoutPlanType, SubscriptionPeriod, WorkoutType
+from core.enums import WorkoutPlanType, SubscriptionPeriod
 from config.app_settings import settings
 from core.schemas import Client, Profile, Program, Subscription
 from core.schemas import QAResponse
 
 CoachAction = Callable[[AskCtx], Awaitable[Program | Subscription | QAResponse | list[str] | None]]
+
+DEFAULT_WORKOUT_DAYS: tuple[str, ...] = ("Пн", "Ср", "Пт", "Сб")
+
+
+def _validate_refresh_credentials(credentials: HTTPBasicCredentials) -> None:
+    if (
+        credentials.username != settings.AI_COACH_REFRESH_USER
+        or credentials.password != settings.AI_COACH_REFRESH_PASSWORD
+    ):
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 def _to_language_code(raw: object, default: str) -> str:
@@ -96,7 +106,7 @@ async def ask(
         else SubscriptionPeriod(data.period or SubscriptionPeriod.one_month.value)
     )
 
-    workout_days: list[str] = data.workout_days or list(FALLBACK_WORKOUT_DAYS)
+    workout_days: list[str] = data.workout_days or list(DEFAULT_WORKOUT_DAYS)
 
     client: Client | None
     try:
@@ -201,34 +211,6 @@ async def ask(
                     f"mode={mode.value} reason={exc.reason}"
                 )
                 return final_result
-        fallback_result: Program | Subscription | None = None
-        if mode in {CoachMode.program, CoachMode.subscription, CoachMode.update}:
-            plan_type_raw = ctx.get("plan_type")
-            try:
-                plan_type_enum = (
-                    plan_type_raw if isinstance(plan_type_raw, WorkoutPlanType) else WorkoutPlanType(plan_type_raw)
-                )
-            except Exception:
-                plan_type_enum = WorkoutPlanType.PROGRAM
-            workout_type_raw = ctx.get("workout_type")
-            workout_type_value = (
-                workout_type_raw.value if isinstance(workout_type_raw, WorkoutType) else workout_type_raw
-            )
-            fallback_result = fallback_plan(
-                plan_type=plan_type_enum,
-                client_profile_id=data.client_id,
-                workout_type=workout_type_value,
-                wishes=ctx.get("wishes"),
-                workout_days=ctx.get("workout_days"),
-                period=ctx.get("period"),
-            )
-        if fallback_result is not None:
-            deps.fallback_used = True
-            logger.info(
-                f"/ask agent fallback request_id={data.request_id} client_id={data.client_id} "
-                f"mode={mode.value} reason={exc.reason} steps_used={deps.tool_calls}"
-            )
-            return fallback_result
         return JSONResponse(
             status_code=408,
             content={"detail": "AI coach aborted request", "reason": exc.reason},
@@ -253,15 +235,27 @@ async def ask(
 
 @app.post("/knowledge/refresh/")
 async def refresh_knowledge(credentials: HTTPBasicCredentials = Depends(security)) -> dict[str, str]:
-    if (
-        credentials.username != settings.AI_COACH_REFRESH_USER
-        or credentials.password != settings.AI_COACH_REFRESH_PASSWORD
-    ):
-        raise HTTPException(status_code=401, detail="Unauthorized")
+    _validate_refresh_credentials(credentials)
 
     try:
         await KnowledgeBase.refresh()
     except Exception as e:  # pragma: no cover - log unexpected errors
         logger.exception(f"Knowledge refresh failed: {e}")
         raise HTTPException(status_code=503, detail="Refresh failed")
+    return {"status": "ok"}
+
+
+@app.post("/knowledge/prune/")
+async def prune_knowledge_base(credentials: HTTPBasicCredentials = Depends(security)) -> dict[str, str]:
+    _validate_refresh_credentials(credentials)
+
+    try:
+        await KnowledgeBase.prune()
+    except UserServiceError as exc:
+        logger.error(f"Knowledge prune failed: {exc}")
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        logger.exception(f"Knowledge prune failed unexpectedly: {exc}")
+        raise HTTPException(status_code=503, detail="Cognee prune failed") from exc
+
     return {"status": "ok"}

@@ -13,7 +13,6 @@ __all__ = [
     "export_coach_payouts",
     "send_daily_survey",
     "send_workout_result",
-    "prune_cognee",
 ]
 
 
@@ -95,26 +94,3 @@ def send_workout_result(self, coach_profile_id: int, client_profile_id: int, tex
     except httpx.HTTPError as exc:
         logger.warning(f"Bot call failed for workout result: {exc!s}")
         raise self.retry(exc=exc)
-
-
-@app.task(
-    bind=True,
-    autoretry_for=(httpx.HTTPError,),
-    retry_backoff=180,
-    retry_jitter=True,
-    max_retries=3,
-)  # pyrefly: ignore[not-callable]
-def prune_cognee(self) -> None:
-    """Remove cached Cognee data storage."""
-    logger.info("prune_cognee started")
-    url = _bot_request_path("/internal/tasks/prune_cognee/")
-    headers = _bot_headers()
-    timeout = internal_request_timeout(settings)
-
-    try:
-        resp = httpx.post(url, headers=headers, timeout=timeout)
-        resp.raise_for_status()
-    except httpx.HTTPError as exc:
-        logger.warning(f"Bot call failed for prune_cognee: {exc}")
-        raise self.retry(exc=exc)
-    logger.info("prune_cognee completed")

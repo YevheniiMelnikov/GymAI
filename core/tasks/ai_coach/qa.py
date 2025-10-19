@@ -8,7 +8,7 @@ from celery import Task
 from loguru import logger
 
 from config.app_settings import settings
-from core.ai_coach import AiQuestionState
+from core.ai_coach.state.ask_ai import AiQuestionState
 from core.celery_app import app
 from core.internal_http import build_internal_auth_headers, internal_request_timeout
 from core.schemas import QAResponse
@@ -28,6 +28,7 @@ AI_QA_NOTIFY_TIME_LIMIT = AI_QA_NOTIFY_SOFT_LIMIT + 30
 
 
 async def _claim_answer_request(request_id: str, *, attempt: int) -> bool:
+    """Deduplicate task execution without touching delivery claim state."""
     if not request_id or attempt > 0:
         return True
     state = AiQuestionState.create()

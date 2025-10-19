@@ -62,7 +62,7 @@ from bot.texts import msg_text, btn_text
 from core.exceptions import AskAiPreparationError, ClientNotFoundError, SubscriptionNotFoundError
 from config.app_settings import settings
 from core.services import get_gif_manager
-from core.ai_coach import AiQuestionState
+from core.ai_coach.state.ask_ai import AiQuestionState
 
 workout_router = Router()
 

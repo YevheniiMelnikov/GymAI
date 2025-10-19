@@ -89,8 +89,8 @@ celery_config = {
             ),
             "options": {"queue": "maintenance"},
         },
-        "prune_cognee": {
-            "task": "core.tasks.bot_calls.prune_cognee",
+        "prune_knowledge_base": {
+            "task": "core.tasks.ai_coach.prune_knowledge_base",
             "schedule": crontab(hour=2, minute=10),
             "options": {"queue": "maintenance"},
         },

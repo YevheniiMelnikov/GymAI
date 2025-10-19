@@ -92,6 +92,21 @@ class KnowledgeBase:
             logger.error(f"Knowledge base update skipped: {e}")
 
     @classmethod
+    async def prune(cls) -> None:
+        """Run Cognee prune routine to cleanup cached data."""
+        try:
+            from cognee.api.v1.prune import prune as cognee_prune  # pyrefly: ignore[import-error]
+        except Exception as exc:  # pragma: no cover - import errors handled upstream
+            logger.error(f"Cognee prune unavailable: {exc}")
+            raise UserServiceError("Cognee prune module unavailable") from exc
+
+        try:
+            await cognee_prune.prune_data()
+        except Exception as exc:  # noqa: BLE001
+            logger.error(f"Cognee prune failed: {exc}")
+            raise UserServiceError("Cognee prune failed") from exc
+
+    @classmethod
     async def update_dataset(
         cls,
         text: str,

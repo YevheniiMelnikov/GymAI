@@ -1,6 +1,5 @@
 """AI coach domain utilities."""
 
-from .fallback import FALLBACK_WORKOUT_DAYS, fallback_plan
 from .models import AskAiPreparationResult
 from .payloads import (
     AiAttachmentPayload,
@@ -9,7 +8,7 @@ from .payloads import (
     AiPlanUpdatePayload,
     AiQuestionPayload,
 )
-from .state import (
+from .state.ask_ai import (
     AI_QUESTION_CHARGED_KEY,
     AI_QUESTION_CLAIM_KEY,
     AI_QUESTION_DELIVERED_KEY,
@@ -17,6 +16,7 @@ from .state import (
     AI_QUESTION_TASK_CLAIM_KEY,
     AiQuestionState,
 )
+from .state.plan import AiPlanState
 
 __all__ = [
     "AskAiPreparationResult",
@@ -26,11 +26,10 @@ __all__ = [
     "AiPlanUpdatePayload",
     "AiQuestionPayload",
     "AiQuestionState",
+    "AiPlanState",
     "AI_QUESTION_CHARGED_KEY",
     "AI_QUESTION_CLAIM_KEY",
     "AI_QUESTION_DELIVERED_KEY",
     "AI_QUESTION_FAILED_KEY",
     "AI_QUESTION_TASK_CLAIM_KEY",
-    "FALLBACK_WORKOUT_DAYS",
-    "fallback_plan",
 ]

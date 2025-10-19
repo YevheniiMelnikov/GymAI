@@ -8,7 +8,6 @@ from .tasks import (
     internal_export_coach_payouts,
     internal_send_workout_result,
     internal_ai_coach_plan_ready,
-    internal_prune_cognee,
 )
 from .answers import internal_ai_answer_ready
 
@@ -20,6 +19,5 @@ __all__ = (
     "internal_export_coach_payouts",
     "internal_send_workout_result",
     "internal_ai_coach_plan_ready",
-    "internal_prune_cognee",
     "internal_ai_answer_ready",
 )

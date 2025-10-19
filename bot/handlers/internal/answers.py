@@ -14,7 +14,7 @@ from bot.handlers.internal.schemas import AiAnswerNotify
 from bot.states import States
 from bot.texts.text_manager import msg_text
 from config.app_settings import settings
-from core.ai_coach import AiQuestionState
+from core.ai_coach.state.ask_ai import AiQuestionState
 from core.exceptions import ClientNotFoundError
 from core.services import APIService
 from core.schemas import Profile

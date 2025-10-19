@@ -1,6 +1,6 @@
 import asyncio
 
-from core.ai_coach import AiQuestionState
+from core.ai_coach.state.ask_ai import AiQuestionState
 from redis.asyncio import Redis
 
 

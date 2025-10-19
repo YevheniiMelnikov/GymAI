@@ -14,7 +14,6 @@ from ai_coach.types import CoachMode
 from core.exceptions import UserServiceError
 from core.schemas import Program, Subscription
 from core.schemas import QAResponse
-from core.ai_coach.fallback import fallback_plan
 from .api_client import APIClient, APIClientHTTPError, APIClientTransportError
 from ...enums import WorkoutPlanType, WorkoutType
 
@@ -222,28 +221,6 @@ class AiCoachService(APIClient):
                     f"request_id={request_id} client_id={payload.client_id} "
                     f"status={exc.status} reason={exc.reason}"
                 )
-                if payload.mode in {CoachMode.program, CoachMode.subscription, CoachMode.update} and exc.reason in {
-                    "timeout",
-                    "knowledge_base_empty",
-                }:
-                    workout_type_value = (
-                        payload.workout_type.value
-                        if isinstance(payload.workout_type, WorkoutType)
-                        else payload.workout_type
-                    )
-                    fallback = fallback_plan(
-                        plan_type=payload.plan_type,
-                        client_profile_id=payload.client_id,
-                        workout_type=workout_type_value,
-                        wishes=payload.wishes,
-                        workout_days=payload.workout_days,
-                        period=payload.period,
-                    )
-                    logger.info(
-                        "AI coach fallback applied "
-                        f"request_id={request_id} client_id={payload.client_id} reason={exc.reason}"
-                    )
-                    return fallback
                 raise
             except APIClientTransportError:
                 logger.error(f"AI coach request failed request_id={request_id} client_id={payload.client_id}")

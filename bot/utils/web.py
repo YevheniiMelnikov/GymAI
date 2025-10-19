@@ -36,7 +36,6 @@ async def setup_app(app: "web.Application", bot: "Bot", dp: "Dispatcher") -> Non
         internal_ai_coach_plan_ready,
         internal_ai_answer_ready,
         internal_export_coach_payouts,
-        internal_prune_cognee,
     )
 
     path = settings.WEBHOOK_PATH.rstrip("/")
@@ -51,7 +50,6 @@ async def setup_app(app: "web.Application", bot: "Bot", dp: "Dispatcher") -> Non
     app.router.add_post("/internal/tasks/ai_plan_ready/", internal_ai_coach_plan_ready)
     app.router.add_post("/internal/tasks/ai_answer_ready/", internal_ai_answer_ready)
     app.router.add_post("/internal/tasks/export_coach_payouts/", internal_export_coach_payouts)
-    app.router.add_post("/internal/tasks/prune_cognee/", internal_prune_cognee)
     setup_application(app, dp, bot=bot)
 
 

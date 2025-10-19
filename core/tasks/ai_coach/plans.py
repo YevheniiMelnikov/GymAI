@@ -8,14 +8,13 @@ from celery import Task
 from loguru import logger
 
 from config.app_settings import settings
-from core.ai_plan_state import AiPlanState
+from core.ai_coach.state.plan import AiPlanState
 from core.celery_app import app
 from core.enums import WorkoutPlanType, WorkoutType
 from core.internal_http import build_internal_auth_headers, internal_request_timeout
 from core.schemas import Program, Subscription
 from core.services import APIService
 from core.services.internal.api_client import APIClientHTTPError, APIClientTransportError
-from core.utils.redis_lock import get_redis_client, redis_try_lock
 
 __all__ = [
     "handle_ai_plan_failure",
@@ -24,9 +23,6 @@ __all__ = [
     "update_ai_workout_plan",
     "_generate_ai_workout_plan_impl",
     "_update_ai_workout_plan_impl",
-    "ai_coach_echo",
-    "ai_coach_worker_report",
-    "refresh_external_knowledge",
 ]
 
 AI_PLAN_SOFT_TIME_LIMIT = settings.AI_COACH_TIMEOUT
@@ -503,86 +499,3 @@ def update_ai_workout_plan(self, payload: dict[str, Any]) -> dict[str, Any] | No
         raise
     else:
         return notify_payload
-
-
-@app.task(
-    bind=True,
-    queue="ai_coach",
-    routing_key="ai_coach",
-)
-def ai_coach_echo(self, payload: dict[str, Any]) -> dict[str, Any]:
-    payload_descriptor: str
-    if isinstance(payload, dict):
-        payload_descriptor = ",".join(sorted(str(key) for key in payload.keys()))
-    else:
-        payload_descriptor = type(payload).__name__
-    logger.info(f"ai_coach_echo started task_id={self.request.id} payload_descriptor={payload_descriptor}")
-    return {"ok": True, "echo": payload}
-
-
-@app.task(
-    bind=True,
-    queue="ai_coach",
-    routing_key="ai_coach",
-)
-def ai_coach_worker_report(self) -> dict[str, Any]:
-    broker_url = str(getattr(app.conf, "broker_url", ""))
-    backend_url = str(getattr(app.conf, "result_backend", ""))
-    hostname = getattr(self.request, "hostname", None)
-    logger.info(f"ai_coach_worker_report hostname={hostname} broker={broker_url} backend={backend_url}")
-    queues = [queue.name for queue in getattr(app.conf, "task_queues", [])]
-    return {
-        "broker": broker_url,
-        "backend": backend_url,
-        "hostname": hostname,
-        "queues": queues,
-    }
-
-
-@app.task(
-    bind=True,
-    autoretry_for=(Exception,),
-    retry_backoff=180,
-    retry_jitter=True,
-    max_retries=3,
-)
-def refresh_external_knowledge(self) -> None:
-    """Refresh external knowledge and rebuild Cognee index."""
-    logger.info("refresh_external_knowledge triggered")
-
-    async def _dedupe_window(window_s: int = 30) -> bool:
-        r = get_redis_client()
-        ok = await r.set("dedupe:refresh_external_knowledge", "1", nx=True, ex=window_s)
-        return bool(ok)
-
-    async def _impl() -> None:
-        if not await _dedupe_window(30):
-            logger.info("refresh_external_knowledge skipped: dedupe window active")
-            return
-
-        async with redis_try_lock(
-            "locks:refresh_external_knowledge",
-            ttl_ms=180_000,
-            wait=False,
-        ) as got:
-            if not got:
-                logger.info("refresh_external_knowledge skipped: lock is held")
-                return
-
-            for attempt in range(3):
-                if await APIService.ai_coach.health(timeout=3.0):
-                    break
-                logger.warning(f"AI coach health check failed attempt {attempt + 1}")
-                await asyncio.sleep(1)
-            else:
-                logger.warning("AI coach not ready, skipping refresh_external_knowledge")
-                return
-            await APIService.ai_coach.refresh_knowledge()
-
-    try:
-        asyncio.run(_impl())
-    except Exception as exc:  # noqa: BLE001
-        logger.error(f"refresh_external_knowledge failed: {exc}")
-        raise
-    else:
-        logger.info("refresh_external_knowledge completed")
