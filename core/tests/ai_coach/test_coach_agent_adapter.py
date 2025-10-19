@@ -13,6 +13,9 @@ os.environ.setdefault("EMAIL", "x")
 os.environ.setdefault("ADMIN_ID", "1")
 
 import asyncio
+import json
+from types import SimpleNamespace
+
 import pytest  # pyrefly: ignore[import-error]
 from pydantic_ai.settings import ModelSettings
 
@@ -114,6 +117,37 @@ def test_answer_question(monkeypatch: pytest.MonkeyPatch) -> None:
         assert result.answer == "answer"
 
     asyncio.run(runner())
+
+
+def test_supports_json_object_openrouter() -> None:
+    class DummyModel:
+        model_name = "openrouter/openai/gpt-5-nano"
+
+    assert CoachAgent._supports_json_object(DummyModel()) is True
+
+
+def test_extract_choice_content_tool_arguments() -> None:
+    arguments = json.dumps({"answer": "Yes", "sources": ["doc"]})
+    response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content="",
+                    tool_calls=[SimpleNamespace(function=SimpleNamespace(arguments=arguments))],
+                ),
+                finish_reason="stop",
+            )
+        ]
+    )
+    extracted = CoachAgent._extract_choice_content(response, client_id=42)
+    assert "answer" in extracted
+
+
+def test_normalize_tool_call_arguments_fills_sources() -> None:
+    payload = {"answer": "Ok", "sources": ["  doc "]}
+    text = CoachAgent._normalize_tool_call_arguments(payload)
+    data = json.loads(text)
+    assert data["sources"] == ["doc"]
 
 
 def test_answer_question_model_empty_response(monkeypatch: pytest.MonkeyPatch) -> None:

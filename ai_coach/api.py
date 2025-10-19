@@ -100,6 +100,18 @@ async def debug_knowledge(
     return snapshot
 
 
+@app.get("/internal/debug/llm_probe")
+async def debug_llm_probe(
+    credentials: HTTPBasicCredentials = Depends(security),
+) -> dict[str, Any]:
+    _validate_refresh_credentials(credentials)
+    try:
+        return await CoachAgent.llm_probe()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"/internal/debug/llm_probe failed: {exc}")
+        raise HTTPException(status_code=503, detail="LLM probe failed") from exc
+
+
 @app.post("/ask/", response_model=Program | Subscription | QAResponse | list[str] | None)
 async def ask(
     data: AICoachRequest, request: Request
