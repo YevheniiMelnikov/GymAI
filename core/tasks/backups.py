@@ -1,9 +1,9 @@
 """Database and cache backup tasks."""
 
-import os
 import shutil
 import subprocess
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from loguru import logger
 
@@ -16,19 +16,20 @@ __all__ = [
     "cleanup_backups",
 ]
 
-_dumps_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "dumps")
-_pg_dir = os.path.join(_dumps_dir, "postgres")
-_redis_dir = os.path.join(_dumps_dir, "redis")
+_BASE_DIR: Path = Path(__file__).resolve().parents[2]
+_DUMPS_DIR: Path = _BASE_DIR / "dumps"
+_PG_DIR: Path = _DUMPS_DIR / "postgres"
+_REDIS_DIR: Path = _DUMPS_DIR / "redis"
 
-os.makedirs(_pg_dir, exist_ok=True)
-os.makedirs(_redis_dir, exist_ok=True)
+_PG_DIR.mkdir(parents=True, exist_ok=True)
+_REDIS_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @app.task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyrefly: ignore[not-callable]
 def pg_backup(self) -> None:
-    ts = datetime.now().strftime("%Y%m%d%H%M%S")
-    path = os.path.join(_pg_dir, f"{settings.DB_NAME}_backup_{ts}.dump")
-    cmd = [
+    ts: str = datetime.now().strftime("%Y%m%d%H%M%S")
+    path: Path = _PG_DIR / f"{settings.DB_NAME}_backup_{ts}.dump"
+    cmd: list[str] = [
         "pg_dump",
         "-h",
         settings.DB_HOST,
@@ -41,38 +42,40 @@ def pg_backup(self) -> None:
         settings.DB_NAME,
     ]
     try:
-        with open(path, "wb") as f:
-            subprocess.run(cmd, stdout=f, check=True)
+        with path.open("wb") as handle:
+            subprocess.run(cmd, stdout=handle, check=True)
         logger.info(f"Postgres backup saved {path}")
     except Exception:
-        if os.path.exists(path):
-            os.remove(path)
+        if path.exists():
+            path.unlink()
         raise
 
 
 @app.task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyrefly: ignore[not-callable]
 def redis_backup(self) -> None:
-    ts = datetime.now().strftime("%Y%m%d%H%M%S")
-    tmp_path = f"/tmp/redis_backup_{ts}.rdb"
-    final_dst = os.path.join(_redis_dir, f"redis_backup_{ts}.rdb")
+    ts: str = datetime.now().strftime("%Y%m%d%H%M%S")
+    tmp_path: Path = Path("/tmp") / f"redis_backup_{ts}.rdb"
+    final_dst: Path = _REDIS_DIR / f"redis_backup_{ts}.rdb"
 
     try:
         subprocess.run(
-            ["redis-cli", "-u", settings.REDIS_URL, "--rdb", tmp_path],
+            ["redis-cli", "-u", settings.REDIS_URL, "--rdb", str(tmp_path)],
             check=True,
         )
-        shutil.move(tmp_path, final_dst)
+        shutil.move(str(tmp_path), str(final_dst))
         logger.info(f"Redis backup saved {final_dst}")
     finally:
-        if os.path.exists(tmp_path):
-            os.remove(tmp_path)
+        if tmp_path.exists():
+            tmp_path.unlink()
 
 
 @app.task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyrefly: ignore[not-callable]
 def cleanup_backups(self) -> None:
-    cutoff = datetime.now() - timedelta(days=settings.BACKUP_RETENTION_DAYS)
-    for root in (_pg_dir, _redis_dir):
-        for f in os.scandir(root):
-            if f.is_file() and datetime.fromtimestamp(f.stat().st_ctime) < cutoff:
-                os.remove(f.path)
-                logger.info(f"Deleted old backup {f.path}")
+    cutoff: datetime = datetime.now() - timedelta(days=settings.BACKUP_RETENTION_DAYS)
+    roots: tuple[Path, Path] = (_PG_DIR, _REDIS_DIR)
+    for root_dir in roots:
+        entries: list[Path] = list(root_dir.iterdir())
+        for candidate_path in entries:
+            if candidate_path.is_file() and datetime.fromtimestamp(candidate_path.stat().st_ctime) < cutoff:
+                candidate_path.unlink()
+                logger.info(f"Deleted old backup {candidate_path}")
