@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Protocol
 
 from bot.utils.profiles import get_assigned_coach

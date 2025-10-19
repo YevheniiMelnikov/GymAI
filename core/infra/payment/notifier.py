@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Protocol, cast
 
 from apps.payments.tasks import send_payment_message

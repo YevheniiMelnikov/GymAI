@@ -1,7 +1,5 @@
 """Celery tasks that proxy calls to the bot service."""
 
-from __future__ import annotations
-
 import httpx
 from loguru import logger
 

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from config.celery import celery_app
 from core.celery_signals import REQUIRED_TASK_NAMES
 
