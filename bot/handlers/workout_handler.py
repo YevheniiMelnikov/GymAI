@@ -233,8 +233,6 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
     image_base64 = preparation.image_base64
     image_mime = preparation.image_mime
 
-    await state.update_data(client=client.model_dump())
-
     request_id = uuid4().hex
     logger.info(f"event=ask_ai_enqueue request_id={request_id} client_id={client.id} profile_id={profile.id}")
     queued = await enqueue_ai_question(
@@ -268,22 +266,18 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
     else:
         logger.warning(f"event=ask_ai_charge_skipped request_id={request_id} client_id={client.id}")
 
-    await state.update_data(
-        client=client.model_dump(),
-        last_request_id=request_id,
-        ask_ai_cost=cost,
-        ask_ai_prompt_id=None,
-        ask_ai_prompt_chat_id=None,
-    )
-
     await answer_msg(message, msg_text("request_in_progress", lang))
-    has_coach = await has_human_coach_subscription(profile.id)
-    await state.set_state(States.select_service)
-    await answer_msg(
-        message,
-        msg_text("select_service", profile.language),
-        reply_markup=select_service_kb(profile.language, has_coach),
-    )
+
+    await show_main_menu(message, profile, state)
+
+    state_payload: dict[str, object] = {
+        "client": client.model_dump(),
+        "last_request_id": request_id,
+        "ask_ai_cost": cost,
+        "ask_ai_prompt_id": None,
+        "ask_ai_prompt_chat_id": None,
+    }
+    await state.update_data(**state_payload)
 
 
 @workout_router.message(States.workouts_number)
