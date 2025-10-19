@@ -1,5 +1,6 @@
-from datetime import datetime
+import json
 import inspect
+from datetime import datetime
 from typing import Any, Optional, TypeVar
 
 from zoneinfo import ZoneInfo
@@ -290,6 +291,10 @@ class CoachAgent:
             reason = "knowledge_base_empty" if deps.knowledge_base_empty else "model_empty_response"
             detail = str(exc)
             logger.info(f"agent.ask aborted client_id={deps.client_id} reason={reason} detail={detail}")
+            if reason == "model_empty_response":
+                fallback = await cls._fallback_answer_question(prompt, deps, history)
+                if fallback is not None:
+                    return fallback
             message = (
                 "AI coach knowledge base returned no data"
                 if reason == "knowledge_base_empty"
@@ -297,3 +302,98 @@ class CoachAgent:
             )
             raise AgentExecutionAborted(message, reason=reason) from exc
         return cls._normalize_output(raw_result, QAResponse)
+
+    @classmethod
+    async def _fallback_answer_question(
+        cls,
+        prompt: str,
+        deps: AgentDeps,
+        history: list[ModelMessage],
+    ) -> QAResponse | None:
+        if deps.fallback_used:
+            logger.debug(f"agent.ask fallback skipped client_id={deps.client_id} reason=already_used")
+            return None
+        deps.fallback_used = True
+        logger.warning(
+            f"agent.ask fallback_invoked client_id={deps.client_id} reason=model_empty_response history={len(history)}"
+        )
+        agent = cls._get_agent()
+        model = getattr(agent, "model", None)
+        client: AsyncOpenAI | None = getattr(model, "client", None)
+        if client is None:
+            logger.warning(f"agent.ask fallback aborted client_id={deps.client_id} reason=missing_client")
+            return None
+        try:
+            knowledge = await KnowledgeBase.search(prompt, deps.client_id, 6)
+        except Exception as exc:  # noqa: BLE001 - log and continue with empty knowledge
+            logger.warning(f"agent.ask fallback knowledge_failed client_id={deps.client_id} error={exc}")
+            knowledge = []
+        entries: list[str] = []
+        entry_ids: list[str] = []
+        for idx, raw in enumerate(knowledge, start=1):
+            text = (raw or "").strip()
+            if not text:
+                continue
+            entry_id = f"KB-{idx}"
+            entry_ids.append(entry_id)
+            entries.append(f"{entry_id}: {text}")
+        language = cls._lang(deps)
+        knowledge_section = "\n\n".join(entries) if entries else "No knowledge entries were retrieved."
+        system_prompt = (
+            "You are a professional fitness coach. Use the provided knowledge entries when available. "
+            "Answer in the client's language and keep the tone concise and helpful. "
+            "Respond with a JSON object containing 'answer' (string) and 'sources' (array of entry IDs). "
+            "If no knowledge entries are available, rely on professional expertise "
+            "and set 'sources' to ['general_knowledge']."
+        )
+        user_prompt = (
+            f"Client language: {language}\n"
+            f"Client question: {prompt}\n"
+            "Knowledge entries:\n"
+            f"{knowledge_section}\n"
+            "Return a JSON object with keys 'answer' and 'sources'."
+        )
+        try:
+            response = await client.chat.completions.create(  # pyrefly: ignore[no-untyped-call]
+                model=settings.AGENT_MODEL,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.3,
+                max_tokens=350,
+                response_format={"type": "json_object"},
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"agent.ask fallback completion_failed client_id={deps.client_id} error={exc}")
+            return None
+        if not getattr(response, "choices", None):
+            logger.warning(f"agent.ask fallback empty_choices client_id={deps.client_id}")
+            return None
+        content = getattr(response.choices[0].message, "content", None)
+        if not content:
+            logger.warning(f"agent.ask fallback empty_content client_id={deps.client_id}")
+            return None
+        try:
+            payload = json.loads(content)
+        except json.JSONDecodeError as exc:  # pragma: no cover - defensive guard
+            logger.warning(f"agent.ask fallback invalid_json client_id={deps.client_id} error={exc}")
+            return None
+        answer = str(payload.get("answer", "")).strip()
+        if not answer:
+            logger.warning(f"agent.ask fallback missing_answer client_id={deps.client_id}")
+            return None
+        raw_sources = payload.get("sources", [])
+        normalized_sources: list[str] = []
+        if isinstance(raw_sources, list):
+            for item in raw_sources:
+                text = str(item).strip()
+                if not text:
+                    continue
+                normalized_sources.append(text)
+        if not normalized_sources:
+            normalized_sources = entry_ids if entry_ids else ["general_knowledge"]
+        if not entry_ids:
+            deps.knowledge_base_empty = True
+        logger.info(f"agent.ask fallback_success client_id={deps.client_id} sources={len(normalized_sources)}")
+        return QAResponse(answer=answer, sources=normalized_sources)
