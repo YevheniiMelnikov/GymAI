@@ -162,32 +162,74 @@ async def tool_search_knowledge(
             f"knowledge_search_repeat client_id={client_id} query='{normalized_query[:80]}' reason=empty_previous"
         )
         return _cache_result(deps, tool_name, [])
+
+    async def _load_fallback(reason: str) -> list[str]:
+        try:
+            fallback_values = await KnowledgeBase.fallback_entries(client_id, limit=k)
+        except Exception as fallback_exc:  # noqa: BLE001 - diagnostics only
+            logger.debug(
+                "knowledge_search_fallback_failed client_id={} query='{}' reason={} detail={}".format(
+                    client_id,
+                    normalized_query[:80],
+                    reason,
+                    fallback_exc,
+                )
+            )
+            fallback_values = []
+        trimmed: list[str] = []
+        for value in fallback_values:
+            text = str(value).strip()
+            if text:
+                trimmed.append(text)
+        deps.last_knowledge_query = normalized_query
+        if trimmed:
+            deps.last_knowledge_empty = False
+            deps.knowledge_base_empty = False
+            logger.info(
+                "knowledge_search_{}_fallback client_id={} query='{}' entries={}".format(
+                    reason,
+                    client_id,
+                    normalized_query[:80],
+                    len(trimmed),
+                )
+            )
+            return _cache_result(deps, tool_name, trimmed)
+        deps.last_knowledge_empty = True
+        deps.knowledge_base_empty = True
+        logger.info(
+            "knowledge_search_{} client_id={} query='{}' detail=no_entries".format(
+                reason,
+                client_id,
+                normalized_query[:80],
+            )
+        )
+        return _cache_result(deps, tool_name, [])
+
     try:
         result = await wait_for(KnowledgeBase.search(normalized_query, client_id, k), timeout=timeout)
     except TimeoutError:
-        deps.knowledge_base_empty = True
-        deps.last_knowledge_query = normalized_query
-        deps.last_knowledge_empty = True
-        logger.info(f"knowledge_search_timeout client_id={client_id} query='{normalized_query[:80]}' timeout={timeout}")
-        return _cache_result(deps, tool_name, [])
+        logger.info(
+            "knowledge_search_timeout client_id={} query='{}' timeout={:.1f}".format(
+                client_id,
+                normalized_query[:80],
+                timeout,
+            )
+        )
+        return await _load_fallback("timeout")
     except Exception as e:  # pragma: no cover - forward to model
         message = str(e)
         if "Empty graph" in message or "EntityNotFound" in type(e).__name__:
-            deps.knowledge_base_empty = True
-            deps.last_knowledge_query = normalized_query
-            deps.last_knowledge_empty = True
-            logger.info(
-                f"knowledge_search_empty client_id={client_id} query='{normalized_query[:80]}' detail={message}"
-            )
-            return _cache_result(deps, tool_name, [])
+            return await _load_fallback("empty")
         raise ModelRetry(f"Knowledge search failed: {e}. Refine the query and retry.") from e
+
     deps.last_knowledge_query = normalized_query
-    deps.last_knowledge_empty = len(result) == 0
-    if deps.last_knowledge_empty:
-        deps.knowledge_base_empty = True
-        logger.info(f"knowledge_search_empty client_id={client_id} query='{normalized_query[:80]}' detail=no_results")
-    logger.debug(f"tool_search_knowledge results={len(result)}")
-    return _cache_result(deps, tool_name, result)
+    if result:
+        deps.last_knowledge_empty = False
+        deps.knowledge_base_empty = False
+        logger.debug(f"tool_search_knowledge results={len(result)}")
+        return _cache_result(deps, tool_name, result)
+
+    return await _load_fallback("empty")
 
 
 @toolset.tool(prepare=_single_use_prepare("tool_get_chat_history"))

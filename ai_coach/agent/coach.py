@@ -3,7 +3,7 @@ import inspect
 from datetime import datetime
 from functools import wraps
 from time import perf_counter
-from typing import Any, Optional, Sequence, TypeVar
+from typing import Any, ClassVar, Optional, Sequence, TypeVar
 
 from zoneinfo import ZoneInfo
 
@@ -11,13 +11,13 @@ from openai import AsyncOpenAI  # pyrefly: ignore[import-error]
 from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
 from pydantic import BaseModel
 from loguru import logger  # pyrefly: ignore[import-error]
-from pydantic_ai.exceptions import UnexpectedModelBehavior  # pyrefly: ignore[import-error]
 
 from config.app_settings import settings
 from core.enums import WorkoutType
 from core.schemas import Program, Subscription
 from core.schemas import QAResponse
 from core.enums import CoachType
+from ai_coach.exceptions import AgentExecutionAborted
 
 from .base import AgentDeps
 from .prompts import (
@@ -35,7 +35,6 @@ from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, Text
 from pydantic_ai.models.openai import OpenAIChatModel  # pyrefly: ignore[import-error]
 from ai_coach.types import CoachMode, MessageRole
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
-from ai_coach.exceptions import AgentExecutionAborted
 
 
 class ProgramAdapter:
@@ -65,6 +64,8 @@ class CoachAgent:
     """PydanticAI wrapper for program generation."""
 
     _agent: Optional[Agent] = None
+    _completion_client: ClassVar[AsyncOpenAI | None] = None
+    _completion_model_name: ClassVar[str | None] = None
 
     @staticmethod
     def _lang(deps: AgentDeps) -> str:
@@ -276,65 +277,108 @@ class CoachAgent:
         prompt: str,
         deps: AgentDeps,
     ) -> QAResponse:
-        agent = cls._get_agent()
-        cls._ensure_llm_logging(agent)
+        client, model_name = cls._get_completion_client()
+        cls._ensure_llm_logging(client, model_name)
         deps.mode = CoachMode.ask_ai
-        user_prompt = f"MODE: ask_ai\n{prompt}"
+        language = cls._lang(deps)
         history = cls._message_history(deps.client_id)
         if inspect.isawaitable(history):
             history = await history
-        prefetched_knowledge: list[str] = []
         try:
             prefetched_knowledge = await KnowledgeBase.search(prompt, deps.client_id, 6)
         except Exception as exc:  # noqa: BLE001 - prefetch should not block main flow
+            prefetched_knowledge = []
             logger.warning(f"agent.ask knowledge_prefetch_failed client_id={deps.client_id} error={exc}")
-        entries_count = sum(1 for item in prefetched_knowledge if (item or "").strip())
-        deps.knowledge_base_empty = entries_count == 0
+        entry_ids, entries = cls._build_knowledge_entries(prefetched_knowledge)
+        if not entry_ids:
+            try:
+                raw_entries = await KnowledgeBase.fallback_entries(deps.client_id, limit=6)
+            except Exception as exc:  # noqa: BLE001 - last resort
+                raw_entries = []
+                logger.debug(f"agent.ask fallback_entries_failed client_id={deps.client_id} detail={exc}")
+            extra_ids, extra_entries = cls._build_knowledge_entries(raw_entries)
+            if extra_ids:
+                entry_ids, entries = extra_ids, extra_entries
+        deps.knowledge_base_empty = len(entry_ids) == 0
         logger.debug(
             (
-                f"agent.ask knowledge_prefetch client_id={deps.client_id} entries={entries_count} "
+                f"agent.ask knowledge_prefetch client_id={deps.client_id} entries={len(entry_ids)} "
                 f"kb_empty={deps.knowledge_base_empty}"
             )
         )
-        model = getattr(agent, "model", None)
-        response_format: dict[str, str] | None = None
-        if cls._supports_json_object(model):
-            response_format = {"type": "json_object"}
-        settings_kwargs: dict[str, Any] = {
-            "temperature": 0.3,
-            "max_tokens": 1024,
-            "tool_choice": "none",
-        }
-        if response_format is not None:
-            settings_kwargs["response_format"] = response_format
+
+        supports_json = cls._supports_json_object(model_name)
+
+        knowledge_section = cls._format_knowledge_entries(entry_ids, entries)
+        system_prompt = (
+            "You are a professional fitness coach. Use the knowledge entries when available. "
+            "Answer in the client's language and keep the tone concise and actionable. "
+            "Return JSON with keys 'answer' and 'sources' when the model supports JSON output."
+        )
+        user_prompt = (
+            f"Client language: {language}\n"
+            f"Client question: {prompt}\n"
+            "Knowledge entries:\n"
+            f"{knowledge_section}\n"
+            "Provide a helpful answer and list the sources used (or ['general_knowledge'] when none are available)."
+        )
+
         try:
-            raw_result = await agent.run(
+            primary = await cls._complete_with_retries(
+                client,
+                system_prompt,
                 user_prompt,
-                deps=deps,
-                output_type=QAResponse,
-                model_settings=ModelSettings(**settings_kwargs),
-                message_history=history,
+                entry_ids,
+                supports_json=supports_json,
+                client_id=deps.client_id,
+                max_tokens=1200,
             )
-        except UnexpectedModelBehavior as exc:
-            reason = "knowledge_base_empty" if deps.knowledge_base_empty else "model_empty_response"
-            detail = str(exc)
-            logger.info(f"agent.ask aborted client_id={deps.client_id} reason={reason} detail={detail}")
-            if reason == "model_empty_response":
-                fallback = await cls._fallback_answer_question(
-                    prompt,
-                    deps,
-                    history,
-                    prefetched_knowledge=prefetched_knowledge,
+        except AgentExecutionAborted as exc:
+            logger.info(f"agent.ask completion_aborted client_id={deps.client_id} reason={exc.reason}")
+            deps.knowledge_base_empty = deps.knowledge_base_empty or (exc.reason == "knowledge_base_empty")
+            fallback = await cls._fallback_answer_question(
+                prompt,
+                deps,
+                history,
+                prefetched_knowledge=prefetched_knowledge,
+            )
+            if fallback is not None:
+                return fallback
+            if not entry_ids:
+                try:
+                    raw_entries = await KnowledgeBase.fallback_entries(deps.client_id, limit=6)
+                except Exception as extra_exc:  # noqa: BLE001 - enrichment best effort
+                    logger.debug(
+                        f"agent.ask fallback_entries_retry_failed client_id={deps.client_id} detail={extra_exc}"
+                    )
+                else:
+                    extra_ids, extra_entries = cls._build_knowledge_entries(raw_entries)
+                    if extra_ids:
+                        entry_ids, entries = extra_ids, extra_entries
+                        deps.knowledge_base_empty = False
+            return cls._manual_answer(prompt, language, entry_ids, entries, deps.client_id)
+
+        if primary is not None:
+            logger.info(
+                "agent.ask completed client_id={} answer_len={} sources={}".format(
+                    deps.client_id,
+                    len(primary.answer),
+                    len(primary.sources),
                 )
-                if fallback is not None:
-                    return fallback
-            message = (
-                "AI coach knowledge base returned no data"
-                if reason == "knowledge_base_empty"
-                else "AI coach returned an empty model response"
             )
-            raise AgentExecutionAborted(message, reason=reason) from exc
-        return cls._normalize_output(raw_result, QAResponse)
+            if not entry_ids:
+                primary.sources = ["general_knowledge"]
+            return primary
+
+        fallback = await cls._fallback_answer_question(
+            prompt,
+            deps,
+            history,
+            prefetched_knowledge=prefetched_knowledge,
+        )
+        if fallback is not None:
+            return fallback
+        return cls._manual_answer(prompt, language, entry_ids, entries, deps.client_id)
 
     @classmethod
     async def _fallback_answer_question(
@@ -352,13 +396,8 @@ class CoachAgent:
         logger.warning(
             f"agent.ask fallback_invoked client_id={deps.client_id} reason=model_empty_response history={len(history)}"
         )
-        agent = cls._get_agent()
-        model = getattr(agent, "model", None)
-        client: AsyncOpenAI | None = getattr(model, "client", None)
-        if client is None:
-            logger.warning(f"agent.ask fallback aborted client_id={deps.client_id} reason=missing_client")
-            return None
-        cls._ensure_llm_logging(agent)
+        client, model_name = cls._get_completion_client()
+        cls._ensure_llm_logging(client, model_name)
         knowledge: Sequence[str]
         if prefetched_knowledge is not None:
             knowledge = prefetched_knowledge
@@ -395,18 +434,19 @@ class CoachAgent:
             f"{knowledge_section}\n"
             "Return a helpful answer and list the sources used (or ['general_knowledge'] when none are available)."
         )
-        supports_json = cls._supports_json_object(model)
+        supports_json = cls._supports_json_object(model_name)
         attempt_modes = [True, False] if supports_json else [False]
         answer: str = ""
         sources: list[str] = []
         for index, as_json in enumerate(attempt_modes):
             second_attempt = index > 0
             try:
-                response = await cls._run_fallback_completion(
+                response = await cls._run_completion(
                     client,
                     system_prompt,
                     user_prompt,
                     use_json=as_json,
+                    max_tokens=1200,
                 )
             except Exception as exc:  # noqa: BLE001
                 mode = "json" if as_json else "text"
@@ -442,15 +482,128 @@ class CoachAgent:
         return None
 
     @staticmethod
+    def _build_knowledge_entries(raw_entries: Sequence[str]) -> tuple[list[str], list[str]]:
+        entry_ids: list[str] = []
+        entries: list[str] = []
+        for index, raw in enumerate(raw_entries, start=1):
+            text = str(raw or "").strip()
+            if not text:
+                continue
+            entry_id = f"KB-{index}"
+            entry_ids.append(entry_id)
+            entries.append(text)
+        return entry_ids, entries
+
+    @staticmethod
+    def _format_knowledge_entries(entry_ids: Sequence[str], entries: Sequence[str]) -> str:
+        if not entry_ids or not entries:
+            return "No knowledge entries were retrieved."
+        formatted: list[str] = []
+        for entry_id, text in zip(entry_ids, entries, strict=False):
+            formatted.append(f"{entry_id}: {text}")
+        return "\n\n".join(formatted)
+
+    @classmethod
+    async def _complete_with_retries(
+        cls,
+        client: AsyncOpenAI,
+        system_prompt: str,
+        user_prompt: str,
+        entry_ids: Sequence[str],
+        *,
+        supports_json: bool,
+        client_id: int,
+        max_tokens: int,
+    ) -> QAResponse | None:
+        attempt_modes = [True, False] if supports_json else [False]
+        for attempt_index, use_json in enumerate(attempt_modes):
+            try:
+                response = await cls._run_completion(
+                    client,
+                    system_prompt,
+                    user_prompt,
+                    use_json=use_json,
+                    max_tokens=max_tokens,
+                )
+            except Exception as exc:  # noqa: BLE001
+                mode = "json" if use_json else "text"
+                logger.warning(
+                    f"agent.ask completion_failed client_id={client_id} mode={mode} attempt={attempt_index} error={exc}"
+                )
+                continue
+            content = cls._extract_choice_content(response, client_id=client_id)
+            if not content:
+                mode = "json" if use_json else "text"
+                logger.warning(f"agent.ask completion_empty client_id={client_id} mode={mode} attempt={attempt_index}")
+                continue
+            answer, sources = cls._parse_fallback_content(
+                content,
+                list(entry_ids),
+                expects_json=use_json,
+                client_id=client_id,
+            )
+            if answer:
+                if not sources:
+                    sources = list(entry_ids) or ["general_knowledge"]
+                return QAResponse(answer=answer, sources=sources)
+        return None
+
+    @classmethod
+    def _manual_answer(
+        cls,
+        prompt: str,
+        language: str,
+        entry_ids: Sequence[str],
+        entries: Sequence[str],
+        client_id: int,
+    ) -> QAResponse:
+        if entry_ids and entries:
+            answer = cls._summarize_entries(entries)
+            logger.info(
+                f"agent.ask manual_answer client_id={client_id} entries={len(entry_ids)} answer_len={len(answer)}"
+            )
+            return QAResponse(answer=answer, sources=list(entry_ids))
+        topic = prompt.strip().rstrip("?") or "training"
+        answer = (
+            f"Here is general guidance for {topic}. Maintain a balanced training schedule with recovery days, combine"
+            " strength and conditioning work, focus on whole foods with sufficient protein, stay hydrated, and track"
+            " sleep. Adjust intensity gradually and consult a healthcare professional if you have medical concerns."
+        )
+        logger.info(f"agent.ask manual_general_answer client_id={client_id} language={language} topic={topic[:40]}")
+        return QAResponse(answer=answer, sources=["general_knowledge"])
+
+    @staticmethod
+    def _summarize_entries(entries: Sequence[str]) -> str:
+        if not entries:
+            return ""
+        summary_chunks: list[str] = []
+        remaining = 600
+        for text in entries:
+            cleaned = text.replace("\n", " ").strip()
+            if not cleaned:
+                continue
+            if len(cleaned) > remaining:
+                clipped = cleaned[: remaining + 1]
+                last_space = clipped.rfind(" ")
+                if last_space > 0:
+                    clipped = clipped[:last_space]
+                cleaned = f"{clipped.strip()}..."
+            summary_chunks.append(f"- {cleaned}")
+            remaining -= len(cleaned)
+            if remaining <= 0:
+                break
+        if not summary_chunks:
+            return "Key guidance could not be extracted from the knowledge base."
+        return "Here is direct guidance from the knowledge base:\n" + "\n".join(summary_chunks)
+
+    @staticmethod
     def _supports_json_object(model: Any) -> bool:
         model_name = getattr(model, "model_name", None) or getattr(model, "name", None)
         if not model_name:
             return False
         normalized = str(model_name).lower()
         allowed_prefixes = (
-            "gpt-4o",
-            "gpt-4.1",
-            "gpt-4.2",
+            "gpt-4",
             "o3-",
             "o1-",
         )
@@ -467,12 +620,33 @@ class CoachAgent:
         return str(model_name)
 
     @classmethod
-    def _ensure_llm_logging(cls, agent: Any) -> None:
+    def _get_completion_client(cls) -> tuple[AsyncOpenAI, str]:
+        if cls._completion_client is not None and cls._completion_model_name is not None:
+            return cls._completion_client, cls._completion_model_name
+
+        agent = cls._get_agent()
         model = getattr(agent, "model", None)
-        if model is None:
-            return
         client = getattr(model, "client", None)
-        if client is None:
+        if isinstance(client, AsyncOpenAI):
+            cls._completion_client = client
+            cls._completion_model_name = cls._model_identifier(model)
+            return client, cls._completion_model_name
+
+        cls._completion_client = AsyncOpenAI(
+            api_key=settings.LLM_API_KEY or None,
+            base_url=settings.LLM_API_URL or None,
+        )
+        cls._completion_model_name = settings.AGENT_MODEL
+        return cls._completion_client, cls._completion_model_name
+
+    @classmethod
+    def _ensure_llm_logging(cls, target: Any, model_id: str | None = None) -> None:
+        client: AsyncOpenAI | None
+        if isinstance(target, AsyncOpenAI):
+            client = target
+        else:
+            client = getattr(target, "client", None)
+        if not isinstance(client, AsyncOpenAI):
             return
         if getattr(client, "_gymbot_wrapped", False):
             return
@@ -484,7 +658,7 @@ class CoachAgent:
         if original_create is None:
             return
 
-        model_id = cls._model_identifier(model)
+        resolved_model = model_id or settings.AGENT_MODEL
 
         @wraps(original_create)
         async def wrapped_create(*args: Any, **kwargs: Any) -> Any:  # noqa: ANN401 - external signature
@@ -495,7 +669,7 @@ class CoachAgent:
                     "llm.request model={} json_format={} messages={} system_len={} user_len={} "
                     "temperature={} max_tokens={} tool_choice={}"
                 ).format(
-                    model_id,
+                    resolved_model,
                     request_meta["json_format"],
                     request_meta["messages"],
                     request_meta["system_len"],
@@ -509,16 +683,17 @@ class CoachAgent:
                 response = await original_create(*args, **kwargs)
             except Exception as exc:  # noqa: BLE001
                 latency = (perf_counter() - start) * 1000.0
-                logger.warning(f"llm.response.error model={model_id} latency_ms={latency:.0f} error={exc}")
+                logger.warning(f"llm.response.error model={resolved_model} latency_ms={latency:.0f} error={exc}")
                 raise
             latency = (perf_counter() - start) * 1000.0
             response_meta = cls._llm_response_metadata(response)
             logger.debug(
                 (
                     "llm.response model={} choices={} finish_reason={} content_len={} "
-                    "has_tool_calls={} prompt_tokens={} completion_tokens={} total_tokens={} latency_ms={:.0f}"
+                    "has_tool_calls={} prompt_tokens={} completion_tokens={} total_tokens={} "
+                    "latency_ms={:.0f} preview={}"
                 ).format(
-                    model_id,
+                    resolved_model,
                     response_meta["choices"],
                     response_meta["finish_reason"],
                     response_meta["content_len"],
@@ -527,6 +702,7 @@ class CoachAgent:
                     response_meta["completion_tokens"],
                     response_meta["total_tokens"],
                     latency,
+                    response_meta["preview"],
                 )
             )
             return response
@@ -555,14 +731,17 @@ class CoachAgent:
                 system_len += length
             elif role == "user":
                 user_len += length
+        temperature = kwargs.get("temperature")
+        max_tokens = kwargs.get("max_tokens")
+        tool_choice = kwargs.get("tool_choice")
         return {
             "json_format": "response_format" in kwargs,
             "messages": total_messages,
             "system_len": system_len,
             "user_len": user_len,
-            "temperature": kwargs.get("temperature"),
-            "max_tokens": kwargs.get("max_tokens"),
-            "tool_choice": kwargs.get("tool_choice"),
+            "temperature": temperature if temperature is not None else "na",
+            "max_tokens": max_tokens if max_tokens is not None else "na",
+            "tool_choice": tool_choice if tool_choice is not None else "na",
         }
 
     @staticmethod
@@ -577,6 +756,7 @@ class CoachAgent:
         completion_tokens = getattr(usage, "completion_tokens", None)
         total_tokens = getattr(usage, "total_tokens", None)
         finish_reason = getattr(first_choice, "finish_reason", "") if first_choice else ""
+        preview = CoachAgent._message_preview(message) if message is not None else ""
         return {
             "choices": len(choices),
             "finish_reason": finish_reason or "",
@@ -585,15 +765,17 @@ class CoachAgent:
             "prompt_tokens": prompt_tokens if prompt_tokens is not None else "na",
             "completion_tokens": completion_tokens if completion_tokens is not None else "na",
             "total_tokens": total_tokens if total_tokens is not None else "na",
+            "preview": preview,
         }
 
     @staticmethod
-    async def _run_fallback_completion(
+    async def _run_completion(
         client: AsyncOpenAI,
         system_prompt: str,
         user_prompt: str,
         *,
         use_json: bool,
+        max_tokens: int,
     ) -> Any:
         kwargs: dict[str, Any] = {
             "model": settings.AGENT_MODEL,
@@ -602,7 +784,7 @@ class CoachAgent:
                 {"role": "user", "content": user_prompt},
             ],
             "temperature": 0.25,
-            "max_tokens": 1024,
+            "max_tokens": max_tokens,
             "tool_choice": "none",
         }
         if use_json:

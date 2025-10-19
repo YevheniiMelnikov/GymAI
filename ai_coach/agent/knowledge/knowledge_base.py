@@ -588,6 +588,14 @@ class KnowledgeBase:
         return collected
 
     @classmethod
+    async def fallback_entries(cls, client_id: int, limit: int = 6) -> list[str]:
+        """Expose raw dataset entries for resiliency fallbacks."""
+        user = await cls._get_cognee_user()
+        aliases = [cls._dataset_name(client_id), cls.GLOBAL_DATASET]
+        datasets = [cls._resolve_dataset_alias(alias) for alias in aliases]
+        return await cls._fallback_dataset_entries(datasets, user, top_k=limit)
+
+    @classmethod
     async def _list_dataset_entries(cls, dataset: str, user: Any | None) -> list[str]:
         datasets_module = getattr(cognee, "datasets", None)
         if datasets_module is None:

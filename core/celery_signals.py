@@ -89,10 +89,18 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
     strict_mode = os.getenv("CELERY_STRICT", "0") == "1"
 
     if "ai_coach" not in queue_names:
-        logger.warning(f"ai_coach queue missing on worker hostname={worker.hostname} queues={queue_names}")
-        if strict_mode:
-            raise SystemExit("ai_coach queue missing")
-        return
+        try:
+            control.add_consumer("ai_coach", destination=[worker.hostname])
+            queue_names.append("ai_coach")
+            queue_names = sorted(set(queue_names))
+            logger.info(f"celery_consumer_added hostname={worker.hostname} queues={queue_names} target=ai_coach")
+        except Exception as add_exc:  # noqa: BLE001
+            logger.warning(
+                f"ai_coach queue missing on worker hostname={worker.hostname} queues={queue_names} error={add_exc}"
+            )
+            if strict_mode:
+                raise SystemExit("ai_coach queue missing") from add_exc
+            return
 
     if not registered_ok:
         logger.error(

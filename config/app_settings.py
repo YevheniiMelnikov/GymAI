@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     AI_COACH_MAX_TOOL_CALLS: Annotated[int, Field(default=5)]
     AI_COACH_REQUEST_TIMEOUT: Annotated[int, Field(default=60)]
     AI_COACH_DEFAULT_TOOL_TIMEOUT: Annotated[float, Field(default=3.0)]
-    AI_COACH_SEARCH_TIMEOUT: Annotated[float, Field(default=2.0)]
+    AI_COACH_SEARCH_TIMEOUT: Annotated[float, Field(default=8.0)]
     AI_COACH_HISTORY_TIMEOUT: Annotated[float, Field(default=6.0)]
     AI_COACH_PROGRAM_HISTORY_TIMEOUT: Annotated[float, Field(default=6.0)]
     AI_COACH_SAVE_TIMEOUT: Annotated[float, Field(default=30.0)]
