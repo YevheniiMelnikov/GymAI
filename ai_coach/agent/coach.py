@@ -66,11 +66,40 @@ class CoachAgent:
     _agent: Optional[Agent] = None
     _completion_client: ClassVar[AsyncOpenAI | None] = None
     _completion_model_name: ClassVar[str | None] = None
+    _FITNESS_HINTS: ClassVar[tuple[str, ...]] = (
+        "сушка",
+        "подсуш",
+        "подсушиться",
+        "підсуш",
+        "підсушитися",
+        "жир",
+        "fat loss",
+        "cutting",
+        "дефицит",
+        "дефіцит",
+        "calorie",
+    )
+    _NEGATIVE_HINTS: ClassVar[tuple[str, ...]] = (
+        "полотен",
+        "рушник",
+        "шкіра",
+        "skin",
+        "hair",
+        "dryer",
+        "фен",
+    )
 
     @staticmethod
     def _lang(deps: AgentDeps) -> str:
         language: str = deps.locale or getattr(settings, "DEFAULT_LANG", "en")
         return language
+
+    @classmethod
+    def _is_fitness_query(cls, prompt: str) -> bool:
+        lowered = prompt.lower()
+        if any(term in lowered for term in cls._NEGATIVE_HINTS):
+            return False
+        return any(hint in lowered for hint in cls._FITNESS_HINTS)
 
     @classmethod
     def _init_agent(cls) -> Any:
@@ -290,6 +319,7 @@ class CoachAgent:
             prefetched_knowledge = []
             logger.warning(f"agent.ask knowledge_prefetch_failed client_id={deps.client_id} error={exc}")
         entry_ids, entries = cls._build_knowledge_entries(prefetched_knowledge)
+        entry_ids, entries = cls._filter_entries_for_prompt(prompt, entry_ids, entries)
         if not entry_ids:
             try:
                 raw_entries = await KnowledgeBase.fallback_entries(deps.client_id, limit=6)
@@ -297,13 +327,14 @@ class CoachAgent:
                 raw_entries = []
                 logger.debug(f"agent.ask fallback_entries_failed client_id={deps.client_id} detail={exc}")
             extra_ids, extra_entries = cls._build_knowledge_entries(raw_entries)
+            extra_ids, extra_entries = cls._filter_entries_for_prompt(prompt, extra_ids, extra_entries)
             if extra_ids:
                 entry_ids, entries = extra_ids, extra_entries
         deps.knowledge_base_empty = len(entry_ids) == 0
         logger.debug(
             (
-                f"agent.ask knowledge_prefetch client_id={deps.client_id} entries={len(entry_ids)} "
-                f"kb_empty={deps.knowledge_base_empty}"
+                f"agent.ask knowledge_ready client_id={deps.client_id} entries={len(entry_ids)} "
+                f"kb_used={not deps.knowledge_base_empty}"
             )
         )
 
@@ -311,15 +342,17 @@ class CoachAgent:
 
         knowledge_section = cls._format_knowledge_entries(entry_ids, entries)
         system_prompt = (
-            "You are a professional fitness coach. Use the knowledge entries when available. "
-            "Answer in the client's language and keep the tone concise and actionable. "
-            "Return JSON with keys 'answer' and 'sources' when the model supports JSON output."
+            "You are a professional fitness coach. Always interpret ambiguous terms such as 'сушка' or 'подсушиться' "
+            "as fitness-related fat loss unless the question explicitly references towels, hair, or skin care. "
+            "Use the knowledge entries when available, answer in the client's language, and keep the tone concise "
+            "and actionable. Return JSON with keys 'answer' and 'sources' when the model supports JSON output."
         )
         user_prompt = (
             f"Client language: {language}\n"
             f"Client question: {prompt}\n"
             "Knowledge entries:\n"
             f"{knowledge_section}\n"
+            "Focus on training, nutrition, recovery, and related fitness strategies. "
             "Provide a helpful answer and list the sources used (or ['general_knowledge'] when none are available)."
         )
 
@@ -356,9 +389,25 @@ class CoachAgent:
                     if extra_ids:
                         entry_ids, entries = extra_ids, extra_entries
                         deps.knowledge_base_empty = False
-            return cls._manual_answer(prompt, language, entry_ids, entries, deps.client_id)
+            manual = cls._manual_answer(prompt, language, entry_ids, entries, deps.client_id)
+            return cls._enforce_fitness_domain(
+                prompt,
+                manual,
+                language,
+                entry_ids,
+                entries,
+                deps.client_id,
+            )
 
         if primary is not None:
+            primary = cls._enforce_fitness_domain(
+                prompt,
+                primary,
+                language,
+                entry_ids,
+                entries,
+                deps.client_id,
+            )
             logger.info(
                 "agent.ask completed client_id={} answer_len={} sources={}".format(
                     deps.client_id,
@@ -378,7 +427,15 @@ class CoachAgent:
         )
         if fallback is not None:
             return fallback
-        return cls._manual_answer(prompt, language, entry_ids, entries, deps.client_id)
+        manual = cls._manual_answer(prompt, language, entry_ids, entries, deps.client_id)
+        return cls._enforce_fitness_domain(
+            prompt,
+            manual,
+            language,
+            entry_ids,
+            entries,
+            deps.client_id,
+        )
 
     @classmethod
     async def _fallback_answer_question(
@@ -416,8 +473,8 @@ class CoachAgent:
             entry_id = f"KB-{idx}"
             entry_ids.append(entry_id)
             entries.append(f"{entry_id}: {text}")
-        if entry_ids:
-            deps.knowledge_base_empty = False
+        entry_ids, entries = cls._filter_entries_for_prompt(prompt, entry_ids, entries)
+        deps.knowledge_base_empty = len(entry_ids) == 0
         language = cls._lang(deps)
         knowledge_section = "\n\n".join(entries) if entries else "No knowledge entries were retrieved."
         system_prompt = (
@@ -475,7 +532,15 @@ class CoachAgent:
                 )
                 if not entry_ids:
                     deps.knowledge_base_empty = True
-                return QAResponse(answer=answer, sources=sources)
+                result = QAResponse(answer=answer, sources=sources)
+                return cls._enforce_fitness_domain(
+                    prompt,
+                    result,
+                    language,
+                    entry_ids,
+                    entries,
+                    deps.client_id,
+                )
         logger.warning(f"agent.ask fallback missing_answer client_id={deps.client_id} kb_empty={not entry_ids}")
         if not entry_ids:
             deps.knowledge_base_empty = True
@@ -493,6 +558,31 @@ class CoachAgent:
             entry_ids.append(entry_id)
             entries.append(text)
         return entry_ids, entries
+
+    @classmethod
+    def _filter_entries_for_prompt(
+        cls,
+        prompt: str,
+        entry_ids: Sequence[str],
+        entries: Sequence[str],
+    ) -> tuple[list[str], list[str]]:
+        if not entry_ids or not entries:
+            return list(entry_ids), list(entries)
+        if not cls._is_fitness_query(prompt):
+            return list(entry_ids), list(entries)
+        filtered_ids: list[str] = []
+        filtered_entries: list[str] = []
+        for entry_id, text in zip(entry_ids, entries, strict=False):
+            lowered = text.lower()
+            if any(term in lowered for term in cls._NEGATIVE_HINTS):
+                logger.debug("agent.ask entry_filtered entry_id=%s reason=negative_hint", entry_id)
+                continue
+            filtered_ids.append(entry_id)
+            filtered_entries.append(text)
+        if filtered_ids:
+            return filtered_ids, filtered_entries
+        logger.debug("agent.ask all_entries_filtered prompt_contains_fitness=true")
+        return [], []
 
     @staticmethod
     def _format_knowledge_entries(entry_ids: Sequence[str], entries: Sequence[str]) -> str:
@@ -564,11 +654,16 @@ class CoachAgent:
             )
             return QAResponse(answer=answer, sources=list(entry_ids))
         topic = prompt.strip().rstrip("?") or "training"
-        answer = (
-            f"Here is general guidance for {topic}. Maintain a balanced training schedule with recovery days, combine"
-            " strength and conditioning work, focus on whole foods with sufficient protein, stay hydrated, and track"
-            " sleep. Adjust intensity gradually and consult a healthcare professional if you have medical concerns."
-        )
+        answer: str
+        if any(hint in prompt.lower() for hint in cls._FITNESS_HINTS):
+            answer = cls._fitness_guidance(language)
+        else:
+            answer = (
+                f"Here is general guidance for {topic}. Maintain a balanced training schedule with recovery days, "
+                "combine strength and conditioning work, focus on whole foods with sufficient protein, stay hydrated, "
+                "and track sleep. Adjust intensity gradually and consult a healthcare professional if you have medical "
+                "concerns."
+            )
         logger.info(f"agent.ask manual_general_answer client_id={client_id} language={language} topic={topic[:40]}")
         return QAResponse(answer=answer, sources=["general_knowledge"])
 
@@ -909,9 +1004,13 @@ class CoachAgent:
         client_id: int,
     ) -> tuple[str, list[str]]:
         normalized_entries = [item for item in entry_ids if item]
-        if expects_json:
+        text = content.strip()
+        if not text:
+            return "", []
+        should_parse_json = expects_json or text.lstrip().startswith("{")
+        if should_parse_json:
             try:
-                payload = json.loads(content)
+                payload = json.loads(text)
             except json.JSONDecodeError as exc:  # pragma: no cover - defensive guard
                 logger.warning(f"agent.ask fallback invalid_json client_id={client_id} error={exc}")
                 return "", []
@@ -923,14 +1022,49 @@ class CoachAgent:
                     text = str(item).strip()
                     if text:
                         normalized_sources.append(text)
+            if normalized_sources:
+                valid = {entry for entry in normalized_entries}
+                normalized_sources = [item for item in normalized_sources if item in valid]
             if not normalized_sources:
                 normalized_sources = list(normalized_entries) if normalized_entries else ["general_knowledge"]
             return answer, normalized_sources
-        answer = content.strip()
-        if not answer:
-            return "", []
+        answer = text
         default_sources = list(normalized_entries) if normalized_entries else ["general_knowledge"]
         return answer, default_sources
+
+    @classmethod
+    def _enforce_fitness_domain(
+        cls,
+        prompt: str,
+        response: QAResponse,
+        language: str,
+        entry_ids: Sequence[str],
+        entries: Sequence[str],
+        client_id: int,
+    ) -> QAResponse:
+        question = prompt.lower()
+        answer = response.answer.strip()
+        if not answer:
+            return cls._manual_answer(prompt, language, entry_ids, entries, client_id)
+        answer_lower = answer.lower()
+        is_fitness_prompt = cls._is_fitness_query(question) or any(hint in question for hint in cls._FITNESS_HINTS)
+        has_negative_answer = any(term in answer_lower for term in cls._NEGATIVE_HINTS)
+        contains_fitness_detail = any(token in answer_lower for token in cls._FITNESS_HINTS if token)
+        if is_fitness_prompt and (has_negative_answer or not contains_fitness_detail):
+            reason = "negative" if has_negative_answer else "missing_fitness"
+            logger.info(f"agent.ask domain_rewrite client_id={client_id} reason={reason}")
+            corrected = cls._manual_answer(prompt, language, entry_ids, entries, client_id)
+            corrected.sources = list(entry_ids) if entry_ids else ["general_knowledge"]
+            return corrected
+        valid_sources = set(entry_ids)
+        if response.sources:
+            filtered = [source for source in response.sources if source in valid_sources]
+            if not filtered and entry_ids:
+                filtered = list(entry_ids)
+            response.sources = filtered or ["general_knowledge"]
+        else:
+            response.sources = list(entry_ids) if entry_ids else ["general_knowledge"]
+        return response
 
     @classmethod
     async def llm_probe(cls) -> dict[str, Any]:
@@ -990,3 +1124,33 @@ class CoachAgent:
             "total_tokens": total_tokens,
             "latency_ms": round(latency, 2),
         }
+
+    @classmethod
+    def _fitness_guidance(cls, language: str) -> str:
+        lang_key = language.lower().split("-")[0] if language else "en"
+        templates: dict[str, str] = {
+            "ua": (
+                "Щоб підсушитися, створіть помірний дефіцит калорій (≈10–20% від підтримки). "
+                "Підтримуйте високий рівень білка, пийте достатньо води та контролюйте сон. "
+                "Тренуйтеся 3–5 разів на тиждень з прогресивним навантаженням, додавайте помірне кардіо. "
+                "Коригуйте калорійність лише після перевірки результатів раз на 1–2 тижні."
+            ),
+            "uk": (
+                "Щоб підсушитися, створіть помірний дефіцит калорій (≈10–20% від підтримки). "
+                "Підтримуйте високий рівень білка, пийте достатньо води та контролюйте сон. "
+                "Тренуйтеся 3–5 разів на тиждень з прогресивним навантаженням, додавайте помірне кардіо. "
+                "Коригуйте калорійність лише після перевірки результатів раз на 1–2 тижні."
+            ),
+            "ru": (
+                "Чтобы подсушиться, создайте умеренный дефицит калорий (≈10–20% от поддержки). "
+                "Держите высокий уровень белка, следите за гидратацией и качеством сна. "
+                "Тренируйтесь 3–5 раз в неделю с прогрессивной нагрузкой, добавляйте умеренное кардио. "
+                "Корректируйте калорийность только по факту изменений раз в 1–2 недели."
+            ),
+            "en": (
+                "To lean out, create a moderate calorie deficit (around 10–20% below maintenance). "
+                "Keep protein high, stay hydrated, prioritise sleep, and train 3–5 times per week with progressive "
+                "resistance work. Add moderate cardio and adjust calories only after reviewing results every 1–2 weeks."
+            ),
+        }
+        return templates.get(lang_key, templates["en"])

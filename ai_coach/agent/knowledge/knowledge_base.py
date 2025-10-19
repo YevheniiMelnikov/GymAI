@@ -4,7 +4,7 @@ import os
 from dataclasses import asdict, is_dataclass
 from hashlib import sha256
 from types import SimpleNamespace
-from typing import Any, Awaitable, Callable, Iterable, Sequence, cast
+from typing import Any, Awaitable, Callable, ClassVar, Iterable, Sequence, cast
 from uuid import UUID
 
 from loguru import logger
@@ -62,6 +62,36 @@ class KnowledgeBase:
     _LEGACY_CLIENT_PREFIX: str = "client_"
     _PROJECTION_CHECK_QUERY: str = "__knowledge_projection_health__"
     _PROJECTION_BACKOFF_SECONDS: tuple[float, ...] = (0.5, 1.0, 2.0, 4.0)
+    _FITNESS_HINTS: ClassVar[tuple[str, ...]] = (
+        "сушка",
+        "подсуш",
+        "підсуш",
+        "жир",
+        "fat loss",
+        "cutting",
+        "дефицит",
+        "дефіцит",
+        "calorie",
+    )
+    _NEGATIVE_HINTS: ClassVar[tuple[str, ...]] = (
+        "полотен",
+        "рушник",
+        "шкіра",
+        "skin",
+        "hair",
+        "dryer",
+        "фен",
+    )
+    _FITNESS_EXPANSIONS: ClassVar[tuple[str, ...]] = (
+        "дефицит калорий",
+        "калорійний дефіцит",
+        "низький відсоток жиру",
+        "reduce body fat",
+        "fat loss training",
+        "strength and cardio",
+        "calorie deficit",
+        "nutrition plan",
+    )
 
     @classmethod
     async def initialize(cls, knowledge_loader: KnowledgeLoader | None = None) -> None:
@@ -148,7 +178,7 @@ class KnowledgeBase:
 
     @classmethod
     async def search(cls, query: str, client_id: int, k: int | None = None) -> list[str]:
-        """Search across client and global datasets."""
+        """Search across client and global datasets with resiliency features."""
         normalized = query.strip()
         if not normalized:
             logger.debug(f"Knowledge search skipped client_id={client_id}: empty query")
@@ -167,39 +197,95 @@ class KnowledgeBase:
                 )
             resolved_datasets.append(resolved)
 
-        query_hash = sha256(normalized.encode()).hexdigest()[:12]
+        base_hash = sha256(normalized.encode()).hexdigest()[:12]
         datasets_hint = ",".join(resolved_datasets)
         logger.debug(
-            f"knowledge_search_start client_id={client_id} query_hash={query_hash}"
+            f"knowledge_search_start client_id={client_id} query_hash={base_hash}"
             f" datasets={datasets_hint} top_k={k if k is not None else 'default'}"
         )
 
-        async def _search(targets: list[str]) -> list[str]:
+        queries = cls._expanded_queries(normalized)
+        if len(queries) > 1:
+            logger.debug(
+                f"knowledge_search_expanded client_id={client_id} variants={len(queries)} base_query_hash={base_hash}"
+            )
+
+        fitness_query = cls._is_fitness_query(normalized)
+        aggregated: list[str] = []
+        seen: set[str] = set()
+        for variant in queries:
+            results = await cls._search_single_query(
+                variant,
+                resolved_datasets,
+                user,
+                k,
+                client_id,
+            )
+            if not results:
+                continue
+            filtered = cls._filter_results(results, fitness_query)
+            for item in filtered:
+                cleaned = str(item or "").strip()
+                if not cleaned:
+                    continue
+                key = cleaned.lower()
+                if key in seen:
+                    continue
+                aggregated.append(cleaned)
+                seen.add(key)
+                if k is not None and len(aggregated) >= k:
+                    break
+            if k is not None and len(aggregated) >= k:
+                break
+
+        if k is not None:
+            return aggregated[:k]
+        return aggregated
+
+    @classmethod
+    async def _search_single_query(
+        cls,
+        query: str,
+        datasets: list[str],
+        user: Any | None,
+        k: int | None,
+        client_id: int,
+    ) -> list[str]:
+        query_hash = sha256(query.encode()).hexdigest()[:12]
+        datasets_hint = ",".join(datasets)
+
+        async def _search_targets(targets: list[str]) -> list[str]:
             params: dict[str, Any] = {
                 "datasets": targets,
                 "user": cls._to_user_or_none(user),
             }
             if k is not None:
                 params["top_k"] = k
-            return await cognee.search(normalized, **params)
+            return await cognee.search(query, **params)
 
         try:
-            results = await _search(resolved_datasets)
+            results = await _search_targets(datasets)
             logger.debug(f"knowledge_search_ok client_id={client_id} query_hash={query_hash} results={len(results)}")
             return results
         except (PermissionDeniedError, DatasetNotFoundError) as exc:
-            logger.warning(f"Search issue client_id={client_id}: {exc}")
+            logger.warning(f"Search issue client_id={client_id} query_hash={query_hash}: {exc}")
             return []
         except Exception as exc:
             message = str(exc)
             if cls._is_graph_missing_error(exc):
-                datasets_hint = ",".join(resolved_datasets)
                 logger.warning(
                     f"knowledge_search_graph_missing client_id={client_id} datasets={datasets_hint} detail={message}"
                 )
-                await cls._warm_up_datasets(resolved_datasets, user)
+                await cls._warm_up_datasets(datasets, user)
                 try:
-                    return await _search(resolved_datasets)
+                    results = await _search_targets(datasets)
+                    logger.debug(
+                        "knowledge_search_ok client_id={} query_hash={} results={} retry=warm",
+                        client_id,
+                        query_hash,
+                        len(results),
+                    )
+                    return results
                 except Exception as retry_exc:
                     if not cls._is_graph_missing_error(retry_exc):
                         logger.warning(
@@ -210,31 +296,90 @@ class KnowledgeBase:
                     fallback_dataset = cls._resolve_dataset_alias(cls.GLOBAL_DATASET)
                     await cls._warm_up_datasets([fallback_dataset], user)
                     try:
-                        results = await _search([fallback_dataset])
+                        results = await _search_targets([fallback_dataset])
                         logger.debug(
-                            f"knowledge_search_ok client_id={client_id} query_hash={query_hash}"
-                            f" results={len(results)} fallback=global"
+                            "knowledge_search_ok client_id={} query_hash={} results={} fallback=global",
+                            client_id,
+                            query_hash,
+                            len(results),
                         )
                         return results
                     except Exception as final_exc:
                         if cls._is_graph_missing_error(final_exc):
                             fallback_entries = await cls._fallback_dataset_entries(
-                                resolved_datasets,
+                                datasets,
                                 user,
                                 top_k=k,
                             )
                             if fallback_entries:
                                 logger.info(
-                                    "knowledge_search_dataset_fallback client_id="
-                                    f"{client_id} results={len(fallback_entries)}"
+                                    "knowledge_search_dataset_fallback client_id={} results={}",
+                                    client_id,
+                                    len(fallback_entries),
                                 )
                                 return fallback_entries
-                            logger.warning(f"knowledge_search_dataset_fallback_empty client_id={client_id}")
+                            logger.warning(
+                                f"knowledge_search_dataset_fallback_empty client_id={client_id} query_hash={query_hash}"
+                            )
                         else:
-                            logger.error(f"knowledge_search_retry_failed client_id={client_id} detail={final_exc}")
+                            logger.error(
+                                "knowledge_search_retry_failed client_id={} query_hash={} detail={}",
+                                client_id,
+                                query_hash,
+                                final_exc,
+                            )
                         return []
             logger.error(f"Unexpected search error client_id={client_id}: {message}")
             return []
+
+    @classmethod
+    def _expanded_queries(cls, query: str) -> list[str]:
+        variants: list[str] = []
+        seen: set[str] = set()
+        for candidate in (query,) + tuple(cls._fitness_query_variants(query)):
+            lowered = candidate.lower()
+            if lowered in seen:
+                continue
+            seen.add(lowered)
+            variants.append(candidate)
+        return variants
+
+    @classmethod
+    def _fitness_query_variants(cls, query: str) -> Iterable[str]:
+        if not cls._is_fitness_query(query):
+            return ()
+        lowered = query.lower()
+        additions: list[str] = []
+        for token in cls._FITNESS_EXPANSIONS:
+            token_lower = token.lower()
+            if token_lower not in lowered:
+                additions.append(f"{query} {token}")
+        additions.extend(token for token in cls._FITNESS_EXPANSIONS if token.lower() not in lowered)
+        return additions
+
+    @classmethod
+    def _filter_results(cls, results: Iterable[str], fitness_only: bool) -> list[str]:
+        filtered: list[str] = []
+        for item in results:
+            text = str(item or "").strip()
+            if not text:
+                continue
+            if fitness_only and cls._contains_negative_hint(text):
+                continue
+            filtered.append(text)
+        return filtered
+
+    @classmethod
+    def _is_fitness_query(cls, query: str) -> bool:
+        lowered = query.lower()
+        if any(term in lowered for term in cls._NEGATIVE_HINTS):
+            return False
+        return any(hint in lowered for hint in cls._FITNESS_HINTS)
+
+    @classmethod
+    def _contains_negative_hint(cls, text: str) -> bool:
+        lowered = text.lower()
+        return any(term in lowered for term in cls._NEGATIVE_HINTS)
 
     @classmethod
     async def add_text(
