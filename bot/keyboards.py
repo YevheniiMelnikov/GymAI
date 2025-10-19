@@ -186,13 +186,11 @@ def new_message_kb(lang: str, profile_id: int) -> KbMarkup:
 
 def select_service_kb(lang: str, has_coach: bool = False) -> KbMarkup:
     builder = ButtonsBuilder(lang)
-    buttons = [
+    buttons: list[list[KbBtn]] = [
         [builder.add("subscription", "subscription")],
         [builder.add("program", "program")],
         [builder.add("ask_ai", "ask_ai")],
-        [builder.add("ai_coach", "ai_coach")],
     ]
-    buttons.append([builder.add("choose_coach", "choose_coach")])
     if has_coach:
         buttons.append([builder.add("contact_coach", "contact")])
     buttons.append([builder.add("prev_menu", "back")])
