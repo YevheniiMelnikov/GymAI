@@ -149,6 +149,7 @@ services:
         EXTRAS: coach
     <<: *common_env
     environment:
+      COGNEE_STORAGE_PATH: /app/.data_storage
       COGNEE_DATA_ROOT: /app/.data_storage
       REDIS_URL: ${REDIS_URL}
       GRAPH_DATABASE_PROVIDER: ${GRAPH_DATABASE_PROVIDER}
@@ -171,7 +172,7 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - ../.data_storage:/app/.data_storage
+      - ../var/cognee_storage:/app/.data_storage
     restart: unless-stopped
 
   bot:

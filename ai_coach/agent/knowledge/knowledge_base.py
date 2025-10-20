@@ -1,6 +1,5 @@
 import asyncio
 import inspect
-import os
 from dataclasses import asdict, is_dataclass
 from hashlib import sha256
 from types import SimpleNamespace
@@ -57,7 +56,7 @@ class KnowledgeBase:
     _has_datasets_module: bool | None = None
     _warned_missing_user: bool = False
 
-    GLOBAL_DATASET: str = os.environ.get("COGNEE_GLOBAL_DATASET", "kb_global")
+    GLOBAL_DATASET: str = settings.COGNEE_GLOBAL_DATASET
     _CLIENT_ALIAS_PREFIX: str = "kb_client_"
     _LEGACY_CLIENT_PREFIX: str = "client_"
     _PROJECTION_CHECK_QUERY: str = "__knowledge_projection_health__"

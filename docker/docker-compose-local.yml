@@ -175,6 +175,7 @@ services:
     environment:
       COGNEE_DEBUG: 1
       LOGURU_LEVEL: DEBUG
+      COGNEE_STORAGE_PATH: /app/.data_storage
       COGNEE_DATA_ROOT: /app/.data_storage
       GRAPH_DATABASE_PROVIDER: ${GRAPH_DATABASE_PROVIDER}
       REDIS_URL: ${REDIS_URL}
@@ -188,7 +189,7 @@ services:
       - .env
     volumes:
       - ../:/app
-      - ../.data_storage:/app/.data_storage
+      - ../var/cognee_storage:/app/.data_storage
     depends_on:
       redis:
         condition: service_healthy

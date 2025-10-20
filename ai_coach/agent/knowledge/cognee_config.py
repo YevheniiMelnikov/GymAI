@@ -1,5 +1,6 @@
 import importlib
 import os
+import shutil
 
 # pyrefly: ignore-file
 # ruff: noqa
@@ -17,12 +18,69 @@ from config.app_settings import settings
 
 
 def _prepare_storage_root() -> Path:
-    root = Path(os.environ.get("COGNEE_DATA_ROOT") or ".data_storage").resolve()
+    storage_candidate = (
+        os.environ.get("COGNEE_STORAGE_PATH") or os.environ.get("COGNEE_DATA_ROOT") or settings.COGNEE_STORAGE_PATH
+    )
+    root = Path(storage_candidate).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
     for sub in (".cognee_system/databases", ".cognee_system/vectordb"):
         (root / sub).mkdir(parents=True, exist_ok=True)
+    os.environ.setdefault("COGNEE_STORAGE_PATH", str(root))
     os.environ.setdefault("COGNEE_DATA_ROOT", str(root))
+    _ensure_package_storage_symlink(root)
+    logger.info(
+        "cognee_storage prepared path={path} exists={exists} writable={writable}",
+        path=str(root),
+        exists=root.exists(),
+        writable=os.access(root, os.W_OK),
+    )
     return root
+
+
+def _ensure_package_storage_symlink(target: Path) -> None:
+    package_storage = Path(cognee.__file__).resolve().parent / ".data_storage"
+    try:
+        if package_storage.exists() and not package_storage.is_symlink():
+            _migrate_package_storage(package_storage, target)
+            if package_storage.is_dir():
+                shutil.rmtree(package_storage)
+            else:
+                package_storage.unlink()
+        if package_storage.is_symlink():
+            resolved = package_storage.resolve()
+            if resolved == target:
+                return
+            package_storage.unlink()
+        package_storage.symlink_to(target, target_is_directory=True)
+        logger.info(
+            "cognee_storage symlinked package_path={package} target={target}",
+            package=str(package_storage),
+            target=str(target),
+        )
+    except Exception as exc:
+        logger.warning(f"Failed to prepare Cognee storage symlink: {exc}")
+
+
+def _migrate_package_storage(source: Path, target: Path) -> None:
+    try:
+        for item in source.iterdir():
+            destination = target / item.name
+            if destination.exists():
+                continue
+            if item.is_dir():
+                shutil.move(str(item), destination)
+            else:
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(item), destination)
+        logger.info(
+            "cognee_storage migrated legacy files source={source} target={target}",
+            source=str(source),
+            target=str(target),
+        )
+    except FileNotFoundError:
+        return
+    except Exception as exc:
+        logger.warning(f"Failed to migrate legacy Cognee storage: {exc}")
 
 
 class CogneeConfig:

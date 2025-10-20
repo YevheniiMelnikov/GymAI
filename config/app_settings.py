@@ -86,6 +86,9 @@ class Settings(BaseSettings):
     AI_PLAN_NOTIFY_POLL_INTERVAL: Annotated[int, Field(default=30)]
     AI_PLAN_NOTIFY_FAILURE_TTL: Annotated[int, Field(default=86400)]
 
+    COGNEE_STORAGE_PATH: Annotated[str, Field(default=".data_storage")]
+    COGNEE_GLOBAL_DATASET: Annotated[str, Field(default="kb_global")]
+
     AI_COACH_REFRESH_USER: Annotated[str, Field(default="admin")]
     AI_COACH_REFRESH_PASSWORD: Annotated[str, Field(default="password")]
 
