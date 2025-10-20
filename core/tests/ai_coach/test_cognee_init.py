@@ -1,10 +1,15 @@
 import asyncio
-import pytest
+import sys
 from types import SimpleNamespace
+from pathlib import Path
+from typing import Any
+
+import pytest
 
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 import ai_coach.agent.knowledge.knowledge_base as coach
 from ai_coach.application import knowledge_ready_event, init_knowledge_base
+from ai_coach.agent.knowledge.cognee_config import _patch_local_file_storage
 
 
 def test_reinit_on_failure(monkeypatch):
@@ -68,3 +73,30 @@ def test_empty_context_does_not_crash(monkeypatch):
         assert res == []
 
     asyncio.run(runner())
+
+
+def test_local_file_storage_patch(monkeypatch, tmp_path):
+    class DummyStorage:
+        _gymbot_storage_patched = False
+        storage_path: Path | str = Path("/tmp/old")
+        STORAGE_PATH: str = "/tmp/old"
+
+        def open(self, file_path: str, mode: str = "r", **kwargs: Any) -> Any:
+            raise FileNotFoundError(file_path)
+
+    module_name = "cognee.infrastructure.files.storage"
+    dummy_module = SimpleNamespace(LocalFileStorage=DummyStorage)
+    monkeypatch.setitem(sys.modules, module_name, dummy_module)
+
+    sample = tmp_path / "text_abc.txt"
+    sample.write_text("hello", encoding="utf-8")
+
+    _patch_local_file_storage(tmp_path)
+
+    storage = DummyStorage()
+    with storage.open(sample.name, encoding="utf-8") as handle:
+        assert handle.read() == "hello"
+
+    assert DummyStorage._gymbot_storage_patched is True
+    assert DummyStorage.storage_path == tmp_path
+    assert DummyStorage.STORAGE_PATH == str(tmp_path)

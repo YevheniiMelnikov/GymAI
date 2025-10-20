@@ -1,13 +1,14 @@
 import importlib
 import os
 import shutil
+from importlib import import_module
 
 # pyrefly: ignore-file
 # ruff: noqa
 """Cognee configuration helpers."""
 
 from pathlib import Path
-from typing import Any, Awaitable, Callable, cast
+from typing import Any, Awaitable, Callable, cast, Optional
 from uuid import uuid4
 
 import cognee
@@ -83,10 +84,49 @@ def _migrate_package_storage(source: Path, target: Path) -> None:
         logger.warning(f"Failed to migrate legacy Cognee storage: {exc}")
 
 
+def _patch_local_file_storage(root: Path) -> None:
+    try:
+        storage_module = import_module("cognee.infrastructure.files.storage")
+    except Exception as exc:
+        logger.warning(f"Failed to import Cognee storage module: {exc}")
+        return
+
+    local_storage_cls: Optional[type] = getattr(storage_module, "LocalFileStorage", None)
+    if local_storage_cls is None:
+        logger.warning("LocalFileStorage class not found in Cognee storage module")
+        return
+
+    if getattr(local_storage_cls, "_gymbot_storage_patched", False):
+        return
+
+    original_open = getattr(local_storage_cls, "open")
+
+    def open_with_project_storage(self: Any, file_path: str, mode: str = "r", **kwargs: Any) -> Any:
+        target_path = (root / file_path).resolve()
+        if any(flag in mode for flag in ("w", "a", "x", "+")):
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            return target_path.open(mode, **kwargs)
+        except FileNotFoundError:
+            return original_open(self, file_path, mode, **kwargs)
+
+    setattr(local_storage_cls, "open", open_with_project_storage)
+    setattr(local_storage_cls, "_gymbot_storage_patched", True)
+    setattr(local_storage_cls, "_gymbot_original_open", original_open)
+
+    if hasattr(local_storage_cls, "storage_path"):
+        setattr(local_storage_cls, "storage_path", root)
+    if hasattr(local_storage_cls, "STORAGE_PATH"):
+        setattr(local_storage_cls, "STORAGE_PATH", str(root))
+
+    logger.info("cognee_storage patched_local_file_storage root=%s", root)
+
+
 class CogneeConfig:
     @classmethod
     def apply(cls) -> None:
-        _prepare_storage_root()
+        storage_root = _prepare_storage_root()
+        _patch_local_file_storage(storage_root)
         cls._configure_llm()
         cls._configure_vector_db()
         cls._configure_relational_db()
