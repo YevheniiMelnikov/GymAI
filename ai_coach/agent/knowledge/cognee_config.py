@@ -8,7 +8,8 @@ from importlib import import_module
 """Cognee configuration helpers."""
 
 from pathlib import Path
-from typing import Any, Awaitable, Callable, cast, Optional
+from types import ModuleType
+from typing import Any, Awaitable, Callable, Optional, cast
 from uuid import uuid4
 
 import cognee
@@ -84,14 +85,26 @@ def _migrate_package_storage(source: Path, target: Path) -> None:
         logger.warning(f"Failed to migrate legacy Cognee storage: {exc}")
 
 
-def _patch_local_file_storage(root: Path) -> None:
-    try:
-        storage_module = import_module("cognee.infrastructure.files.storage")
-    except Exception as exc:
-        logger.warning(f"Failed to import Cognee storage module: {exc}")
-        return
+def _resolve_localfilestorage_class() -> Optional[type[Any]]:
+    module_candidates = (
+        "cognee.infrastructure.files.storage.LocalFileStorage",
+        "cognee.infrastructure.files.storage.local_file_storage",
+        "cognee.infrastructure.files.storage",
+    )
+    for module_path in module_candidates:
+        try:
+            module = import_module(module_path)
+        except Exception:
+            continue
+        if isinstance(module, ModuleType):
+            candidate = getattr(module, "LocalFileStorage", None)
+            if isinstance(candidate, type):
+                return candidate
+    return None
 
-    local_storage_cls: Optional[type] = getattr(storage_module, "LocalFileStorage", None)
+
+def _patch_local_file_storage(root: Path) -> None:
+    local_storage_cls = _resolve_localfilestorage_class()
     if local_storage_cls is None:
         logger.warning("LocalFileStorage class not found in Cognee storage module")
         return
@@ -99,10 +112,18 @@ def _patch_local_file_storage(root: Path) -> None:
     if getattr(local_storage_cls, "_gymbot_storage_patched", False):
         return
 
-    original_open = getattr(local_storage_cls, "open")
+    try:
+        original_open = getattr(local_storage_cls, "open")
+    except AttributeError:
+        original_open = None
+    if original_open is None or not callable(original_open):
+        logger.info("LocalFileStorage has no open method; skipping storage patch")
+        return
 
     def open_with_project_storage(self: Any, file_path: str, mode: str = "r", **kwargs: Any) -> Any:
-        target_path = (root / file_path).resolve()
+        raw_path = Path(file_path)
+        target_path = raw_path if raw_path.is_absolute() else (root / raw_path)
+        target_path = target_path.resolve()
         if any(flag in mode for flag in ("w", "a", "x", "+")):
             target_path.parent.mkdir(parents=True, exist_ok=True)
         try:
@@ -115,7 +136,7 @@ def _patch_local_file_storage(root: Path) -> None:
     setattr(local_storage_cls, "_gymbot_original_open", original_open)
 
     if hasattr(local_storage_cls, "storage_path"):
-        setattr(local_storage_cls, "storage_path", root)
+        setattr(local_storage_cls, "storage_path", str(root))
     if hasattr(local_storage_cls, "STORAGE_PATH"):
         setattr(local_storage_cls, "STORAGE_PATH", str(root))
 
