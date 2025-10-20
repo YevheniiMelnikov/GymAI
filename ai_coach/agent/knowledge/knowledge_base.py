@@ -669,28 +669,103 @@ class KnowledgeBase:
                 logger.warning(f"knowledge_dataset_warmup_failed dataset={dataset} detail={exc}")
 
     @classmethod
-    async def _project_dataset(cls, dataset: str, user: Any | None) -> None:
+    async def _project_dataset(
+        cls,
+        dataset: str,
+        user: Any | None,
+        *,
+        allow_rebuild: bool = True,
+    ) -> None:
         """Run cognify and wait for the dataset projection to become available."""
         user_ns = cls._to_user_or_none(user)
         try:
             await cognee.cognify(datasets=[dataset], user=user_ns)  # pyrefly: ignore[bad-argument-type]
+        except FileNotFoundError as exc:
+            logger.warning(f"knowledge_dataset_storage_missing dataset={dataset} detail={exc}")
+            cls._log_storage_state(dataset)
+            if allow_rebuild and await cls.rebuild_dataset(dataset, user):
+                logger.info(f"knowledge_dataset_rebuilt dataset={dataset}")
+                await cls._project_dataset(dataset, user, allow_rebuild=False)
+                return
+            raise
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"knowledge_dataset_cognify_failed dataset={dataset} detail={exc}")
             raise
 
+        await cls._wait_for_projection(dataset, user_ns)
+
+    @classmethod
+    async def rebuild_dataset(cls, dataset: str, user: Any | None) -> bool:
+        """Rebuild dataset content by re-adding raw entries and clearing hash store."""
+        try:
+            await cls._ensure_dataset_exists(dataset, user)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"knowledge_dataset_rebuild_ensure_failed dataset={dataset} detail={exc}")
+        try:
+            entries = await cls._list_dataset_entries(dataset, user)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"knowledge_dataset_rebuild_list_failed dataset={dataset} detail={exc}")
+            return False
+        if not entries:
+            logger.warning(f"knowledge_dataset_rebuild_skipped dataset={dataset}: no_entries")
+            return False
+        await HashStore.clear(dataset)
+        user_ns = cls._to_user_or_none(user)
+        reinserted = 0
+        for text in entries:
+            normalized = str(text or "").strip()
+            if not normalized:
+                continue
+            try:
+                await _safe_add(
+                    normalized,
+                    dataset_name=dataset,
+                    user=user_ns,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"knowledge_dataset_rebuild_add_failed dataset={dataset} detail={exc}")
+                continue
+            digest = sha256(normalized.encode()).hexdigest()
+            await HashStore.add(dataset, digest)
+            reinserted += 1
+        if reinserted == 0:
+            logger.warning(f"knowledge_dataset_rebuild_skipped dataset={dataset}: no_valid_entries")
+            return False
+        logger.info(f"knowledge_dataset_rebuild_ready dataset={dataset} documents={reinserted}")
+        return True
+
+    @classmethod
+    async def _wait_for_projection(cls, dataset: str, user_ns: Any | None) -> None:
         if not cls._PROJECTION_BACKOFF_SECONDS:
             return
-
         for delay in cls._PROJECTION_BACKOFF_SECONDS:
             if await cls._is_projection_ready(dataset, user_ns):
                 logger.debug(f"knowledge_dataset_projected dataset={dataset}")
                 return
             await asyncio.sleep(delay)
-
         if await cls._is_projection_ready(dataset, user_ns):
             logger.debug(f"knowledge_dataset_projected dataset={dataset} after_timeout=True")
             return
         logger.warning(f"knowledge_dataset_projection_timeout dataset={dataset}")
+
+    @classmethod
+    def _log_storage_state(cls, dataset: str) -> None:
+        storage_info = CogneeConfig.describe_storage()
+        logger.warning(
+            "knowledge_dataset_storage_state dataset=%s storage_root=%s root_exists=%s "
+            "root_writable=%s entries=%s sample=%s package_path=%s package_exists=%s package_is_symlink=%s "
+            "package_target=%s",
+            dataset,
+            storage_info.get("root"),
+            storage_info.get("root_exists"),
+            storage_info.get("root_writable"),
+            storage_info.get("entries_count"),
+            storage_info.get("entries_sample"),
+            storage_info.get("package_path"),
+            storage_info.get("package_exists"),
+            storage_info.get("package_is_symlink"),
+            storage_info.get("package_target"),
+        )
 
     @classmethod
     async def _is_projection_ready(cls, dataset: str, user_ns: Any | None) -> bool:

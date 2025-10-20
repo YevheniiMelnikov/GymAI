@@ -73,16 +73,39 @@ CRITICAL_TASK_ROUTES: dict[str, dict[str, str]] = {
 }
 
 AI_COACH_TASK_ROUTES: dict[str, dict[str, str]] = {
-    "core.tasks.ai_coach.generate_ai_workout_plan": {
+    "core.tasks.ai_coach.plans.generate_ai_workout_plan": {
         "queue": "ai_coach",
         "routing_key": "ai_coach",
     },
-    "core.tasks.ai_coach.update_ai_workout_plan": {
+    "core.tasks.ai_coach.plans.update_ai_workout_plan": {
         "queue": "ai_coach",
         "routing_key": "ai_coach",
     },
-    "core.tasks.ai_coach.ai_coach_echo": {"queue": "ai_coach", "routing_key": "ai_coach"},
-    "core.tasks.ai_coach.ai_coach_worker_report": {
+    "core.tasks.ai_coach.plans.notify_ai_plan_ready_task": {
+        "queue": "ai_coach",
+        "routing_key": "ai_coach",
+    },
+    "core.tasks.ai_coach.plans.handle_ai_plan_failure": {
+        "queue": "ai_coach",
+        "routing_key": "ai_coach",
+    },
+    "core.tasks.ai_coach.qa.ask_ai_question": {
+        "queue": "ai_coach",
+        "routing_key": "ai_coach",
+    },
+    "core.tasks.ai_coach.qa.notify_ai_answer_ready_task": {
+        "queue": "ai_coach",
+        "routing_key": "ai_coach",
+    },
+    "core.tasks.ai_coach.qa.handle_ai_question_failure": {
+        "queue": "ai_coach",
+        "routing_key": "ai_coach",
+    },
+    "core.tasks.ai_coach.maintenance.ai_coach_echo": {
+        "queue": "ai_coach",
+        "routing_key": "ai_coach",
+    },
+    "core.tasks.ai_coach.maintenance.ai_coach_worker_report": {
         "queue": "ai_coach",
         "routing_key": "ai_coach",
     },

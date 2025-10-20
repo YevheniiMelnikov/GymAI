@@ -42,3 +42,10 @@ class HashStore:
             )
         except Exception as e:  # pragma: no cover - best effort
             logger.error(f"HashStore.add error {dataset}: {e}")
+
+    @classmethod
+    async def clear(cls, dataset: str) -> None:
+        try:
+            await cast(Awaitable[int], cls.redis.delete(cls._key(dataset)))
+        except Exception as e:  # pragma: no cover - best effort
+            logger.error(f"HashStore.clear error {dataset}: {e}")
