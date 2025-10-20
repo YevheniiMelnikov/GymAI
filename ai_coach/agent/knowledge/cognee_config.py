@@ -1,6 +1,5 @@
 import importlib
 import os
-import shutil
 from importlib import import_module
 
 # pyrefly: ignore-file
@@ -43,77 +42,51 @@ def _prepare_storage_root() -> Path:
     root.mkdir(parents=True, exist_ok=True)
     for sub in (".cognee_system/databases", ".cognee_system/vectordb"):
         (root / sub).mkdir(parents=True, exist_ok=True)
-    os.environ.setdefault("COGNEE_STORAGE_PATH", str(root))
-    os.environ.setdefault("COGNEE_DATA_ROOT", str(root))
-    _ensure_package_storage_symlink(root)
+    os.environ["COGNEE_STORAGE_PATH"] = str(root)
+    os.environ["COGNEE_DATA_ROOT"] = str(root)
     _log_storage_details(root)
     return root
 
 
-def _ensure_package_storage_symlink(target: Path) -> None:
+def _collect_storage_info(root: Path | None) -> dict[str, Any]:
     package_storage = Path(cognee.__file__).resolve().parent / ".data_storage"
+    package_target: str | None = None
     try:
-        if package_storage.exists() and not package_storage.is_symlink():
-            _migrate_package_storage(package_storage, target)
-            if package_storage.is_dir():
-                shutil.rmtree(package_storage)
-            else:
-                package_storage.unlink()
-        if package_storage.is_symlink():
-            resolved = package_storage.resolve()
-            if resolved == target:
-                return
-            package_storage.unlink()
-        package_storage.symlink_to(target, target_is_directory=True)
-    except Exception as exc:
-        logger.warning(f"Failed to prepare Cognee storage symlink: {exc}")
+        if package_storage.exists() or package_storage.is_symlink():
+            package_target = str(package_storage.resolve())
+    except Exception as exc:  # noqa: BLE001
+        logger.debug(f"cognee_storage_readlink_failed path={package_storage} detail={exc}")
 
+    entries_sample: list[str]
+    entries_count: int
+    if root is not None and root.exists():
+        entries_sample, entries_count = _directory_snapshot(root)
+    else:
+        entries_sample, entries_count = [], 0
 
-def _migrate_package_storage(source: Path, target: Path) -> None:
-    try:
-        for item in source.iterdir():
-            destination = target / item.name
-            if destination.exists():
-                continue
-            if item.is_dir():
-                shutil.move(str(item), destination)
-            else:
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(item), destination)
-        logger.info(
-            "cognee_storage migrated legacy files source={source} target={target}",
-            source=str(source),
-            target=str(target),
-        )
-    except FileNotFoundError:
-        return
-    except Exception as exc:
-        logger.warning(f"Failed to migrate legacy Cognee storage: {exc}")
+    root_exists = root.exists() if isinstance(root, Path) else False
+    root_writable = os.access(root, os.W_OK) if isinstance(root, Path) else False
+
+    return {
+        "root": str(root) if isinstance(root, Path) else None,
+        "root_exists": root_exists,
+        "root_writable": root_writable,
+        "entries_sample": entries_sample,
+        "entries_count": entries_count,
+        "package_path": str(package_storage),
+        "package_exists": package_storage.exists() or package_storage.is_symlink(),
+        "package_is_symlink": package_storage.is_symlink(),
+        "package_target": package_target,
+    }
 
 
 def _log_storage_details(root: Path) -> None:
-    package_storage = Path(cognee.__file__).resolve().parent / ".data_storage"
-    package_target: str | None = None
-    package_exists = package_storage.exists() or package_storage.is_symlink()
-    package_is_symlink = package_storage.is_symlink()
-    if package_is_symlink or package_storage.exists():
-        try:
-            package_target = str(package_storage.resolve())
-        except Exception as exc:  # noqa: BLE001
-            logger.debug(f"cognee_storage_readlink_failed path={package_storage} detail={exc}")
-    entries_sample, entries_count = _directory_snapshot(root)
+    info = _collect_storage_info(root)
     logger.info(
-        "cognee_storage prepared path=%s exists=%s writable=%s entries=%s sample=%s package_path=%s"
-        " package_exists=%s package_is_symlink=%s package_target=%s",
-        str(root),
-        root.exists(),
-        os.access(root, os.W_OK),
-        entries_count,
-        entries_sample,
-        str(package_storage),
-        package_exists,
-        package_is_symlink,
-        package_target,
+        f"cognee_storage prepared path={info['root']} exists={info['root_exists']} "
+        f"writable={info['root_writable']} entries={info['entries_count']} sample={info['entries_sample']} "
+        f"package_path={info['package_path']} package_exists={info['package_exists']} "
+        f"package_is_symlink={info['package_is_symlink']} package_target={info['package_target']}"
     )
 
 
@@ -144,17 +117,21 @@ def _patch_local_file_storage(root: Path) -> None:
     if getattr(local_storage_cls, "_gymbot_storage_patched", False):
         return
 
-    try:
-        original_open = getattr(local_storage_cls, "open")
-    except AttributeError:
-        original_open = None
+    allow_package_storage = os.getenv("COGNEE_ALLOW_PACKAGE_STORAGE", "0") == "1"
+
+    original_open = getattr(local_storage_cls, "open", None)
     storage_attr = getattr(local_storage_cls, "storage_path", None) or getattr(local_storage_cls, "STORAGE_PATH", None)
-    if original_open is None or not callable(original_open):
+
+    if hasattr(local_storage_cls, "storage_path"):
+        setattr(local_storage_cls, "storage_path", str(root))
+    if hasattr(local_storage_cls, "STORAGE_PATH"):
+        setattr(local_storage_cls, "STORAGE_PATH", str(root))
+
+    if not callable(original_open):
         logger.info(
-            "cognee_storage localfilestorage_no_open class=%s storage_path=%s",
-            local_storage_cls.__name__,
-            storage_attr,
+            f"cognee_storage localfilestorage_no_open class={local_storage_cls.__name__} storage_path={storage_attr}"
         )
+        setattr(local_storage_cls, "_gymbot_storage_patched", True)
         return
 
     def open_with_project_storage(self: Any, file_path: str, mode: str = "r", **kwargs: Any) -> Any:
@@ -166,22 +143,17 @@ def _patch_local_file_storage(root: Path) -> None:
         try:
             return target_path.open(mode, **kwargs)
         except FileNotFoundError:
-            return original_open(self, file_path, mode, **kwargs)
+            if allow_package_storage and callable(original_open):
+                logger.warning(f"cognee_storage package_fallback file={file_path} root={root}")
+                return original_open(self, file_path, mode, **kwargs)
+            raise
 
     setattr(local_storage_cls, "open", open_with_project_storage)
     setattr(local_storage_cls, "_gymbot_storage_patched", True)
-    setattr(local_storage_cls, "_gymbot_original_open", original_open)
-
-    if hasattr(local_storage_cls, "storage_path"):
-        setattr(local_storage_cls, "storage_path", str(root))
-    if hasattr(local_storage_cls, "STORAGE_PATH"):
-        setattr(local_storage_cls, "STORAGE_PATH", str(root))
 
     logger.info(
-        "cognee_storage patched_local_file_storage class=%s root=%s storage_path=%s",
-        local_storage_cls.__name__,
-        str(root),
-        storage_attr,
+        f"cognee_storage patched_local_file_storage class={local_storage_cls.__name__} "
+        f"root={root} storage_path={storage_attr} allow_package_storage={allow_package_storage}"
     )
 
 
@@ -211,33 +183,7 @@ class CogneeConfig:
             candidate = os.environ.get("COGNEE_STORAGE_PATH") or os.environ.get("COGNEE_DATA_ROOT")
             if candidate:
                 root = Path(candidate).expanduser().resolve()
-        package_storage = Path(cognee.__file__).resolve().parent / ".data_storage"
-        entries_sample: list[str]
-        entries_count: int
-        if root is not None:
-            entries_sample, entries_count = _directory_snapshot(root)
-        else:
-            entries_sample, entries_count = [], 0
-        package_target: str | None = None
-        try:
-            if package_storage.exists() or package_storage.is_symlink():
-                package_target = str(package_storage.resolve())
-        except Exception as exc:  # noqa: BLE001
-            logger.debug(f"cognee_storage_describe_readlink_failed detail={exc}")
-        root_path = root if isinstance(root, Path) else None
-        root_exists = root_path.exists() if root_path is not None else False
-        root_writable = os.access(root_path, os.W_OK) if root_path is not None else False
-        return {
-            "root": str(root_path) if root_path is not None else None,
-            "root_exists": root_exists,
-            "root_writable": root_writable,
-            "entries_sample": entries_sample,
-            "entries_count": entries_count,
-            "package_path": str(package_storage),
-            "package_exists": package_storage.exists() or package_storage.is_symlink(),
-            "package_is_symlink": package_storage.is_symlink(),
-            "package_target": package_target,
-        }
+        return _collect_storage_info(root)
 
     @staticmethod
     def _configure_llm() -> None:

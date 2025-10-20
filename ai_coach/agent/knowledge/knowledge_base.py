@@ -683,6 +683,7 @@ class KnowledgeBase:
         except FileNotFoundError as exc:
             logger.warning(f"knowledge_dataset_storage_missing dataset={dataset} detail={exc}")
             cls._log_storage_state(dataset)
+            await HashStore.clear(dataset)
             if allow_rebuild and await cls.rebuild_dataset(dataset, user):
                 logger.info(f"knowledge_dataset_rebuilt dataset={dataset}")
                 await cls._project_dataset(dataset, user, allow_rebuild=False)
@@ -752,19 +753,12 @@ class KnowledgeBase:
     def _log_storage_state(cls, dataset: str) -> None:
         storage_info = CogneeConfig.describe_storage()
         logger.warning(
-            "knowledge_dataset_storage_state dataset=%s storage_root=%s root_exists=%s "
-            "root_writable=%s entries=%s sample=%s package_path=%s package_exists=%s package_is_symlink=%s "
-            "package_target=%s",
-            dataset,
-            storage_info.get("root"),
-            storage_info.get("root_exists"),
-            storage_info.get("root_writable"),
-            storage_info.get("entries_count"),
-            storage_info.get("entries_sample"),
-            storage_info.get("package_path"),
-            storage_info.get("package_exists"),
-            storage_info.get("package_is_symlink"),
-            storage_info.get("package_target"),
+            f"knowledge_dataset_storage_state dataset={dataset} storage_root={storage_info.get('root')} "
+            f"root_exists={storage_info.get('root_exists')} root_writable={storage_info.get('root_writable')} "
+            f"entries={storage_info.get('entries_count')} sample={storage_info.get('entries_sample')} "
+            f"package_path={storage_info.get('package_path')} package_exists={storage_info.get('package_exists')} "
+            f"package_is_symlink={storage_info.get('package_is_symlink')} "
+            f"package_target={storage_info.get('package_target')}"
         )
 
     @classmethod
@@ -829,10 +823,11 @@ class KnowledgeBase:
         except Exception as exc:  # pragma: no cover - best effort to keep flow running
             logger.debug(f"knowledge_dataset_list_ensure_failed dataset={dataset} detail={exc}")
         user_ns = cls._to_user_or_none(user)
+        identifier = await cls._resolve_dataset_identifier(dataset, user)
         try:
             rows = await cls._fetch_dataset_rows(
                 cast(Callable[..., Awaitable[Iterable[Any]]], list_data),
-                dataset,
+                identifier,
                 user_ns,
             )
         except Exception as exc:  # noqa: BLE001 - dataset listing is best effort
@@ -897,6 +892,16 @@ class KnowledgeBase:
         except Exception as exc:  # noqa: BLE001
             info["last_error"] = str(exc)
         return info
+
+    @classmethod
+    async def _resolve_dataset_identifier(cls, dataset: str, user: Any | None) -> str:
+        metadata = await cls._get_dataset_metadata(dataset, user)
+        if metadata is not None:
+            for attr in ("id", "dataset_id"):
+                identifier = getattr(metadata, attr, None)
+                if identifier:
+                    return str(identifier)
+        return dataset
 
     @classmethod
     async def _get_dataset_metadata(cls, dataset: str, user: Any | None) -> Any | None:
