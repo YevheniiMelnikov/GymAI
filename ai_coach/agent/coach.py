@@ -88,6 +88,22 @@ class CoachAgent:
         "dryer",
         "фен",
     )
+    _MANUAL_ROLE_PREFIXES: ClassVar[tuple[str, ...]] = (
+        "client:",
+        "ai_coach:",
+        "assistant:",
+        "system:",
+    )
+    _MANUAL_NOISE_PHRASES: ClassVar[tuple[str, ...]] = (
+        "контекст пуст",
+        "context empty",
+        "не могу ответить",
+        "cannot answer",
+        "graph search",
+        "knowledge graph",
+        "fallback",
+        "данные временно недоступны",
+    )
 
     @staticmethod
     def _lang(deps: AgentDeps) -> str:
@@ -667,16 +683,15 @@ class CoachAgent:
         logger.info(f"agent.ask manual_general_answer client_id={client_id} language={language} topic={topic[:40]}")
         return QAResponse(answer=answer, sources=["general_knowledge"])
 
-    @staticmethod
-    def _summarize_entries(entries: Sequence[str]) -> str:
-        if not entries:
-            return ""
+    @classmethod
+    def _summarize_entries(cls, entries: Sequence[str]) -> str:
+        prepared = cls._prepare_manual_entries(entries)
+        if not prepared:
+            return "Key guidance could not be extracted from the knowledge base."
         summary_chunks: list[str] = []
         remaining = 600
-        for text in entries:
+        for text in prepared:
             cleaned = text.replace("\n", " ").strip()
-            if not cleaned:
-                continue
             if len(cleaned) > remaining:
                 clipped = cleaned[: remaining + 1]
                 last_space = clipped.rfind(" ")
@@ -690,6 +705,37 @@ class CoachAgent:
         if not summary_chunks:
             return "Key guidance could not be extracted from the knowledge base."
         return "Here is direct guidance from the knowledge base:\n" + "\n".join(summary_chunks)
+
+    @classmethod
+    def _prepare_manual_entries(cls, entries: Sequence[str]) -> list[str]:
+        cleaned_entries: list[str] = []
+        seen: set[str] = set()
+        for entry in entries:
+            normalized = cls._sanitize_manual_entry(entry)
+            if not normalized:
+                continue
+            key = normalized.casefold()
+            if key in seen:
+                continue
+            seen.add(key)
+            cleaned_entries.append(normalized)
+        return cleaned_entries
+
+    @classmethod
+    def _sanitize_manual_entry(cls, entry: str) -> str | None:
+        normalized = " ".join(entry.split())
+        if not normalized:
+            return None
+        lowered = normalized.casefold()
+        if any(noise in lowered for noise in cls._MANUAL_NOISE_PHRASES):
+            return None
+        for prefix in cls._MANUAL_ROLE_PREFIXES:
+            pref = prefix.casefold()
+            if lowered.startswith(pref):
+                normalized = normalized[len(prefix) :].lstrip()
+                lowered = normalized.casefold()
+                break
+        return normalized or None
 
     @staticmethod
     def _supports_json_object(model: Any) -> bool:
