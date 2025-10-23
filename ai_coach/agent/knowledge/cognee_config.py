@@ -127,6 +127,24 @@ def _patch_local_file_storage(root: Path) -> None:
     if hasattr(local_storage_cls, "STORAGE_PATH"):
         setattr(local_storage_cls, "STORAGE_PATH", str(root))
 
+    package_storage = (Path(cognee.__file__).resolve().parent / ".data_storage").resolve()
+
+    def _remap_path(raw_path: Path) -> Path:
+        if raw_path.is_absolute():
+            try:
+                if raw_path.is_relative_to(root):
+                    return raw_path
+            except ValueError:
+                pass
+            try:
+                if raw_path.is_relative_to(package_storage):
+                    relative = raw_path.relative_to(package_storage)
+                    return (root / relative).resolve()
+            except ValueError:
+                pass
+            return (root / raw_path.name).resolve()
+        return (root / raw_path).resolve()
+
     if not callable(original_open):
         logger.info(
             f"cognee_storage localfilestorage_no_open class={local_storage_cls.__name__} storage_path={storage_attr}"
@@ -136,8 +154,7 @@ def _patch_local_file_storage(root: Path) -> None:
 
     def open_with_project_storage(self: Any, file_path: str, mode: str = "r", **kwargs: Any) -> Any:
         raw_path = Path(file_path)
-        target_path = raw_path if raw_path.is_absolute() else (root / raw_path)
-        target_path = target_path.resolve()
+        target_path = _remap_path(raw_path)
         if any(flag in mode for flag in ("w", "a", "x", "+")):
             target_path.parent.mkdir(parents=True, exist_ok=True)
         try:

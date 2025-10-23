@@ -55,6 +55,15 @@ class KnowledgeBase:
     _list_data_requires_user: bool | None = None
     _has_datasets_module: bool | None = None
     _warned_missing_user: bool = False
+    _DATASET_IDS: ClassVar[dict[str, str]] = {}
+    _DATASET_ALIASES: ClassVar[dict[str, str]] = {}
+    _DATASET_IDENTIFIER_FIELDS: ClassVar[tuple[str, ...]] = (
+        "dataset_id",
+        "datasetId",
+        "dataset_name",
+        "datasetName",
+        "id",
+    )
 
     GLOBAL_DATASET: str = settings.COGNEE_GLOBAL_DATASET
     _CLIENT_ALIAS_PREFIX: str = "kb_client_"
@@ -165,14 +174,10 @@ class KnowledgeBase:
             raise
         await HashStore.add(ds_name, digest)
         resolved = ds_name
-        if info is not None:
-            for candidate in (getattr(info, "dataset_id", None), getattr(info, "dataset_name", None)):
-                if isinstance(candidate, str) and candidate:
-                    try:
-                        resolved = str(UUID(candidate))
-                        break
-                    except ValueError:
-                        continue
+        identifier = cls._extract_dataset_identifier(info)
+        if identifier:
+            cls._register_dataset_identifier(ds_name, identifier)
+            resolved = identifier
         return resolved, True
 
     @classmethod
@@ -496,12 +501,52 @@ class KnowledgeBase:
         return normalized
 
     @classmethod
+    def _alias_for_dataset(cls, dataset: str) -> str:
+        stripped = dataset.strip()
+        if stripped in cls._DATASET_ALIASES:
+            return cls._DATASET_ALIASES[stripped]
+        return cls._resolve_dataset_alias(stripped)
+
+    @classmethod
+    def _register_dataset_identifier(cls, alias: str, identifier: str) -> None:
+        canonical = cls._resolve_dataset_alias(alias)
+        if not canonical:
+            return
+        cls._DATASET_IDS[canonical] = identifier
+        cls._DATASET_ALIASES[identifier] = canonical
+
+    @classmethod
+    def _extract_dataset_identifier(cls, info: Any | None) -> str | None:
+        if info is None:
+            return None
+        candidates: list[Any] = []
+        if isinstance(info, dict):
+            for key in cls._DATASET_IDENTIFIER_FIELDS:
+                if key in info:
+                    candidates.append(info[key])
+        for key in cls._DATASET_IDENTIFIER_FIELDS:
+            value = getattr(info, key, None)
+            if value is not None:
+                candidates.append(value)
+        for candidate in candidates:
+            if candidate in (None, ""):
+                continue
+            text = candidate if isinstance(candidate, str) else str(candidate)
+            try:
+                identifier = str(UUID(text))
+            except (ValueError, TypeError):
+                continue
+            return identifier
+        return None
+
+    @classmethod
     async def _ensure_dataset_exists(cls, name: str, user: Any | None) -> None:
         """Create dataset if it does not exist for the given user."""
         user_ns = cls._to_user_or_none(user)
         if user_ns is None:
             logger.debug(f"Dataset ensure skipped dataset={name}: user context unavailable")
             return
+        canonical = cls._resolve_dataset_alias(name)
         try:
             from cognee.modules.data.methods import (  # type: ignore
                 get_authorized_dataset_by_name,
@@ -509,9 +554,16 @@ class KnowledgeBase:
             )
         except Exception:
             return
-        exists = await get_authorized_dataset_by_name(name, user_ns, "write")  # pyrefly: ignore[bad-argument-type]
-        if exists is None:
-            await create_authorized_dataset(name, user_ns)  # pyrefly: ignore[bad-argument-type]
+        exists = await get_authorized_dataset_by_name(canonical, user_ns, "write")  # pyrefly: ignore[bad-argument-type]
+        if exists is not None:
+            identifier = cls._extract_dataset_identifier(exists)
+            if identifier:
+                cls._register_dataset_identifier(canonical, identifier)
+            return
+        created = await create_authorized_dataset(canonical, user_ns)  # pyrefly: ignore[bad-argument-type]
+        identifier = cls._extract_dataset_identifier(created)
+        if identifier:
+            cls._register_dataset_identifier(canonical, identifier)
 
     @classmethod
     def _dataset_name(cls, client_id: int) -> str:
@@ -678,14 +730,15 @@ class KnowledgeBase:
     ) -> None:
         """Run cognify and wait for the dataset projection to become available."""
         user_ns = cls._to_user_or_none(user)
+        alias = cls._alias_for_dataset(dataset)
         try:
             await cognee.cognify(datasets=[dataset], user=user_ns)  # pyrefly: ignore[bad-argument-type]
         except FileNotFoundError as exc:
-            logger.warning(f"knowledge_dataset_storage_missing dataset={dataset} detail={exc}")
-            cls._log_storage_state(dataset)
-            await HashStore.clear(dataset)
-            if allow_rebuild and await cls.rebuild_dataset(dataset, user):
-                logger.info(f"knowledge_dataset_rebuilt dataset={dataset}")
+            logger.warning(f"knowledge_dataset_storage_missing dataset={alias} detail={exc}")
+            cls._log_storage_state(alias)
+            await HashStore.clear(alias)
+            if allow_rebuild and await cls.rebuild_dataset(alias, user):
+                logger.info(f"knowledge_dataset_rebuilt dataset={alias}")
                 await cls._project_dataset(dataset, user, allow_rebuild=False)
                 return
             raise
@@ -698,19 +751,20 @@ class KnowledgeBase:
     @classmethod
     async def rebuild_dataset(cls, dataset: str, user: Any | None) -> bool:
         """Rebuild dataset content by re-adding raw entries and clearing hash store."""
+        alias = cls._alias_for_dataset(dataset)
         try:
-            await cls._ensure_dataset_exists(dataset, user)
+            await cls._ensure_dataset_exists(alias, user)
         except Exception as exc:  # noqa: BLE001
-            logger.warning(f"knowledge_dataset_rebuild_ensure_failed dataset={dataset} detail={exc}")
+            logger.warning(f"knowledge_dataset_rebuild_ensure_failed dataset={alias} detail={exc}")
         try:
-            entries = await cls._list_dataset_entries(dataset, user)
+            entries = await cls._list_dataset_entries(alias, user)
         except Exception as exc:  # noqa: BLE001
-            logger.warning(f"knowledge_dataset_rebuild_list_failed dataset={dataset} detail={exc}")
+            logger.warning(f"knowledge_dataset_rebuild_list_failed dataset={alias} detail={exc}")
             return False
         if not entries:
-            logger.warning(f"knowledge_dataset_rebuild_skipped dataset={dataset}: no_entries")
+            logger.warning(f"knowledge_dataset_rebuild_skipped dataset={alias}: no_entries")
             return False
-        await HashStore.clear(dataset)
+        await HashStore.clear(alias)
         user_ns = cls._to_user_or_none(user)
         reinserted = 0
         for text in entries:
@@ -718,21 +772,24 @@ class KnowledgeBase:
             if not normalized:
                 continue
             try:
-                await _safe_add(
+                info = await _safe_add(
                     normalized,
-                    dataset_name=dataset,
+                    dataset_name=alias,
                     user=user_ns,
                 )
             except Exception as exc:  # noqa: BLE001
-                logger.warning(f"knowledge_dataset_rebuild_add_failed dataset={dataset} detail={exc}")
+                logger.warning(f"knowledge_dataset_rebuild_add_failed dataset={alias} detail={exc}")
                 continue
             digest = sha256(normalized.encode()).hexdigest()
-            await HashStore.add(dataset, digest)
+            await HashStore.add(alias, digest)
+            identifier = cls._extract_dataset_identifier(info)
+            if identifier:
+                cls._register_dataset_identifier(alias, identifier)
             reinserted += 1
         if reinserted == 0:
-            logger.warning(f"knowledge_dataset_rebuild_skipped dataset={dataset}: no_valid_entries")
+            logger.warning(f"knowledge_dataset_rebuild_skipped dataset={alias}: no_valid_entries")
             return False
-        logger.info(f"knowledge_dataset_rebuild_ready dataset={dataset} documents={reinserted}")
+        logger.info(f"knowledge_dataset_rebuild_ready dataset={alias} documents={reinserted}")
         return True
 
     @classmethod
@@ -810,20 +867,21 @@ class KnowledgeBase:
 
     @classmethod
     async def _list_dataset_entries(cls, dataset: str, user: Any | None) -> list[str]:
+        alias = cls._alias_for_dataset(dataset)
         datasets_module = getattr(cognee, "datasets", None)
         if datasets_module is None:
-            logger.debug(f"knowledge_dataset_list_skipped dataset={dataset}: datasets module missing")
+            logger.debug(f"knowledge_dataset_list_skipped dataset={alias}: datasets module missing")
             return []
         list_data = getattr(datasets_module, "list_data", None)
         if not callable(list_data):
-            logger.debug(f"knowledge_dataset_list_skipped dataset={dataset}: list_data missing")
+            logger.debug(f"knowledge_dataset_list_skipped dataset={alias}: list_data missing")
             return []
         try:
-            await cls._ensure_dataset_exists(dataset, user)
+            await cls._ensure_dataset_exists(alias, user)
         except Exception as exc:  # pragma: no cover - best effort to keep flow running
-            logger.debug(f"knowledge_dataset_list_ensure_failed dataset={dataset} detail={exc}")
+            logger.debug(f"knowledge_dataset_list_ensure_failed dataset={alias} detail={exc}")
         user_ns = cls._to_user_or_none(user)
-        identifier = await cls._resolve_dataset_identifier(dataset, user)
+        identifier = await cls._resolve_dataset_identifier(alias, user)
         try:
             rows = await cls._fetch_dataset_rows(
                 cast(Callable[..., Awaitable[Iterable[Any]]], list_data),
@@ -831,7 +889,7 @@ class KnowledgeBase:
                 user_ns,
             )
         except Exception as exc:  # noqa: BLE001 - dataset listing is best effort
-            logger.debug(f"knowledge_dataset_list_failed dataset={dataset} detail={exc}")
+            logger.debug(f"knowledge_dataset_list_failed dataset={alias} detail={exc}")
             return []
         texts: list[str] = []
         for row in rows:
@@ -895,13 +953,17 @@ class KnowledgeBase:
 
     @classmethod
     async def _resolve_dataset_identifier(cls, dataset: str, user: Any | None) -> str:
-        metadata = await cls._get_dataset_metadata(dataset, user)
+        alias = cls._alias_for_dataset(dataset)
+        mapped = cls._DATASET_IDS.get(alias)
+        if mapped:
+            return mapped
+        metadata = await cls._get_dataset_metadata(alias, user)
         if metadata is not None:
-            for attr in ("id", "dataset_id"):
-                identifier = getattr(metadata, attr, None)
-                if identifier:
-                    return str(identifier)
-        return dataset
+            identifier = cls._extract_dataset_identifier(metadata)
+            if identifier:
+                cls._register_dataset_identifier(alias, identifier)
+                return identifier
+        return alias
 
     @classmethod
     async def _get_dataset_metadata(cls, dataset: str, user: Any | None) -> Any | None:

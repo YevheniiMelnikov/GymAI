@@ -1,6 +1,7 @@
 import logging
 
 from typing import Awaitable, cast
+
 from redis.asyncio import Redis
 
 from config.app_settings import settings
