@@ -59,6 +59,7 @@ services:
 
   rabbitmq:
     image: rabbitmq:4.1.4-management
+    user: "0:0"
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-rabbitmq}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rabbitmq}
