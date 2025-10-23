@@ -238,6 +238,7 @@ services:
 
 networks:
   internal:
+    name: gymbot_internal_local
     driver: bridge
 
 volumes:

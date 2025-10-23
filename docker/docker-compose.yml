@@ -233,3 +233,7 @@ volumes:
   data_storage:
   redisdata:
   rabbitmqdata:
+
+networks:
+  internal:
+    name: gymbot_internal
