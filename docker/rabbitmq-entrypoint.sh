@@ -37,4 +37,9 @@ if [ ! -x "$UPSTREAM_ENTRYPOINT" ]; then
     exit 1
 fi
 
+# Fallback to the stock RabbitMQ command when no arguments were provided.
+if [ "$#" -eq 0 ]; then
+    set -- "${RABBITMQ_DEFAULT_CMD:-rabbitmq-server}"
+fi
+
 exec "$UPSTREAM_ENTRYPOINT" "$@"
