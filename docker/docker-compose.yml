@@ -63,6 +63,8 @@ services:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-rabbitmq}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rabbitmq}
       RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
     ports:
       - ${HOST_RABBITMQ_PORT:-5672}:5672
       - ${HOST_RABBITMQ_MANAGEMENT_PORT:-15672}:15672
@@ -227,3 +229,4 @@ volumes:
   staticfiles:
   data_storage:
   redisdata:
+  rabbitmqdata:
