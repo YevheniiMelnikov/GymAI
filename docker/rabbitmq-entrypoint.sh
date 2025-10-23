@@ -26,4 +26,15 @@ if [ -f "$COOKIE_FILE" ]; then
     fi
 fi
 
-exec /opt/rabbitmq/sbin/docker-entrypoint.sh "$@"
+DEFAULT_ENTRYPOINT="/usr/local/bin/docker-entrypoint.sh"
+if command -v docker-entrypoint.sh >/dev/null 2>&1; then
+    DEFAULT_ENTRYPOINT="$(command -v docker-entrypoint.sh)"
+fi
+UPSTREAM_ENTRYPOINT="${RABBITMQ_UPSTREAM_ENTRYPOINT:-$DEFAULT_ENTRYPOINT}"
+
+if [ ! -x "$UPSTREAM_ENTRYPOINT" ]; then
+    printf 'rabbitmq_entrypoint upstream_entrypoint_missing path=%s\n' "$UPSTREAM_ENTRYPOINT" >&2
+    exit 1
+fi
+
+exec "$UPSTREAM_ENTRYPOINT" "$@"
