@@ -1,12 +1,14 @@
 import asyncio
-from typing import Any
+from hashlib import sha256
 from types import SimpleNamespace
+from typing import Any, Sequence
 
 import pytest
 
 import ai_coach.agent.knowledge.knowledge_base as knowledge_base_module
 from ai_coach.agent.coach import CoachAgent
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+
 from core.schemas import Client
 from core.schemas import QAResponse
 
@@ -51,10 +53,12 @@ def test_ensure_profile_indexed_fetches_client_by_id(monkeypatch: pytest.MonkeyP
         dataset: str,
         user: Any,
         node_set: list[str] | None = None,
+        metadata: Any | None = None,
     ) -> tuple[str, bool]:
         recorded["dataset"] = dataset
         recorded["text"] = text
         recorded["node_set"] = node_set
+        recorded["metadata"] = metadata
         return dataset, True
 
     async def fake_process_dataset(cls, dataset: str, user: Any) -> None:
@@ -76,6 +80,7 @@ def test_ensure_profile_indexed_fetches_client_by_id(monkeypatch: pytest.MonkeyP
     assert recorded["node_set"] == ["client_profile"]
     assert recorded["processed"] == KnowledgeBase._dataset_name(client_id)
     assert recorded["text"].startswith("profile: ")
+    assert recorded["metadata"] == {"kind": "document", "source": "client_profile"}
 
 
 def test_debug_snapshot_compiles_dataset_information(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -105,3 +110,73 @@ def test_debug_snapshot_compiles_dataset_information(monkeypatch: pytest.MonkeyP
     for item in snapshot["datasets"]:
         assert item["documents"] == 1
         assert item["id"].startswith("id-")
+
+
+def test_build_snippets_skip_messages(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_collect_metadata(digest: str, datasets: Sequence[str]) -> tuple[str | None, dict[str, Any] | None]:
+        if digest == sha256("message".encode()).hexdigest():
+            return datasets[0], {"kind": "message"}
+        if digest == sha256("note".encode()).hexdigest():
+            return datasets[0], {"kind": "note"}
+        return datasets[0], {"kind": "document"}
+
+    async def fake_contains(dataset: str, digest: str) -> bool:
+        return True
+
+    monkeypatch.setattr(KnowledgeBase, "_collect_metadata", classmethod(fake_collect_metadata))
+    monkeypatch.setattr(
+        knowledge_base_module.HashStore,
+        "contains",
+        classmethod(fake_contains),
+    )
+    snippets = asyncio.run(KnowledgeBase._build_snippets(["document", "message", "note"], ["ds"]))
+    texts = [item.text for item in snippets]
+    kinds = [item.kind for item in snippets]
+    assert texts == ["document", "note"]
+    assert kinds == ["document", "note"]
+
+
+def test_fallback_entries_skip_messages(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_list_dataset_entries(cls, dataset: str, user: Any | None) -> list[str]:
+        return [" document ", " message entry "]
+
+    async def fake_metadata_for_text(dataset: str, text: str) -> dict[str, Any] | None:
+        if text.strip().startswith("message"):
+            return {"kind": "message"}
+        return {"kind": "document"}
+
+    monkeypatch.setattr(KnowledgeBase, "_list_dataset_entries", classmethod(fake_list_dataset_entries))
+    monkeypatch.setattr(
+        knowledge_base_module.HashStore,
+        "metadata_for_text",
+        classmethod(fake_metadata_for_text),
+    )
+
+    results = asyncio.run(KnowledgeBase._fallback_dataset_entries(["ds"], user=None, top_k=5))
+    assert results == ["document"]
+
+
+def test_build_snippets_skip_unindexed(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_collect_metadata(digest: str, datasets: Sequence[str]) -> tuple[str | None, dict[str, Any] | None]:
+        return datasets[0], None
+
+    async def fake_contains(dataset: str, digest: str) -> bool:
+        return digest == sha256("kept".encode()).hexdigest()
+
+    monkeypatch.setattr(KnowledgeBase, "_collect_metadata", classmethod(fake_collect_metadata))
+    monkeypatch.setattr(
+        knowledge_base_module.HashStore,
+        "contains",
+        classmethod(fake_contains),
+    )
+
+    snippets = asyncio.run(KnowledgeBase._build_snippets(["kept", "ignored"], ["ds"]))
+    assert [item.text for item in snippets] == ["kept"]
+
+
+def test_build_knowledge_entries_skip_non_content() -> None:
+    snippet_doc = knowledge_base_module.KnowledgeSnippet(text=" doc ")
+    snippet_unknown = knowledge_base_module.KnowledgeSnippet(text="ignored", kind="unknown")
+    ids, entries = CoachAgent._build_knowledge_entries([snippet_doc, snippet_unknown, " other "])
+    assert ids == ["KB-1", "KB-2"]
+    assert entries == ["doc", "other"]

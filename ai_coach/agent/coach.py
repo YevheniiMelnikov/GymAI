@@ -34,7 +34,7 @@ from pydantic_ai import Agent, RunContext  # pyrefly: ignore[import-error]
 from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart  # pyrefly: ignore[import-error]
 from pydantic_ai.models.openai import OpenAIChatModel  # pyrefly: ignore[import-error]
 from ai_coach.types import CoachMode, MessageRole
-from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase, KnowledgeSnippet
 
 
 class ProgramAdapter:
@@ -66,56 +66,11 @@ class CoachAgent:
     _agent: Optional[Agent] = None
     _completion_client: ClassVar[AsyncOpenAI | None] = None
     _completion_model_name: ClassVar[str | None] = None
-    _FITNESS_HINTS: ClassVar[tuple[str, ...]] = (
-        "сушка",
-        "подсуш",
-        "подсушиться",
-        "підсуш",
-        "підсушитися",
-        "жир",
-        "fat loss",
-        "cutting",
-        "дефицит",
-        "дефіцит",
-        "calorie",
-    )
-    _NEGATIVE_HINTS: ClassVar[tuple[str, ...]] = (
-        "полотен",
-        "рушник",
-        "шкіра",
-        "skin",
-        "hair",
-        "dryer",
-        "фен",
-    )
-    _MANUAL_ROLE_PREFIXES: ClassVar[tuple[str, ...]] = (
-        "client:",
-        "ai_coach:",
-        "assistant:",
-        "system:",
-    )
-    _MANUAL_NOISE_PHRASES: ClassVar[tuple[str, ...]] = (
-        "контекст пуст",
-        "context empty",
-        "не могу ответить",
-        "cannot answer",
-        "graph search",
-        "knowledge graph",
-        "fallback",
-        "данные временно недоступны",
-    )
 
     @staticmethod
     def _lang(deps: AgentDeps) -> str:
         language: str = deps.locale or getattr(settings, "DEFAULT_LANG", "en")
         return language
-
-    @classmethod
-    def _is_fitness_query(cls, prompt: str) -> bool:
-        lowered = prompt.lower()
-        if any(term in lowered for term in cls._NEGATIVE_HINTS):
-            return False
-        return any(hint in lowered for hint in cls._FITNESS_HINTS)
 
     @classmethod
     def _init_agent(cls) -> Any:
@@ -329,6 +284,7 @@ class CoachAgent:
         history = cls._message_history(deps.client_id)
         if inspect.isawaitable(history):
             history = await history
+        prefetched_knowledge: Sequence[KnowledgeSnippet]
         try:
             prefetched_knowledge = await KnowledgeBase.search(prompt, deps.client_id, 6)
         except Exception as exc:  # noqa: BLE001 - prefetch should not block main flow
@@ -460,7 +416,7 @@ class CoachAgent:
         deps: AgentDeps,
         history: list[ModelMessage],
         *,
-        prefetched_knowledge: Sequence[str] | None = None,
+        prefetched_knowledge: Sequence[KnowledgeSnippet] | None = None,
     ) -> QAResponse | None:
         if deps.fallback_used:
             logger.debug(f"agent.ask fallback skipped client_id={deps.client_id} reason=already_used")
@@ -471,7 +427,7 @@ class CoachAgent:
         )
         client, model_name = cls._get_completion_client()
         cls._ensure_llm_logging(client, model_name)
-        knowledge: Sequence[str]
+        knowledge: Sequence[KnowledgeSnippet]
         if prefetched_knowledge is not None:
             knowledge = prefetched_knowledge
         else:
@@ -480,19 +436,11 @@ class CoachAgent:
             except Exception as exc:  # noqa: BLE001 - log and continue with empty knowledge
                 logger.warning(f"agent.ask fallback knowledge_failed client_id={deps.client_id} error={exc}")
                 knowledge = []
-        entries: list[str] = []
-        entry_ids: list[str] = []
-        for idx, raw in enumerate(knowledge, start=1):
-            text = str(raw or "").strip()
-            if not text:
-                continue
-            entry_id = f"KB-{idx}"
-            entry_ids.append(entry_id)
-            entries.append(f"{entry_id}: {text}")
+        entry_ids, entries = cls._build_knowledge_entries(knowledge)
         entry_ids, entries = cls._filter_entries_for_prompt(prompt, entry_ids, entries)
         deps.knowledge_base_empty = len(entry_ids) == 0
         language = cls._lang(deps)
-        knowledge_section = "\n\n".join(entries) if entries else "No knowledge entries were retrieved."
+        knowledge_section = cls._format_knowledge_entries(entry_ids, entries)
         system_prompt = (
             "You are a professional fitness coach. Use the provided knowledge entries when available. "
             "Answer in the client's language and keep the tone concise and helpful. "
@@ -563,11 +511,18 @@ class CoachAgent:
         return None
 
     @staticmethod
-    def _build_knowledge_entries(raw_entries: Sequence[str]) -> tuple[list[str], list[str]]:
+    def _build_knowledge_entries(
+        raw_entries: Sequence[KnowledgeSnippet | str],
+    ) -> tuple[list[str], list[str]]:
         entry_ids: list[str] = []
         entries: list[str] = []
         for index, raw in enumerate(raw_entries, start=1):
-            text = str(raw or "").strip()
+            if isinstance(raw, KnowledgeSnippet):
+                if not raw.is_content():
+                    continue
+                text = raw.text.strip()
+            else:
+                text = str(raw or "").strip()
             if not text:
                 continue
             entry_id = f"KB-{index}"
@@ -575,30 +530,15 @@ class CoachAgent:
             entries.append(text)
         return entry_ids, entries
 
-    @classmethod
+    @staticmethod
     def _filter_entries_for_prompt(
-        cls,
         prompt: str,
         entry_ids: Sequence[str],
         entries: Sequence[str],
     ) -> tuple[list[str], list[str]]:
         if not entry_ids or not entries:
             return list(entry_ids), list(entries)
-        if not cls._is_fitness_query(prompt):
-            return list(entry_ids), list(entries)
-        filtered_ids: list[str] = []
-        filtered_entries: list[str] = []
-        for entry_id, text in zip(entry_ids, entries, strict=False):
-            lowered = text.lower()
-            if any(term in lowered for term in cls._NEGATIVE_HINTS):
-                logger.debug("agent.ask entry_filtered entry_id=%s reason=negative_hint", entry_id)
-                continue
-            filtered_ids.append(entry_id)
-            filtered_entries.append(text)
-        if filtered_ids:
-            return filtered_ids, filtered_entries
-        logger.debug("agent.ask all_entries_filtered prompt_contains_fitness=true")
-        return [], []
+        return list(entry_ids), list(entries)
 
     @staticmethod
     def _format_knowledge_entries(entry_ids: Sequence[str], entries: Sequence[str]) -> str:
@@ -670,16 +610,12 @@ class CoachAgent:
             )
             return QAResponse(answer=answer, sources=list(entry_ids))
         topic = prompt.strip().rstrip("?") or "training"
-        answer: str
-        if any(hint in prompt.lower() for hint in cls._FITNESS_HINTS):
-            answer = cls._fitness_guidance(language)
-        else:
-            answer = (
-                f"Here is general guidance for {topic}. Maintain a balanced training schedule with recovery days, "
-                "combine strength and conditioning work, focus on whole foods with sufficient protein, stay hydrated, "
-                "and track sleep. Adjust intensity gradually and consult a healthcare professional if you have medical "
-                "concerns."
-            )
+        answer = (
+            f"Here is general guidance for {topic}. Maintain a balanced training schedule with recovery days, "
+            "combine strength and conditioning work, focus on whole foods with sufficient protein, stay hydrated, "
+            "and track sleep. Adjust intensity gradually and consult a healthcare professional if you have medical "
+            "concerns."
+        )
         logger.info(f"agent.ask manual_general_answer client_id={client_id} language={language} topic={topic[:40]}")
         return QAResponse(answer=answer, sources=["general_knowledge"])
 
@@ -724,17 +660,6 @@ class CoachAgent:
     @classmethod
     def _sanitize_manual_entry(cls, entry: str) -> str | None:
         normalized = " ".join(entry.split())
-        if not normalized:
-            return None
-        lowered = normalized.casefold()
-        if any(noise in lowered for noise in cls._MANUAL_NOISE_PHRASES):
-            return None
-        for prefix in cls._MANUAL_ROLE_PREFIXES:
-            pref = prefix.casefold()
-            if lowered.startswith(pref):
-                normalized = normalized[len(prefix) :].lstrip()
-                lowered = normalized.casefold()
-                break
         return normalized or None
 
     @staticmethod
@@ -1088,20 +1013,10 @@ class CoachAgent:
         entries: Sequence[str],
         client_id: int,
     ) -> QAResponse:
-        question = prompt.lower()
         answer = response.answer.strip()
         if not answer:
             return cls._manual_answer(prompt, language, entry_ids, entries, client_id)
-        answer_lower = answer.lower()
-        is_fitness_prompt = cls._is_fitness_query(question) or any(hint in question for hint in cls._FITNESS_HINTS)
-        has_negative_answer = any(term in answer_lower for term in cls._NEGATIVE_HINTS)
-        contains_fitness_detail = any(token in answer_lower for token in cls._FITNESS_HINTS if token)
-        if is_fitness_prompt and (has_negative_answer or not contains_fitness_detail):
-            reason = "negative" if has_negative_answer else "missing_fitness"
-            logger.info(f"agent.ask domain_rewrite client_id={client_id} reason={reason}")
-            corrected = cls._manual_answer(prompt, language, entry_ids, entries, client_id)
-            corrected.sources = list(entry_ids) if entry_ids else ["general_knowledge"]
-            return corrected
+        response.answer = answer
         valid_sources = set(entry_ids)
         if response.sources:
             filtered = [source for source in response.sources if source in valid_sources]
@@ -1170,33 +1085,3 @@ class CoachAgent:
             "total_tokens": total_tokens,
             "latency_ms": round(latency, 2),
         }
-
-    @classmethod
-    def _fitness_guidance(cls, language: str) -> str:
-        lang_key = language.lower().split("-")[0] if language else "en"
-        templates: dict[str, str] = {
-            "ua": (
-                "Щоб підсушитися, створіть помірний дефіцит калорій (≈10–20% від підтримки). "
-                "Підтримуйте високий рівень білка, пийте достатньо води та контролюйте сон. "
-                "Тренуйтеся 3–5 разів на тиждень з прогресивним навантаженням, додавайте помірне кардіо. "
-                "Коригуйте калорійність лише після перевірки результатів раз на 1–2 тижні."
-            ),
-            "uk": (
-                "Щоб підсушитися, створіть помірний дефіцит калорій (≈10–20% від підтримки). "
-                "Підтримуйте високий рівень білка, пийте достатньо води та контролюйте сон. "
-                "Тренуйтеся 3–5 разів на тиждень з прогресивним навантаженням, додавайте помірне кардіо. "
-                "Коригуйте калорійність лише після перевірки результатів раз на 1–2 тижні."
-            ),
-            "ru": (
-                "Чтобы подсушиться, создайте умеренный дефицит калорий (≈10–20% от поддержки). "
-                "Держите высокий уровень белка, следите за гидратацией и качеством сна. "
-                "Тренируйтесь 3–5 раз в неделю с прогрессивной нагрузкой, добавляйте умеренное кардио. "
-                "Корректируйте калорийность только по факту изменений раз в 1–2 недели."
-            ),
-            "en": (
-                "To lean out, create a moderate calorie deficit (around 10–20% below maintenance). "
-                "Keep protein high, stay hydrated, prioritise sleep, and train 3–5 times per week with progressive "
-                "resistance work. Add moderate cardio and adjust calories only after reviewing results every 1–2 weeks."
-            ),
-        }
-        return templates.get(lang_key, templates["en"])

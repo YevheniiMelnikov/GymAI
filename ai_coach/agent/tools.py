@@ -206,7 +206,7 @@ async def tool_search_knowledge(
         return _cache_result(deps, tool_name, [])
 
     try:
-        result = await wait_for(KnowledgeBase.search(normalized_query, client_id, k), timeout=timeout)
+        snippets = await wait_for(KnowledgeBase.search(normalized_query, client_id, k), timeout=timeout)
     except TimeoutError:
         logger.info(
             "knowledge_search_timeout client_id={} query='{}' timeout={:.1f}".format(
@@ -223,11 +223,12 @@ async def tool_search_knowledge(
         raise ModelRetry(f"Knowledge search failed: {e}. Refine the query and retry.") from e
 
     deps.last_knowledge_query = normalized_query
-    if result:
+    if snippets:
         deps.last_knowledge_empty = False
         deps.knowledge_base_empty = False
-        logger.debug(f"tool_search_knowledge results={len(result)}")
-        return _cache_result(deps, tool_name, result)
+        logger.debug(f"tool_search_knowledge results={len(snippets)}")
+        texts = [snippet.text for snippet in snippets]
+        return _cache_result(deps, tool_name, texts)
 
     return await _load_fallback("empty")
 

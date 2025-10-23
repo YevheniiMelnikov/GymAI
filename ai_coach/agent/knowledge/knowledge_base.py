@@ -1,9 +1,9 @@
 import asyncio
 import inspect
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict, dataclass, is_dataclass
 from hashlib import sha256
 from types import SimpleNamespace
-from typing import Any, Awaitable, Callable, ClassVar, Iterable, Sequence, cast
+from typing import Any, Awaitable, Callable, ClassVar, Iterable, Mapping, Sequence, cast
 from uuid import UUID
 
 from loguru import logger
@@ -18,6 +18,8 @@ from config.app_settings import settings
 from core.exceptions import UserServiceError
 from core.services import APIService
 from core.schemas import Client
+
+from typing import Literal
 
 import cognee  # type: ignore
 
@@ -45,6 +47,16 @@ async def _safe_add(*args, **kwargs):
     return await cognee.add(*args, **kwargs)
 
 
+@dataclass(slots=True)
+class KnowledgeSnippet:
+    text: str
+    dataset: str | None = None
+    kind: Literal["document", "message", "note", "unknown"] = "document"
+
+    def is_content(self) -> bool:
+        return self.kind in {"document", "note"}
+
+
 class KnowledgeBase:
     """Cognee-backed knowledge storage for the coach agent."""
 
@@ -70,36 +82,6 @@ class KnowledgeBase:
     _LEGACY_CLIENT_PREFIX: str = "client_"
     _PROJECTION_CHECK_QUERY: str = "__knowledge_projection_health__"
     _PROJECTION_BACKOFF_SECONDS: tuple[float, ...] = (0.5, 1.0, 2.0, 4.0)
-    _FITNESS_HINTS: ClassVar[tuple[str, ...]] = (
-        "сушка",
-        "подсуш",
-        "підсуш",
-        "жир",
-        "fat loss",
-        "cutting",
-        "дефицит",
-        "дефіцит",
-        "calorie",
-    )
-    _NEGATIVE_HINTS: ClassVar[tuple[str, ...]] = (
-        "полотен",
-        "рушник",
-        "шкіра",
-        "skin",
-        "hair",
-        "dryer",
-        "фен",
-    )
-    _FITNESS_EXPANSIONS: ClassVar[tuple[str, ...]] = (
-        "дефицит калорий",
-        "калорійний дефіцит",
-        "низький відсоток жиру",
-        "reduce body fat",
-        "fat loss training",
-        "strength and cardio",
-        "calorie deficit",
-        "nutrition plan",
-    )
 
     @classmethod
     async def initialize(cls, knowledge_loader: KnowledgeLoader | None = None) -> None:
@@ -153,6 +135,7 @@ class KnowledgeBase:
         dataset: str,
         user: Any | None,
         node_set: list[str] | None = None,
+        metadata: Mapping[str, Any] | None = None,
     ) -> tuple[str, bool]:
         """Add text to dataset if new, update hash store, return (dataset, created)."""
         text = (text or "").strip()
@@ -172,7 +155,7 @@ class KnowledgeBase:
             )
         except (DatasetNotFoundError, PermissionDeniedError):
             raise
-        await HashStore.add(ds_name, digest)
+        await HashStore.add(ds_name, digest, metadata=metadata)
         resolved = ds_name
         identifier = cls._extract_dataset_identifier(info)
         if identifier:
@@ -181,7 +164,12 @@ class KnowledgeBase:
         return resolved, True
 
     @classmethod
-    async def search(cls, query: str, client_id: int, k: int | None = None) -> list[str]:
+    async def search(
+        cls,
+        query: str,
+        client_id: int,
+        k: int | None = None,
+    ) -> list[KnowledgeSnippet]:
         """Search across client and global datasets with resiliency features."""
         normalized = query.strip()
         if not normalized:
@@ -214,28 +202,26 @@ class KnowledgeBase:
                 f"knowledge_search_expanded client_id={client_id} variants={len(queries)} base_query_hash={base_hash}"
             )
 
-        fitness_query = cls._is_fitness_query(normalized)
-        aggregated: list[str] = []
+        aggregated: list[KnowledgeSnippet] = []
         seen: set[str] = set()
         for variant in queries:
-            results = await cls._search_single_query(
+            snippets = await cls._search_single_query(
                 variant,
                 resolved_datasets,
                 user,
                 k,
                 client_id,
             )
-            if not results:
+            if not snippets:
                 continue
-            filtered = cls._filter_results(results, fitness_query)
-            for item in filtered:
-                cleaned = str(item or "").strip()
+            for snippet in snippets:
+                cleaned = snippet.text.strip()
                 if not cleaned:
                     continue
-                key = cleaned.lower()
+                key = cleaned.casefold()
                 if key in seen:
                     continue
-                aggregated.append(cleaned)
+                aggregated.append(snippet)
                 seen.add(key)
                 if k is not None and len(aggregated) >= k:
                     break
@@ -254,7 +240,7 @@ class KnowledgeBase:
         user: Any | None,
         k: int | None,
         client_id: int,
-    ) -> list[str]:
+    ) -> list[KnowledgeSnippet]:
         query_hash = sha256(query.encode()).hexdigest()[:12]
         datasets_hint = ",".join(datasets)
 
@@ -270,7 +256,7 @@ class KnowledgeBase:
         try:
             results = await _search_targets(datasets)
             logger.debug(f"knowledge_search_ok client_id={client_id} query_hash={query_hash} results={len(results)}")
-            return results
+            return await cls._build_snippets(results, datasets)
         except (PermissionDeniedError, DatasetNotFoundError) as exc:
             logger.warning(f"Search issue client_id={client_id} query_hash={query_hash}: {exc}")
             return []
@@ -289,7 +275,7 @@ class KnowledgeBase:
                         query_hash,
                         len(results),
                     )
-                    return results
+                    return await cls._build_snippets(results, datasets)
                 except Exception as retry_exc:
                     if not cls._is_graph_missing_error(retry_exc):
                         logger.warning(
@@ -307,7 +293,7 @@ class KnowledgeBase:
                             query_hash,
                             len(results),
                         )
-                        return results
+                        return await cls._build_snippets(results, [fallback_dataset])
                     except Exception as final_exc:
                         if cls._is_graph_missing_error(final_exc):
                             fallback_entries = await cls._fallback_dataset_entries(
@@ -321,7 +307,8 @@ class KnowledgeBase:
                                     client_id,
                                     len(fallback_entries),
                                 )
-                                return fallback_entries
+                                snippets = await cls._build_snippets(fallback_entries, datasets)
+                                return snippets
                             logger.warning(
                                 f"knowledge_search_dataset_fallback_empty client_id={client_id} query_hash={query_hash}"
                             )
@@ -337,53 +324,73 @@ class KnowledgeBase:
             return []
 
     @classmethod
-    def _expanded_queries(cls, query: str) -> list[str]:
-        variants: list[str] = []
-        seen: set[str] = set()
-        for candidate in (query,) + tuple(cls._fitness_query_variants(query)):
-            lowered = candidate.lower()
-            if lowered in seen:
+    async def _build_snippets(
+        cls,
+        items: Iterable[str],
+        datasets: Sequence[str],
+    ) -> list[KnowledgeSnippet]:
+        normalized: list[str] = []
+        for raw in items:
+            text = str(raw or "").strip()
+            if text:
+                normalized.append(text)
+        if not normalized:
+            return []
+        digests = [sha256(text.encode()).hexdigest() for text in normalized]
+        metadata = await asyncio.gather(*(cls._collect_metadata(digest, datasets) for digest in digests))
+        known = await asyncio.gather(*(cls._is_known_digest(digest, datasets) for digest in digests))
+        snippets: list[KnowledgeSnippet] = []
+        for text, digest, (dataset, meta), is_known in zip(normalized, digests, metadata, known, strict=False):
+            if not is_known:
+                logger.debug(
+                    "knowledge_snippet_discarded digest={} reason=not_indexed datasets={}",
+                    digest[:12],
+                    ",".join(datasets),
+                )
                 continue
-            seen.add(lowered)
-            variants.append(candidate)
-        return variants
+            dataset_name = str((meta or {}).get("dataset") or dataset or "").strip() or None
+            if meta:
+                kind_value = str(meta.get("kind", "document"))
+                if kind_value == "message":
+                    continue
+                if kind_value in {"document", "note"}:
+                    kind: Literal["document", "note", "unknown"] = cast(
+                        Literal["document", "note"],
+                        kind_value,
+                    )
+                else:
+                    kind = "unknown"
+            else:
+                kind = "document"
+            snippets.append(KnowledgeSnippet(text=text, dataset=dataset_name, kind=kind))
+        return snippets
 
     @classmethod
-    def _fitness_query_variants(cls, query: str) -> Iterable[str]:
-        if not cls._is_fitness_query(query):
-            return ()
-        lowered = query.lower()
-        additions: list[str] = []
-        for token in cls._FITNESS_EXPANSIONS:
-            token_lower = token.lower()
-            if token_lower not in lowered:
-                additions.append(f"{query} {token}")
-        additions.extend(token for token in cls._FITNESS_EXPANSIONS if token.lower() not in lowered)
-        return additions
-
-    @classmethod
-    def _filter_results(cls, results: Iterable[str], fitness_only: bool) -> list[str]:
-        filtered: list[str] = []
-        for item in results:
-            text = str(item or "").strip()
-            if not text:
-                continue
-            if fitness_only and cls._contains_negative_hint(text):
-                continue
-            filtered.append(text)
-        return filtered
-
-    @classmethod
-    def _is_fitness_query(cls, query: str) -> bool:
-        lowered = query.lower()
-        if any(term in lowered for term in cls._NEGATIVE_HINTS):
+    async def _is_known_digest(cls, digest: str, datasets: Sequence[str]) -> bool:
+        if not datasets:
             return False
-        return any(hint in lowered for hint in cls._FITNESS_HINTS)
+        checks = await asyncio.gather(*(HashStore.contains(dataset, digest) for dataset in datasets))
+        return any(checks)
 
     @classmethod
-    def _contains_negative_hint(cls, text: str) -> bool:
-        lowered = text.lower()
-        return any(term in lowered for term in cls._NEGATIVE_HINTS)
+    async def _collect_metadata(
+        cls,
+        digest: str,
+        datasets: Sequence[str],
+    ) -> tuple[str | None, Mapping[str, Any] | None]:
+        if not datasets:
+            return None, None
+        lookups = await asyncio.gather(*(HashStore.metadata(dataset, digest) for dataset in datasets))
+        for dataset, meta in zip(datasets, lookups, strict=False):
+            if meta:
+                enriched = dict(meta)
+                enriched.setdefault("dataset", dataset)
+                return dataset, enriched
+        return datasets[0] if datasets else None, None
+
+    @classmethod
+    def _expanded_queries(cls, query: str) -> list[str]:
+        return [query]
 
     @classmethod
     async def add_text(
@@ -398,11 +405,21 @@ class KnowledgeBase:
         """Add message text to a dataset, schedule cognify if new."""
         user = await cls._get_cognee_user()
         ds = dataset or (cls._dataset_name(client_id) if client_id is not None else cls.GLOBAL_DATASET)
+        metadata: dict[str, Any] | None = None
         if role:
             text = f"{role.value}: {text}"
+            metadata = {"kind": "message", "role": role.value}
+        else:
+            metadata = {"kind": "document"}
         try:
             logger.debug(f"Updating dataset {ds}")
-            ds, created = await cls.update_dataset(text, ds, user, node_set=node_set or [])
+            ds, created = await cls.update_dataset(
+                text,
+                ds,
+                user,
+                node_set=node_set or [],
+                metadata=metadata,
+            )
             if created:
                 task = asyncio.create_task(cls._process_dataset(ds, user))
                 task.add_done_callback(cls._log_task_exception)
@@ -669,7 +686,13 @@ class KnowledgeBase:
             return
         text = cls._client_profile_text(client)
         dataset = cls._dataset_name(client_id)
-        dataset, created = await cls.update_dataset(text, dataset, user, node_set=["client_profile"])
+        dataset, created = await cls.update_dataset(
+            text,
+            dataset,
+            user,
+            node_set=["client_profile"],
+            metadata={"kind": "document", "source": "client_profile"},
+        )
         if created:
             await cls._process_dataset(dataset, user)
 
@@ -781,7 +804,7 @@ class KnowledgeBase:
                 logger.warning(f"knowledge_dataset_rebuild_add_failed dataset={alias} detail={exc}")
                 continue
             digest = sha256(normalized.encode()).hexdigest()
-            await HashStore.add(alias, digest)
+            await HashStore.add(alias, digest, metadata={"kind": "document"})
             identifier = cls._extract_dataset_identifier(info)
             if identifier:
                 cls._register_dataset_identifier(alias, identifier)
@@ -851,6 +874,9 @@ class KnowledgeBase:
             for item in entries:
                 normalized = item.strip()
                 if not normalized:
+                    continue
+                metadata = await HashStore.metadata_for_text(dataset, normalized)
+                if metadata and metadata.get("kind") == "message":
                     continue
                 collected.append(normalized)
                 if len(collected) >= limit:
