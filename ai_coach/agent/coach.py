@@ -604,26 +604,21 @@ class CoachAgent:
         client_id: int,
     ) -> QAResponse:
         if entry_ids and entries:
-            answer = cls._summarize_entries(entries)
+            answer = cls._summarize_entries(entries, language)
             logger.info(
                 f"agent.ask manual_answer client_id={client_id} entries={len(entry_ids)} answer_len={len(answer)}"
             )
             return QAResponse(answer=answer, sources=list(entry_ids))
         topic = prompt.strip().rstrip("?") or "training"
-        answer = (
-            f"Here is general guidance for {topic}. Maintain a balanced training schedule with recovery days, "
-            "combine strength and conditioning work, focus on whole foods with sufficient protein, stay hydrated, "
-            "and track sleep. Adjust intensity gradually and consult a healthcare professional if you have medical "
-            "concerns."
-        )
+        answer = cls._general_guidance(language, topic)
         logger.info(f"agent.ask manual_general_answer client_id={client_id} language={language} topic={topic[:40]}")
         return QAResponse(answer=answer, sources=["general_knowledge"])
 
     @classmethod
-    def _summarize_entries(cls, entries: Sequence[str]) -> str:
+    def _summarize_entries(cls, entries: Sequence[str], language: str) -> str:
         prepared = cls._prepare_manual_entries(entries)
         if not prepared:
-            return "Key guidance could not be extracted from the knowledge base."
+            return cls._no_guidance_message(language)
         summary_chunks: list[str] = []
         remaining = 600
         for text in prepared:
@@ -639,8 +634,65 @@ class CoachAgent:
             if remaining <= 0:
                 break
         if not summary_chunks:
-            return "Key guidance could not be extracted from the knowledge base."
-        return "Here is direct guidance from the knowledge base:\n" + "\n".join(summary_chunks)
+            return cls._no_guidance_message(language)
+        header = cls._summary_header(language)
+        return f"{header}\n" + "\n".join(summary_chunks)
+
+    @classmethod
+    def _summary_header(cls, language: str) -> str:
+        key = cls._language_key(language)
+        headers = {
+            "ua": "Ось прямі рекомендації з бази знань:",
+            "ru": "Вот прямые рекомендации из базы знаний:",
+            "default": "Here is direct guidance from the knowledge base:",
+        }
+        return headers.get(key, headers["default"])
+
+    @classmethod
+    def _general_guidance(cls, language: str, topic: str) -> str:
+        key = cls._language_key(language)
+        guidance = {
+            "ua": (
+                "Ось загальні рекомендації щодо {topic}. "
+                "Підтримуйте збалансований графік тренувань з днями відновлення, "
+                "поєднуйте силові та кардіо-навантаження, обирайте повноцінні продукти з достатньою кількістю білка, "
+                "стежте за гідратацією та сном. "
+                "Регулюйте інтенсивність поступово і звертайтеся до лікаря, якщо є медичні обмеження."
+            ).format(topic=topic),
+            "ru": (
+                "Вот общие рекомендации по теме {topic}. "
+                "Поддерживайте сбалансированный график тренировок с днями восстановления, "
+                "совмещайте силовые и кардио-нагрузки, выбирайте цельные продукты с достаточным количеством белка, "
+                "следите за водным балансом и сном. "
+                "Постепенно регулируйте интенсивность и консультируйтесь с врачом при наличии ограничений."
+            ).format(topic=topic),
+            "default": (
+                "Here is general guidance for {topic}. "
+                "Maintain a balanced training schedule with recovery days, combine strength and conditioning work, "
+                "focus on whole foods with sufficient protein, stay hydrated, and track sleep. "
+                "Adjust intensity gradually and consult a healthcare professional if you have medical concerns."
+            ).format(topic=topic),
+        }
+        return guidance.get(key, guidance["default"])
+
+    @classmethod
+    def _no_guidance_message(cls, language: str) -> str:
+        key = cls._language_key(language)
+        messages = {
+            "ua": "Не вдалося отримати корисні підказки з бази знань.",
+            "ru": "Не удалось получить полезные рекомендации из базы знаний.",
+            "default": "Key guidance could not be extracted from the knowledge base.",
+        }
+        return messages.get(key, messages["default"])
+
+    @staticmethod
+    def _language_key(language: str) -> str:
+        normalized = (language or "").strip().lower()
+        if not normalized:
+            return "default"
+        primary = normalized.split("-")[0]
+        alias_map = {"uk": "ua", "ua": "ua"}
+        return alias_map.get(primary, primary)
 
     @classmethod
     def _prepare_manual_entries(cls, entries: Sequence[str]) -> list[str]:
