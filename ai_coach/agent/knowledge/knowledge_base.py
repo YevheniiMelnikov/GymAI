@@ -76,6 +76,7 @@ class KnowledgeBase:
     _warned_missing_user: bool = False
     _DATASET_IDS: ClassVar[dict[str, str]] = {}
     _DATASET_ALIASES: ClassVar[dict[str, str]] = {}
+    _PROJECTED_DATASETS: ClassVar[set[str]] = set()
     _DATASET_IDENTIFIER_FIELDS: ClassVar[tuple[str, ...]] = (
         "dataset_id",
         "datasetId",
@@ -102,6 +103,7 @@ class KnowledgeBase:
             pass
         cls._loader = knowledge_loader
         cls._user = await cls._get_cognee_user()
+        cls._PROJECTED_DATASETS.clear()
         try:
             await cls.refresh()
         except Exception as e:
@@ -113,6 +115,7 @@ class KnowledgeBase:
         user = await cls._get_cognee_user()
         ds = cls._resolve_dataset_alias(cls.GLOBAL_DATASET)
         await cls._ensure_dataset_exists(ds, user)
+        cls._PROJECTED_DATASETS.discard(cls._alias_for_dataset(ds))
         if cls._loader:
             await cls._loader.refresh()
         try:
@@ -154,15 +157,31 @@ class KnowledgeBase:
         cls._ensure_storage_file(digest, text)
         if await HashStore.contains(ds_name, digest):
             return ds_name, False
-        try:
-            info = await _safe_add(
-                text,
-                dataset_name=ds_name,
-                user=cls._to_user_or_none(user),  # pyrefly: ignore[bad-argument-type]
-                node_set=node_set,
-            )
-        except (DatasetNotFoundError, PermissionDeniedError):
-            raise
+
+        attempts = 0
+        while attempts < 2:
+            try:
+                info = await _safe_add(
+                    text,
+                    dataset_name=ds_name,
+                    user=cls._to_user_or_none(user),  # pyrefly: ignore[bad-argument-type]
+                    node_set=node_set,
+                )
+            except FileNotFoundError:
+                attempts += 1
+                cls._ensure_storage_file(digest, text)
+                if attempts >= 2:
+                    raise
+                logger.debug(
+                    "knowledge_dataset_retry_missing_file dataset={} digest={} attempt={}",
+                    ds_name,
+                    digest[:12],
+                    attempts,
+                )
+                continue
+            except (DatasetNotFoundError, PermissionDeniedError):
+                raise
+            break
         await HashStore.add(ds_name, digest, metadata=metadata)
         resolved = ds_name
         identifier = cls._extract_dataset_identifier(info)
@@ -261,6 +280,27 @@ class KnowledgeBase:
                 params["top_k"] = k
             return await cognee.search(query, **params)
 
+        user_ns = cls._to_user_or_none(user)
+        for dataset in datasets:
+            alias = cls._alias_for_dataset(dataset)
+            if alias in cls._PROJECTED_DATASETS:
+                continue
+            try:
+                ready = await cls._is_projection_ready(dataset, user_ns)
+            except Exception as probe_exc:  # noqa: BLE001
+                logger.debug(f"knowledge_dataset_projection_probe_failed dataset={alias} detail={probe_exc}")
+                ready = False
+            if not ready:
+                try:
+                    await cls._process_dataset(dataset, user)
+                except Exception as warm_exc:  # noqa: BLE001
+                    logger.debug(f"knowledge_dataset_projection_warm_failed dataset={alias} detail={warm_exc}")
+                else:
+                    cls._PROJECTED_DATASETS.add(alias)
+            else:
+                await cls._wait_for_projection(dataset, user_ns)
+                cls._PROJECTED_DATASETS.add(alias)
+
         try:
             results = await _search_targets(datasets)
             logger.debug(f"knowledge_search_ok client_id={client_id} query_hash={query_hash} results={len(results)}")
@@ -334,52 +374,149 @@ class KnowledgeBase:
     @classmethod
     async def _build_snippets(
         cls,
-        items: Iterable[str],
+        items: Iterable[Any],
         datasets: Sequence[str],
         user: Any | None,
     ) -> list[KnowledgeSnippet]:
-        normalized: list[str] = []
+        normalized: list[tuple[str, str | None, Mapping[str, Any] | None]] = []
         for raw in items:
-            text = str(raw or "").strip()
-            if text:
-                normalized.append(text)
+            text, dataset_hint, metadata = cls._extract_search_item(raw)
+            if not text:
+                continue
+            if metadata is not None and not isinstance(metadata, Mapping):
+                metadata = cls._coerce_metadata(metadata)
+            normalized.append((text, dataset_hint, metadata))
         if not normalized:
             return []
 
-        digests = [sha256(text.encode()).hexdigest() for text in normalized]
-        metadata = await asyncio.gather(*(cls._collect_metadata(digest, datasets) for digest in digests))
+        digests = [sha256(text.encode()).hexdigest() for text, _, _ in normalized]
+        dataset_list = list(datasets)
+        metadata_results: list[tuple[str | None, Mapping[str, Any] | None]] = [(None, None)] * len(normalized)
+        pending: list[int] = []
+
+        for index, ((_, dataset_hint, metadata), _) in enumerate(zip(normalized, digests, strict=False)):
+            if metadata is not None:
+                meta_dict = dict(metadata)
+                dataset_name = cls._dataset_from_metadata(meta_dict) or dataset_hint
+                alias = cls._alias_for_dataset(dataset_name) if dataset_name else None
+                if alias:
+                    meta_dict.setdefault("dataset", alias)
+                metadata_results[index] = (alias, meta_dict)
+            else:
+                metadata_results[index] = (dataset_hint, None)
+                pending.append(index)
+
+        if pending:
+            lookups = await asyncio.gather(*(cls._collect_metadata(digests[i], datasets) for i in pending))
+            for slot, (dataset_name, meta) in zip(pending, lookups, strict=False):
+                alias_source = dataset_name or normalized[slot][1]
+                fallback_dataset = alias_source or (dataset_list[0] if dataset_list else "")
+                alias = cls._alias_for_dataset(fallback_dataset) if fallback_dataset else None
+                if meta:
+                    meta_dict = dict(meta)
+                else:
+                    meta_dict = {}
+                if alias:
+                    meta_dict.setdefault("dataset", alias)
+                metadata_results[slot] = (alias, meta_dict or None)
 
         snippets: list[KnowledgeSnippet] = []
-        dataset_list = list(datasets)
         add_tasks: list[Awaitable[None]] = []
-        for text, digest, (dataset_name, meta) in zip(normalized, digests, metadata, strict=False):
-            alias_source = dataset_name or (dataset_list[0] if dataset_list else "")
-            dataset_alias = cls._alias_for_dataset(alias_source)
-            effective_meta: Mapping[str, Any] | None = meta
+        for (text, dataset_hint, _), digest, (resolved_dataset, payload) in zip(
+            normalized, digests, metadata_results, strict=False
+        ):
+            alias_source = resolved_dataset or dataset_hint or (dataset_list[0] if dataset_list else "")
+            dataset_alias = cls._alias_for_dataset(alias_source) if alias_source else None
+            if dataset_alias is None and dataset_list:
+                dataset_alias = cls._alias_for_dataset(dataset_list[0])
+            payload_dict: dict[str, Any]
+            if payload:
+                payload_dict = dict(payload)
+            else:
+                payload_dict = cls._infer_metadata_from_text(text) or {"kind": "document"}
+            if dataset_alias:
+                payload_dict.setdefault("dataset", dataset_alias)
+                add_tasks.append(HashStore.add(dataset_alias, digest, metadata=payload_dict))
+            else:
+                payload_dict.pop("dataset", None)
 
-            inferred = None if effective_meta else cls._infer_metadata_from_text(text)
-            payload = dict(effective_meta) if effective_meta else {}
-            if inferred:
-                payload.update(inferred)
-            if not payload:
-                payload = {"kind": "document"}
-            payload.setdefault("dataset", dataset_alias)
-            add_tasks.append(HashStore.add(dataset_alias, digest, metadata=payload))
-
-            kind = cls._resolve_snippet_kind(payload, text)
+            kind = cls._resolve_snippet_kind(payload_dict, text)
             if kind == "message":
                 continue
 
-            dataset_hint = str(payload.get("dataset") or dataset_alias).strip() or None
-            snippet_kind: Literal["document", "note", "unknown"]
+            dataset_value = str(payload_dict.get("dataset") or dataset_alias or "").strip() or None
             if kind in {"document", "note"}:
                 snippet_kind = cast(Literal["document", "note"], kind)
             else:
                 snippet_kind = "unknown"
-            snippets.append(KnowledgeSnippet(text=text, dataset=dataset_hint, kind=snippet_kind))
+            snippets.append(KnowledgeSnippet(text=text, dataset=dataset_value, kind=snippet_kind))
+
         if add_tasks:
             await asyncio.gather(*add_tasks)
         return snippets
+
+    @classmethod
+    def _extract_search_item(
+        cls,
+        raw: Any,
+    ) -> tuple[str, str | None, Mapping[str, Any] | None]:
+        if raw is None:
+            return "", None, None
+        if is_dataclass(raw):
+            return cls._extract_search_item(asdict(raw))
+        if isinstance(raw, Mapping):
+            text_value = raw.get("text", "")
+            text = str(text_value or "").strip()
+            metadata = cls._coerce_metadata(raw.get("metadata"))
+            dataset_hint = cls._dataset_from_metadata(metadata)
+            if dataset_hint is None:
+                dataset_hint = cls._extract_dataset_key(raw)
+            return text, dataset_hint, metadata
+        text_attr = getattr(raw, "text", None)
+        if text_attr is None and hasattr(raw, "content"):
+            text_attr = getattr(raw, "content")
+        text = str(text_attr or raw).strip()
+        metadata = cls._coerce_metadata(getattr(raw, "metadata", None))
+        dataset_hint = cls._dataset_from_metadata(metadata)
+        if dataset_hint is None:
+            dataset_hint = cls._extract_dataset_key(raw)
+        return text, dataset_hint, metadata
+
+    @staticmethod
+    def _coerce_metadata(meta: Any) -> Mapping[str, Any] | None:
+        if meta is None:
+            return None
+        if isinstance(meta, Mapping):
+            return dict(meta)
+        if is_dataclass(meta):
+            return asdict(meta)
+        try:
+            return dict(meta)  # type: ignore[arg-type]
+        except Exception:  # noqa: BLE001
+            return None
+
+    @staticmethod
+    def _dataset_from_metadata(metadata: Mapping[str, Any] | None) -> str | None:
+        if not metadata:
+            return None
+        for key in ("dataset", "dataset_name", "datasetId", "dataset_id"):
+            value = metadata.get(key)
+            if value not in (None, ""):
+                return str(value)
+        return None
+
+    @staticmethod
+    def _extract_dataset_key(source: Mapping[str, Any] | Any) -> str | None:
+        if isinstance(source, Mapping):
+            items = source.items()
+        else:
+            items = (
+                (attr, getattr(source, attr, None)) for attr in ("dataset", "dataset_name", "datasetId", "dataset_id")
+            )
+        for key, value in items:
+            if key in {"dataset", "dataset_name", "datasetId", "dataset_id"} and value not in (None, ""):
+                return str(value)
+        return None
 
     @classmethod
     async def _collect_metadata(
@@ -508,6 +645,7 @@ class KnowledgeBase:
             except FileNotFoundError as exc:
                 logger.warning(f"Add text storage missing dataset={target_alias} detail={exc}")
                 await HashStore.clear(target_alias)
+                cls._PROJECTED_DATASETS.discard(cls._alias_for_dataset(target_alias))
                 rebuilt = await cls.rebuild_dataset(target_alias, user)
                 if not rebuilt:
                     logger.warning(f"Add text rebuild failed dataset={target_alias}")
@@ -794,6 +932,7 @@ class KnowledgeBase:
         async with lock:
             ds = cls._resolve_dataset_alias(dataset)
             await cls._project_dataset(ds, user)
+            cls._PROJECTED_DATASETS.add(cls._alias_for_dataset(ds))
 
     @staticmethod
     def _log_task_exception(task: asyncio.Task[Any]) -> None:
@@ -851,6 +990,7 @@ class KnowledgeBase:
             logger.warning(f"knowledge_dataset_storage_missing dataset={alias} detail={exc}")
             cls._log_storage_state(alias)
             await HashStore.clear(alias)
+            cls._PROJECTED_DATASETS.discard(alias)
             if allow_rebuild and await cls.rebuild_dataset(alias, user):
                 logger.info(f"knowledge_dataset_rebuilt dataset={alias}")
                 await cls._project_dataset(dataset, user, allow_rebuild=False)
@@ -879,6 +1019,7 @@ class KnowledgeBase:
             logger.warning(f"knowledge_dataset_rebuild_skipped dataset={alias}: no_entries")
             return False
         await HashStore.clear(alias)
+        cls._PROJECTED_DATASETS.discard(alias)
         reinserted = 0
         last_dataset: str | None = None
         for entry in entries:

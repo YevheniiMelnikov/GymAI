@@ -1,5 +1,6 @@
 import asyncio
 from hashlib import sha256
+from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any, Sequence
 
@@ -192,3 +193,45 @@ def test_build_knowledge_entries_skip_non_content() -> None:
     ids, entries = CoachAgent._build_knowledge_entries([snippet_doc, snippet_unknown, " other "])
     assert ids == ["KB-1", "KB-2"]
     assert entries == ["doc", "other"]
+
+
+def test_build_snippets_accepts_mapping(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fail_collect(cls, digest: str, datasets: Sequence[str]) -> tuple[str | None, dict[str, Any] | None]:
+        raise AssertionError("_collect_metadata should not be called when metadata is provided")
+
+    monkeypatch.setattr(KnowledgeBase, "_collect_metadata", classmethod(fail_collect))
+    monkeypatch.setattr(
+        knowledge_base_module.HashStore,
+        "add",
+        classmethod(_fake_hash_add),
+    )
+
+    sample = {"text": "Document", "metadata": {"kind": "document", "dataset": "kb_global"}}
+    snippets = asyncio.run(KnowledgeBase._build_snippets([sample], ["kb_global"], user=None))
+    assert [item.text for item in snippets] == ["Document"]
+    assert snippets[0].dataset == "kb_global"
+    assert snippets[0].kind == "document"
+
+
+def test_build_snippets_accepts_object(monkeypatch: pytest.MonkeyPatch) -> None:
+    @dataclass
+    class Result:
+        text: str
+        metadata: dict[str, Any]
+        dataset_name: str
+
+    async def fail_collect(cls, digest: str, datasets: Sequence[str]) -> tuple[str | None, dict[str, Any] | None]:
+        raise AssertionError("_collect_metadata should not be called for object results")
+
+    monkeypatch.setattr(KnowledgeBase, "_collect_metadata", classmethod(fail_collect))
+    monkeypatch.setattr(
+        knowledge_base_module.HashStore,
+        "add",
+        classmethod(_fake_hash_add),
+    )
+
+    item = Result(text="Note entry", metadata={"kind": "note"}, dataset_name="kb_client_5")
+    snippets = asyncio.run(KnowledgeBase._build_snippets([item], ["kb_client_5"], user=None))
+    assert [snippet.text for snippet in snippets] == ["Note entry"]
+    assert snippets[0].dataset == "kb_client_5"
+    assert snippets[0].kind == "note"

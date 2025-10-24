@@ -3,7 +3,7 @@ import inspect
 from datetime import datetime
 from functools import wraps
 from time import perf_counter
-from typing import Any, ClassVar, Optional, Sequence, TypeVar
+from typing import Any, ClassVar, Mapping, Optional, Sequence, TypeVar
 
 from zoneinfo import ZoneInfo
 
@@ -35,6 +35,7 @@ from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, Text
 from pydantic_ai.models.openai import OpenAIChatModel  # pyrefly: ignore[import-error]
 from ai_coach.types import CoachMode, MessageRole
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase, KnowledgeSnippet
+from ai_coach.language import resolve_language_name
 
 
 class ProgramAdapter:
@@ -67,10 +68,46 @@ class CoachAgent:
     _completion_client: ClassVar[AsyncOpenAI | None] = None
     _completion_model_name: ClassVar[str | None] = None
 
-    @staticmethod
-    def _lang(deps: AgentDeps) -> str:
-        language: str = deps.locale or getattr(settings, "DEFAULT_LANG", "en")
-        return language
+    _LANGUAGE_CODE_ALIASES: ClassVar[dict[str, str]] = {
+        "ua": "uk",
+        "ua-ua": "uk",
+        "uk-ua": "uk",
+        "ukrainian": "uk",
+        "eng": "en",
+        "en-us": "en",
+        "english": "en",
+        "ru-ru": "ru",
+        "rus": "ru",
+        "russian": "ru",
+    }
+
+    @classmethod
+    def _language_context(cls, deps: AgentDeps) -> tuple[str, str]:
+        default_lang: str = getattr(settings, "DEFAULT_LANG", "en") or "en"
+        raw_locale = (deps.locale or default_lang).strip()
+        if not raw_locale:
+            raw_locale = default_lang
+        normalized = raw_locale.replace("_", "-").lower()
+        code = cls._LANGUAGE_CODE_ALIASES.get(normalized)
+        if code is None and "-" in normalized:
+            primary = normalized.split("-", 1)[0]
+            code = cls._LANGUAGE_CODE_ALIASES.get(primary, primary)
+        if code is None:
+            code = cls._LANGUAGE_CODE_ALIASES.get(normalized, normalized)
+        if not code:
+            code = default_lang.lower()
+        if len(code) != 2 or not code.isalpha():
+            fallback = cls._LANGUAGE_CODE_ALIASES.get(default_lang.lower(), default_lang.lower())
+            code = fallback if len(fallback) == 2 and fallback.isalpha() else "en"
+        code = code.lower()
+        descriptor = resolve_language_name(code)
+        display = f"{descriptor} ({code})" if descriptor != code else code
+        return code, display
+
+    @classmethod
+    def _lang(cls, deps: AgentDeps) -> str:
+        code, _ = cls._language_context(deps)
+        return code
 
     @classmethod
     def _init_agent(cls) -> Any:
@@ -280,7 +317,7 @@ class CoachAgent:
         client, model_name = cls._get_completion_client()
         cls._ensure_llm_logging(client, model_name)
         deps.mode = CoachMode.ask_ai
-        language = cls._lang(deps)
+        _, language = cls._language_context(deps)
         history = cls._message_history(deps.client_id)
         if inspect.isawaitable(history):
             history = await history
@@ -361,7 +398,7 @@ class CoachAgent:
                     if extra_ids:
                         entry_ids, entries = extra_ids, extra_entries
                         deps.knowledge_base_empty = False
-            manual = cls._manual_answer(prompt, language, entry_ids, entries, deps.client_id)
+            manual = cls._manual_answer(prompt, entry_ids, entries, deps.client_id)
             return cls._enforce_fitness_domain(
                 prompt,
                 manual,
@@ -399,7 +436,7 @@ class CoachAgent:
         )
         if fallback is not None:
             return fallback
-        manual = cls._manual_answer(prompt, language, entry_ids, entries, deps.client_id)
+        manual = cls._manual_answer(prompt, entry_ids, entries, deps.client_id)
         return cls._enforce_fitness_domain(
             prompt,
             manual,
@@ -439,7 +476,7 @@ class CoachAgent:
         entry_ids, entries = cls._build_knowledge_entries(knowledge)
         entry_ids, entries = cls._filter_entries_for_prompt(prompt, entry_ids, entries)
         deps.knowledge_base_empty = len(entry_ids) == 0
-        language = cls._lang(deps)
+        _, language = cls._language_context(deps)
         knowledge_section = cls._format_knowledge_entries(entry_ids, entries)
         system_prompt = (
             "You are a professional fitness coach. Use the provided knowledge entries when available. "
@@ -540,13 +577,14 @@ class CoachAgent:
             return list(entry_ids), list(entries)
         return list(entry_ids), list(entries)
 
-    @staticmethod
-    def _format_knowledge_entries(entry_ids: Sequence[str], entries: Sequence[str]) -> str:
+    @classmethod
+    def _format_knowledge_entries(cls, entry_ids: Sequence[str], entries: Sequence[str]) -> str:
         if not entry_ids or not entries:
             return "No knowledge entries were retrieved."
         formatted: list[str] = []
         for entry_id, text in zip(entry_ids, entries, strict=False):
-            formatted.append(f"{entry_id}: {text}")
+            snippet = cls._truncate_text(text, 500)
+            formatted.append(f"{entry_id}: {snippet}")
         return "\n\n".join(formatted)
 
     @classmethod
@@ -598,27 +636,21 @@ class CoachAgent:
     def _manual_answer(
         cls,
         prompt: str,
-        language: str,
         entry_ids: Sequence[str],
         entries: Sequence[str],
         client_id: int,
     ) -> QAResponse:
-        if entry_ids and entries:
-            answer = cls._summarize_entries(entries, language)
-            logger.info(
-                f"agent.ask manual_answer client_id={client_id} entries={len(entry_ids)} answer_len={len(answer)}"
-            )
-            return QAResponse(answer=answer, sources=list(entry_ids))
-        topic = prompt.strip().rstrip("?") or "training"
-        answer = cls._general_guidance(language, topic)
-        logger.info(f"agent.ask manual_general_answer client_id={client_id} language={language} topic={topic[:40]}")
-        return QAResponse(answer=answer, sources=["general_knowledge"])
+        if not entry_ids or not entries:
+            raise AgentExecutionAborted("Knowledge base empty", reason="knowledge_base_empty")
+        answer = cls._summarize_entries(entries)
+        logger.info(f"agent.ask manual_answer client_id={client_id} entries={len(entry_ids)} answer_len={len(answer)}")
+        return QAResponse(answer=answer, sources=list(entry_ids))
 
     @classmethod
-    def _summarize_entries(cls, entries: Sequence[str], language: str) -> str:
+    def _summarize_entries(cls, entries: Sequence[str]) -> str:
         prepared = cls._prepare_manual_entries(entries)
         if not prepared:
-            return cls._no_guidance_message(language)
+            raise AgentExecutionAborted("Knowledge base empty", reason="knowledge_base_empty")
         summary_chunks: list[str] = []
         remaining = 600
         for text in prepared:
@@ -634,65 +666,8 @@ class CoachAgent:
             if remaining <= 0:
                 break
         if not summary_chunks:
-            return cls._no_guidance_message(language)
-        header = cls._summary_header(language)
-        return f"{header}\n" + "\n".join(summary_chunks)
-
-    @classmethod
-    def _summary_header(cls, language: str) -> str:
-        key = cls._language_key(language)
-        headers = {
-            "ua": "Ось прямі рекомендації з бази знань:",
-            "ru": "Вот прямые рекомендации из базы знаний:",
-            "default": "Here is direct guidance from the knowledge base:",
-        }
-        return headers.get(key, headers["default"])
-
-    @classmethod
-    def _general_guidance(cls, language: str, topic: str) -> str:
-        key = cls._language_key(language)
-        guidance = {
-            "ua": (
-                "Ось загальні рекомендації щодо {topic}. "
-                "Підтримуйте збалансований графік тренувань з днями відновлення, "
-                "поєднуйте силові та кардіо-навантаження, обирайте повноцінні продукти з достатньою кількістю білка, "
-                "стежте за гідратацією та сном. "
-                "Регулюйте інтенсивність поступово і звертайтеся до лікаря, якщо є медичні обмеження."
-            ).format(topic=topic),
-            "ru": (
-                "Вот общие рекомендации по теме {topic}. "
-                "Поддерживайте сбалансированный график тренировок с днями восстановления, "
-                "совмещайте силовые и кардио-нагрузки, выбирайте цельные продукты с достаточным количеством белка, "
-                "следите за водным балансом и сном. "
-                "Постепенно регулируйте интенсивность и консультируйтесь с врачом при наличии ограничений."
-            ).format(topic=topic),
-            "default": (
-                "Here is general guidance for {topic}. "
-                "Maintain a balanced training schedule with recovery days, combine strength and conditioning work, "
-                "focus on whole foods with sufficient protein, stay hydrated, and track sleep. "
-                "Adjust intensity gradually and consult a healthcare professional if you have medical concerns."
-            ).format(topic=topic),
-        }
-        return guidance.get(key, guidance["default"])
-
-    @classmethod
-    def _no_guidance_message(cls, language: str) -> str:
-        key = cls._language_key(language)
-        messages = {
-            "ua": "Не вдалося отримати корисні підказки з бази знань.",
-            "ru": "Не удалось получить полезные рекомендации из базы знаний.",
-            "default": "Key guidance could not be extracted from the knowledge base.",
-        }
-        return messages.get(key, messages["default"])
-
-    @staticmethod
-    def _language_key(language: str) -> str:
-        normalized = (language or "").strip().lower()
-        if not normalized:
-            return "default"
-        primary = normalized.split("-")[0]
-        alias_map = {"uk": "ua", "ua": "ua"}
-        return alias_map.get(primary, primary)
+            raise AgentExecutionAborted("Knowledge base empty", reason="knowledge_base_empty")
+        return "\n".join(summary_chunks)
 
     @classmethod
     def _prepare_manual_entries(cls, entries: Sequence[str]) -> list[str]:
@@ -713,6 +688,44 @@ class CoachAgent:
     def _sanitize_manual_entry(cls, entry: str) -> str | None:
         normalized = " ".join(entry.split())
         return normalized or None
+
+    @staticmethod
+    def _truncate_text(text: str, limit: int) -> str:
+        if len(text) <= limit:
+            return text
+        truncated = text[: limit + 1]
+        last_space = truncated.rfind(" ")
+        if last_space > 0:
+            truncated = truncated[:last_space]
+        return f"{truncated.rstrip()}..."
+
+    @staticmethod
+    def _extract_message_content(content: Any) -> str:
+        if isinstance(content, str):
+            return content.strip()
+        if hasattr(content, "model_dump"):
+            try:
+                dumped = content.model_dump()
+            except Exception:  # noqa: BLE001
+                dumped = None
+            if isinstance(dumped, dict):
+                maybe_text = dumped.get("text")
+                if isinstance(maybe_text, str):
+                    return maybe_text.strip()
+        if isinstance(content, Sequence) and not isinstance(content, (str, bytes)):
+            parts: list[str] = []
+            for part in content:
+                if isinstance(part, Mapping):
+                    maybe_text = part.get("text") or part.get("content")
+                    if isinstance(maybe_text, str) and maybe_text.strip():
+                        parts.append(maybe_text.strip())
+                elif hasattr(part, "text"):
+                    candidate = getattr(part, "text")
+                    if isinstance(candidate, str) and candidate.strip():
+                        parts.append(candidate.strip())
+            if parts:
+                return "\n".join(parts)
+        return ""
 
     @staticmethod
     def _supports_json_object(model: Any) -> bool:
@@ -909,8 +922,8 @@ class CoachAgent:
             kwargs["response_format"] = {"type": "json_object"}
         return await client.chat.completions.create(**kwargs)  # pyrefly: ignore[no-untyped-call]
 
-    @staticmethod
-    def _extract_choice_content(response: Any, *, client_id: int | None = None) -> str:
+    @classmethod
+    def _extract_choice_content(cls, response: Any, *, client_id: int | None = None) -> str:
         choices = getattr(response, "choices", None)
         if not choices:
             if client_id is not None:
@@ -922,10 +935,11 @@ class CoachAgent:
                 logger.debug(f"llm.parse client_id={client_id} empty=True reason=no_message")
             return ""
         content = getattr(message, "content", "") or ""
-        if isinstance(content, str) and content.strip():
+        extracted = cls._extract_message_content(content)
+        if extracted:
             if client_id is not None:
                 logger.debug(f"llm.parse client_id={client_id} empty=False reason=message_content")
-            return content
+            return extracted
         tool_calls = getattr(message, "tool_calls", None)
         if tool_calls:
             for call in tool_calls:
@@ -1036,21 +1050,22 @@ class CoachAgent:
                 payload = json.loads(text)
             except json.JSONDecodeError as exc:  # pragma: no cover - defensive guard
                 logger.warning(f"agent.ask fallback invalid_json client_id={client_id} error={exc}")
-                return "", []
-            answer = str(payload.get("answer", "")).strip()
-            sources_payload = payload.get("sources", [])
-            normalized_sources: list[str] = []
-            if isinstance(sources_payload, Sequence) and not isinstance(sources_payload, (str, bytes)):
-                for item in sources_payload:
-                    text = str(item).strip()
-                    if text:
-                        normalized_sources.append(text)
-            if normalized_sources:
-                valid = {entry for entry in normalized_entries}
-                normalized_sources = [item for item in normalized_sources if item in valid]
-            if not normalized_sources:
-                normalized_sources = list(normalized_entries) if normalized_entries else ["general_knowledge"]
-            return answer, normalized_sources
+                should_parse_json = False
+            else:
+                answer = str(payload.get("answer", "")).strip()
+                sources_payload = payload.get("sources", [])
+                normalized_sources: list[str] = []
+                if isinstance(sources_payload, Sequence) and not isinstance(sources_payload, (str, bytes)):
+                    for item in sources_payload:
+                        text = str(item).strip()
+                        if text:
+                            normalized_sources.append(text)
+                if normalized_sources:
+                    valid = {entry for entry in normalized_entries}
+                    normalized_sources = [item for item in normalized_sources if item in valid]
+                if not normalized_sources:
+                    normalized_sources = list(normalized_entries) if normalized_entries else ["general_knowledge"]
+                return answer, normalized_sources
         answer = text
         default_sources = list(normalized_entries) if normalized_entries else ["general_knowledge"]
         return answer, default_sources
@@ -1067,7 +1082,7 @@ class CoachAgent:
     ) -> QAResponse:
         answer = response.answer.strip()
         if not answer:
-            return cls._manual_answer(prompt, language, entry_ids, entries, client_id)
+            return cls._manual_answer(prompt, entry_ids, entries, client_id)
         response.answer = answer
         valid_sources = set(entry_ids)
         if response.sources:
