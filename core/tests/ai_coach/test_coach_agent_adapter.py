@@ -175,9 +175,9 @@ async def test_answer_question_manual_answer_when_everything_fails(monkeypatch: 
     monkeypatch.setattr(CoachAgent, "_complete_with_retries", classmethod(lambda *args, **kwargs: fake_complete()))
     monkeypatch.setattr(CoachAgent, "_fallback_answer_question", classmethod(fake_fallback))
     deps = AgentDeps(client_id=5, locale="en", allow_save=False)
-    result = await CoachAgent.answer_question("question", deps)
-    assert "general guidance" in result.answer.lower()
-    assert result.sources == ["general_knowledge"]
+    with pytest.raises(AgentExecutionAborted) as exc_info:
+        await CoachAgent.answer_question("question", deps)
+    assert exc_info.value.reason == "knowledge_base_empty"
 
 
 @pytest.mark.asyncio

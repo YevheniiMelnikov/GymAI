@@ -1,6 +1,5 @@
 import importlib
 import os
-import shutil
 from importlib import import_module
 
 # pyrefly: ignore-file
@@ -9,7 +8,7 @@ from importlib import import_module
 
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Awaitable, Callable, Optional, cast
+from typing import Any, Awaitable, Callable, ClassVar, Optional, cast
 from uuid import uuid4
 
 import cognee
@@ -17,6 +16,22 @@ from loguru import logger
 from sqlalchemy import schema as sa_schema
 
 from config.app_settings import settings
+
+
+def _directory_snapshot(path: Path, limit: int = 10) -> tuple[list[str], int]:
+    try:
+        entries: list[str] = []
+        count = 0
+        for item in path.iterdir():
+            count += 1
+            if len(entries) < limit:
+                entries.append(item.name)
+        return entries, count
+    except FileNotFoundError:
+        return [], 0
+    except Exception as exc:  # noqa: BLE001
+        logger.debug(f"cognee_storage_snapshot_failed path={path} detail={exc}")
+        return [], 0
 
 
 def _prepare_storage_root() -> Path:
@@ -27,62 +42,52 @@ def _prepare_storage_root() -> Path:
     root.mkdir(parents=True, exist_ok=True)
     for sub in (".cognee_system/databases", ".cognee_system/vectordb"):
         (root / sub).mkdir(parents=True, exist_ok=True)
-    os.environ.setdefault("COGNEE_STORAGE_PATH", str(root))
-    os.environ.setdefault("COGNEE_DATA_ROOT", str(root))
-    _ensure_package_storage_symlink(root)
-    logger.info(
-        "cognee_storage prepared path={path} exists={exists} writable={writable}",
-        path=str(root),
-        exists=root.exists(),
-        writable=os.access(root, os.W_OK),
-    )
+    os.environ["COGNEE_STORAGE_PATH"] = str(root)
+    os.environ["COGNEE_DATA_ROOT"] = str(root)
+    _log_storage_details(root)
     return root
 
 
-def _ensure_package_storage_symlink(target: Path) -> None:
+def _collect_storage_info(root: Path | None) -> dict[str, Any]:
     package_storage = Path(cognee.__file__).resolve().parent / ".data_storage"
+    package_target: str | None = None
     try:
-        if package_storage.exists() and not package_storage.is_symlink():
-            _migrate_package_storage(package_storage, target)
-            if package_storage.is_dir():
-                shutil.rmtree(package_storage)
-            else:
-                package_storage.unlink()
-        if package_storage.is_symlink():
-            resolved = package_storage.resolve()
-            if resolved == target:
-                return
-            package_storage.unlink()
-        package_storage.symlink_to(target, target_is_directory=True)
-        logger.info(
-            "cognee_storage symlinked package_path={package} target={target}",
-            package=str(package_storage),
-            target=str(target),
-        )
-    except Exception as exc:
-        logger.warning(f"Failed to prepare Cognee storage symlink: {exc}")
+        if package_storage.exists() or package_storage.is_symlink():
+            package_target = str(package_storage.resolve())
+    except Exception as exc:  # noqa: BLE001
+        logger.debug(f"cognee_storage_readlink_failed path={package_storage} detail={exc}")
+
+    entries_sample: list[str]
+    entries_count: int
+    if root is not None and root.exists():
+        entries_sample, entries_count = _directory_snapshot(root)
+    else:
+        entries_sample, entries_count = [], 0
+
+    root_exists = root.exists() if isinstance(root, Path) else False
+    root_writable = os.access(root, os.W_OK) if isinstance(root, Path) else False
+
+    return {
+        "root": str(root) if isinstance(root, Path) else None,
+        "root_exists": root_exists,
+        "root_writable": root_writable,
+        "entries_sample": entries_sample,
+        "entries_count": entries_count,
+        "package_path": str(package_storage),
+        "package_exists": package_storage.exists() or package_storage.is_symlink(),
+        "package_is_symlink": package_storage.is_symlink(),
+        "package_target": package_target,
+    }
 
 
-def _migrate_package_storage(source: Path, target: Path) -> None:
-    try:
-        for item in source.iterdir():
-            destination = target / item.name
-            if destination.exists():
-                continue
-            if item.is_dir():
-                shutil.move(str(item), destination)
-            else:
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(item), destination)
-        logger.info(
-            "cognee_storage migrated legacy files source={source} target={target}",
-            source=str(source),
-            target=str(target),
-        )
-    except FileNotFoundError:
-        return
-    except Exception as exc:
-        logger.warning(f"Failed to migrate legacy Cognee storage: {exc}")
+def _log_storage_details(root: Path) -> None:
+    info = _collect_storage_info(root)
+    logger.info(
+        f"cognee_storage prepared path={info['root']} exists={info['root_exists']} "
+        f"writable={info['root_writable']} entries={info['entries_count']} sample={info['entries_sample']} "
+        f"package_path={info['package_path']} package_exists={info['package_exists']} "
+        f"package_is_symlink={info['package_is_symlink']} package_target={info['package_target']}"
+    )
 
 
 def _resolve_localfilestorage_class() -> Optional[type[Any]]:
@@ -112,41 +117,70 @@ def _patch_local_file_storage(root: Path) -> None:
     if getattr(local_storage_cls, "_gymbot_storage_patched", False):
         return
 
-    try:
-        original_open = getattr(local_storage_cls, "open")
-    except AttributeError:
-        original_open = None
-    if original_open is None or not callable(original_open):
-        logger.info("LocalFileStorage has no open method; skipping storage patch")
-        return
+    allow_package_storage = os.getenv("COGNEE_ALLOW_PACKAGE_STORAGE", "0") == "1"
 
-    def open_with_project_storage(self: Any, file_path: str, mode: str = "r", **kwargs: Any) -> Any:
-        raw_path = Path(file_path)
-        target_path = raw_path if raw_path.is_absolute() else (root / raw_path)
-        target_path = target_path.resolve()
-        if any(flag in mode for flag in ("w", "a", "x", "+")):
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            return target_path.open(mode, **kwargs)
-        except FileNotFoundError:
-            return original_open(self, file_path, mode, **kwargs)
-
-    setattr(local_storage_cls, "open", open_with_project_storage)
-    setattr(local_storage_cls, "_gymbot_storage_patched", True)
-    setattr(local_storage_cls, "_gymbot_original_open", original_open)
+    original_open = getattr(local_storage_cls, "open", None)
+    storage_attr = getattr(local_storage_cls, "storage_path", None) or getattr(local_storage_cls, "STORAGE_PATH", None)
 
     if hasattr(local_storage_cls, "storage_path"):
         setattr(local_storage_cls, "storage_path", str(root))
     if hasattr(local_storage_cls, "STORAGE_PATH"):
         setattr(local_storage_cls, "STORAGE_PATH", str(root))
 
-    logger.info("cognee_storage patched_local_file_storage root=%s", root)
+    package_storage = (Path(cognee.__file__).resolve().parent / ".data_storage").resolve()
+
+    def _remap_path(raw_path: Path) -> Path:
+        if raw_path.is_absolute():
+            try:
+                if raw_path.is_relative_to(root):
+                    return raw_path
+            except ValueError:
+                pass
+            try:
+                if raw_path.is_relative_to(package_storage):
+                    relative = raw_path.relative_to(package_storage)
+                    return (root / relative).resolve()
+            except ValueError:
+                pass
+            return (root / raw_path.name).resolve()
+        return (root / raw_path).resolve()
+
+    if not callable(original_open):
+        logger.info(
+            f"cognee_storage localfilestorage_no_open class={local_storage_cls.__name__} storage_path={storage_attr}"
+        )
+        setattr(local_storage_cls, "_gymbot_storage_patched", True)
+        return
+
+    def open_with_project_storage(self: Any, file_path: str, mode: str = "r", **kwargs: Any) -> Any:
+        raw_path = Path(file_path)
+        target_path = _remap_path(raw_path)
+        if any(flag in mode for flag in ("w", "a", "x", "+")):
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            return target_path.open(mode, **kwargs)
+        except FileNotFoundError:
+            if allow_package_storage and callable(original_open):
+                logger.warning(f"cognee_storage package_fallback file={file_path} root={root}")
+                return original_open(self, file_path, mode, **kwargs)
+            raise
+
+    setattr(local_storage_cls, "open", open_with_project_storage)
+    setattr(local_storage_cls, "_gymbot_storage_patched", True)
+
+    logger.info(
+        f"cognee_storage patched_local_file_storage class={local_storage_cls.__name__} "
+        f"root={root} storage_path={storage_attr} allow_package_storage={allow_package_storage}"
+    )
 
 
 class CogneeConfig:
+    _STORAGE_ROOT: ClassVar[Path | None] = None
+
     @classmethod
     def apply(cls) -> None:
         storage_root = _prepare_storage_root()
+        cls._STORAGE_ROOT = storage_root
         _patch_local_file_storage(storage_root)
         cls._configure_llm()
         cls._configure_vector_db()
@@ -154,6 +188,19 @@ class CogneeConfig:
         cls._patch_cognee()
         cls._patch_dataset_creation()
         cls._patch_rbac_and_dataset_resolvers()
+
+    @classmethod
+    def storage_root(cls) -> Path | None:
+        return cls._STORAGE_ROOT
+
+    @classmethod
+    def describe_storage(cls) -> dict[str, Any]:
+        root = cls._STORAGE_ROOT
+        if root is None:
+            candidate = os.environ.get("COGNEE_STORAGE_PATH") or os.environ.get("COGNEE_DATA_ROOT")
+            if candidate:
+                root = Path(candidate).expanduser().resolve()
+        return _collect_storage_info(root)
 
     @staticmethod
     def _configure_llm() -> None:

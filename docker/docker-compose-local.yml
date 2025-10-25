@@ -86,10 +86,15 @@ services:
   rabbitmq:
     image: rabbitmq:4.1.4-management
     container_name: rabbitmq
+    user: "0:0"
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-rabbitmq}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rabbitmq}
       RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
+    entrypoint: /usr/local/bin/rabbitmq-entrypoint.sh
+    volumes:
+      - rabbitmqdata:/var/lib/rabbitmq
+      - ./rabbitmq-entrypoint.sh:/usr/local/bin/rabbitmq-entrypoint.sh:ro
     ports:
       - ${HOST_RABBITMQ_PORT:-5672}:5672
       - ${HOST_RABBITMQ_MANAGEMENT_PORT:-15672}:15672
@@ -129,7 +134,7 @@ services:
       interval: 60s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 5m
     volumes:
       - staticfiles:/app/staticfiles
       - ../google_creds.json:/app/google_creds.json:ro
@@ -233,9 +238,11 @@ services:
 
 networks:
   internal:
+    name: gymbot_internal_local
     driver: bridge
 
 volumes:
   pgdata:
   staticfiles:
   data_storage:
+  rabbitmqdata:
