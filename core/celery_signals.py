@@ -8,9 +8,9 @@ from urllib.parse import urlparse
 from celery import Task, signals
 from loguru import logger
 
-from core.celery_app import AI_COACH_TASK_ROUTES
+from core.celery_app import AI_COACH_TASK_ROUTES, CRITICAL_TASK_ROUTES
 
-REQUIRED_TASK_NAMES: tuple[str, ...] = tuple(AI_COACH_TASK_ROUTES.keys())
+EXPECTED_TASK_NAMES: tuple[str, ...] = tuple(sorted({*AI_COACH_TASK_ROUTES.keys(), *CRITICAL_TASK_ROUTES.keys()}))
 _TASK_START_TIMES: MutableMapping[str, float] = {}
 _SIGNALS_ATTACHED: bool = False
 
@@ -63,17 +63,18 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
                 {str(getattr(queue, "name", "")) for queue in task_queues if getattr(queue, "name", "")}
             )
 
-    registered_missing: list[str] = []
-    registered_ok: bool = False
     tasks_map = getattr(app_obj, "tasks", {})
+    registered_tasks = {str(name) for name in getattr(tasks_map, "keys", lambda: [])()}
 
     if inspect is not None:
         registered_map = inspect.registered() or inspect.registered_tasks() or {}
         worker_registered = set(registered_map.get(worker.hostname) or [])
-        registered_missing = [name for name in REQUIRED_TASK_NAMES if name not in worker_registered]
-        registered_ok = not registered_missing
     else:
-        registered_ok = all(name in tasks_map for name in REQUIRED_TASK_NAMES)
+        worker_registered = registered_tasks
+
+    missing = [name for name in EXPECTED_TASK_NAMES if name not in worker_registered]
+    registered_ok = not missing
+    registered_sample = sorted(worker_registered)[:5]
 
     conf = getattr(app_obj, "conf", None)
     broker_url = str(getattr(conf, "broker_url", "")) if conf is not None else ""
@@ -83,22 +84,30 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
 
     logger.info(
         f"celery_ready hostname={worker.hostname} broker={broker_url} scheme_host={scheme_host} "
-        f"vhost={vhost} queues={queue_names} registered_ok={registered_ok} missing={registered_missing}"
+        f"vhost={vhost} queues={queue_names} registered_ok={registered_ok} expected={len(EXPECTED_TASK_NAMES)} "
+        f"missing={missing} registered_sample={registered_sample}"
     )
 
     strict_mode = os.getenv("CELERY_STRICT", "0") == "1"
 
     if "ai_coach" not in queue_names:
-        logger.warning(f"ai_coach queue missing on worker hostname={worker.hostname} queues={queue_names}")
-        if strict_mode:
-            raise SystemExit("ai_coach queue missing")
-        return
+        try:
+            control.add_consumer("ai_coach", destination=[worker.hostname])
+            queue_names.append("ai_coach")
+            queue_names = sorted(set(queue_names))
+            logger.info(f"celery_consumer_added hostname={worker.hostname} queues={queue_names} target=ai_coach")
+        except Exception as add_exc:  # noqa: BLE001
+            logger.warning(
+                f"ai_coach queue missing on worker hostname={worker.hostname} queues={queue_names} error={add_exc}"
+            )
+            if strict_mode:
+                raise SystemExit("ai_coach queue missing") from add_exc
+            return
 
     if not registered_ok:
+        available_sample = sorted(registered_tasks)[:10]
         logger.error(
-            "celery tasks missing "
-            f"hostname={worker.hostname} missing={registered_missing} "
-            f"available={sorted(tasks_map.keys())}"
+            f"celery tasks missing hostname={worker.hostname} missing={missing} available_sample={available_sample}"
         )
         if strict_mode:
             raise SystemExit("required celery tasks missing")
@@ -106,7 +115,7 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
 
 
 def _on_task_prerun(task_id: str, task: Task, **_: Any) -> None:
-    if task.name not in REQUIRED_TASK_NAMES:
+    if task.name not in EXPECTED_TASK_NAMES:
         return
     request_id, retries = _extract_request_context(task)
     _TASK_START_TIMES[task_id] = time.perf_counter()
@@ -114,7 +123,7 @@ def _on_task_prerun(task_id: str, task: Task, **_: Any) -> None:
 
 
 def _on_task_postrun(task_id: str, task: Task, state: str, retval: Any, **_: Any) -> None:
-    if task.name not in REQUIRED_TASK_NAMES:
+    if task.name not in EXPECTED_TASK_NAMES:
         return
     start_time = _TASK_START_TIMES.pop(task_id, None)
     duration_ms: float | None = None
@@ -152,4 +161,5 @@ def _extract_request_context(task: Task) -> tuple[str | None, int]:
 
 __all__ = [
     "setup_celery_signals",
+    "EXPECTED_TASK_NAMES",
 ]

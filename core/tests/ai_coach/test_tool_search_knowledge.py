@@ -1,4 +1,5 @@
 import asyncio
+from typing import Any
 import pytest  # pyrefly: ignore[import-error]
 
 from ai_coach.agent import AgentDeps
@@ -21,7 +22,11 @@ def test_tool_search_knowledge_k(monkeypatch: pytest.MonkeyPatch) -> None:
             called["client_id"] = client_id
             return []
 
+        async def fake_fallback_entries(client_id: int, limit: int = 6) -> list[str]:
+            return []
+
         monkeypatch.setattr(KnowledgeBase, "search", fake_search)
+        monkeypatch.setattr(KnowledgeBase, "fallback_entries", fake_fallback_entries)
         ctx = _Ctx()
         result = await tool_search_knowledge(ctx, "hi", k=5)
         assert result == []
@@ -39,11 +44,54 @@ def test_tool_search_knowledge_duplicate_returns_empty(monkeypatch: pytest.Monke
         async def fake_search(query: str, client_id: int, k: int) -> list[str]:
             return []
 
+        async def fake_fallback_entries(client_id: int, limit: int = 6) -> list[str]:
+            return []
+
         monkeypatch.setattr(KnowledgeBase, "search", fake_search)
+        monkeypatch.setattr(KnowledgeBase, "fallback_entries", fake_fallback_entries)
         ctx = _Ctx()
         await tool_search_knowledge(ctx, "  hello  ")
         result = await tool_search_knowledge(ctx, "hello")
         assert result == []
+
+    asyncio.run(runner())
+
+
+def test_tool_search_knowledge_timeout_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        async def fake_wait_for(coro: Any, timeout: float) -> list[str]:
+            coro.close()
+            raise TimeoutError
+
+        async def fake_fallback_entries(client_id: int, limit: int = 6) -> list[str]:
+            return ["Fallback guidance"]
+
+        monkeypatch.setattr("ai_coach.agent.tools.wait_for", fake_wait_for)
+        monkeypatch.setattr(KnowledgeBase, "fallback_entries", fake_fallback_entries)
+        ctx = _Ctx()
+        result = await tool_search_knowledge(ctx, "timeout case", k=3)
+        assert result == ["Fallback guidance"]
+        assert ctx.deps.knowledge_base_empty is False
+        assert ctx.deps.last_knowledge_empty is False
+
+    asyncio.run(runner())
+
+
+def test_tool_search_knowledge_uses_fallback_entries(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def runner() -> None:
+        async def fake_search(query: str, client_id: int, k: int) -> list[str]:
+            return []
+
+        async def fake_fallback_entries(client_id: int, limit: int = 6) -> list[str]:
+            return [" First entry ", "Second entry"]
+
+        monkeypatch.setattr(KnowledgeBase, "search", fake_search)
+        monkeypatch.setattr(KnowledgeBase, "fallback_entries", fake_fallback_entries)
+        ctx = _Ctx()
+        result = await tool_search_knowledge(ctx, "need fallback", k=2)
+        assert result == ["First entry", "Second entry"]
+        assert ctx.deps.knowledge_base_empty is False
+        assert ctx.deps.last_knowledge_empty is False
 
     asyncio.run(runner())
 

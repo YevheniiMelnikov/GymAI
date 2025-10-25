@@ -49,7 +49,11 @@ class AiCoachService(APIClient):
         data = await self._post_ask(payload, request_id=request_id)
         if data is None:
             return None
-        return QAResponse.model_validate(data)
+        return self._build_qa_response(
+            data,
+            client_id=client_id,
+            request_id=request_id,
+        )
 
     async def ask(
         self,
@@ -73,7 +77,11 @@ class AiCoachService(APIClient):
         data = await self._post_ask(payload, request_id=request_id, extra_headers=headers)
         if data is None:
             return None
-        return QAResponse.model_validate(data)
+        return self._build_qa_response(
+            data,
+            client_id=client_id,
+            request_id=request_id,
+        )
 
     async def create_workout_plan(
         self,
@@ -242,6 +250,45 @@ class AiCoachService(APIClient):
             retryable=False,
             reason=reason if isinstance(reason, str) else None,
         )
+
+    def _build_qa_response(
+        self,
+        data: Any,
+        *,
+        client_id: int,
+        request_id: str | None,
+    ) -> QAResponse:
+        if isinstance(data, QAResponse):
+            return data
+        if isinstance(data, dict):
+            try:
+                return QAResponse.model_validate(data)
+            except (ValidationError, TypeError) as exc:
+                logger.error(
+                    f"AI coach QA payload validation failed client_id={client_id} request_id={request_id} error={exc}"
+                )
+                raise UserServiceError("AI coach returned an invalid QA payload") from exc
+        if isinstance(data, str):
+            text = data.strip()
+            if not text:
+                logger.error(f"AI coach QA payload empty string client_id={client_id} request_id={request_id}")
+                raise UserServiceError("AI coach returned an empty QA answer")
+            return QAResponse(answer=text)
+        if isinstance(data, list):
+            parts: list[str] = []
+            for item in data:
+                if isinstance(item, str) and item.strip():
+                    parts.append(item.strip())
+                elif item:
+                    parts.append(str(item))
+            if not parts:
+                logger.error(f"AI coach QA payload empty list client_id={client_id} request_id={request_id}")
+                raise UserServiceError("AI coach returned an empty QA answer")
+            return QAResponse(answer="\n\n".join(parts))
+        logger.error(
+            f"AI coach QA payload unexpected type client_id={client_id} request_id={request_id} type={type(data)}"
+        )
+        raise UserServiceError("AI coach returned an invalid QA payload")
 
     async def refresh_knowledge(self) -> None:
         token = base64.b64encode(

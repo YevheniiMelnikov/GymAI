@@ -48,6 +48,9 @@ async def _notify_ai_answer_ready(payload: dict[str, Any]) -> None:
     timeout = internal_request_timeout(settings)
     request_id = str(payload.get("request_id", ""))
     status = str(payload.get("status", "success"))
+    if status == "duplicate":
+        logger.info(f"event=ask_ai_notify_skip request_id={request_id} status=duplicate")
+        return
     state = AiQuestionState.create()
     if request_id:
         if status == "success" and await state.is_delivered(request_id):
@@ -106,7 +109,8 @@ async def _notify_ai_answer_error(
     client_profile_id: int | None,
     request_id: str,
     error: str,
-) -> None:
+    dispatch: bool = False,
+) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "client_id": client_id,
         "status": "error",
@@ -115,11 +119,13 @@ async def _notify_ai_answer_error(
     }
     if client_profile_id is not None and client_profile_id > 0:
         payload["client_profile_id"] = client_profile_id
-    notify_ai_answer_ready_task.apply_async(  # pyrefly: ignore[not-callable]
-        args=[payload],
-        queue="ai_coach",
-        routing_key="ai_coach",
-    )
+    if dispatch:
+        notify_ai_answer_ready_task.apply_async(  # pyrefly: ignore[not-callable]
+            args=[payload],
+            queue="ai_coach",
+            routing_key="ai_coach",
+        )
+    return payload
 
 
 async def _handle_ai_answer_failure_impl(payload: dict[str, Any], detail: str) -> None:
@@ -136,6 +142,7 @@ async def _handle_ai_answer_failure_impl(payload: dict[str, Any], detail: str) -
         client_profile_id=client_profile_id,
         request_id=request_id,
         error=reason,
+        dispatch=True,
     )
     if request_id:
         state = AiQuestionState.create()
@@ -174,7 +181,11 @@ async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str
 
     if not await _claim_answer_request(request_id, attempt=attempt):
         logger.info(f"event=ask_ai_duplicate request_id={request_id} client_id={client_id}")
-        return None
+        return {
+            "client_id": client_id,
+            "request_id": request_id,
+            "status": "duplicate",
+        }
 
     logger.info(
         (
@@ -197,18 +208,17 @@ async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str
             f"status={exc.status} retryable={exc.retryable} reason={exc.reason}"
         )
         if not exc.retryable:
-            await _notify_ai_answer_error(
+            return await _notify_ai_answer_error(
                 client_id=client_id,
                 client_profile_id=client_profile_id or None,
                 request_id=request_id,
                 error=exc.reason or f"http_{exc.status}",
             )
-            return None
         raise
     except Exception as exc:  # noqa: BLE001
         logger.error(f"event=ask_ai_failed client_id={client_id} request_id={request_id} attempt={attempt} error={exc}")
         if attempt >= getattr(task, "max_retries", 0):
-            await _notify_ai_answer_error(
+            return await _notify_ai_answer_error(
                 client_id=client_id,
                 client_profile_id=client_profile_id or None,
                 request_id=request_id,
@@ -218,13 +228,12 @@ async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str
 
     if response is None:
         logger.error(f"event=ask_ai_empty_response client_id={client_id} request_id={request_id}")
-        await _notify_ai_answer_error(
+        return await _notify_ai_answer_error(
             client_id=client_id,
             client_profile_id=client_profile_id or None,
             request_id=request_id,
             error="empty_response",
         )
-        return None
 
     qa_response = response if isinstance(response, QAResponse) else QAResponse.model_validate(response)
     sources = list(qa_response.sources)
@@ -289,6 +298,9 @@ def ask_ai_question(self, payload: dict[str, Any]) -> dict[str, Any] | None:  # 
     time_limit=AI_QA_NOTIFY_TIME_LIMIT,
 )
 def notify_ai_answer_ready_task(self, payload: dict[str, Any]) -> None:  # pyrefly: ignore[valid-type]
+    if not isinstance(payload, dict):
+        logger.error(f"event=ask_ai_notify_invalid_payload payload_type={type(payload)!r}")
+        return
     try:
         asyncio.run(_notify_ai_answer_ready(payload))
     except Exception as exc:  # noqa: BLE001

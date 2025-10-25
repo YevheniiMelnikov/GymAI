@@ -1,7 +1,5 @@
 """Common authentication helpers for internal endpoints."""
 
-from __future__ import annotations
-
 import hmac
 from ipaddress import ip_address, ip_network
 from functools import wraps

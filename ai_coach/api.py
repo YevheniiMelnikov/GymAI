@@ -90,6 +90,28 @@ async def internal_ping() -> dict[str, bool]:
     return {"ok": True}
 
 
+@app.get("/internal/debug/knowledge")
+async def debug_knowledge(
+    client_id: int | None = None,
+    credentials: HTTPBasicCredentials = Depends(security),
+) -> dict[str, Any]:
+    _validate_refresh_credentials(credentials)
+    snapshot = await KnowledgeBase.debug_snapshot(client_id=client_id)
+    return snapshot
+
+
+@app.get("/internal/debug/llm_probe")
+async def debug_llm_probe(
+    credentials: HTTPBasicCredentials = Depends(security),
+) -> dict[str, Any]:
+    _validate_refresh_credentials(credentials)
+    try:
+        return await CoachAgent.llm_probe()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"/internal/debug/llm_probe failed: {exc}")
+        raise HTTPException(status_code=503, detail="LLM probe failed") from exc
+
+
 @app.post("/ask/", response_model=Program | Subscription | QAResponse | list[str] | None)
 async def ask(
     data: AICoachRequest, request: Request
@@ -170,12 +192,27 @@ async def ask(
 
         if mode == CoachMode.ask_ai:
             answer = getattr(result, "answer", None)
+            sources: list[str] = []
+            if isinstance(result, QAResponse):
+                sources = [src.strip() for src in result.sources if isinstance(src, str) and src.strip()]
+            else:
+                raw_sources = getattr(result, "sources", None)
+                if isinstance(raw_sources, list):
+                    for item in raw_sources:
+                        text = str(item).strip()
+                        if text:
+                            sources.append(text)
             logger.debug(
                 f"/ask agent completed request_id={data.request_id}"
                 f" client_id={data.client_id} mode=ask_ai"
                 f" answer_len={len(answer) if isinstance(answer, str) else 0}"
                 f" steps_used={deps.tool_calls} kb_empty={deps.knowledge_base_empty}"
             )
+            if sources:
+                logger.debug(
+                    f"/ask agent sources request_id={data.request_id} client_id={data.client_id} "
+                    f"count={len(sources)} sources={' | '.join(sources)}"
+                )
             if isinstance(answer, str):
                 await KnowledgeBase.save_client_message(data.prompt or "", client_id=data.client_id)
                 await KnowledgeBase.save_ai_message(answer, client_id=data.client_id)
@@ -191,6 +228,7 @@ async def ask(
             "max_tool_calls_exceeded": "tool budget exceeded",
             "timeout": "request timed out",
             "knowledge_base_empty": "knowledge base returned no data",
+            "model_empty_response": "model returned empty response",
         }
         detail_reason = reason_map.get(exc.reason, exc.reason)
         logger.info(
@@ -220,16 +258,6 @@ async def ask(
         raise HTTPException(status_code=422, detail="Invalid response") from e
     except Exception as e:  # pragma: no cover - log unexpected errors
         logger.exception(f"/ask agent failed: {e}")
-        if mode == CoachMode.ask_ai:
-            try:
-                responses = await KnowledgeBase.search(data.prompt or "", client_id=data.client_id)
-                logger.debug(
-                    f"/ask completed request_id={data.request_id} client_id={data.client_id} responses={responses}"
-                )
-                return responses
-            except Exception as inner_exc:  # pragma: no cover - log unexpected errors
-                logger.exception(f"/ask fallback failed: {inner_exc}")
-                raise HTTPException(status_code=503, detail="Service unavailable") from inner_exc
         raise HTTPException(status_code=503, detail="Service unavailable") from e
 
 

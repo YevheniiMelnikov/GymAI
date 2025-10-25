@@ -1,6 +1,5 @@
 import asyncio
 import io
-import os
 
 # pyrefly: ignore-file
 # ruff: noqa
@@ -18,6 +17,7 @@ import fitz  # PyMuPDF  # pyrefly: ignore[import-error]
 
 from config.app_settings import settings
 from .base_knowledge_loader import KnowledgeLoader
+from .knowledge_base import KnowledgeBase
 
 SCOPES: Final = ["https://www.googleapis.com/auth/drive.readonly"]
 
@@ -53,10 +53,11 @@ class GDriveDocumentLoader(KnowledgeLoader):
         async def __call__(self, text: str, *, dataset: str, node_set: list[str] | None = None) -> None: ...
 
     _add_text: _AddText
-    _dataset_name: str = os.environ.get("COGNEE_GLOBAL_DATASET", "external_docs")
+    _dataset_name: str
 
     def __init__(self, add_text: _AddText) -> None:
         self._add_text = add_text
+        self._dataset_name = KnowledgeBase.GLOBAL_DATASET
 
     def _get_drive_files_service(self) -> Any:
         if self._files_service is None:
@@ -94,6 +95,10 @@ class GDriveDocumentLoader(KnowledgeLoader):
         q = f"'{self.folder_id}' in parents and trashed = false"
         resp = service.list(q=q, fields="files(id, name, size, mimeType)").execute()
         files = cast(list[dict[str, Any]], resp.get("files", []))
+        logger.info(f"kb_gdrive.scan start folder_id={self.folder_id} dataset={self._dataset_name} files={len(files)}")
+        processed = 0
+        skipped = 0
+        errors = 0
 
         for f in files:
             name = f.get("name") or ""
@@ -103,12 +108,15 @@ class GDriveDocumentLoader(KnowledgeLoader):
 
             if ext not in self._PARSERS:
                 logger.info(f"Skip {name}: unsupported extension")
+                skipped += 1
                 continue
             if (size or 0) > settings.MAX_FILE_SIZE_MB * (1024 * 1024):
                 logger.info(f"Skip {name}: file too large ({size / 1_048_576:.1f}MB)")
+                skipped += 1
                 continue
             if not file_id:
                 logger.warning(f"Skip {name}: missing file_id")
+                skipped += 1
                 continue
 
             try:
@@ -118,6 +126,7 @@ class GDriveDocumentLoader(KnowledgeLoader):
 
                 if not text.strip():
                     logger.debug(f"Skip {name}: empty after parsing")
+                    skipped += 1
                     continue
 
                 await self._add_text(
@@ -125,8 +134,14 @@ class GDriveDocumentLoader(KnowledgeLoader):
                     dataset=self._dataset_name,
                     node_set=[f"gdrive:{name}"],
                 )
+                processed += 1
             except Exception:
                 logger.exception(f"Failed to process {name} (id={file_id})")
+                errors += 1
+        logger.info(
+            f"kb_gdrive.summary dataset={self._dataset_name} files_total={len(files)}"
+            f" processed={processed} skipped={skipped} errors={errors}"
+        )
 
     async def refresh(self) -> None:
         await self.load()

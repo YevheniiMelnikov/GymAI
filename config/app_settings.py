@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     AI_COACH_MAX_TOOL_CALLS: Annotated[int, Field(default=5)]
     AI_COACH_REQUEST_TIMEOUT: Annotated[int, Field(default=60)]
     AI_COACH_DEFAULT_TOOL_TIMEOUT: Annotated[float, Field(default=3.0)]
-    AI_COACH_SEARCH_TIMEOUT: Annotated[float, Field(default=2.0)]
+    AI_COACH_SEARCH_TIMEOUT: Annotated[float, Field(default=8.0)]
     AI_COACH_HISTORY_TIMEOUT: Annotated[float, Field(default=6.0)]
     AI_COACH_PROGRAM_HISTORY_TIMEOUT: Annotated[float, Field(default=6.0)]
     AI_COACH_SAVE_TIMEOUT: Annotated[float, Field(default=30.0)]
@@ -85,6 +85,9 @@ class Settings(BaseSettings):
     AI_PLAN_NOTIFY_TIMEOUT: Annotated[int, Field(default=900)]
     AI_PLAN_NOTIFY_POLL_INTERVAL: Annotated[int, Field(default=30)]
     AI_PLAN_NOTIFY_FAILURE_TTL: Annotated[int, Field(default=86400)]
+
+    COGNEE_STORAGE_PATH: Annotated[str, Field(default=".data_storage")]
+    COGNEE_GLOBAL_DATASET: Annotated[str, Field(default="kb_global")]
 
     AI_COACH_REFRESH_USER: Annotated[str, Field(default="admin")]
     AI_COACH_REFRESH_PASSWORD: Annotated[str, Field(default="password")]

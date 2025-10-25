@@ -1,7 +1,5 @@
 """Utilities for authenticated calls to internal bot endpoints."""
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING, Protocol, Union
 
 import httpx

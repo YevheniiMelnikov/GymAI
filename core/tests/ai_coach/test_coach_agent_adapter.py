@@ -12,21 +12,34 @@ os.environ.setdefault("PRIVACY_POLICY", "x")
 os.environ.setdefault("EMAIL", "x")
 os.environ.setdefault("ADMIN_ID", "1")
 
-import asyncio
-import pytest  # pyrefly: ignore[import-error]
-from pydantic_ai.settings import ModelSettings
+import json
+from types import SimpleNamespace
+from typing import Any, Sequence
 
-from ai_coach.agent import (
-    AgentDeps,
-    CoachAgent,
-    ProgramAdapter,
-    QAResponse,
-)
+import pytest  # pyrefly: ignore[import-error]
+
+from ai_coach.agent import AgentDeps, CoachAgent, ProgramAdapter, QAResponse
+from ai_coach.exceptions import AgentExecutionAborted
+from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from ai_coach.schemas import AICoachRequest, ProgramPayload, SubscriptionPayload
 from ai_coach.types import CoachMode
 from ai_coach.application import app
-from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from core.enums import CoachType
+
+
+@pytest.fixture(autouse=True)
+def _reset_completion_client() -> Any:
+    CoachAgent._completion_client = None
+    CoachAgent._completion_model_name = None
+    yield
+    CoachAgent._completion_client = None
+    CoachAgent._completion_model_name = None
+
+
+def _dummy_completion_client() -> tuple[Any, str]:
+    completions = SimpleNamespace(create=lambda *args, **kwargs: None)
+    client = SimpleNamespace(chat=SimpleNamespace(completions=completions))
+    return client, "dummy-model"
 
 
 def _sample_program(**kwargs) -> ProgramPayload:
@@ -91,48 +104,158 @@ def test_ask_request_accepts_ask_ai() -> None:
     assert req.mode is CoachMode.ask_ai
 
 
-def test_answer_question(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def runner() -> None:
-        class DummyAgent:
-            async def run(
-                self,
-                prompt: str,
-                deps: AgentDeps,
-                output_type: type[QAResponse] | None = None,
-                model_settings: ModelSettings | None = None,
-                message_history: list | None = None,
-            ) -> QAResponse:  # pragma: no cover - dummy
-                assert "MODE: ask_ai" in prompt
-                assert output_type is QAResponse
-                assert model_settings is not None
-                return QAResponse(answer="answer")
+@pytest.mark.asyncio
+async def test_answer_question_uses_primary_completion(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_search(query: str, client_id: int, k: int | None = None) -> list[str]:
+        return ["Stay hydrated"]
 
-        monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: DummyAgent()))
-        deps = AgentDeps(client_id=1, locale="en", allow_save=False)
-        result = await CoachAgent.answer_question("question", deps)
-        assert result.answer == "answer"
+    async def fake_complete(*_: Any, **__: Any) -> QAResponse | None:
+        return QAResponse(answer="Final", sources=["KB-1"])
 
-    asyncio.run(runner())
+    monkeypatch.setattr(CoachAgent, "_get_completion_client", classmethod(lambda cls: _dummy_completion_client()))
+    monkeypatch.setattr(CoachAgent, "_ensure_llm_logging", classmethod(lambda cls, target, model_id=None: None))
+    monkeypatch.setattr(KnowledgeBase, "search", staticmethod(fake_search))
+    monkeypatch.setattr(CoachAgent, "_complete_with_retries", classmethod(lambda *args, **kwargs: fake_complete()))
+    deps = AgentDeps(client_id=7, locale="en", allow_save=False)
+    result = await CoachAgent.answer_question("question", deps)
+    assert result.answer == "Final"
+    assert result.sources == ["KB-1"]
 
 
-def test_ask_ai_legacy(monkeypatch) -> None:
-    async def fake_search(prompt: str, client_id: int) -> list[str]:
-        return ["legacy"]
+@pytest.mark.asyncio
+async def test_answer_question_uses_fallback_when_completion_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_search(query: str, client_id: int, k: int | None = None) -> list[str]:
+        return ["Entry text"]
 
-    async def noop(*args, **kwargs) -> None:
+    async def fake_complete(*_: Any, **__: Any) -> QAResponse | None:
         return None
 
+    async def fake_fallback(
+        cls,
+        prompt: str,
+        deps: AgentDeps,
+        history: list[object],
+        *,
+        prefetched_knowledge: Sequence[str] | None = None,
+    ) -> QAResponse | None:
+        return QAResponse(answer="Fallback", sources=["KB-1"])
+
+    monkeypatch.setattr(CoachAgent, "_get_completion_client", classmethod(lambda cls: _dummy_completion_client()))
+    monkeypatch.setattr(CoachAgent, "_ensure_llm_logging", classmethod(lambda cls, target, model_id=None: None))
+    monkeypatch.setattr(KnowledgeBase, "search", staticmethod(fake_search))
+    monkeypatch.setattr(CoachAgent, "_complete_with_retries", classmethod(lambda *args, **kwargs: fake_complete()))
+    monkeypatch.setattr(CoachAgent, "_fallback_answer_question", classmethod(fake_fallback))
+    deps = AgentDeps(client_id=9, locale="en", allow_save=False)
+    result = await CoachAgent.answer_question("question", deps)
+    assert result.answer == "Fallback"
+    assert result.sources == ["KB-1"]
+
+
+@pytest.mark.asyncio
+async def test_answer_question_manual_answer_when_everything_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_search(query: str, client_id: int, k: int | None = None) -> list[str]:
+        return []
+
+    async def fake_complete(*_: Any, **__: Any) -> QAResponse | None:
+        return None
+
+    async def fake_fallback(
+        cls,
+        prompt: str,
+        deps: AgentDeps,
+        history: list[object],
+        *,
+        prefetched_knowledge: Sequence[str] | None = None,
+    ) -> QAResponse | None:
+        return None
+
+    monkeypatch.setattr(CoachAgent, "_get_completion_client", classmethod(lambda cls: _dummy_completion_client()))
+    monkeypatch.setattr(CoachAgent, "_ensure_llm_logging", classmethod(lambda cls, target, model_id=None: None))
+    monkeypatch.setattr(KnowledgeBase, "search", staticmethod(fake_search))
+    monkeypatch.setattr(CoachAgent, "_complete_with_retries", classmethod(lambda *args, **kwargs: fake_complete()))
+    monkeypatch.setattr(CoachAgent, "_fallback_answer_question", classmethod(fake_fallback))
+    deps = AgentDeps(client_id=5, locale="en", allow_save=False)
+    with pytest.raises(AgentExecutionAborted) as exc_info:
+        await CoachAgent.answer_question("question", deps)
+    assert exc_info.value.reason == "knowledge_base_empty"
+
+
+@pytest.mark.asyncio
+async def test_answer_question_handles_agent_aborted(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_search(query: str, client_id: int, k: int | None = None) -> list[str]:
+        return []
+
+    async def raising_complete(*_: Any, **__: Any) -> QAResponse | None:
+        raise AgentExecutionAborted("kb empty", reason="knowledge_base_empty")
+
+    async def fake_fallback(
+        cls,
+        prompt: str,
+        deps: AgentDeps,
+        history: list[object],
+        *,
+        prefetched_knowledge: Sequence[str] | None = None,
+    ) -> QAResponse | None:
+        return QAResponse(answer="Recovered", sources=["general_knowledge"])
+
+    monkeypatch.setattr(CoachAgent, "_get_completion_client", classmethod(lambda cls: _dummy_completion_client()))
+    monkeypatch.setattr(CoachAgent, "_ensure_llm_logging", classmethod(lambda cls, target, model_id=None: None))
+    monkeypatch.setattr(KnowledgeBase, "search", staticmethod(fake_search))
+    monkeypatch.setattr(CoachAgent, "_complete_with_retries", classmethod(lambda *args, **kwargs: raising_complete()))
+    monkeypatch.setattr(CoachAgent, "_fallback_answer_question", classmethod(fake_fallback))
+    deps = AgentDeps(client_id=11, locale="en", allow_save=False)
+    result = await CoachAgent.answer_question("question", deps)
+    assert result.answer == "Recovered"
+    assert result.sources == ["general_knowledge"]
+
+
+def test_supports_json_object_whitelisted_model() -> None:
+    class DummyModel:
+        model_name = "openrouter/openai/gpt-4o-mini"
+
+    assert CoachAgent._supports_json_object(DummyModel()) is True
+
+
+def test_supports_json_object_rejects_unknown_model() -> None:
+    class DummyModel:
+        model_name = "openrouter/openai/gpt-5-nano"
+
+    assert CoachAgent._supports_json_object(DummyModel()) is False
+
+
+def test_extract_choice_content_tool_arguments() -> None:
+    arguments = json.dumps({"answer": "Yes", "sources": ["doc"]})
+    response = SimpleNamespace(
+        choices=[
+            SimpleNamespace(
+                message=SimpleNamespace(
+                    content="",
+                    tool_calls=[SimpleNamespace(function=SimpleNamespace(arguments=arguments))],
+                ),
+                finish_reason="stop",
+            )
+        ]
+    )
+    extracted = CoachAgent._extract_choice_content(response, client_id=42)
+    assert "answer" in extracted
+
+
+def test_normalize_tool_call_arguments_fills_sources() -> None:
+    payload = {"answer": "Ok", "sources": ["  doc "]}
+    text = CoachAgent._normalize_tool_call_arguments(payload)
+    data = json.loads(text)
+    assert data["sources"] == ["doc"]
+
+
+def test_ask_ai_runtime_error(monkeypatch) -> None:
     async def boom(prompt: str, deps: AgentDeps) -> QAResponse:
         raise RuntimeError("boom")
 
     monkeypatch.setattr(CoachAgent, "answer_question", staticmethod(boom))
-    monkeypatch.setattr(KnowledgeBase, "search", staticmethod(fake_search))
-    monkeypatch.setattr(KnowledgeBase, "save_client_message", staticmethod(noop))
-    monkeypatch.setattr(KnowledgeBase, "save_ai_message", staticmethod(noop))
 
     from fastapi.testclient import TestClient
 
     with TestClient(app) as client:
         resp = client.post("/ask/", json={"client_id": 1, "prompt": "hi", "mode": "ask_ai"})
-    assert resp.status_code == 200
-    assert resp.json() == ["legacy"]
+    assert resp.status_code == 503
+    assert resp.json()["detail"] == "Service unavailable"
