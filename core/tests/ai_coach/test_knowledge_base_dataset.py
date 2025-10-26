@@ -1,8 +1,9 @@
 import asyncio
-from hashlib import md5, sha256
+from collections import defaultdict
 from dataclasses import dataclass
-from types import SimpleNamespace
+from hashlib import md5, sha256
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Awaitable, Callable, Iterable, Mapping, Sequence
 
 import pytest
@@ -10,9 +11,51 @@ import pytest
 import ai_coach.agent.knowledge.knowledge_base as knowledge_base_module
 from ai_coach.agent.coach import CoachAgent
 from ai_coach.agent.knowledge.knowledge_base import DatasetRow, KnowledgeBase, KnowledgeSnippet
+from core.schemas import Client, QAResponse
 
-from core.schemas import Client
-from core.schemas import QAResponse
+
+@pytest.fixture()
+def memory_hash_store(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+    datasets: dict[str, set[str]] = defaultdict(set)
+    metadata_map: dict[tuple[str, str], dict[str, Any]] = {}
+
+    class FakeHashStore:
+        @classmethod
+        async def contains(cls, dataset: str, digest: str) -> bool:
+            return digest in datasets.get(dataset, set())
+
+        @classmethod
+        async def add(cls, dataset: str, digest: str, metadata: Mapping[str, Any] | None = None) -> None:
+            datasets.setdefault(dataset, set()).add(digest)
+            if metadata is not None:
+                metadata_map[(dataset, digest)] = dict(metadata)
+
+        @classmethod
+        async def clear(cls, dataset: str) -> None:
+            datasets.pop(dataset, None)
+            for key in list(metadata_map.keys()):
+                if key[0] == dataset:
+                    metadata_map.pop(key, None)
+
+        @classmethod
+        async def list(cls, dataset: str) -> set[str]:
+            return set(datasets.get(dataset, set()))
+
+        @classmethod
+        async def metadata(cls, dataset: str, digest: str) -> dict[str, Any] | None:
+            data = metadata_map.get((dataset, digest))
+            return dict(data) if data is not None else None
+
+        @classmethod
+        async def get_md5_for_sha(cls, dataset: str, digest: str) -> str | None:
+            data = metadata_map.get((dataset, digest))
+            if data is None:
+                return None
+            value = data.get("digest_md5")
+            return str(value) if value else None
+
+    monkeypatch.setattr(knowledge_base_module, "HashStore", FakeHashStore)
+    return {"datasets": datasets, "metadata": metadata_map}
 
 
 async def _fake_hash_add(cls, dataset: str, digest: str, metadata: dict[str, Any] | None = None) -> None:
@@ -198,7 +241,6 @@ async def test_add_text_merges_metadata(monkeypatch: pytest.MonkeyPatch) -> None
         dataset=KnowledgeBase.GLOBAL_DATASET,
         metadata={"kind": "document", "source": "gdrive", "title": "plan.pdf"},
     )
-    await asyncio.sleep(0)
     assert recorded["text"] == "Training plan"
     assert recorded["dataset"] == KnowledgeBase.GLOBAL_DATASET
     assert recorded["metadata"]["kind"] == "document"
@@ -208,6 +250,141 @@ async def test_add_text_merges_metadata(monkeypatch: pytest.MonkeyPatch) -> None
     assert "digest_sha" in recorded["metadata"]
     assert "digest_md5" in recorded["metadata"]
     assert recorded["processed"] == KnowledgeBase.GLOBAL_DATASET
+
+
+@pytest.mark.asyncio
+async def test_rebuild_from_disk_populates_hashstore_when_graph_empty(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    memory_hash_store: dict[str, Any],
+) -> None:
+    storage_root = tmp_path / "cognee"
+    storage_root.mkdir()
+    texts = ["Document One", "Document Two"]
+    aliases = ["kb_client_1"] * len(texts)
+    for text in texts:
+        normalized = KnowledgeBase._normalize_text(text)
+        digest_sha = sha256(normalized.encode("utf-8")).hexdigest()
+        (storage_root / f"text_{digest_sha}.txt").write_text(text, encoding="utf-8")
+
+    monkeypatch.setattr(
+        KnowledgeBase,
+        "_storage_root",
+        classmethod(lambda cls: storage_root),
+    )
+
+    created, linked = await KnowledgeBase._rebuild_from_disk(aliases[0])
+
+    assert created == len(texts)
+    assert linked == len(texts)
+    hashes = await knowledge_base_module.HashStore.list(aliases[0])
+    assert len(hashes) == len(texts)
+    for text in texts:
+        normalized = KnowledgeBase._normalize_text(text)
+        digest_sha = sha256(normalized.encode("utf-8")).hexdigest()
+        assert digest_sha in hashes
+
+
+@pytest.mark.asyncio
+async def test_wait_for_projection_timeout_returns_false(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_ready(cls, dataset: str, user_ns: Any | None, *, user: Any | None = None) -> bool:
+        return False
+
+    async def fake_sleep(duration: float) -> None:
+        return None
+
+    monkeypatch.setattr(
+        KnowledgeBase,
+        "_is_projection_ready",
+        classmethod(fake_ready),
+    )
+    monkeypatch.setattr(knowledge_base_module.asyncio, "sleep", fake_sleep)
+
+    result = await KnowledgeBase._wait_for_projection("kb_global", None, user=None, timeout=0.01)
+
+    assert result is False
+
+
+@pytest.mark.asyncio
+async def test_wait_for_projection_timeout_skips_global_during_search(
+    monkeypatch: pytest.MonkeyPatch,
+    memory_hash_store: dict[str, Any],
+) -> None:
+    captured: dict[str, Any] = {}
+
+    async def fake_get_user(cls) -> Any | None:
+        return None
+
+    async def fake_profile_indexed(cls, client_id: int, user: Any | None) -> None:
+        return None
+
+    async def fake_ensure_exists(cls, dataset: str, user: Any | None) -> None:
+        return None
+
+    async def fake_search_single_query(
+        cls,
+        query: str,
+        datasets: list[str],
+        user: Any | None,
+        k: int | None,
+        client_id: int,
+        *,
+        request_id: str | None = None,
+    ) -> list[KnowledgeSnippet]:
+        captured["datasets"] = list(datasets)
+        return []
+
+    monkeypatch.setattr(
+        KnowledgeBase,
+        "ensure_global_projected",
+        classmethod(lambda cls, timeout: False),
+    )
+    monkeypatch.setattr(KnowledgeBase, "_get_cognee_user", classmethod(fake_get_user))
+    monkeypatch.setattr(KnowledgeBase, "_ensure_profile_indexed", classmethod(fake_profile_indexed))
+    monkeypatch.setattr(KnowledgeBase, "_ensure_dataset_exists", classmethod(fake_ensure_exists))
+    monkeypatch.setattr(KnowledgeBase, "_search_single_query", classmethod(fake_search_single_query))
+    monkeypatch.setattr(
+        KnowledgeBase,
+        "_ensure_dataset_projected",
+        classmethod(lambda cls, dataset, user, timeout=2.0: True),
+    )
+
+    await KnowledgeBase.search("routine", client_id=99, request_id="RID-1")
+
+    assert captured["datasets"] == [KnowledgeBase._resolve_dataset_alias("kb_client_99")]
+
+
+@pytest.mark.asyncio
+async def test_md5_files_are_promoted_to_sha_once(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    memory_hash_store: dict[str, Any],
+) -> None:
+    alias = "kb_client_5"
+    storage_root = tmp_path / "cognee"
+    storage_root.mkdir()
+    original_text = " Legacy text with spacing "
+    normalized = KnowledgeBase._normalize_text(original_text)
+    digest_md5 = md5(normalized.encode("utf-8")).hexdigest()
+    md5_path = storage_root / f"text_{digest_md5}.txt"
+    md5_path.write_text(original_text, encoding="utf-8")
+
+    monkeypatch.setattr(
+        KnowledgeBase,
+        "_storage_root",
+        classmethod(lambda cls: storage_root),
+    )
+
+    entries = [DatasetRow(text="", metadata={"digest_md5": digest_md5, "dataset": alias})]
+    await KnowledgeBase._heal_dataset_storage(alias, user=None, entries=entries, reason="md5_promotion")
+
+    digest_sha = sha256(normalized.encode("utf-8")).hexdigest()
+    sha_path = storage_root / f"text_{digest_sha}.txt"
+    assert sha_path.exists()
+    assert not md5_path.exists()
+
+    hashes = await knowledge_base_module.HashStore.list(alias)
+    assert digest_sha in hashes
 
 
 @pytest.mark.asyncio

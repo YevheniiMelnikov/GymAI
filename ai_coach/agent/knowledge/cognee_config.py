@@ -48,14 +48,49 @@ def _prepare_storage_root() -> Path:
     return root
 
 
+def _package_storage_candidates() -> list[Path]:
+    base_dir = Path(cognee.__file__).resolve().parent
+    names = ("cognee_storage", ".data_storage")
+    candidates: list[Path] = []
+    seen: set[str] = set()
+    for name in names:
+        candidate = base_dir / name
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        candidates.append(candidate)
+    return candidates
+
+
 def _collect_storage_info(root: Path | None) -> dict[str, Any]:
-    package_storage = Path(cognee.__file__).resolve().parent / ".data_storage"
+    package_candidates = _package_storage_candidates()
+    package_storage = package_candidates[0] if package_candidates else Path(cognee.__file__).resolve().parent
+    package_exists = False
+    package_is_symlink = False
     package_target: str | None = None
-    try:
-        if package_storage.exists() or package_storage.is_symlink():
-            package_target = str(package_storage.resolve())
-    except Exception as exc:  # noqa: BLE001
-        logger.debug(f"cognee_storage_readlink_failed path={package_storage} detail={exc}")
+    for candidate in package_candidates:
+        exists = False
+        is_symlink = False
+        try:
+            exists = candidate.exists()
+            is_symlink = candidate.is_symlink()
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"cognee_storage_stat_failed path={candidate} detail={exc}")
+        if exists or is_symlink:
+            package_storage = candidate
+            package_exists = exists or is_symlink
+            package_is_symlink = is_symlink
+            try:
+                package_target = str(candidate.resolve(strict=False))
+            except Exception as exc:  # noqa: BLE001
+                logger.debug(f"cognee_storage_readlink_failed path={candidate} detail={exc}")
+            break
+    if package_target is None:
+        try:
+            package_target = str(package_storage.resolve(strict=False))
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"cognee_storage_resolve_failed path={package_storage} detail={exc}")
 
     entries_sample: list[str]
     entries_count: int
@@ -74,9 +109,10 @@ def _collect_storage_info(root: Path | None) -> dict[str, Any]:
         "entries_sample": entries_sample,
         "entries_count": entries_count,
         "package_path": str(package_storage),
-        "package_exists": package_storage.exists() or package_storage.is_symlink(),
-        "package_is_symlink": package_storage.is_symlink(),
+        "package_exists": package_exists,
+        "package_is_symlink": package_is_symlink,
         "package_target": package_target,
+        "package_candidates": [str(candidate) for candidate in package_candidates],
     }
 
 
@@ -127,7 +163,12 @@ def _patch_local_file_storage(root: Path) -> None:
     if hasattr(local_storage_cls, "STORAGE_PATH"):
         setattr(local_storage_cls, "STORAGE_PATH", str(root))
 
-    package_storage = (Path(cognee.__file__).resolve().parent / ".data_storage").resolve()
+    package_roots: list[Path] = []
+    for candidate in _package_storage_candidates():
+        try:
+            package_roots.append(candidate.resolve(strict=False))
+        except Exception:  # noqa: BLE001
+            package_roots.append(candidate)
 
     def _remap_path(raw_path: Path) -> Path:
         if raw_path.is_absolute():
@@ -136,12 +177,13 @@ def _patch_local_file_storage(root: Path) -> None:
                     return raw_path
             except ValueError:
                 pass
-            try:
-                if raw_path.is_relative_to(package_storage):
-                    relative = raw_path.relative_to(package_storage)
-                    return (root / relative).resolve()
-            except ValueError:
-                pass
+            for package_storage in package_roots:
+                try:
+                    if raw_path.is_relative_to(package_storage):
+                        relative = raw_path.relative_to(package_storage)
+                        return (root / relative).resolve()
+                except ValueError:
+                    continue
             return (root / raw_path.name).resolve()
         return (root / raw_path).resolve()
 

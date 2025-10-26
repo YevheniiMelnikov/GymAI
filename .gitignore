@@ -20,6 +20,7 @@ lib64/
 parts/
 sdist/
 var/
+cognee_storage/
 wheels/
 share/python-wheels/
 *.egg-info/
@@ -172,3 +173,4 @@ apps/webapp/static/js/
 /docker/nginx.conf.template
 /docker/nginx.local.conf.template
 diff*
+/GEMINI.md

@@ -1,6 +1,7 @@
 import json
 import os
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
+from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import SplitResult, quote, quote_plus, urlsplit, urlunsplit
 from uuid import NAMESPACE_DNS, uuid5
@@ -47,6 +48,33 @@ def normalize_service_host(
     return normalized
 
 
+def normalize_service_url(
+    url: str,
+    *,
+    default_scheme: str = "http",
+    ensure_trailing_slash: bool = True,
+) -> str:
+    """Ensure service URLs have a scheme and stable trailing slash semantics."""
+
+    raw = (url or "").strip()
+    if not raw:
+        return url
+
+    candidate = raw if "://" in raw else f"{default_scheme}://{raw}"
+    parsed = urlsplit(candidate)
+    scheme = parsed.scheme or default_scheme
+    netloc = parsed.netloc or parsed.path
+    path = parsed.path if parsed.netloc else "/"
+    normalized = urlunsplit((scheme, netloc, path or "/", parsed.query, parsed.fragment))
+
+    if ensure_trailing_slash:
+        original_path = parsed.path or "/"
+        if (original_path == "/" or original_path.endswith("/")) and not normalized.endswith("/"):
+            normalized = f"{normalized}/"
+
+    return normalized
+
+
 class Settings(BaseSettings):
     DEBUG: bool = False
     PAYMENT_CHECK_INTERVAL: int = 60
@@ -81,10 +109,11 @@ class Settings(BaseSettings):
     AI_COACH_HISTORY_TIMEOUT: Annotated[float, Field(default=6.0)]
     AI_COACH_PROGRAM_HISTORY_TIMEOUT: Annotated[float, Field(default=6.0)]
     AI_COACH_SAVE_TIMEOUT: Annotated[float, Field(default=30.0)]
+    KB_CHAT_PROJECT_DEBOUNCE_MIN: Annotated[float, Field(default=5.0)]
     AI_COACH_ATTACH_GIFS_MIN_BUDGET: Annotated[float, Field(default=10.0)]
     AI_COACH_SECONDARY_MODEL: Annotated[str | None, Field(default=None)]
-    AI_COACH_FIRST_PASS_MAX_TOKENS: Annotated[int, Field(default=900)]
-    AI_COACH_RETRY_MAX_TOKENS: Annotated[int, Field(default=600)]
+    AI_COACH_FIRST_PASS_MAX_TOKENS: Annotated[int, Field(default=1200)]
+    AI_COACH_RETRY_MAX_TOKENS: Annotated[int, Field(default=1200)]
     AI_COACH_EMPTY_COMPLETION_RETRY: Annotated[bool, Field(default=True)]
     AI_COACH_PRIMARY_CONTEXT_LIMIT: Annotated[int, Field(default=2200)]
     AI_COACH_RETRY_CONTEXT_LIMIT: Annotated[int, Field(default=1400)]
@@ -94,7 +123,8 @@ class Settings(BaseSettings):
     AI_PLAN_NOTIFY_POLL_INTERVAL: Annotated[int, Field(default=30)]
     AI_PLAN_NOTIFY_FAILURE_TTL: Annotated[int, Field(default=86400)]
 
-    COGNEE_STORAGE_PATH: Annotated[str, Field(default=".data_storage")]
+    COGNEE_STORAGE_PATH: Annotated[str, Field(default="cognee_storage")]
+    COGNEE_STORAGE_SHA_PRIMARY: Annotated[bool, Field(default=True)]
     COGNEE_GLOBAL_DATASET: Annotated[str, Field(default="kb_global")]
 
     AI_COACH_REFRESH_USER: Annotated[str, Field(default="admin")]
@@ -227,6 +257,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _compute_derived_fields(self) -> "Settings":
         in_docker: bool = os.path.exists("/.dockerenv") or os.getenv("KUBERNETES_SERVICE_HOST") is not None
+        self.AI_COACH_URL = normalize_service_url(self.AI_COACH_URL)
 
         # WEBHOOK_URL
         if not self.WEBHOOK_URL:
@@ -243,6 +274,15 @@ class Settings(BaseSettings):
         # API_URL
         if not self.API_URL:
             self.API_URL = self._derive_api_url(in_docker)
+
+        storage_path_candidate = Path(self.COGNEE_STORAGE_PATH).expanduser()
+        if in_docker and not storage_path_candidate.is_absolute():
+            storage_path_candidate = Path("/app") / storage_path_candidate
+        try:
+            resolved_storage = storage_path_candidate.resolve(strict=False)
+        except RuntimeError:
+            resolved_storage = storage_path_candidate
+        self.COGNEE_STORAGE_PATH = str(resolved_storage)
 
         # Cognee dataset namespace
         if not self.COGNEE_CLIENT_DATASET_NAMESPACE:
@@ -283,6 +323,8 @@ class Settings(BaseSettings):
                     bot_service_host,
                     force=force_override,
                 )
+
+        self.AI_COACH_URL = normalize_service_url(self.AI_COACH_URL)
 
         return self
 

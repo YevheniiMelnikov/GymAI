@@ -206,7 +206,15 @@ async def tool_search_knowledge(
         return _cache_result(deps, tool_name, [])
 
     try:
-        snippets = await wait_for(KnowledgeBase.search(normalized_query, client_id, k), timeout=timeout)
+        snippets = await wait_for(
+            KnowledgeBase.search(
+                normalized_query,
+                client_id,
+                k,
+                request_id=deps.request_rid,
+            ),
+            timeout=timeout,
+        )
     except TimeoutError:
         logger.info(
             "knowledge_search_timeout client_id={} query='{}' timeout={:.1f}".format(

@@ -102,6 +102,15 @@ services:
       --timeout 60
       --access-logfile -
       --error-logfile -
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      ai_coach:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:${API_PORT:-8000}/health/"]
       interval: 60s
@@ -127,6 +136,15 @@ services:
     command: celery -A config.celery:celery_app worker -l info -Q default,critical,maintenance,ai_coach -P threads
     extra_hosts:
       - "host.docker.internal:172.17.0.1"
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      ai_coach:
+        condition: service_healthy
     restart: unless-stopped
 
   beat:
@@ -141,6 +159,15 @@ services:
     <<: *common_env
     entrypoint: /app/docker/entrypoint.sh
     command: celery -A config.celery:celery_app beat -l info
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      ai_coach:
+        condition: service_healthy
     restart: unless-stopped
 
   ai_coach:
@@ -154,8 +181,8 @@ services:
         EXTRAS: coach
     <<: *common_env
     environment:
-      COGNEE_STORAGE_PATH: /app/.data_storage
-      COGNEE_DATA_ROOT: /app/.data_storage
+      COGNEE_STORAGE_PATH: /app/cognee_storage
+      COGNEE_DATA_ROOT: /app/cognee_storage
       REDIS_URL: ${REDIS_URL}
       GRAPH_DATABASE_PROVIDER: ${GRAPH_DATABASE_PROVIDER}
       PGHOST: ${DB_HOST}
@@ -176,8 +203,14 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:${COACH_PORT:-9000}/internal/debug/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     volumes:
-      - ../var/cognee_storage:/app/.data_storage
+      - ../cognee_storage:/app/cognee_storage
     restart: unless-stopped
 
   bot:

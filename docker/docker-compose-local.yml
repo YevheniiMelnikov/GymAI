@@ -129,6 +129,15 @@ services:
       --timeout 60
       --access-logfile -
       --error-logfile -
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      ai_coach:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:${API_PORT:-8000}/health/"]
       interval: 60s
@@ -161,6 +170,15 @@ services:
       -l info
       -Q default,critical,maintenance,ai_coach
       -P threads
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      ai_coach:
+        condition: service_healthy
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -180,8 +198,8 @@ services:
     environment:
       COGNEE_DEBUG: 1
       LOGURU_LEVEL: DEBUG
-      COGNEE_STORAGE_PATH: /app/.data_storage
-      COGNEE_DATA_ROOT: /app/.data_storage
+      COGNEE_STORAGE_PATH: /app/cognee_storage
+      COGNEE_DATA_ROOT: /app/cognee_storage
       GRAPH_DATABASE_PROVIDER: ${GRAPH_DATABASE_PROVIDER}
       REDIS_URL: ${REDIS_URL}
       PGHOST: ${DB_HOST}
@@ -194,12 +212,18 @@ services:
       - .env
     volumes:
       - ../:/app
-      - ../var/cognee_storage:/app/.data_storage
+      - ../cognee_storage:/app/cognee_storage
     depends_on:
       redis:
         condition: service_healthy
       db:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:${COACH_PORT:-9000}/internal/debug/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     entrypoint: /app/docker/entrypoint.sh
     command: >
       bash -lc "uvicorn ai_coach.api:app --host 0.0.0.0 --port ${COACH_PORT:-9000}"

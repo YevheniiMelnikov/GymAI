@@ -1,5 +1,6 @@
 import json
 import inspect
+import os
 from datetime import datetime
 from functools import wraps
 from time import perf_counter
@@ -323,7 +324,12 @@ class CoachAgent:
             history = await history
         prefetched_knowledge: Sequence[KnowledgeSnippet]
         try:
-            prefetched_knowledge = await KnowledgeBase.search(prompt, deps.client_id, 6)
+            prefetched_knowledge = await KnowledgeBase.search(
+                prompt,
+                deps.client_id,
+                6,
+                request_id=deps.request_rid,
+            )
         except Exception as exc:  # noqa: BLE001 - prefetch should not block main flow
             prefetched_knowledge = []
             logger.warning(f"agent.ask knowledge_prefetch_failed client_id={deps.client_id} error={exc}")
@@ -347,8 +353,6 @@ class CoachAgent:
             )
         )
 
-        supports_json = cls._supports_json_object(model_name)
-
         knowledge_section = cls._format_knowledge_entries(entry_ids, entries)
         system_prompt = (
             "You are GymBot's fitness coach.\n"
@@ -371,9 +375,9 @@ class CoachAgent:
                 system_prompt,
                 user_prompt,
                 entry_ids,
-                supports_json=supports_json,
                 client_id=deps.client_id,
                 max_tokens=settings.AI_COACH_FIRST_PASS_MAX_TOKENS,
+                model=model_name,
             )
         except AgentExecutionAborted as exc:
             logger.info(f"agent.ask completion_aborted client_id={deps.client_id} reason={exc.reason}")
@@ -500,7 +504,12 @@ class CoachAgent:
             knowledge = prefetched_knowledge
         else:
             try:
-                knowledge = await KnowledgeBase.search(prompt, deps.client_id, 6)
+                knowledge = await KnowledgeBase.search(
+                    prompt,
+                    deps.client_id,
+                    6,
+                    request_id=deps.request_rid,
+                )
             except Exception as exc:  # noqa: BLE001 - log and continue with empty knowledge
                 logger.warning(f"agent.ask fallback knowledge_failed client_id={deps.client_id} error={exc}")
                 knowledge = []
@@ -522,15 +531,14 @@ class CoachAgent:
             f"{knowledge_section}\n"
             "Return an actionable answer and cite the snippet IDs you relied on."
         )
-        supports_json = cls._supports_json_object(model_name)
         response = await cls._complete_with_retries(
             client,
             system_prompt,
             user_prompt,
             entry_ids,
-            supports_json=supports_json,
             client_id=deps.client_id,
             max_tokens=settings.AI_COACH_FIRST_PASS_MAX_TOKENS,
+            model=model_name,
         )
         if response is not None:
             result = cls._enforce_fitness_domain(
@@ -621,133 +629,55 @@ class CoachAgent:
         user_prompt: str,
         entry_ids: Sequence[str],
         *,
-        supports_json: bool,
         client_id: int,
         max_tokens: int,
+        model: str | None = None,
     ) -> QAResponse | None:
-        plans = cls._build_completion_plans(supports_json, max_tokens)
-        base_prompt = user_prompt
-        for plan_index, plan in enumerate(plans):
-            pruned_prompt, pruned_chars = cls._prune_prompt(
-                base_prompt,
-                plan["context_limit"],
-                force_trim=plan_index > 0,
-            )
-            if plan_index > 0:
+        max_attempts = 2 if settings.AI_COACH_EMPTY_COMPLETION_RETRY else 1
+        model_id = model or settings.AGENT_MODEL
+        for attempt in range(max_attempts):
+            if attempt > 0:
                 logger.info(
-                    ("llm.retry client_id={} model={} max_tokens={} pruned_ctx={} json_modes={}").format(
-                        client_id,
-                        plan["model"],
-                        plan["max_tokens"],
-                        pruned_chars,
-                        len(plan["json_sequence"]),
+                    ("llm.retry client_id={} model={} max_tokens={} attempt={} json_modes=0").format(
+                        client_id, model_id, max_tokens, attempt
                     )
                 )
-            for mode_index, use_json in enumerate(plan["json_sequence"]):
-                try:
-                    response = await cls._run_completion(
-                        client,
-                        system_prompt,
-                        pruned_prompt,
-                        use_json=use_json,
-                        model=plan["model"],
-                        max_tokens=plan["max_tokens"],
+            try:
+                response = await cls._run_completion(
+                    client,
+                    system_prompt,
+                    user_prompt,
+                    model=model_id,
+                    max_tokens=max_tokens,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    ("agent.ask completion_failed client_id={} model={} attempt={} error={}").format(
+                        client_id, model_id, attempt, exc
                     )
-                except Exception as exc:  # noqa: BLE001
-                    mode = "json" if use_json else "text"
-                    logger.warning(
-                        (
-                            "agent.ask completion_failed client_id={} model={} mode={} plan_index={} mode_index={} "
-                            "error={}"
-                        ).format(client_id, plan["model"], mode, plan_index, mode_index, exc)
-                    )
-                    continue
-                meta = cls._llm_response_metadata(response)
-                content = cls._extract_choice_content(response, client_id=client_id)
-                if not content:
-                    reason = meta.get("finish_reason") or "unknown"
-                    logger.warning(
-                        ("llm.response.empty client_id={} reason={} model={} plan_index={} mode_index={}").format(
-                            client_id, reason, plan["model"], plan_index, mode_index
-                        )
-                    )
-                    continue
-                if (meta.get("finish_reason") or "").lower() == "length" and not content.strip():
-                    logger.warning(
-                        (
-                            "llm.response.empty client_id={} reason=finish_length model={} plan_index={} mode_index={}"
-                        ).format(client_id, plan["model"], plan_index, mode_index)
-                    )
-                    continue
+                )
+                continue
+            meta = cls._llm_response_metadata(response)
+            content = cls._extract_choice_content(response, client_id=client_id)
+            if content:
                 answer, sources = cls._parse_fallback_content(
                     content,
-                    list(entry_ids),
-                    expects_json=use_json,
+                    entry_ids,
                     client_id=client_id,
                 )
-                if not answer:
-                    continue
-                if not sources:
-                    sources = list(entry_ids) or ["general_knowledge"]
-                return QAResponse(answer=answer, sources=sources)
-        return None
-
-    @classmethod
-    def _build_completion_plans(cls, supports_json: bool, max_tokens: int) -> list[dict[str, Any]]:
-        json_sequence = [True, False] if supports_json else [False]
-        first_max = min(max_tokens, settings.AI_COACH_FIRST_PASS_MAX_TOKENS)
-        plans: list[dict[str, Any]] = [
-            {
-                "model": settings.AGENT_MODEL,
-                "max_tokens": first_max,
-                "context_limit": settings.AI_COACH_PRIMARY_CONTEXT_LIMIT,
-                "json_sequence": json_sequence,
-            }
-        ]
-        if settings.AI_COACH_EMPTY_COMPLETION_RETRY:
-            retry_model = settings.AI_COACH_SECONDARY_MODEL or settings.AGENT_MODEL
-            retry_sequence = [False] if supports_json else [False]
-            plans.append(
-                {
-                    "model": retry_model,
-                    "max_tokens": settings.AI_COACH_RETRY_MAX_TOKENS,
-                    "context_limit": settings.AI_COACH_RETRY_CONTEXT_LIMIT,
-                    "json_sequence": retry_sequence or [False],
-                }
+                if answer.strip():
+                    normalized_sources = list(sources) if sources else list(entry_ids) or ["general_knowledge"]
+                    return QAResponse(answer=answer, sources=normalized_sources)
+            finish_reason = meta.get("finish_reason") or "unknown"
+            logger.warning(
+                ("llm.response.empty client_id={} reason={} model={} attempt={}").format(
+                    client_id,
+                    finish_reason,
+                    model_id,
+                    attempt,
+                )
             )
-        return plans
-
-    @staticmethod
-    def _prune_prompt(prompt: str, limit: int | None, *, force_trim: bool = False) -> tuple[str, int]:
-        trimmed = prompt
-        pruned = 0
-        if limit is not None and limit > 0 and len(prompt) > limit:
-            trimmed = prompt[:limit]
-            last_split = trimmed.rfind("\n\n")
-            if last_split > int(limit * 0.6):
-                trimmed = trimmed[:last_split]
-            pruned = len(prompt) - len(trimmed)
-        if force_trim and pruned == 0:
-            marker = "Knowledge entries:"
-            before, marker_token, after = prompt.partition(marker)
-            if marker_token:
-                lines = after.splitlines()
-                if len(lines) > 6:
-                    kept_lines = "\n".join(lines[:6]).strip()
-                    trimmed_candidate = f"{before}{marker_token}\n{kept_lines}".strip()
-                    if trimmed_candidate and len(trimmed_candidate) < len(prompt):
-                        trimmed = trimmed_candidate
-                        pruned = len(prompt) - len(trimmed)
-        if force_trim and pruned == 0:
-            current_len = len(prompt)
-            target = max(int(current_len * 0.8), current_len - 200)
-            if limit is not None and limit > 0:
-                target = min(target, limit)
-            target = max(target, 200)
-            if target < current_len:
-                trimmed = prompt[:target]
-                pruned = len(prompt) - len(trimmed)
-        return trimmed.rstrip(), max(pruned, 0)
+        return None
 
     @classmethod
     def _kb_summary_from_entries(
@@ -838,22 +768,6 @@ class CoachAgent:
         return ""
 
     @staticmethod
-    def _supports_json_object(model: Any) -> bool:
-        model_name = getattr(model, "model_name", None) or getattr(model, "name", None)
-        if not model_name:
-            return False
-        normalized = str(model_name).lower()
-        allowed_prefixes = (
-            "gpt-4",
-            "o3-",
-            "o1-",
-        )
-        for segment in normalized.split("/"):
-            if segment.startswith(allowed_prefixes):
-                return True
-        return False
-
-    @staticmethod
     def _model_identifier(model: Any) -> str:
         model_name = getattr(model, "model_name", None) or getattr(model, "name", None)
         if not model_name:
@@ -908,11 +822,12 @@ class CoachAgent:
             request_meta = cls._llm_request_metadata(kwargs)
             logger.debug(
                 (
-                    "llm.request model={} json_format={} messages={} system_len={} user_len={} "
+                    "llm.request model={} json_format={} stream={} messages={} system_len={} user_len={} "
                     "temperature={} max_tokens={} tool_choice={}"
                 ).format(
                     resolved_model,
                     request_meta["json_format"],
+                    request_meta["stream"],
                     request_meta["messages"],
                     request_meta["system_len"],
                     request_meta["user_len"],
@@ -947,6 +862,15 @@ class CoachAgent:
                     response_meta["preview"],
                 )
             )
+            if os.getenv("LOG_LLM_RAW", "").lower() in {"1", "true", "yes"}:
+                raw_snapshot, raw_keys = cls._raw_choice_snapshot(response)
+                logger.debug(
+                    "llm.response.raw model={} raw_first_200={} raw_keys={}".format(
+                        resolved_model,
+                        raw_snapshot or "",
+                        raw_keys or "na",
+                    )
+                )
             return response
 
         completions.create = wrapped_create  # pyrefly: ignore[attr-defined]
@@ -978,6 +902,7 @@ class CoachAgent:
         tool_choice = kwargs.get("tool_choice")
         return {
             "json_format": "response_format" in kwargs,
+            "stream": bool(kwargs.get("stream", False)),
             "messages": total_messages,
             "system_len": system_len,
             "user_len": user_len,
@@ -994,10 +919,8 @@ class CoachAgent:
         if message is None and isinstance(first_choice, Mapping):
             message = first_choice.get("message")
         if isinstance(message, Mapping):
-            content = message.get("content", "") or ""
             tool_calls = message.get("tool_calls")
         else:
-            content = getattr(message, "content", "") or ""
             tool_calls = getattr(message, "tool_calls", None)
         usage = getattr(response, "usage", None)
         prompt_tokens = getattr(usage, "prompt_tokens", None)
@@ -1008,10 +931,11 @@ class CoachAgent:
         else:
             finish_reason = getattr(first_choice, "finish_reason", "") if first_choice else ""
         preview = CoachAgent._message_preview(message) if message is not None else ""
+        extracted_text = CoachAgent._extract_choice_content(response, client_id=None)
         return {
             "choices": len(choices),
             "finish_reason": finish_reason or "",
-            "content_len": len(str(content).strip()),
+            "content_len": len(extracted_text),
             "has_tool_calls": bool(tool_calls),
             "prompt_tokens": prompt_tokens if prompt_tokens is not None else "na",
             "completion_tokens": completion_tokens if completion_tokens is not None else "na",
@@ -1025,7 +949,6 @@ class CoachAgent:
         system_prompt: str,
         user_prompt: str,
         *,
-        use_json: bool,
         model: str,
         max_tokens: int,
     ) -> Any:
@@ -1038,10 +961,107 @@ class CoachAgent:
             "temperature": 0.25,
             "max_tokens": max_tokens,
             "tool_choice": "none",
+            "stream": False,
         }
-        if use_json:
-            kwargs["response_format"] = {"type": "json_object"}
         return await client.chat.completions.create(**kwargs)  # pyrefly: ignore[no-untyped-call]
+
+    @staticmethod
+    def _choice_payload(choice: Any) -> dict[str, Any]:
+        if isinstance(choice, Mapping):
+            return dict(choice)
+        model_dump = getattr(choice, "model_dump", None)
+        if callable(model_dump):
+            try:
+                dumped = model_dump()
+            except Exception:  # noqa: BLE001 - diagnostics only
+                dumped = None
+            if isinstance(dumped, Mapping):
+                return dict(dumped)
+        model_dump_json = getattr(choice, "model_dump_json", None)
+        if callable(model_dump_json):
+            try:
+                dumped_json = model_dump_json()
+            except Exception:  # noqa: BLE001 - diagnostics only
+                dumped_json = None
+            if isinstance(dumped_json, str):
+                try:
+                    payload = json.loads(dumped_json)
+                except json.JSONDecodeError:
+                    payload = None
+                if isinstance(payload, Mapping):
+                    return dict(payload)
+        return {}
+
+    @classmethod
+    def _coerce_text_candidate(cls, candidate: Any) -> str:
+        if candidate is None:
+            return ""
+        if isinstance(candidate, str):
+            return candidate.strip()
+        if isinstance(candidate, Mapping):
+            primary = candidate.get("content")
+            text = cls._coerce_text_candidate(primary)
+            if text:
+                return text
+            return cls._coerce_text_candidate(candidate.get("text"))
+        if isinstance(candidate, Sequence) and not isinstance(candidate, (str, bytes)):
+            return cls._extract_message_content(candidate)
+        content_attr = getattr(candidate, "content", None)
+        if content_attr is not None:
+            text = cls._coerce_text_candidate(content_attr)
+            if text:
+                return text
+        text_attr = getattr(candidate, "text", None)
+        if isinstance(text_attr, str):
+            return text_attr.strip()
+        if text_attr is not None:
+            text = cls._coerce_text_candidate(text_attr)
+            if text:
+                return text
+        model_dump = getattr(candidate, "model_dump", None)
+        if callable(model_dump):
+            try:
+                dumped = model_dump()
+            except Exception:  # noqa: BLE001 - diagnostics only
+                dumped = None
+            if isinstance(dumped, Mapping):
+                return cls._coerce_text_candidate(dumped.get("content") or dumped.get("text"))
+        return cls._extract_message_content(candidate)
+
+    @classmethod
+    def _extract_text_from_choice(cls, payload: Mapping[str, Any]) -> str:
+        if not isinstance(payload, Mapping):
+            return ""
+        message = payload.get("message")
+        text = cls._coerce_text_candidate(message)
+        if text:
+            return text
+        for key in ("content", "text"):
+            candidate = payload.get(key)
+            text = cls._coerce_text_candidate(candidate)
+            if text:
+                return text
+        return ""
+
+    @classmethod
+    def _raw_choice_snapshot(cls, source: Any) -> tuple[str, str]:
+        choice: Any = source
+        if hasattr(source, "choices"):
+            choices = getattr(source, "choices", None)
+            if not choices:
+                return "", ""
+            choice = choices[0]
+        payload = cls._choice_payload(choice)
+        raw_keys = ",".join(sorted(payload.keys())) if payload else ""
+        if payload:
+            try:
+                raw_repr = json.dumps(payload, ensure_ascii=False, default=str)
+            except TypeError:
+                raw_repr = str(payload)
+        else:
+            raw_repr = str(choice)
+        snapshot = (raw_repr or "")[:200]
+        return snapshot, raw_keys
 
     @classmethod
     def _extract_choice_content(cls, response: Any, *, client_id: int | None = None) -> str:
@@ -1051,29 +1071,40 @@ class CoachAgent:
                 logger.debug(f"llm.parse client_id={client_id} empty=True reason=no_choices")
             return ""
         first_choice = choices[0]
-        message = getattr(first_choice, "message", None)
-        if message is None and isinstance(first_choice, Mapping):
-            message = first_choice.get("message")
-        if message is None and isinstance(first_choice, Mapping):
-            fallback_text = first_choice.get("content") or first_choice.get("text")
-            if isinstance(fallback_text, str) and fallback_text.strip():
-                logger.debug("llm.parse client_id={} empty=False reason=choice_text".format(client_id or "na"))
-                return fallback_text.strip()
-        if message is None:
-            if client_id is not None:
-                logger.debug(f"llm.parse client_id={client_id} empty=True reason=no_message")
-            return ""
-        if isinstance(message, Mapping):
-            content = message.get("content", "") or ""
-            tool_calls = message.get("tool_calls")
+        raw_snapshot, raw_keys = cls._raw_choice_snapshot(first_choice)
+        payload = cls._choice_payload(first_choice)
+        extracted = cls._extract_text_from_choice(payload)
+        message_obj: Any = (
+            payload.get("message") if isinstance(payload, Mapping) else getattr(first_choice, "message", None)
+        )
+        tool_calls: Any | None = None
+        if message_obj is None and isinstance(first_choice, Mapping):
+            message_obj = first_choice.get("message")
+        if message_obj is None:
+            message_obj = getattr(first_choice, "message", None)
+        if isinstance(message_obj, Mapping):
+            tool_calls = message_obj.get("tool_calls")
         else:
-            content = getattr(message, "content", "") or ""
-            tool_calls = getattr(message, "tool_calls", None)
-        extracted = cls._extract_message_content(content)
+            tool_calls = getattr(message_obj, "tool_calls", None)
         if extracted:
             if client_id is not None:
                 logger.debug(f"llm.parse client_id={client_id} empty=False reason=message_content")
             return extracted
+        if message_obj is None and isinstance(first_choice, Mapping):
+            fallback_text = first_choice.get("content") or first_choice.get("text")
+            if isinstance(fallback_text, str) and fallback_text.strip():
+                if client_id is not None:
+                    logger.debug("llm.parse client_id={} empty=False reason=choice_text".format(client_id))
+                return fallback_text.strip()
+        if isinstance(message_obj, Mapping):
+            content = message_obj.get("content", "") or ""
+        else:
+            content = getattr(message_obj, "content", "") or ""
+        secondary = cls._extract_message_content(content)
+        if secondary:
+            if client_id is not None:
+                logger.debug(f"llm.parse client_id={client_id} empty=False reason=message_content")
+            return secondary
         if tool_calls:
             for call in tool_calls:
                 function = getattr(call, "function", None)
@@ -1083,11 +1114,19 @@ class CoachAgent:
                     if client_id is not None:
                         logger.debug("llm.parse client_id={} empty=False reason=tool_call".format(client_id))
                     return normalized
+        if raw_snapshot.strip() and client_id is not None:
+            logger.debug(
+                "llm.parse_mismatch client_id={} raw_first_200={} raw_keys={}".format(
+                    client_id,
+                    raw_snapshot,
+                    raw_keys or "na",
+                )
+            )
         if client_id is not None:
             finish_reason = ""
             if choices:
                 finish_reason = str(getattr(choices[0], "finish_reason", "") or "")
-            preview = CoachAgent._message_preview(message)
+            preview = CoachAgent._message_preview(message_obj)
             logger.debug(
                 "llm.parse client_id={} empty=True reason=no_content finish_reason={} {}".format(
                     client_id,
@@ -1170,14 +1209,13 @@ class CoachAgent:
         content: str,
         entry_ids: Sequence[str],
         *,
-        expects_json: bool,
         client_id: int,
     ) -> tuple[str, list[str]]:
         normalized_entries = [item for item in entry_ids if item]
         text = content.strip()
         if not text:
             return "", []
-        should_parse_json = expects_json or text.lstrip().startswith("{")
+        should_parse_json = text.lstrip().startswith("{")
         if should_parse_json:
             try:
                 payload = json.loads(text)

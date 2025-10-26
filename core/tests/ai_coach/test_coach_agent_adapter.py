@@ -209,20 +209,6 @@ async def test_answer_question_handles_agent_aborted(monkeypatch: pytest.MonkeyP
     assert result.sources == ["general_knowledge"]
 
 
-def test_supports_json_object_whitelisted_model() -> None:
-    class DummyModel:
-        model_name = "openrouter/openai/gpt-4o-mini"
-
-    assert CoachAgent._supports_json_object(DummyModel()) is True
-
-
-def test_supports_json_object_rejects_unknown_model() -> None:
-    class DummyModel:
-        model_name = "openrouter/openai/gpt-5-nano"
-
-    assert CoachAgent._supports_json_object(DummyModel()) is False
-
-
 def test_extract_choice_content_tool_arguments() -> None:
     arguments = json.dumps({"answer": "Yes", "sources": ["doc"]})
     response = SimpleNamespace(
@@ -245,6 +231,25 @@ def test_normalize_tool_call_arguments_fills_sources() -> None:
     text = CoachAgent._normalize_tool_call_arguments(payload)
     data = json.loads(text)
     assert data["sources"] == ["doc"]
+
+
+def test_api_passthrough_returns_llm_answer(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_answer(prompt: str, deps: AgentDeps) -> QAResponse:
+        return QAResponse(answer="OK_FROM_LLM", sources=["KB-1"])
+
+    monkeypatch.setattr(CoachAgent, "answer_question", staticmethod(fake_answer))
+    monkeypatch.setattr(KnowledgeBase, "save_client_message", staticmethod(lambda *args, **kwargs: None))
+    monkeypatch.setattr(KnowledgeBase, "save_ai_message", staticmethod(lambda *args, **kwargs: None))
+
+    from fastapi.testclient import TestClient
+
+    with TestClient(app) as client:
+        resp = client.post("/ask/", json={"client_id": 1, "prompt": "hi", "mode": "ask_ai"})
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["answer"] == "OK_FROM_LLM"
+    assert payload["sources"] == ["KB-1"]
 
 
 def test_ask_ai_runtime_error(monkeypatch) -> None:
