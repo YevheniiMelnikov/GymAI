@@ -101,14 +101,23 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
     answer_text = (payload.answer or "").strip()
     if not answer_text:
         await state_tracker.mark_failed(request_id, "empty_answer")
-        logger.error(f"event=ask_ai_answer_empty request_id={request_id} client_id={payload.client_id}")
-        fallback = msg_text("coach_agent_error", language).format(tg=settings.TG_SUPPORT_CONTACT)
-        try:
-            await bot.send_message(chat_id=profile.tg_id, text=fallback)
-        except Exception as exc:  # noqa: BLE001
-            logger.error(
-                f"event=ask_ai_empty_error_message_failed request_id={request_id} profile_id={profile.id} error={exc!s}"
-            )
+        logger.warning(
+            "event=ask_ai_answer_empty request_id={} client_id={} placeholder_blocked={}",
+            request_id,
+            payload.client_id,
+            settings.DISABLE_MANUAL_PLACEHOLDER,
+        )
+        if not settings.DISABLE_MANUAL_PLACEHOLDER:
+            fallback = msg_text("coach_agent_error", language).format(tg=settings.TG_SUPPORT_CONTACT)
+            try:
+                await bot.send_message(chat_id=profile.tg_id, text=fallback)
+            except Exception as exc:  # noqa: BLE001
+                logger.error(
+                    "event=ask_ai_empty_error_message_failed request_id={} profile_id={} error={}",
+                    request_id,
+                    profile.id,
+                    exc,
+                )
         return web.json_response({"detail": "empty_answer"}, status=400)
 
     if payload.sources:
@@ -122,9 +131,18 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
 
     escaped_answer = html.escape(answer_text)
     message_text = msg_text("ask_ai_answer", language).format(answer=escaped_answer)
+    chunks = list(_chunk_message(message_text))
+    rendered_len = sum(len(chunk) for chunk in chunks)
+    truncated = "yes" if len(chunks) > 1 else "no"
+    logger.info(
+        "bot.send out_len={} rendered_len={} truncated={}",
+        len(answer_text),
+        rendered_len,
+        truncated,
+    )
 
     try:
-        for chunk in _chunk_message(message_text):
+        for chunk in chunks:
             await bot.send_message(
                 chat_id=profile.tg_id,
                 text=chunk,

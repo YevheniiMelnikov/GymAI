@@ -3,7 +3,7 @@ import inspect
 from datetime import datetime
 from functools import wraps
 from time import perf_counter
-from typing import Any, ClassVar, Mapping, Optional, Sequence, TypeVar
+from typing import Any, Awaitable, Callable, ClassVar, Mapping, Optional, Sequence, TypeVar, cast
 
 from zoneinfo import ZoneInfo
 
@@ -351,18 +351,18 @@ class CoachAgent:
 
         knowledge_section = cls._format_knowledge_entries(entry_ids, entries)
         system_prompt = (
-            "You are a professional fitness coach. Always interpret ambiguous terms such as 'сушка' or 'подсушиться' "
-            "as fitness-related fat loss unless the question explicitly references towels, hair, or skin care. "
-            "Use the knowledge entries when available, answer in the client's language, and keep the tone concise "
-            "and actionable. Return JSON with keys 'answer' and 'sources' when the model supports JSON output."
+            "You are GymBot's fitness coach.\n"
+            "- Keep guidance evidence-based and actionable.\n"
+            "- Treat ambiguous terms (e.g. 'сушка') as fitness context unless explicitly about towels or beauty.\n"
+            "- Answer in the client's language and stay concise.\n"
+            "- Mention which knowledge snippets you used; fall back to ['general_knowledge'] when none apply."
         )
         user_prompt = (
             f"Client language: {language}\n"
             f"Client question: {prompt}\n"
-            "Knowledge entries:\n"
+            "Knowledge entries (client and global):\n"
             f"{knowledge_section}\n"
-            "Focus on training, nutrition, recovery, and related fitness strategies. "
-            "Provide a helpful answer and list the sources used (or ['general_knowledge'] when none are available)."
+            "Respond with practical fitness advice and cite the snippet IDs you relied on."
         )
 
         try:
@@ -373,7 +373,7 @@ class CoachAgent:
                 entry_ids,
                 supports_json=supports_json,
                 client_id=deps.client_id,
-                max_tokens=1200,
+                max_tokens=settings.AI_COACH_FIRST_PASS_MAX_TOKENS,
             )
         except AgentExecutionAborted as exc:
             logger.info(f"agent.ask completion_aborted client_id={deps.client_id} reason={exc.reason}")
@@ -398,15 +398,30 @@ class CoachAgent:
                     if extra_ids:
                         entry_ids, entries = extra_ids, extra_entries
                         deps.knowledge_base_empty = False
-            manual = cls._manual_answer(prompt, entry_ids, entries, deps.client_id)
-            return cls._enforce_fitness_domain(
-                prompt,
-                manual,
-                language,
-                entry_ids,
-                entries,
-                deps.client_id,
-            )
+            if entry_ids:
+                snippets_for_summary = (
+                    prefetched_knowledge
+                    if prefetched_knowledge is not None and len(prefetched_knowledge) >= len(entry_ids)
+                    else None
+                )
+                summary = cls._kb_summary_from_entries(
+                    prompt,
+                    entry_ids,
+                    entries,
+                    snippets=snippets_for_summary,
+                    client_id=deps.client_id,
+                    language=language,
+                )
+                return cls._enforce_fitness_domain(
+                    prompt,
+                    summary,
+                    language,
+                    entry_ids,
+                    entries,
+                    deps.client_id,
+                    deps=deps,
+                )
+            raise AgentExecutionAborted("Knowledge base empty", reason="knowledge_base_empty")
 
         if primary is not None:
             primary = cls._enforce_fitness_domain(
@@ -416,6 +431,7 @@ class CoachAgent:
                 entry_ids,
                 entries,
                 deps.client_id,
+                deps=deps,
             )
             logger.info(
                 "agent.ask completed client_id={} answer_len={} sources={}".format(
@@ -436,15 +452,30 @@ class CoachAgent:
         )
         if fallback is not None:
             return fallback
-        manual = cls._manual_answer(prompt, entry_ids, entries, deps.client_id)
-        return cls._enforce_fitness_domain(
-            prompt,
-            manual,
-            language,
-            entry_ids,
-            entries,
-            deps.client_id,
-        )
+        if entry_ids:
+            snippets_for_summary = (
+                prefetched_knowledge
+                if prefetched_knowledge is not None and len(prefetched_knowledge) >= len(entry_ids)
+                else None
+            )
+            summary = cls._kb_summary_from_entries(
+                prompt,
+                entry_ids,
+                entries,
+                snippets=snippets_for_summary,
+                client_id=deps.client_id,
+                language=language,
+            )
+            return cls._enforce_fitness_domain(
+                prompt,
+                summary,
+                language,
+                entry_ids,
+                entries,
+                deps.client_id,
+                deps=deps,
+            )
+        raise AgentExecutionAborted("Knowledge base empty", reason="knowledge_base_empty")
 
     @classmethod
     async def _fallback_answer_question(
@@ -479,72 +510,67 @@ class CoachAgent:
         _, language = cls._language_context(deps)
         knowledge_section = cls._format_knowledge_entries(entry_ids, entries)
         system_prompt = (
-            "You are a professional fitness coach. Use the provided knowledge entries when available. "
-            "Answer in the client's language and keep the tone concise and helpful. "
-            "Return JSON with keys 'answer' and 'sources' when structured output is supported. "
-            "If no knowledge entries are available, rely on professional expertise "
-            "and use ['general_knowledge'] as sources."
+            "You are GymBot's fitness coach.\n"
+            "- Use the provided knowledge snippets first.\n"
+            "- Keep the answer short, motivating, and in the client's language.\n"
+            "- List the snippet IDs you used or ['general_knowledge'] when none are relevant."
         )
         user_prompt = (
             f"Client language: {language}\n"
             f"Client question: {prompt}\n"
             "Knowledge entries:\n"
             f"{knowledge_section}\n"
-            "Return a helpful answer and list the sources used (or ['general_knowledge'] when none are available)."
+            "Return an actionable answer and cite the snippet IDs you relied on."
         )
         supports_json = cls._supports_json_object(model_name)
-        attempt_modes = [True, False] if supports_json else [False]
-        answer: str = ""
-        sources: list[str] = []
-        for index, as_json in enumerate(attempt_modes):
-            second_attempt = index > 0
-            try:
-                response = await cls._run_completion(
-                    client,
-                    system_prompt,
-                    user_prompt,
-                    use_json=as_json,
-                    max_tokens=1200,
-                )
-            except Exception as exc:  # noqa: BLE001
-                mode = "json" if as_json else "text"
-                logger.warning(
-                    f"agent.ask fallback completion_failed client_id={deps.client_id} mode={mode} error={exc}"
-                )
-                continue
-            content = cls._extract_choice_content(response, client_id=deps.client_id)
-            if not content:
-                logger.warning(
-                    f"agent.ask fallback empty_content client_id={deps.client_id} second_attempt={second_attempt}"
-                )
-                continue
-            answer, sources = cls._parse_fallback_content(
-                content,
+        response = await cls._complete_with_retries(
+            client,
+            system_prompt,
+            user_prompt,
+            entry_ids,
+            supports_json=supports_json,
+            client_id=deps.client_id,
+            max_tokens=settings.AI_COACH_FIRST_PASS_MAX_TOKENS,
+        )
+        if response is not None:
+            result = cls._enforce_fitness_domain(
+                prompt,
+                response,
+                language,
                 entry_ids,
-                expects_json=as_json,
-                client_id=deps.client_id,
+                entries,
+                deps.client_id,
+                deps=deps,
             )
-            if answer:
-                logger.info(
-                    (
-                        f"agent.ask fallback_success client_id={deps.client_id} answer_len={len(answer)} "
-                        f"sources={len(sources)} kb_empty={not entry_ids} second_attempt={second_attempt}"
-                    )
+            logger.info(
+                (
+                    f"agent.ask fallback_success client_id={deps.client_id} answer_len={len(result.answer)} "
+                    f"sources={len(result.sources)} kb_empty={not entry_ids}"
                 )
-                if not entry_ids:
-                    deps.knowledge_base_empty = True
-                result = QAResponse(answer=answer, sources=sources)
-                return cls._enforce_fitness_domain(
-                    prompt,
-                    result,
-                    language,
-                    entry_ids,
-                    entries,
-                    deps.client_id,
-                )
-        logger.warning(f"agent.ask fallback missing_answer client_id={deps.client_id} kb_empty={not entry_ids}")
-        if not entry_ids:
-            deps.knowledge_base_empty = True
+            )
+            return result
+        if entry_ids:
+            snippets_for_summary = knowledge if knowledge is not None and len(knowledge) >= len(entry_ids) else None
+            summary = cls._kb_summary_from_entries(
+                prompt,
+                entry_ids,
+                entries,
+                snippets=snippets_for_summary,
+                client_id=deps.client_id,
+                language=language,
+            )
+            result = cls._enforce_fitness_domain(
+                prompt,
+                summary,
+                language,
+                entry_ids,
+                entries,
+                deps.client_id,
+                deps=deps,
+            )
+            return result
+        deps.knowledge_base_empty = True
+        logger.warning(f"agent.ask fallback missing_answer client_id={deps.client_id} kb_empty=True")
         return None
 
     @staticmethod
@@ -599,95 +625,179 @@ class CoachAgent:
         client_id: int,
         max_tokens: int,
     ) -> QAResponse | None:
-        attempt_modes = [True, False] if supports_json else [False]
-        for attempt_index, use_json in enumerate(attempt_modes):
-            try:
-                response = await cls._run_completion(
-                    client,
-                    system_prompt,
-                    user_prompt,
-                    use_json=use_json,
-                    max_tokens=max_tokens,
-                )
-            except Exception as exc:  # noqa: BLE001
-                mode = "json" if use_json else "text"
-                logger.warning(
-                    f"agent.ask completion_failed client_id={client_id} mode={mode} attempt={attempt_index} error={exc}"
-                )
-                continue
-            content = cls._extract_choice_content(response, client_id=client_id)
-            if not content:
-                mode = "json" if use_json else "text"
-                logger.warning(f"agent.ask completion_empty client_id={client_id} mode={mode} attempt={attempt_index}")
-                continue
-            answer, sources = cls._parse_fallback_content(
-                content,
-                list(entry_ids),
-                expects_json=use_json,
-                client_id=client_id,
+        plans = cls._build_completion_plans(supports_json, max_tokens)
+        base_prompt = user_prompt
+        for plan_index, plan in enumerate(plans):
+            pruned_prompt, pruned_chars = cls._prune_prompt(
+                base_prompt,
+                plan["context_limit"],
+                force_trim=plan_index > 0,
             )
-            if answer:
+            if plan_index > 0:
+                logger.info(
+                    ("llm.retry client_id={} model={} max_tokens={} pruned_ctx={} json_modes={}").format(
+                        client_id,
+                        plan["model"],
+                        plan["max_tokens"],
+                        pruned_chars,
+                        len(plan["json_sequence"]),
+                    )
+                )
+            for mode_index, use_json in enumerate(plan["json_sequence"]):
+                try:
+                    response = await cls._run_completion(
+                        client,
+                        system_prompt,
+                        pruned_prompt,
+                        use_json=use_json,
+                        model=plan["model"],
+                        max_tokens=plan["max_tokens"],
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    mode = "json" if use_json else "text"
+                    logger.warning(
+                        (
+                            "agent.ask completion_failed client_id={} model={} mode={} plan_index={} mode_index={} "
+                            "error={}"
+                        ).format(client_id, plan["model"], mode, plan_index, mode_index, exc)
+                    )
+                    continue
+                meta = cls._llm_response_metadata(response)
+                content = cls._extract_choice_content(response, client_id=client_id)
+                if not content:
+                    reason = meta.get("finish_reason") or "unknown"
+                    logger.warning(
+                        ("llm.response.empty client_id={} reason={} model={} plan_index={} mode_index={}").format(
+                            client_id, reason, plan["model"], plan_index, mode_index
+                        )
+                    )
+                    continue
+                if (meta.get("finish_reason") or "").lower() == "length" and not content.strip():
+                    logger.warning(
+                        (
+                            "llm.response.empty client_id={} reason=finish_length model={} plan_index={} mode_index={}"
+                        ).format(client_id, plan["model"], plan_index, mode_index)
+                    )
+                    continue
+                answer, sources = cls._parse_fallback_content(
+                    content,
+                    list(entry_ids),
+                    expects_json=use_json,
+                    client_id=client_id,
+                )
+                if not answer:
+                    continue
                 if not sources:
                     sources = list(entry_ids) or ["general_knowledge"]
                 return QAResponse(answer=answer, sources=sources)
         return None
 
     @classmethod
-    def _manual_answer(
+    def _build_completion_plans(cls, supports_json: bool, max_tokens: int) -> list[dict[str, Any]]:
+        json_sequence = [True, False] if supports_json else [False]
+        first_max = min(max_tokens, settings.AI_COACH_FIRST_PASS_MAX_TOKENS)
+        plans: list[dict[str, Any]] = [
+            {
+                "model": settings.AGENT_MODEL,
+                "max_tokens": first_max,
+                "context_limit": settings.AI_COACH_PRIMARY_CONTEXT_LIMIT,
+                "json_sequence": json_sequence,
+            }
+        ]
+        if settings.AI_COACH_EMPTY_COMPLETION_RETRY:
+            retry_model = settings.AI_COACH_SECONDARY_MODEL or settings.AGENT_MODEL
+            retry_sequence = [False] if supports_json else [False]
+            plans.append(
+                {
+                    "model": retry_model,
+                    "max_tokens": settings.AI_COACH_RETRY_MAX_TOKENS,
+                    "context_limit": settings.AI_COACH_RETRY_CONTEXT_LIMIT,
+                    "json_sequence": retry_sequence or [False],
+                }
+            )
+        return plans
+
+    @staticmethod
+    def _prune_prompt(prompt: str, limit: int | None, *, force_trim: bool = False) -> tuple[str, int]:
+        trimmed = prompt
+        pruned = 0
+        if limit is not None and limit > 0 and len(prompt) > limit:
+            trimmed = prompt[:limit]
+            last_split = trimmed.rfind("\n\n")
+            if last_split > int(limit * 0.6):
+                trimmed = trimmed[:last_split]
+            pruned = len(prompt) - len(trimmed)
+        if force_trim and pruned == 0:
+            marker = "Knowledge entries:"
+            before, marker_token, after = prompt.partition(marker)
+            if marker_token:
+                lines = after.splitlines()
+                if len(lines) > 6:
+                    kept_lines = "\n".join(lines[:6]).strip()
+                    trimmed_candidate = f"{before}{marker_token}\n{kept_lines}".strip()
+                    if trimmed_candidate and len(trimmed_candidate) < len(prompt):
+                        trimmed = trimmed_candidate
+                        pruned = len(prompt) - len(trimmed)
+        if force_trim and pruned == 0:
+            current_len = len(prompt)
+            target = max(int(current_len * 0.8), current_len - 200)
+            if limit is not None and limit > 0:
+                target = min(target, limit)
+            target = max(target, 200)
+            if target < current_len:
+                trimmed = prompt[:target]
+                pruned = len(prompt) - len(trimmed)
+        return trimmed.rstrip(), max(pruned, 0)
+
+    @classmethod
+    def _kb_summary_from_entries(
         cls,
         prompt: str,
         entry_ids: Sequence[str],
         entries: Sequence[str],
+        *,
+        snippets: Sequence[KnowledgeSnippet] | None,
         client_id: int,
+        language: str,
     ) -> QAResponse:
         if not entry_ids or not entries:
             raise AgentExecutionAborted("Knowledge base empty", reason="knowledge_base_empty")
-        answer = cls._summarize_entries(entries)
-        logger.info(f"agent.ask manual_answer client_id={client_id} entries={len(entry_ids)} answer_len={len(answer)}")
-        return QAResponse(answer=answer, sources=list(entry_ids))
-
-    @classmethod
-    def _summarize_entries(cls, entries: Sequence[str]) -> str:
-        prepared = cls._prepare_manual_entries(entries)
-        if not prepared:
-            raise AgentExecutionAborted("Knowledge base empty", reason="knowledge_base_empty")
-        summary_chunks: list[str] = []
-        remaining = 600
-        for text in prepared:
-            cleaned = text.replace("\n", " ").strip()
-            if len(cleaned) > remaining:
-                clipped = cleaned[: remaining + 1]
-                last_space = clipped.rfind(" ")
-                if last_space > 0:
-                    clipped = clipped[:last_space]
-                cleaned = f"{clipped.strip()}..."
-            summary_chunks.append(f"- {cleaned}")
-            remaining -= len(cleaned)
-            if remaining <= 0:
-                break
-        if not summary_chunks:
-            raise AgentExecutionAborted("Knowledge base empty", reason="knowledge_base_empty")
-        return "\n".join(summary_chunks)
-
-    @classmethod
-    def _prepare_manual_entries(cls, entries: Sequence[str]) -> list[str]:
-        cleaned_entries: list[str] = []
-        seen: set[str] = set()
-        for entry in entries:
-            normalized = cls._sanitize_manual_entry(entry)
-            if not normalized:
+        client_dataset = KnowledgeBase._dataset_name(client_id)
+        index_map = {entry_id: idx for idx, entry_id in enumerate(entry_ids)}
+        annotated: list[tuple[str, str, str]] = []
+        for idx, text in enumerate(entries):
+            cleaned = text.strip()
+            if not cleaned:
                 continue
-            key = normalized.casefold()
-            if key in seen:
-                continue
-            seen.add(key)
-            cleaned_entries.append(normalized)
-        return cleaned_entries
+            dataset = ""
+            if snippets is not None and idx < len(snippets):
+                dataset = snippets[idx].dataset or ""
+            source = entry_ids[idx] if idx < len(entry_ids) else f"KB-{idx + 1}"
+            annotated.append((dataset, source, cleaned))
+        if not annotated:
+            raise AgentExecutionAborted("Knowledge base empty", reason="knowledge_base_empty")
+        annotated.sort(key=lambda item: (0 if item[0] == client_dataset else 1, index_map.get(item[1], 0)))
+        selected = annotated[:3]
+        summary_lines: list[str] = []
+        for dataset, source, text in selected:
+            summary_lines.append(f"- {cls._shorten_for_summary(text)}")
+        intro = "Ось що я знайшов у нотатках тренувань:"
+        outro = "Якщо потрібні деталі або коригування, дай знати — я підкажу далі."
+        answer = "\n".join([intro, *summary_lines, "", outro]).strip()
+        logger.info("agent.ask kb_fallback_summary client_id={} used_snippets={}".format(client_id, len(selected)))
+        sources = [source for _, source, _ in selected] or ["general_knowledge"]
+        return QAResponse(answer=answer, sources=sources)
 
-    @classmethod
-    def _sanitize_manual_entry(cls, entry: str) -> str | None:
-        normalized = " ".join(entry.split())
-        return normalized or None
+    @staticmethod
+    def _shorten_for_summary(text: str, *, limit: int = 280) -> str:
+        cleaned = " ".join(text.split())
+        if len(cleaned) <= limit:
+            return cleaned
+        truncated = cleaned[: limit + 1]
+        last_space = truncated.rfind(" ")
+        if last_space > 0:
+            truncated = truncated[:last_space]
+        return f"{truncated.rstrip()}..."
 
     @staticmethod
     def _truncate_text(text: str, limit: int) -> str:
@@ -786,12 +896,13 @@ class CoachAgent:
         if completions is None:
             return
         original_create = getattr(completions, "create", None)
-        if original_create is None:
+        if not callable(original_create):
             return
+        typed_create = cast(Callable[..., Awaitable[Any]], original_create)
 
         resolved_model = model_id or settings.AGENT_MODEL
 
-        @wraps(original_create)
+        @wraps(typed_create)
         async def wrapped_create(*args: Any, **kwargs: Any) -> Any:  # noqa: ANN401 - external signature
             start = perf_counter()
             request_meta = cls._llm_request_metadata(kwargs)
@@ -811,7 +922,7 @@ class CoachAgent:
                 )
             )
             try:
-                response = await original_create(*args, **kwargs)
+                response = await typed_create(*args, **kwargs)
             except Exception as exc:  # noqa: BLE001
                 latency = (perf_counter() - start) * 1000.0
                 logger.warning(f"llm.response.error model={resolved_model} latency_ms={latency:.0f} error={exc}")
@@ -880,13 +991,22 @@ class CoachAgent:
         choices = getattr(response, "choices", None) or []
         first_choice = choices[0] if choices else None
         message = getattr(first_choice, "message", None)
-        content = getattr(message, "content", "") or ""
-        tool_calls = getattr(message, "tool_calls", None)
+        if message is None and isinstance(first_choice, Mapping):
+            message = first_choice.get("message")
+        if isinstance(message, Mapping):
+            content = message.get("content", "") or ""
+            tool_calls = message.get("tool_calls")
+        else:
+            content = getattr(message, "content", "") or ""
+            tool_calls = getattr(message, "tool_calls", None)
         usage = getattr(response, "usage", None)
         prompt_tokens = getattr(usage, "prompt_tokens", None)
         completion_tokens = getattr(usage, "completion_tokens", None)
         total_tokens = getattr(usage, "total_tokens", None)
-        finish_reason = getattr(first_choice, "finish_reason", "") if first_choice else ""
+        if isinstance(first_choice, Mapping):
+            finish_reason = str(first_choice.get("finish_reason", "") or "")
+        else:
+            finish_reason = getattr(first_choice, "finish_reason", "") if first_choice else ""
         preview = CoachAgent._message_preview(message) if message is not None else ""
         return {
             "choices": len(choices),
@@ -906,10 +1026,11 @@ class CoachAgent:
         user_prompt: str,
         *,
         use_json: bool,
+        model: str,
         max_tokens: int,
     ) -> Any:
         kwargs: dict[str, Any] = {
-            "model": settings.AGENT_MODEL,
+            "model": model,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -929,18 +1050,30 @@ class CoachAgent:
             if client_id is not None:
                 logger.debug(f"llm.parse client_id={client_id} empty=True reason=no_choices")
             return ""
-        message = getattr(choices[0], "message", None)
+        first_choice = choices[0]
+        message = getattr(first_choice, "message", None)
+        if message is None and isinstance(first_choice, Mapping):
+            message = first_choice.get("message")
+        if message is None and isinstance(first_choice, Mapping):
+            fallback_text = first_choice.get("content") or first_choice.get("text")
+            if isinstance(fallback_text, str) and fallback_text.strip():
+                logger.debug("llm.parse client_id={} empty=False reason=choice_text".format(client_id or "na"))
+                return fallback_text.strip()
         if message is None:
             if client_id is not None:
                 logger.debug(f"llm.parse client_id={client_id} empty=True reason=no_message")
             return ""
-        content = getattr(message, "content", "") or ""
+        if isinstance(message, Mapping):
+            content = message.get("content", "") or ""
+            tool_calls = message.get("tool_calls")
+        else:
+            content = getattr(message, "content", "") or ""
+            tool_calls = getattr(message, "tool_calls", None)
         extracted = cls._extract_message_content(content)
         if extracted:
             if client_id is not None:
                 logger.debug(f"llm.parse client_id={client_id} empty=False reason=message_content")
             return extracted
-        tool_calls = getattr(message, "tool_calls", None)
         if tool_calls:
             for call in tool_calls:
                 function = getattr(call, "function", None)
@@ -1079,10 +1212,23 @@ class CoachAgent:
         entry_ids: Sequence[str],
         entries: Sequence[str],
         client_id: int,
+        deps: AgentDeps | None = None,
     ) -> QAResponse:
         answer = response.answer.strip()
         if not answer:
-            return cls._manual_answer(prompt, entry_ids, entries, client_id)
+            if entry_ids and entries:
+                if deps is not None:
+                    deps.fallback_used = True
+                summary = cls._kb_summary_from_entries(
+                    prompt,
+                    entry_ids,
+                    entries,
+                    snippets=None,
+                    client_id=client_id,
+                    language=language,
+                )
+                return summary
+            raise AgentExecutionAborted("Knowledge base empty", reason="knowledge_base_empty")
         response.answer = answer
         valid_sources = set(entry_ids)
         if response.sources:

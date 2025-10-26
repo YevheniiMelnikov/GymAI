@@ -16,10 +16,12 @@ from dependency_injector import providers
 from core.containers import create_container, set_container, get_container
 from core.infra.payment import BotCoachResolver, BotCreditService, TaskPaymentNotifier
 from core.services.internal import APIService
+from config.app_settings import settings
 
 
 logging.getLogger("OntologyAdapter").setLevel(logging.WARNING)
 logging.getLogger("CogneeGraph").setLevel(logging.ERROR)
+logging.getLogger("GraphCompletionRetriever").setLevel(logging.ERROR)
 
 knowledge_ready_event: asyncio.Event | None = None
 
@@ -40,7 +42,32 @@ async def init_knowledge_base(knowledge_loader: KnowledgeLoader | None = None) -
         knowledge_ready_event.clear()
         raise
 
-    logger.success("AI coach initialized")
+    projection_ready = False
+    configured_timeout = float(settings.AI_COACH_GLOBAL_PROJECTION_TIMEOUT)
+    projection_timeout = max(configured_timeout, 45.0)
+    try:
+        projection_ready = await KnowledgeBase.ensure_global_projected(timeout=projection_timeout)
+        if projection_ready:
+            logger.info("knowledge_dataset_cognify_ok dataset=kb_global")
+    except Exception as exc:  # noqa: BLE001 - best-effort diagnostics
+        logger.warning(f"AI coach projection wait failed: {exc}")
+    if projection_ready:
+        logger.success("AI coach initialized")
+    else:
+        logger.warning(f"AI coach global dataset not projected within {projection_timeout:.1f}s")
+
+        async def _await_projection() -> None:
+            try:
+                ready = await KnowledgeBase.ensure_global_projected(timeout=projection_timeout)
+            except Exception as wait_exc:  # noqa: BLE001
+                logger.warning(f"AI coach delayed projection wait failed: {wait_exc}")
+                return
+            if ready and knowledge_ready_event is not None:
+                logger.info("knowledge_dataset_cognify_ok dataset=kb_global")
+                logger.info("AI coach global dataset projection ready after delay")
+
+        asyncio.create_task(_await_projection())
+
     knowledge_ready_event.set()
 
 

@@ -213,6 +213,22 @@ async def ask(
                     f"/ask agent sources request_id={data.request_id} client_id={data.client_id} "
                     f"count={len(sources)} sources={' | '.join(sources)}"
                 )
+            origin = "agent"
+            answer_len = len(answer) if isinstance(answer, str) else 0
+            if isinstance(result, QAResponse):
+                if deps.fallback_used:
+                    origin = "kb_fallback"
+                if not answer:
+                    origin = "placeholder_blocked" if settings.DISABLE_MANUAL_PLACEHOLDER else "empty"
+            else:
+                origin = "structured"
+            logger.info(
+                "api.answer_out request_id={} client_id={} len={} from={}",
+                data.request_id,
+                data.client_id,
+                answer_len,
+                origin,
+            )
             if isinstance(answer, str):
                 await KnowledgeBase.save_client_message(data.prompt or "", client_id=data.client_id)
                 await KnowledgeBase.save_ai_message(answer, client_id=data.client_id)

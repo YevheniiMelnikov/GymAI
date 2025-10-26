@@ -2,10 +2,11 @@ import logging
 
 import json
 from hashlib import sha256
-from typing import Any, Awaitable, Mapping, cast
+from typing import Any, Awaitable, Iterable, Mapping, cast
 
 from redis.asyncio import Redis
 
+from ai_coach.agent.knowledge.utils.text import normalize_text
 from config.app_settings import settings
 
 
@@ -39,12 +40,19 @@ class HashStore:
             return False
 
     @classmethod
-    async def add(
-        cls,
-        dataset: str,
-        hash_value: str,
-        metadata: Mapping[str, Any] | None = None,
-    ) -> None:
+    @staticmethod
+    def _normalize_metadata(hash_value: str, metadata: Mapping[str, Any] | None) -> dict[str, Any] | None:
+        if metadata is None:
+            return None
+        payload = dict(metadata)
+        payload.setdefault("digest_sha", hash_value)
+        existing_md5 = payload.get("digest_md5")
+        if isinstance(existing_md5, str):
+            payload["digest_md5"] = existing_md5.strip()
+        return payload
+
+    @classmethod
+    async def add(cls, dataset: str, hash_value: str, metadata: Mapping[str, Any] | None = None) -> None:
         try:
             key = cls._key(dataset)
             await cast(Awaitable[int], cls.redis.sadd(key, hash_value))
@@ -52,10 +60,13 @@ class HashStore:
                 Awaitable[int],
                 cls.redis.expire(key, settings.BACKUP_RETENTION_DAYS * 24 * 60 * 60),
             )
-            if metadata:
+            normalized_meta = cls._normalize_metadata(hash_value, metadata)
+            if normalized_meta:
+                meta_key = cls._meta_key(dataset)
+                await cast(Awaitable[int], cls.redis.hset(meta_key, hash_value, json.dumps(normalized_meta)))
                 await cast(
                     Awaitable[int],
-                    cls.redis.hset(cls._meta_key(dataset), hash_value, json.dumps(metadata)),
+                    cls.redis.expire(meta_key, settings.BACKUP_RETENTION_DAYS * 24 * 60 * 60),
                 )
         except Exception as e:  # pragma: no cover - best effort
             logger.error(f"HashStore.add error {dataset}: {e}")
@@ -88,5 +99,27 @@ class HashStore:
 
     @classmethod
     async def metadata_for_text(cls, dataset: str, text: str) -> dict[str, Any] | None:
-        digest = sha256(text.encode()).hexdigest()
+        normalized = normalize_text(text)
+        if not normalized:
+            return None
+        digest = sha256(normalized.encode()).hexdigest()
         return await cls.metadata(dataset, digest)
+
+    @classmethod
+    async def list(cls, dataset: str) -> set[str]:
+        try:
+            members = await cast(Awaitable[Iterable[str]], cls.redis.smembers(cls._key(dataset)))
+        except Exception as e:  # pragma: no cover - best effort
+            logger.error(f"HashStore.list error {dataset}: {e}")
+            return set()
+        return {str(item) for item in members}
+
+    @classmethod
+    async def get_md5_for_sha(cls, dataset: str, digest_sha: str) -> str | None:
+        metadata = await cls.metadata(dataset, digest_sha)
+        if not metadata:
+            return None
+        md5_value = metadata.get("digest_md5")
+        if isinstance(md5_value, str) and md5_value:
+            return md5_value.strip()
+        return None
