@@ -3,9 +3,10 @@ import inspect
 import logging
 import os
 import random
+import re
 import time
 from dataclasses import asdict, dataclass, is_dataclass
-from hashlib import md5, sha256
+from hashlib import sha256
 from pathlib import Path
 from time import monotonic
 from types import SimpleNamespace
@@ -257,7 +258,7 @@ class KnowledgeBase:
         normalized_text = cls._normalize_text(text)
         if not normalized_text:
             return dataset, False
-        digest_sha, digest_md5 = cls._compute_digests(normalized_text)
+        digest_sha = cls._compute_digests(normalized_text)
         payload = normalized_text.encode("utf-8")
         ds_name = cls._resolve_dataset_alias(dataset)
         await cls._ensure_dataset_exists(ds_name, user)
@@ -266,53 +267,33 @@ class KnowledgeBase:
             text=normalized_text,
             dataset=ds_name,
         )
+        logger.debug(f"[sha_path_check] dataset={ds_name} sha={digest_sha[:12]} built_path={storage_path}")
         if created_file:
             logger.debug(
-                f"kb_write start dataset={ds_name} digest_sha={digest_sha[:12]} digest_md5={digest_md5[:12]} "
+                f"kb_write start dataset={ds_name} digest_sha={digest_sha[:12]} "
                 f"path={storage_path} bytes={len(payload)}"
             )
-        metadata_payload = cls._augment_metadata(metadata, ds_name, digest_sha=digest_sha, digest_md5=digest_md5)
+        metadata_payload = cls._augment_metadata(metadata, ds_name, digest_sha=digest_sha)
         if await HashStore.contains(ds_name, digest_sha):
             await HashStore.add(ds_name, digest_sha, metadata=metadata_payload)
             logger.debug(f"kb_append skipped dataset={ds_name} digest_sha={digest_sha[:12]} reason=duplicate")
             return ds_name, False
 
-        attempts = 0
         info: Any | None = None
-        while attempts < 2:
-            try:
-                info = await _safe_add(
-                    normalized_text,
-                    dataset_name=ds_name,
-                    user=cls._to_user_or_none(user),  # pyrefly: ignore[bad-argument-type]
-                    node_set=node_set,
-                )
-            except FileNotFoundError as exc:
-                attempts += 1
-                missing_path = getattr(exc, "filename", None) or str(exc)
-                logger.debug(
-                    f"knowledge_dataset_retry_missing_file dataset={ds_name} digest_sha={digest_sha[:12]} "
-                    f"attempt={attempts} missing={missing_path}"
-                )
-                storage_path, created_file = cls._ensure_storage_file(
-                    digest_sha=digest_sha,
-                    text=normalized_text,
-                    dataset=ds_name,
-                )
-                if created_file:
-                    logger.debug(
-                        f"kb_write start dataset={ds_name} digest_sha={digest_sha[:12]} digest_md5={digest_md5[:12]} "
-                        f"path={storage_path} bytes={len(payload)}"
-                    )
-                    metadata_payload = cls._augment_metadata(
-                        metadata, ds_name, digest_sha=digest_sha, digest_md5=digest_md5
-                    )
-                if attempts >= 2:
-                    raise
-                continue
-            except (DatasetNotFoundError, PermissionDeniedError):
-                raise
-            break
+        try:
+            info = await _safe_add(
+                normalized_text,
+                dataset_name=ds_name,
+                user=cls._to_user_or_none(user),  # pyrefly: ignore[bad-argument-type]
+                node_set=node_set,
+            )
+        except FileNotFoundError as exc:
+            logger.debug(
+                f"kb_append storage_missing dataset={ds_name} sha={digest_sha[:12]} detail={exc}",
+            )
+            raise
+        except (DatasetNotFoundError, PermissionDeniedError):
+            raise
 
         hashstore_ok = False
         for attempt in range(2):
@@ -349,7 +330,7 @@ class KnowledgeBase:
             cls._register_dataset_identifier(ds_name, identifier)
             resolved = identifier
         logger.debug(
-            f"kb_append ok dataset={resolved} digest_sha={digest_sha[:12]} digest_md5={digest_md5[:12]} "
+            f"kb_append ok dataset={resolved} digest_sha={digest_sha[:12]} "
             f"path={storage_path}"
         )
         return resolved, True
@@ -370,15 +351,16 @@ class KnowledgeBase:
             return []
         rid_value = request_id or "na"
         global_alias = cls._alias_for_dataset(cls._resolve_dataset_alias(cls.GLOBAL_DATASET))
-        global_ready = False
-        if global_alias in cls._PROJECTED_DATASETS:
-            global_ready = True
-        else:
-            ready = await cls.ensure_global_projected(timeout=float(settings.AI_COACH_GLOBAL_PROJECTION_TIMEOUT))
+        global_ready = global_alias in cls._PROJECTED_DATASETS
+        global_unavailable = False
+
+        if not global_ready:
+            ready = await cls.ensure_global_projected(timeout=0.3)  # Quick check, no blocking
             if ready:
                 cls._PROJECTED_DATASETS.add(global_alias)
                 global_ready = True
             else:
+                global_unavailable = True
                 cls._log_once(
                     f"projection:{global_alias}:search_pending",
                     logging.INFO,
@@ -386,7 +368,7 @@ class KnowledgeBase:
                 )
         user = await cls._get_cognee_user()
         await cls._ensure_profile_indexed(client_id, user)
-        datasets = [cls._dataset_name(client_id)]
+        datasets = [cls._dataset_name(client_id), cls._chat_dataset_name(client_id)]
         if global_ready:
             datasets.append(cls.GLOBAL_DATASET)
         resolved_datasets: list[str] = []
@@ -405,7 +387,7 @@ class KnowledgeBase:
         top_k_label = k if k is not None else "default"
         logger.debug(
             f"knowledge_search_start client_id={client_id} rid={rid_value} query_hash={base_hash} "
-            f"datasets={datasets_hint} top_k={top_k_label}"
+            f"datasets={datasets_hint} top_k={top_k_label} global_unavailable={global_unavailable}"
         )
 
         queries = cls._expanded_queries(normalized)
@@ -574,13 +556,12 @@ class KnowledgeBase:
         if not prepared:
             return []
 
-        digest_pairs = [cls._compute_digests(normalized_text) for _, normalized_text, _, _ in prepared]
-        digests_sha = [pair[0] for pair in digest_pairs]
+        digests_sha = [cls._compute_digests(normalized_text) for _, normalized_text, _, _ in prepared]
         dataset_list = list(datasets)
         metadata_results: list[tuple[str | None, Mapping[str, Any] | None]] = [(None, None)] * len(prepared)
         pending: list[int] = []
 
-        for index, ((_, _, dataset_hint, metadata), _) in enumerate(zip(prepared, digest_pairs, strict=False)):
+        for index, ((_, _, dataset_hint, metadata), _) in enumerate(zip(prepared, digests_sha, strict=False)):
             if metadata is not None:
                 meta_dict = dict(metadata)
                 dataset_name = cls._dataset_from_metadata(meta_dict) or dataset_hint
@@ -608,8 +589,8 @@ class KnowledgeBase:
 
         snippets: list[KnowledgeSnippet] = []
         add_tasks: list[Awaitable[None]] = []
-        for (text, normalized_text, dataset_hint, _), (digest_sha, digest_md5), (resolved_dataset, payload) in zip(
-            prepared, digest_pairs, metadata_results, strict=False
+        for (text, normalized_text, dataset_hint, _), digest_sha, (resolved_dataset, payload) in zip(
+            prepared, digests_sha, metadata_results, strict=False
         ):
             alias_source = resolved_dataset or dataset_hint or (dataset_list[0] if dataset_list else "")
             dataset_alias = cls._alias_for_dataset(alias_source) if alias_source else None
@@ -624,7 +605,6 @@ class KnowledgeBase:
                 payload_dict,
                 dataset_alias,
                 digest_sha=digest_sha,
-                digest_md5=digest_md5,
             )
             if dataset_alias:
                 add_tasks.append(HashStore.add(dataset_alias, digest_sha, metadata=metadata_payload))
@@ -782,110 +762,48 @@ class KnowledgeBase:
             logger.info("kb_storage_migrated md5_to_sha=0")
             logger.info("kb_hash_standard sha_only=True")
             return
-        migrated = 0
+        md5_files_found = 0
         for path in storage_root.glob("text_*.txt"):
-            if path.is_symlink():
-                continue
-            digest = cls._filename_to_digest(path.name)
-            if not digest or len(digest) == 64:
-                continue
-            if len(digest) != 32:
-                continue
-            try:
-                contents = path.read_text(encoding="utf-8")
-            except Exception:  # noqa: BLE001 - skip unreadable files silently
-                continue
-            digest_sha = sha256(contents.encode("utf-8")).hexdigest()
-            target = cls._storage_path_for_sha(digest_sha)
-            if target.exists():
-                migrated += 1
-                try:
-                    path.unlink()
-                except Exception:  # noqa: BLE001
-                    pass
-                continue
-            try:
-                path.rename(target)
-                migrated += 1
-                try:
-                    path.symlink_to(target)
-                except Exception:  # noqa: BLE001
-                    pass
-                continue
-            except Exception:
-                try:
-                    target.write_text(contents, encoding="utf-8")
-                except Exception:  # noqa: BLE001
-                    continue
-                migrated += 1
-                try:
-                    path.unlink()
-                except Exception:  # noqa: BLE001
-                    pass
-        logger.info(f"kb_storage_migrated md5_to_sha={migrated}")
+            md5_match = re.match(r"^text_([0-9a-f]{32})\.txt$", path.name)
+            if md5_match:
+                md5_files_found += 1
+                cls._log_once(
+                    (path.name, "md5_file_found"),
+                    logging.WARNING,
+                    f"knowledge_storage_md5_file_found path={path} reason=unsupported_format",
+                    min_interval=3600.0,
+                )
+        if md5_files_found > 0:
+            logger.warning(f"knowledge_storage_md5_files_total count={md5_files_found} action=ignored")
         logger.info("kb_hash_standard sha_only=True")
 
     @classmethod
     def _storage_path_for_sha(cls, digest_sha: str) -> Path:
+        if len(digest_sha) != 64:
+            logger.warning(f"[storage_path_invalid_digest] bad_digest={digest_sha}")
+            raise ValueError(f"Invalid SHA256 digest: {digest_sha}")
         return cls._storage_root() / f"text_{digest_sha}.txt"
 
-    @classmethod
-    def _legacy_storage_path_for_md5(cls, digest_md5: str) -> Path:
-        return cls._storage_root() / f"text_{digest_md5}.txt"
+
 
     @classmethod
     def _read_storage_text(
         cls,
         *,
-        digest_sha: str | None = None,
-        digest_md5: str | None = None,
+        digest_sha: str,
     ) -> str | None:
-        if digest_sha:
-            path = cls._storage_path_for_sha(digest_sha)
-            if path.exists():
-                try:
-                    return path.read_text(encoding="utf-8")
-                except Exception as exc:  # noqa: BLE001
-                    cls._log_once(
-                        f"storage_read:{digest_sha[:12]}",
-                        logging.DEBUG,
-                        f"knowledge_storage_read_failed digest={digest_sha[:12]} detail={exc}",
-                        min_interval=60.0,
-                    )
-        if not digest_md5:
-            return None
-        legacy_path = cls._legacy_storage_path_for_md5(digest_md5)
-        if not legacy_path.exists():
-            return None
-        try:
-            legacy_text = legacy_path.read_text(encoding="utf-8")
-        except Exception as exc:  # noqa: BLE001
-            cls._log_once(
-                f"storage_read:{digest_md5[:12]}",
-                logging.DEBUG,
-                f"knowledge_storage_read_failed digest={digest_md5[:12]} detail={exc}",
-                min_interval=60.0,
-            )
-            return None
-        if cls._SHA_PRIMARY:
-            computed_sha, computed_md5 = cls._compute_digests(legacy_text)
-            target_sha = digest_sha if digest_sha and len(digest_sha) == 64 else computed_sha
-            cls._ensure_storage_file(
-                digest_sha=target_sha,
-                text=legacy_text,
-                dataset=None,
-            )
-            cls._log_once(
-                f"storage_migrate:{target_sha[:12]}",
-                logging.DEBUG,
-                f"knowledge_storage_md5_migrated digest_sha={target_sha[:12]} legacy_path={legacy_path}",
-                min_interval=120.0,
-            )
+        path = cls._storage_path_for_sha(digest_sha)
+        if path.exists():
             try:
-                legacy_path.unlink(missing_ok=True)
-            except Exception:  # noqa: BLE001
-                pass
-        return legacy_text
+                return path.read_text(encoding="utf-8")
+            except Exception as exc:  # noqa: BLE001
+                cls._log_once(
+                    f"storage_read:{digest_sha[:12]}",
+                    logging.DEBUG,
+                    f"knowledge_storage_read_failed digest={digest_sha[:12]} detail={exc}",
+                    min_interval=60.0,
+                )
+        return None
 
     @staticmethod
     def _filename_to_digest(filename: str | None) -> str | None:
@@ -919,48 +837,43 @@ class KnowledgeBase:
         return None
 
     @classmethod
-    def _metadata_digest_md5(cls, metadata: Mapping[str, Any] | None) -> str | None:
-        if not metadata:
-            return None
-        for key in ("digest_md5", "md5", "checksum_md5"):
-            value = metadata.get(key)
-            if isinstance(value, str):
-                candidate = value.strip()
-                if candidate:
-                    return candidate
-        return None
-
-    @classmethod
     def _prepare_dataset_row(cls, raw: Any, alias: str) -> DatasetRow:
         text_value = getattr(raw, "text", None)
-        base_text = str(text_value or "")
+        if text_value is not None and not isinstance(text_value, str):
+            if isinstance(text_value, (int, float, bool)):
+                base_text = str(text_value)
+            else:
+                cls._log_once(
+                    (alias, str(type(text_value)), "non_string_text"),
+                    logging.WARNING,
+                    f"knowledge_dataset_row_skipped dataset={{alias}} reason=non_string_text type={{type(text_value).__name__}}",
+                )
+                base_text = ""
+        else:
+            base_text = str(text_value or "")
         metadata_obj = getattr(raw, "metadata", None)
         metadata_map = cls._coerce_metadata(metadata_obj)
         digest_sha_meta = cls._metadata_digest_sha(metadata_map)
-        digest_md5 = cls._metadata_digest_md5(metadata_map)
-        if not digest_md5:
-            digest_md5 = cls._digest_from_raw_location(getattr(raw, "raw_data_location", None))
         normalized_text = cls._normalize_text(base_text)
-        if not normalized_text and (digest_sha_meta or digest_md5):
-            storage_text = cls._read_storage_text(digest_sha=digest_sha_meta, digest_md5=digest_md5)
+        if not normalized_text and digest_sha_meta:
+            storage_text = cls._read_storage_text(digest_sha=digest_sha_meta)
             if storage_text is not None:
                 normalized_text = cls._normalize_text(storage_text)
         metadata_dict: dict[str, Any] | None = dict(metadata_map) if metadata_map else None
         if metadata_dict is not None:
             metadata_dict.setdefault("dataset", alias)
         text_output = normalized_text if normalized_text else base_text
+        if not normalized_text:
+            cls._log_once(
+                (alias, digest_sha_meta or "no_digest", "empty_content"),
+                logging.WARNING,
+                f"knowledge_dataset_row_unrecoverable dataset={alias} digest={digest_sha_meta[:12] if digest_sha_meta else 'N/A'} reason=empty_content",
+            )
         if normalized_text:
-            digest_sha, digest_md5_calc = cls._compute_digests(normalized_text)
+            digest_sha = cls._compute_digests(normalized_text)
             if metadata_dict is None:
                 metadata_dict = {"dataset": alias}
             metadata_dict.setdefault("digest_sha", digest_sha)
-            metadata_dict["digest_md5"] = digest_md5_calc
-            digest_md5 = metadata_dict["digest_md5"]
-        else:
-            if metadata_dict is None and digest_md5:
-                metadata_dict = {"dataset": alias, "digest_md5": digest_md5}
-            elif metadata_dict is not None and digest_md5:
-                metadata_dict.setdefault("digest_md5", digest_md5)
         if metadata_dict and not metadata_dict.get("dataset"):
             metadata_dict["dataset"] = alias
         if metadata_dict is not None and not metadata_dict:
@@ -968,7 +881,16 @@ class KnowledgeBase:
         return DatasetRow(text=text_output, metadata=metadata_dict)
 
     @classmethod
-    def _normalize_text(cls, text: str | None) -> str:
+    def _normalize_text(cls, text: Any) -> str:
+        if not isinstance(text, str):
+            if text is not None:
+                cls._log_once(
+                    f"normalize_text_non_string:{type(text).__name__}",
+                    logging.WARNING,
+                    f"knowledge_normalize_text_skipped type={{type(text).__name__}} reason='non-string input'",
+                    min_interval=60.0,
+                )
+            return ""
         return normalize_text(text)
 
     @classmethod
@@ -978,7 +900,6 @@ class KnowledgeBase:
         dataset_alias: str | None,
         *,
         digest_sha: str,
-        digest_md5: str,
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {}
         if metadata:
@@ -989,17 +910,15 @@ class KnowledgeBase:
         else:
             payload.pop("dataset", None)
         payload["digest_sha"] = digest_sha
-        payload["digest_md5"] = digest_md5
         if "kind" not in payload:
             payload["kind"] = "document"
         return payload
 
     @staticmethod
-    def _compute_digests(normalized_text: str) -> tuple[str, str]:
+    def _compute_digests(normalized_text: str) -> str:
         payload = normalized_text.encode("utf-8")
         digest_sha = sha256(payload).hexdigest()
-        digest_md5 = md5(payload).hexdigest()
-        return digest_sha, digest_md5
+        return digest_sha
 
     @classmethod
     async def _heal_dataset_storage(
@@ -1025,26 +944,18 @@ class KnowledgeBase:
             normalized = cls._normalize_text(entry.text)
             metadata_map = entry.metadata if isinstance(entry.metadata, Mapping) else None
             digest_sha_meta = cls._metadata_digest_sha(metadata_map)
-            digest_md5_meta = cls._metadata_digest_md5(metadata_map)
-            if not normalized and (digest_sha_meta or digest_md5_meta):
-                storage_text = cls._read_storage_text(digest_sha=digest_sha_meta, digest_md5=digest_md5_meta)
-                if storage_text is not None:
-                    normalized = cls._normalize_text(storage_text)
             if not normalized:
+                cls._log_once(
+                    (alias, digest_sha_meta or "no_digest", "empty_content_heal"),
+                    logging.WARNING,
+                    f"knowledge_dataset_heal_unrecoverable dataset={alias} digest={digest_sha_meta[:12] if digest_sha_meta else 'N/A'} reason=empty_content",
+                )
                 continue
-            digest_sha, digest_md5 = cls._compute_digests(normalized)
+            digest_sha = cls._compute_digests(normalized)
             storage_path = cls._storage_path_for_sha(digest_sha)
-            legacy_path = cls._legacy_storage_path_for_md5(digest_md5)
             sha_exists = storage_path.exists()
-            legacy_exists = legacy_path.exists()
-            if not sha_exists and (cls._SHA_PRIMARY or not legacy_exists):
+            if not sha_exists:
                 missing += 1
-                stored_md5 = await HashStore.get_md5_for_sha(alias, digest_sha)
-                if stored_md5 and stored_md5 != digest_md5:
-                    logger.debug(
-                        f"knowledge_dataset_digest_mismatch dataset={alias} digest_sha={digest_sha[:12]} "
-                        f"stored_md5={stored_md5[:12]} expected_md5={digest_md5[:12]}"
-                    )
             _, created = cls._ensure_storage_file(
                 digest_sha=digest_sha,
                 text=normalized,
@@ -1053,7 +964,7 @@ class KnowledgeBase:
             if created:
                 healed += 1
             metadata_payload = cls._augment_metadata(
-                entry.metadata, alias, digest_sha=digest_sha, digest_md5=digest_md5
+                entry.metadata, alias, digest_sha=digest_sha
             )
             add_tasks.append(HashStore.add(alias, digest_sha, metadata=metadata_payload))
         if add_tasks:
@@ -1073,41 +984,56 @@ class KnowledgeBase:
             return 0, 0
         created = 0
         linked = 0
+        mismatch_count = 0
+        unreadable_count = 0
+        empty_count = 0
         for path in storage_root.glob("text_*.txt"):
-            digest = cls._filename_to_digest(path.name)
-            if not digest or len(digest) != 64:
+            digest_match = re.match(r"^text_([0-9a-f]{64})\.txt$", path.name)
+            if not digest_match:
                 continue
+            digest_sha_from_name = digest_match.group(1)
             try:
                 contents = path.read_text(encoding="utf-8")
             except Exception as exc:  # noqa: BLE001
-                logger.debug(f"knowledge_rebuild_read_failed dataset={alias} digest_sha={digest[:12]} detail={exc}")
+                logger.debug(
+                    f"knowledge_rebuild_read_failed dataset={alias} sha={digest_sha_from_name[:12]} detail={exc}"
+                )
+                unreadable_count += 1
                 continue
             normalized = cls._normalize_text(contents)
             if not normalized:
+                empty_count += 1
                 continue
-            digest_sha = sha256(normalized.encode("utf-8")).hexdigest()
-            if digest_sha != digest:
-                logger.debug(f"knowledge_rebuild_digest_mismatch dataset={alias} digest_sha={digest[:12]}")
+            digest_sha_from_content = cls._compute_digests(normalized)
+            if digest_sha_from_content != digest_sha_from_name:
+                logger.warning(
+                    f"knowledge_rebuild_digest_mismatch dataset={alias} "
+                    f"path_sha={digest_sha_from_name[:12]} content_sha={digest_sha_from_content[:12]}"
+                )
+                mismatch_count += 1
                 continue
-            digest_md5 = md5(normalized.encode("utf-8")).hexdigest()
             inferred_kind = cls._resolve_snippet_kind({"kind": "document"}, normalized)
             metadata = cls._augment_metadata(
                 {"kind": inferred_kind},
                 alias,
-                digest_sha=digest_sha,
-                digest_md5=digest_md5,
+                digest_sha=digest_sha_from_content,
             )
             try:
-                already = await HashStore.contains(alias, digest_sha)
-                await HashStore.add(alias, digest_sha, metadata=metadata)
+                already = await HashStore.contains(alias, digest_sha_from_content)
+                await HashStore.add(alias, digest_sha_from_content, metadata=metadata)
             except Exception as exc:  # noqa: BLE001
                 logger.debug(
-                    f"knowledge_rebuild_hashstore_failed dataset={alias} digest_sha={digest_sha[:12]} detail={exc}"
+                    f"knowledge_rebuild_hashstore_failed dataset={alias} sha={digest_sha_from_content[:12]} detail={exc}"
                 )
                 continue
             linked += 1
             if not already:
                 created += 1
+        if created > 0 or linked > 0 or mismatch_count > 0 or unreadable_count > 0 or empty_count > 0:
+            logger.debug(
+                f"[disk_rebuild_commit] dataset={alias} created={created} linked={linked} sha_only=True "
+                f"mismatch_count={mismatch_count} unreadable_count={unreadable_count} empty_count={empty_count}"
+            )
         return created, linked
 
     @classmethod
@@ -1122,21 +1048,36 @@ class KnowledgeBase:
             return 0, None
         reinserted = 0
         last_dataset: str | None = None
-        for digest, metadata in digests:
-            path = cls._storage_path_for_sha(digest)
-            if not path.exists():
-                continue
-            try:
-                raw_text = path.read_text(encoding="utf-8")
-            except Exception as exc:  # noqa: BLE001
-                logger.debug(f"knowledge_reingest_read_failed dataset={alias} digest_sha={digest[:12]} detail={exc}")
-                continue
-            normalized = cls._normalize_text(raw_text)
+        for digest_sha, metadata in digests:
+            path = cls._storage_path_for_sha(digest_sha)
+            logger.debug(f"[reingest_probe] sha={digest_sha} path_attempt={path}")
+            normalized = None
+            if path.exists():
+                try:
+                    raw_text = path.read_text(encoding="utf-8")
+                    normalized = cls._normalize_text(raw_text)
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug(f"knowledge_reingest_read_failed dataset={alias} sha={digest_sha[:12]} detail={exc}")
+            if not normalized and metadata and metadata.get("text"):
+                normalized = cls._normalize_text(str(metadata["text"]))
+                if normalized:
+                    cls._ensure_storage_file(digest_sha=digest_sha, text=normalized, dataset=alias)
+
             if not normalized:
+                if metadata and metadata.get("text"):
+                    normalized = cls._normalize_text(str(metadata["text"]))
+                    if normalized:
+                        cls._ensure_storage_file(digest_sha=digest_sha, text=normalized, dataset=alias)
+
+            if not normalized:
+                cls._log_once(
+                    (alias, digest_sha, "unrecoverable"),
+                    logging.WARNING,
+                    f"knowledge_reingest_unrecoverable dataset={alias} digest_sha={digest_sha[:12]}",
+                )
                 continue
-            kind = None
-            if isinstance(metadata, Mapping):
-                kind = metadata.get("kind")
+
+            kind = metadata.get("kind") if isinstance(metadata, Mapping) else None
             if kind == "message":
                 continue
             meta_payload = metadata if isinstance(metadata, Mapping) else None
@@ -1149,7 +1090,7 @@ class KnowledgeBase:
                     metadata=meta_payload,
                 )
             except Exception as exc:  # noqa: BLE001
-                logger.debug(f"knowledge_reingest_failed dataset={alias} digest_sha={digest[:12]} detail={exc}")
+                logger.debug(f"knowledge_reingest_failed dataset={alias} digest_sha={digest_sha[:12]} detail={exc}")
                 continue
             if created:
                 reinserted += 1
@@ -1206,21 +1147,30 @@ class KnowledgeBase:
         meta_payload: dict[str, Any] = {}
         if metadata:
             meta_payload.update(dict(metadata))
+
         if role:
             text = f"{role.value}: {text}"
             meta_payload.setdefault("kind", "message")
             meta_payload.setdefault("role", role.value)
         else:
             meta_payload.setdefault("kind", "document")
+
+        normalized_text = cls._normalize_text(text)
+        if not normalized_text:
+            return
+
         target_alias = cls._resolve_dataset_alias(ds)
         meta_payload.setdefault("dataset", target_alias)
+
+        digest_sha = cls._compute_digests(normalized_text)
+
         attempts = 0
         role_label = role.value if role else "document"
         while attempts < 2:
             try:
-                logger.debug(f"kb_append start dataset={target_alias} role={role_label} length={len(text)}")
+                logger.debug(f"kb_append start dataset={target_alias} role={role_label} length={len(normalized_text)}")
                 resolved_name, created = await cls.update_dataset(
-                    text,
+                    normalized_text,
                     target_alias,
                     user,
                     node_set=list(node_set or []),
@@ -1239,19 +1189,20 @@ class KnowledgeBase:
             except PermissionDeniedError:
                 raise
             except FileNotFoundError as exc:
-                logger.debug(f"kb_append storage_missing dataset={target_alias} detail={exc}")
+                logger.debug(f"kb_append storage_missing dataset={target_alias} sha={digest_sha[:12]} detail={exc}")
+                cls._ensure_storage_file(digest_sha=digest_sha, text=normalized_text, dataset=target_alias)
                 await HashStore.clear(target_alias)
                 cls._PROJECTED_DATASETS.discard(cls._alias_for_dataset(target_alias))
                 rebuilt = await cls.rebuild_dataset(target_alias, user)
                 if not rebuilt:
-                    logger.warning(f"kb_append rebuild_failed dataset={target_alias}")
+                    logger.info(f"kb_append rebuild_failed dataset={target_alias}")
                     break
                 attempts += 1
                 continue
             except Exception as exc:  # noqa: BLE001
                 logger.warning(f"kb_append skipped dataset={target_alias}: {exc}", exc_info=True)
                 break
-        logger.warning(f"kb_append aborted dataset={target_alias}")
+        logger.info(f"kb_append aborted dataset={target_alias}")
 
     @classmethod
     async def save_client_message(cls, text: str, client_id: int) -> None:
@@ -1872,6 +1823,7 @@ class KnowledgeBase:
                     f"knowledge_dataset_rebuild_disk_sync dataset={alias} created={created_from_disk} "
                     f"linked={linked_from_disk}"
                 )
+
             hashes = await HashStore.list(alias)
             if hashes:
                 digest_metadata: list[tuple[str, Mapping[str, Any] | None]] = []
@@ -1889,11 +1841,19 @@ class KnowledgeBase:
                 return False
             if not entries:
                 storage_root = cls._storage_root()
+                storage_info = CogneeConfig.describe_storage()
+                dir_count = storage_info.get("entries_count", 0)
+                root_size_bytes = storage_info.get("root_size_bytes", 0)
+                cls._log_once(
+                    (alias, "rebuild_scan"),
+                    logging.DEBUG,
+                    f"knowledge_rebuild_scan dataset={alias} dir_count={dir_count} root_size_bytes={root_size_bytes}",
+                )
                 files = sorted(p.name for p in storage_root.glob("text_*.txt") if cls._filename_to_digest(p.name))[:5]
                 total_files = sum(1 for _ in storage_root.glob("text_*.txt"))
                 logger.warning(
                     f"knowledge_dataset_rebuild_skipped dataset={alias}: no_entries "
-                    f"storage_files={total_files} sample={files}"
+                    f"storage_files={total_files} sample={files} dir_count={dir_count} root_size_bytes={root_size_bytes}"
                 )
                 return False
         for entry in entries:
@@ -1996,20 +1956,17 @@ class KnowledgeBase:
                 delay = backoff[delay_index]
 
         elapsed_ms = int((monotonic() - start) * 1000)
-        if await _ready():
+        if timeout is not None and timeout > 0:
             cls._log_once(
-                f"projection:{alias}:ready",
-                logging.DEBUG,
-                f"knowledge_projection_wait dataset={alias} elapsed_ms={elapsed_ms} result=ready",
-                min_interval=10.0,
+                f"projection:{alias}:timeout",
+                logging.INFO,
+                f"knowledge_projection_wait dataset={alias} elapsed_ms={elapsed_ms} result=timeout",
             )
-            return True
-
-        cls._log_once(
-            f"projection:{alias}:timeout",
-            logging.WARNING,
-            f"knowledge_projection_wait dataset={alias} elapsed_ms={elapsed_ms} result=timeout",
-        )
+            cls._log_once(
+                (alias, "projection_gate"),
+                logging.INFO,
+                f"knowledge_projection_gate dataset={alias} timeout_s={timeout} fallback=local_only datasets={alias}",
+            )
         return False
 
     @classmethod
@@ -2031,10 +1988,8 @@ class KnowledgeBase:
             f"healed_count={healed_count}"
         )
 
-    @classmethod
-    async def _is_projection_ready(cls, dataset: str, user_ns: Any | None, *, user: Any | None = None) -> bool:
-        """Return True if the dataset projection looks ready for querying."""
-        alias = cls._alias_for_dataset(dataset)
+    async def _is_projection_ready(cls, dataset: str, user_ns: Any | None = None, *, user: Any | None = None) -> bool:
+        alias = KnowledgeBase._alias_for_dataset(dataset)
         state = cls._projection_state(alias)
         now = time.time()
         if now < state["next_check_ts"]:
@@ -2051,6 +2006,7 @@ class KnowledgeBase:
             state["status"] = "pending"
             state["reason"] = "datasets_module_missing"
             state["next_check_ts"] = now + random.uniform(20.0, 40.0)
+            logger.info(f"[projection_status] dataset={alias} projected_rows=0 is_pending=True timeout=N/A")
             return False
         list_data = getattr(datasets_module, "list_data", None)
         if not callable(list_data):
@@ -2063,6 +2019,7 @@ class KnowledgeBase:
             state["status"] = "pending"
             state["reason"] = "list_data_missing"
             state["next_check_ts"] = now + random.uniform(20.0, 40.0)
+            logger.info(f"[projection_status] dataset={alias} projected_rows=0 is_pending=True timeout=N/A")
             return False
 
         list_data_callable = cast(Callable[..., Awaitable[Iterable[Any]]], list_data)
@@ -2078,6 +2035,7 @@ class KnowledgeBase:
                 f"knowledge_projection_pending dataset={alias} reason=dataset_id_unavailable detail={probe_exc}",
                 min_interval=30.0,
             )
+            logger.info(f"[projection_status] dataset={alias} projected_rows=0 is_pending=True timeout=N/A")
             return False
         except Exception as exc:  # noqa: BLE001
             state["status"] = "pending"
@@ -2086,9 +2044,10 @@ class KnowledgeBase:
             cls._log_once(
                 (alias, "projection_pending", "list_data_error"),
                 logging.WARNING,
-                f"knowledge_projection_pending dataset={alias} reason=list_data_error detail={exc}",
+                f"knowledge_projection_pending dataset={alias} reason=list_data_error detail={exc.__class__.__name__} {exc}",
                 min_interval=30.0,
             )
+            logger.info(f"[projection_status] dataset={alias} projected_rows=0 is_pending=True timeout=N/A")
             return False
 
         rows = list(rows)
@@ -2104,19 +2063,29 @@ class KnowledgeBase:
         content_rows = 0
         missing_files = 0
         entries_snapshot: list[DatasetRow] = []
+        no_content_rows = 0
         for raw_row in rows:
-            prepared = cls._prepare_dataset_row(raw_row, alias)
+            try:
+                prepared = cls._prepare_dataset_row(raw_row, alias)
+            except Exception as exc:
+                cls._log_once(
+                    (alias, "prepare_dataset_row_failed"),
+                    logging.WARNING,
+                    f"knowledge_projection_prepare_failed dataset={{alias}} detail={{exc}}",
+                )
+                continue
+
             entries_snapshot.append(prepared)
             metadata_map = prepared.metadata if isinstance(prepared.metadata, Mapping) else None
             digest_sha = cls._metadata_digest_sha(metadata_map)
-            digest_md5 = cls._metadata_digest_md5(metadata_map)
             sha_exists = bool(digest_sha and cls._storage_path_for_sha(digest_sha).exists())
-            legacy_exists = bool(digest_md5 and cls._legacy_storage_path_for_md5(digest_md5).exists())
-            storage_exists = sha_exists or (legacy_exists and not cls._SHA_PRIMARY)
+            storage_exists = sha_exists
             normalized_entry = cls._normalize_text(prepared.text)
             if not normalized_entry:
                 if not storage_exists:
                     missing_files += 1
+                else:
+                    no_content_rows += 1
                 continue
             content_rows += 1
             if not storage_exists:
@@ -2124,116 +2093,63 @@ class KnowledgeBase:
             kind_value = cls._resolve_snippet_kind(prepared.metadata, normalized_entry)
             if kind_value == "message":
                 message_rows += 1
-                continue
-            doc_rows += 1
-        if missing_files > 0:
-            missing, healed = await cls._heal_dataset_storage(
-                dataset,
-                user,
-                entries=entries_snapshot,
-                reason="projection_missing_storage",
+            elif kind_value in {"document", "note"}:
+                doc_rows += 1
+
+        if row_count > 0 and content_rows == 0 and missing_files > 0:
+            state["status"] = "pending"
+            state["reason"] = "storage_missing"
+            state["next_check_ts"] = now + random.uniform(5.0, 10.0)
+            cls._log_once(
+                (alias, "projection_pending", "storage_missing"),
+                logging.INFO,
+                f"knowledge_projection_pending dataset={alias} reason=storage_missing rows={row_count} missing_files={missing_files}",
+                min_interval=15.0,
             )
-            if healed > 0:
-                state["status"] = "pending"
-                state["reason"] = "healing"
-                state["next_check_ts"] = now + random.uniform(4.0, 8.0)
+            logger.info(f"[projection_status] dataset={alias} projected_rows={row_count} is_pending=True timeout=N/A")
+            return False
+
+        if doc_rows > 0:
+            if await HashStore.list(alias):
+                state["status"] = "ready"
+                state["reason"] = None
+                state["next_check_ts"] = now + random.uniform(300.0, 600.0)
                 cls._log_once(
-                    (alias, "projection_pending", "healing_missing"),
+                    (alias, "projection_ready"),
                     logging.DEBUG,
                     (
-                        f"knowledge_projection_pending dataset={alias} reason=healing_missing "
-                        f"missing={missing} healed={healed}"
+                        f"knowledge_projection_ready dataset={alias} rows={row_count} "
+                        f"docs={doc_rows} messages={message_rows}"
                     ),
                     min_interval=15.0,
                 )
-                return False
-        if doc_rows > 0:
-            cls._log_once(
-                f"projection:{alias}:documents",
-                logging.DEBUG,
-                f"kb_projection_documents dataset={alias} documents={doc_rows}",
-                min_interval=30.0,
-            )
-        if content_rows == 0:
-            missing = healed = 0
-            if row_count > 0:
-                missing, healed = await cls._heal_dataset_storage(
-                    dataset,
-                    user,
-                    entries=entries_snapshot,
-                    reason="projection_no_documents",
-                )
-                if healed > 0:
-                    state["status"] = "pending"
-                    state["reason"] = "healing"
-                    state["next_check_ts"] = now + random.uniform(4.0, 8.0)
-                    cls._log_once(
-                        (alias, "projection_pending", "healing"),
-                        logging.DEBUG,
-                        (
-                            f"knowledge_projection_pending dataset={alias} reason=healing "
-                            f"missing={missing} healed={healed}"
-                        ),
-                        min_interval=15.0,
-                    )
-                    return False
+                logger.info(f"[projection_status] dataset={alias} projected_rows={row_count} is_pending=False timeout=N/A")
+                return True
+
+        if row_count > 0:
             state["status"] = "pending"
             state["reason"] = "no_documents"
-            state["next_check_ts"] = now + random.uniform(30.0, 45.0)
+            state["next_check_ts"] = now + random.uniform(10.0, 20.0)
             cls._log_once(
                 (alias, "projection_pending", "no_documents"),
                 logging.DEBUG,
                 f"knowledge_projection_pending dataset={alias} reason=no_documents rows={row_count}",
-                min_interval=30.0,
-            )
-            return False
-        if doc_rows == 0 and message_rows > 0:
-            cls._log_once(
-                (alias, "projection_messages_only"),
-                logging.DEBUG,
-                f"kb_projection_messages dataset={alias} messages={message_rows}",
-                min_interval=30.0,
-            )
-
-        graph_logger = logging.getLogger("GraphCompletionRetriever")
-        previous_level = graph_logger.level
-        graph_logger.setLevel(logging.ERROR)
-        try:
-            await cognee.search(
-                cls._PROJECTION_CHECK_QUERY,
-                datasets=[dataset],
-                user=user_ns,
-                top_k=1,
-            )
-        except Exception as exc:  # noqa: BLE001
-            if cls._is_graph_missing_error(exc):
-                state["status"] = "pending"
-                state["reason"] = "projection_incomplete"
-                state["next_check_ts"] = now + random.uniform(10.0, 20.0)
-                cls._log_once(
-                    (alias, "projection_pending", "projection_incomplete"),
-                    logging.DEBUG,
-                    f"knowledge_projection_pending dataset={alias} reason=projection_incomplete",
-                    min_interval=15.0,
-                )
-                return False
-            state["status"] = "pending"
-            state["reason"] = "probe_error"
-            state["next_check_ts"] = now + random.uniform(20.0, 40.0)
-            cls._log_once(
-                (alias, "projection_pending", "probe_error"),
-                logging.DEBUG,
-                f"knowledge_projection_probe_error dataset={alias} detail={exc}",
                 min_interval=15.0,
             )
+            logger.info(f"[projection_status] dataset={alias} projected_rows={row_count} is_pending=True timeout=N/A")
             return False
-        finally:
-            graph_logger.setLevel(previous_level)
 
-        state["status"] = "ready"
-        state["reason"] = None
-        state["next_check_ts"] = now + 5.0
-        return True
+        state["status"] = "pending"
+        state["reason"] = "no_rows"
+        state["next_check_ts"] = now + random.uniform(10.0, 20.0)
+        cls._log_once(
+            (alias, "projection_pending", "no_rows"),
+            logging.DEBUG,
+            f"knowledge_projection_pending dataset={alias} reason=no_rows",
+            min_interval=15.0,
+        )
+        logger.info(f"[projection_status] dataset={alias} projected_rows=0 is_pending=True timeout=N/A")
+        return False
 
     @classmethod
     async def _fallback_dataset_entries(
@@ -2259,8 +2175,8 @@ class KnowledgeBase:
                 if metadata is None:
                     metadata = cls._infer_metadata_from_text(normalized)
                 metadata_dict = dict(metadata) if metadata else {"kind": "document"}
-                dig_sha, dig_md5 = cls._compute_digests(normalized)
-                ensured_metadata = cls._augment_metadata(metadata_dict, alias, digest_sha=dig_sha, digest_md5=dig_md5)
+                dig_sha = cls._compute_digests(normalized)
+                ensured_metadata = cls._augment_metadata(metadata_dict, alias, digest_sha=dig_sha)
                 cls._ensure_storage_file(
                     digest_sha=dig_sha,
                     text=normalized,

@@ -102,6 +102,16 @@ async def debug_knowledge(
     return snapshot
 
 
+@app.get("/internal/knowledge/snapshot")
+async def knowledge_snapshot(
+    client_id: int | None = None,
+    credentials: HTTPBasicCredentials = Depends(security),
+) -> dict[str, Any]:
+    _validate_refresh_credentials(credentials)
+    snapshot = await KnowledgeBase.debug_snapshot(client_id=client_id)
+    return snapshot
+
+
 @app.get("/internal/debug/llm_probe")
 async def debug_llm_probe(
     credentials: HTTPBasicCredentials = Depends(security),

@@ -114,6 +114,7 @@ class Settings(BaseSettings):
     AI_COACH_SECONDARY_MODEL: Annotated[str | None, Field(default=None)]
     AI_COACH_FIRST_PASS_MAX_TOKENS: Annotated[int, Field(default=1200)]
     AI_COACH_RETRY_MAX_TOKENS: Annotated[int, Field(default=1200)]
+    AI_COACH_CONTINUATION_MAX_TOKENS: Annotated[int, Field(default=600)]
     AI_COACH_EMPTY_COMPLETION_RETRY: Annotated[bool, Field(default=True)]
     AI_COACH_PRIMARY_CONTEXT_LIMIT: Annotated[int, Field(default=2200)]
     AI_COACH_RETRY_CONTEXT_LIMIT: Annotated[int, Field(default=1400)]

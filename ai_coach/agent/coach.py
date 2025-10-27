@@ -335,6 +335,7 @@ class CoachAgent:
             logger.warning(f"agent.ask knowledge_prefetch_failed client_id={deps.client_id} error={exc}")
         entry_ids, entries = cls._build_knowledge_entries(prefetched_knowledge)
         entry_ids, entries = cls._filter_entries_for_prompt(prompt, entry_ids, entries)
+        kb_used = bool(entry_ids)
         if not entry_ids:
             try:
                 raw_entries = await KnowledgeBase.fallback_entries(deps.client_id, limit=6)
@@ -345,11 +346,12 @@ class CoachAgent:
             extra_ids, extra_entries = cls._filter_entries_for_prompt(prompt, extra_ids, extra_entries)
             if extra_ids:
                 entry_ids, entries = extra_ids, extra_entries
-        deps.knowledge_base_empty = len(entry_ids) == 0
+                kb_used = True
+        deps.knowledge_base_empty = not kb_used
         logger.debug(
             (
                 f"agent.ask knowledge_ready client_id={deps.client_id} entries={len(entry_ids)} "
-                f"kb_used={not deps.knowledge_base_empty}"
+                f"kb_used={kb_used}"
             )
         )
 
@@ -438,10 +440,11 @@ class CoachAgent:
                 deps=deps,
             )
             logger.info(
-                "agent.ask completed client_id={} answer_len={} sources={}".format(
+                "agent.ask.done client_id={} answer_len={} sources={} kb_used={}".format(
                     deps.client_id,
                     len(primary.answer),
                     len(primary.sources),
+                    kb_used,
                 )
             )
             if not entry_ids:
@@ -632,21 +635,29 @@ class CoachAgent:
         client_id: int,
         max_tokens: int,
         model: str | None = None,
+        continuation_attempt: int = 0,
     ) -> QAResponse | None:
         max_attempts = 2 if settings.AI_COACH_EMPTY_COMPLETION_RETRY else 1
         model_id = model or settings.AGENT_MODEL
+        full_content = ""
+        final_finish_reason = "unknown"
+
         for attempt in range(max_attempts):
             if attempt > 0:
                 logger.info(
                     ("llm.retry client_id={} model={} max_tokens={} attempt={} json_modes=0").format(
-                        client_id, model_id, max_tokens, attempt
+                        client_id, model_id, attempt, 0
                     )
                 )
+            current_user_prompt = user_prompt
+            if continuation_attempt > 0:
+                current_user_prompt = f"{user_prompt}\n\nContinue from here: {full_content}"
+
             try:
                 response = await cls._run_completion(
                     client,
                     system_prompt,
-                    user_prompt,
+                    current_user_prompt,
                     model=model_id,
                     max_tokens=max_tokens,
                 )
@@ -659,24 +670,50 @@ class CoachAgent:
                 continue
             meta = cls._llm_response_metadata(response)
             content = cls._extract_choice_content(response, client_id=client_id)
-            if content:
-                answer, sources = cls._parse_fallback_content(
-                    content,
+            full_content += content
+            final_finish_reason = meta.get("finish_reason") or "unknown"
+
+            if final_finish_reason == "length" and continuation_attempt == 0:
+                logger.info(
+                    ("llm.continuation_needed client_id={} model={} max_tokens={} current_len={}").format(
+                        client_id, model_id, max_tokens, len(full_content)
+                    )
+                )
+                # Make a single continuation attempt
+                continuation_response = await cls._complete_with_retries(
+                    client,
+                    system_prompt,
+                    user_prompt, # Pass original user_prompt for context
                     entry_ids,
                     client_id=client_id,
+                    max_tokens=getattr(settings, "AI_COACH_CONTINUATION_MAX_TOKENS", 600),
+                    model=model,
+                    continuation_attempt=1,
                 )
-                if answer.strip():
-                    normalized_sources = list(sources) if sources else list(entry_ids) or ["general_knowledge"]
-                    return QAResponse(answer=answer, sources=normalized_sources)
-            finish_reason = meta.get("finish_reason") or "unknown"
-            logger.warning(
-                ("llm.response.empty client_id={} reason={} model={} attempt={}").format(
-                    client_id,
-                    finish_reason,
-                    model_id,
-                    attempt,
-                )
+                if continuation_response and continuation_response.answer:
+                    full_content += continuation_response.answer
+                    final_finish_reason = cls._llm_response_metadata(continuation_response).get("finish_reason") or "stop"
+                break # Break after continuation attempt
+            else:
+                break # Break if not length or already a continuation
+
+        if full_content:
+            answer, sources = cls._parse_fallback_content(
+                full_content,
+                entry_ids,
+                client_id=client_id,
             )
+            if answer.strip():
+                normalized_sources = list(sources) if sources else list(entry_ids) or ["general_knowledge"]
+                return QAResponse(answer=answer, sources=normalized_sources)
+        logger.warning(
+            ("llm.response.empty client_id={} reason={} model={} final_content_len={}").format(
+                client_id,
+                final_finish_reason,
+                model_id,
+                len(full_content),
+            )
+        )
         return None
 
     @classmethod

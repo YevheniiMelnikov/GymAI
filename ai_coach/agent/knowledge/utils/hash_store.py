@@ -46,9 +46,6 @@ class HashStore:
             return None
         payload = dict(metadata)
         payload.setdefault("digest_sha", hash_value)
-        existing_md5 = payload.get("digest_md5")
-        if isinstance(existing_md5, str):
-            payload["digest_md5"] = existing_md5.strip()
         return payload
 
     @classmethod
@@ -61,15 +58,20 @@ class HashStore:
                 cls.redis.expire(key, settings.BACKUP_RETENTION_DAYS * 24 * 60 * 60),
             )
             normalized_meta = cls._normalize_metadata(hash_value, metadata)
+            meta_bytes = 0
             if normalized_meta:
                 meta_key = cls._meta_key(dataset)
-                await cast(Awaitable[int], cls.redis.hset(meta_key, hash_value, json.dumps(normalized_meta)))
+                json_meta = json.dumps(normalized_meta)
+                meta_bytes = len(json_meta.encode("utf-8"))
+                await cast(Awaitable[int], cls.redis.hset(meta_key, hash_value, json_meta))
                 await cast(
                     Awaitable[int],
                     cls.redis.expire(meta_key, settings.BACKUP_RETENTION_DAYS * 24 * 60 * 60),
                 )
+            logger.debug(f"[hashstore_put] sha={hash_value[:12]} bytes={meta_bytes} dataset={dataset} ok")
         except Exception as e:  # pragma: no cover - best effort
             logger.error(f"HashStore.add error {dataset}: {e}")
+            logger.debug(f"[hashstore_put] sha={hash_value[:12]} bytes=0 dataset={dataset} err={e}")
 
     @classmethod
     async def clear(cls, dataset: str) -> None:
@@ -114,12 +116,3 @@ class HashStore:
             return set()
         return {str(item) for item in members}
 
-    @classmethod
-    async def get_md5_for_sha(cls, dataset: str, digest_sha: str) -> str | None:
-        metadata = await cls.metadata(dataset, digest_sha)
-        if not metadata:
-            return None
-        md5_value = metadata.get("digest_md5")
-        if isinstance(md5_value, str) and md5_value:
-            return md5_value.strip()
-        return None
