@@ -54,8 +54,8 @@ async def test_wait_for_projection_ready():
     """Unit-test _wait_for_projection: branch ready."""
     with patch.object(KnowledgeBase, "_is_projection_ready", new_callable=AsyncMock) as mock_is_ready:
         mock_is_ready.return_value = True
-        ready = await KnowledgeBase._wait_for_projection("test_dataset", user_ns=object(), user=object())
-        assert ready is True
+            status = await KnowledgeBase._wait_for_projection("test_dataset", user=object())
+            assert status == ProjectionStatus.READY is True
 
 
 @pytest.mark.asyncio
@@ -63,10 +63,10 @@ async def test_wait_for_projection_timeout():
     """Unit-test _wait_for_projection: branch timeout."""
     with patch.object(KnowledgeBase, "_is_projection_ready", new_callable=AsyncMock) as mock_is_ready:
         mock_is_ready.return_value = False
-        ready = await KnowledgeBase._wait_for_projection(
-            "test_dataset", user_ns=object(), user=object(), timeout=0.1
-        )
-        assert ready is False
+    status = await KnowledgeBase._wait_for_projection(
+        "test_dataset", user=object(), timeout_s=0.01
+    )
+    assert status == ProjectionStatus.TIMEOUT
 
 
 @pytest.mark.asyncio

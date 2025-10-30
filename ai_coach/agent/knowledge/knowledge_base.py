@@ -62,6 +62,16 @@ class ProjectionProbeError(RuntimeError):
     """Raised when dataset readiness cannot be determined due to configuration issues."""
 
 
+from enum import Enum
+
+
+class ProjectionStatus(Enum):
+    READY = "ready"
+    TIMEOUT = "timeout"
+    FATAL_ERROR = "fatal_error"
+    USER_CONTEXT_UNAVAILABLE = "user_context_unavailable"
+
+
 @dataclass(slots=True)
 class KnowledgeSnippet:
     text: str
@@ -76,6 +86,14 @@ class KnowledgeSnippet:
 class DatasetRow:
     text: str
     metadata: Mapping[str, Any] | None = None
+
+
+@dataclass(slots=True)
+class RebuildResult:
+    reinserted: int = 0
+    healed: int = 0
+    linked: int = 0
+    rehydrated: int = 0
 
 
 class KnowledgeBase:
@@ -125,7 +143,11 @@ class KnowledgeBase:
 
         hashstore_entries_sha = 0
         hashstore_entries_md5 = 0
-        all_datasets = await HashStore.list_all_datasets() # Assuming this method exists or can be implemented
+        all_datasets = (
+            await HashStore.list_all_datasets()
+            if hasattr(HashStore, "list_all_datasets")
+            else [cls._alias_for_dataset(cls.GLOBAL_DATASET)]
+        )
         for dataset_alias in all_datasets:
             digests = await HashStore.list(dataset_alias)
             for digest in digests:
@@ -156,16 +178,26 @@ class KnowledgeBase:
             pass
         cls._loader = knowledge_loader
         cls._user = await cls._get_cognee_user()
-        assert getattr(cls._user, "id", None), "KB user is missing id"
+        if not getattr(cls._user, "id", None):
+            logger.warning("KB user is missing id, skipping heavy initialization steps.")
+            return
+
         cls._PROJECTED_DATASETS.clear()
         try:
             await cls._sanitize_hash_store()
         except Exception as exc:  # noqa: BLE001 - best effort sanitation
             logger.warning(f"kb_hashstore_sanitation_failed detail={exc}")
-        try:
-            await StorageResolver.build_md5_to_sha_index(cls._storage_root())
-        except Exception as exc:  # noqa: BLE001 - best effort index build
-            logger.warning(f"kb_md5_to_sha_index_failed detail={exc}")
+
+        if hasattr(StorageResolver, "build_md5_to_sha_index"):
+            try:
+                build_func = StorageResolver.build_md5_to_sha_index
+                if inspect.iscoroutinefunction(build_func):
+                    await build_func(cls._storage_root())
+                else:
+                    build_func(cls._storage_root())
+            except Exception as exc:
+                logger.warning(f"StorageResolver.build_md5_to_sha_index failed: {exc}")
+
         try:
             await cls.rebuild_dataset(cls.GLOBAL_DATASET, cls._user, sha_only=True)
         except Exception as exc:  # noqa: BLE001 - best effort rebuild
@@ -178,12 +210,32 @@ class KnowledgeBase:
         if ds_id:
             timeout = float(getattr(settings, "AI_COACH_GLOBAL_PROJECTION_FIRST_BOOT_TIMEOUT", 5.0))
             try:
-                await cls._wait_for_projection(cls.GLOBAL_DATASET, cls._user, timeout=timeout)
-                logger.info(f"projection:first_boot_wait_s={timeout}")
+                status = await cls._wait_for_projection(cls.GLOBAL_DATASET, cls._user, timeout_s=timeout)
+                if status == ProjectionStatus.READY:
+                    logger.info(f"projection:first_boot_wait_s={timeout}")
+                else:
+                    logger.warning(f"Knowledge global projection wait failed: {status.value}")
             except Exception as exc:  # noqa: BLE001 - diagnostics only
                 logger.warning(f"Knowledge global projection wait failed: {exc}")
         else:
-            logger.warning(f"kb_global_projection_skipped reason=dataset_id_unavailable")
+            logger.warning("kb_global_projection_skipped reason=dataset_id_unavailable")
+
+        storage_root = cls._storage_root()
+        storage_info = CogneeConfig.describe_storage()
+        projection_status = await cls._is_projection_ready(cls.GLOBAL_DATASET, user=cls._user)
+        kb_projection_rows = 0
+        try:
+            kb_projection_rows = len(await cls._list_dataset_entries(cls.GLOBAL_DATASET, cls._user))
+        except Exception:
+            pass
+
+        logger.info(
+            f"kb_storage_root={storage_root}, "
+            f"files_count={storage_info.get('entries_count', 0)}, "
+            f"md5_mirrors_count={storage_info.get('md5_mirrors_count', 0)}, "
+            f"kb_projection_rows={kb_projection_rows}, "
+            f"projection_status={projection_status}"
+        )
 
     @classmethod
     async def refresh(cls) -> None:
@@ -218,13 +270,15 @@ class KnowledgeBase:
             await cls._ensure_dataset_exists(dataset, user)
         except Exception as exc:  # noqa: BLE001
             cls._log_once(
-                f"projection:{dataset}:ensure_missing",
                 logging.DEBUG,
-                f"knowledge_projection_dataset_missing dataset={dataset} detail={exc}",
+                "knowledge_projection_dataset_missing",
+                throttle_key=f"projection:{dataset}:ensure_missing",
+                dataset=dataset,
+                detail=exc,
             )
         user_ctx = cls._to_user_ctx(user)
-        ready = await cls._wait_for_projection(dataset, user=user, timeout=timeout)
-        if ready:
+        status = await cls._wait_for_projection(dataset, user=user, timeout_s=timeout)
+        if status == ProjectionStatus.READY:
             cls._PROJECTED_DATASETS.add(cls._alias_for_dataset(dataset))
             return True
 
@@ -233,9 +287,11 @@ class KnowledgeBase:
                 entries = await cls._list_dataset_entries(dataset, user)
             except Exception as exc:  # noqa: BLE001 - diagnostics only
                 cls._log_once(
-                    f"projection:{dataset}:ensure_list_failed",
                     logging.DEBUG,
-                    f"knowledge_projection_pending dataset={dataset} reason=list_entries_failed detail={exc}",
+                    "projection:ensure_list_failed",
+                    dataset=dataset,
+                    reason="list_entries_failed",
+                    detail=exc,
                     min_interval=15.0,
                 )
             else:
@@ -250,20 +306,20 @@ class KnowledgeBase:
                         retry_timeout = 5.0
                         if timeout is not None:
                             retry_timeout = min(max(timeout, 0.0), 5.0)
-                        retry_ready = await cls._wait_for_projection(
+                        retry_status = await cls._wait_for_projection(
                             dataset,
                             user=user,
-                            timeout=retry_timeout,
+                            timeout_s=retry_timeout,
                         )
-                        if retry_ready:
+                        if retry_status == ProjectionStatus.READY:
                             alias = cls._alias_for_dataset(dataset)
                             cls._PROJECTED_DATASETS.add(alias)
                             return True
 
         cls._log_once(
-            f"projection:{dataset}:deferred",
             logging.INFO if not cls._GLOBAL_PROJECTION_LOGGED_INFO else logging.DEBUG,
-            f"knowledge_projection_deferred dataset={dataset}",
+            "projection:deferred",
+            dataset=dataset,
         )
         if not cls._GLOBAL_PROJECTION_LOGGED_INFO:
             cls._GLOBAL_PROJECTION_LOGGED_INFO = True
@@ -286,7 +342,7 @@ class KnowledgeBase:
     async def prune(cls) -> None:
         """Run Cognee prune routine to cleanup cached data."""
         try:
-            from cognee.api.v1.prune import prune as cognee_prune  # pyrefly: ignore[import-error]
+            from cognee.api.v1.prune import prune as cognee_prune  # noqa
         except Exception as exc:  # pragma: no cover - import errors handled upstream
             logger.error(f"Cognee prune unavailable: {exc}")
             raise UserServiceError("Cognee prune module unavailable") from exc
@@ -308,7 +364,8 @@ class KnowledgeBase:
     ) -> tuple[str, bool]:
         """Add text to dataset if new, update hash store, return (dataset, created)."""
         normalized_text = cls._normalize_text(text)
-        if not normalized_text:
+        if not normalized_text.strip():
+            logger.debug(f"empty_content_filtered dataset={dataset}")
             return dataset, False
         digest_sha = cls._compute_digests(normalized_text)
         payload = normalized_text.encode("utf-8")
@@ -334,7 +391,7 @@ class KnowledgeBase:
             return ds_name, False
 
         info: Any | None = None
-        for attempt in range(2): # Allow one retry for MD5 fallback
+        for attempt in range(2):  # Allow one retry for MD5 fallback
             try:
                 info = await _safe_add(
                     normalized_text,
@@ -342,7 +399,7 @@ class KnowledgeBase:
                     user=cls._to_user_ctx(user),  # pyrefly: ignore[bad-argument-type]
                     node_set=node_set,
                 )
-                break # Success, exit loop
+                break  # Success, exit loop
             except FileNotFoundError as exc:
                 missing_path_str = getattr(exc, "filename", None) or str(exc)
                 missing_filename = Path(missing_path_str).name
@@ -355,19 +412,17 @@ class KnowledgeBase:
                         md5_path.parent.mkdir(parents=True, exist_ok=True)
                         md5_path.write_text(normalized_text, encoding="utf-8")
                         bytes_written = len(normalized_text.encode("utf-8"))
-                        logger.debug(
-                            f"storage_md5_fallback_written md5={missing_filename[:12]} bytes={bytes_written}"
-                        )
+                        logger.debug(f"storage_md5_fallback_written md5={missing_filename[:12]} bytes={bytes_written}")
                         continue  # повторяем _safe_add
                     except Exception as write_exc:
-                        logger.debug(f"storage_md5_fallback_write_failed md5={missing_filename[:12]} detail={write_exc}")
+                        logger.debug(
+                            f"storage_md5_fallback_write_failed md5={missing_filename[:12]} detail={write_exc}"
+                        )
                     # 2) как запасной путь — старая ветка с маппингом/HashStore
                     sha_path = StorageResolver.map_md5_to_sha_path(missing_filename, cls._storage_root())
                     if sha_path and sha_path.exists():
-                        logger.debug(
-                            f"storage_md5_fallback_ok sha={sha_path.name[:12]} md5={missing_filename[:12]}"
-                        )
-                        continue # Retry _safe_add, now with SHA file present
+                        logger.debug(f"storage_md5_fallback_ok sha={sha_path.name[:12]} md5={missing_filename[:12]}")
+                        continue  # Retry _safe_add, now with SHA file present
                     else:
                         # SHA file not found or mapping failed, try to restore from HashStore
                         md5_digest = cls._filename_to_digest(missing_filename)
@@ -392,7 +447,7 @@ class KnowledgeBase:
                                     await HashStore.add(ds_name, recomputed_sha, metadata=metadata_from_hashstore)
                                     # Remove old MD5 entry if it exists
                                     await HashStore.remove(ds_name, md5_digest)
-                                    continue # Retry _safe_add, now with SHA file present
+                                    continue  # Retry _safe_add, now with SHA file present
                                 else:
                                     logger.warning(
                                         f"storage_md5_fallback_restore_failed sha={recomputed_sha[:12]} md5={md5_digest[:12]} reason=file_not_created"
@@ -408,7 +463,7 @@ class KnowledgeBase:
                 logger.debug(
                     f"kb_append storage_missing dataset={ds_name} sha={digest_sha[:12]} detail={exc}",
                 )
-                raise # Re-raise if not an MD5 fallback or fallback failed
+                raise  # Re-raise if not an MD5 fallback or fallback failed
             except (DatasetNotFoundError, PermissionDeniedError):
                 raise
         if info is None:
@@ -450,10 +505,7 @@ class KnowledgeBase:
             cls._register_dataset_identifier(ds_name, identifier)
             resolved = identifier
         logger.debug(f"kb_append ds={resolved} item=1")
-        logger.debug(
-            f"kb_append ok dataset={resolved} digest_sha={digest_sha[:12]} "
-            f"path={storage_path}"
-        )
+        logger.debug(f"kb_append ok dataset={resolved} digest_sha={digest_sha[:12]} path={storage_path}")
         return resolved, True
 
     @classmethod
@@ -483,9 +535,11 @@ class KnowledgeBase:
             else:
                 global_unavailable = True
                 cls._log_once(
-                    f"projection:{global_alias}:search_pending",
                     logging.INFO,
-                    f"knowledge_search_global_pending client_id={client_id} rid={rid_value}",
+                    "knowledge_search_global_pending",
+                    throttle_key=f"projection:{global_alias}:search_pending",
+                    client_id=client_id,
+                    rid=rid_value,
                 )
         user = await cls._get_cognee_user()
         await cls._ensure_profile_indexed(client_id, user)
@@ -606,10 +660,11 @@ class KnowledgeBase:
         if not ready_datasets:
             if skipped_aliases:
                 cls._log_once(
-                    f"search:{rid_value}:{','.join(skipped_aliases)}",
                     logging.DEBUG,
-                    f"knowledge_search_skipped client_id={client_id} rid={rid_value} "
-                    f"datasets={','.join(skipped_aliases)}",
+                    "search:skipped",
+                    client_id=client_id,
+                    rid=rid_value,
+                    datasets=",".join(skipped_aliases),
                     min_interval=5.0,
                 )
             fallback_raw = await cls._fallback_dataset_entries(datasets, user, top_k=k)
@@ -833,7 +888,6 @@ class KnowledgeBase:
         fallback = cls._alias_for_dataset(datasets[0]) if datasets else None
         return fallback, None
 
-    @classmethod
     @staticmethod
     def _infer_metadata_from_text(text: str) -> dict[str, Any] | None:
         normalized = text.strip()
@@ -886,11 +940,11 @@ class KnowledgeBase:
         md5_removed_count = 0
         sha_final_count = 0
 
-        all_aliases = await HashStore.list_all_datasets()
+        all_aliases = await HashStore.list_all_datasets() if hasattr(HashStore, "list_all_datasets") else []
         for alias in all_aliases:
             digests_to_process = await HashStore.list(alias)
             for digest in digests_to_process:
-                if len(digest) == 32: # Likely an MD5 hash
+                if len(digest) == 32:  # Likely an MD5 hash
                     md5_found_count += 1
                     metadata = await HashStore.metadata(alias, digest)
                     if metadata and metadata.get("text"):
@@ -923,15 +977,9 @@ class KnowledgeBase:
     @classmethod
     def _storage_path_for_sha(cls, digest_sha: str) -> Path | None:
         if len(digest_sha) != 64:
-            cls._log_once(
-                f"storage_path_invalid_digest:{digest_sha}",
-                logging.WARNING,
-                f"knowledge_storage_path_invalid_digest sha={digest_sha}",
-            )
+            cls._log_once(logging.WARNING, "storage_path_invalid_digest", sha=digest_sha)
             return None
         return cls._storage_root() / f"text_{digest_sha}.txt"
-
-
 
     @classmethod
     def _read_storage_text(
@@ -947,9 +995,10 @@ class KnowledgeBase:
                 return path.read_text(encoding="utf-8")
             except Exception as exc:  # noqa: BLE001
                 cls._log_once(
-                    f"storage_read:{digest_sha[:12]}",
                     logging.DEBUG,
-                    f"knowledge_storage_read_failed digest={digest_sha[:12]} detail={exc}",
+                    "storage_read",
+                    digest=digest_sha[:12],
+                    detail=exc,
                     min_interval=60.0,
                 )
         return None
@@ -994,9 +1043,11 @@ class KnowledgeBase:
             else:
                 if text_value is not None:
                     cls._log_once(
-                        (alias, str(type(text_value)), "non_string_text"),
-                        logging.WARNING,
-                        f"knowledge_dataset_row_skipped dataset={alias} reason=non_string_text type={type(text_value).__name__}",
+                        level=logging.WARNING,
+                        event="knowledge_dataset_row_skipped",
+                        dataset=alias,
+                        reason="non_string_text",
+                        type=type(text_value).__name__,
                     )
                 base_text = str(text_value or "")
         else:
@@ -1015,9 +1066,11 @@ class KnowledgeBase:
         text_output = normalized_text if normalized_text else base_text
         if not normalized_text:
             cls._log_once(
-                (alias, digest_sha_meta or "no_digest", "empty_content"),
                 logging.WARNING,
-                f"knowledge_dataset_row_unrecoverable dataset={alias} digest={digest_sha_meta[:12] if digest_sha_meta else 'N/A'} reason=empty_content",
+                "knowledge_dataset_row_unrecoverable",
+                dataset=alias,
+                digest=digest_sha_meta[:12] if digest_sha_meta else "N/A",
+                reason="empty_content",
             )
             state = cls._projection_state(alias)
             state["no_content_rows"] = state.get("no_content_rows", 0) + 1
@@ -1091,9 +1144,11 @@ class KnowledgeBase:
             digest_sha_meta = cls._metadata_digest_sha(metadata_map)
             if not normalized:
                 cls._log_once(
-                    (alias, digest_sha_meta or "no_digest", "empty_content_heal"),
                     logging.WARNING,
-                    f"knowledge_dataset_heal_unrecoverable dataset={alias} digest={digest_sha_meta[:12] if digest_sha_meta else 'N/A'} reason=empty_content",
+                    "knowledge_dataset_heal_unrecoverable",
+                    dataset=alias,
+                    digest=digest_sha_meta[:12] if digest_sha_meta else "N/A",
+                    reason="empty_content",
                 )
                 continue
             digest_sha = cls._compute_digests(normalized)
@@ -1110,9 +1165,7 @@ class KnowledgeBase:
             )
             if created:
                 healed += 1
-            metadata_payload = cls._augment_metadata(
-                entry.metadata, alias, digest_sha=digest_sha
-            )
+            metadata_payload = cls._augment_metadata(entry.metadata, alias, digest_sha=digest_sha)
             add_tasks.append(HashStore.add(alias, digest_sha, metadata=metadata_payload))
         if add_tasks:
             await asyncio.gather(*add_tasks)
@@ -1140,11 +1193,7 @@ class KnowledgeBase:
             digest_match = re.match(r"^text_([0-9a-f]{64})\.txt$", path.name)
             if not digest_match:
                 if re.match(r"^text_([0-9a-f]{32})\.txt$", path.name):
-                    cls._log_once(
-                        f"rebuild_disk_md5_ignored:{path.name}",
-                        logging.INFO,
-                        f"knowledge_rebuild_disk_md5_ignored path={path.name}",
-                    )
+                    cls._log_once(logging.INFO, "rebuild_disk_md5_ignored", path=path.name)
                 continue
             digest_sha_from_name = digest_match.group(1)
             try:
@@ -1219,28 +1268,31 @@ class KnowledgeBase:
                     normalized = cls._normalize_text(raw_text)
                 except Exception as exc:  # noqa: BLE001
                     logger.debug(f"knowledge_reingest_read_failed dataset={alias} sha={digest_sha[:12]} detail={exc}")
-            
+
             # Healing step: if file is missing but content is in metadata, re-create it
             if not normalized and metadata and metadata.get("text"):
                 normalized = cls._normalize_text(str(metadata["text"]))
                 if normalized:
                     cls._ensure_storage_file(digest_sha=digest_sha, text=normalized, dataset=alias)
                     healed_count += 1
-            elif not normalized and not metadata: # If file is missing and no metadata to heal from
+            elif not normalized and not metadata:  # If file is missing and no metadata to heal from
                 if await HashStore.contains(alias, digest_sha):
                     await HashStore.remove(alias, digest_sha)
                     cls._log_once(
-                        (alias, digest_sha, "stale_md5_removed"),
                         logging.WARNING,
-                        f"knowledge_reingest_stale_md5_removed dataset={alias} digest_sha={digest_sha[:12]} reason=no_metadata_to_heal",
+                        "knowledge_reingest_stale_md5_removed",
+                        dataset=alias,
+                        digest_sha=digest_sha[:12],
+                        reason="no_metadata_to_heal",
                     )
                 continue
 
             if not normalized:
                 cls._log_once(
-                    (alias, digest_sha, "unrecoverable"),
                     logging.WARNING,
-                    f"knowledge_reingest_unrecoverable dataset={alias} digest_sha={digest_sha[:12]}",
+                    "knowledge_reingest_unrecoverable",
+                    dataset=alias,
+                    digest_sha=digest_sha[:12],
                 )
                 continue
 
@@ -1281,6 +1333,7 @@ class KnowledgeBase:
             # ensure md5 mirror even if SHA exists
             try:
                 from hashlib import md5 as _md5
+
                 md5_hex = _md5(text.encode("utf-8")).hexdigest()
                 md5_path = path.parent / f"text_{md5_hex}.txt"
                 if not md5_path.exists():
@@ -1309,6 +1362,7 @@ class KnowledgeBase:
             # create md5 mirror for Cognee (symlink or copy)
             try:
                 from hashlib import md5 as _md5
+
                 md5_hex = _md5(text.encode("utf-8")).hexdigest()
                 md5_path = path.parent / f"text_{md5_hex}.txt"
                 if not md5_path.exists():
@@ -1365,7 +1419,8 @@ class KnowledgeBase:
             meta_payload.setdefault("kind", "document")
 
         normalized_text = cls._normalize_text(text)
-        if not normalized_text:
+        if not normalized_text.strip():
+            logger.debug(f"empty_content_filtered dataset={ds} role={role.value if role else 'document'}")
             return
 
         target_alias = cls._resolve_dataset_alias(ds)
@@ -1542,20 +1597,33 @@ class KnowledgeBase:
         return True
 
     @classmethod
-    def _log_once(cls, key: str | tuple[str, ...], level: int, message: str, *, min_interval: float = 30.0) -> None:
+    def _log_once(cls, level: int, event: str, **fields) -> None:
+        """Log a message with throttling to avoid flooding."""
         now = time.time()
-        if isinstance(key, tuple):
-            storage_key = "|".join(key)
-        else:
-            storage_key = key
-        last = cls._LOG_THROTTLE.get(storage_key, 0.0)
-        if now - last >= min_interval:
-            log_method = getattr(logger, "log", None)
-            if callable(log_method):
-                log_method(level, message)
-            else:
-                logging.getLogger(__name__).log(level, message)
-            cls._LOG_THROTTLE[storage_key] = now
+        min_interval = float(cast(float, fields.pop("min_interval", 10.0)))
+        throttle_key = fields.pop("throttle_key", event)
+
+        last_log_time = cls._LOG_THROTTLE.get(throttle_key, 0.0)
+
+        if now - last_log_time >= min_interval:
+            message_parts = [event]
+            for key, value in fields.items():
+                if value is not None:
+                    # Format value safely, handling dataclasses and other objects
+                    if is_dataclass(value):
+                        value_str = str(asdict(value))
+                    else:
+                        value_str = str(value)
+                    # Simple quoting for values with spaces
+                    if " " in value_str and not (value_str.startswith("'") or value_str.startswith('"')):
+                        value_str = f'"{value_str}"'
+                    message_parts.append(f"{key}={value_str}")
+
+            full_message = " ".join(message_parts)
+
+            # Use loguru's level-based logging methods for better context
+            logger.log(level, full_message)
+            cls._LOG_THROTTLE[throttle_key] = now
 
     @classmethod
     def _projection_state(cls, alias: str) -> dict[str, Any]:
@@ -1572,40 +1640,27 @@ class KnowledgeBase:
     @classmethod
     async def _get_dataset_id(cls, dataset: str, user: Any | None) -> str | None:
         alias = cls._alias_for_dataset(dataset)
-        user_ctx = cls._to_user_ctx(user)
         if cls._looks_like_uuid(dataset):
             cls._register_dataset_identifier(alias, dataset)
-            cls._log_once(
-                f"dataset_resolved:{alias}",
-                logging.DEBUG,
-                f"kb_dataset_resolved name={alias} id={dataset}",
-                min_interval=10.0,
-            )
+            if dataset:
+                cls._log_once(logging.DEBUG, "dataset_resolved", name=alias, id=dataset, min_interval=10.0)
             return dataset
+
         identifier = cls._DATASET_IDS.get(alias)
         if identifier:
-            cls._log_once(
-                f"dataset_resolved:{alias}",
-                logging.DEBUG,
-                f"kb_dataset_resolved name={alias} id={identifier}",
-                min_interval=10.0,
-            )
+            cls._log_once(logging.DEBUG, "dataset_resolved", name=alias, id=identifier, min_interval=10.0)
             return identifier
+
         if user is not None:
             try:
                 await cls._ensure_dataset_exists(alias, user)
-            except Exception as exc:  # noqa: BLE001 - diagnostics only
-                logger.debug(f"knowledge_dataset_id_lookup_failed dataset={alias} detail={exc}")
-            else:
                 identifier = cls._DATASET_IDS.get(alias)
                 if identifier:
-                    cls._log_once(
-                        f"dataset_resolved:{alias}",
-                        logging.DEBUG,
-                        f"kb_dataset_resolved name={alias} id={identifier}",
-                        min_interval=5.0,
-                    )
+                    cls._log_once(logging.DEBUG, "dataset_resolved", name=alias, id=identifier, min_interval=5.0)
                     return identifier
+            except Exception as exc:  # noqa: BLE001 - diagnostics only
+                logger.debug(f"knowledge_dataset_id_lookup_failed dataset={alias} detail={exc}")
+
         if user is not None:
             metadata = await cls._get_dataset_metadata(alias, user)
             if metadata is not None:
@@ -1613,9 +1668,10 @@ class KnowledgeBase:
                 if identifier:
                     cls._register_dataset_identifier(alias, identifier)
                     cls._log_once(
-                        f"dataset_resolved:{alias}",
                         logging.DEBUG,
-                        f"kb_dataset_resolved name={alias} id={identifier}",
+                        "dataset_resolved",
+                        name=alias,
+                        id=identifier,
                         min_interval=5.0,
                     )
                     return identifier
@@ -1654,46 +1710,44 @@ class KnowledgeBase:
             return
         canonical = cls._resolve_dataset_alias(name)
         try:
-            from cognee.modules.data.methods import (
-                get_authorized_dataset_by_name,
-                create_authorized_dataset,
-            )
+            from cognee.modules.data.methods import get_authorized_dataset_by_name, create_authorized_dataset  # noqa
         except Exception:
             return
-        exists = await get_authorized_dataset_by_name(canonical, cls._to_user_ctx(user), "write")  # pyrefly: ignore[bad-argument-type]
+        exists = await get_authorized_dataset_by_name(
+            canonical, cls._to_user_ctx(user), "write"
+        )  # pyrefly: ignore[bad-argument-type]
         if exists is not None:
             identifier = cls._extract_dataset_identifier(exists)
             if identifier:
                 cls._register_dataset_identifier(canonical, identifier)
             return
-        created = await create_authorized_dataset(canonical, cls._to_user_ctx(user))  # pyrefly: ignore[bad-argument-type]
+        created = await create_authorized_dataset(
+            canonical, cls._to_user_ctx(user)
+        )  # pyrefly: ignore[bad-argument-type]
         identifier = cls._extract_dataset_identifier(created)
         if identifier:
             cls._register_dataset_identifier(canonical, identifier)
 
     @classmethod
-    async def _ensure_dataset_projected(
-        cls,
-        dataset: str,
-        user: Any | None,
-        *,
-        timeout: float = 2.0,
-    ) -> bool:
+    async def _ensure_dataset_projected(cls, dataset: str, user: Any | None, *, timeout: float = 2.0) -> bool:
         alias = cls._alias_for_dataset(dataset)
-        if await cls._wait_for_projection(dataset, user=user, timeout=timeout):
+
+        status = await cls._wait_for_projection(dataset, user=user, timeout_s=timeout)
+        if status == ProjectionStatus.READY:
             cls._PROJECTED_DATASETS.add(alias)
             return True
-        if user is None:
-            return False
+
+        # Не готово — пробуем прогнать cognify, затем ждём ещё раз
         try:
             logger.debug(f"knowledge_dataset_cognify_start dataset={alias}")
             await cls._process_dataset(dataset, user)
+            logger.debug(f"knowledge_dataset_cognify_ok dataset={alias}")
         except Exception as exc:  # noqa: BLE001
             logger.debug(f"knowledge_dataset_projection_warm_failed dataset={alias} detail={exc}")
             return False
-        else:
-            logger.debug(f"knowledge_dataset_cognify_ok dataset={alias}")
-        if await cls._wait_for_projection(dataset, user=user, timeout=timeout):
+
+        status = await cls._wait_for_projection(dataset, user=user, timeout_s=timeout)
+        if status == ProjectionStatus.READY:
             cls._PROJECTED_DATASETS.add(alias)
             return True
         return False
@@ -1803,9 +1857,10 @@ class KnowledgeBase:
         dataset_id = await cls._get_dataset_id(dataset, user)
         if dataset_id is None:
             cls._log_once(
-                f"projection:{alias}:dataset_id_unavailable",
                 logging.WARNING,
-                f"knowledge_projection_pending dataset={alias} reason=dataset_id_unavailable",
+                "projection:dataset_id_unavailable",
+                dataset=alias,
+                reason="dataset_id_unavailable",
             )
             raise ProjectionProbeError(f"dataset_id_unavailable alias={alias}")
 
@@ -1905,12 +1960,14 @@ class KnowledgeBase:
             except ProjectionProbeError:
                 dataset_id = None
             cls._log_once(
-                f"projection:{alias}:process",
                 logging.DEBUG,
-                f"kb_pipeline_start dataset={alias} dataset_id={dataset_id}",
+                "projection:process",
+                dataset=alias,
+                dataset_id=dataset_id,
                 min_interval=5.0,
             )
             await cls._project_dataset(alias, user, allow_rebuild=True)
+
     @staticmethod
     def _log_task_exception(task: asyncio.Task[Any]) -> None:
         """Log exception from a background task."""
@@ -1929,9 +1986,9 @@ class KnowledgeBase:
             return None
         if isinstance(user, CogneeUser):
             return SimpleNamespace(**asdict(user))
-        if is_dataclass(user) and hasattr(user, 'id'):
+        if is_dataclass(user) and hasattr(user, "id"):
             return SimpleNamespace(**asdict(user))
-        if hasattr(user, 'id'):
+        if hasattr(user, "id"):
             return user
         return None
 
@@ -1958,10 +2015,11 @@ class KnowledgeBase:
             kind = "has_id_attr"
 
         cls._log_once(
-            "kb_user_id_startup",
             logging.DEBUG,
-            f"kb_user_id kind={kind} value={user_id or 'None'}",
-            min_interval=3600.0, # Log once per hour
+            "kb_user_id_startup",
+            kind=kind,
+            value=user_id or "None",
+            min_interval=3600.0,  # Log once per hour
         )
         return user_id
 
@@ -1989,7 +2047,8 @@ class KnowledgeBase:
         cls,
         dataset: str,
         user: Any | None,
-        *, allow_rebuild: bool = True,
+        *,
+        allow_rebuild: bool = True,
     ) -> None:
         """Run cognify and wait for the dataset projection to become available."""
         alias = cls._alias_for_dataset(dataset)
@@ -2000,9 +2059,10 @@ class KnowledgeBase:
             logger.warning(f"knowledge_project_skipped dataset={alias}: user context unavailable")
             return
         cls._log_once(
-            f"projection:{alias}:cognify_start",
             logging.DEBUG,
-            f"knowledge_dataset_cognify_start dataset={alias} dataset_id={dataset_id}",
+            "projection:cognify_start",
+            dataset=alias,
+            dataset_id=dataset_id,
             min_interval=5.0,
         )
         try:
@@ -2016,9 +2076,11 @@ class KnowledgeBase:
                 await cls._project_dataset(alias, user, allow_rebuild=True)
                 return
             cls._log_once(
-                (alias, "storage_missing", "heal_failed"),
                 logging.WARNING,
-                f"knowledge_dataset_storage_unhealed dataset={alias} missing={missing} healed={healed}",
+                "storage_missing:heal_failed",
+                dataset=alias,
+                missing=missing,
+                healed=healed,
                 min_interval=30.0,
             )
             cls._log_storage_state(alias, missing_count=missing, healed_count=healed)
@@ -2030,19 +2092,29 @@ class KnowledgeBase:
             logger.warning(f"knowledge_dataset_cognify_failed dataset={dataset} detail={exc}")
             raise
         cls._log_once(
-            f"projection:{alias}:cognify_done",
             logging.DEBUG,
-            f"kb_pipeline_done dataset={alias} dataset_id={dataset_id}",
+            "projection:cognify_done",
+            dataset=alias,
+            dataset_id=dataset_id,
             min_interval=5.0,
         )
-        projected = await cls._wait_for_projection(alias, user=user)
+        status = await cls._wait_for_projection(alias, user=user)
+        if status == ProjectionStatus.READY:
+            projected = True
+        else:
+            projected = False
         if not projected:
             logger.debug(f"knowledge_dataset_projection_pending dataset={alias} result=timeout")
 
     @classmethod
-    async def rebuild_dataset(cls, dataset: str, user: Any | None, sha_only: bool = False) -> tuple[int, int]:
+    async def rebuild_dataset(cls, dataset: str, user: Any | None, sha_only: bool = False) -> "RebuildResult":
         """Rebuild dataset content by re-adding raw entries and clearing hash store."""
         alias = cls._alias_for_dataset(dataset)
+        reinserted = 0
+        healed_count = 0
+        linked_from_disk = 0
+        rehydrated = 0
+
         try:
             await cls._ensure_dataset_exists(alias, user)
         except Exception as exc:  # noqa: BLE001
@@ -2055,9 +2127,7 @@ class KnowledgeBase:
             entries = await cls._list_dataset_entries(alias, user)
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"knowledge_dataset_rebuild_list_failed dataset={alias} detail={exc}")
-            return 0, 0
-        reinserted = 0
-        healed_count = 0
+            return RebuildResult()
         last_dataset: str | None = None
         if not entries:
             created_from_disk, linked_from_disk = await cls._rebuild_from_disk(alias)
@@ -2075,23 +2145,28 @@ class KnowledgeBase:
                     meta_payload = metadata if isinstance(metadata, Mapping) else None
                     digest_metadata.append((digest, meta_payload))
                 await HashStore.clear(alias)
-                rehydrated, reingest_healed, last_dataset = await cls._reingest_from_hashstore(alias, user, digest_metadata)
+                rehydrated, reingest_healed, last_dataset = await cls._reingest_from_hashstore(
+                    alias, user, digest_metadata
+                )
                 reinserted += rehydrated
                 healed_count += reingest_healed
             try:
                 entries = await cls._list_dataset_entries(alias, user)
             except Exception as exc:  # noqa: BLE001
                 logger.warning(f"knowledge_dataset_rebuild_list_retry_failed dataset={alias} detail={exc}")
-                return 0, 0
+                return RebuildResult()
             if not entries:
                 storage_root = cls._storage_root()
                 storage_info = CogneeConfig.describe_storage()
                 dir_count = storage_info.get("entries_count", 0)
                 root_size_bytes = storage_info.get("root_size_bytes", 0)
                 cls._log_once(
-                    (alias, "rebuild_scan"),
                     logging.DEBUG,
-                    f"knowledge_rebuild_scan dataset={alias} dir_count={dir_count} root_size_bytes={root_size_bytes}",
+                    "knowledge_rebuild_scan",
+                    throttle_key=(alias, "rebuild_scan"),
+                    dataset=alias,
+                    dir_count=dir_count,
+                    root_size_bytes=root_size_bytes,
                 )
                 files = sorted(p.name for p in storage_root.glob("text_*.txt") if cls._filename_to_digest(p.name))[:5]
                 total_files = sum(1 for _ in storage_root.glob("text_*.txt"))
@@ -2099,7 +2174,7 @@ class KnowledgeBase:
                     f"knowledge_dataset_rebuild_skipped dataset={alias}: no_entries "
                     f"storage_files={total_files} sample={files} dir_count={dir_count} root_size_bytes={root_size_bytes}"
                 )
-                return 0, 0
+                return RebuildResult()
         for entry in entries:
             normalized = cls._normalize_text(entry.text)
             if not normalized:
@@ -2128,16 +2203,19 @@ class KnowledgeBase:
                 reinserted += 1
         if reinserted == 0:
             logger.warning(f"knowledge_dataset_rebuild_skipped dataset={alias}: no_valid_entries")
-            return 0, 0
+            return RebuildResult()
         logger.info(f"knowledge_dataset_rebuild_ready dataset={alias} documents={reinserted} healed={healed_count}")
+        result = RebuildResult(
+            reinserted=reinserted, healed=healed_count, linked=linked_from_disk, rehydrated=rehydrated
+        )
         if last_dataset:
             cls._LAST_REBUILD_RESULT[alias] = {
                 "timestamp": time.time(),
-                "documents": reinserted,
-                "healed": healed_count,
+                "documents": result.reinserted,
+                "healed": result.healed,
                 "sha_only": sha_only,
             }
-        return reinserted, healed_count
+        return result
 
     @classmethod
     async def _wait_for_projection(
@@ -2145,63 +2223,63 @@ class KnowledgeBase:
         dataset: str,
         user: Any | None,
         *,
-        timeout: float | None = None,
-    ) -> bool:
+        timeout_s: float | None = 5.0,
+    ) -> ProjectionStatus:
         alias = cls._alias_for_dataset(dataset)
         state = cls._projection_state(alias)
         started = monotonic()
-        backoff_idx = 0
         fatal_error = False
 
         logger.debug(f"projection_wait start dataset={dataset}")
         try:
             await cls._ensure_dataset_exists(dataset, user)
         except Exception as exc:  # noqa: BLE001
-            cls._log_once(
-                f"projection:{alias}:ensure_missing",
-                logging.DEBUG,
-                f"knowledge_projection_dataset_missing dataset={alias} detail={exc}",
-            )
+            cls._log_once(logging.DEBUG, "projection:ensure_missing", dataset=alias, detail=exc)
 
         user_ctx = cls._to_user_ctx(user)
         if user_ctx is None:
-            logger.debug(
-                f"projection_wait done dataset={dataset} ok=False reason=user_context_unavailable"
-            )
-            return False
+            logger.debug(f"projection_wait done dataset={dataset} ok=False reason=user_context_unavailable")
+            return ProjectionStatus.USER_CONTEXT_UNAVAILABLE
 
         ds_id = await cls._get_dataset_id(dataset, user)
 
         async def _ready() -> bool:
             nonlocal fatal_error
             try:
-                return await cls._is_projection_ready(dataset, user_ctx, user=user) # Changed user_id to user_ctx
+                return await cls._is_projection_ready(dataset, user_ctx=user_ctx, user=user)
             except ProjectionProbeError:
                 fatal_error = True
                 return False
             except Exception as probe_exc:  # noqa: BLE001
                 cls._log_once(
-                    f"projection:{alias}:probe_exception",
                     logging.DEBUG,
-                    f"knowledge_projection_probe_error dataset={alias} detail={probe_exc}",
+                    "knowledge_projection_probe_error",
+                    throttle_key=f"projection:{alias}:probe_exception",
+                    dataset=alias,
+                    detail=probe_exc,
                 )
                 return False
 
         if await _ready():
             cls._log_once(
-                f"projection:{alias}:ready",
                 logging.DEBUG,
-                f"knowledge_projection_wait dataset={alias} elapsed_ms={0} result=ready "
-                f"id={ds_id} missing_files={state.get('missing_files', 0)} healed_count={state.get('healed_count', 0)} no_content_rows={state.get('no_content_rows', 0)}", # Added logging details
+                "projection:ready",
+                dataset=alias,
+                elapsed_ms=int((monotonic() - started) * 1000),
+                result="ready",
+                id=ds_id,
+                missing_files=state.get("missing_files", 0),
+                healed_count=state.get("healed_count", 0),
+                no_content_rows=state.get("no_content_rows", 0),
                 min_interval=10.0,
             )
-            logger.debug(f"projection_wait done dataset={dataset} ok=True")
-            return True
+            logger.debug(f"projection_wait done dataset={dataset} ok=True reason=ready")
+            return ProjectionStatus.READY
         if fatal_error:
             logger.debug(f"projection_wait done dataset={dataset} ok=False reason=fatal_error")
-            return False
+            return ProjectionStatus.FATAL_ERROR
 
-        deadline = started + timeout if timeout is not None and timeout > 0 else None
+        deadline = started + timeout_s if timeout_s and timeout_s > 0 else None
         backoff = cls._PROJECTION_BACKOFF_SECONDS or (0.5,)
         delay_index = 0
         delay = backoff[delay_index]
@@ -2213,43 +2291,54 @@ class KnowledgeBase:
                 break
             await asyncio.sleep(sleep_for)
             if await _ready():
-                elapsed_ms = int((monotonic() - started) * 1000)
                 cls._log_once(
-                    f"projection:{alias}:ready",
                     logging.DEBUG,
-                    f"knowledge_projection_wait dataset={alias} elapsed_ms={elapsed_ms} result=ready "
-                    f"id={ds_id} missing_files={state.get('missing_files', 0)} healed_count={state.get('healed_count', 0)} no_content_rows={state.get('no_content_rows', 0)}", # Added logging details
+                    "projection:ready",
+                    dataset=alias,
+                    elapsed_ms=int((monotonic() - started) * 1000),
+                    result="ready",
+                    id=ds_id,
+                    missing_files=state.get("missing_files", 0),
+                    healed_count=state.get("healed_count", 0),
+                    no_content_rows=state.get("no_content_rows", 0),
                     min_interval=10.0,
                 )
-                return True
+                return ProjectionStatus.READY
             if fatal_error:
-                return False
+                return ProjectionStatus.FATAL_ERROR
             if delay_index < len(backoff) - 1:
                 delay_index += 1
                 delay = backoff[delay_index]
 
         elapsed_ms = int((monotonic() - started) * 1000)
-        if timeout is not None and timeout > 0:
+        if timeout_s is not None and timeout_s > 0:
             cls._log_once(
-                f"projection:{alias}:timeout",
                 logging.INFO,
-                f"knowledge_projection_wait dataset={alias} elapsed_ms={elapsed_ms} result=timeout "
-                f"missing_files={state.get('missing_files', 0)} healed_count={state.get('healed_count', 0)} no_content_rows={state.get('no_content_rows', 0)}", # Added logging details
+                "projection:timeout",
+                dataset=alias,
+                elapsed_ms=elapsed_ms,
+                result="timeout",
+                missing_files=state.get("missing_files", 0),
+                healed_count=state.get("healed_count", 0),
+                no_content_rows=state.get("no_content_rows", 0),
             )
             cls._log_once(
-                (alias, "projection_gate"),
                 logging.INFO,
-                f"knowledge_projection_gate dataset={alias} timeout_s={timeout} fallback=local_only datasets={alias} "
+                "projection:gate",
+                dataset=alias,
+                timeout_s=timeout_s,
+                fallback="local_only",
             )
         ds_id = await cls._get_dataset_id(dataset, user)
         cls._log_once(
-            f"projection:{alias}:state",
             logging.DEBUG,
-            "kb_proj state dataset=%s ready=%s id=%s missing_files=%s empty_rows=%s",
-            alias, False, ds_id, state.get("missing_files", 0), state.get("no_content_rows", 0),
+            "projection:state",
+            dataset=alias,
+            status=state.get("status"),
+            reason=state.get("reason"),
         )
         logger.debug(f"projection_wait done dataset={dataset} ok=False reason=timeout")
-        return False
+        return ProjectionStatus.TIMEOUT
 
     @classmethod
     def _log_storage_state(
@@ -2274,7 +2363,7 @@ class KnowledgeBase:
     async def _is_projection_ready(
         cls,
         dataset: str,
-        user_ctx: Any | None = None, # Changed from user_id
+        user_ctx: Any | None = None,  # Changed from user_id
         *,
         user: Any | None = None,
     ) -> bool:
@@ -2287,9 +2376,11 @@ class KnowledgeBase:
         datasets_module = getattr(cognee, "datasets", None)
         if datasets_module is None:
             cls._log_once(
-                (alias, "projection_pending", "datasets_module_missing"),
                 logging.DEBUG,
-                f"knowledge_projection_pending dataset={alias} reason=datasets_module_missing",
+                "knowledge_projection_pending",
+                throttle_key=(alias, "projection_pending", "datasets_module_missing"),
+                dataset=alias,
+                reason="datasets_module_missing",
                 min_interval=15.0,
             )
             state["status"] = "pending"
@@ -2300,9 +2391,11 @@ class KnowledgeBase:
         list_data = getattr(datasets_module, "list_data", None)
         if not callable(list_data):
             cls._log_once(
-                (alias, "projection_pending", "list_data_missing"),
                 logging.DEBUG,
-                f"knowledge_projection_pending dataset={alias} reason=list_data_missing",
+                "knowledge_projection_pending",
+                throttle_key=(alias, "projection_pending", "list_data_missing"),
+                dataset=alias,
+                reason="list_data_missing",
                 min_interval=15.0,
             )
             state["status"] = "pending"
@@ -2313,15 +2406,18 @@ class KnowledgeBase:
 
         list_data_callable = cast(Callable[..., Awaitable[Iterable[Any]]], list_data)
         try:
-            rows = await cls._fetch_dataset_rows(list_data_callable, dataset, user) # Changed user_ns to user_ctx
+            rows = await cls._fetch_dataset_rows(list_data_callable, dataset, user)  # Changed user_ns to user_ctx
         except ProjectionProbeError as probe_exc:
             state["status"] = "pending"
             state["reason"] = "dataset_id_unavailable"
             state["next_check_ts"] = now + random.uniform(20.0, 40.0)
             cls._log_once(
-                (alias, "projection_pending", "dataset_id_unavailable"),
                 logging.WARNING,
-                f"knowledge_projection_pending dataset={alias} reason=dataset_id_unavailable detail={probe_exc}",
+                "knowledge_projection_pending",
+                throttle_key=(alias, "projection_pending", "dataset_id_unavailable"),
+                dataset=alias,
+                reason="dataset_id_unavailable",
+                detail=probe_exc,
                 min_interval=30.0,
             )
             logger.info(f"[projection_status] dataset={alias} projected_rows=0 is_pending=True timeout=N/A")
@@ -2331,9 +2427,12 @@ class KnowledgeBase:
             state["reason"] = "list_data_error"
             state["next_check_ts"] = now + random.uniform(45.0, 90.0)
             cls._log_once(
-                (alias, "projection_pending", "list_data_error"),
                 logging.WARNING,
-                f"knowledge_projection_pending dataset={alias} reason=list_data_error detail={exc.__class__.__name__} {exc}",
+                "knowledge_projection_pending",
+                throttle_key=(alias, "projection_pending", "list_data_error"),
+                dataset=alias,
+                reason="list_data_error",
+                detail=f"{exc.__class__.__name__} {exc}",
                 min_interval=30.0,
             )
             logger.info(f"[projection_status] dataset={alias} projected_rows=0 is_pending=True timeout=N/A")
@@ -2342,9 +2441,11 @@ class KnowledgeBase:
         rows = list(rows)
         row_count = len(rows)
         cls._log_once(
-            f"projection:{alias}:row_count",
             logging.DEBUG,
-            f"kb_projection_rows dataset={alias} rows={row_count}",
+            "kb_projection_rows",
+            throttle_key=f"projection:{alias}:row_count",
+            dataset=alias,
+            rows=row_count,
             min_interval=30.0,
         )
         doc_rows = 0
@@ -2353,14 +2454,17 @@ class KnowledgeBase:
         missing_files = 0
         entries_snapshot: list[DatasetRow] = []
         no_content_rows = 0
+        missing_files_sample: list[str] = []
         for raw_row in rows:
             try:
                 prepared = cls._prepare_dataset_row(raw_row, alias)
             except Exception as exc:
                 cls._log_once(
-                    (alias, "prepare_dataset_row_failed"),
                     logging.WARNING,
-                    f"knowledge_projection_prepare_failed dataset={{alias}} detail={{exc}}",
+                    "knowledge_projection_prepare_failed",
+                    throttle_key=(alias, "prepare_dataset_row_failed"),
+                    dataset=alias,
+                    detail=exc,
                 )
                 continue
 
@@ -2374,12 +2478,17 @@ class KnowledgeBase:
             if not normalized_entry:
                 if not storage_exists:
                     missing_files += 1
+                    if len(missing_files_sample) < 5 and digest_sha:
+                        missing_files_sample.append(digest_sha)
                 else:
                     no_content_rows += 1
                 continue
             content_rows += 1
             if not storage_exists:
                 missing_files += 1
+                if len(missing_files_sample) < 5 and digest_sha:
+                    missing_files_sample.append(digest_sha)
+
             kind_value = cls._resolve_snippet_kind(prepared.metadata, normalized_entry)
             if kind_value == "message":
                 message_rows += 1
@@ -2394,9 +2503,14 @@ class KnowledgeBase:
             state["reason"] = "storage_missing"
             state["next_check_ts"] = now + random.uniform(5.0, 10.0)
             cls._log_once(
-                (alias, "projection_pending", "storage_missing"),
                 logging.INFO,
-                f"knowledge_projection_pending dataset={alias} reason=storage_missing rows={row_count} missing_files={missing_files}",
+                "knowledge_projection_pending",
+                throttle_key=(alias, "projection_pending", "storage_missing"),
+                dataset=alias,
+                reason="storage_missing",
+                rows=row_count,
+                missing_files=missing_files,
+                missing_files_sample=missing_files_sample,
                 min_interval=15.0,
             )
             logger.info(f"[projection_status] dataset={alias} projected_rows={row_count} is_pending=True timeout=N/A")
@@ -2408,16 +2522,21 @@ class KnowledgeBase:
                 state["reason"] = None
                 state["next_check_ts"] = now + random.uniform(300.0, 600.0)
                 cls._log_once(
-                    (alias, "projection_ready"),
                     logging.DEBUG,
-                    (
-                        f"knowledge_projection_ready dataset={alias} rows={row_count} "
-                        f"docs={doc_rows} messages={message_rows} "
-                        f"missing_files={state.get('missing_files', 0)} healed_count={state.get('healed_count', 0)} no_content_rows={state.get('no_content_rows', 0)}"
-                    ),
+                    "knowledge_projection_ready",
+                    throttle_key=(alias, "projection_ready"),
+                    dataset=alias,
+                    rows=row_count,
+                    docs=doc_rows,
+                    messages=message_rows,
+                    missing_files=state.get("missing_files", 0),
+                    healed_count=state.get("healed_count", 0),
+                    no_content_rows=state.get("no_content_rows", 0),
                     min_interval=15.0,
                 )
-                logger.info(f"[projection_status] dataset={alias} projected_rows={row_count} is_pending=False timeout=N/A")
+                logger.info(
+                    f"[projection_status] dataset={alias} projected_rows={row_count} is_pending=False timeout=N/A"
+                )
                 return True
 
         if row_count > 0:
@@ -2425,9 +2544,12 @@ class KnowledgeBase:
             state["reason"] = "no_documents"
             state["next_check_ts"] = now + random.uniform(10.0, 20.0)
             cls._log_once(
-                (alias, "projection_pending", "no_documents"),
                 logging.DEBUG,
-                f"knowledge_projection_pending dataset={alias} reason=no_documents rows={row_count}",
+                "knowledge_projection_pending",
+                throttle_key=(alias, "projection_pending", "no_documents"),
+                dataset=alias,
+                reason="no_documents",
+                rows=row_count,
                 min_interval=15.0,
             )
             logger.info(f"[projection_status] dataset={alias} projected_rows={row_count} is_pending=True timeout=N/A")
@@ -2437,9 +2559,11 @@ class KnowledgeBase:
         state["reason"] = "no_rows"
         state["next_check_ts"] = now + random.uniform(10.0, 20.0)
         cls._log_once(
-            (alias, "projection_pending", "no_rows"),
             logging.DEBUG,
-            f"knowledge_projection_pending dataset={alias} reason=no_rows",
+            "knowledge_projection_pending",
+            throttle_key=(alias, "projection_pending", "no_rows"),
+            dataset=alias,
+            reason="no_rows",
             min_interval=15.0,
         )
         logger.info(f"[projection_status] dataset={alias} projected_rows=0 is_pending=True timeout=N/A")
@@ -2581,9 +2705,10 @@ class KnowledgeBase:
             )
         else:
             info["documents"] = 0
+        user_ctx = cls._to_user_ctx(user)
         try:
-            info["projected"] = await cls._is_projection_ready(resolved, user_ns, user=user)
-        except Exception as exc:  # noqa: BLE001
+            info["projected"] = await cls._is_projection_ready(resolved, user_ctx=user_ctx, user=user)
+        except Exception as exc:
             info["last_error"] = str(exc)
         return info
 

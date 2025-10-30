@@ -3,6 +3,7 @@ import re
 from pathlib import Path
 from typing import ClassVar
 
+
 class StorageResolver:
     _MD5_TO_SHA: ClassVar[dict[str, str]] = {}
 
@@ -34,5 +35,5 @@ class StorageResolver:
                     content = await path.read_text(encoding="utf-8")
                     md5_digest = hashlib.md5(content.encode("utf-8")).hexdigest()
                     cls._MD5_TO_SHA[md5_digest] = sha_digest
-                except Exception: # noqa: BLE001
+                except Exception:  # noqa: BLE001
                     pass

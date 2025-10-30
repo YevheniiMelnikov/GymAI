@@ -300,9 +300,8 @@ async def test_wait_for_projection_timeout_returns_false(monkeypatch: pytest.Mon
     )
     monkeypatch.setattr(knowledge_base_module.asyncio, "sleep", fake_sleep)
 
-    result = await KnowledgeBase._wait_for_projection("kb_global", None, user=None, timeout=0.01)
-
-    assert result is False
+    status = await KnowledgeBase._wait_for_projection("kb_global", user=None, timeout_s=0.01)
+    assert status == ProjectionStatus.USER_CONTEXT_UNAVAILABLE
 
 
 @pytest.mark.asyncio

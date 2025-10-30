@@ -349,10 +349,7 @@ class CoachAgent:
                 kb_used = True
         deps.knowledge_base_empty = not kb_used
         logger.debug(
-            (
-                f"agent.ask knowledge_ready client_id={deps.client_id} entries={len(entry_ids)} "
-                f"kb_used={kb_used}"
-            )
+            (f"agent.ask knowledge_ready client_id={deps.client_id} entries={len(entry_ids)} kb_used={kb_used}")
         )
 
         knowledge_section = cls._format_knowledge_entries(entry_ids, entries)
@@ -683,7 +680,7 @@ class CoachAgent:
                 continuation_response = await cls._complete_with_retries(
                     client,
                     system_prompt,
-                    user_prompt, # Pass original user_prompt for context
+                    user_prompt,  # Pass original user_prompt for context
                     entry_ids,
                     client_id=client_id,
                     max_tokens=getattr(settings, "AI_COACH_CONTINUATION_MAX_TOKENS", 600),
@@ -692,10 +689,12 @@ class CoachAgent:
                 )
                 if continuation_response and continuation_response.answer:
                     full_content += continuation_response.answer
-                    final_finish_reason = cls._llm_response_metadata(continuation_response).get("finish_reason") or "stop"
-                break # Break after continuation attempt
+                    final_finish_reason = (
+                        cls._llm_response_metadata(continuation_response).get("finish_reason") or "stop"
+                    )
+                break  # Break after continuation attempt
             else:
-                break # Break if not length or already a continuation
+                break  # Break if not length or already a continuation
 
         if full_content:
             answer, sources = cls._parse_fallback_content(
