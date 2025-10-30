@@ -347,7 +347,21 @@ class KnowledgeBase:
                 missing_path_str = getattr(exc, "filename", None) or str(exc)
                 missing_filename = Path(missing_path_str).name
                 if StorageResolver.is_md5_filename(missing_filename):
-                    # Try to map MD5 to SHA path
+                    # 1) записываем недостающий md5-файл напрямую
+                    md5_path = Path(missing_path_str)
+                    if not md5_path.is_absolute():
+                        md5_path = cls._storage_root() / missing_filename
+                    try:
+                        md5_path.parent.mkdir(parents=True, exist_ok=True)
+                        md5_path.write_text(normalized_text, encoding="utf-8")
+                        bytes_written = len(normalized_text.encode("utf-8"))
+                        logger.debug(
+                            f"storage_md5_fallback_written md5={missing_filename[:12]} bytes={bytes_written}"
+                        )
+                        continue  # повторяем _safe_add
+                    except Exception as write_exc:
+                        logger.debug(f"storage_md5_fallback_write_failed md5={missing_filename[:12]} detail={write_exc}")
+                    # 2) как запасной путь — старая ветка с маппингом/HashStore
                     sha_path = StorageResolver.map_md5_to_sha_path(missing_filename, cls._storage_root())
                     if sha_path and sha_path.exists():
                         logger.debug(
@@ -435,6 +449,7 @@ class KnowledgeBase:
         if identifier:
             cls._register_dataset_identifier(ds_name, identifier)
             resolved = identifier
+        logger.debug(f"kb_append ds={resolved} item=1")
         logger.debug(
             f"kb_append ok dataset={resolved} digest_sha={digest_sha[:12]} "
             f"path={storage_path}"
@@ -1261,8 +1276,27 @@ class KnowledgeBase:
         path = cls._storage_path_for_sha(digest_sha)
         if path is None:
             return None, False
+
         if path.exists():
+            # ensure md5 mirror even if SHA exists
+            try:
+                from hashlib import md5 as _md5
+                md5_hex = _md5(text.encode("utf-8")).hexdigest()
+                md5_path = path.parent / f"text_{md5_hex}.txt"
+                if not md5_path.exists():
+                    try:
+                        md5_path.symlink_to(path.name)  # relative link inside same dir
+                        logger.debug(f"md5_mirror_link_created md5={md5_hex[:12]} -> {path.name[:16]}")
+                    except Exception:
+                        if not md5_path.exists():  # возможно, другой поток уже создал
+                            md5_path.write_text(text, encoding="utf-8")
+                            logger.debug(
+                                f"md5_mirror_file_created md5={md5_hex[:12]} bytes={len(text.encode('utf-8'))}"
+                            )
+            except Exception as md5_exc:
+                logger.debug(f"md5_mirror_skip reason={md5_exc}")
             return path, False
+
         path.parent.mkdir(parents=True, exist_ok=True)
         temp_path = path.with_suffix(path.suffix + ".tmp")
         try:
@@ -1271,7 +1305,28 @@ class KnowledgeBase:
                 handle.flush()
                 os.fsync(handle.fileno())
             temp_path.replace(path)
+
+            # create md5 mirror for Cognee (symlink or copy)
+            try:
+                from hashlib import md5 as _md5
+                md5_hex = _md5(text.encode("utf-8")).hexdigest()
+                md5_path = path.parent / f"text_{md5_hex}.txt"
+                if not md5_path.exists():
+                    try:
+                        md5_path.symlink_to(path.name)
+                        logger.debug(f"md5_mirror_link_created md5={md5_hex[:12]} -> {path.name[:16]}")
+                    except Exception:
+                        if not md5_path.exists():  # возможно, другой поток уже создал
+                            md5_path.write_text(text, encoding="utf-8")
+                            logger.debug(
+                                f"md5_mirror_file_created md5={md5_hex[:12]} bytes={len(text.encode('utf-8'))}"
+                            )
+            except Exception as md5_exc:
+                logger.debug(f"md5_mirror_skip reason={md5_exc}")
+
+            logger.debug(f"kb_storage ensure sha={digest_sha[:12]} created=True")
             return path, True
+
         except Exception as exc:  # noqa: BLE001 - log and proceed with Cognee handling
             logger.warning(
                 f"knowledge_storage_write_failed digest_sha={digest_sha[:12]} "
@@ -1279,9 +1334,9 @@ class KnowledgeBase:
             )
             try:
                 temp_path.unlink(missing_ok=True)
-            except Exception:  # noqa: BLE001 - best effort cleanup
+            except Exception:
                 pass
-            return path, False
+            return None, False
 
     @classmethod
     async def add_text(
@@ -2001,6 +2056,7 @@ class KnowledgeBase:
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"knowledge_dataset_rebuild_list_failed dataset={alias} detail={exc}")
             return 0, 0
+        reinserted = 0
         healed_count = 0
         last_dataset: str | None = None
         if not entries:
@@ -2083,6 +2139,7 @@ class KnowledgeBase:
             }
         return reinserted, healed_count
 
+    @classmethod
     async def _wait_for_projection(
         cls,
         dataset: str,
@@ -2095,7 +2152,24 @@ class KnowledgeBase:
         started = monotonic()
         backoff_idx = 0
         fatal_error = False
+
+        logger.debug(f"projection_wait start dataset={dataset}")
+        try:
+            await cls._ensure_dataset_exists(dataset, user)
+        except Exception as exc:  # noqa: BLE001
+            cls._log_once(
+                f"projection:{alias}:ensure_missing",
+                logging.DEBUG,
+                f"knowledge_projection_dataset_missing dataset={alias} detail={exc}",
+            )
+
         user_ctx = cls._to_user_ctx(user)
+        if user_ctx is None:
+            logger.debug(
+                f"projection_wait done dataset={dataset} ok=False reason=user_context_unavailable"
+            )
+            return False
+
         ds_id = await cls._get_dataset_id(dataset, user)
 
         async def _ready() -> bool:
@@ -2121,8 +2195,10 @@ class KnowledgeBase:
                 f"id={ds_id} missing_files={state.get('missing_files', 0)} healed_count={state.get('healed_count', 0)} no_content_rows={state.get('no_content_rows', 0)}", # Added logging details
                 min_interval=10.0,
             )
+            logger.debug(f"projection_wait done dataset={dataset} ok=True")
             return True
         if fatal_error:
+            logger.debug(f"projection_wait done dataset={dataset} ok=False reason=fatal_error")
             return False
 
         deadline = started + timeout if timeout is not None and timeout > 0 else None
@@ -2172,6 +2248,7 @@ class KnowledgeBase:
             "kb_proj state dataset=%s ready=%s id=%s missing_files=%s empty_rows=%s",
             alias, False, ds_id, state.get("missing_files", 0), state.get("no_content_rows", 0),
         )
+        logger.debug(f"projection_wait done dataset={dataset} ok=False reason=timeout")
         return False
 
     @classmethod
