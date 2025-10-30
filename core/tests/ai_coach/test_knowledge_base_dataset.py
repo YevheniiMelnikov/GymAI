@@ -607,7 +607,7 @@ async def test_projection_ready_with_messages_only(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(KnowledgeBase, "_storage_root", classmethod(lambda cls: tmp_path))
     monkeypatch.setattr(KnowledgeBase, "_ensure_dataset_exists", classmethod(lambda cls, dataset, user: None))
     monkeypatch.setattr(KnowledgeBase, "_get_dataset_id", classmethod(lambda cls, dataset, user, user_ns: "uuid"))
-    monkeypatch.setattr(KnowledgeBase, "_to_user_or_none", classmethod(lambda cls, user: None))
+    monkeypatch.setattr(KnowledgeBase, "_to_user_ctx", classmethod(lambda cls, user: None))
     monkeypatch.setattr(KnowledgeBase, "_fetch_dataset_rows", classmethod(fake_fetch_rows))
     monkeypatch.setattr(
         knowledge_base_module.cognee,

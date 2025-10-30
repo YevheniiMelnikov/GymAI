@@ -116,3 +116,11 @@ class HashStore:
             return set()
         return {str(item) for item in members}
 
+    @classmethod
+    async def list_all_datasets(cls) -> set[str]:
+        try:
+            keys = await cast(Awaitable[Iterable[str]], cls.redis.keys("cognee_hashes:*"))
+            return {key.removeprefix("cognee_hashes:") for key in keys}
+        except Exception as e:  # pragma: no cover - best effort
+            logger.error(f"HashStore.list_all_datasets error: {e}")
+            return set()
