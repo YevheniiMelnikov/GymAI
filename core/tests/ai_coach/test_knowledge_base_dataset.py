@@ -5,12 +5,18 @@ from hashlib import md5, sha256
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Awaitable, Callable, Iterable, Mapping, Sequence
+from uuid import UUID
 
 import pytest
 
 import ai_coach.agent.knowledge.knowledge_base as knowledge_base_module
 from ai_coach.agent.coach import CoachAgent
-from ai_coach.agent.knowledge.knowledge_base import DatasetRow, KnowledgeBase, KnowledgeSnippet
+from ai_coach.agent.knowledge.knowledge_base import (
+    DatasetRow,
+    KnowledgeBase,
+    KnowledgeSnippet,
+    ProjectionStatus,
+)
 from core.schemas import Client, QAResponse
 
 
@@ -148,8 +154,9 @@ def test_debug_snapshot_compiles_dataset_information(monkeypatch: pytest.MonkeyP
     async def fake_metadata(cls, dataset: str, user: Any | None) -> Any:
         return SimpleNamespace(id=f"id-{dataset}", updated_at="2024-10-19T12:00:00Z")
 
-    async def fake_projection(cls, dataset: str, user_ns: Any | None) -> bool:
-        return dataset.endswith("global")
+    async def fake_projection(cls, dataset: str, user: Any | None) -> tuple[bool, str]:
+        projected = dataset.endswith("global")
+        return projected, "ready" if projected else "pending"
 
     async def fake_get_user(cls) -> Any | None:  # type: ignore[override]
         return SimpleNamespace(id="user-1")
@@ -287,8 +294,8 @@ async def test_rebuild_from_disk_populates_hashstore_when_graph_empty(
 
 @pytest.mark.asyncio
 async def test_wait_for_projection_timeout_returns_false(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_ready(cls, dataset: str, user_ns: Any | None, *, user: Any | None = None) -> bool:
-        return False
+    async def fake_ready(cls, dataset: str, user: Any | None) -> tuple[bool, str]:
+        return False, "pending"
 
     async def fake_sleep(duration: float) -> None:
         return None
@@ -398,7 +405,7 @@ async def test_project_dataset_heals_missing_storage(monkeypatch: pytest.MonkeyP
     KnowledgeBase._DATASET_IDS.clear()
     KnowledgeBase._DATASET_ALIASES.clear()
 
-    async def fake_get_dataset_id(cls, dataset: str, user: Any | None, user_ns: Any | None) -> str:
+    async def fake_get_dataset_id(cls, dataset: str, user: Any | None) -> str:
         return "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 
     async def fake_list_entries(cls, dataset: str, user: Any | None) -> list[DatasetRow]:
@@ -411,9 +418,13 @@ async def test_project_dataset_heals_missing_storage(monkeypatch: pytest.MonkeyP
         return None
 
     async def fake_wait(
-        cls, dataset: str, user_ns: Any | None, *, user: Any | None = None, timeout: float | None = None
-    ) -> bool:
-        return True
+        cls,
+        dataset: str,
+        user: Any | None,
+        *,
+        timeout_s: float,
+    ) -> ProjectionStatus:
+        return ProjectionStatus.READY
 
     call_state = {"count": 0}
 
@@ -473,7 +484,7 @@ async def test_ensure_global_projected_heals_before_retry(monkeypatch: pytest.Mo
     async def fake_get_user(cls) -> Any | None:
         return SimpleNamespace(id="coach")
 
-    async def fake_get_dataset_id(cls, dataset_name: str, user: Any | None, user_ns: Any | None) -> str:
+    async def fake_get_dataset_id(cls, dataset_name: str, user: Any | None) -> str:
         return "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
 
     async def fake_list_entries(cls, dataset_name: str, user: Any | None) -> list[DatasetRow]:
@@ -490,13 +501,12 @@ async def test_ensure_global_projected_heals_before_retry(monkeypatch: pytest.Mo
     async def fake_wait(
         cls,
         dataset_name: str,
-        user_ns: Any | None,
+        user: Any | None,
         *,
-        user: Any | None = None,
-        timeout: float | None = None,
-    ) -> bool:
+        timeout_s: float,
+    ) -> ProjectionStatus:
         wait_state["count"] += 1
-        return wait_state["count"] >= 2
+        return ProjectionStatus.READY if wait_state["count"] >= 2 else ProjectionStatus.TIMEOUT
 
     original_heal = KnowledgeBase._heal_dataset_storage.__func__
 
@@ -539,9 +549,9 @@ async def test_ensure_global_projected_heals_before_retry(monkeypatch: pytest.Mo
     monkeypatch.setattr(knowledge_base_module.HashStore, "add", classmethod(fake_hash_add))
     monkeypatch.setattr(knowledge_base_module.HashStore, "get_md5_for_sha", classmethod(fake_get_md5))
 
-    ready = await KnowledgeBase.ensure_global_projected(timeout=1.0)
+    status = await KnowledgeBase.ensure_global_projected(timeout=1.0)
 
-    assert ready is True
+    assert status == ProjectionStatus.READY
     assert wait_state["count"] >= 2
     assert storage_file.exists()
     assert storage_file.read_text(encoding="utf-8") == normalized
@@ -586,7 +596,6 @@ async def test_projection_ready_with_messages_only(monkeypatch: pytest.MonkeyPat
         list_data: Callable[..., Awaitable[Iterable[Any]]],
         dataset: str,
         user: Any | None,
-        user_ns: Any | None,
     ) -> list[Any]:
         return [
             SimpleNamespace(
@@ -604,9 +613,10 @@ async def test_projection_ready_with_messages_only(monkeypatch: pytest.MonkeyPat
     KnowledgeBase._PROJECTION_STATE.pop(alias, None)
 
     monkeypatch.setattr(KnowledgeBase, "_storage_root", classmethod(lambda cls: tmp_path))
+    user_ctx = SimpleNamespace(id=UUID(int=0))
     monkeypatch.setattr(KnowledgeBase, "_ensure_dataset_exists", classmethod(lambda cls, dataset, user: None))
-    monkeypatch.setattr(KnowledgeBase, "_get_dataset_id", classmethod(lambda cls, dataset, user, user_ns: "uuid"))
-    monkeypatch.setattr(KnowledgeBase, "_to_user_ctx", classmethod(lambda cls, user: None))
+    monkeypatch.setattr(KnowledgeBase, "_get_dataset_id", classmethod(lambda cls, dataset, user: "uuid"))
+    monkeypatch.setattr(KnowledgeBase, "_to_user_ctx", classmethod(lambda cls, user: user_ctx))
     monkeypatch.setattr(KnowledgeBase, "_fetch_dataset_rows", classmethod(fake_fetch_rows))
     monkeypatch.setattr(
         knowledge_base_module.cognee,
@@ -616,9 +626,10 @@ async def test_projection_ready_with_messages_only(monkeypatch: pytest.MonkeyPat
     )
     monkeypatch.setattr(knowledge_base_module.cognee, "search", fake_search, raising=False)
 
-    ready = await KnowledgeBase._is_projection_ready(alias, None, user=None)
+    ready, reason = await KnowledgeBase._is_projection_ready(alias, user_ctx)
 
     assert ready is True
+    assert reason.startswith("all_rows_empty_content")
 
 
 @pytest.mark.asyncio
@@ -649,15 +660,15 @@ async def test_projection_uses_uuid(monkeypatch: pytest.MonkeyPatch, tmp_path: P
     )
     monkeypatch.setattr(KnowledgeBase, "_storage_root", classmethod(lambda cls: tmp_path))
 
-    result = await KnowledgeBase._is_projection_ready(
+    user_ctx = SimpleNamespace(id="user-1")
+    projected, reason = await KnowledgeBase._is_projection_ready(
         KnowledgeBase.GLOBAL_DATASET,
-        SimpleNamespace(id="user-1"),
-        user=SimpleNamespace(id="user-1"),
+        user_ctx,
     )
 
-    assert result is True
+    assert projected is True
     assert captured["dataset_id"] == dataset_id
-    assert captured["user"].id == "user-1"
+    assert captured["user"].id == user_ctx.id
 
 
 @pytest.mark.asyncio
@@ -686,8 +697,8 @@ async def test_ensure_global_projected_timeout_ok(monkeypatch: pytest.MonkeyPatc
     async def fake_get_user(cls) -> Any | None:
         return SimpleNamespace(id="user-2")
 
-    async def fake_ensure_global_projected(cls, *, timeout: float | None = None) -> bool:
-        return False
+    async def fake_ensure_global_projected(cls, *, timeout: float | None = None) -> ProjectionStatus:
+        return ProjectionStatus.TIMEOUT
 
     monkeypatch.setattr(KnowledgeBase, "_PROJECTED_DATASETS", set())
     monkeypatch.setattr(KnowledgeBase, "_ensure_profile_indexed", classmethod(fake_ensure_profile_indexed))
@@ -732,9 +743,9 @@ async def test_global_projection_ready_with_document(monkeypatch: pytest.MonkeyP
         SimpleNamespace(datasets=SimpleNamespace(list_data=fake_list_data), search=fake_search),
     )
 
-    ready = await KnowledgeBase.ensure_global_projected(timeout=1.0)
+    status = await KnowledgeBase.ensure_global_projected(timeout=1.0)
 
-    assert ready is True
+    assert status == ProjectionStatus.READY
 
 
 def test_fallback_entries_skip_messages(monkeypatch: pytest.MonkeyPatch) -> None:

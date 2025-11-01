@@ -5,20 +5,26 @@ import logging
 import os
 import random
 import re
+import sqlite3
 import time
 from dataclasses import asdict, dataclass, is_dataclass
 from hashlib import sha256
 from pathlib import Path
 from time import monotonic
 from types import SimpleNamespace
-from typing import Any, Awaitable, Callable, ClassVar, Iterable, Mapping, Sequence, cast
+from typing import Any, Awaitable, Callable, ClassVar, Iterable, Mapping, Sequence, cast, Literal
 from urllib.parse import urlparse
-from uuid import UUID
-
+from uuid import NAMESPACE_DNS, UUID, uuid5
+from enum import Enum
 from loguru import logger
 
 from ai_coach.agent.knowledge.base_knowledge_loader import KnowledgeLoader
-from ai_coach.agent.knowledge.cognee_config import CogneeConfig
+from ai_coach.agent.knowledge.cognee_config import CogneeConfig, ensure_cognee_ready
+
+try:
+    from sqlalchemy.exc import OperationalError as SAOperationalError  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+    SAOperationalError = None  # type: ignore[assignment]
 from ai_coach.agent.knowledge.utils.hash_store import HashStore
 from ai_coach.agent.knowledge.utils.lock_cache import LockCache
 from ai_coach.agent.knowledge.utils.storage_resolver import StorageResolver
@@ -29,8 +35,6 @@ from config.app_settings import settings
 from core.exceptions import UserServiceError
 from core.services import APIService
 from core.schemas import Client
-
-from typing import Literal
 
 import cognee  # type: ignore
 
@@ -54,6 +58,14 @@ except Exception:  # pragma: no cover - stubs for tests
         pass
 
 
+try:  # pragma: no cover - optional dependency
+    from cognee.infrastructure.databases.exceptions import DatabaseNotCreatedError  # type: ignore
+except Exception:  # pragma: no cover - fallback stub
+
+    class DatabaseNotCreatedError(Exception):
+        pass
+
+
 async def _safe_add(*args, **kwargs):
     return await cognee.add(*args, **kwargs)
 
@@ -62,7 +74,19 @@ class ProjectionProbeError(RuntimeError):
     """Raised when dataset readiness cannot be determined due to configuration issues."""
 
 
-from enum import Enum
+_DB_SETUP_TOKENS: tuple[str, ...] = ("await setup", "no such table", "database not created")
+
+
+def _needs_cognee_setup(exc: Exception) -> bool:
+    if isinstance(exc, DatabaseNotCreatedError):
+        return True
+    if isinstance(exc, sqlite3.OperationalError):
+        return True
+    if SAOperationalError is not None and isinstance(exc, SAOperationalError):
+        message = str(exc).lower()
+        return any(token in message for token in _DB_SETUP_TOKENS)
+    message = str(exc).lower()
+    return any(token in message for token in _DB_SETUP_TOKENS)
 
 
 class ProjectionStatus(Enum):
@@ -120,6 +144,7 @@ class KnowledgeBase:
         "id",
     )
     GLOBAL_DATASET: str = settings.COGNEE_GLOBAL_DATASET
+    _BOOTSTRAP_USER_UUID: ClassVar[UUID] = uuid5(NAMESPACE_DNS, "gymbot_cognee_bootstrap_user")
     _CLIENT_ALIAS_PREFIX: str = "kb_client_"
     _CHAT_ALIAS_PREFIX: str = "kb_chat_"
     _LEGACY_CLIENT_PREFIX: str = "client_"
@@ -206,11 +231,12 @@ class KnowledgeBase:
             await cls.refresh()
         except Exception as e:
             logger.warning(f"Knowledge refresh skipped: {e}")
-        ds_id = await cls._get_dataset_id(cls.GLOBAL_DATASET, cls._user)
+        user_ctx = cls._to_user_ctx(cls._user)
+        ds_id = await cls._get_dataset_id(cls.GLOBAL_DATASET, user_ctx)
         if ds_id:
             timeout = float(getattr(settings, "AI_COACH_GLOBAL_PROJECTION_FIRST_BOOT_TIMEOUT", 5.0))
             try:
-                status = await cls._wait_for_projection(cls.GLOBAL_DATASET, cls._user, timeout_s=timeout)
+                status = await cls._wait_for_projection(cls.GLOBAL_DATASET, cls._user, timeout=timeout)
                 if status == ProjectionStatus.READY:
                     logger.info(f"projection:first_boot_wait_s={timeout}")
                 else:
@@ -222,10 +248,11 @@ class KnowledgeBase:
 
         storage_root = cls._storage_root()
         storage_info = CogneeConfig.describe_storage()
-        projection_status = await cls._is_projection_ready(cls.GLOBAL_DATASET, user=cls._user)
+        projection_ready, projection_reason = await cls._is_projection_ready(cls.GLOBAL_DATASET, cls._user)
         kb_projection_rows = 0
         try:
-            kb_projection_rows = len(await cls._list_dataset_entries(cls.GLOBAL_DATASET, cls._user))
+            if user_ctx is not None:
+                kb_projection_rows = len(await cls._list_dataset_entries(cls.GLOBAL_DATASET, user_ctx))
         except Exception:
             pass
 
@@ -234,7 +261,8 @@ class KnowledgeBase:
             f"files_count={storage_info.get('entries_count', 0)}, "
             f"md5_mirrors_count={storage_info.get('md5_mirrors_count', 0)}, "
             f"kb_projection_rows={kb_projection_rows}, "
-            f"projection_status={projection_status}"
+            f"projection_ready={projection_ready}, "
+            f"projection_reason={projection_reason}"
         )
 
     @classmethod
@@ -242,17 +270,17 @@ class KnowledgeBase:
         """Re-cognify global dataset and refresh loader if available."""
         user = await cls._get_cognee_user()
         ds = cls._resolve_dataset_alias(cls.GLOBAL_DATASET)
-        await cls._ensure_dataset_exists(ds, user)
-        cls._PROJECTED_DATASETS.discard(cls._alias_for_dataset(ds))
-        if cls._loader:
-            await cls._loader.refresh()
         user_ctx = cls._to_user_ctx(user)
         if user_ctx is None:
             logger.warning(f"knowledge_refresh_skipped dataset={ds}: user context unavailable")
             return
+        await cls._ensure_dataset_exists(ds, user_ctx)
+        cls._PROJECTED_DATASETS.discard(cls._alias_for_dataset(ds))
+        if cls._loader:
+            await cls._loader.refresh()
         target = ds
         try:
-            dataset_id = await cls._get_dataset_id(ds, user)
+            dataset_id = await cls._get_dataset_id(ds, user_ctx)
         except ProjectionProbeError:
             dataset_id = None
         if dataset_id:
@@ -263,28 +291,52 @@ class KnowledgeBase:
             logger.error(f"Knowledge base update skipped: {e}")
 
     @classmethod
-    async def ensure_global_projected(cls, *, timeout: float | None = None) -> bool:
-        user = await cls._get_cognee_user()
+    async def ensure_global_projected(cls, *, timeout: float | None = None) -> ProjectionStatus:
         dataset = cls._resolve_dataset_alias(cls.GLOBAL_DATASET)
-        try:
-            await cls._ensure_dataset_exists(dataset, user)
-        except Exception as exc:  # noqa: BLE001
-            cls._log_once(
-                logging.DEBUG,
-                "knowledge_projection_dataset_missing",
-                throttle_key=f"projection:{dataset}:ensure_missing",
-                dataset=dataset,
-                detail=exc,
-            )
-        user_ctx = cls._to_user_ctx(user)
-        status = await cls._wait_for_projection(dataset, user=user, timeout_s=timeout)
-        if status == ProjectionStatus.READY:
-            cls._PROJECTED_DATASETS.add(cls._alias_for_dataset(dataset))
-            return True
+        user = await cls._get_cognee_user()
+        tried_setup = False
 
-        if user is not None:
+        while True:
+            user_ctx = cls._to_user_ctx(user)
+            if user_ctx is None:
+                if not tried_setup:
+                    tried_setup = True
+                    await ensure_cognee_ready()
+                    user = await cls._get_cognee_user()
+                    continue
+                logger.warning("knowledge_projection_skipped dataset={} reason=user_context_unavailable", dataset)
+                return ProjectionStatus.USER_CONTEXT_UNAVAILABLE
+
             try:
-                entries = await cls._list_dataset_entries(dataset, user)
+                await cls._ensure_dataset_exists(dataset, user_ctx)
+            except Exception as exc:  # noqa: BLE001
+                if _needs_cognee_setup(exc) and not tried_setup:
+                    tried_setup = True
+                    await ensure_cognee_ready()
+                    user = await cls._get_cognee_user()
+                    continue
+                if _needs_cognee_setup(exc):
+                    logger.warning(
+                        "knowledge_projection_dataset_missing dataset={} detail={}",
+                        dataset,
+                        exc,
+                    )
+                    return ProjectionStatus.USER_CONTEXT_UNAVAILABLE
+                cls._log_once(
+                    logging.DEBUG,
+                    "knowledge_projection_dataset_missing",
+                    throttle_key=f"projection:{dataset}:ensure_missing",
+                    dataset=dataset,
+                    detail=exc,
+                )
+
+            status = await cls._wait_for_projection(dataset, user=user, timeout=timeout)
+            if status == ProjectionStatus.READY:
+                cls._PROJECTED_DATASETS.add(cls._alias_for_dataset(dataset))
+                return ProjectionStatus.READY
+
+            try:
+                entries = await cls._list_dataset_entries(dataset, user_ctx)
             except Exception as exc:  # noqa: BLE001 - diagnostics only
                 cls._log_once(
                     logging.DEBUG,
@@ -294,49 +346,33 @@ class KnowledgeBase:
                     detail=exc,
                     min_interval=15.0,
                 )
-            else:
-                if entries:
-                    missing, healed = await cls._heal_dataset_storage(
-                        dataset,
-                        user,
-                        entries=entries,
-                        reason="ensure_global_projection",
-                    )
-                    if healed > 0:
-                        retry_timeout = 5.0
-                        if timeout is not None:
-                            retry_timeout = min(max(timeout, 0.0), 5.0)
-                        retry_status = await cls._wait_for_projection(
-                            dataset,
-                            user=user,
-                            timeout_s=retry_timeout,
-                        )
-                        if retry_status == ProjectionStatus.READY:
-                            alias = cls._alias_for_dataset(dataset)
-                            cls._PROJECTED_DATASETS.add(alias)
-                            return True
+                entries = []
 
-        cls._log_once(
-            logging.INFO if not cls._GLOBAL_PROJECTION_LOGGED_INFO else logging.DEBUG,
-            "projection:deferred",
-            dataset=dataset,
-        )
-        if not cls._GLOBAL_PROJECTION_LOGGED_INFO:
-            cls._GLOBAL_PROJECTION_LOGGED_INFO = True
-        state = cls._projection_state(cls._alias_for_dataset(dataset))
-        state["next_check_ts"] = time.time() + random.uniform(15.0, 30.0)
-        if user is not None and not state.get("processing"):
-            state["processing"] = True
+            if entries:
+                missing, healed = await cls._heal_dataset_storage(
+                    dataset,
+                    user_ctx,
+                    entries=entries,
+                    reason="ensure_global_projection",
+                )
+                if healed > 0:
+                    retry_timeout = 5.0 if timeout is None else min(max(timeout, 0.0), 5.0)
+                    retry_status = await cls._wait_for_projection(dataset, user=user, timeout=retry_timeout)
+                    if retry_status == ProjectionStatus.READY:
+                        alias = cls._alias_for_dataset(dataset)
+                        cls._PROJECTED_DATASETS.add(alias)
+                        return ProjectionStatus.READY
 
-            async def _background_process() -> None:
-                try:
-                    await cls._process_dataset(dataset, user)
-                finally:
-                    state["processing"] = False
-
-            task = asyncio.create_task(_background_process())
-            task.add_done_callback(cls._log_task_exception)
-        return False
+            cls._log_once(
+                logging.INFO if not cls._GLOBAL_PROJECTION_LOGGED_INFO else logging.DEBUG,
+                "projection:deferred",
+                dataset=dataset,
+            )
+            if not cls._GLOBAL_PROJECTION_LOGGED_INFO:
+                cls._GLOBAL_PROJECTION_LOGGED_INFO = True
+            state = cls._projection_state(cls._alias_for_dataset(dataset))
+            state["next_check_ts"] = time.time() + random.uniform(15.0, 30.0)
+            return status
 
     @classmethod
     async def prune(cls) -> None:
@@ -370,7 +406,8 @@ class KnowledgeBase:
         digest_sha = cls._compute_digests(normalized_text)
         payload = normalized_text.encode("utf-8")
         ds_name = cls._resolve_dataset_alias(dataset)
-        await cls._ensure_dataset_exists(ds_name, user)
+        user_ctx = cls._to_user_ctx(user)
+        await cls._ensure_dataset_exists(ds_name, user_ctx)
         storage_path, created_file = cls._ensure_storage_file(
             digest_sha=digest_sha,
             text=normalized_text,
@@ -396,7 +433,7 @@ class KnowledgeBase:
                 info = await _safe_add(
                     normalized_text,
                     dataset_name=ds_name,
-                    user=cls._to_user_ctx(user),  # pyrefly: ignore[bad-argument-type]
+                    user=user_ctx,  # pyrefly: ignore[bad-argument-type]
                     node_set=node_set,
                 )
                 break  # Success, exit loop
@@ -450,7 +487,8 @@ class KnowledgeBase:
                                     continue  # Retry _safe_add, now with SHA file present
                                 else:
                                     logger.warning(
-                                        f"storage_md5_fallback_restore_failed sha={recomputed_sha[:12]} md5={md5_digest[:12]} reason=file_not_created"
+                                        "storage_md5_fallback_restore_failed "
+                                        f"sha={recomputed_sha[:12]} md5={md5_digest[:12]} reason=file_not_created"
                                     )
                             else:
                                 logger.debug(
@@ -528,8 +566,8 @@ class KnowledgeBase:
         global_unavailable = False
 
         if not global_ready:
-            ready = await cls.ensure_global_projected(timeout=0.3)  # Quick check, no blocking
-            if ready:
+            status = await cls.ensure_global_projected(timeout=0.3)  # Quick check, no blocking
+            if status == ProjectionStatus.READY:
                 cls._PROJECTED_DATASETS.add(global_alias)
                 global_ready = True
             else:
@@ -543,6 +581,7 @@ class KnowledgeBase:
                 )
         user = await cls._get_cognee_user()
         await cls._ensure_profile_indexed(client_id, user)
+        user_ctx = cls._to_user_ctx(user)
         datasets = [cls._dataset_name(client_id), cls._chat_dataset_name(client_id)]
         if global_ready:
             datasets.append(cls.GLOBAL_DATASET)
@@ -550,7 +589,7 @@ class KnowledgeBase:
         for alias in datasets:
             resolved = cls._resolve_dataset_alias(alias)
             try:
-                await cls._ensure_dataset_exists(resolved, user)
+                await cls._ensure_dataset_exists(resolved, user_ctx)
             except Exception as ensure_exc:
                 logger.debug(
                     f"knowledge_dataset_ensure_failed client_id={client_id} dataset={resolved} detail={ensure_exc}"
@@ -1122,7 +1161,7 @@ class KnowledgeBase:
     async def _heal_dataset_storage(
         cls,
         dataset: str,
-        user: Any | None,
+        user_ctx: Any | None,
         *,
         entries: Sequence[DatasetRow] | None = None,
         reason: str,
@@ -1130,7 +1169,7 @@ class KnowledgeBase:
         alias = cls._alias_for_dataset(dataset)
         if entries is None:
             try:
-                fetched = await cls._list_dataset_entries(alias, user)
+                fetched = await cls._list_dataset_entries(alias, user_ctx)
             except Exception as exc:  # noqa: BLE001 - diagnostics only
                 logger.debug(f"knowledge_dataset_heal_fetch_failed dataset={alias} reason={reason} detail={exc}")
                 return 0, 0
@@ -1227,7 +1266,8 @@ class KnowledgeBase:
                 await HashStore.add(alias, digest_sha_from_content, metadata=metadata)
             except Exception as exc:  # noqa: BLE001
                 logger.debug(
-                    f"knowledge_rebuild_hashstore_failed dataset={alias} sha={digest_sha_from_content[:12]} detail={exc}"
+                    "knowledge_rebuild_hashstore_failed "
+                    f"dataset={alias} sha={digest_sha_from_content[:12]} detail={exc}"
                 )
                 continue
             linked += 1
@@ -1255,7 +1295,7 @@ class KnowledgeBase:
         last_dataset: str | None = None
         for digest_sha, metadata in digests:
             if len(digest_sha) != 64:
-                logger.warning("hashstore_legacy_digest_skipped digest=%s", digest_sha[:12])
+                logger.warning("hashstore_legacy_digest_skipped digest={}", digest_sha[:12])
                 continue
             path = cls._storage_path_for_sha(digest_sha)
             if path is None:
@@ -1268,6 +1308,19 @@ class KnowledgeBase:
                     normalized = cls._normalize_text(raw_text)
                 except Exception as exc:  # noqa: BLE001
                     logger.debug(f"knowledge_reingest_read_failed dataset={alias} sha={digest_sha[:12]} detail={exc}")
+            else:
+                # SHA file not found, try MD5 fallback
+                md5_path = StorageResolver.map_sha_to_md5_path(digest_sha, cls._storage_root())
+                if md5_path and md5_path.exists():
+                    try:
+                        raw_text = md5_path.read_text(encoding="utf-8")
+                        normalized = cls._normalize_text(raw_text)
+                        logger.debug(f"reingest_md5_fallback_ok sha={digest_sha[:12]} md5_path={md5_path.name[:12]}")
+                    except Exception as exc:  # noqa: BLE001
+                        logger.debug(
+                            "knowledge_reingest_read_failed_md5_fallback "
+                            f"dataset={alias} sha={digest_sha[:12]} detail={exc}"
+                        )
 
             # Healing step: if file is missing but content is in metadata, re-create it
             if not normalized and metadata and metadata.get("text"):
@@ -1504,8 +1557,9 @@ class KnowledgeBase:
             else:
                 logger.debug(f"History fetch skipped client_id={client_id}: default user unavailable")
             return []
+        user_ctx: Any | None = cls._to_user_ctx(user)
         try:
-            await cls._ensure_dataset_exists(dataset, user)
+            await cls._ensure_dataset_exists(dataset, user_ctx)
         except Exception as exc:  # pragma: no cover - non-critical indexing failure
             logger.debug(f"Dataset ensure skipped client_id={client_id}: {exc}")
         datasets_module = getattr(cognee, "datasets", None)
@@ -1526,9 +1580,8 @@ class KnowledgeBase:
 
         cls._has_datasets_module = True
         list_data_callable = cast(Callable[..., Awaitable[Iterable[Any]]], list_data)
-        user_ctx: Any | None = cls._to_user_ctx(user)
         try:
-            data = await cls._fetch_dataset_rows(list_data_callable, dataset, user)
+            data = await cls._fetch_dataset_rows(list_data_callable, dataset, user_ctx)
         except Exception:
             logger.info(f"No message history found for client_id={client_id}")
             return []
@@ -1545,11 +1598,31 @@ class KnowledgeBase:
         """Fetch and cache default Cognee user."""
         if cls._user is not None:
             return cls._user
-        try:
-            cls._user = await get_default_user()
-        except Exception:
-            cls._user = None
-        return cls._user
+        retried_setup = False
+        while True:
+            try:
+                cls._user = await get_default_user()
+                if cls._user is None:
+                    cls._user = cls._bootstrap_user_ctx()
+                return cls._user
+            except Exception as exc:
+                if _needs_cognee_setup(exc) and not retried_setup:
+                    retried_setup = True
+                    await ensure_cognee_ready()
+                    continue
+                if _needs_cognee_setup(exc):
+                    cls._log_once(
+                        logging.WARNING,
+                        "cognee:bootstrap_user",
+                        reason="db_unavailable",
+                        detail=str(exc),
+                        min_interval=3600.0,
+                    )
+                    cls._user = cls._bootstrap_user_ctx()
+                    return cls._user
+                logger.debug(f"cognee_user_fetch_failed detail={exc}")
+                cls._user = cls._bootstrap_user_ctx()
+                return cls._user
 
     @classmethod
     def _resolve_dataset_alias(cls, name: str) -> str:
@@ -1638,7 +1711,7 @@ class KnowledgeBase:
         )
 
     @classmethod
-    async def _get_dataset_id(cls, dataset: str, user: Any | None) -> str | None:
+    async def _get_dataset_id(cls, dataset: str, user_ctx: Any | None) -> str | None:
         alias = cls._alias_for_dataset(dataset)
         if cls._looks_like_uuid(dataset):
             cls._register_dataset_identifier(alias, dataset)
@@ -1651,9 +1724,9 @@ class KnowledgeBase:
             cls._log_once(logging.DEBUG, "dataset_resolved", name=alias, id=identifier, min_interval=10.0)
             return identifier
 
-        if user is not None:
+        if user_ctx is not None:
             try:
-                await cls._ensure_dataset_exists(alias, user)
+                await cls._ensure_dataset_exists(alias, user_ctx)
                 identifier = cls._DATASET_IDS.get(alias)
                 if identifier:
                     cls._log_once(logging.DEBUG, "dataset_resolved", name=alias, id=identifier, min_interval=5.0)
@@ -1661,8 +1734,8 @@ class KnowledgeBase:
             except Exception as exc:  # noqa: BLE001 - diagnostics only
                 logger.debug(f"knowledge_dataset_id_lookup_failed dataset={alias} detail={exc}")
 
-        if user is not None:
-            metadata = await cls._get_dataset_metadata(alias, user)
+        if user_ctx is not None:
+            metadata = await cls._get_dataset_metadata(alias, user_ctx)
             if metadata is not None:
                 identifier = cls._extract_dataset_identifier(metadata)
                 if identifier:
@@ -1702,9 +1775,9 @@ class KnowledgeBase:
         return None
 
     @classmethod
-    async def _ensure_dataset_exists(cls, name: str, user: Any | None) -> None:
+    async def _ensure_dataset_exists(cls, name: str, user_ctx: Any | None) -> None:
         """Create dataset if it does not exist for the given user."""
-        user_id = cls._to_user_id(user)
+        user_id = getattr(user_ctx, "id", None)
         if user_id is None:
             logger.debug(f"Dataset ensure skipped dataset={name}: user context unavailable")
             return
@@ -1713,26 +1786,37 @@ class KnowledgeBase:
             from cognee.modules.data.methods import get_authorized_dataset_by_name, create_authorized_dataset  # noqa
         except Exception:
             return
-        exists = await get_authorized_dataset_by_name(
-            canonical, cls._to_user_ctx(user), "write"
-        )  # pyrefly: ignore[bad-argument-type]
-        if exists is not None:
-            identifier = cls._extract_dataset_identifier(exists)
-            if identifier:
-                cls._register_dataset_identifier(canonical, identifier)
-            return
-        created = await create_authorized_dataset(
-            canonical, cls._to_user_ctx(user)
-        )  # pyrefly: ignore[bad-argument-type]
-        identifier = cls._extract_dataset_identifier(created)
-        if identifier:
-            cls._register_dataset_identifier(canonical, identifier)
+        retried_setup = False
+        while True:
+            try:
+                exists = await get_authorized_dataset_by_name(
+                    canonical, user_ctx, "write"
+                )  # pyrefly: ignore[bad-argument-type]
+                if exists is not None:
+                    identifier = cls._extract_dataset_identifier(exists)
+                    if identifier:
+                        cls._register_dataset_identifier(canonical, identifier)
+                    return
+                created = await create_authorized_dataset(canonical, user_ctx)  # pyrefly: ignore[bad-argument-type]
+                identifier = cls._extract_dataset_identifier(created)
+                if identifier:
+                    cls._register_dataset_identifier(canonical, identifier)
+                return
+            except Exception as exc:
+                if _needs_cognee_setup(exc) and not retried_setup:
+                    retried_setup = True
+                    await ensure_cognee_ready()
+                    continue
+                if _needs_cognee_setup(exc):
+                    logger.warning(f"knowledge_dataset_ensure_failed dataset={canonical} detail={exc}")
+                    return
+                raise
 
     @classmethod
     async def _ensure_dataset_projected(cls, dataset: str, user: Any | None, *, timeout: float = 2.0) -> bool:
         alias = cls._alias_for_dataset(dataset)
 
-        status = await cls._wait_for_projection(dataset, user=user, timeout_s=timeout)
+        status = await cls._wait_for_projection(dataset, user=user, timeout=timeout)
         if status == ProjectionStatus.READY:
             cls._PROJECTED_DATASETS.add(alias)
             return True
@@ -1746,7 +1830,7 @@ class KnowledgeBase:
             logger.debug(f"knowledge_dataset_projection_warm_failed dataset={alias} detail={exc}")
             return False
 
-        status = await cls._wait_for_projection(dataset, user=user, timeout_s=timeout)
+        status = await cls._wait_for_projection(dataset, user=user, timeout=timeout)
         if status == ProjectionStatus.READY:
             cls._PROJECTED_DATASETS.add(alias)
             return True
@@ -1854,7 +1938,7 @@ class KnowledgeBase:
         """Fetch dataset rows, gracefully handling legacy signatures."""
         alias = cls._alias_for_dataset(dataset)
         user_ctx = cls._to_user_ctx(user)
-        dataset_id = await cls._get_dataset_id(dataset, user)
+        dataset_id = await cls._get_dataset_id(dataset, user_ctx)
         if dataset_id is None:
             cls._log_once(
                 logging.WARNING,
@@ -1956,7 +2040,7 @@ class KnowledgeBase:
             alias = cls._alias_for_dataset(dataset)
             user_ctx = cls._to_user_ctx(user)
             try:
-                dataset_id = await cls._get_dataset_id(alias, user)
+                dataset_id = await cls._get_dataset_id(alias, user_ctx)
             except ProjectionProbeError:
                 dataset_id = None
             cls._log_once(
@@ -1968,6 +2052,134 @@ class KnowledgeBase:
             )
             await cls._project_dataset(alias, user, allow_rebuild=True)
 
+    @classmethod
+    async def _wait_for_projection(
+        cls,
+        dataset: str,
+        user: Any | None,
+        *,
+        timeout: float | None = None,
+        **legacy_kwargs: Any,
+    ) -> ProjectionStatus:
+        """Wait for a dataset to be projected, with a timeout and backoff."""
+        legacy_timeout = legacy_kwargs.pop("timeout_s", None)
+        if timeout is None:
+            timeout = legacy_timeout
+        if legacy_kwargs:
+            unexpected = ", ".join(sorted(legacy_kwargs.keys()))
+            raise TypeError(f"Unexpected keyword arguments: {unexpected}")
+        alias = cls._alias_for_dataset(dataset)
+        user_ctx = cls._to_user_ctx(user)
+        if user_ctx is None:
+            cls._log_once(
+                logging.WARNING,
+                "projection:wait_skipped",
+                dataset=alias,
+                reason="user_context_unavailable",
+            )
+            return ProjectionStatus.USER_CONTEXT_UNAVAILABLE
+
+        started = monotonic()
+        probe_count = 0
+        while True:
+            probe_count += 1
+            status, reason = await cls._is_projection_ready(dataset, user_ctx)
+            if status:
+                cls._log_once(
+                    logging.DEBUG,
+                    "projection:wait_ready",
+                    dataset=alias,
+                    probes=probe_count,
+                    reason=reason,
+                    min_interval=5.0,
+                )
+                return ProjectionStatus.READY
+
+            elapsed = monotonic() - started
+            if timeout is not None and elapsed >= timeout:
+                cls._log_once(
+                    logging.WARNING,
+                    "projection:wait_timeout",
+                    dataset=alias,
+                    probes=probe_count,
+                    reason=reason,
+                    timeout_s=timeout,
+                )
+                return ProjectionStatus.TIMEOUT
+
+            backoff_idx = min(probe_count - 1, len(cls._PROJECTION_BACKOFF_SECONDS) - 1)
+            sleep_for = cls._PROJECTION_BACKOFF_SECONDS[backoff_idx]
+            cls._log_once(
+                logging.DEBUG,
+                "projection:wait_pending",
+                dataset=alias,
+                probes=probe_count,
+                reason=reason,
+                sleep_for=sleep_for,
+                min_interval=5.0,
+            )
+            await asyncio.sleep(sleep_for)
+
+    @classmethod
+    async def _is_projection_ready(cls, dataset: str, user: Any | None) -> tuple[bool, str]:
+        """Check if a dataset is fully projected and ready for use."""
+        alias = cls._alias_for_dataset(dataset)
+        user_ctx = cls._to_user_ctx(user)
+        if user_ctx is None:
+            return False, "user_context_unavailable"
+
+        try:
+            dataset_id = await cls._get_dataset_id(dataset, user_ctx)
+        except ProjectionProbeError as exc:
+            return False, f"dataset_id_unavailable: {exc}"
+        if dataset_id is None:
+            return False, "dataset_id_unavailable"
+
+        datasets_module = getattr(cognee, "datasets", None)
+        if datasets_module is None:
+            return False, "cognee_datasets_module_missing"
+
+        list_data = getattr(datasets_module, "list_data", None)
+        if not callable(list_data):
+            return False, "cognee_list_data_callable_missing"
+
+        list_data_callable = cast(Callable[..., Awaitable[Iterable[Any]]], list_data)
+        try:
+            rows = await cls._fetch_dataset_rows(list_data_callable, dataset, user_ctx)
+        except Exception as exc:
+            return False, f"list_data_fetch_failed: {exc}"
+
+        if not rows:
+            return False, "no_rows_in_dataset"
+
+        pending_rows = 0
+        empty_content_rows = 0
+        for row in rows:
+            prepared_row = cls._prepare_dataset_row(row, alias)
+            if not prepared_row.text.strip():
+                empty_content_rows += 1
+                continue
+            if not prepared_row.metadata or not prepared_row.metadata.get("digest_sha"):
+                pending_rows += 1
+                continue
+
+        if pending_rows > 0:
+            return False, f"pending_rows={pending_rows}"
+        if empty_content_rows > 0:
+            cls._log_once(
+                logging.INFO,
+                "projection:empty_content_rows",
+                dataset=alias,
+                count=empty_content_rows,
+                min_interval=30.0,
+            )
+            # If all remaining rows are empty, consider it ready but log a warning
+            if pending_rows == 0 and empty_content_rows == len(rows):
+                return True, f"all_rows_empty_content={empty_content_rows}"
+            return False, f"empty_content_rows={empty_content_rows}"
+
+        return True, "ready"
+
     @staticmethod
     def _log_task_exception(task: asyncio.Task[Any]) -> None:
         """Log exception from a background task."""
@@ -1975,53 +2187,52 @@ class KnowledgeBase:
             logger.warning(f"Dataset processing failed: {exc}", exc_info=True)
 
     @classmethod
-    def _to_user_or_none(cls, user: Any | None) -> Any | None:
-        """Temporary alias for backward compatibility."""
-        return cls._to_user_ctx(user)
-
-    @classmethod
     def _to_user_ctx(cls, user: Any | None) -> Any | None:
-        """Normalize user object into SimpleNamespace or return None for Cognee API calls."""
+        if isinstance(user, SimpleNamespace) and isinstance(getattr(user, "id", None), UUID):
+            tenant_value = getattr(user, "tenant_id", None)
+            if tenant_value is None or isinstance(tenant_value, UUID):
+                return user
         if user is None:
             return None
-        if isinstance(user, CogneeUser):
-            return SimpleNamespace(**asdict(user))
-        if is_dataclass(user) and hasattr(user, "id"):
-            return SimpleNamespace(**asdict(user))
-        if hasattr(user, "id"):
-            return user
-        return None
+
+        raw_id = getattr(user, "id", None)
+        if raw_id is None and isinstance(user, CogneeUser):
+            payload = asdict(user)
+            raw_id = payload.get("id")
+            tenant_val = payload.get("tenant_id")
+        elif raw_id is None and is_dataclass(user):
+            payload = asdict(user)
+            raw_id = payload.get("id")
+            tenant_val = payload.get("tenant_id")
+        else:
+            tenant_val = getattr(user, "tenant_id", None)
+
+        uid = cls._normalize_uuid(raw_id)
+        if uid is None:
+            return None
+        tenant_uuid = cls._normalize_uuid(tenant_val)
+        return SimpleNamespace(id=uid, tenant_id=tenant_uuid)
 
     @classmethod
     def _to_user_id(cls, user: Any | None) -> str | None:
         """Normalize user object into a string identifier for internal keys/logs or return None."""
-        user_id: str | None = None
-        kind: str = "unknown"
+        user_ctx = cls._to_user_ctx(user)
+        return user_ctx.id.hex if user_ctx else None
 
-        if user is None:
-            kind = "None"
-        elif isinstance(user, CogneeUser):
-            user_id = str(user.id)
-            kind = "CogneeUser"
-        elif is_dataclass(user):
-            d = asdict(user)
-            if d.get("id"):
-                user_id = str(d["id"])
-                kind = "dataclass"
-            else:
-                kind = "dataclass_no_id"
-        elif getattr(user, "id", None):
-            user_id = str(user.id)
-            kind = "has_id_attr"
+    @staticmethod
+    def _normalize_uuid(value: Any | None) -> UUID | None:
+        if value in (None, ""):
+            return None
+        if isinstance(value, UUID):
+            return value
+        try:
+            return UUID(str(value))
+        except Exception:
+            return uuid5(NAMESPACE_DNS, str(value))
 
-        cls._log_once(
-            logging.DEBUG,
-            "kb_user_id_startup",
-            kind=kind,
-            value=user_id or "None",
-            min_interval=3600.0,  # Log once per hour
-        )
-        return user_id
+    @classmethod
+    def _bootstrap_user_ctx(cls) -> SimpleNamespace:
+        return SimpleNamespace(id=cls._BOOTSTRAP_USER_UUID, tenant_id=None)
 
     @classmethod
     def _is_graph_missing_error(cls, exc: Exception) -> bool:
@@ -2053,7 +2264,7 @@ class KnowledgeBase:
         """Run cognify and wait for the dataset projection to become available."""
         alias = cls._alias_for_dataset(dataset)
         user_ctx = cls._to_user_ctx(user)
-        dataset_id = await cls._get_dataset_id(alias, user)
+        dataset_id = await cls._get_dataset_id(alias, user_ctx)
         target = dataset_id or alias
         if user_ctx is None:
             logger.warning(f"knowledge_project_skipped dataset={alias}: user context unavailable")
@@ -2070,7 +2281,7 @@ class KnowledgeBase:
         except FileNotFoundError as exc:
             missing_path = getattr(exc, "filename", None) or str(exc)
             logger.debug(f"knowledge_dataset_storage_missing dataset={alias} missing={missing_path}")
-            missing, healed = await cls._heal_dataset_storage(alias, user, reason="cognify_missing")
+            missing, healed = await cls._heal_dataset_storage(alias, user_ctx, reason="cognify_missing")
             cls._PROJECTED_DATASETS.discard(alias)
             if healed > 0:
                 await cls._project_dataset(alias, user, allow_rebuild=True)
@@ -2110,21 +2321,22 @@ class KnowledgeBase:
     async def rebuild_dataset(cls, dataset: str, user: Any | None, sha_only: bool = False) -> "RebuildResult":
         """Rebuild dataset content by re-adding raw entries and clearing hash store."""
         alias = cls._alias_for_dataset(dataset)
+        user_ctx = cls._to_user_ctx(user)
         reinserted = 0
         healed_count = 0
         linked_from_disk = 0
         rehydrated = 0
 
         try:
-            await cls._ensure_dataset_exists(alias, user)
+            await cls._ensure_dataset_exists(alias, user_ctx)
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"knowledge_dataset_rebuild_ensure_failed dataset={alias} detail={exc}")
-        await cls._heal_dataset_storage(alias, user, reason="rebuild_preflight")
+        await cls._heal_dataset_storage(alias, user_ctx, reason="rebuild_preflight")
         await HashStore.clear(alias)
         cls._PROJECTED_DATASETS.discard(alias)
-        await cls._heal_dataset_storage(alias, user, reason="rebuild_preflight")
+        await cls._heal_dataset_storage(alias, user_ctx, reason="rebuild_preflight")
         try:
-            entries = await cls._list_dataset_entries(alias, user)
+            entries = await cls._list_dataset_entries(alias, user_ctx)
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"knowledge_dataset_rebuild_list_failed dataset={alias} detail={exc}")
             return RebuildResult()
@@ -2146,12 +2358,12 @@ class KnowledgeBase:
                     digest_metadata.append((digest, meta_payload))
                 await HashStore.clear(alias)
                 rehydrated, reingest_healed, last_dataset = await cls._reingest_from_hashstore(
-                    alias, user, digest_metadata
+                    alias, user_ctx, digest_metadata
                 )
-                reinserted += rehydrated
+                reinserted += int(rehydrated or 0)
                 healed_count += reingest_healed
             try:
-                entries = await cls._list_dataset_entries(alias, user)
+                entries = await cls._list_dataset_entries(alias, user_ctx)
             except Exception as exc:  # noqa: BLE001
                 logger.warning(f"knowledge_dataset_rebuild_list_retry_failed dataset={alias} detail={exc}")
                 return RebuildResult()
@@ -2171,8 +2383,13 @@ class KnowledgeBase:
                 files = sorted(p.name for p in storage_root.glob("text_*.txt") if cls._filename_to_digest(p.name))[:5]
                 total_files = sum(1 for _ in storage_root.glob("text_*.txt"))
                 logger.warning(
-                    f"knowledge_dataset_rebuild_skipped dataset={alias}: no_entries "
-                    f"storage_files={total_files} sample={files} dir_count={dir_count} root_size_bytes={root_size_bytes}"
+                    "knowledge_dataset_rebuild_skipped dataset={}: no_entries "
+                    "storage_files={} sample={} dir_count={} root_size_bytes={}",
+                    alias,
+                    total_files,
+                    files,
+                    dir_count,
+                    root_size_bytes,
                 )
                 return RebuildResult()
         for entry in entries:
@@ -2218,129 +2435,6 @@ class KnowledgeBase:
         return result
 
     @classmethod
-    async def _wait_for_projection(
-        cls,
-        dataset: str,
-        user: Any | None,
-        *,
-        timeout_s: float | None = 5.0,
-    ) -> ProjectionStatus:
-        alias = cls._alias_for_dataset(dataset)
-        state = cls._projection_state(alias)
-        started = monotonic()
-        fatal_error = False
-
-        logger.debug(f"projection_wait start dataset={dataset}")
-        try:
-            await cls._ensure_dataset_exists(dataset, user)
-        except Exception as exc:  # noqa: BLE001
-            cls._log_once(logging.DEBUG, "projection:ensure_missing", dataset=alias, detail=exc)
-
-        user_ctx = cls._to_user_ctx(user)
-        if user_ctx is None:
-            logger.debug(f"projection_wait done dataset={dataset} ok=False reason=user_context_unavailable")
-            return ProjectionStatus.USER_CONTEXT_UNAVAILABLE
-
-        ds_id = await cls._get_dataset_id(dataset, user)
-
-        async def _ready() -> bool:
-            nonlocal fatal_error
-            try:
-                return await cls._is_projection_ready(dataset, user_ctx=user_ctx, user=user)
-            except ProjectionProbeError:
-                fatal_error = True
-                return False
-            except Exception as probe_exc:  # noqa: BLE001
-                cls._log_once(
-                    logging.DEBUG,
-                    "knowledge_projection_probe_error",
-                    throttle_key=f"projection:{alias}:probe_exception",
-                    dataset=alias,
-                    detail=probe_exc,
-                )
-                return False
-
-        if await _ready():
-            cls._log_once(
-                logging.DEBUG,
-                "projection:ready",
-                dataset=alias,
-                elapsed_ms=int((monotonic() - started) * 1000),
-                result="ready",
-                id=ds_id,
-                missing_files=state.get("missing_files", 0),
-                healed_count=state.get("healed_count", 0),
-                no_content_rows=state.get("no_content_rows", 0),
-                min_interval=10.0,
-            )
-            logger.debug(f"projection_wait done dataset={dataset} ok=True reason=ready")
-            return ProjectionStatus.READY
-        if fatal_error:
-            logger.debug(f"projection_wait done dataset={dataset} ok=False reason=fatal_error")
-            return ProjectionStatus.FATAL_ERROR
-
-        deadline = started + timeout_s if timeout_s and timeout_s > 0 else None
-        backoff = cls._PROJECTION_BACKOFF_SECONDS or (0.5,)
-        delay_index = 0
-        delay = backoff[delay_index]
-        while True:
-            jitter = random.uniform(0.0, min(1.0, delay * 0.1))
-            sleep_for = delay + jitter
-            next_time = monotonic() + sleep_for
-            if deadline is not None and next_time > deadline:
-                break
-            await asyncio.sleep(sleep_for)
-            if await _ready():
-                cls._log_once(
-                    logging.DEBUG,
-                    "projection:ready",
-                    dataset=alias,
-                    elapsed_ms=int((monotonic() - started) * 1000),
-                    result="ready",
-                    id=ds_id,
-                    missing_files=state.get("missing_files", 0),
-                    healed_count=state.get("healed_count", 0),
-                    no_content_rows=state.get("no_content_rows", 0),
-                    min_interval=10.0,
-                )
-                return ProjectionStatus.READY
-            if fatal_error:
-                return ProjectionStatus.FATAL_ERROR
-            if delay_index < len(backoff) - 1:
-                delay_index += 1
-                delay = backoff[delay_index]
-
-        elapsed_ms = int((monotonic() - started) * 1000)
-        if timeout_s is not None and timeout_s > 0:
-            cls._log_once(
-                logging.INFO,
-                "projection:timeout",
-                dataset=alias,
-                elapsed_ms=elapsed_ms,
-                result="timeout",
-                missing_files=state.get("missing_files", 0),
-                healed_count=state.get("healed_count", 0),
-                no_content_rows=state.get("no_content_rows", 0),
-            )
-            cls._log_once(
-                logging.INFO,
-                "projection:gate",
-                dataset=alias,
-                timeout_s=timeout_s,
-                fallback="local_only",
-            )
-        ds_id = await cls._get_dataset_id(dataset, user)
-        cls._log_once(
-            logging.DEBUG,
-            "projection:state",
-            dataset=alias,
-            status=state.get("status"),
-            reason=state.get("reason"),
-        )
-        logger.debug(f"projection_wait done dataset={dataset} ok=False reason=timeout")
-        return ProjectionStatus.TIMEOUT
-
-    @classmethod
     def _log_storage_state(
         cls,
         dataset: str,
@@ -2360,220 +2454,10 @@ class KnowledgeBase:
         )
 
     @classmethod
-    async def _is_projection_ready(
-        cls,
-        dataset: str,
-        user_ctx: Any | None = None,  # Changed from user_id
-        *,
-        user: Any | None = None,
-    ) -> bool:
-        alias = KnowledgeBase._alias_for_dataset(dataset)
-        state = cls._projection_state(alias)
-        now = time.time()
-        if now < state["next_check_ts"]:
-            return state["status"] == "ready"
-
-        datasets_module = getattr(cognee, "datasets", None)
-        if datasets_module is None:
-            cls._log_once(
-                logging.DEBUG,
-                "knowledge_projection_pending",
-                throttle_key=(alias, "projection_pending", "datasets_module_missing"),
-                dataset=alias,
-                reason="datasets_module_missing",
-                min_interval=15.0,
-            )
-            state["status"] = "pending"
-            state["reason"] = "datasets_module_missing"
-            state["next_check_ts"] = now + random.uniform(20.0, 40.0)
-            logger.info(f"[projection_status] dataset={alias} projected_rows=0 is_pending=True timeout=N/A")
-            return False
-        list_data = getattr(datasets_module, "list_data", None)
-        if not callable(list_data):
-            cls._log_once(
-                logging.DEBUG,
-                "knowledge_projection_pending",
-                throttle_key=(alias, "projection_pending", "list_data_missing"),
-                dataset=alias,
-                reason="list_data_missing",
-                min_interval=15.0,
-            )
-            state["status"] = "pending"
-            state["reason"] = "list_data_missing"
-            state["next_check_ts"] = now + random.uniform(20.0, 40.0)
-            logger.info(f"[projection_status] dataset={alias} projected_rows=0 is_pending=True timeout=N/A")
-            return False
-
-        list_data_callable = cast(Callable[..., Awaitable[Iterable[Any]]], list_data)
-        try:
-            rows = await cls._fetch_dataset_rows(list_data_callable, dataset, user)  # Changed user_ns to user_ctx
-        except ProjectionProbeError as probe_exc:
-            state["status"] = "pending"
-            state["reason"] = "dataset_id_unavailable"
-            state["next_check_ts"] = now + random.uniform(20.0, 40.0)
-            cls._log_once(
-                logging.WARNING,
-                "knowledge_projection_pending",
-                throttle_key=(alias, "projection_pending", "dataset_id_unavailable"),
-                dataset=alias,
-                reason="dataset_id_unavailable",
-                detail=probe_exc,
-                min_interval=30.0,
-            )
-            logger.info(f"[projection_status] dataset={alias} projected_rows=0 is_pending=True timeout=N/A")
-            return False
-        except Exception as exc:  # noqa: BLE001
-            state["status"] = "pending"
-            state["reason"] = "list_data_error"
-            state["next_check_ts"] = now + random.uniform(45.0, 90.0)
-            cls._log_once(
-                logging.WARNING,
-                "knowledge_projection_pending",
-                throttle_key=(alias, "projection_pending", "list_data_error"),
-                dataset=alias,
-                reason="list_data_error",
-                detail=f"{exc.__class__.__name__} {exc}",
-                min_interval=30.0,
-            )
-            logger.info(f"[projection_status] dataset={alias} projected_rows=0 is_pending=True timeout=N/A")
-            return False
-
-        rows = list(rows)
-        row_count = len(rows)
-        cls._log_once(
-            logging.DEBUG,
-            "kb_projection_rows",
-            throttle_key=f"projection:{alias}:row_count",
-            dataset=alias,
-            rows=row_count,
-            min_interval=30.0,
-        )
-        doc_rows = 0
-        message_rows = 0
-        content_rows = 0
-        missing_files = 0
-        entries_snapshot: list[DatasetRow] = []
-        no_content_rows = 0
-        missing_files_sample: list[str] = []
-        for raw_row in rows:
-            try:
-                prepared = cls._prepare_dataset_row(raw_row, alias)
-            except Exception as exc:
-                cls._log_once(
-                    logging.WARNING,
-                    "knowledge_projection_prepare_failed",
-                    throttle_key=(alias, "prepare_dataset_row_failed"),
-                    dataset=alias,
-                    detail=exc,
-                )
-                continue
-
-            entries_snapshot.append(prepared)
-            metadata_map = prepared.metadata if isinstance(prepared.metadata, Mapping) else None
-            digest_sha = cls._metadata_digest_sha(metadata_map)
-            storage_path = cls._storage_path_for_sha(digest_sha) if digest_sha else None
-            sha_exists = storage_path.exists() if storage_path else False
-            storage_exists = sha_exists
-            normalized_entry = cls._normalize_text(prepared.text)
-            if not normalized_entry:
-                if not storage_exists:
-                    missing_files += 1
-                    if len(missing_files_sample) < 5 and digest_sha:
-                        missing_files_sample.append(digest_sha)
-                else:
-                    no_content_rows += 1
-                continue
-            content_rows += 1
-            if not storage_exists:
-                missing_files += 1
-                if len(missing_files_sample) < 5 and digest_sha:
-                    missing_files_sample.append(digest_sha)
-
-            kind_value = cls._resolve_snippet_kind(prepared.metadata, normalized_entry)
-            if kind_value == "message":
-                message_rows += 1
-            elif kind_value in {"document", "note"}:
-                doc_rows += 1
-
-        state["no_content_rows"] = no_content_rows
-        state["missing_files"] = missing_files
-
-        if row_count > 0 and content_rows == 0 and missing_files > 0:
-            state["status"] = "pending"
-            state["reason"] = "storage_missing"
-            state["next_check_ts"] = now + random.uniform(5.0, 10.0)
-            cls._log_once(
-                logging.INFO,
-                "knowledge_projection_pending",
-                throttle_key=(alias, "projection_pending", "storage_missing"),
-                dataset=alias,
-                reason="storage_missing",
-                rows=row_count,
-                missing_files=missing_files,
-                missing_files_sample=missing_files_sample,
-                min_interval=15.0,
-            )
-            logger.info(f"[projection_status] dataset={alias} projected_rows={row_count} is_pending=True timeout=N/A")
-            return False
-
-        if doc_rows > 0:
-            if await HashStore.list(alias):
-                state["status"] = "ready"
-                state["reason"] = None
-                state["next_check_ts"] = now + random.uniform(300.0, 600.0)
-                cls._log_once(
-                    logging.DEBUG,
-                    "knowledge_projection_ready",
-                    throttle_key=(alias, "projection_ready"),
-                    dataset=alias,
-                    rows=row_count,
-                    docs=doc_rows,
-                    messages=message_rows,
-                    missing_files=state.get("missing_files", 0),
-                    healed_count=state.get("healed_count", 0),
-                    no_content_rows=state.get("no_content_rows", 0),
-                    min_interval=15.0,
-                )
-                logger.info(
-                    f"[projection_status] dataset={alias} projected_rows={row_count} is_pending=False timeout=N/A"
-                )
-                return True
-
-        if row_count > 0:
-            state["status"] = "pending"
-            state["reason"] = "no_documents"
-            state["next_check_ts"] = now + random.uniform(10.0, 20.0)
-            cls._log_once(
-                logging.DEBUG,
-                "knowledge_projection_pending",
-                throttle_key=(alias, "projection_pending", "no_documents"),
-                dataset=alias,
-                reason="no_documents",
-                rows=row_count,
-                min_interval=15.0,
-            )
-            logger.info(f"[projection_status] dataset={alias} projected_rows={row_count} is_pending=True timeout=N/A")
-            return False
-
-        state["status"] = "pending"
-        state["reason"] = "no_rows"
-        state["next_check_ts"] = now + random.uniform(10.0, 20.0)
-        cls._log_once(
-            logging.DEBUG,
-            "knowledge_projection_pending",
-            throttle_key=(alias, "projection_pending", "no_rows"),
-            dataset=alias,
-            reason="no_rows",
-            min_interval=15.0,
-        )
-        logger.info(f"[projection_status] dataset={alias} projected_rows=0 is_pending=True timeout=N/A")
-        return False
-
-    @classmethod
     async def _fallback_dataset_entries(
         cls,
         datasets: Sequence[str],
-        user: Any | None,
+        user_ctx: Any | None,
         *,
         top_k: int | None,
     ) -> list[str]:
@@ -2581,7 +2465,7 @@ class KnowledgeBase:
         collected: list[str] = []
         limit = top_k or 6
         for dataset in datasets:
-            rows = await cls._list_dataset_entries(dataset, user)
+            rows = await cls._list_dataset_entries(dataset, user_ctx)
             if not rows:
                 continue
             alias = cls._alias_for_dataset(dataset)
@@ -2614,10 +2498,11 @@ class KnowledgeBase:
         user = await cls._get_cognee_user()
         aliases = [cls._dataset_name(client_id), cls.GLOBAL_DATASET]
         datasets = [cls._resolve_dataset_alias(alias) for alias in aliases]
-        return await cls._fallback_dataset_entries(datasets, user, top_k=limit)
+        user_ctx = cls._to_user_ctx(user)
+        return await cls._fallback_dataset_entries(datasets, user_ctx, top_k=limit)
 
     @classmethod
-    async def _list_dataset_entries(cls, dataset: str, user: Any | None) -> list[DatasetRow]:
+    async def _list_dataset_entries(cls, dataset: str, user_ctx: Any | None) -> list[DatasetRow]:
         alias = cls._alias_for_dataset(dataset)
         datasets_module = getattr(cognee, "datasets", None)
         if datasets_module is None:
@@ -2628,15 +2513,14 @@ class KnowledgeBase:
             logger.debug(f"knowledge_dataset_list_skipped dataset={alias}: list_data missing")
             return []
         try:
-            await cls._ensure_dataset_exists(alias, user)
+            await cls._ensure_dataset_exists(alias, user_ctx)
         except Exception as exc:  # pragma: no cover - best effort to keep flow running
             logger.debug(f"knowledge_dataset_ensure_failed dataset={alias} detail={exc}")
-        user_ctx = cls._to_user_ctx(user)
         try:
             rows = await cls._fetch_dataset_rows(
                 cast(Callable[..., Awaitable[Iterable[Any]]], list_data),
                 alias,
-                user,
+                user_ctx,
             )
         except Exception as exc:  # noqa: BLE001 - dataset listing is best effort
             logger.debug(f"knowledge_dataset_list_failed dataset={alias} detail={exc}")
@@ -2684,7 +2568,7 @@ class KnowledgeBase:
         info["no_content_rows"] = state.get("no_content_rows", 0)
         info["missing_files"] = state.get("missing_files", 0)
         info["healed_count"] = state.get("healed_count", 0)
-        metadata = await cls._get_dataset_metadata(resolved, user)
+        metadata = await cls._get_dataset_metadata(resolved, user_ctx)
         if metadata is not None:
             identifier = getattr(metadata, "id", None) or getattr(metadata, "dataset_id", None)
             if identifier:
@@ -2693,7 +2577,7 @@ class KnowledgeBase:
             if updated_at is not None:
                 info["updated_at"] = str(updated_at)
         try:
-            entries = await cls._list_dataset_entries(resolved, user)
+            entries = await cls._list_dataset_entries(resolved, user_ctx)
         except Exception as exc:  # noqa: BLE001
             info["last_error"] = str(exc)
             entries = []
@@ -2705,20 +2589,21 @@ class KnowledgeBase:
             )
         else:
             info["documents"] = 0
-        user_ctx = cls._to_user_ctx(user)
         try:
-            info["projected"] = await cls._is_projection_ready(resolved, user_ctx=user_ctx, user=user)
+            projected, projected_reason = await cls._is_projection_ready(resolved, user_ctx)
+            info["projected"] = projected
+            info["projection_reason"] = projected_reason
         except Exception as exc:
             info["last_error"] = str(exc)
         return info
 
     @classmethod
-    async def _resolve_dataset_identifier(cls, dataset: str, user: Any | None) -> str:
+    async def _resolve_dataset_identifier(cls, dataset: str, user_ctx: Any | None) -> str:
         alias = cls._alias_for_dataset(dataset)
         mapped = cls._DATASET_IDS.get(alias)
         if mapped:
             return mapped
-        metadata = await cls._get_dataset_metadata(alias, user)
+        metadata = await cls._get_dataset_metadata(alias, user_ctx)
         if metadata is not None:
             identifier = cls._extract_dataset_identifier(metadata)
             if identifier:
@@ -2727,12 +2612,11 @@ class KnowledgeBase:
         return alias
 
     @classmethod
-    async def _get_dataset_metadata(cls, dataset: str, user: Any | None) -> Any | None:
+    async def _get_dataset_metadata(cls, dataset: str, user_ctx: Any | None) -> Any | None:
         try:  # pragma: no cover - optional dependency
             from cognee.modules.data.methods import get_authorized_dataset_by_name  # type: ignore
         except Exception:
             return None
-        user_ctx = cls._to_user_ctx(user)
         try:
             return await get_authorized_dataset_by_name(dataset, user_ctx, "read")
         except Exception as exc:  # noqa: BLE001

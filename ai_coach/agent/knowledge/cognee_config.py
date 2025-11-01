@@ -1,21 +1,23 @@
-import importlib
-import os
-from importlib import import_module
-
 # pyrefly: ignore-file
 # ruff: noqa
 """Cognee configuration helpers."""
 
+import importlib
+import inspect
+import os
+from importlib import import_module
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Awaitable, Callable, ClassVar, Optional, cast
 from uuid import uuid4
 
-import cognee
 from loguru import logger
 from sqlalchemy import schema as sa_schema
 
 from config.app_settings import settings
+
+_COGNEE_MODULE: ModuleType | None = None
+_COGNEE_SETUP_DONE = False
 
 
 def _directory_snapshot(path: Path, limit: int = 10) -> tuple[list[str], int]:
@@ -34,22 +36,14 @@ def _directory_snapshot(path: Path, limit: int = 10) -> tuple[list[str], int]:
         return [], 0
 
 
-def _prepare_storage_root() -> Path:
-    storage_candidate = (
-        os.environ.get("COGNEE_STORAGE_PATH") or os.environ.get("COGNEE_DATA_ROOT") or settings.COGNEE_STORAGE_PATH
-    )
-    root = Path(storage_candidate).expanduser().resolve()
-    root.mkdir(parents=True, exist_ok=True)
-    for sub in (".cognee_system/databases", ".cognee_system/vectordb"):
-        (root / sub).mkdir(parents=True, exist_ok=True)
-    os.environ["COGNEE_STORAGE_PATH"] = str(root)
-    os.environ["COGNEE_DATA_ROOT"] = str(root)
-    _log_storage_details(root)
-    return root
-
-
 def _package_storage_candidates() -> list[Path]:
-    base_dir = Path(cognee.__file__).resolve().parent
+    try:
+        module = importlib.import_module("cognee")
+    except Exception as exc:  # noqa: BLE001
+        logger.debug(f"cognee_package_lookup_failed detail={exc}")
+        return []
+
+    base_dir = Path(module.__file__).resolve().parent
     names = ("cognee_storage", ".data_storage")
     candidates: list[Path] = []
     seen: set[str] = set()
@@ -65,7 +59,7 @@ def _package_storage_candidates() -> list[Path]:
 
 def _collect_storage_info(root: Path | None) -> dict[str, Any]:
     package_candidates = _package_storage_candidates()
-    package_storage = package_candidates[0] if package_candidates else Path(cognee.__file__).resolve().parent
+    package_storage: Path | None = package_candidates[0] if package_candidates else None
     package_exists = False
     package_is_symlink = False
     package_target: str | None = None
@@ -86,7 +80,7 @@ def _collect_storage_info(root: Path | None) -> dict[str, Any]:
             except Exception as exc:  # noqa: BLE001
                 logger.debug(f"cognee_storage_readlink_failed path={candidate} detail={exc}")
             break
-    if package_target is None:
+    if package_target is None and package_storage is not None:
         try:
             package_target = str(package_storage.resolve(strict=False))
         except Exception as exc:  # noqa: BLE001
@@ -94,7 +88,7 @@ def _collect_storage_info(root: Path | None) -> dict[str, Any]:
 
     entries_sample: list[str]
     entries_count: int
-    if root is not None and root.exists():
+    if isinstance(root, Path) and root.exists():
         entries_sample, entries_count = _directory_snapshot(root)
     else:
         entries_sample, entries_count = [], 0
@@ -108,7 +102,7 @@ def _collect_storage_info(root: Path | None) -> dict[str, Any]:
         "root_writable": root_writable,
         "entries_sample": entries_sample,
         "entries_count": entries_count,
-        "package_path": str(package_storage),
+        "package_path": str(package_storage) if package_storage is not None else None,
         "package_exists": package_exists,
         "package_is_symlink": package_is_symlink,
         "package_target": package_target,
@@ -119,11 +113,32 @@ def _collect_storage_info(root: Path | None) -> dict[str, Any]:
 def _log_storage_details(root: Path) -> None:
     info = _collect_storage_info(root)
     logger.info(
-        f"cognee_storage prepared path={info['root']} exists={info['root_exists']} "
-        f"writable={info['root_writable']} entries={info['entries_count']} sample={info['entries_sample']} "
-        f"package_path={info['package_path']} package_exists={info['package_exists']} "
-        f"package_is_symlink={info['package_is_symlink']} package_target={info['package_target']}"
+        "cognee_storage prepared path={} exists={} writable={} entries={} sample={} "
+        "package_path={} package_exists={} package_is_symlink={} package_target={}",
+        info["root"],
+        info["root_exists"],
+        info["root_writable"],
+        info["entries_count"],
+        info["entries_sample"],
+        info["package_path"],
+        info["package_exists"],
+        info["package_is_symlink"],
+        info["package_target"],
     )
+
+
+def _prepare_storage_root() -> Path:
+    storage_candidate = (
+        os.environ.get("COGNEE_STORAGE_PATH") or os.environ.get("COGNEE_DATA_ROOT") or settings.COGNEE_STORAGE_PATH
+    )
+    root = Path(storage_candidate).expanduser().resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    for sub in (".cognee_system/databases", ".cognee_system/vectordb"):
+        (root / sub).mkdir(parents=True, exist_ok=True)
+    os.environ["COGNEE_STORAGE_PATH"] = str(root)
+    os.environ["COGNEE_DATA_ROOT"] = str(root)
+    _log_storage_details(root)
+    return root
 
 
 def _resolve_localfilestorage_class() -> Optional[type[Any]]:
@@ -189,7 +204,9 @@ def _patch_local_file_storage(root: Path) -> None:
 
     if not callable(original_open):
         logger.info(
-            f"cognee_storage localfilestorage_no_open class={local_storage_cls.__name__} storage_path={storage_attr}"
+            "cognee_storage localfilestorage_no_open class={} storage_path={}",
+            local_storage_cls.__name__,
+            storage_attr,
         )
         setattr(local_storage_cls, "_gymbot_storage_patched", True)
         return
@@ -197,13 +214,14 @@ def _patch_local_file_storage(root: Path) -> None:
     def open_with_project_storage(self: Any, file_path: str, mode: str = "r", **kwargs: Any) -> Any:
         raw_path = Path(file_path)
         target_path = _remap_path(raw_path)
-        if any(flag in mode for flag in ("w", "a", "x", "+")):
+        write_mode = any(flag in mode for flag in ("w", "a", "x", "+"))
+        if write_mode:
             target_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             return target_path.open(mode, **kwargs)
         except FileNotFoundError:
-            if allow_package_storage and callable(original_open):
-                logger.warning(f"cognee_storage package_fallback file={file_path} root={root}")
+            if allow_package_storage and not write_mode and callable(original_open):
+                logger.warning("cognee_storage package_fallback file={} root={}", file_path, root)
                 return original_open(self, file_path, mode, **kwargs)
             raise
 
@@ -211,8 +229,11 @@ def _patch_local_file_storage(root: Path) -> None:
     setattr(local_storage_cls, "_gymbot_storage_patched", True)
 
     logger.info(
-        f"cognee_storage patched_local_file_storage class={local_storage_cls.__name__} "
-        f"root={root} storage_path={storage_attr} allow_package_storage={allow_package_storage}"
+        "cognee_storage patched_local_file_storage class={} root={} storage_path={} allow_package_storage={}",
+        local_storage_cls.__name__,
+        root,
+        storage_attr,
+        allow_package_storage,
     )
 
 
@@ -223,6 +244,12 @@ class CogneeConfig:
     def apply(cls) -> None:
         storage_root = _prepare_storage_root()
         cls._STORAGE_ROOT = storage_root
+
+        global _COGNEE_MODULE
+        if _COGNEE_MODULE is None:
+            _COGNEE_MODULE = importlib.import_module("cognee")
+        globals()["cognee"] = _COGNEE_MODULE
+
         _patch_local_file_storage(storage_root)
         cls._configure_llm()
         cls._configure_vector_db()
@@ -295,8 +322,8 @@ class CogneeConfig:
             if GenericAPIAdapter:
                 CogneeConfig._patch_generic_api_adapter(GenericAPIAdapter)
 
-        except Exception as e:
-            logger.debug(f"Cognee patch failed: {e}")
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"Cognee patch failed: {exc}")
 
     @staticmethod
     def _patch_graph_relationship_ledger(ledger_cls: type) -> None:
@@ -355,8 +382,8 @@ class CogneeConfig:
                 func = getattr(m_cad, "create_authorized_dataset", None)
                 if callable(func):
                     m_lcd.__dict__["create_authorized_dataset"] = func
-        except Exception as e:
-            logger.debug(f"Patch dataset creation failed: {e}")
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"Patch dataset creation failed: {exc}")
 
     @classmethod
     def _patch_rbac_and_dataset_resolvers(cls) -> None:
@@ -375,7 +402,7 @@ class CogneeConfig:
                         res = await original_all(user, permission_type)
                     except Exception:
                         return []
-                    return [x for x in (res or []) if getattr(x, "id", None)]
+                    return [entry for entry in (res or []) if getattr(entry, "id", None)]
 
                 setattr(m_all, "get_all_user_permission_datasets", safe_all)
 
@@ -387,7 +414,7 @@ class CogneeConfig:
                         res = await original_auth(datasets, permission_type, user)
                     except Exception:
                         return []
-                    return [x for x in (res or []) if getattr(x, "id", None)]
+                    return [entry for entry in (res or []) if getattr(entry, "id", None)]
 
                 setattr(m_auth, "get_authorized_existing_datasets", safe_auth)
 
@@ -403,5 +430,48 @@ class CogneeConfig:
                     mod.__dict__["get_all_user_permission_datasets"] = m_all.get_all_user_permission_datasets
                 if "get_authorized_existing_datasets" in mod.__dict__ and callable(orig_auth):
                     mod.__dict__["get_authorized_existing_datasets"] = m_auth.get_authorized_existing_datasets
-        except Exception as e:
-            logger.debug(f"Patch RBAC resolvers failed: {e}")
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"Patch RBAC resolvers failed: {exc}")
+
+
+async def ensure_cognee_ready() -> None:
+    """Ensure Cognee setup is executed only once."""
+    global _COGNEE_SETUP_DONE
+    if _COGNEE_SETUP_DONE:
+        return
+
+    try:
+        cognee_module = importlib.import_module("cognee")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"Cognee setup skipped: {exc}")
+        return
+    global _COGNEE_MODULE
+    _COGNEE_MODULE = cognee_module
+
+    setup_callable = getattr(cognee_module, "setup", None)
+    if callable(setup_callable):
+        try:
+            result = setup_callable()
+            if inspect.isawaitable(result):
+                await result
+            _COGNEE_SETUP_DONE = True
+            return
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"Cognee setup() failed: {exc}")
+
+    try:
+        from cognee.modules.engine.operations.setup import setup as legacy_setup  # type: ignore
+    except Exception as exc:  # noqa: BLE001
+        logger.debug(f"Cognee legacy setup unavailable: {exc}")
+        return
+
+    if _COGNEE_SETUP_DONE:
+        return
+
+    try:
+        legacy_result = legacy_setup()
+        if inspect.isawaitable(legacy_result):
+            await legacy_result
+        _COGNEE_SETUP_DONE = True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"Cognee legacy setup failed: {exc}")

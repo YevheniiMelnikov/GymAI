@@ -9,8 +9,9 @@ from fastapi.security import HTTPBasic
 
 from loguru import logger
 
-from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase, ProjectionStatus
 from ai_coach.agent.knowledge.base_knowledge_loader import KnowledgeLoader
+from ai_coach.agent.knowledge.cognee_config import CogneeConfig, ensure_cognee_ready
 from dependency_injector import providers
 
 from core.containers import create_container, set_container, get_container
@@ -42,27 +43,31 @@ async def init_knowledge_base(knowledge_loader: KnowledgeLoader | None = None) -
         knowledge_ready_event.clear()
         raise
 
-    projection_ready = False
+    projection_ready_status = ProjectionStatus.FATAL_ERROR
     configured_timeout = float(settings.AI_COACH_GLOBAL_PROJECTION_TIMEOUT)
     projection_timeout = max(configured_timeout, 45.0)
     try:
-        projection_ready = await KnowledgeBase.ensure_global_projected(timeout=projection_timeout)
-        if projection_ready:
+        projection_ready_status = await KnowledgeBase.ensure_global_projected(timeout=projection_timeout)
+        if projection_ready_status == ProjectionStatus.READY:
             logger.info("knowledge_dataset_cognify_ok dataset=kb_global")
     except Exception as exc:  # noqa: BLE001 - best-effort diagnostics
         logger.warning(f"AI coach projection wait failed: {exc}")
-    if projection_ready:
+    if projection_ready_status == ProjectionStatus.READY:
         logger.success("AI coach initialized")
     else:
-        logger.warning(f"AI coach global dataset not projected within {projection_timeout:.1f}s")
+        logger.warning(
+            "AI coach global dataset not projected within %.1fs, status: %s",
+            projection_timeout,
+            projection_ready_status.value,
+        )
 
         async def _await_projection() -> None:
             try:
-                ready = await KnowledgeBase.ensure_global_projected(timeout=projection_timeout)
+                ready_status = await KnowledgeBase.ensure_global_projected(timeout=projection_timeout)
             except Exception as wait_exc:  # noqa: BLE001
                 logger.warning(f"AI coach delayed projection wait failed: {wait_exc}")
                 return
-            if ready and knowledge_ready_event is not None:
+            if ready_status == ProjectionStatus.READY and knowledge_ready_event is not None:
                 logger.info("knowledge_dataset_cognify_ok dataset=kb_global")
                 logger.info("AI coach global dataset projection ready after delay")
 
@@ -85,6 +90,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     init_resources = container.init_resources()
     if init_resources is not None:
         await init_resources
+
+    CogneeConfig.apply()
+    await ensure_cognee_ready()
 
     loader = GDriveDocumentLoader(KnowledgeBase.add_text)
     await init_knowledge_base(loader)

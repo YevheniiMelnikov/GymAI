@@ -1,13 +1,9 @@
-
-import asyncio
-import re
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from cognee.modules.data.exceptions import DatasetNotFoundError
 
-from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase, ProjectionProbeError
+from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase, ProjectionStatus
 
 
 @pytest.fixture(autouse=True)
@@ -25,9 +21,7 @@ async def test_add_text_file_not_found_retry(monkeypatch):
     dataset = "test_dataset"
     text = "some text"
 
-    mock_update_dataset = AsyncMock(
-        side_effect=[FileNotFoundError("File not found"), ("resolved_name", True)]
-    )
+    mock_update_dataset = AsyncMock(side_effect=[FileNotFoundError("File not found"), ("resolved_name", True)])
     mock_ensure_storage_file = MagicMock()
     mock_hash_store_clear = AsyncMock()
     mock_rebuild_dataset = AsyncMock(return_value=True)
@@ -53,19 +47,17 @@ async def test_add_text_file_not_found_retry(monkeypatch):
 async def test_wait_for_projection_ready():
     """Unit-test _wait_for_projection: branch ready."""
     with patch.object(KnowledgeBase, "_is_projection_ready", new_callable=AsyncMock) as mock_is_ready:
-        mock_is_ready.return_value = True
-            status = await KnowledgeBase._wait_for_projection("test_dataset", user=object())
-            assert status == ProjectionStatus.READY is True
+        mock_is_ready.return_value = (True, "ready")
+        status = await KnowledgeBase._wait_for_projection("test_dataset", user=object())
+    assert status == ProjectionStatus.READY
 
 
 @pytest.mark.asyncio
 async def test_wait_for_projection_timeout():
     """Unit-test _wait_for_projection: branch timeout."""
     with patch.object(KnowledgeBase, "_is_projection_ready", new_callable=AsyncMock) as mock_is_ready:
-        mock_is_ready.return_value = False
-    status = await KnowledgeBase._wait_for_projection(
-        "test_dataset", user=object(), timeout_s=0.01
-    )
+        mock_is_ready.return_value = (False, "pending_rows=1")
+    status = await KnowledgeBase._wait_for_projection("test_dataset", user=object(), timeout_s=0.01)
     assert status == ProjectionStatus.TIMEOUT
 
 
