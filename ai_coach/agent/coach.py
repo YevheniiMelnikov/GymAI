@@ -358,14 +358,13 @@ class CoachAgent:
             "- Keep guidance evidence-based and actionable.\n"
             "- Treat ambiguous terms (e.g. 'сушка') as fitness context unless explicitly about towels or beauty.\n"
             "- Answer in the client's language and stay concise.\n"
-            "- Mention which knowledge snippets you used; fall back to ['general_knowledge'] when none apply."
         )
         user_prompt = (
             f"Client language: {language}\n"
             f"Client question: {prompt}\n"
             "Knowledge entries (client and global):\n"
             f"{knowledge_section}\n"
-            "Respond with practical fitness advice and cite the snippet IDs you relied on."
+            "Respond with practical fitness advice."
         )
 
         try:
@@ -522,14 +521,13 @@ class CoachAgent:
             "You are GymBot's fitness coach.\n"
             "- Use the provided knowledge snippets first.\n"
             "- Keep the answer short, motivating, and in the client's language.\n"
-            "- List the snippet IDs you used or ['general_knowledge'] when none are relevant."
         )
         user_prompt = (
             f"Client language: {language}\n"
             f"Client question: {prompt}\n"
             "Knowledge entries:\n"
             f"{knowledge_section}\n"
-            "Return an actionable answer and cite the snippet IDs you relied on."
+            "Return an actionable answer."
         )
         response = await cls._complete_with_retries(
             client,

@@ -146,6 +146,7 @@ class Settings(BaseSettings):
 
     BOT_TOKEN: Annotated[str, Field(default="")]
     BOT_LINK: Annotated[str, Field(default="")]
+    BOT_NAME: str = "Lifty"
     WEBHOOK_HOST: Annotated[str, Field(default="")]
     HOST_NGINX_PORT: Annotated[str, Field(default="8000")]
     WEBAPP_PUBLIC_URL: Annotated[str | None, Field(default=None)]

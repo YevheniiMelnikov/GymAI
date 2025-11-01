@@ -68,6 +68,7 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
         state_key = StorageKey(bot_id=bot.id, chat_id=profile.tg_id, user_id=profile.tg_id)
         fsm = FSMContext(storage=storage, key=state_key)
         state_data = await fsm.get_data()
+        reply_to_message_id = state_data.get("ask_ai_question_message_id")
         state_data.update(
             {
                 "profile": profile.model_dump(),
@@ -75,7 +76,7 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
                 "last_request_id": payload.request_id,
             }
         )
-        for temporary_key in ("ask_ai_prompt_id", "ask_ai_prompt_chat_id", "ask_ai_cost"):
+        for temporary_key in ("ask_ai_prompt_id", "ask_ai_prompt_chat_id", "ask_ai_cost", "ask_ai_question_message_id"):
             state_data.pop(temporary_key, None)
         await fsm.set_data(state_data)
 
@@ -91,7 +92,7 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
         await state_tracker.mark_failed(request_id, reason)
         error_message = msg_text("coach_agent_error", language).format(tg=settings.TG_SUPPORT_CONTACT)
         try:
-            await bot.send_message(chat_id=profile.tg_id, text=error_message)
+            await bot.send_message(chat_id=profile.tg_id, text=error_message, reply_to_message_id=reply_to_message_id)
         except Exception as exc:  # noqa: BLE001
             logger.error(
                 f"event=ask_ai_error_message_failed request_id={request_id} profile_id={profile.id} error={exc!s}"
@@ -110,7 +111,7 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
         if not settings.DISABLE_MANUAL_PLACEHOLDER:
             fallback = msg_text("coach_agent_error", language).format(tg=settings.TG_SUPPORT_CONTACT)
             try:
-                await bot.send_message(chat_id=profile.tg_id, text=fallback)
+                await bot.send_message(chat_id=profile.tg_id, text=fallback, reply_to_message_id=reply_to_message_id)
             except Exception as exc:  # noqa: BLE001
                 logger.error(
                     "event=ask_ai_empty_error_message_failed request_id={} profile_id={} error={}",
@@ -130,7 +131,7 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
         )
 
     escaped_answer = html.escape(answer_text)
-    message_text = msg_text("ask_ai_answer", language).format(answer=escaped_answer)
+    message_text = msg_text("incoming_message", language).format(name=settings.BOT_NAME, message=escaped_answer)
     chunks = list(_chunk_message(message_text))
     rendered_len = sum(len(chunk) for chunk in chunks)
     truncated = "yes" if len(chunks) > 1 else "no"
@@ -148,6 +149,7 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
                 text=chunk,
                 parse_mode=ParseMode.HTML,
                 disable_web_page_preview=True,
+                reply_to_message_id=reply_to_message_id,
             )
     except Exception as exc:  # noqa: BLE001
         await state_tracker.mark_failed(request_id, f"send_failed:{exc!s}")

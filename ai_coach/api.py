@@ -6,6 +6,9 @@ from pydantic import ValidationError  # pyrefly: ignore[import-error]
 from typing import Any, Awaitable, Callable, cast
 from time import monotonic
 from uuid import uuid4
+import re
+from hashlib import sha1
+from cachetools import TTLCache
 
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from ai_coach.agent import AgentDeps, CoachAgent  # pyrefly: ignore[missing-module-attribute]
@@ -23,6 +26,8 @@ from core.schemas import QAResponse
 CoachAction = Callable[[AskCtx], Awaitable[Program | Subscription | QAResponse | list[str] | None]]
 
 DEFAULT_WORKOUT_DAYS: tuple[str, ...] = ("Пн", "Ср", "Пт", "Сб")
+
+dedupe_cache = TTLCache(maxsize=2048, ttl=15)
 
 
 def _validate_refresh_credentials(credentials: HTTPBasicCredentials) -> None:
@@ -154,6 +159,13 @@ async def ask(
     started = monotonic()
     result: Any | None = None
     default_model = settings.AGENT_MODEL
+    dedupe_key: str | None = None
+
+    if data.prompt:
+        dedupe_key = sha1(f"{data.client_id}:{data.prompt.strip()}:{mode.value}".encode()).hexdigest()
+        if dedupe_key in dedupe_cache:
+            logger.info(f"ask.deduped rid={rid} key={dedupe_key}")
+            return dedupe_cache[dedupe_key]
 
     with logger.contextualize(rid=rid):
         logger.debug(
@@ -297,6 +309,10 @@ async def ask(
                     deps.tool_calls,
                     deps.knowledge_base_empty,
                 )
+
+            if dedupe_key and result and not isinstance(result, JSONResponse):
+                dedupe_cache[dedupe_key] = result
+
             return result
 
         except AgentExecutionAborted as exc:

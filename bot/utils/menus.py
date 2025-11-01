@@ -132,13 +132,14 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
             await state.update_data(message_ids=[profile_msg.message_id, name_msg.message_id])
 
 
-async def show_main_menu(message: Message, profile: Profile, state: FSMContext) -> None:
+async def show_main_menu(message: Message, profile: Profile, state: FSMContext, *, delete_source: bool = True) -> None:
     menu = kb.client_menu_kb if profile.role == "client" else kb.coach_menu_kb
     await state.clear()
     await state.update_data(profile=profile.model_dump())
     await state.set_state(States.main_menu)
     await answer_msg(message, msg_text("main_menu", profile.language), reply_markup=menu(profile.language))
-    await del_msg(cast(Message | CallbackQuery | None, message))
+    if delete_source:
+        await del_msg(cast(Message | CallbackQuery | None, message))
 
 
 async def show_balance_menu(callback_obj: CallbackQuery | Message, profile: Profile, state: FSMContext) -> None:
