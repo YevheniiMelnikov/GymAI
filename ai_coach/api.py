@@ -14,7 +14,7 @@ from core.exceptions import UserServiceError
 from core.services import APIService
 from ai_coach.application import app, security
 from ai_coach.schemas import AICoachRequest
-from ai_coach.types import AskCtx, CoachMode
+from ai_coach.types import AskCtx, CoachMode, MessageRole
 from core.enums import WorkoutPlanType, SubscriptionPeriod
 from config.app_settings import settings
 from core.schemas import Client, Profile, Program, Subscription
@@ -224,6 +224,16 @@ async def ask(
         logger.debug(f"/ask ctx.language={language} deps.locale={deps.locale} mode={mode.value}")
 
         try:
+            if mode == CoachMode.ask_ai and data.prompt:
+                kb_chat_dataset = KnowledgeBase._chat_dataset_name(data.client_id)
+                await KnowledgeBase.add_text(
+                    dataset=kb_chat_dataset,
+                    text=data.prompt,
+                    role=MessageRole.CLIENT,
+                    client_id=data.client_id,
+                )
+                logger.info(f"chat_ingest question_bytes={len(data.prompt.encode())} dataset={kb_chat_dataset}")
+
             coach_agent_action = DISPATCH[mode]
         except KeyError as e:
             logger.exception(f"/ask unsupported mode={mode.value}")

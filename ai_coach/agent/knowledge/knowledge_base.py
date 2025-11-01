@@ -94,6 +94,8 @@ class ProjectionStatus(Enum):
     TIMEOUT = "timeout"
     FATAL_ERROR = "fatal_error"
     USER_CONTEXT_UNAVAILABLE = "user_context_unavailable"
+    READY_NO_ROWS = "ready_no_rows"
+    READY_EMPTY = "ready_empty"
 
 
 @dataclass(slots=True)
@@ -643,6 +645,101 @@ class KnowledgeBase:
         return aggregated
 
     @classmethod
+    async def _list_dataset_entries(cls, dataset: str, user_ctx: Any | None) -> list[DatasetRow]:
+        alias = cls._alias_for_dataset(dataset)
+        if user_ctx is None:
+            return []
+
+        datasets_module = getattr(cognee, "datasets", None)
+        if datasets_module is None:
+            return []
+
+        list_data = getattr(datasets_module, "list_data", None)
+        if not callable(list_data):
+            return []
+
+        list_data_callable = cast(Callable[..., Awaitable[Iterable[Any]]], list_data)
+        try:
+            raw_rows = await cls._fetch_dataset_rows(list_data_callable, dataset, user_ctx)
+        except Exception:
+            return []
+
+        return [cls._prepare_dataset_row(row, alias) for row in raw_rows]
+
+    @dataclass(slots=True)
+    class ProjectionCounters:
+        row_count: int = 0
+        empty_content_count: int = 0
+
+    @classmethod
+    async def _get_projection_counters(cls, dataset: str, user_ctx: Any) -> ProjectionCounters:
+        rows = await cls._list_dataset_entries(dataset, user_ctx)
+        row_count = len(rows)
+        empty_content_count = sum(1 for row in rows if not row.text.strip())
+        return cls.ProjectionCounters(row_count=row_count, empty_content_count=empty_content_count)
+
+    @classmethod
+    async def _get_projection_status(cls, dataset: str, user: Any) -> tuple[ProjectionStatus, str]:
+        user_ctx = cls._to_user_ctx(user)
+        alias = cls._alias_for_dataset(dataset)
+        if user_ctx is None:
+            return ProjectionStatus.USER_CONTEXT_UNAVAILABLE, "user_context_unavailable"
+
+        try:
+            rows = await cls._list_dataset_entries(dataset, user_ctx)
+            row_count = len(rows)
+            if row_count == 0:
+                return ProjectionStatus.READY_NO_ROWS, "no_rows_in_dataset"
+
+            empty_content_count = sum(1 for row in rows if not row.text.strip())
+            if empty_content_count == row_count:
+                return ProjectionStatus.READY_EMPTY, "all_rows_empty_content"
+
+            if alias in cls._PROJECTED_DATASETS:
+                return ProjectionStatus.READY, "ready"
+
+            return ProjectionStatus.TIMEOUT, "projection_pending"
+
+        except Exception as e:
+            return ProjectionStatus.FATAL_ERROR, str(e)
+
+    @classmethod
+    async def _wait_for_projection(cls, dataset: str, user: Any | None, *, timeout: float | None = None) -> ProjectionStatus:
+        alias = cls._alias_for_dataset(dataset)
+        max_probes = 3
+        start_time = monotonic()
+
+        for probe in range(max_probes):
+            status, reason = await cls._get_projection_status(dataset, user)
+
+            if status in (
+                ProjectionStatus.READY,
+                ProjectionStatus.READY_NO_ROWS,
+                ProjectionStatus.READY_EMPTY,
+                ProjectionStatus.FATAL_ERROR,
+                ProjectionStatus.USER_CONTEXT_UNAVAILABLE,
+            ):
+                if status == ProjectionStatus.READY_NO_ROWS:
+                    cls._log_once(logging.INFO, "projection:ready_no_rows", dataset=alias, probes=probe + 1)
+                elif status == ProjectionStatus.READY_EMPTY:
+                    cls._log_once(logging.INFO, "projection:ready_empty", dataset=alias, probes=probe + 1)
+                return status
+
+            if timeout is not None and (monotonic() - start_time) > timeout:
+                cls._log_once(logging.WARNING, "projection:wait_timeout", dataset=alias, reason=reason, timeout_s=timeout)
+                return ProjectionStatus.TIMEOUT
+
+            if probe < max_probes - 1:
+                sleep_for = cls._PROJECTION_BACKOFF_SECONDS[min(probe, len(cls._PROJECTION_BACKOFF_SECONDS) - 1)]
+                cls._log_once(
+                    logging.DEBUG, "projection:wait_pending", dataset=alias, probes=probe + 1, reason=reason, sleep_for=sleep_for
+                )
+                await asyncio.sleep(sleep_for)
+
+        cls._log_once(logging.WARNING, "projection:wait_timeout", dataset=alias, reason="max_probes_exceeded")
+        return ProjectionStatus.TIMEOUT
+
+    @classmethod
     async def _search_single_query(
         cls,
         query: str,
@@ -678,22 +775,27 @@ class KnowledgeBase:
             try:
                 if user is not None:
                     logger.info(f"knowledge_dataset_cognify_start dataset={alias} rid={rid_value}")
-                ready = await cls._ensure_dataset_projected(dataset, user, timeout=2.0)
+                status = await cls._ensure_dataset_projected(dataset, user, timeout=2.0)
             except Exception as warm_exc:  # noqa: BLE001
                 logger.debug(
                     f"knowledge_dataset_projection_warm_failed dataset={alias} rid={rid_value} detail={warm_exc}"
                 )
                 skipped_aliases.append(alias)
                 continue
-            if ready:
+
+            if status == ProjectionStatus.READY:
                 ready_datasets.append(dataset)
                 if user is not None:
                     logger.info(f"knowledge_dataset_cognify_ok dataset={alias} rid={rid_value}")
                 continue
-            if user is not None:
-                logger.warning(
-                    f"knowledge_dataset_search_skipped dataset={alias} rid={rid_value} reason=projection_pending"
-                )
+
+            if status in (ProjectionStatus.READY_NO_ROWS, ProjectionStatus.READY_EMPTY):
+                logger.info(f"knowledge_dataset_search_skipped dataset={alias} rid={rid_value} reason={status.value}")
+            else:  # TIMEOUT, FATAL_ERROR, etc.
+                if user is not None:
+                    logger.warning(
+                        f"knowledge_dataset_search_skipped dataset={alias} rid={rid_value} reason=projection_pending"
+                    )
             skipped_aliases.append(alias)
 
         if not ready_datasets:
@@ -1813,28 +1915,31 @@ class KnowledgeBase:
                 raise
 
     @classmethod
-    async def _ensure_dataset_projected(cls, dataset: str, user: Any | None, *, timeout: float = 2.0) -> bool:
+    async def _ensure_dataset_projected(cls, dataset: str, user: Any | None, *, timeout: float = 2.0) -> ProjectionStatus:
         alias = cls._alias_for_dataset(dataset)
 
         status = await cls._wait_for_projection(dataset, user=user, timeout=timeout)
         if status == ProjectionStatus.READY:
             cls._PROJECTED_DATASETS.add(alias)
-            return True
+            return status
 
-        # Не готово — пробуем прогнать cognify, затем ждём ещё раз
+        if status in (ProjectionStatus.READY_NO_ROWS, ProjectionStatus.READY_EMPTY):
+            return status
+
+        # If timeout, try to cognify
         try:
             logger.debug(f"knowledge_dataset_cognify_start dataset={alias}")
             await cls._process_dataset(dataset, user)
             logger.debug(f"knowledge_dataset_cognify_ok dataset={alias}")
         except Exception as exc:  # noqa: BLE001
             logger.debug(f"knowledge_dataset_projection_warm_failed dataset={alias} detail={exc}")
-            return False
+            return ProjectionStatus.FATAL_ERROR
 
         status = await cls._wait_for_projection(dataset, user=user, timeout=timeout)
         if status == ProjectionStatus.READY:
             cls._PROJECTED_DATASETS.add(alias)
-            return True
-        return False
+
+        return status
 
     @classmethod
     def _dataset_name(cls, client_id: int) -> str:

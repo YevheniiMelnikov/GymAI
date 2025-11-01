@@ -174,3 +174,4 @@ apps/webapp/static/js/
 /docker/nginx.local.conf.template
 diff*
 /GEMINI.md
+/.uv-cache/
