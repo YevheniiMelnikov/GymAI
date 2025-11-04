@@ -101,6 +101,15 @@ class AiQuestionState:
             logger.warning(f"ai_question_is_charged_skip request_id={request_id} error={exc!s}")
             return False
 
+    async def unmark_charged(self, request_id: str) -> bool:
+        key = AI_QUESTION_CHARGED_KEY.format(request_id=request_id)
+        try:
+            result = await self.client.delete(key)
+            return bool(result)
+        except RedisError as exc:
+            logger.warning(f"ai_question_unmark_charged_failed request_id={request_id} error={exc!s}")
+            return False
+
     async def clear(self, request_id: str) -> None:
         keys = [
             AI_QUESTION_CLAIM_KEY.format(request_id=request_id),

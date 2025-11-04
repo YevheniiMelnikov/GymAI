@@ -20,7 +20,7 @@ import pytest  # pyrefly: ignore[import-error]
 
 from ai_coach.agent import AgentDeps, CoachAgent, ProgramAdapter, QAResponse
 from ai_coach.exceptions import AgentExecutionAborted
-from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase, KnowledgeSnippet
 from ai_coach.schemas import AICoachRequest, ProgramPayload, SubscriptionPayload
 from ai_coach.types import CoachMode
 from ai_coach.application import app
@@ -106,8 +106,8 @@ def test_ask_request_accepts_ask_ai() -> None:
 
 @pytest.mark.asyncio
 async def test_answer_question_uses_primary_completion(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_search(query: str, client_id: int, k: int | None = None) -> list[str]:
-        return ["Stay hydrated"]
+    async def fake_search(query: str, client_id: int, k: int | None = None) -> list[KnowledgeSnippet]:
+        return [KnowledgeSnippet(text="Stay hydrated", dataset="kb_global", kind="document")]
 
     async def fake_complete(*_: Any, **__: Any) -> QAResponse | None:
         return QAResponse(answer="Final", sources=["KB-1"])
@@ -119,13 +119,13 @@ async def test_answer_question_uses_primary_completion(monkeypatch: pytest.Monke
     deps = AgentDeps(client_id=7, locale="en", allow_save=False)
     result = await CoachAgent.answer_question("question", deps)
     assert result.answer == "Final"
-    assert result.sources == ["KB-1"]
+    assert result.sources == ["kb_global"]
 
 
 @pytest.mark.asyncio
 async def test_answer_question_uses_fallback_when_completion_fails(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_search(query: str, client_id: int, k: int | None = None) -> list[str]:
-        return ["Entry text"]
+    async def fake_search(query: str, client_id: int, k: int | None = None) -> list[KnowledgeSnippet]:
+        return [KnowledgeSnippet(text="Entry text", dataset="kb_global", kind="document")]
 
     async def fake_complete(*_: Any, **__: Any) -> QAResponse | None:
         return None
@@ -136,9 +136,9 @@ async def test_answer_question_uses_fallback_when_completion_fails(monkeypatch: 
         deps: AgentDeps,
         history: list[object],
         *,
-        prefetched_knowledge: Sequence[str] | None = None,
+        prefetched_knowledge: Sequence[KnowledgeSnippet] | None = None,
     ) -> QAResponse | None:
-        return QAResponse(answer="Fallback", sources=["KB-1"])
+        return QAResponse(answer="Fallback", sources=["kb_global"])
 
     monkeypatch.setattr(CoachAgent, "_get_completion_client", classmethod(lambda cls: _dummy_completion_client()))
     monkeypatch.setattr(CoachAgent, "_ensure_llm_logging", classmethod(lambda cls, target, model_id=None: None))
@@ -148,12 +148,12 @@ async def test_answer_question_uses_fallback_when_completion_fails(monkeypatch: 
     deps = AgentDeps(client_id=9, locale="en", allow_save=False)
     result = await CoachAgent.answer_question("question", deps)
     assert result.answer == "Fallback"
-    assert result.sources == ["KB-1"]
+    assert result.sources == ["kb_global"]
 
 
 @pytest.mark.asyncio
 async def test_answer_question_manual_answer_when_everything_fails(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_search(query: str, client_id: int, k: int | None = None) -> list[str]:
+    async def fake_search(query: str, client_id: int, k: int | None = None) -> list[KnowledgeSnippet]:
         return []
 
     async def fake_complete(*_: Any, **__: Any) -> QAResponse | None:
@@ -165,7 +165,7 @@ async def test_answer_question_manual_answer_when_everything_fails(monkeypatch: 
         deps: AgentDeps,
         history: list[object],
         *,
-        prefetched_knowledge: Sequence[str] | None = None,
+        prefetched_knowledge: Sequence[KnowledgeSnippet] | None = None,
     ) -> QAResponse | None:
         return None
 
@@ -182,31 +182,20 @@ async def test_answer_question_manual_answer_when_everything_fails(monkeypatch: 
 
 @pytest.mark.asyncio
 async def test_answer_question_handles_agent_aborted(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_search(query: str, client_id: int, k: int | None = None) -> list[str]:
+    async def fake_search(query: str, client_id: int, k: int | None = None) -> list[KnowledgeSnippet]:
         return []
 
     async def raising_complete(*_: Any, **__: Any) -> QAResponse | None:
         raise AgentExecutionAborted("kb empty", reason="knowledge_base_empty")
 
-    async def fake_fallback(
-        cls,
-        prompt: str,
-        deps: AgentDeps,
-        history: list[object],
-        *,
-        prefetched_knowledge: Sequence[str] | None = None,
-    ) -> QAResponse | None:
-        return QAResponse(answer="Recovered", sources=["general_knowledge"])
-
     monkeypatch.setattr(CoachAgent, "_get_completion_client", classmethod(lambda cls: _dummy_completion_client()))
     monkeypatch.setattr(CoachAgent, "_ensure_llm_logging", classmethod(lambda cls, target, model_id=None: None))
     monkeypatch.setattr(KnowledgeBase, "search", staticmethod(fake_search))
     monkeypatch.setattr(CoachAgent, "_complete_with_retries", classmethod(lambda *args, **kwargs: raising_complete()))
-    monkeypatch.setattr(CoachAgent, "_fallback_answer_question", classmethod(fake_fallback))
     deps = AgentDeps(client_id=11, locale="en", allow_save=False)
-    result = await CoachAgent.answer_question("question", deps)
-    assert result.answer == "Recovered"
-    assert result.sources == ["general_knowledge"]
+    with pytest.raises(AgentExecutionAborted) as exc_info:
+        await CoachAgent.answer_question("question", deps)
+    assert exc_info.value.reason == "knowledge_base_empty"
 
 
 def test_extract_choice_content_tool_arguments() -> None:
@@ -235,7 +224,7 @@ def test_normalize_tool_call_arguments_fills_sources() -> None:
 
 def test_api_passthrough_returns_llm_answer(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_answer(prompt: str, deps: AgentDeps) -> QAResponse:
-        return QAResponse(answer="OK_FROM_LLM", sources=["KB-1"])
+        return QAResponse(answer="OK_FROM_LLM", sources=["kb_global"])
 
     monkeypatch.setattr(CoachAgent, "answer_question", staticmethod(fake_answer))
     monkeypatch.setattr(KnowledgeBase, "save_client_message", staticmethod(lambda *args, **kwargs: None))
@@ -249,7 +238,7 @@ def test_api_passthrough_returns_llm_answer(monkeypatch: pytest.MonkeyPatch) -> 
     assert resp.status_code == 200
     payload = resp.json()
     assert payload["answer"] == "OK_FROM_LLM"
-    assert payload["sources"] == ["KB-1"]
+    assert payload["sources"] == ["kb_global"]
 
 
 def test_ask_ai_runtime_error(monkeypatch) -> None:

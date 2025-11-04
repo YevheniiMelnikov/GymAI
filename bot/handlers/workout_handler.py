@@ -62,7 +62,6 @@ from bot.texts import msg_text, btn_text
 from core.exceptions import AskAiPreparationError, ClientNotFoundError, SubscriptionNotFoundError
 from config.app_settings import settings
 from core.services import get_gif_manager
-from core.ai_coach.state.ask_ai import AiQuestionState
 
 workout_router = Router()
 
@@ -241,6 +240,7 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
         prompt=question_text,
         language=profile.language,
         request_id=request_id,
+        cost=cost,
         image_base64=image_base64,
         image_mime=image_mime,
     )
@@ -252,19 +252,6 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
             msg_text("coach_agent_error", lang).format(tg=settings.TG_SUPPORT_CONTACT),
         )
         return
-
-    charge_state = AiQuestionState.create()
-    charged = await charge_state.mark_charged(request_id)
-    if charged:
-        await APIService.profile.adjust_client_credits(profile.id, -cost)
-        new_balance = client.credits - cost
-        await Cache.client.update_client(client.profile, {"credits": new_balance})
-        client = client.model_copy(update={"credits": new_balance})
-        logger.info(
-            f"event=ask_ai_charged request_id={request_id} client_id={client.id} cost={cost} balance={new_balance}"
-        )
-    else:
-        logger.warning(f"event=ask_ai_charge_skipped request_id={request_id} client_id={client.id}")
 
     await answer_msg(message, msg_text("request_in_progress", lang))
 

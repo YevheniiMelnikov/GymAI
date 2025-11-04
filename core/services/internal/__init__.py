@@ -68,6 +68,10 @@ class _APIServiceProxy:
         return self._proxy("profile")
 
     @property
+    def client(self) -> _ServiceProxy:
+        return self._proxy("client")
+
+    @property
     def workout(self) -> _ServiceProxy:
         return self._proxy("workout")
 

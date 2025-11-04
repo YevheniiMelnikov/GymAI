@@ -25,13 +25,13 @@ Deliver production-grade improvements to GymBot's multi-service stack (Django AP
 4. Keep migrations, fixtures, and translations aligned. If data models change, wrap them with migrations or document the manual steps.
 
 ## Testing Policy
-- Add or update tests only when a change touches critical paths (auth flows, payments, subscription lifecycle, workout plan generation, AI coach reasoning, Celery scheduling). Keep them targeted and deterministic.
+- Add or update tests only when a change touches critical paths (auth flows, payments, subscription lifecycle, workout plan generation, AI coach reasoning, Celery scheduling). Keep them targeted and deterministic. Do not create more than 2 tests per task.
 - Honour existing tests even if the module is low priority. Adjust them when behaviour legitimately changes.
 
 ## Quality Gates
 - Run `task format` whenever code layout changes.
-- Always use f-strings instead of "%s"
-- Run `task lint` after every change and fix (or mark as ignored) all Ruff and Pyrefly findings before declaring the work complete.
+- Always use f-strings instead of "%s" or .format()
+- Run `task format` after every task.
 - Document any required env vars, migrations, or background services in the review summary when they affect the change.
 
 ## Code Review Checklist

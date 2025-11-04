@@ -1,8 +1,9 @@
 """Common authentication helpers for internal endpoints."""
 
 import hmac
-from ipaddress import ip_address, ip_network
+import time
 from functools import wraps
+from ipaddress import ip_address, ip_network
 from typing import Awaitable, Callable, TypeVar
 
 from aiohttp import web
@@ -53,60 +54,61 @@ def _is_ip_allowed(request: web.Request) -> tuple[bool, str | None]:
     return False, client_ip
 
 
-def _extract_api_key(request: web.Request) -> str:
-    header = request.headers.get("Authorization", "")
-    if header.lower().startswith("api-key "):
-        return header.split(" ", 1)[1].strip()
-    return ""
-
-
 def require_internal_auth(handler: Handler) -> Handler:
-    """Validate bot internal requests with API key headers or IP allowlist.
-
-    When the allowlist is empty, every IP is accepted (useful in local/dev
-    environments). Set ``INTERNAL_API_KEY`` and/or the allowlist for
-    production deployments.
-    """
+    """Validate internal requests with HMAC-SHA256 signatures and an IP allowlist."""
 
     @wraps(handler)
     async def wrapped(request: web.Request, *args, **kwargs):  # type: ignore[override]
-        if settings.DEBUG:
-            return await handler(request, *args, **kwargs)
+        is_allowed, client_ip = _is_ip_allowed(request)
+        if not is_allowed:
+            logger.warning(
+                f"internal_auth_denied reason=ip_not_allowed path={request.rel_url} client_ip={client_ip or 'unknown'}"
+            )
+            return web.json_response({"detail": "IP address not allowed"}, status=403)
 
-        allowed_ip, client_ip = _is_ip_allowed(request)
-        expected_internal_key = (settings.INTERNAL_API_KEY or "").strip()
-        provided_internal_key = (request.headers.get("X-Internal-Api-Key", "") or "").strip()
-        provided_auth_key = _extract_api_key(request)
-        fallback_api_key = "" if expected_internal_key else (settings.API_KEY or "").strip()
-        has_any_key = bool(provided_internal_key or provided_auth_key)
+        key_id = request.headers.get("X-Key-Id")
+        ts_header = request.headers.get("X-TS")
+        sig_header = request.headers.get("X-Sig")
 
-        key_valid = False
-        if expected_internal_key:
-            if provided_internal_key and hmac.compare_digest(provided_internal_key, expected_internal_key):
-                key_valid = True
-            elif provided_auth_key and hmac.compare_digest(provided_auth_key, expected_internal_key):
-                key_valid = True
-        elif fallback_api_key:
-            if provided_internal_key and hmac.compare_digest(provided_internal_key, fallback_api_key):
-                key_valid = True
-            elif provided_auth_key and hmac.compare_digest(provided_auth_key, fallback_api_key):
-                key_valid = True
+        if not all((key_id, ts_header, sig_header)):
+            logger.warning(
+                f"internal_auth_denied reason=missing_headers path={request.rel_url} client_ip={client_ip or 'unknown'}"
+            )
+            return web.json_response({"detail": "Missing signature headers"}, status=403)
 
-        if key_valid or allowed_ip:
-            return await handler(request, *args, **kwargs)
+        if key_id != settings.INTERNAL_KEY_ID:
+            logger.warning(
+                f"internal_auth_denied reason=unknown_key_id path={request.rel_url} "
+                f"client_ip={client_ip or 'unknown'} key_id={key_id}"
+            )
+            return web.json_response({"detail": "Unknown key ID"}, status=403)
 
-        reason = "ip_not_allowed"
-        key_expected = bool(expected_internal_key or fallback_api_key)
-        if key_expected:
-            reason = "missing_key" if not has_any_key else "key_mismatch"
-        elif not client_ip:
-            reason = "missing_ip"
+        try:
+            ts = int(ts_header)
+        except ValueError:
+            logger.warning(
+                f"internal_auth_denied reason=invalid_ts_format path={request.rel_url} "
+                f"client_ip={client_ip or 'unknown'}"
+            )
+            return web.json_response({"detail": "Invalid timestamp format"}, status=403)
 
-        logger.warning(
-            f"internal_auth_denied path={request.rel_url} client_ip={client_ip or 'unknown'} "
-            f"has_key={has_any_key} allowed_ip={allowed_ip} reason={reason}"
-        )
-        payload = {"code": "unauthorized", "message": "Unauthorized"}
-        return web.json_response(payload, status=401)
+        if abs(time.time() - ts) > 300:
+            logger.warning(
+                f"internal_auth_denied reason=stale_timestamp path={request.rel_url} client_ip={client_ip or 'unknown'}"
+            )
+            return web.json_response({"detail": "Stale timestamp"}, status=403)
+
+        body = await request.read()
+        message = str(ts).encode() + b"." + body
+        expected_sig = hmac.new(settings.INTERNAL_API_KEY.encode(), message, "sha256").hexdigest()
+
+        if not hmac.compare_digest(sig_header, expected_sig):
+            logger.warning(
+                f"internal_auth_denied reason=signature_mismatch path={request.rel_url} "
+                f"client_ip={client_ip or 'unknown'}"
+            )
+            return web.json_response({"detail": "Signature mismatch"}, status=403)
+
+        return await handler(request, *args, **kwargs)
 
     return wrapped  # type: ignore[return-value]

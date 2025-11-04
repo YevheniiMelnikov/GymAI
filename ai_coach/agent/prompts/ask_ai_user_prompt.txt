@@ -1,0 +1,6 @@
+Client language: {language}
+Client question: {question}
+Knowledge entries (client and global):
+{knowledge}
+
+Respond with practical fitness advice.

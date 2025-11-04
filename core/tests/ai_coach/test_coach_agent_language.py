@@ -6,7 +6,7 @@ from ai_coach.agent import AgentDeps, CoachAgent
 from config.app_settings import settings
 
 
-MODULE_PATH: Path = Path(__file__).resolve().parents[3] / "ai_coach" / "language.py"
+MODULE_PATH: Path = Path(__file__).resolve().parents[3] / "ai_coach" / "utils.py"
 SPEC = importlib.util.spec_from_file_location("ai_coach.language", MODULE_PATH)
 assert SPEC is not None and SPEC.loader is not None
 MODULE: ModuleType = importlib.util.module_from_spec(SPEC)

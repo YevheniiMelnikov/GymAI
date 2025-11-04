@@ -1,0 +1,557 @@
+import asyncio
+import logging
+from hashlib import sha256
+from typing import Any, Awaitable, Iterable, Mapping, Sequence, cast, Literal, Optional, TYPE_CHECKING
+
+from loguru import logger
+
+import cognee
+
+from ai_coach.agent.knowledge.schemas import KnowledgeSnippet, ProjectionStatus
+from ai_coach.agent.knowledge.utils.datasets import DatasetService
+from ai_coach.agent.knowledge.utils.projection import ProjectionService
+
+if TYPE_CHECKING:
+    from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+
+
+class SearchService:
+    def __init__(
+        self,
+        dataset_service: DatasetService,
+        projection_service: ProjectionService,
+        *,
+        knowledge_base: Optional["KnowledgeBase"] = None,
+    ):
+        self.dataset_service = dataset_service
+        self.projection_service = projection_service
+        self._knowledge_base: Optional["KnowledgeBase"] = knowledge_base
+
+    def _require_kb(self) -> "KnowledgeBase":
+        if self._knowledge_base is None:
+            raise RuntimeError("knowledge_base_unavailable")
+        return self._knowledge_base
+
+    async def search(
+        self,
+        query: str,
+        client_id: int,
+        k: int | None = None,
+        *,
+        request_id: str | None = None,
+        datasets: Sequence[str] | None = None,
+        user: Any | None = None,
+    ) -> list[KnowledgeSnippet]:
+        normalized = query.strip()
+        if not normalized:
+            logger.debug(f"Knowledge search skipped client_id={client_id}: empty query")
+            return []
+        rid_value = request_id or "na"
+        actor = user if user is not None else await self.dataset_service.get_cognee_user()
+        await self._ensure_profile_indexed(client_id, actor)
+        user_ctx = self.dataset_service.to_user_ctx(actor)
+
+        candidate_aliases: list[str] = []
+        if datasets is not None:
+            for name in datasets:
+                alias = self.dataset_service.alias_for_dataset(name)
+                if alias not in candidate_aliases:
+                    candidate_aliases.append(alias)
+        else:
+            candidate_aliases.extend(
+                [
+                    self.dataset_service.alias_for_dataset(self.dataset_service.dataset_name(client_id)),
+                    self.dataset_service.alias_for_dataset(self.dataset_service.chat_dataset_name(client_id)),
+                ]
+            )
+            global_alias_default = self.dataset_service.alias_for(self.dataset_service.GLOBAL_DATASET)
+            if global_alias_default not in candidate_aliases:
+                candidate_aliases.append(global_alias_default)
+
+        global_alias = self.dataset_service.alias_for(self.dataset_service.GLOBAL_DATASET)
+        include_global = global_alias in candidate_aliases
+        global_ready = not include_global or global_alias in self.dataset_service._PROJECTED_DATASETS
+        global_unavailable = False
+
+        if include_global and not global_ready:
+            status = await self.projection_service.ensure_dataset_projected(
+                self.dataset_service.GLOBAL_DATASET,
+                actor,
+                timeout=0.3,
+            )
+            if status in (ProjectionStatus.READY, ProjectionStatus.READY_EMPTY):
+                self.dataset_service.add_projected_dataset(global_alias)
+                global_ready = True
+            else:
+                global_unavailable = True
+                candidate_aliases = [alias for alias in candidate_aliases if alias != global_alias]
+                self.dataset_service.log_once(
+                    logging.INFO,
+                    "knowledge_search_global_pending",
+                    throttle_key=f"projection:{global_alias}:search_pending",
+                    client_id=client_id,
+                    rid=rid_value,
+                )
+
+        if not candidate_aliases:
+            logger.debug(f"knowledge_search_skipped client_id={client_id} rid={rid_value} reason=no_datasets")
+            return []
+
+        resolved_datasets: list[str] = []
+        for alias in candidate_aliases:
+            resolved = self.dataset_service.alias_for_dataset(alias)
+            try:
+                await self.dataset_service.ensure_dataset_exists(resolved, user_ctx)
+            except Exception as ensure_exc:
+                logger.debug(
+                    f"knowledge_dataset_ensure_failed client_id={client_id} dataset={resolved} detail={ensure_exc}"
+                )
+            resolved_datasets.append(resolved)
+
+        base_hash = sha256(normalized.encode()).hexdigest()[:12]
+        datasets_hint = ",".join(resolved_datasets)
+        top_k_label = k if k is not None else "default"
+        logger.debug(
+            f"knowledge_search_start client_id={client_id} rid={rid_value} query_hash={base_hash} "
+            f"datasets={datasets_hint} top_k={top_k_label} global_unavailable={global_unavailable}"
+        )
+
+        queries = self._expanded_queries(normalized)
+        if len(queries) > 1:
+            logger.debug(
+                f"knowledge_search_expanded client_id={client_id} rid={rid_value} "
+                f"variants={len(queries)} base_query_hash={base_hash}"
+            )
+
+        aggregated: list[KnowledgeSnippet] = []
+        seen: set[str] = set()
+        for variant in queries:
+            snippets = await self._search_single_query(
+                variant,
+                resolved_datasets,
+                actor,
+                k,
+                client_id,
+                request_id=request_id,
+            )
+            if not snippets:
+                continue
+            for snippet in snippets:
+                cleaned = snippet.text.strip()
+                if not cleaned:
+                    continue
+                key = cleaned.casefold()
+                if key in seen:
+                    continue
+                aggregated.append(snippet)
+                seen.add(key)
+                if k is not None and len(aggregated) >= k:
+                    break
+            if k is not None and len(aggregated) >= k:
+                break
+
+        if k is not None:
+            return aggregated[:k]
+        if not aggregated:
+            self.dataset_service.log_once(
+                logging.INFO,
+                "search:empty",
+                client_id=client_id,
+                rid=rid_value,
+                datasets=datasets_hint,
+                min_interval=60.0,
+            )
+            logger.debug(f"knowledge_search_empty client_id={client_id} rid={rid_value} datasets={datasets_hint}")
+        return aggregated
+
+    async def _search_single_query(
+        self,
+        query: str,
+        datasets: list[str],
+        user: Any | None,
+        k: int | None,
+        client_id: int,
+        *,
+        request_id: str | None = None,
+    ) -> list[KnowledgeSnippet]:
+        if user is None:
+            logger.warning(f"knowledge_search_skipped client_id={client_id}: user context unavailable")
+            return []
+        query_hash = sha256(query.encode()).hexdigest()[:12]
+        skipped_aliases: list[str] = []
+        rid_value = request_id or "na"
+
+        async def _search_targets(targets: list[str]) -> list[str]:
+            params: dict[str, Any] = {
+                "datasets": targets,
+                "user": self.dataset_service.to_user_ctx(user),
+            }
+            if k is not None:
+                params["top_k"] = k
+            return await cognee.search(query, **params)
+
+        ready_datasets: list[str] = []
+        for dataset in datasets:
+            alias = self.dataset_service.alias_for_dataset(dataset)
+            row_count = await self.dataset_service.get_row_count(alias, user)
+            if row_count <= 0:
+                self.dataset_service.log_once(
+                    logging.INFO,
+                    "search:skip_empty_graph",
+                    dataset=alias,
+                    stage="search",
+                    min_interval=120.0,
+                )
+                logger.debug(f"search.skip_empty_graph dataset={alias}")
+                skipped_aliases.append(alias)
+                continue
+            try:
+                await self.dataset_service.ensure_dataset_exists(alias, user_ctx)
+            except Exception as ensure_exc:
+                logger.debug(
+                    f"knowledge_dataset_ensure_failed client_id={client_id} dataset={alias} detail={ensure_exc}"
+                )
+                skipped_aliases.append(alias)
+                continue
+            if alias in self.dataset_service._PROJECTED_DATASETS:
+                ready_datasets.append(alias)
+                continue
+            try:
+                status = await self.projection_service.ensure_dataset_projected(alias, user, timeout=2.0)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"knowledge_projection_ensure_failed dataset={alias} detail={exc}")
+                skipped_aliases.append(alias)
+                continue
+            if status in (ProjectionStatus.READY, ProjectionStatus.READY_EMPTY):
+                ready_datasets.append(alias)
+            else:
+                skipped_aliases.append(alias)
+
+        if not ready_datasets:
+            if skipped_aliases:
+                self.dataset_service.log_once(
+                    logging.DEBUG,
+                    "search:skipped",
+                    client_id=client_id,
+                    rid=rid_value,
+                    datasets=",".join(skipped_aliases),
+                    min_interval=5.0,
+                )
+            fallback_raw = await self._fallback_dataset_entries(datasets, user, top_k=k)
+            if fallback_raw:
+                primary_source = skipped_aliases[0] if skipped_aliases else datasets[0]
+                primary_alias = self.dataset_service.alias_for_dataset(primary_source)
+                snippets = [
+                    KnowledgeSnippet(text=value, dataset=primary_alias, kind="document")
+                    for value in fallback_raw
+                    if value.strip()
+                ]
+                return snippets[:k] if k is not None else snippets
+            self.dataset_service.log_once(
+                logging.INFO,
+                "search:empty",
+                client_id=client_id,
+                rid=rid_value,
+                datasets=",".join(datasets),
+                min_interval=60.0,
+            )
+            logger.debug(f"knowledge_search_empty client_id={client_id} rid={rid_value} datasets={','.join(datasets)}")
+            return []
+
+        for alias in ready_datasets:
+            logger.debug(f"kb.search alias={alias} q_hash={query_hash}")
+
+        try:
+            results = await _search_targets(ready_datasets)
+            logger.debug(
+                f"knowledge_search_ok client_id={client_id} rid={rid_value} "
+                f"query_hash={query_hash} results={len(results)}"
+            )
+            if not results:
+                await asyncio.sleep(0.25)
+                retry = await _search_targets(ready_datasets)
+                if retry:
+                    logger.info(
+                        f"knowledge_search_retry_after_empty client_id={client_id} rid={rid_value} "
+                        f"query_hash={query_hash} results={len(retry)}"
+                    )
+                    results = retry
+            snippets = await self._build_snippets(results, ready_datasets, user)
+            if snippets:
+                per_alias: dict[str, int] = {}
+                for snippet in snippets:
+                    alias = (snippet.dataset or "").strip() or "unknown"
+                    per_alias[alias] = per_alias.get(alias, 0) + 1
+                for alias, count in per_alias.items():
+                    logger.debug(f"kb.search.hits alias={alias} count={count}")
+            return snippets
+        except Exception as exc:
+            ready_aliases = [self.dataset_service.alias_for_dataset(ds) for ds in ready_datasets]
+            kb = self._knowledge_base
+            if kb is not None and kb._is_graph_missing_error(exc):
+                for alias in ready_aliases:
+                    self.dataset_service._PROJECTED_DATASETS.discard(alias)
+                logger.info(
+                    f"knowledge_dataset_search_skipped dataset={','.join(ready_aliases)} rid={rid_value} "
+                    f"reason=projection_incomplete detail={exc}"
+                )
+                return []
+            logger.warning(
+                f"knowledge_search_failed client_id={client_id} rid={rid_value} query_hash={query_hash} detail={exc}"
+            )
+            logger.debug(f"kb.search.fail detail={exc}")
+            return []
+
+    async def _build_snippets(
+        self, items: Iterable[Any], datasets: Sequence[str], user: Any | None
+    ) -> list[KnowledgeSnippet]:
+        from ai_coach.agent.knowledge.utils.storage import StorageService
+
+        prepared: list[tuple[str, str, str | None, Mapping[str, Any] | None]] = []
+        for raw in items:
+            text, dataset_hint, metadata = self._extract_search_item(raw)
+            if not text:
+                continue
+            if metadata is not None and not isinstance(metadata, Mapping):
+                metadata = self.dataset_service._coerce_metadata(metadata)
+            normalized_text = self.dataset_service._normalize_text(text)
+            if not normalized_text:
+                continue
+            prepared.append((text, normalized_text, dataset_hint, metadata))
+        if not prepared:
+            return []
+
+        digests_sha = [
+            StorageService.compute_digests(normalized_text, dataset_alias=None) for _, normalized_text, _, _ in prepared
+        ]
+        dataset_list = list(datasets)
+        metadata_results: list[tuple[str | None, Mapping[str, Any] | None]] = [(None, None)] * len(prepared)
+        pending: list[int] = []
+
+        for index, ((_, _, dataset_hint, metadata), _) in enumerate(zip(prepared, digests_sha, strict=False)):
+            if metadata is not None:
+                meta_dict = dict(metadata)
+                dataset_name = self.dataset_service._extract_dataset_key(meta_dict) or dataset_hint
+                alias = self.dataset_service.resolve_dataset_alias(dataset_name) if dataset_name else None
+                if alias:
+                    meta_dict.setdefault("dataset", alias)
+                metadata_results[index] = (alias, meta_dict)
+            else:
+                metadata_results[index] = (dataset_hint, None)
+                pending.append(index)
+
+        if pending:
+            lookups = await asyncio.gather(*(self._collect_metadata(digests_sha[i], datasets) for i in pending))
+            for slot, (dataset_name, meta) in zip(pending, lookups, strict=False):
+                alias_source = dataset_name or prepared[slot][2]
+                fallback_dataset = alias_source or (dataset_list[0] if dataset_list else "")
+                alias = self.dataset_service.alias_for_dataset(fallback_dataset) if fallback_dataset else None
+                if meta:
+                    meta_dict = dict(meta)
+                else:
+                    meta_dict = {}
+                if alias:
+                    meta_dict.setdefault("dataset", alias)
+                metadata_results[slot] = (alias, meta_dict or None)
+
+        snippets: list[KnowledgeSnippet] = []
+        add_tasks: list[Awaitable[None]] = []
+        for index, ((text, normalized_text, dataset_hint, _), (resolved_dataset, payload)) in enumerate(
+            zip(prepared, metadata_results, strict=False)
+        ):
+            alias_source = resolved_dataset or dataset_hint or (dataset_list[0] if dataset_list else "")
+            dataset_alias = self.dataset_service.alias_for_dataset(alias_source) if alias_source else None
+            if dataset_alias is None and dataset_list:
+                dataset_alias = self.dataset_service.alias_for_dataset(dataset_list[0])
+            extra_payload: dict[str, Any] = dict(payload) if payload else {}
+            if dataset_alias:
+                extra_payload.setdefault("dataset", dataset_alias)
+            payload_dict = self.dataset_service._infer_metadata_from_text(normalized_text, extra_payload)
+            digest_base = digests_sha[index]
+            digest_sha = (
+                StorageService.compute_digests(normalized_text, dataset_alias=dataset_alias)
+                if dataset_alias
+                else digest_base
+            )
+            metadata_payload = StorageService.augment_metadata(
+                payload_dict,
+                dataset_alias,
+                digest_sha=digest_sha,
+            )
+            if dataset_alias:
+                from ai_coach.agent.knowledge.utils.hash_store import HashStore
+
+                add_tasks.append(HashStore.add(dataset_alias, digest_sha, metadata=metadata_payload))
+            else:
+                metadata_payload.pop("dataset", None)
+
+            kind = self._resolve_snippet_kind(metadata_payload, text)
+            if kind == "message":
+                kind = "note"
+
+            dataset_value = str(metadata_payload.get("dataset") or dataset_alias or "").strip() or None
+            if kind in {"document", "note"}:
+                snippet_kind = cast(Literal["document", "note"], kind)
+            else:
+                snippet_kind = "unknown"
+            snippets.append(KnowledgeSnippet(text=text, dataset=dataset_value, kind=snippet_kind))
+
+        if add_tasks:
+            await asyncio.gather(*add_tasks)
+        return snippets
+
+    def _extract_search_item(self, raw: Any) -> tuple[str, str | None, Mapping[str, Any] | None]:
+        from dataclasses import asdict, is_dataclass
+
+        if raw is None:
+            return "", None, None
+        if is_dataclass(raw):
+            return self._extract_search_item(asdict(raw))
+        if isinstance(raw, Mapping):
+            text_value = raw.get("text", "")
+            text = str(text_value or "").strip()
+            metadata = self.dataset_service._coerce_metadata(raw.get("metadata"))
+            dataset_hint = self.dataset_service._extract_dataset_key(metadata)
+            if dataset_hint is None:
+                dataset_hint = self.dataset_service._extract_dataset_key(raw)
+            if dataset_hint:
+                dataset_hint = self.dataset_service.resolve_dataset_alias(dataset_hint)
+            return text, dataset_hint, metadata
+        text_attr = getattr(raw, "text", None)
+        if text_attr is None and hasattr(raw, "content"):
+            text_attr = getattr(raw, "content")
+        text = str(text_attr or raw).strip()
+        metadata = self.dataset_service._coerce_metadata(getattr(raw, "metadata", None))
+        dataset_hint = self.dataset_service._extract_dataset_key(metadata)
+        if dataset_hint is None:
+            raw_payload: Mapping[str, Any] | None = None
+            if isinstance(raw, Mapping):
+                raw_payload = raw
+            else:
+                try:
+                    raw_payload = vars(raw)  # type: ignore[var-annotated]
+                except TypeError:
+                    raw_payload = None
+            dataset_hint = self.dataset_service._extract_dataset_key(raw_payload)
+        if dataset_hint:
+            dataset_hint = self.dataset_service.resolve_dataset_alias(dataset_hint)
+        return text, dataset_hint, metadata
+
+    async def _collect_metadata(
+        self, digest: str, datasets: Sequence[str]
+    ) -> tuple[str | None, Mapping[str, Any] | None]:
+        from ai_coach.agent.knowledge.utils.hash_store import HashStore
+
+        if not datasets:
+            return None, None
+        lookups = await asyncio.gather(
+            *(HashStore.metadata(self.dataset_service.alias_for_dataset(dataset), digest) for dataset in datasets)
+        )
+        for dataset, meta in zip(datasets, lookups, strict=False):
+            alias = self.dataset_service.alias_for_dataset(dataset)
+            if meta:
+                enriched = dict(meta)
+                enriched.setdefault("dataset", alias)
+                return alias, enriched
+        fallback = self.dataset_service.alias_for_dataset(datasets[0]) if datasets else None
+        return fallback, None
+
+    async def _fallback_dataset_entries(
+        self, datasets: Sequence[str], user_ctx: Any | None, *, top_k: int | None
+    ) -> list[tuple[str, str]]:
+        from ai_coach.agent.knowledge.utils.storage import StorageService
+        from ai_coach.agent.knowledge.utils.hash_store import HashStore
+
+        collected: list[tuple[str, str]] = []
+        limit = top_k or 6
+        for dataset in datasets:
+            rows = await self.dataset_service.list_dataset_entries(dataset, user_ctx)
+            if not rows:
+                continue
+            alias = self.dataset_service.alias_for_dataset(dataset)
+            for row in rows:
+                normalized = self.dataset_service._normalize_text(row.text)
+                if not normalized:
+                    continue
+                metadata = dict(row.metadata) if isinstance(row.metadata, Mapping) else {}
+                metadata.setdefault("dataset", alias)
+                metadata_dict = self.dataset_service._infer_metadata_from_text(normalized, metadata)
+                dig_sha = StorageService.compute_digests(normalized, dataset_alias=alias)
+                ensured_metadata = StorageService.augment_metadata(metadata_dict, alias, digest_sha=dig_sha)
+                StorageService.ensure_storage_file(
+                    digest_sha=dig_sha,
+                    text=normalized,
+                    dataset=alias,
+                )
+                await HashStore.add(alias, dig_sha, metadata=ensured_metadata)
+                if ensured_metadata.get("kind") == "message":
+                    continue
+                collected.append((normalized, alias))
+                if len(collected) >= limit:
+                    return collected
+        return collected
+
+    async def fallback_entries(self, client_id: int, limit: int = 6) -> list[tuple[str, str]]:
+        user = await self.dataset_service.get_cognee_user()
+        aliases = [
+            self.dataset_service.dataset_name(client_id),
+            self.dataset_service.chat_dataset_name(client_id),
+            self.dataset_service.GLOBAL_DATASET,
+        ]
+        datasets = [self.dataset_service.alias_for_dataset(alias) for alias in aliases]
+        user_ctx = self.dataset_service.to_user_ctx(user)
+        return await self._fallback_dataset_entries(datasets, user_ctx, top_k=limit)
+
+    async def _warm_up_datasets(self, datasets: list[str], user: Any | None) -> None:
+        kb = self._knowledge_base
+        if kb is None:
+            logger.debug("knowledge_dataset_warmup_skipped reason=knowledge_base_unavailable")
+            return
+        for dataset in datasets:
+            try:
+                await kb._process_dataset(dataset, user)
+            except Exception as exc:
+                logger.warning(f"knowledge_dataset_warmup_failed dataset={dataset} detail={exc}")
+
+    def _expanded_queries(self, query: str) -> list[str]:
+        return [query]
+
+    def _resolve_snippet_kind(self, metadata: Mapping[str, Any] | None, text: str) -> str:
+        if metadata:
+            kind_value = str(metadata.get("kind", "")).lower()
+            if kind_value in {"document", "note"}:
+                return kind_value
+            if kind_value == "message":
+                return "message"
+            if kind_value:
+                return "unknown"
+        inferred = self.dataset_service._infer_metadata_from_text(text)
+        if inferred and inferred.get("kind") == "message":
+            return "message"
+        return "document"
+
+    async def _ensure_profile_indexed(self, client_id: int, user: Any | None) -> None:
+        from core.services import APIService
+
+        try:
+            client = await APIService.profile.get_client(client_id)
+        except Exception as e:
+            logger.warning(f"Failed to fetch client id={client_id}: {e}")
+            return
+        if not client:
+            return
+        kb = self._knowledge_base
+        if kb is None:
+            logger.debug(f"knowledge_profile_index_skip client_id={client_id} reason=knowledge_base_unavailable")
+            return
+        text = kb._client_profile_text(client)
+        dataset = self.dataset_service.dataset_name(client_id)
+        dataset, created = await kb.update_dataset(
+            text,
+            dataset,
+            user,
+            node_set=["client_profile"],
+            metadata={"kind": "document", "source": "client_profile"},
+        )
+        if created:
+            await kb._process_dataset(dataset, user)

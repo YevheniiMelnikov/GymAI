@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 from functools import wraps
 from time import perf_counter
-from typing import Any, Awaitable, Callable, ClassVar, Mapping, Optional, Sequence, TypeVar, cast
+from typing import Any, Awaitable, Callable, ClassVar, Iterable, Mapping, Optional, Sequence, TypeVar, cast
 
 from zoneinfo import ZoneInfo
 
@@ -26,6 +26,7 @@ from .prompts import (
     UPDATE_WORKOUT,
     GENERATE_WORKOUT,
     COACH_INSTRUCTIONS,
+    ASK_AI_USER_PROMPT,
     agent_instructions,
 )
 
@@ -36,7 +37,15 @@ from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, Text
 from pydantic_ai.models.openai import OpenAIChatModel  # pyrefly: ignore[import-error]
 from ai_coach.types import CoachMode, MessageRole
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase, KnowledgeSnippet
-from ai_coach.language import resolve_language_name
+from ai_coach.agent.knowledge.context import current_kb, get_or_create_kb
+from ai_coach.agent.utils import resolve_language_name
+
+
+def _kb() -> KnowledgeBase:
+    existing = current_kb()
+    if existing is not None:
+        return existing
+    return get_or_create_kb()
 
 
 class ProgramAdapter:
@@ -80,7 +89,7 @@ class CoachAgent:
         "ru-ru": "ru",
         "rus": "ru",
         "russian": "ru",
-    }
+    }  # TODO: REMOVE
 
     @classmethod
     def _language_context(cls, deps: AgentDeps) -> tuple[str, str]:
@@ -195,7 +204,8 @@ class CoachAgent:
     @staticmethod
     async def _message_history(client_id: int) -> list[ModelMessage]:
         """Prepare past messages for the agent."""
-        raw = await KnowledgeBase.get_message_history(client_id)
+        kb = _kb()
+        raw = await kb.get_message_history(client_id)
         history: list[ModelMessage] = []
         for item in raw:
             if item.startswith(f"{MessageRole.CLIENT.value}:"):
@@ -318,54 +328,103 @@ class CoachAgent:
         client, model_name = cls._get_completion_client()
         cls._ensure_llm_logging(client, model_name)
         deps.mode = CoachMode.ask_ai
-        _, language = cls._language_context(deps)
-        history = cls._message_history(deps.client_id)
-        if inspect.isawaitable(history):
-            history = await history
-        prefetched_knowledge: Sequence[KnowledgeSnippet]
+        _, language_label = cls._language_context(deps)
+        history = await cls._message_history(deps.client_id)
+        kb = _kb()
+        prefetched_knowledge: list[KnowledgeSnippet] = []
         try:
-            prefetched_knowledge = await KnowledgeBase.search(
-                prompt,
+            entry_ids, entries, entry_datasets, prefetched_knowledge = await cls._collect_kb_entries(
+                kb,
                 deps.client_id,
-                6,
+                prompt,
                 request_id=deps.request_rid,
+                limit=6,
             )
         except Exception as exc:  # noqa: BLE001 - prefetch should not block main flow
-            prefetched_knowledge = []
             logger.warning(f"agent.ask knowledge_prefetch_failed client_id={deps.client_id} error={exc}")
-        entry_ids, entries = cls._build_knowledge_entries(prefetched_knowledge)
-        entry_ids, entries = cls._filter_entries_for_prompt(prompt, entry_ids, entries)
+            entry_ids, entries, entry_datasets = [], [], []
+        source_aliases = cls._unique_sources(entry_datasets) if entry_ids else []
         kb_used = bool(entry_ids)
-        if not entry_ids:
-            try:
-                raw_entries = await KnowledgeBase.fallback_entries(deps.client_id, limit=6)
-            except Exception as exc:  # noqa: BLE001 - last resort
-                raw_entries = []
-                logger.debug(f"agent.ask fallback_entries_failed client_id={deps.client_id} detail={exc}")
-            extra_ids, extra_entries = cls._build_knowledge_entries(raw_entries)
-            extra_ids, extra_entries = cls._filter_entries_for_prompt(prompt, extra_ids, extra_entries)
-            if extra_ids:
-                entry_ids, entries = extra_ids, extra_entries
-                kb_used = True
         deps.knowledge_base_empty = not kb_used
-        logger.debug(
-            (f"agent.ask knowledge_ready client_id={deps.client_id} entries={len(entry_ids)} kb_used={kb_used}")
+        deps.kb_used = kb_used
+        if kb_used:
+            logger.debug(
+                "agent.ask knowledge_ready client_id={} entries={} sources={}".format(
+                    deps.client_id,
+                    len(entry_ids),
+                    ",".join(source_aliases),
+                )
+            )
+        else:
+            logger.debug(f"agent.ask knowledge_empty client_id={deps.client_id}")
+
+        knowledge_section = cls._format_knowledge_entries(entry_ids, entries) if kb_used else ""
+        system_prompt = COACH_SYSTEM_PROMPT
+        user_prompt = ASK_AI_USER_PROMPT.format(
+            language=language_label,
+            question=prompt,
+            knowledge=knowledge_section,
         )
 
-        knowledge_section = cls._format_knowledge_entries(entry_ids, entries)
-        system_prompt = (
-            "You are GymBot's fitness coach.\n"
-            "- Keep guidance evidence-based and actionable.\n"
-            "- Treat ambiguous terms (e.g. 'сушка') as fitness context unless explicitly about towels or beauty.\n"
-            "- Answer in the client's language and stay concise.\n"
-        )
-        user_prompt = (
-            f"Client language: {language}\n"
-            f"Client question: {prompt}\n"
-            "Knowledge entries (client and global):\n"
-            f"{knowledge_section}\n"
-            "Respond with practical fitness advice."
-        )
+        async def _general_answer() -> QAResponse:
+            plain_prompt = ASK_AI_USER_PROMPT.format(
+                language=language_label,
+                question=prompt,
+                knowledge="",
+            )
+            plain = await cls._complete_with_retries(
+                client,
+                system_prompt,
+                plain_prompt,
+                [],
+                client_id=deps.client_id,
+                max_tokens=settings.AI_COACH_FIRST_PASS_MAX_TOKENS,
+                model=model_name,
+            )
+            if plain is None:
+                direct_prompt = (
+                    f"Client language: {language_label}\n"
+                    f"Client question: {prompt}\n"
+                    "Respond with practical fitness advice."
+                )
+                plain = await cls._complete_with_retries(
+                    client,
+                    system_prompt,
+                    direct_prompt,
+                    [],
+                    client_id=deps.client_id,
+                    max_tokens=settings.AI_COACH_FIRST_PASS_MAX_TOKENS,
+                    model=model_name,
+                )
+            if plain is None:
+                fallback_text = (
+                    "Focus on consistent training, progressive overload, balanced nutrition, and quality recovery."
+                )
+                logger.warning(
+                    "agent.ask general_fallback_used client_id={} reason=llm_unavailable".format(deps.client_id)
+                )
+                return QAResponse(answer=fallback_text, sources=["general_knowledge"])
+            try:
+                normalized = cls._enforce_fitness_domain(
+                    prompt,
+                    plain,
+                    language_label,
+                    [],
+                    [],
+                    [],
+                    deps.client_id,
+                    deps=deps,
+                )
+            except AgentExecutionAborted:
+                fallback_text = (
+                    "Focus on consistent training, progressive overload, balanced nutrition, and quality recovery."
+                )
+                logger.warning(
+                    "agent.ask general_fallback_used client_id={} reason=empty_llm_response".format(deps.client_id)
+                )
+                return QAResponse(answer=fallback_text, sources=["general_knowledge"])
+            normalized.sources = ["general_knowledge"]
+            return normalized
 
         try:
             primary = await cls._complete_with_retries(
@@ -379,7 +438,8 @@ class CoachAgent:
             )
         except AgentExecutionAborted as exc:
             logger.info(f"agent.ask completion_aborted client_id={deps.client_id} reason={exc.reason}")
-            deps.knowledge_base_empty = deps.knowledge_base_empty or (exc.reason == "knowledge_base_empty")
+            if exc.reason == "knowledge_base_empty":
+                deps.knowledge_base_empty = True
             fallback = await cls._fallback_answer_question(
                 prompt,
                 deps,
@@ -387,19 +447,9 @@ class CoachAgent:
                 prefetched_knowledge=prefetched_knowledge,
             )
             if fallback is not None:
+                if not fallback.sources:
+                    fallback.sources = source_aliases if kb_used else ["general_knowledge"]
                 return fallback
-            if not entry_ids:
-                try:
-                    raw_entries = await KnowledgeBase.fallback_entries(deps.client_id, limit=6)
-                except Exception as extra_exc:  # noqa: BLE001 - enrichment best effort
-                    logger.debug(
-                        f"agent.ask fallback_entries_retry_failed client_id={deps.client_id} detail={extra_exc}"
-                    )
-                else:
-                    extra_ids, extra_entries = cls._build_knowledge_entries(raw_entries)
-                    if extra_ids:
-                        entry_ids, entries = extra_ids, extra_entries
-                        deps.knowledge_base_empty = False
             if entry_ids:
                 snippets_for_summary = (
                     prefetched_knowledge
@@ -410,41 +460,43 @@ class CoachAgent:
                     prompt,
                     entry_ids,
                     entries,
+                    datasets=entry_datasets,
                     snippets=snippets_for_summary,
                     client_id=deps.client_id,
-                    language=language,
+                    language=language_label,
                 )
                 return cls._enforce_fitness_domain(
                     prompt,
                     summary,
-                    language,
+                    language_label,
                     entry_ids,
                     entries,
+                    entry_datasets,
                     deps.client_id,
                     deps=deps,
                 )
-            raise AgentExecutionAborted("Knowledge base empty", reason="knowledge_base_empty")
+            return await _general_answer()
 
         if primary is not None:
             primary = cls._enforce_fitness_domain(
                 prompt,
                 primary,
-                language,
+                language_label,
                 entry_ids,
                 entries,
+                entry_datasets,
                 deps.client_id,
                 deps=deps,
             )
+            primary.sources = source_aliases if kb_used else ["general_knowledge"]
             logger.info(
                 "agent.ask.done client_id={} answer_len={} sources={} kb_used={}".format(
                     deps.client_id,
                     len(primary.answer),
-                    len(primary.sources),
+                    ",".join(primary.sources),
                     kb_used,
                 )
             )
-            if not entry_ids:
-                primary.sources = ["general_knowledge"]
             return primary
 
         fallback = await cls._fallback_answer_question(
@@ -465,20 +517,22 @@ class CoachAgent:
                 prompt,
                 entry_ids,
                 entries,
+                datasets=entry_datasets,
                 snippets=snippets_for_summary,
                 client_id=deps.client_id,
-                language=language,
+                language=language_label,
             )
-            return cls._enforce_fitness_domain(
-                prompt,
-                summary,
-                language,
-                entry_ids,
-                entries,
-                deps.client_id,
-                deps=deps,
-            )
-        raise AgentExecutionAborted("Knowledge base empty", reason="knowledge_base_empty")
+        return cls._enforce_fitness_domain(
+            prompt,
+            summary,
+            language_label,
+            entry_ids,
+            entries,
+            entry_datasets,
+            deps.client_id,
+            deps=deps,
+        )
+        return await _general_answer()
 
     @classmethod
     async def _fallback_answer_question(
@@ -499,11 +553,12 @@ class CoachAgent:
         client, model_name = cls._get_completion_client()
         cls._ensure_llm_logging(client, model_name)
         knowledge: Sequence[KnowledgeSnippet]
+        kb = _kb()
         if prefetched_knowledge is not None:
             knowledge = prefetched_knowledge
         else:
             try:
-                knowledge = await KnowledgeBase.search(
+                knowledge = await kb.search(
                     prompt,
                     deps.client_id,
                     6,
@@ -512,22 +567,19 @@ class CoachAgent:
             except Exception as exc:  # noqa: BLE001 - log and continue with empty knowledge
                 logger.warning(f"agent.ask fallback knowledge_failed client_id={deps.client_id} error={exc}")
                 knowledge = []
-        entry_ids, entries = cls._build_knowledge_entries(knowledge)
-        entry_ids, entries = cls._filter_entries_for_prompt(prompt, entry_ids, entries)
+        entry_ids, entries, entry_datasets = cls._build_knowledge_entries(knowledge)
+        entry_ids, entries, entry_datasets = cls._filter_entries_for_prompt(prompt, entry_ids, entries, entry_datasets)
+        entry_datasets = [
+            kb.dataset_service.alias_for_dataset(dataset) if dataset else "" for dataset in entry_datasets
+        ]
         deps.knowledge_base_empty = len(entry_ids) == 0
-        _, language = cls._language_context(deps)
+        _, language_label = cls._language_context(deps)
         knowledge_section = cls._format_knowledge_entries(entry_ids, entries)
-        system_prompt = (
-            "You are GymBot's fitness coach.\n"
-            "- Use the provided knowledge snippets first.\n"
-            "- Keep the answer short, motivating, and in the client's language.\n"
-        )
-        user_prompt = (
-            f"Client language: {language}\n"
-            f"Client question: {prompt}\n"
-            "Knowledge entries:\n"
-            f"{knowledge_section}\n"
-            "Return an actionable answer."
+        system_prompt = COACH_SYSTEM_PROMPT
+        user_prompt = ASK_AI_USER_PROMPT.format(
+            language=language_label,
+            question=prompt,
+            knowledge=knowledge_section,
         )
         response = await cls._complete_with_retries(
             client,
@@ -542,16 +594,18 @@ class CoachAgent:
             result = cls._enforce_fitness_domain(
                 prompt,
                 response,
-                language,
+                language_label,
                 entry_ids,
                 entries,
+                entry_datasets,
                 deps.client_id,
                 deps=deps,
             )
+            result.sources = cls._unique_sources(entry_datasets)
             logger.info(
                 (
                     f"agent.ask fallback_success client_id={deps.client_id} answer_len={len(result.answer)} "
-                    f"sources={len(result.sources)} kb_empty={not entry_ids}"
+                    f"sources={','.join(result.sources)} kb_empty={deps.knowledge_base_empty}"
                 )
             )
             return result
@@ -561,19 +615,22 @@ class CoachAgent:
                 prompt,
                 entry_ids,
                 entries,
+                datasets=entry_datasets,
                 snippets=snippets_for_summary,
                 client_id=deps.client_id,
-                language=language,
+                language=language_label,
             )
             result = cls._enforce_fitness_domain(
                 prompt,
                 summary,
-                language,
+                language_label,
                 entry_ids,
                 entries,
+                entry_datasets,
                 deps.client_id,
                 deps=deps,
             )
+            result.sources = cls._unique_sources(entry_datasets)
             return result
         deps.knowledge_base_empty = True
         logger.warning(f"agent.ask fallback missing_answer client_id={deps.client_id} kb_empty=True")
@@ -582,37 +639,120 @@ class CoachAgent:
     @staticmethod
     def _build_knowledge_entries(
         raw_entries: Sequence[KnowledgeSnippet | str],
-    ) -> tuple[list[str], list[str]]:
+        *,
+        default_dataset: str | None = None,
+    ) -> tuple[list[str], list[str], list[str]]:
         entry_ids: list[str] = []
         entries: list[str] = []
+        datasets: list[str] = []
         for index, raw in enumerate(raw_entries, start=1):
             if isinstance(raw, KnowledgeSnippet):
                 if not raw.is_content():
                     continue
                 text = raw.text.strip()
+                dataset = (raw.dataset or "").strip() if raw.dataset else ""
             else:
                 text = str(raw or "").strip()
+                dataset = default_dataset or ""
             if not text:
                 continue
             entry_id = f"KB-{index}"
             entry_ids.append(entry_id)
             entries.append(text)
-        return entry_ids, entries
+            datasets.append(dataset)
+        return entry_ids, entries, datasets
+
+    @staticmethod
+    def _unique_sources(datasets: Iterable[str]) -> list[str]:
+        unique: list[str] = []
+        seen: set[str] = set()
+        for raw in datasets:
+            alias = (raw or "").strip()
+            if not alias or alias in seen:
+                continue
+            seen.add(alias)
+            unique.append(alias)
+
+        def _order(value: str) -> tuple[int, str]:
+            if value.startswith("kb_client_"):
+                return (0, value)
+            if value.startswith("kb_chat_"):
+                return (1, value)
+            if value == settings.COGNEE_GLOBAL_DATASET:
+                return (2, value)
+            return (3, value)
+
+        unique.sort(key=_order)
+        return unique
+
+    @classmethod
+    async def _collect_kb_entries(
+        cls,
+        kb: KnowledgeBase,
+        client_id: int,
+        query: str,
+        *,
+        request_id: str | None,
+        limit: int = 6,
+    ) -> tuple[list[str], list[str], list[str], list[KnowledgeSnippet]]:
+        actor = await kb.dataset_service.get_cognee_user()
+        candidate_datasets = [
+            kb.dataset_service.dataset_name(client_id),
+            kb.dataset_service.chat_dataset_name(client_id),
+            kb.GLOBAL_DATASET,
+        ]
+        unique_datasets: list[str] = []
+        seen: set[str] = set()
+        for dataset in candidate_datasets:
+            alias = kb.dataset_service.alias_for_dataset(dataset)
+            if alias in seen:
+                continue
+            seen.add(alias)
+            unique_datasets.append(alias)
+        for dataset in unique_datasets:
+            try:
+                await kb.projection_service.ensure_dataset_projected(dataset, actor, timeout=2.0)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug(f"knowledge_projection_skip dataset={dataset} detail={exc}")
+
+        snippets = await kb.search(query, client_id, limit, request_id=request_id)
+        entry_ids, entries, datasets = cls._build_knowledge_entries(snippets)
+        entry_ids, entries, datasets = cls._filter_entries_for_prompt(query, entry_ids, entries, datasets)
+        dataset_aliases = [kb.dataset_service.alias_for_dataset(dataset) if dataset else "" for dataset in datasets]
+        if entry_ids:
+            return entry_ids, entries, dataset_aliases, list(snippets)
+        try:
+            fallback_raw = await kb.fallback_entries(client_id, limit=limit)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"agent.ask fallback_entries_failed client_id={client_id} detail={exc}")
+            fallback_raw = []
+        fallback_snippets = [
+            KnowledgeSnippet(text=text, dataset=dataset, kind="document") for text, dataset in fallback_raw
+        ]
+        fallback_ids, fallback_entries, fallback_datasets = cls._build_knowledge_entries(fallback_snippets)
+        fallback_ids, fallback_entries, fallback_datasets = cls._filter_entries_for_prompt(
+            query, fallback_ids, fallback_entries, fallback_datasets
+        )
+        alias_fallbacks = [
+            kb.dataset_service.alias_for_dataset(dataset) if dataset else "" for dataset in fallback_datasets
+        ]
+        return fallback_ids, fallback_entries, alias_fallbacks, list(snippets)
 
     @staticmethod
     def _filter_entries_for_prompt(
         prompt: str,
         entry_ids: Sequence[str],
         entries: Sequence[str],
-    ) -> tuple[list[str], list[str]]:
+        datasets: Sequence[str],
+    ) -> tuple[list[str], list[str], list[str]]:
         if not entry_ids or not entries:
-            return list(entry_ids), list(entries)
-        return list(entry_ids), list(entries)
+            return list(entry_ids), list(entries), list(datasets)
+        return list(entry_ids), list(entries), list(datasets)
 
     @classmethod
     def _format_knowledge_entries(cls, entry_ids: Sequence[str], entries: Sequence[str]) -> str:
         if not entry_ids or not entries:
-            return "No knowledge entries were retrieved."
+            return ""
         formatted: list[str] = []
         for entry_id, text in zip(entry_ids, entries, strict=False):
             snippet = cls._truncate_text(text, 500)
@@ -720,13 +860,15 @@ class CoachAgent:
         entry_ids: Sequence[str],
         entries: Sequence[str],
         *,
+        datasets: Sequence[str] | None,
         snippets: Sequence[KnowledgeSnippet] | None,
         client_id: int,
         language: str,
     ) -> QAResponse:
         if not entry_ids or not entries:
             raise AgentExecutionAborted("Knowledge base empty", reason="knowledge_base_empty")
-        client_dataset = KnowledgeBase._dataset_name(client_id)
+        kb = _kb()
+        client_dataset = kb.dataset_service.dataset_name(client_id)
         index_map = {entry_id: idx for idx, entry_id in enumerate(entry_ids)}
         annotated: list[tuple[str, str, str]] = []
         for idx, text in enumerate(entries):
@@ -734,7 +876,9 @@ class CoachAgent:
             if not cleaned:
                 continue
             dataset = ""
-            if snippets is not None and idx < len(snippets):
+            if datasets is not None and idx < len(datasets):
+                dataset = datasets[idx] or ""
+            elif snippets is not None and idx < len(snippets):
                 dataset = snippets[idx].dataset or ""
             source = entry_ids[idx] if idx < len(entry_ids) else f"KB-{idx + 1}"
             annotated.append((dataset, source, cleaned))
@@ -749,7 +893,8 @@ class CoachAgent:
         outro = "Якщо потрібні деталі або коригування, дай знати — я підкажу далі."
         answer = "\n".join([intro, *summary_lines, "", outro]).strip()
         logger.info("agent.ask kb_fallback_summary client_id={} used_snippets={}".format(client_id, len(selected)))
-        sources = [source for _, source, _ in selected] or ["general_knowledge"]
+        source_aliases = cls._unique_sources(dataset or "" for dataset, _, _ in selected)
+        sources = source_aliases or [source for _, source, _ in selected] or ["general_knowledge"]
         return QAResponse(answer=answer, sources=sources)
 
     @staticmethod
@@ -1283,6 +1428,7 @@ class CoachAgent:
         language: str,
         entry_ids: Sequence[str],
         entries: Sequence[str],
+        datasets: Sequence[str] | None,
         client_id: int,
         deps: AgentDeps | None = None,
     ) -> QAResponse:
@@ -1295,21 +1441,26 @@ class CoachAgent:
                     prompt,
                     entry_ids,
                     entries,
+                    datasets=datasets,
                     snippets=None,
                     client_id=client_id,
                     language=language,
                 )
                 return summary
-            raise AgentExecutionAborted("Knowledge base empty", reason="knowledge_base_empty")
+            raise AgentExecutionAborted("Model returned empty response", reason="model_empty_response")
         response.answer = answer
-        valid_sources = set(entry_ids)
-        if response.sources:
-            filtered = [source for source in response.sources if source in valid_sources]
-            if not filtered and entry_ids:
-                filtered = list(entry_ids)
-            response.sources = filtered or ["general_knowledge"]
+        dataset_sources = cls._unique_sources(datasets or [])
+        if dataset_sources:
+            response.sources = dataset_sources
         else:
-            response.sources = list(entry_ids) if entry_ids else ["general_knowledge"]
+            valid_sources = set(entry_ids)
+            if response.sources:
+                filtered = [source for source in response.sources if source in valid_sources]
+                if not filtered and entry_ids:
+                    filtered = list(entry_ids)
+                response.sources = filtered or ["general_knowledge"]
+            else:
+                response.sources = list(entry_ids) if entry_ids else ["general_knowledge"]
         return response
 
     @classmethod

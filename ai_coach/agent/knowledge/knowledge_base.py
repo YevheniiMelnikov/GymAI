@@ -1,125 +1,27 @@
 import asyncio
-import hashlib
-import inspect
-import logging
-import os
-import random
-import re
-import sqlite3
 import time
-from dataclasses import asdict, dataclass, is_dataclass
+import logging
 from hashlib import sha256
-from pathlib import Path
 from time import monotonic
-from types import SimpleNamespace
-from typing import Any, Awaitable, Callable, ClassVar, Iterable, Mapping, Sequence, cast, Literal
-from urllib.parse import urlparse
-from uuid import NAMESPACE_DNS, UUID, uuid5
-from enum import Enum
+from typing import Any, ClassVar, Mapping, TYPE_CHECKING
+
 from loguru import logger
 
 from ai_coach.agent.knowledge.base_knowledge_loader import KnowledgeLoader
-from ai_coach.agent.knowledge.cognee_config import CogneeConfig, ensure_cognee_ready
-
-try:
-    from sqlalchemy.exc import OperationalError as SAOperationalError  # type: ignore
-except Exception:  # pragma: no cover - optional dependency
-    SAOperationalError = None  # type: ignore[assignment]
-from ai_coach.agent.knowledge.utils.hash_store import HashStore
+from ai_coach.agent.knowledge.schemas import KnowledgeSnippet, ProjectionStatus, RebuildResult
+from ai_coach.agent.knowledge.utils.chat_queue import ChatProjectionScheduler
+from ai_coach.agent.knowledge.cognee_config import CogneeConfig
+from ai_coach.agent.knowledge.utils.datasets import DatasetService
+from ai_coach.agent.knowledge.utils.projection import ProjectionService
+from ai_coach.agent.knowledge.utils.search import SearchService
+from ai_coach.agent.knowledge.utils.storage import StorageService
 from ai_coach.agent.knowledge.utils.lock_cache import LockCache
-from ai_coach.agent.knowledge.utils.storage_resolver import StorageResolver
-from ai_coach.agent.knowledge.utils.text import normalize_text
-from ai_coach.schemas import CogneeUser
 from ai_coach.types import MessageRole
+
 from config.app_settings import settings
-from core.exceptions import UserServiceError
-from core.services import APIService
-from core.schemas import Client
 
-import cognee  # type: ignore
-
-try:
-    from cognee.modules.users.methods.get_default_user import get_default_user  # type: ignore
-except Exception:
-
-    async def get_default_user() -> Any | None:  # type: ignore
-        return None
-
-
-try:  # pragma: no cover - optional dependency
-    from cognee.modules.data.exceptions import DatasetNotFoundError  # type: ignore
-    from cognee.modules.users.exceptions.exceptions import PermissionDeniedError  # type: ignore
-except Exception:  # pragma: no cover - stubs for tests
-
-    class DatasetNotFoundError(Exception):
-        pass
-
-    class PermissionDeniedError(Exception):
-        pass
-
-
-try:  # pragma: no cover - optional dependency
-    from cognee.infrastructure.databases.exceptions import DatabaseNotCreatedError  # type: ignore
-except Exception:  # pragma: no cover - fallback stub
-
-    class DatabaseNotCreatedError(Exception):
-        pass
-
-
-async def _safe_add(*args, **kwargs):
-    return await cognee.add(*args, **kwargs)
-
-
-class ProjectionProbeError(RuntimeError):
-    """Raised when dataset readiness cannot be determined due to configuration issues."""
-
-
-_DB_SETUP_TOKENS: tuple[str, ...] = ("await setup", "no such table", "database not created")
-
-
-def _needs_cognee_setup(exc: Exception) -> bool:
-    if isinstance(exc, DatabaseNotCreatedError):
-        return True
-    if isinstance(exc, sqlite3.OperationalError):
-        return True
-    if SAOperationalError is not None and isinstance(exc, SAOperationalError):
-        message = str(exc).lower()
-        return any(token in message for token in _DB_SETUP_TOKENS)
-    message = str(exc).lower()
-    return any(token in message for token in _DB_SETUP_TOKENS)
-
-
-class ProjectionStatus(Enum):
-    READY = "ready"
-    TIMEOUT = "timeout"
-    FATAL_ERROR = "fatal_error"
-    USER_CONTEXT_UNAVAILABLE = "user_context_unavailable"
-    READY_NO_ROWS = "ready_no_rows"
-    READY_EMPTY = "ready_empty"
-
-
-@dataclass(slots=True)
-class KnowledgeSnippet:
-    text: str
-    dataset: str | None = None
-    kind: Literal["document", "message", "note", "unknown"] = "document"
-
-    def is_content(self) -> bool:
-        return self.kind in {"document", "note"}
-
-
-@dataclass(slots=True)
-class DatasetRow:
-    text: str
-    metadata: Mapping[str, Any] | None = None
-
-
-@dataclass(slots=True)
-class RebuildResult:
-    reinserted: int = 0
-    healed: int = 0
-    linked: int = 0
-    rehydrated: int = 0
+if TYPE_CHECKING:
+    from core.schemas import Client
 
 
 class KnowledgeBase:
@@ -128,1440 +30,145 @@ class KnowledgeBase:
     _loader: KnowledgeLoader | None = None
     _cognify_locks: LockCache = LockCache()
     _user: Any | None = None
-    _list_data_supports_user: bool | None = None
-    _list_data_requires_user: bool | None = None
-    _has_datasets_module: bool | None = None
     _warned_missing_user: bool = False
-    _DATASET_IDS: ClassVar[dict[str, str]] = {}
-    _DATASET_ALIASES: ClassVar[dict[str, str]] = {}
-    _PROJECTED_DATASETS: ClassVar[set[str]] = set()
     _PENDING_REBUILDS: ClassVar[set[str]] = set()
-    _PROJECTION_STATE: ClassVar[dict[str, dict[str, Any]]] = {}
-    _LOG_THROTTLE: ClassVar[dict[str, float]] = {}
-    _DATASET_IDENTIFIER_FIELDS: ClassVar[tuple[str, ...]] = (
-        "dataset_id",
-        "datasetId",
-        "dataset_name",
-        "datasetName",
-        "id",
-    )
-    GLOBAL_DATASET: str = settings.COGNEE_GLOBAL_DATASET
-    _BOOTSTRAP_USER_UUID: ClassVar[UUID] = uuid5(NAMESPACE_DNS, "gymbot_cognee_bootstrap_user")
-    _CLIENT_ALIAS_PREFIX: str = "kb_client_"
-    _CHAT_ALIAS_PREFIX: str = "kb_chat_"
-    _LEGACY_CLIENT_PREFIX: str = "client_"
-    _PROJECTION_CHECK_QUERY: str = "__knowledge_projection_health__"
-    _PROJECTION_BACKOFF_SECONDS: tuple[float, ...] = (0.5, 1.0, 2.0, 4.0, 6.0, 8.0, 12.0)
-    _CHAT_PENDING: ClassVar[dict[str, int]] = {}
-    _CHAT_PROJECT_TASKS: ClassVar[dict[str, asyncio.Task[Any]]] = {}
-    _CHAT_LAST_PROJECT_TS: ClassVar[dict[str, float]] = {}
-    _SHA_PRIMARY: ClassVar[bool] = getattr(settings, "COGNEE_STORAGE_SHA_PRIMARY", True)
     _LAST_REBUILD_RESULT: ClassVar[dict[str, Any]] = {}
-    _GLOBAL_PROJECTION_LOGGED_INFO: ClassVar[bool] = False
+    GLOBAL_DATASET: str = settings.COGNEE_GLOBAL_DATASET
 
-    @classmethod
-    async def _get_consistency_report(cls) -> dict[str, Any]:
-        storage_root = cls._storage_root()
-        storage_sha_files = 0
-        if storage_root.exists():
-            for path in storage_root.glob("text_*.txt"):
-                if re.match(r"^text_([0-9a-f]{64})\.txt$", path.name):
-                    storage_sha_files += 1
+    def __init__(self) -> None:
+        self._projection_health: dict[str, tuple[ProjectionStatus, str]] = {}
+        self.dataset_service = DatasetService()
+        self.storage_service = StorageService(self.dataset_service)
+        self.projection_service = ProjectionService(self.dataset_service, self.storage_service)
+        self.storage_service.attach_knowledge_base(self)
+        self.projection_service.attach_knowledge_base(self)
+        self.projection_service.set_waiter(self._wait_for_projection)
+        self.search_service = SearchService(self.dataset_service, self.projection_service, knowledge_base=self)
+        self.chat_queue_service = ChatProjectionScheduler(self.dataset_service, self)
 
-        hashstore_entries_sha = 0
-        hashstore_entries_md5 = 0
-        all_datasets = (
-            await HashStore.list_all_datasets()
-            if hasattr(HashStore, "list_all_datasets")
-            else [cls._alias_for_dataset(cls.GLOBAL_DATASET)]
-        )
-        for dataset_alias in all_datasets:
-            digests = await HashStore.list(dataset_alias)
-            for digest in digests:
-                if len(digest) == 64:
-                    hashstore_entries_sha += 1
-                elif len(digest) == 32:
-                    hashstore_entries_md5 += 1
-
-        can_rebuild = storage_root.exists() and os.access(storage_root, os.W_OK)
-
-        return {
-            "storage_sha_files": storage_sha_files,
-            "hashstore_entries_sha": hashstore_entries_sha,
-            "hashstore_entries_md5": hashstore_entries_md5,
-            "can_rebuild": can_rebuild,
-            "last_rebuild_result": cls._LAST_REBUILD_RESULT,
-        }
-
-    @classmethod
-    async def initialize(cls, knowledge_loader: KnowledgeLoader | None = None) -> None:
-        """Initialize Cognee config, user, and preload knowledge base."""
+    async def initialize(self, knowledge_loader: KnowledgeLoader | None = None) -> None:
         CogneeConfig.apply()
         try:
-            from cognee.modules.engine.operations.setup import setup as cognee_setup  # type: ignore
+            from cognee.modules.engine.operations.setup import setup as cognee_setup
 
             await cognee_setup()
         except Exception:
             pass
-        cls._loader = knowledge_loader
-        cls._user = await cls._get_cognee_user()
-        if not getattr(cls._user, "id", None):
+        self._loader = knowledge_loader
+        self._user = await self.dataset_service.get_cognee_user()
+        if not getattr(self._user, "id", None):
             logger.warning("KB user is missing id, skipping heavy initialization steps.")
             return
 
-        cls._PROJECTED_DATASETS.clear()
+        self.dataset_service._PROJECTED_DATASETS.clear()
         try:
-            await cls._sanitize_hash_store()
-        except Exception as exc:  # noqa: BLE001 - best effort sanitation
+            await self.storage_service.sanitize_hash_store()
+        except Exception as exc:
             logger.warning(f"kb_hashstore_sanitation_failed detail={exc}")
 
-        if hasattr(StorageResolver, "build_md5_to_sha_index"):
-            try:
-                build_func = StorageResolver.build_md5_to_sha_index
-                if inspect.iscoroutinefunction(build_func):
-                    await build_func(cls._storage_root())
-                else:
-                    build_func(cls._storage_root())
-            except Exception as exc:
-                logger.warning(f"StorageResolver.build_md5_to_sha_index failed: {exc}")
-
         try:
-            await cls.rebuild_dataset(cls.GLOBAL_DATASET, cls._user, sha_only=True)
-        except Exception as exc:  # noqa: BLE001 - best effort rebuild
+            await self.rebuild_dataset(self.GLOBAL_DATASET, self._user, sha_only=True)
+        except Exception as exc:
             logger.warning(f"kb_global_rebuild_failed detail={exc}")
         try:
-            await cls.refresh()
+            await self.refresh()
         except Exception as e:
             logger.warning(f"Knowledge refresh skipped: {e}")
-        user_ctx = cls._to_user_ctx(cls._user)
-        ds_id = await cls._get_dataset_id(cls.GLOBAL_DATASET, user_ctx)
-        if ds_id:
-            timeout = float(getattr(settings, "AI_COACH_GLOBAL_PROJECTION_FIRST_BOOT_TIMEOUT", 5.0))
-            try:
-                status = await cls._wait_for_projection(cls.GLOBAL_DATASET, cls._user, timeout=timeout)
-                if status == ProjectionStatus.READY:
-                    logger.info(f"projection:first_boot_wait_s={timeout}")
-                else:
-                    logger.warning(f"Knowledge global projection wait failed: {status.value}")
-            except Exception as exc:  # noqa: BLE001 - diagnostics only
-                logger.warning(f"Knowledge global projection wait failed: {exc}")
-        else:
-            logger.warning("kb_global_projection_skipped reason=dataset_id_unavailable")
 
-        storage_root = cls._storage_root()
-        storage_info = CogneeConfig.describe_storage()
-        projection_ready, projection_reason = await cls._is_projection_ready(cls.GLOBAL_DATASET, cls._user)
-        kb_projection_rows = 0
-        try:
-            if user_ctx is not None:
-                kb_projection_rows = len(await cls._list_dataset_entries(cls.GLOBAL_DATASET, user_ctx))
-        except Exception:
-            pass
+    async def refresh(self) -> None:
+        import cognee
+        from cognee.modules.data.exceptions import DatasetNotFoundError
+        from cognee.modules.users.exceptions.exceptions import PermissionDeniedError
 
-        logger.info(
-            f"kb_storage_root={storage_root}, "
-            f"files_count={storage_info.get('entries_count', 0)}, "
-            f"md5_mirrors_count={storage_info.get('md5_mirrors_count', 0)}, "
-            f"kb_projection_rows={kb_projection_rows}, "
-            f"projection_ready={projection_ready}, "
-            f"projection_reason={projection_reason}"
-        )
-
-    @classmethod
-    async def refresh(cls) -> None:
-        """Re-cognify global dataset and refresh loader if available."""
-        user = await cls._get_cognee_user()
-        ds = cls._resolve_dataset_alias(cls.GLOBAL_DATASET)
-        user_ctx = cls._to_user_ctx(user)
+        user = await self.dataset_service.get_cognee_user()
+        ds = self.dataset_service.alias_for_dataset(self.GLOBAL_DATASET)
+        user_ctx = self.dataset_service.to_user_ctx(user)
         if user_ctx is None:
             logger.warning(f"knowledge_refresh_skipped dataset={ds}: user context unavailable")
             return
-        await cls._ensure_dataset_exists(ds, user_ctx)
-        cls._PROJECTED_DATASETS.discard(cls._alias_for_dataset(ds))
-        if cls._loader:
-            await cls._loader.refresh()
+        await self.dataset_service.ensure_dataset_exists(ds, user_ctx)
+        self.dataset_service._PROJECTED_DATASETS.discard(ds)
+        if self._loader:
+            await self._loader.refresh()
         target = ds
         try:
-            dataset_id = await cls._get_dataset_id(ds, user_ctx)
-        except ProjectionProbeError:
+            dataset_id = await self.dataset_service.get_dataset_id(ds, user_ctx)
+        except Exception:
             dataset_id = None
         if dataset_id:
             target = dataset_id
         try:
-            await cognee.cognify(datasets=[target], user=user_ctx)  # pyrefly: ignore[bad-argument-type]
+            await cognee.cognify(datasets=[target], user=user_ctx)
         except (PermissionDeniedError, DatasetNotFoundError) as e:
             logger.error(f"Knowledge base update skipped: {e}")
 
-    @classmethod
-    async def ensure_global_projected(cls, *, timeout: float | None = None) -> ProjectionStatus:
-        dataset = cls._resolve_dataset_alias(cls.GLOBAL_DATASET)
-        user = await cls._get_cognee_user()
-        tried_setup = False
-
-        while True:
-            user_ctx = cls._to_user_ctx(user)
-            if user_ctx is None:
-                if not tried_setup:
-                    tried_setup = True
-                    await ensure_cognee_ready()
-                    user = await cls._get_cognee_user()
-                    continue
-                logger.warning("knowledge_projection_skipped dataset={} reason=user_context_unavailable", dataset)
-                return ProjectionStatus.USER_CONTEXT_UNAVAILABLE
-
-            try:
-                await cls._ensure_dataset_exists(dataset, user_ctx)
-            except Exception as exc:  # noqa: BLE001
-                if _needs_cognee_setup(exc) and not tried_setup:
-                    tried_setup = True
-                    await ensure_cognee_ready()
-                    user = await cls._get_cognee_user()
-                    continue
-                if _needs_cognee_setup(exc):
-                    logger.warning(
-                        "knowledge_projection_dataset_missing dataset={} detail={}",
-                        dataset,
-                        exc,
-                    )
-                    return ProjectionStatus.USER_CONTEXT_UNAVAILABLE
-                cls._log_once(
-                    logging.DEBUG,
-                    "knowledge_projection_dataset_missing",
-                    throttle_key=f"projection:{dataset}:ensure_missing",
-                    dataset=dataset,
-                    detail=exc,
-                )
-
-            status = await cls._wait_for_projection(dataset, user=user, timeout=timeout)
-            if status == ProjectionStatus.READY:
-                cls._PROJECTED_DATASETS.add(cls._alias_for_dataset(dataset))
-                return ProjectionStatus.READY
-
-            try:
-                entries = await cls._list_dataset_entries(dataset, user_ctx)
-            except Exception as exc:  # noqa: BLE001 - diagnostics only
-                cls._log_once(
-                    logging.DEBUG,
-                    "projection:ensure_list_failed",
-                    dataset=dataset,
-                    reason="list_entries_failed",
-                    detail=exc,
-                    min_interval=15.0,
-                )
-                entries = []
-
-            if entries:
-                missing, healed = await cls._heal_dataset_storage(
-                    dataset,
-                    user_ctx,
-                    entries=entries,
-                    reason="ensure_global_projection",
-                )
-                if healed > 0:
-                    retry_timeout = 5.0 if timeout is None else min(max(timeout, 0.0), 5.0)
-                    retry_status = await cls._wait_for_projection(dataset, user=user, timeout=retry_timeout)
-                    if retry_status == ProjectionStatus.READY:
-                        alias = cls._alias_for_dataset(dataset)
-                        cls._PROJECTED_DATASETS.add(alias)
-                        return ProjectionStatus.READY
-
-            cls._log_once(
-                logging.INFO if not cls._GLOBAL_PROJECTION_LOGGED_INFO else logging.DEBUG,
-                "projection:deferred",
-                dataset=dataset,
-            )
-            if not cls._GLOBAL_PROJECTION_LOGGED_INFO:
-                cls._GLOBAL_PROJECTION_LOGGED_INFO = True
-            state = cls._projection_state(cls._alias_for_dataset(dataset))
-            state["next_check_ts"] = time.time() + random.uniform(15.0, 30.0)
-            return status
-
-    @classmethod
-    async def prune(cls) -> None:
-        """Run Cognee prune routine to cleanup cached data."""
-        try:
-            from cognee.api.v1.prune import prune as cognee_prune  # noqa
-        except Exception as exc:  # pragma: no cover - import errors handled upstream
-            logger.error(f"Cognee prune unavailable: {exc}")
-            raise UserServiceError("Cognee prune module unavailable") from exc
-
-        try:
-            await cognee_prune.prune_data()
-        except Exception as exc:  # noqa: BLE001
-            logger.error(f"Cognee prune failed: {exc}")
-            raise UserServiceError("Cognee prune failed") from exc
-
-    @classmethod
-    async def update_dataset(
-        cls,
-        text: str,
-        dataset: str,
-        user: Any | None,
-        node_set: list[str] | None = None,
-        metadata: Mapping[str, Any] | None = None,
-    ) -> tuple[str, bool]:
-        """Add text to dataset if new, update hash store, return (dataset, created)."""
-        normalized_text = cls._normalize_text(text)
-        if not normalized_text.strip():
-            logger.debug(f"empty_content_filtered dataset={dataset}")
-            return dataset, False
-        digest_sha = cls._compute_digests(normalized_text)
-        payload = normalized_text.encode("utf-8")
-        ds_name = cls._resolve_dataset_alias(dataset)
-        user_ctx = cls._to_user_ctx(user)
-        await cls._ensure_dataset_exists(ds_name, user_ctx)
-        storage_path, created_file = cls._ensure_storage_file(
-            digest_sha=digest_sha,
-            text=normalized_text,
-            dataset=ds_name,
-        )
-        if storage_path is None:
-            return ds_name, False
-        logger.debug(f"[sha_path_check] dataset={ds_name} sha={digest_sha[:12]} built_path={storage_path}")
-        if created_file:
-            logger.debug(
-                f"kb_write start dataset={ds_name} digest_sha={digest_sha[:12]} "
-                f"path={storage_path} bytes={len(payload)}"
-            )
-        metadata_payload = cls._augment_metadata(metadata, ds_name, digest_sha=digest_sha)
-        if await HashStore.contains(ds_name, digest_sha):
-            await HashStore.add(ds_name, digest_sha, metadata=metadata_payload)
-            logger.debug(f"kb_append skipped dataset={ds_name} digest_sha={digest_sha[:12]} reason=duplicate")
-            return ds_name, False
-
-        info: Any | None = None
-        for attempt in range(2):  # Allow one retry for MD5 fallback
-            try:
-                info = await _safe_add(
-                    normalized_text,
-                    dataset_name=ds_name,
-                    user=user_ctx,  # pyrefly: ignore[bad-argument-type]
-                    node_set=node_set,
-                )
-                break  # Success, exit loop
-            except FileNotFoundError as exc:
-                missing_path_str = getattr(exc, "filename", None) or str(exc)
-                missing_filename = Path(missing_path_str).name
-                if StorageResolver.is_md5_filename(missing_filename):
-                    # 1) записываем недостающий md5-файл напрямую
-                    md5_path = Path(missing_path_str)
-                    if not md5_path.is_absolute():
-                        md5_path = cls._storage_root() / missing_filename
-                    try:
-                        md5_path.parent.mkdir(parents=True, exist_ok=True)
-                        md5_path.write_text(normalized_text, encoding="utf-8")
-                        bytes_written = len(normalized_text.encode("utf-8"))
-                        logger.debug(f"storage_md5_fallback_written md5={missing_filename[:12]} bytes={bytes_written}")
-                        continue  # повторяем _safe_add
-                    except Exception as write_exc:
-                        logger.debug(
-                            f"storage_md5_fallback_write_failed md5={missing_filename[:12]} detail={write_exc}"
-                        )
-                    # 2) как запасной путь — старая ветка с маппингом/HashStore
-                    sha_path = StorageResolver.map_md5_to_sha_path(missing_filename, cls._storage_root())
-                    if sha_path and sha_path.exists():
-                        logger.debug(f"storage_md5_fallback_ok sha={sha_path.name[:12]} md5={missing_filename[:12]}")
-                        continue  # Retry _safe_add, now with SHA file present
-                    else:
-                        # SHA file not found or mapping failed, try to restore from HashStore
-                        md5_digest = cls._filename_to_digest(missing_filename)
-                        if md5_digest:
-                            # Get metadata for the MD5 digest
-                            metadata_from_hashstore = await HashStore.metadata(ds_name, md5_digest)
-                            if metadata_from_hashstore and metadata_from_hashstore.get("text"):
-                                restored_text = str(metadata_from_hashstore["text"])
-                                # Recompute SHA from restored text to ensure consistency
-                                recomputed_sha = cls._compute_digests(cls._normalize_text(restored_text))
-                                # Ensure the SHA file exists with the restored content
-                                restored_sha_path, created_restored_file = cls._ensure_storage_file(
-                                    digest_sha=recomputed_sha,
-                                    text=restored_text,
-                                    dataset=ds_name,
-                                )
-                                if created_restored_file:
-                                    logger.debug(
-                                        f"storage_md5_fallback_healed sha={recomputed_sha[:12]} md5={md5_digest[:12]}"
-                                    )
-                                    # Update HashStore to use SHA digest if not already
-                                    await HashStore.add(ds_name, recomputed_sha, metadata=metadata_from_hashstore)
-                                    # Remove old MD5 entry if it exists
-                                    await HashStore.remove(ds_name, md5_digest)
-                                    continue  # Retry _safe_add, now with SHA file present
-                                else:
-                                    logger.warning(
-                                        "storage_md5_fallback_restore_failed "
-                                        f"sha={recomputed_sha[:12]} md5={md5_digest[:12]} reason=file_not_created"
-                                    )
-                            else:
-                                logger.debug(
-                                    f"storage_md5_fallback_miss md5={missing_filename[:12]} reason=no_metadata_text"
-                                )
-                        else:
-                            logger.debug(
-                                f"storage_md5_fallback_miss md5={missing_filename[:12]} reason=invalid_md5_filename"
-                            )
-                logger.debug(
-                    f"kb_append storage_missing dataset={ds_name} sha={digest_sha[:12]} detail={exc}",
-                )
-                raise  # Re-raise if not an MD5 fallback or fallback failed
-            except (DatasetNotFoundError, PermissionDeniedError):
-                raise
-        if info is None:
-            # If we reach here, it means all retries failed or an unhandled exception occurred
-            raise RuntimeError(f"Failed to add dataset entry after retries for {ds_name}")
-
-        hashstore_ok = False
-        for attempt in range(2):
-            await HashStore.add(ds_name, digest_sha, metadata=metadata_payload)
-            try:
-                hashstore_ok = await HashStore.contains(ds_name, digest_sha)
-            except Exception as exc:  # noqa: BLE001 - diagnostics only
-                logger.warning(
-                    f"hashstore_add_verification_failed dataset={ds_name} digest_sha={digest_sha[:12]} detail={exc}"
-                )
-                continue
-            if hashstore_ok:
-                break
-        if not hashstore_ok:
-            logger.warning(
-                f"hashstore_add_failed dataset={ds_name} digest_sha={digest_sha[:12]} will_mark_for_rebuild=True"
-            )
-            alias = cls._alias_for_dataset(ds_name)
-            if alias not in cls._PENDING_REBUILDS and user is not None:
-                cls._PENDING_REBUILDS.add(alias)
-
-                async def _schedule_rebuild() -> None:
-                    try:
-                        await cls.rebuild_dataset(alias, user)
-                    except Exception as rebuild_exc:  # noqa: BLE001 - background diagnostics only
-                        logger.debug(f"knowledge_dataset_rebuild_deferred_failed dataset={alias} detail={rebuild_exc}")
-                    finally:
-                        cls._PENDING_REBUILDS.discard(alias)
-
-                asyncio.create_task(_schedule_rebuild())
-        resolved = ds_name
-        identifier = cls._extract_dataset_identifier(info)
-        if identifier:
-            cls._register_dataset_identifier(ds_name, identifier)
-            resolved = identifier
-        logger.debug(f"kb_append ds={resolved} item=1")
-        logger.debug(f"kb_append ok dataset={resolved} digest_sha={digest_sha[:12]} path={storage_path}")
-        return resolved, True
-
-    @classmethod
     async def search(
-        cls,
-        query: str,
-        client_id: int,
-        k: int | None = None,
-        *,
-        request_id: str | None = None,
+        self, query: str, client_id: int, k: int | None = None, *, request_id: str | None = None
     ) -> list[KnowledgeSnippet]:
-        """Search across client and global datasets with resiliency features."""
-        normalized = query.strip()
-        if not normalized:
-            logger.debug(f"Knowledge search skipped client_id={client_id}: empty query")
-            return []
-        rid_value = request_id or "na"
-        global_alias = cls._alias_for_dataset(cls._resolve_dataset_alias(cls.GLOBAL_DATASET))
-        global_ready = global_alias in cls._PROJECTED_DATASETS
-        global_unavailable = False
-
-        if not global_ready:
-            status = await cls.ensure_global_projected(timeout=0.3)  # Quick check, no blocking
-            if status == ProjectionStatus.READY:
-                cls._PROJECTED_DATASETS.add(global_alias)
-                global_ready = True
-            else:
-                global_unavailable = True
-                cls._log_once(
-                    logging.INFO,
-                    "knowledge_search_global_pending",
-                    throttle_key=f"projection:{global_alias}:search_pending",
-                    client_id=client_id,
-                    rid=rid_value,
-                )
-        user = await cls._get_cognee_user()
-        await cls._ensure_profile_indexed(client_id, user)
-        user_ctx = cls._to_user_ctx(user)
-        datasets = [cls._dataset_name(client_id), cls._chat_dataset_name(client_id)]
-        if global_ready:
-            datasets.append(cls.GLOBAL_DATASET)
-        resolved_datasets: list[str] = []
-        for alias in datasets:
-            resolved = cls._resolve_dataset_alias(alias)
-            try:
-                await cls._ensure_dataset_exists(resolved, user_ctx)
-            except Exception as ensure_exc:
-                logger.debug(
-                    f"knowledge_dataset_ensure_failed client_id={client_id} dataset={resolved} detail={ensure_exc}"
-                )
-            resolved_datasets.append(resolved)
-
-        base_hash = sha256(normalized.encode()).hexdigest()[:12]
-        datasets_hint = ",".join(resolved_datasets)
-        top_k_label = k if k is not None else "default"
-        logger.debug(
-            f"knowledge_search_start client_id={client_id} rid={rid_value} query_hash={base_hash} "
-            f"datasets={datasets_hint} top_k={top_k_label} global_unavailable={global_unavailable}"
-        )
-
-        queries = cls._expanded_queries(normalized)
-        if len(queries) > 1:
-            logger.debug(
-                f"knowledge_search_expanded client_id={client_id} rid={rid_value} "
-                f"variants={len(queries)} base_query_hash={base_hash}"
-            )
-
-        aggregated: list[KnowledgeSnippet] = []
+        normalized_query = self.dataset_service._normalize_text(query)
+        q_hash = sha256(normalized_query.encode("utf-8")).hexdigest()[:12] if normalized_query else "empty"
+        user = await self.dataset_service.get_cognee_user()
+        datasets_order = [
+            self.dataset_service.dataset_name(client_id),
+            self.dataset_service.chat_dataset_name(client_id),
+            self.GLOBAL_DATASET,
+        ]
+        searchable_aliases: list[str] = []
         seen: set[str] = set()
-        for variant in queries:
-            snippets = await cls._search_single_query(
-                variant,
-                resolved_datasets,
-                user,
-                k,
+        for dataset in datasets_order:
+            alias = self.dataset_service.alias_for_dataset(dataset)
+            if alias in seen:
+                continue
+            seen.add(alias)
+            row_count = await self.dataset_service.get_row_count(alias, user=user)
+            if row_count > 0:
+                searchable_aliases.append(alias)
+                continue
+            self.dataset_service.log_once(
+                logging.INFO,
+                "projection:skip_no_rows",
+                dataset=alias,
+                stage="search",
+                min_interval=120.0,
+            )
+            logger.debug(f"projection:skip_no_rows dataset={alias} stage=search")
+        dataset_label = ",".join(searchable_aliases) if searchable_aliases else "none"
+        logger.debug(f"ask.search.start client_id={client_id} datasets={dataset_label} q_hash={q_hash}")
+        if not searchable_aliases:
+            logger.debug(f"kb.search dataset={dataset_label} q_hash={q_hash} hits=0")
+            logger.debug(f"ask.search.done client_id={client_id} datasets={dataset_label} entries=0")
+            return []
+        try:
+            results = await self.search_service.search(
+                query,
                 client_id,
+                k,
                 request_id=request_id,
+                datasets=searchable_aliases,
+                user=user,
             )
-            if not snippets:
-                continue
-            for snippet in snippets:
-                cleaned = snippet.text.strip()
-                if not cleaned:
-                    continue
-                key = cleaned.casefold()
-                if key in seen:
-                    continue
-                aggregated.append(snippet)
-                seen.add(key)
-                if k is not None and len(aggregated) >= k:
-                    break
-            if k is not None and len(aggregated) >= k:
-                break
-
-        if k is not None:
-            return aggregated[:k]
-        return aggregated
-
-    @classmethod
-    async def _list_dataset_entries(cls, dataset: str, user_ctx: Any | None) -> list[DatasetRow]:
-        alias = cls._alias_for_dataset(dataset)
-        if user_ctx is None:
-            return []
-
-        datasets_module = getattr(cognee, "datasets", None)
-        if datasets_module is None:
-            return []
-
-        list_data = getattr(datasets_module, "list_data", None)
-        if not callable(list_data):
-            return []
-
-        list_data_callable = cast(Callable[..., Awaitable[Iterable[Any]]], list_data)
-        try:
-            raw_rows = await cls._fetch_dataset_rows(list_data_callable, dataset, user_ctx)
-        except Exception:
-            return []
-
-        return [cls._prepare_dataset_row(row, alias) for row in raw_rows]
-
-    @dataclass(slots=True)
-    class ProjectionCounters:
-        row_count: int = 0
-        empty_content_count: int = 0
-
-    @classmethod
-    async def _get_projection_counters(cls, dataset: str, user_ctx: Any) -> ProjectionCounters:
-        rows = await cls._list_dataset_entries(dataset, user_ctx)
-        row_count = len(rows)
-        empty_content_count = sum(1 for row in rows if not row.text.strip())
-        return cls.ProjectionCounters(row_count=row_count, empty_content_count=empty_content_count)
-
-    @classmethod
-    async def _get_projection_status(cls, dataset: str, user: Any) -> tuple[ProjectionStatus, str]:
-        user_ctx = cls._to_user_ctx(user)
-        alias = cls._alias_for_dataset(dataset)
-        if user_ctx is None:
-            return ProjectionStatus.USER_CONTEXT_UNAVAILABLE, "user_context_unavailable"
-
-        try:
-            rows = await cls._list_dataset_entries(dataset, user_ctx)
-            row_count = len(rows)
-            if row_count == 0:
-                return ProjectionStatus.READY_NO_ROWS, "no_rows_in_dataset"
-
-            empty_content_count = sum(1 for row in rows if not row.text.strip())
-            if empty_content_count == row_count:
-                return ProjectionStatus.READY_EMPTY, "all_rows_empty_content"
-
-            if alias in cls._PROJECTED_DATASETS:
-                return ProjectionStatus.READY, "ready"
-
-            return ProjectionStatus.TIMEOUT, "projection_pending"
-
-        except Exception as e:
-            return ProjectionStatus.FATAL_ERROR, str(e)
-
-    @classmethod
-    async def _wait_for_projection(cls, dataset: str, user: Any | None, *, timeout: float | None = None) -> ProjectionStatus:
-        alias = cls._alias_for_dataset(dataset)
-        max_probes = 3
-        start_time = monotonic()
-
-        for probe in range(max_probes):
-            status, reason = await cls._get_projection_status(dataset, user)
-
-            if status in (
-                ProjectionStatus.READY,
-                ProjectionStatus.READY_NO_ROWS,
-                ProjectionStatus.READY_EMPTY,
-                ProjectionStatus.FATAL_ERROR,
-                ProjectionStatus.USER_CONTEXT_UNAVAILABLE,
-            ):
-                if status == ProjectionStatus.READY_NO_ROWS:
-                    cls._log_once(logging.INFO, "projection:ready_no_rows", dataset=alias, probes=probe + 1)
-                elif status == ProjectionStatus.READY_EMPTY:
-                    cls._log_once(logging.INFO, "projection:ready_empty", dataset=alias, probes=probe + 1)
-                return status
-
-            if timeout is not None and (monotonic() - start_time) > timeout:
-                cls._log_once(logging.WARNING, "projection:wait_timeout", dataset=alias, reason=reason, timeout_s=timeout)
-                return ProjectionStatus.TIMEOUT
-
-            if probe < max_probes - 1:
-                sleep_for = cls._PROJECTION_BACKOFF_SECONDS[min(probe, len(cls._PROJECTION_BACKOFF_SECONDS) - 1)]
-                cls._log_once(
-                    logging.DEBUG, "projection:wait_pending", dataset=alias, probes=probe + 1, reason=reason, sleep_for=sleep_for
-                )
-                await asyncio.sleep(sleep_for)
-
-        cls._log_once(logging.WARNING, "projection:wait_timeout", dataset=alias, reason="max_probes_exceeded")
-        return ProjectionStatus.TIMEOUT
-
-    @classmethod
-    async def _search_single_query(
-        cls,
-        query: str,
-        datasets: list[str],
-        user: Any | None,
-        k: int | None,
-        client_id: int,
-        *,
-        request_id: str | None = None,
-    ) -> list[KnowledgeSnippet]:
-        if user is None:
-            logger.warning(f"knowledge_search_skipped client_id={client_id}: user context unavailable")
-            return []
-        query_hash = sha256(query.encode()).hexdigest()[:12]
-        skipped_aliases: list[str] = []
-        rid_value = request_id or "na"
-
-        async def _search_targets(targets: list[str]) -> list[str]:
-            params: dict[str, Any] = {
-                "datasets": targets,
-                "user": cls._to_user_ctx(user),
-            }
-            if k is not None:
-                params["top_k"] = k
-            return await cognee.search(query, **params)
-
-        ready_datasets: list[str] = []
-        for dataset in datasets:
-            alias = cls._alias_for_dataset(dataset)
-            if alias in cls._PROJECTED_DATASETS:
-                ready_datasets.append(dataset)
-                continue
-            try:
-                if user is not None:
-                    logger.info(f"knowledge_dataset_cognify_start dataset={alias} rid={rid_value}")
-                status = await cls._ensure_dataset_projected(dataset, user, timeout=2.0)
-            except Exception as warm_exc:  # noqa: BLE001
-                logger.debug(
-                    f"knowledge_dataset_projection_warm_failed dataset={alias} rid={rid_value} detail={warm_exc}"
-                )
-                skipped_aliases.append(alias)
-                continue
-
-            if status == ProjectionStatus.READY:
-                ready_datasets.append(dataset)
-                if user is not None:
-                    logger.info(f"knowledge_dataset_cognify_ok dataset={alias} rid={rid_value}")
-                continue
-
-            if status in (ProjectionStatus.READY_NO_ROWS, ProjectionStatus.READY_EMPTY):
-                logger.info(f"knowledge_dataset_search_skipped dataset={alias} rid={rid_value} reason={status.value}")
-            else:  # TIMEOUT, FATAL_ERROR, etc.
-                if user is not None:
-                    logger.warning(
-                        f"knowledge_dataset_search_skipped dataset={alias} rid={rid_value} reason=projection_pending"
-                    )
-            skipped_aliases.append(alias)
-
-        if not ready_datasets:
-            if skipped_aliases:
-                cls._log_once(
-                    logging.DEBUG,
-                    "search:skipped",
-                    client_id=client_id,
-                    rid=rid_value,
-                    datasets=",".join(skipped_aliases),
-                    min_interval=5.0,
-                )
-            fallback_raw = await cls._fallback_dataset_entries(datasets, user, top_k=k)
-            if fallback_raw:
-                primary_alias = skipped_aliases[0] if skipped_aliases else datasets[0]
-                snippets = [
-                    KnowledgeSnippet(text=value, dataset=primary_alias, kind="document")
-                    for value in fallback_raw
-                    if value.strip()
-                ]
-                return snippets[:k] if k is not None else snippets
-            return []
-
-        try:
-            results = await _search_targets(ready_datasets)
-            logger.debug(
-                f"knowledge_search_ok client_id={client_id} rid={rid_value} "
-                f"query_hash={query_hash} results={len(results)}"
-            )
-            if not results:
-                await asyncio.sleep(0.25)
-                retry = await _search_targets(ready_datasets)
-                if retry:
-                    logger.warning(
-                        f"knowledge_search_retry_after_empty client_id={client_id} rid={rid_value} "
-                        f"query_hash={query_hash} results={len(retry)}"
-                    )
-                    results = retry
-            return await cls._build_snippets(results, ready_datasets, user)
-        except (PermissionDeniedError, DatasetNotFoundError) as exc:
-            logger.warning(
-                f"knowledge_search_issue client_id={client_id} rid={rid_value} query_hash={query_hash} detail={exc}"
-            )
-            return []
         except Exception as exc:
-            ready_aliases = [cls._alias_for_dataset(ds) for ds in ready_datasets]
-            if cls._is_graph_missing_error(exc):
-                for alias in ready_aliases:
-                    cls._PROJECTED_DATASETS.discard(alias)
-                logger.warning(
-                    f"knowledge_dataset_search_skipped dataset={','.join(ready_aliases)} rid={rid_value} "
-                    f"reason=projection_incomplete detail={exc}"
-                )
-                return []
-            logger.warning(
-                f"knowledge_search_failed client_id={client_id} rid={rid_value} query_hash={query_hash} detail={exc}"
-            )
-            return []
+            logger.debug(f"kb.search.fail detail={exc}")
+            raise
+        hits = len(results)
+        logger.debug(f"kb.search dataset={dataset_label} q_hash={q_hash} hits={hits}")
+        logger.debug(f"ask.search.done client_id={client_id} datasets={dataset_label} entries={hits}")
+        return results
 
-    @classmethod
-    async def _build_snippets(
-        cls,
-        items: Iterable[Any],
-        datasets: Sequence[str],
-        user: Any | None,
-    ) -> list[KnowledgeSnippet]:
-        prepared: list[tuple[str, str, str | None, Mapping[str, Any] | None]] = []
-        for raw in items:
-            text, dataset_hint, metadata = cls._extract_search_item(raw)
-            if not text:
-                continue
-            if metadata is not None and not isinstance(metadata, Mapping):
-                metadata = cls._coerce_metadata(metadata)
-            normalized_text = cls._normalize_text(text)
-            if not normalized_text:
-                continue
-            prepared.append((text, normalized_text, dataset_hint, metadata))
-        if not prepared:
-            return []
-
-        digests_sha = [cls._compute_digests(normalized_text) for _, normalized_text, _, _ in prepared]
-        dataset_list = list(datasets)
-        metadata_results: list[tuple[str | None, Mapping[str, Any] | None]] = [(None, None)] * len(prepared)
-        pending: list[int] = []
-
-        for index, ((_, _, dataset_hint, metadata), _) in enumerate(zip(prepared, digests_sha, strict=False)):
-            if metadata is not None:
-                meta_dict = dict(metadata)
-                dataset_name = cls._dataset_from_metadata(meta_dict) or dataset_hint
-                alias = cls._alias_for_dataset(dataset_name) if dataset_name else None
-                if alias:
-                    meta_dict.setdefault("dataset", alias)
-                metadata_results[index] = (alias, meta_dict)
-            else:
-                metadata_results[index] = (dataset_hint, None)
-                pending.append(index)
-
-        if pending:
-            lookups = await asyncio.gather(*(cls._collect_metadata(digests_sha[i], datasets) for i in pending))
-            for slot, (dataset_name, meta) in zip(pending, lookups, strict=False):
-                alias_source = dataset_name or prepared[slot][2]
-                fallback_dataset = alias_source or (dataset_list[0] if dataset_list else "")
-                alias = cls._alias_for_dataset(fallback_dataset) if fallback_dataset else None
-                if meta:
-                    meta_dict = dict(meta)
-                else:
-                    meta_dict = {}
-                if alias:
-                    meta_dict.setdefault("dataset", alias)
-                metadata_results[slot] = (alias, meta_dict or None)
-
-        snippets: list[KnowledgeSnippet] = []
-        add_tasks: list[Awaitable[None]] = []
-        for (text, normalized_text, dataset_hint, _), digest_sha, (resolved_dataset, payload) in zip(
-            prepared, digests_sha, metadata_results, strict=False
-        ):
-            alias_source = resolved_dataset or dataset_hint or (dataset_list[0] if dataset_list else "")
-            dataset_alias = cls._alias_for_dataset(alias_source) if alias_source else None
-            if dataset_alias is None and dataset_list:
-                dataset_alias = cls._alias_for_dataset(dataset_list[0])
-            payload_dict: dict[str, Any]
-            if payload:
-                payload_dict = dict(payload)
-            else:
-                payload_dict = cls._infer_metadata_from_text(text) or {"kind": "document"}
-            metadata_payload = cls._augment_metadata(
-                payload_dict,
-                dataset_alias,
-                digest_sha=digest_sha,
-            )
-            if dataset_alias:
-                add_tasks.append(HashStore.add(dataset_alias, digest_sha, metadata=metadata_payload))
-            else:
-                metadata_payload.pop("dataset", None)
-
-            kind = cls._resolve_snippet_kind(metadata_payload, text)
-            if kind == "message":
-                continue
-
-            dataset_value = str(metadata_payload.get("dataset") or dataset_alias or "").strip() or None
-            if kind in {"document", "note"}:
-                snippet_kind = cast(Literal["document", "note"], kind)
-            else:
-                snippet_kind = "unknown"
-            snippets.append(KnowledgeSnippet(text=text, dataset=dataset_value, kind=snippet_kind))
-
-        if add_tasks:
-            await asyncio.gather(*add_tasks)
-        return snippets
-
-    @classmethod
-    def _extract_search_item(
-        cls,
-        raw: Any,
-    ) -> tuple[str, str | None, Mapping[str, Any] | None]:
-        if raw is None:
-            return "", None, None
-        if is_dataclass(raw):
-            return cls._extract_search_item(asdict(raw))
-        if isinstance(raw, Mapping):
-            text_value = raw.get("text", "")
-            text = str(text_value or "").strip()
-            metadata = cls._coerce_metadata(raw.get("metadata"))
-            dataset_hint = cls._dataset_from_metadata(metadata)
-            if dataset_hint is None:
-                dataset_hint = cls._extract_dataset_key(raw)
-            return text, dataset_hint, metadata
-        text_attr = getattr(raw, "text", None)
-        if text_attr is None and hasattr(raw, "content"):
-            text_attr = getattr(raw, "content")
-        text = str(text_attr or raw).strip()
-        metadata = cls._coerce_metadata(getattr(raw, "metadata", None))
-        dataset_hint = cls._dataset_from_metadata(metadata)
-        if dataset_hint is None:
-            dataset_hint = cls._extract_dataset_key(raw)
-        return text, dataset_hint, metadata
-
-    @staticmethod
-    def _coerce_metadata(meta: Any) -> Mapping[str, Any] | None:
-        if meta is None:
-            return None
-        if isinstance(meta, Mapping):
-            return dict(meta)
-        if is_dataclass(meta):
-            return asdict(meta)
-        try:
-            return dict(meta)  # type: ignore[arg-type]
-        except Exception:  # noqa: BLE001
-            return None
-
-    @staticmethod
-    def _dataset_from_metadata(metadata: Mapping[str, Any] | None) -> str | None:
-        if not metadata:
-            return None
-        for key in ("dataset", "dataset_name", "datasetId", "dataset_id"):
-            value = metadata.get(key)
-            if value not in (None, ""):
-                return str(value)
-        return None
-
-    @staticmethod
-    def _extract_dataset_key(source: Mapping[str, Any] | Any) -> str | None:
-        if isinstance(source, Mapping):
-            items = source.items()
-        else:
-            items = (
-                (attr, getattr(source, attr, None)) for attr in ("dataset", "dataset_name", "datasetId", "dataset_id")
-            )
-        for key, value in items:
-            if key in {"dataset", "dataset_name", "datasetId", "dataset_id"} and value not in (None, ""):
-                return str(value)
-        return None
-
-    @classmethod
-    async def _collect_metadata(
-        cls,
-        digest: str,
-        datasets: Sequence[str],
-    ) -> tuple[str | None, Mapping[str, Any] | None]:
-        if not datasets:
-            return None, None
-        lookups = await asyncio.gather(
-            *(HashStore.metadata(cls._alias_for_dataset(dataset), digest) for dataset in datasets)
-        )
-        for dataset, meta in zip(datasets, lookups, strict=False):
-            alias = cls._alias_for_dataset(dataset)
-            if meta:
-                enriched = dict(meta)
-                enriched.setdefault("dataset", alias)
-                return alias, enriched
-        fallback = cls._alias_for_dataset(datasets[0]) if datasets else None
-        return fallback, None
-
-    @staticmethod
-    def _infer_metadata_from_text(text: str) -> dict[str, Any] | None:
-        normalized = text.strip()
-        if not normalized:
-            return None
-        lowered = normalized.casefold()
-        for role in MessageRole:
-            prefix = f"{role.value}:"
-            if lowered.startswith(prefix.casefold()):
-                return {"kind": "message", "role": role.value}
-        return {"kind": "document"}
-
-    @classmethod
-    def _resolve_snippet_kind(
-        cls, metadata: Mapping[str, Any] | None, text: str
-    ) -> Literal[
-        "document",
-        "message",
-        "note",
-        "unknown",
-    ]:
-        if metadata:
-            kind_value = str(metadata.get("kind", "")).lower()
-            if kind_value in {"document", "note"}:
-                return cast(Literal["document", "note"], kind_value)
-            if kind_value == "message":
-                return "message"
-            if kind_value:
-                return "unknown"
-        inferred = cls._infer_metadata_from_text(text)
-        if inferred and inferred.get("kind") == "message":
-            return "message"
-        return "document"
-
-    @classmethod
-    def _expanded_queries(cls, query: str) -> list[str]:
-        return [query]
-
-    @classmethod
-    def _storage_root(cls) -> Path:
-        root = CogneeConfig.storage_root()
-        if root is not None:
-            return root
-        return Path(settings.COGNEE_STORAGE_PATH).expanduser().resolve()
-
-    @classmethod
-    async def _sanitize_hash_store(cls) -> None:
-        md5_found_count = 0
-        md5_converted_count = 0
-        md5_removed_count = 0
-        sha_final_count = 0
-
-        all_aliases = await HashStore.list_all_datasets() if hasattr(HashStore, "list_all_datasets") else []
-        for alias in all_aliases:
-            digests_to_process = await HashStore.list(alias)
-            for digest in digests_to_process:
-                if len(digest) == 32:  # Likely an MD5 hash
-                    md5_found_count += 1
-                    metadata = await HashStore.metadata(alias, digest)
-                    if metadata and metadata.get("text"):
-                        content = str(metadata["text"])
-                        sha256_hash = hashlib.sha256(content.encode("utf-8")).hexdigest()
-                        # Check if SHA256 already exists
-                        if await HashStore.contains(alias, sha256_hash):
-                            await HashStore.remove(alias, digest)
-                            md5_removed_count += 1
-                        else:
-                            # Convert MD5 entry to SHA256
-                            await HashStore.remove(alias, digest)
-                            await HashStore.add(alias, sha256_hash, metadata)
-                            md5_converted_count += 1
-                    else:
-                        # Cannot convert, remove stale MD5 entry
-                        await HashStore.remove(alias, digest)
-                        md5_removed_count += 1
-            sha_final_count += len(await HashStore.list(alias))
-
-        if md5_found_count > 0:
-            logger.info(
-                f"kb_hashstore_sanitation_completed md5_found={md5_found_count} "
-                f"md5_converted={md5_converted_count} md5_removed={md5_removed_count} "
-                f"sha_final={sha_final_count}"
-            )
-        else:
-            logger.info("kb_hashstore_sanitation_skipped reason=no_md5_entries_found")
-
-    @classmethod
-    def _storage_path_for_sha(cls, digest_sha: str) -> Path | None:
-        if len(digest_sha) != 64:
-            cls._log_once(logging.WARNING, "storage_path_invalid_digest", sha=digest_sha)
-            return None
-        return cls._storage_root() / f"text_{digest_sha}.txt"
-
-    @classmethod
-    def _read_storage_text(
-        cls,
-        *,
-        digest_sha: str,
-    ) -> str | None:
-        path = cls._storage_path_for_sha(digest_sha)
-        if path is None:
-            return None
-        if path.exists():
-            try:
-                return path.read_text(encoding="utf-8")
-            except Exception as exc:  # noqa: BLE001
-                cls._log_once(
-                    logging.DEBUG,
-                    "storage_read",
-                    digest=digest_sha[:12],
-                    detail=exc,
-                    min_interval=60.0,
-                )
-        return None
-
-    @staticmethod
-    def _filename_to_digest(filename: str | None) -> str | None:
-        if not filename:
-            return None
-        if filename.startswith("text_") and filename.endswith(".txt"):
-            return filename[5:-4]
-        return None
-
-    @classmethod
-    def _digest_from_raw_location(cls, raw_location: str | None) -> str | None:
-        if not raw_location:
-            return None
-        try:
-            parsed = urlparse(raw_location)
-        except Exception:  # noqa: BLE001
-            return None
-        if parsed.scheme == "file":
-            return cls._filename_to_digest(Path(parsed.path).name)
-        return cls._filename_to_digest(Path(raw_location).name)
-
-    @classmethod
-    def _metadata_digest_sha(cls, metadata: Mapping[str, Any] | None) -> str | None:
-        if not metadata:
-            return None
-        value = metadata.get("digest_sha")
-        if isinstance(value, str):
-            candidate = value.strip()
-            if candidate:
-                return candidate
-        return None
-
-    @classmethod
-    def _prepare_dataset_row(cls, raw: Any, alias: str) -> DatasetRow:
-        text_value = getattr(raw, "text", None)
-        if not isinstance(text_value, str):
-            if isinstance(text_value, (int, float, bool)):
-                base_text = str(text_value)
-            else:
-                if text_value is not None:
-                    cls._log_once(
-                        level=logging.WARNING,
-                        event="knowledge_dataset_row_skipped",
-                        dataset=alias,
-                        reason="non_string_text",
-                        type=type(text_value).__name__,
-                    )
-                base_text = str(text_value or "")
-        else:
-            base_text = text_value
-        metadata_obj = getattr(raw, "metadata", None)
-        metadata_map = cls._coerce_metadata(metadata_obj)
-        digest_sha_meta = cls._metadata_digest_sha(metadata_map)
-        normalized_text = cls._normalize_text(base_text)
-        if not normalized_text and digest_sha_meta:
-            storage_text = cls._read_storage_text(digest_sha=digest_sha_meta)
-            if storage_text is not None:
-                normalized_text = cls._normalize_text(storage_text)
-        metadata_dict: dict[str, Any] | None = dict(metadata_map) if metadata_map else None
-        if metadata_dict is not None:
-            metadata_dict.setdefault("dataset", alias)
-        text_output = normalized_text if normalized_text else base_text
-        if not normalized_text:
-            cls._log_once(
-                logging.WARNING,
-                "knowledge_dataset_row_unrecoverable",
-                dataset=alias,
-                digest=digest_sha_meta[:12] if digest_sha_meta else "N/A",
-                reason="empty_content",
-            )
-            state = cls._projection_state(alias)
-            state["no_content_rows"] = state.get("no_content_rows", 0) + 1
-        if normalized_text:
-            digest_sha = cls._compute_digests(normalized_text)
-            if metadata_dict is None:
-                metadata_dict = {"dataset": alias}
-            metadata_dict.setdefault("digest_sha", digest_sha)
-        if metadata_dict and not metadata_dict.get("dataset"):
-            metadata_dict["dataset"] = alias
-        if metadata_dict is not None and not metadata_dict:
-            metadata_dict = None
-        return DatasetRow(text=text_output, metadata=metadata_dict)
-
-    @classmethod
-    def _normalize_text(cls, text: Any) -> str:
-        if not isinstance(text, str):
-            text = str(text) if text is not None else ""
-        return normalize_text(text)
-
-    @classmethod
-    def _augment_metadata(
-        cls,
-        metadata: Mapping[str, Any] | None,
-        dataset_alias: str | None,
-        *,
-        digest_sha: str,
-    ) -> dict[str, Any]:
-        payload: dict[str, Any] = {}
-        if metadata:
-            payload.update(dict(metadata))
-        dataset_value = (dataset_alias or payload.get("dataset") or "").strip()
-        if dataset_value:
-            payload["dataset"] = dataset_value
-        else:
-            payload.pop("dataset", None)
-        payload["digest_sha"] = digest_sha
-        if "kind" not in payload:
-            payload["kind"] = "document"
-        return payload
-
-    @staticmethod
-    def _compute_digests(normalized_text: str) -> str:
-        payload = normalized_text.encode("utf-8")
-        digest_sha = sha256(payload).hexdigest()
-        return digest_sha
-
-    @classmethod
-    async def _heal_dataset_storage(
-        cls,
-        dataset: str,
-        user_ctx: Any | None,
-        *,
-        entries: Sequence[DatasetRow] | None = None,
-        reason: str,
-    ) -> tuple[int, int]:
-        alias = cls._alias_for_dataset(dataset)
-        if entries is None:
-            try:
-                fetched = await cls._list_dataset_entries(alias, user_ctx)
-            except Exception as exc:  # noqa: BLE001 - diagnostics only
-                logger.debug(f"knowledge_dataset_heal_fetch_failed dataset={alias} reason={reason} detail={exc}")
-                return 0, 0
-            entries = fetched
-        missing = 0
-        healed = 0
-        add_tasks: list[Awaitable[None]] = []
-        for entry in entries:
-            normalized = cls._normalize_text(entry.text)
-            metadata_map = entry.metadata if isinstance(entry.metadata, Mapping) else None
-            digest_sha_meta = cls._metadata_digest_sha(metadata_map)
-            if not normalized:
-                cls._log_once(
-                    logging.WARNING,
-                    "knowledge_dataset_heal_unrecoverable",
-                    dataset=alias,
-                    digest=digest_sha_meta[:12] if digest_sha_meta else "N/A",
-                    reason="empty_content",
-                )
-                continue
-            digest_sha = cls._compute_digests(normalized)
-            storage_path = cls._storage_path_for_sha(digest_sha)
-            if storage_path is None:
-                continue
-            sha_exists = storage_path.exists()
-            if not sha_exists:
-                missing += 1
-            _, created = cls._ensure_storage_file(
-                digest_sha=digest_sha,
-                text=normalized,
-                dataset=alias,
-            )
-            if created:
-                healed += 1
-            metadata_payload = cls._augment_metadata(entry.metadata, alias, digest_sha=digest_sha)
-            add_tasks.append(HashStore.add(alias, digest_sha, metadata=metadata_payload))
-        if add_tasks:
-            await asyncio.gather(*add_tasks)
-        if missing or healed:
-            logger.debug(
-                f"knowledge_dataset_storage_heal dataset={alias} reason={reason} missing={missing} healed={healed}"
-            )
-            cls._log_storage_state(alias, missing_count=missing, healed_count=healed)
-            state = cls._projection_state(alias)
-            state["healed_count"] = state.get("healed_count", 0) + healed
-        return missing, healed
-
-    @classmethod
-    async def _rebuild_from_disk(cls, alias: str) -> tuple[int, int]:
-        """Synchronise HashStore with files present on disk for the dataset."""
-        storage_root = cls._storage_root()
-        if not storage_root.exists():
-            return 0, 0
-        created = 0
-        linked = 0
-        mismatch_count = 0
-        unreadable_count = 0
-        empty_count = 0
-        for path in storage_root.glob("text_*.txt"):
-            digest_match = re.match(r"^text_([0-9a-f]{64})\.txt$", path.name)
-            if not digest_match:
-                if re.match(r"^text_([0-9a-f]{32})\.txt$", path.name):
-                    cls._log_once(logging.INFO, "rebuild_disk_md5_ignored", path=path.name)
-                continue
-            digest_sha_from_name = digest_match.group(1)
-            try:
-                contents = path.read_text(encoding="utf-8")
-            except Exception as exc:  # noqa: BLE001
-                logger.debug(
-                    f"knowledge_rebuild_read_failed dataset={alias} sha={digest_sha_from_name[:12]} detail={exc}"
-                )
-                unreadable_count += 1
-                continue
-            normalized = cls._normalize_text(contents)
-            if not normalized:
-                empty_count += 1
-                continue
-            digest_sha_from_content = cls._compute_digests(normalized)
-            if digest_sha_from_content != digest_sha_from_name:
-                logger.warning(
-                    f"knowledge_rebuild_digest_mismatch dataset={alias} "
-                    f"path_sha={digest_sha_from_name[:12]} content_sha={digest_sha_from_content[:12]}"
-                )
-                mismatch_count += 1
-                continue
-            inferred_kind = cls._resolve_snippet_kind({"kind": "document"}, normalized)
-            metadata = cls._augment_metadata(
-                {"kind": inferred_kind},
-                alias,
-                digest_sha=digest_sha_from_content,
-            )
-            try:
-                already = await HashStore.contains(alias, digest_sha_from_content)
-                await HashStore.add(alias, digest_sha_from_content, metadata=metadata)
-            except Exception as exc:  # noqa: BLE001
-                logger.debug(
-                    "knowledge_rebuild_hashstore_failed "
-                    f"dataset={alias} sha={digest_sha_from_content[:12]} detail={exc}"
-                )
-                continue
-            linked += 1
-            if not already:
-                created += 1
-        if created > 0 or linked > 0 or mismatch_count > 0 or unreadable_count > 0 or empty_count > 0:
-            logger.debug(
-                f"[disk_rebuild_commit] dataset={alias} created={created} linked={linked} sha_only=True "
-                f"mismatch_count={mismatch_count} unreadable_count={unreadable_count} empty_count={empty_count}"
-            )
-        return created, linked
-
-    @classmethod
-    async def _reingest_from_hashstore(
-        cls,
-        alias: str,
-        user: Any | None,
-        digests: Sequence[tuple[str, Mapping[str, Any] | None]],
-    ) -> tuple[int, int, str | None]:
-        """Reinsert documents from stored digests back into Cognee when graph rows are absent."""
-        if not digests:
-            return 0, 0, None
-        reinserted = 0
-        healed_count = 0
-        last_dataset: str | None = None
-        for digest_sha, metadata in digests:
-            if len(digest_sha) != 64:
-                logger.warning("hashstore_legacy_digest_skipped digest={}", digest_sha[:12])
-                continue
-            path = cls._storage_path_for_sha(digest_sha)
-            if path is None:
-                continue
-            logger.debug(f"[reingest_probe] sha={digest_sha} path_attempt={path}")
-            normalized = None
-            if path.exists():
-                try:
-                    raw_text = path.read_text(encoding="utf-8")
-                    normalized = cls._normalize_text(raw_text)
-                except Exception as exc:  # noqa: BLE001
-                    logger.debug(f"knowledge_reingest_read_failed dataset={alias} sha={digest_sha[:12]} detail={exc}")
-            else:
-                # SHA file not found, try MD5 fallback
-                md5_path = StorageResolver.map_sha_to_md5_path(digest_sha, cls._storage_root())
-                if md5_path and md5_path.exists():
-                    try:
-                        raw_text = md5_path.read_text(encoding="utf-8")
-                        normalized = cls._normalize_text(raw_text)
-                        logger.debug(f"reingest_md5_fallback_ok sha={digest_sha[:12]} md5_path={md5_path.name[:12]}")
-                    except Exception as exc:  # noqa: BLE001
-                        logger.debug(
-                            "knowledge_reingest_read_failed_md5_fallback "
-                            f"dataset={alias} sha={digest_sha[:12]} detail={exc}"
-                        )
-
-            # Healing step: if file is missing but content is in metadata, re-create it
-            if not normalized and metadata and metadata.get("text"):
-                normalized = cls._normalize_text(str(metadata["text"]))
-                if normalized:
-                    cls._ensure_storage_file(digest_sha=digest_sha, text=normalized, dataset=alias)
-                    healed_count += 1
-            elif not normalized and not metadata:  # If file is missing and no metadata to heal from
-                if await HashStore.contains(alias, digest_sha):
-                    await HashStore.remove(alias, digest_sha)
-                    cls._log_once(
-                        logging.WARNING,
-                        "knowledge_reingest_stale_md5_removed",
-                        dataset=alias,
-                        digest_sha=digest_sha[:12],
-                        reason="no_metadata_to_heal",
-                    )
-                continue
-
-            if not normalized:
-                cls._log_once(
-                    logging.WARNING,
-                    "knowledge_reingest_unrecoverable",
-                    dataset=alias,
-                    digest_sha=digest_sha[:12],
-                )
-                continue
-
-            kind = metadata.get("kind") if isinstance(metadata, Mapping) else None
-            if kind == "message":
-                continue
-            meta_payload = metadata if isinstance(metadata, Mapping) else None
-            try:
-                dataset_name, created = await cls.update_dataset(
-                    normalized,
-                    alias,
-                    user,
-                    node_set=None,
-                    metadata=meta_payload,
-                )
-            except Exception as exc:  # noqa: BLE001
-                logger.debug(f"knowledge_reingest_failed dataset={alias} digest_sha={digest_sha[:12]} detail={exc}")
-                continue
-            if created:
-                reinserted += 1
-                cls._register_dataset_identifier(alias, dataset_name)
-                last_dataset = dataset_name
-        return reinserted, healed_count, last_dataset
-
-    @classmethod
-    def _ensure_storage_file(
-        cls,
-        *,
-        digest_sha: str,
-        text: str,
-        dataset: str | None = None,
-    ) -> tuple[Path | None, bool]:
-        path = cls._storage_path_for_sha(digest_sha)
-        if path is None:
-            return None, False
-
-        if path.exists():
-            # ensure md5 mirror even if SHA exists
-            try:
-                from hashlib import md5 as _md5
-
-                md5_hex = _md5(text.encode("utf-8")).hexdigest()
-                md5_path = path.parent / f"text_{md5_hex}.txt"
-                if not md5_path.exists():
-                    try:
-                        md5_path.symlink_to(path.name)  # relative link inside same dir
-                        logger.debug(f"md5_mirror_link_created md5={md5_hex[:12]} -> {path.name[:16]}")
-                    except Exception:
-                        if not md5_path.exists():  # возможно, другой поток уже создал
-                            md5_path.write_text(text, encoding="utf-8")
-                            logger.debug(
-                                f"md5_mirror_file_created md5={md5_hex[:12]} bytes={len(text.encode('utf-8'))}"
-                            )
-            except Exception as md5_exc:
-                logger.debug(f"md5_mirror_skip reason={md5_exc}")
-            return path, False
-
-        path.parent.mkdir(parents=True, exist_ok=True)
-        temp_path = path.with_suffix(path.suffix + ".tmp")
-        try:
-            with temp_path.open("w", encoding="utf-8") as handle:
-                handle.write(text)
-                handle.flush()
-                os.fsync(handle.fileno())
-            temp_path.replace(path)
-
-            # create md5 mirror for Cognee (symlink or copy)
-            try:
-                from hashlib import md5 as _md5
-
-                md5_hex = _md5(text.encode("utf-8")).hexdigest()
-                md5_path = path.parent / f"text_{md5_hex}.txt"
-                if not md5_path.exists():
-                    try:
-                        md5_path.symlink_to(path.name)
-                        logger.debug(f"md5_mirror_link_created md5={md5_hex[:12]} -> {path.name[:16]}")
-                    except Exception:
-                        if not md5_path.exists():  # возможно, другой поток уже создал
-                            md5_path.write_text(text, encoding="utf-8")
-                            logger.debug(
-                                f"md5_mirror_file_created md5={md5_hex[:12]} bytes={len(text.encode('utf-8'))}"
-                            )
-            except Exception as md5_exc:
-                logger.debug(f"md5_mirror_skip reason={md5_exc}")
-
-            logger.debug(f"kb_storage ensure sha={digest_sha[:12]} created=True")
-            return path, True
-
-        except Exception as exc:  # noqa: BLE001 - log and proceed with Cognee handling
-            logger.warning(
-                f"knowledge_storage_write_failed digest_sha={digest_sha[:12]} "
-                f"dataset={dataset or 'unknown'} path={path} detail={exc}"
-            )
-            try:
-                temp_path.unlink(missing_ok=True)
-            except Exception:
-                pass
-            return None, False
-
-    @classmethod
     async def add_text(
-        cls,
+        self,
         text: str,
         *,
         dataset: str | None = None,
         node_set: list[str] | None = None,
         client_id: int | None = None,
         role: MessageRole | None = None,
-        metadata: Mapping[str, Any] | None = None,
+        metadata: dict[str, Any] | None = None,
         project: bool = True,
     ) -> None:
-        """Add message text to a dataset, schedule cognify if new."""
-        user = await cls._get_cognee_user()
-        ds = dataset or (cls._dataset_name(client_id) if client_id is not None else cls.GLOBAL_DATASET)
+        user = await self.dataset_service.get_cognee_user()
+        ds = dataset or (self.dataset_service.dataset_name(client_id) if client_id is not None else self.GLOBAL_DATASET)
+        target_alias = self.dataset_service.alias_for_dataset(ds)
         meta_payload: dict[str, Any] = {}
         if metadata:
             meta_payload.update(dict(metadata))
@@ -1573,22 +180,26 @@ class KnowledgeBase:
         else:
             meta_payload.setdefault("kind", "document")
 
-        normalized_text = cls._normalize_text(text)
+        payload_bytes = len(text.encode("utf-8"))
+        normalized_text = self.dataset_service._normalize_text(text)
+        logger.debug(f"kb.add_text dataset={target_alias} bytes={payload_bytes}")
         if not normalized_text.strip():
-            logger.debug(f"empty_content_filtered dataset={ds} role={role.value if role else 'document'}")
+            self.dataset_service.log_once(
+                logging.INFO,
+                "empty_content_filtered",
+                dataset=ds,
+                role=role.value if role else "document",
+                min_interval=30.0,
+            )
             return
 
-        target_alias = cls._resolve_dataset_alias(ds)
         meta_payload.setdefault("dataset", target_alias)
 
-        digest_sha = cls._compute_digests(normalized_text)
-
         attempts = 0
-        role_label = role.value if role else "document"
+        backoffs = (0.5,)
         while attempts < 2:
             try:
-                logger.debug(f"kb_append start dataset={target_alias} role={role_label} length={len(normalized_text)}")
-                resolved_name, created = await cls.update_dataset(
+                resolved_name, created = await self.update_dataset(
                     normalized_text,
                     target_alias,
                     user,
@@ -1596,38 +207,28 @@ class KnowledgeBase:
                     metadata=meta_payload,
                 )
                 if created:
-                    alias = cls._alias_for_dataset(target_alias)
-                    if not project or cls._is_chat_dataset(alias):
-                        pending = cls._queue_chat_dataset(alias)
+                    alias = target_alias
+                    if not project or self.dataset_service.is_chat_dataset(alias):
+                        pending = self.chat_queue_service.queue_chat_dataset(alias)
                         logger.debug(f"kb_chat_ingest queued={pending} dataset={alias}")
-                        cls._ensure_chat_projection_task(alias)
+                        self.chat_queue_service.ensure_chat_projection_task(alias)
                     else:
-                        task = asyncio.create_task(cls._process_dataset(resolved_name, user))
-                        task.add_done_callback(cls._log_task_exception)
+                        task = asyncio.create_task(self._process_dataset(resolved_name, user))
+                        task.add_done_callback(self._log_task_exception)
                 return
-            except PermissionDeniedError:
-                raise
-            except FileNotFoundError as exc:
-                logger.debug(f"kb_append storage_missing dataset={target_alias} sha={digest_sha[:12]} detail={exc}")
-                cls._ensure_storage_file(digest_sha=digest_sha, text=normalized_text, dataset=target_alias)
-                await HashStore.clear(target_alias)
-                cls._PROJECTED_DATASETS.discard(cls._alias_for_dataset(target_alias))
-                rebuilt = await cls.rebuild_dataset(target_alias, user)
-                if not rebuilt:
-                    logger.info(f"kb_append rebuild_failed dataset={target_alias}")
-                    break
+            except Exception as exc:
                 attempts += 1
-                continue
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(f"kb_append skipped dataset={target_alias}: {exc}", exc_info=True)
-                break
-        logger.info(f"kb_append aborted dataset={target_alias}")
+                if attempts >= 2:
+                    logger.warning(f"kb_append aborted dataset={target_alias}: {exc}", exc_info=True)
+                    break
+                sleep_for = backoffs[min(attempts - 1, len(backoffs) - 1)]
+                logger.debug(f"kb_append.retry dataset={target_alias} attempt={attempts} sleep_for={sleep_for}")
+                await asyncio.sleep(sleep_for)
 
-    @classmethod
-    async def save_client_message(cls, text: str, client_id: int) -> None:
-        await cls.add_text(
+    async def save_client_message(self, text: str, client_id: int) -> None:
+        await self.add_text(
             text,
-            dataset=cls._chat_dataset_name(client_id),
+            dataset=self.dataset_service.chat_dataset_name(client_id),
             client_id=client_id,
             role=MessageRole.CLIENT,
             node_set=[f"client:{client_id}", "chat_message"],
@@ -1635,11 +236,10 @@ class KnowledgeBase:
             project=False,
         )
 
-    @classmethod
-    async def save_ai_message(cls, text: str, client_id: int) -> None:
-        await cls.add_text(
+    async def save_ai_message(self, text: str, client_id: int) -> None:
+        await self.add_text(
             text,
-            dataset=cls._chat_dataset_name(client_id),
+            dataset=self.dataset_service.chat_dataset_name(client_id),
             client_id=client_id,
             role=MessageRole.AI_COACH,
             node_set=[f"client:{client_id}", "chat_message"],
@@ -1647,43 +247,23 @@ class KnowledgeBase:
             project=False,
         )
 
-    @classmethod
-    async def get_message_history(cls, client_id: int, limit: int | None = None) -> list[str]:
-        """Return recent chat messages for a client."""
-        dataset: str = cls._resolve_dataset_alias(cls._chat_dataset_name(client_id))
-        user: Any | None = await cls._get_cognee_user()
+    async def get_message_history(self, client_id: int, limit: int | None = None) -> list[str]:
+        dataset: str = self.dataset_service.alias_for_dataset(self.dataset_service.chat_dataset_name(client_id))
+        user: Any | None = await self.dataset_service.get_cognee_user()
         if user is None:
-            if not cls._warned_missing_user:
+            if not self._warned_missing_user:
                 logger.warning(f"History fetch skipped client_id={client_id}: default user unavailable")
-                cls._warned_missing_user = True
+                self._warned_missing_user = True
             else:
                 logger.debug(f"History fetch skipped client_id={client_id}: default user unavailable")
             return []
-        user_ctx: Any | None = cls._to_user_ctx(user)
+        user_ctx: Any | None = self.dataset_service.to_user_ctx(user)
         try:
-            await cls._ensure_dataset_exists(dataset, user_ctx)
-        except Exception as exc:  # pragma: no cover - non-critical indexing failure
+            await self.dataset_service.ensure_dataset_exists(dataset, user_ctx)
+        except Exception as exc:
             logger.debug(f"Dataset ensure skipped client_id={client_id}: {exc}")
-        datasets_module = getattr(cognee, "datasets", None)
-        if datasets_module is None:
-            if cls._has_datasets_module is not False:
-                logger.warning(f"History fetch skipped client_id={client_id}: datasets module unavailable")
-            cls._has_datasets_module = False
-            return []
-
-        list_data = getattr(datasets_module, "list_data", None)
-        if not callable(list_data):
-            if cls._has_datasets_module is not False:
-                logger.warning(
-                    f"History fetch skipped client_id={client_id}: list_data callable missing",
-                )
-            cls._has_datasets_module = False
-            return []
-
-        cls._has_datasets_module = True
-        list_data_callable = cast(Callable[..., Awaitable[Iterable[Any]]], list_data)
         try:
-            data = await cls._fetch_dataset_rows(list_data_callable, dataset, user_ctx)
+            data = await self.dataset_service.list_dataset_entries(dataset, user_ctx)
         except Exception:
             logger.info(f"No message history found for client_id={client_id}")
             return []
@@ -1695,409 +275,372 @@ class KnowledgeBase:
         limit = limit or settings.CHAT_HISTORY_LIMIT
         return messages[-limit:]
 
-    @classmethod
-    async def _get_cognee_user(cls) -> Any | None:
-        """Fetch and cache default Cognee user."""
-        if cls._user is not None:
-            return cls._user
-        retried_setup = False
-        while True:
-            try:
-                cls._user = await get_default_user()
-                if cls._user is None:
-                    cls._user = cls._bootstrap_user_ctx()
-                return cls._user
-            except Exception as exc:
-                if _needs_cognee_setup(exc) and not retried_setup:
-                    retried_setup = True
-                    await ensure_cognee_ready()
-                    continue
-                if _needs_cognee_setup(exc):
-                    cls._log_once(
-                        logging.WARNING,
-                        "cognee:bootstrap_user",
-                        reason="db_unavailable",
-                        detail=str(exc),
-                        min_interval=3600.0,
-                    )
-                    cls._user = cls._bootstrap_user_ctx()
-                    return cls._user
-                logger.debug(f"cognee_user_fetch_failed detail={exc}")
-                cls._user = cls._bootstrap_user_ctx()
-                return cls._user
-
-    @classmethod
-    def _resolve_dataset_alias(cls, name: str) -> str:
-        """Map dataset alias to the canonical dataset identifier."""
-        normalized = name.strip()
-        if not normalized:
-            return name
-        if normalized.startswith(cls._CLIENT_ALIAS_PREFIX):
-            suffix = normalized[len(cls._CLIENT_ALIAS_PREFIX) :]
-            try:
-                client_id = int(suffix)
-            except ValueError:
-                return normalized
-            return cls._dataset_name(client_id)
-        if normalized.startswith(cls._LEGACY_CLIENT_PREFIX):
-            suffix = normalized[len(cls._LEGACY_CLIENT_PREFIX) :]
-            try:
-                client_id = int(suffix)
-            except ValueError:
-                return normalized
-            return cls._dataset_name(client_id)
-        return normalized
-
-    @classmethod
-    def _alias_for_dataset(cls, dataset: str) -> str:
-        stripped = dataset.strip()
-        if stripped in cls._DATASET_ALIASES:
-            return cls._DATASET_ALIASES[stripped]
-        return cls._resolve_dataset_alias(stripped)
-
-    @classmethod
-    def _register_dataset_identifier(cls, alias: str, identifier: str) -> None:
-        canonical = cls._resolve_dataset_alias(alias)
-        if not canonical:
-            return
-        cls._DATASET_IDS[canonical] = identifier
-        cls._DATASET_ALIASES[identifier] = canonical
-
-    @staticmethod
-    def _looks_like_uuid(value: str) -> bool:
-        try:
-            UUID(value)
-        except (ValueError, TypeError):
-            return False
-        return True
-
-    @classmethod
-    def _log_once(cls, level: int, event: str, **fields) -> None:
-        """Log a message with throttling to avoid flooding."""
-        now = time.time()
-        min_interval = float(cast(float, fields.pop("min_interval", 10.0)))
-        throttle_key = fields.pop("throttle_key", event)
-
-        last_log_time = cls._LOG_THROTTLE.get(throttle_key, 0.0)
-
-        if now - last_log_time >= min_interval:
-            message_parts = [event]
-            for key, value in fields.items():
-                if value is not None:
-                    # Format value safely, handling dataclasses and other objects
-                    if is_dataclass(value):
-                        value_str = str(asdict(value))
-                    else:
-                        value_str = str(value)
-                    # Simple quoting for values with spaces
-                    if " " in value_str and not (value_str.startswith("'") or value_str.startswith('"')):
-                        value_str = f'"{value_str}"'
-                    message_parts.append(f"{key}={value_str}")
-
-            full_message = " ".join(message_parts)
-
-            # Use loguru's level-based logging methods for better context
-            logger.log(level, full_message)
-            cls._LOG_THROTTLE[throttle_key] = now
-
-    @classmethod
-    def _projection_state(cls, alias: str) -> dict[str, Any]:
-        return cls._PROJECTION_STATE.setdefault(
-            alias,
-            {
-                "status": "unknown",
-                "reason": None,
-                "next_check_ts": 0.0,
-                "processing": False,
-            },
-        )
-
-    @classmethod
-    async def _get_dataset_id(cls, dataset: str, user_ctx: Any | None) -> str | None:
-        alias = cls._alias_for_dataset(dataset)
-        if cls._looks_like_uuid(dataset):
-            cls._register_dataset_identifier(alias, dataset)
-            if dataset:
-                cls._log_once(logging.DEBUG, "dataset_resolved", name=alias, id=dataset, min_interval=10.0)
-            return dataset
-
-        identifier = cls._DATASET_IDS.get(alias)
-        if identifier:
-            cls._log_once(logging.DEBUG, "dataset_resolved", name=alias, id=identifier, min_interval=10.0)
-            return identifier
-
-        if user_ctx is not None:
-            try:
-                await cls._ensure_dataset_exists(alias, user_ctx)
-                identifier = cls._DATASET_IDS.get(alias)
-                if identifier:
-                    cls._log_once(logging.DEBUG, "dataset_resolved", name=alias, id=identifier, min_interval=5.0)
-                    return identifier
-            except Exception as exc:  # noqa: BLE001 - diagnostics only
-                logger.debug(f"knowledge_dataset_id_lookup_failed dataset={alias} detail={exc}")
-
-        if user_ctx is not None:
-            metadata = await cls._get_dataset_metadata(alias, user_ctx)
-            if metadata is not None:
-                identifier = cls._extract_dataset_identifier(metadata)
-                if identifier:
-                    cls._register_dataset_identifier(alias, identifier)
-                    cls._log_once(
-                        logging.DEBUG,
-                        "dataset_resolved",
-                        name=alias,
-                        id=identifier,
-                        min_interval=5.0,
-                    )
-                    return identifier
-        return None
-
-    @classmethod
-    def _extract_dataset_identifier(cls, info: Any | None) -> str | None:
-        if info is None:
-            return None
-        candidates: list[Any] = []
-        if isinstance(info, dict):
-            for key in cls._DATASET_IDENTIFIER_FIELDS:
-                if key in info:
-                    candidates.append(info[key])
-        for key in cls._DATASET_IDENTIFIER_FIELDS:
-            value = getattr(info, key, None)
-            if value is not None:
-                candidates.append(value)
-        for candidate in candidates:
-            if candidate in (None, ""):
-                continue
-            text = candidate if isinstance(candidate, str) else str(candidate)
-            try:
-                identifier = str(UUID(text))
-            except (ValueError, TypeError):
-                continue
-            return identifier
-        return None
-
-    @classmethod
-    async def _ensure_dataset_exists(cls, name: str, user_ctx: Any | None) -> None:
-        """Create dataset if it does not exist for the given user."""
-        user_id = getattr(user_ctx, "id", None)
-        if user_id is None:
-            logger.debug(f"Dataset ensure skipped dataset={name}: user context unavailable")
-            return
-        canonical = cls._resolve_dataset_alias(name)
-        try:
-            from cognee.modules.data.methods import get_authorized_dataset_by_name, create_authorized_dataset  # noqa
-        except Exception:
-            return
-        retried_setup = False
-        while True:
-            try:
-                exists = await get_authorized_dataset_by_name(
-                    canonical, user_ctx, "write"
-                )  # pyrefly: ignore[bad-argument-type]
-                if exists is not None:
-                    identifier = cls._extract_dataset_identifier(exists)
-                    if identifier:
-                        cls._register_dataset_identifier(canonical, identifier)
-                    return
-                created = await create_authorized_dataset(canonical, user_ctx)  # pyrefly: ignore[bad-argument-type]
-                identifier = cls._extract_dataset_identifier(created)
-                if identifier:
-                    cls._register_dataset_identifier(canonical, identifier)
-                return
-            except Exception as exc:
-                if _needs_cognee_setup(exc) and not retried_setup:
-                    retried_setup = True
-                    await ensure_cognee_ready()
-                    continue
-                if _needs_cognee_setup(exc):
-                    logger.warning(f"knowledge_dataset_ensure_failed dataset={canonical} detail={exc}")
-                    return
-                raise
-
-    @classmethod
-    async def _ensure_dataset_projected(cls, dataset: str, user: Any | None, *, timeout: float = 2.0) -> ProjectionStatus:
-        alias = cls._alias_for_dataset(dataset)
-
-        status = await cls._wait_for_projection(dataset, user=user, timeout=timeout)
-        if status == ProjectionStatus.READY:
-            cls._PROJECTED_DATASETS.add(alias)
-            return status
-
-        if status in (ProjectionStatus.READY_NO_ROWS, ProjectionStatus.READY_EMPTY):
-            return status
-
-        # If timeout, try to cognify
-        try:
-            logger.debug(f"knowledge_dataset_cognify_start dataset={alias}")
-            await cls._process_dataset(dataset, user)
-            logger.debug(f"knowledge_dataset_cognify_ok dataset={alias}")
-        except Exception as exc:  # noqa: BLE001
-            logger.debug(f"knowledge_dataset_projection_warm_failed dataset={alias} detail={exc}")
-            return ProjectionStatus.FATAL_ERROR
-
-        status = await cls._wait_for_projection(dataset, user=user, timeout=timeout)
-        if status == ProjectionStatus.READY:
-            cls._PROJECTED_DATASETS.add(alias)
-
-        return status
-
-    @classmethod
-    def _dataset_name(cls, client_id: int) -> str:
-        """Generate canonical dataset alias for a client profile."""
-        return f"{cls._CLIENT_ALIAS_PREFIX}{client_id}"
-
-    @classmethod
-    def _chat_dataset_name(cls, client_id: int) -> str:
-        return f"{cls._CHAT_ALIAS_PREFIX}{client_id}"
-
-    @classmethod
-    def _is_chat_dataset(cls, dataset: str) -> bool:
-        alias = cls._alias_for_dataset(dataset)
-        return alias.startswith(cls._CHAT_ALIAS_PREFIX)
-
-    @classmethod
-    def _queue_chat_dataset(cls, alias: str) -> int:
-        normalized = cls._alias_for_dataset(alias)
-        pending = cls._CHAT_PENDING.get(normalized, 0) + 1
-        cls._CHAT_PENDING[normalized] = pending
-        return pending
-
-    @classmethod
-    def _chat_debounce_seconds(cls) -> float:
-        raw_minutes = float(settings.KB_CHAT_PROJECT_DEBOUNCE_MIN)
-        return max(raw_minutes, 0.0) * 60.0
-
-    @classmethod
-    def _chat_projection_delay(cls, alias: str) -> float:
-        debounce = cls._chat_debounce_seconds()
-        if debounce <= 0:
-            return 0.0
-        last = cls._CHAT_LAST_PROJECT_TS.get(alias, 0.0)
-        now = monotonic()
-        if last <= 0:
-            return 0.0
-        remaining = (last + debounce) - now
-        return remaining if remaining > 0 else 0.0
-
-    @classmethod
-    def _ensure_chat_projection_task(cls, alias: str) -> None:
-        normalized = cls._alias_for_dataset(alias)
-        if cls._CHAT_PENDING.get(normalized, 0) <= 0:
-            return
-        existing = cls._CHAT_PROJECT_TASKS.get(normalized)
-        if existing and not existing.done():
-            return
-        delay = cls._chat_projection_delay(normalized)
-        task = asyncio.create_task(cls._run_chat_projection(normalized, delay))
-        cls._CHAT_PROJECT_TASKS[normalized] = task
-        task.add_done_callback(cls._log_task_exception)
-
-    @classmethod
-    async def _run_chat_projection(cls, alias: str, delay: float) -> None:
-        if delay > 0:
-            await asyncio.sleep(delay)
-        queued = cls._CHAT_PENDING.get(alias, 0)
-        if queued <= 0:
-            cls._CHAT_PROJECT_TASKS.pop(alias, None)
-            return
-        logger.debug(f"kb_chat_project start queued={queued} dataset={alias}")
-        user = await cls._get_cognee_user()
-        started = monotonic()
-        try:
-            await cls._process_dataset(alias, user)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(f"kb_chat_project failed dataset={alias} queued={queued} detail={exc}")
-            cls._CHAT_PROJECT_TASKS.pop(alias, None)
-            cls._CHAT_LAST_PROJECT_TS[alias] = monotonic()
-            cls._ensure_chat_projection_task(alias)
-            return
-        took_ms = int((monotonic() - started) * 1000)
-        logger.debug(f"kb_chat_project end queued={queued} dataset={alias} took_ms={took_ms}")
-        cls._CHAT_PENDING.pop(alias, None)
-        cls._CHAT_PROJECT_TASKS.pop(alias, None)
-        cls._CHAT_LAST_PROJECT_TS[alias] = monotonic()
-
-    @classmethod
-    def _describe_list_data(cls, list_data: Callable[..., Awaitable[Iterable[Any]]]) -> tuple[bool | None, bool | None]:
-        try:
-            signature = inspect.signature(list_data)
-        except (TypeError, ValueError):
-            return None, None
-        parameter = signature.parameters.get("user")
-        if parameter is None:
-            return False, False
-        supports_keyword = parameter.kind in (
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            inspect.Parameter.KEYWORD_ONLY,
-        )
-        requires_user = parameter.default is inspect._empty
-        return supports_keyword, requires_user
-
-    @classmethod
-    async def _fetch_dataset_rows(
-        cls,
-        list_data: Callable[..., Awaitable[Iterable[Any]]],
+    async def update_dataset(
+        self,
+        text: str,
         dataset: str,
-        user: Any | None,
-    ) -> list[Any]:
-        """Fetch dataset rows, gracefully handling legacy signatures."""
-        alias = cls._alias_for_dataset(dataset)
-        user_ctx = cls._to_user_ctx(user)
-        dataset_id = await cls._get_dataset_id(dataset, user_ctx)
-        if dataset_id is None:
-            cls._log_once(
-                logging.WARNING,
-                "projection:dataset_id_unavailable",
-                dataset=alias,
-                reason="dataset_id_unavailable",
+        user: Any | None = None,
+        node_set: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> tuple[str, bool]:
+        from ai_coach.agent.knowledge.utils.hash_store import HashStore
+
+        normalized_text = self.dataset_service._normalize_text(text)
+        if not normalized_text.strip():
+            self.dataset_service.log_once(
+                logging.INFO,
+                "empty_content_filtered",
+                dataset=dataset,
+                min_interval=30.0,
             )
-            raise ProjectionProbeError(f"dataset_id_unavailable alias={alias}")
+            return dataset, False
+        alias = self.dataset_service.alias_for_dataset(dataset)
+        actor = user if user is not None else self._user
+        if actor is None:
+            self.dataset_service.log_once(
+                logging.WARNING,
+                "knowledge_update_dataset_failed",
+                dataset=alias,
+                reason="missing_user",
+                min_interval=30.0,
+            )
+            logger.warning(f"knowledge_update_dataset_failed dataset={alias} reason=missing_user")
+            raise RuntimeError("update_dataset_failed_missing_user")
+        ds_name = alias
+        digest_sha = self.storage_service.compute_digests(normalized_text, dataset_alias=ds_name)
+        user_ctx = self.dataset_service.to_user_ctx(actor)
+        if user_ctx is None:
+            logger.warning(f"knowledge_update_dataset_failed dataset={ds_name} reason=user_context_unavailable")
+            raise RuntimeError("update_dataset_failed_user_context")
+        await self.dataset_service.ensure_dataset_exists(ds_name, user_ctx)
+        rows_before = await self.dataset_service.get_row_count(alias, user=actor)
+        inferred_metadata = self.dataset_service._infer_metadata_from_text(normalized_text, metadata)
+        metadata_payload = self.storage_service.augment_metadata(inferred_metadata, ds_name, digest_sha=digest_sha)
+        storage_path, created_file = self.storage_service.ensure_storage_file(
+            digest_sha=digest_sha, text=normalized_text, dataset=ds_name
+        )
+        if storage_path is None:
+            logger.debug(f"kb.update dataset={alias} rows_before={rows_before} rows_after={rows_before}")
+            return ds_name, False
+        if await HashStore.contains(ds_name, digest_sha):
+            await HashStore.add(ds_name, digest_sha, metadata=metadata_payload)
+            logger.debug(f"kb_append skipped dataset={ds_name} digest_sha={digest_sha[:12]} reason=duplicate")
+            logger.debug(f"kb.update dataset={alias} rows_before={rows_before} rows_after={rows_before}")
+            return ds_name, False
 
-        if user_ctx is not None:
-            if cls._list_data_supports_user is None or cls._list_data_requires_user is None:
-                supports, requires = cls._describe_list_data(list_data)
-                if supports is not None:
-                    cls._list_data_supports_user = supports
-                if requires is not None:
-                    cls._list_data_requires_user = requires
-
-        if user_ctx is not None and cls._list_data_supports_user is not False:
-            try:
-                rows = await list_data(dataset_id, user=user_ctx)
-            except TypeError:
-                logger.debug("cognee.datasets.list_data rejected keyword 'user', retrying without keyword")
-                cls._list_data_supports_user = False
-                if cls._list_data_requires_user:
-                    logger.debug("cognee.datasets.list_data requires user context, retrying positional call")
-                    rows = await list_data(dataset_id, user_ctx)
-                    cls._list_data_supports_user = True
-                    return list(rows)
-            else:
-                cls._list_data_supports_user = True
-                return list(rows)
-
-        if user_ctx is not None and cls._list_data_requires_user:
-            rows = await list_data(dataset_id, user_ctx)
-            cls._list_data_supports_user = True
-            return list(rows)
-
+        info: Any | None = None
         try:
-            rows = await list_data(dataset_id)
-        except TypeError as exc:
-            if user_ctx is not None:
-                logger.debug(
-                    f"cognee.datasets.list_data raised {exc.__class__.__name__}: retrying with positional user"
-                )
-                rows = await list_data(dataset_id, user_ctx)
-                cls._list_data_supports_user = True
-                cls._list_data_requires_user = True
-                return list(rows)
-            raise
-        return list(rows)
+            import cognee
+
+            info = await cognee.add(normalized_text, dataset_name=ds_name, user=user_ctx, node_set=list(node_set or []))
+        except Exception as exc:
+            raise RuntimeError(f"Failed to add dataset entry for {ds_name}") from exc
+
+        await HashStore.add(ds_name, digest_sha, metadata=metadata_payload)
+        resolved = ds_name
+        identifier = self.dataset_service._extract_dataset_identifier(info)
+        if identifier:
+            self.dataset_service.register_dataset_identifier(ds_name, identifier)
+            resolved = identifier
+        resolved_alias = self.dataset_service.alias_for_dataset(resolved)
+        rows_after = await self.dataset_service.get_row_count(resolved_alias, user=actor)
+        logger.debug(f"kb.update dataset={resolved_alias} rows_before={rows_before} rows_after={rows_after}")
+        return resolved, True
+
+    async def _process_dataset(self, dataset: str, user: Any | None = None) -> None:
+        lock = self._cognify_locks.get(dataset)
+        async with lock:
+            alias = self.dataset_service.alias_for_dataset(dataset)
+            actor = user if user is not None else self._user
+            if actor is None:
+                logger.debug(f"projection:process_skipped dataset={alias} reason=missing_user")
+                return
+            user_ctx = self.dataset_service.to_user_ctx(actor)
+            try:
+                dataset_id = await self.dataset_service.get_dataset_id(alias, user_ctx)
+            except Exception:
+                dataset_id = None
+            self.dataset_service.log_once(
+                logging.DEBUG,
+                "projection:process",
+                dataset=alias,
+                dataset_id=dataset_id,
+                min_interval=5.0,
+            )
+            await self.projection_service.project_dataset(alias, actor, allow_rebuild=True)
+            await self.projection_service.wait(
+                alias,
+                actor,
+                timeout=settings.AI_COACH_GLOBAL_PROJECTION_TIMEOUT,
+            )
 
     @staticmethod
-    def _client_profile_text(client: Client) -> str:
-        """Format client profile attributes into text for indexing."""
+    def _log_task_exception(task: asyncio.Task[Any]) -> None:
+        if exc := task.exception():
+            logger.warning(f"Dataset processing failed: {exc}", exc_info=True)
+
+    async def _wait_for_projection(
+        self,
+        dataset: str,
+        user: Any | None = None,
+        *,
+        timeout: float | None = None,
+    ) -> ProjectionStatus:
+        alias = self.dataset_service.alias_for_dataset(dataset)
+        actor = user if user is not None else self._user
+        if actor is None:
+            self.dataset_service.log_once(
+                logging.WARNING,
+                "projection:wait_skipped",
+                dataset=alias,
+                reason="missing_user",
+                min_interval=30.0,
+            )
+            status = ProjectionStatus.USER_CONTEXT_UNAVAILABLE
+            self._projection_health[alias] = (status, "missing_user")
+            self.projection_service.record_wait_attempts(alias, 0, status)
+            return status
+
+        user_ctx = self.dataset_service.to_user_ctx(actor)
+        if user_ctx is None:
+            self.dataset_service.log_once(
+                logging.WARNING,
+                "projection:wait_skipped",
+                dataset=alias,
+                reason="user_context_unavailable",
+                min_interval=30.0,
+            )
+            status = ProjectionStatus.USER_CONTEXT_UNAVAILABLE
+            self._projection_health[alias] = (status, "user_context_unavailable")
+            self.projection_service.record_wait_attempts(alias, 0, status)
+            return status
+
+        effective_timeout = timeout if timeout is not None else 45.0
+        deadline = monotonic() + max(effective_timeout, 0.0)
+        backoff = (0.5, 1.0, 2.0, 5.0, 8.0)
+        attempts = 0
+
+        while True:
+            attempts += 1
+            ready, reason = await self.projection_service.probe(alias, actor)
+            if not ready:
+                provisional = ProjectionStatus.FATAL_ERROR if reason == "fatal_error" else ProjectionStatus.TIMEOUT
+                self._projection_health[alias] = (provisional, reason)
+            if ready:
+                self.dataset_service.log_once(
+                    logging.DEBUG,
+                    "projection:wait_ready",
+                    dataset=alias,
+                    reason=reason,
+                    min_interval=5.0,
+                )
+                status = ProjectionStatus.READY
+                self.dataset_service.add_projected_dataset(alias)
+                self._projection_health[alias] = (status, reason)
+                self.projection_service.record_wait_attempts(alias, attempts, status)
+                return status
+
+            if reason == "no_rows_in_dataset":
+                status = ProjectionStatus.READY_EMPTY
+                self.dataset_service.add_projected_dataset(alias)
+                self._projection_health[alias] = (status, reason)
+                self.projection_service.record_wait_attempts(alias, attempts, status)
+                return status
+
+            if reason == "fatal_error":
+                self.dataset_service.log_once(
+                    logging.WARNING,
+                    "projection:fatal_error",
+                    dataset=alias,
+                    min_interval=30.0,
+                )
+                status = ProjectionStatus.FATAL_ERROR
+                self._projection_health[alias] = (status, reason)
+                self.projection_service.record_wait_attempts(alias, attempts, status)
+                return status
+
+            if reason == "not_found":
+                self.dataset_service.log_once(
+                    logging.WARNING,
+                    "projection:not_found",
+                    dataset=alias,
+                    min_interval=30.0,
+                )
+                status = ProjectionStatus.TIMEOUT
+                self._projection_health[alias] = (status, reason)
+                self.projection_service.record_wait_attempts(alias, attempts, status)
+                return status
+
+            now = monotonic()
+            if now >= deadline:
+                self.dataset_service.log_once(
+                    logging.WARNING,
+                    "projection:wait_timeout",
+                    dataset=alias,
+                    reason=reason,
+                    timeout_s=effective_timeout,
+                )
+                status = ProjectionStatus.TIMEOUT
+                self._projection_health[alias] = (status, reason)
+                self.projection_service.record_wait_attempts(alias, attempts, status)
+                return status
+
+            sleep_for = backoff[min(attempts - 1, len(backoff) - 1)]
+            self.dataset_service.log_once(
+                logging.DEBUG,
+                "projection:wait_pending",
+                dataset=alias,
+                attempts=attempts,
+                reason=reason,
+                sleep_for=sleep_for,
+                min_interval=5.0,
+            )
+            await asyncio.sleep(sleep_for)
+
+    async def rebuild_dataset(self, dataset: str, user: Any | None, sha_only: bool = False) -> "RebuildResult":
+        alias = self.dataset_service.alias_for_dataset(dataset)
+        user_ctx = self.dataset_service.to_user_ctx(user)
+        reinserted = 0
+        healed_count = 0
+        linked_from_disk = 0
+        rehydrated = 0
+
+        try:
+            await self.dataset_service.ensure_dataset_exists(alias, user_ctx)
+        except Exception as exc:
+            logger.warning(f"knowledge_dataset_rebuild_ensure_failed dataset={alias} detail={exc}")
+        await self.storage_service.heal_dataset_storage(alias, user_ctx, reason="rebuild_preflight")
+        from ai_coach.agent.knowledge.utils.hash_store import HashStore
+
+        await HashStore.clear(alias)
+        self.dataset_service._PROJECTED_DATASETS.discard(alias)
+        try:
+            entries = await self.dataset_service.list_dataset_entries(alias, user_ctx)
+        except Exception as exc:
+            logger.warning(f"knowledge_dataset_rebuild_list_failed dataset={alias} detail={exc}")
+            return RebuildResult()
+        last_dataset: str | None = None
+        if not entries:
+            created_from_disk, linked_from_disk = await self.storage_service.rebuild_from_disk(alias)
+            if linked_from_disk:
+                logger.debug(
+                    f"knowledge_dataset_rebuild_disk_sync dataset={alias} created={created_from_disk} "
+                    f"linked={linked_from_disk}"
+                )
+
+            hashes = await HashStore.list(alias)
+            if hashes:
+                digest_metadata: list[tuple[str, Mapping[str, Any] | None]] = []
+                for digest in hashes:
+                    metadata = await HashStore.metadata(alias, digest)
+                    meta_payload = metadata if isinstance(metadata, Mapping) else None
+                    digest_metadata.append((digest, meta_payload))
+                await HashStore.clear(alias)
+                reingest_result = await self.storage_service.reingest_from_hashstore(
+                    alias,
+                    user,
+                    digest_metadata,
+                    knowledge_base=self,
+                )
+                rehydrated += int(reingest_result.rehydrated)
+                reinserted += int(reingest_result.rehydrated)
+                healed_count += reingest_result.healed_documents
+                if reingest_result.last_dataset:
+                    last_dataset = reingest_result.last_dataset
+                if not reingest_result.healed:
+                    reingest_result.reinserted = reinserted
+                    reingest_result.healed_documents = healed_count
+                    reingest_result.linked = linked_from_disk
+                    reingest_result.rehydrated = rehydrated
+                    return reingest_result
+            try:
+                entries = await self.dataset_service.list_dataset_entries(alias, user_ctx)
+            except Exception as exc:
+                logger.warning(f"knowledge_dataset_rebuild_list_retry_failed dataset={alias} detail={exc}")
+                return RebuildResult()
+            if not entries:
+                return RebuildResult()
+        for entry in entries:
+            normalized = self.dataset_service._normalize_text(entry.text)
+            if not normalized:
+                continue
+            entry_metadata = dict(entry.metadata) if isinstance(entry.metadata, Mapping) else {}
+            entry_metadata.setdefault("dataset", alias)
+            meta_dict = self.dataset_service._infer_metadata_from_text(normalized, entry_metadata)
+            try:
+                dataset_name, created = await self.update_dataset(
+                    normalized,
+                    alias,
+                    user,
+                    node_set=None,
+                    metadata=meta_dict,
+                )
+            except Exception as exc:
+                logger.warning(f"knowledge_dataset_rebuild_add_failed dataset={alias} detail={exc}")
+                continue
+            last_dataset = dataset_name
+            if created:
+                reinserted += 1
+        if reinserted == 0:
+            logger.warning(f"knowledge_dataset_rebuild_skipped dataset={alias}: no_valid_entries")
+            return RebuildResult(
+                reinserted=0,
+                healed_documents=healed_count,
+                linked=linked_from_disk,
+                rehydrated=rehydrated,
+                last_dataset=last_dataset,
+                healed=True,
+                reason="no_valid_entries",
+            )
+        logger.info(f"knowledge_dataset_rebuild_ready dataset={alias} documents={reinserted} healed={healed_count}")
+        result = RebuildResult(
+            reinserted=reinserted,
+            healed_documents=healed_count,
+            linked=linked_from_disk,
+            rehydrated=rehydrated,
+            last_dataset=last_dataset,
+            healed=True,
+            reason="ok",
+        )
+        if last_dataset:
+            self._LAST_REBUILD_RESULT[alias] = {
+                "timestamp": time.time(),
+                "documents": result.reinserted,
+                "healed": result.healed_documents,
+                "sha_only": sha_only,
+            }
+        return result
+
+    async def fallback_entries(self, client_id: int, limit: int = 6) -> list[tuple[str, str]]:
+        return await self.search_service.fallback_entries(client_id, limit)
+
+    def chat_dataset_name(self, client_id: int) -> str:
+        return self.dataset_service.chat_dataset_name(client_id)
+
+    def get_last_rebuild_result(self) -> dict[str, Any]:
+        return self._LAST_REBUILD_RESULT
+
+    def get_projection_health(self, dataset: str) -> tuple[ProjectionStatus, str] | None:
+        alias = self.dataset_service.alias_for_dataset(dataset)
+        return self._projection_health.get(alias)
+
+    async def prune(self) -> None:
+        logger.info("cognee_prune.started")
+        # TODO: Implement actual pruning logic here, delegating to relevant services.
+        pass
+
+    @staticmethod
+    def _is_graph_missing_error(exc: Exception) -> bool:
+        message = str(exc)
+        if "Empty graph" in message or "empty graph" in message:
+            return True
+        if "EntityNotFound" in exc.__class__.__name__:
+            return True
+        status = getattr(exc, "status_code", None)
+        return status == 404
+
+    @staticmethod
+    def _client_profile_text(client: "Client") -> str:
         parts = []
         if client.name:
             parts.append(f"name: {client.name}")
@@ -2114,616 +657,3 @@ class KnowledgeBase:
         if client.health_notes:
             parts.append(f"health_notes: {client.health_notes}")
         return "profile: " + "; ".join(parts)
-
-    @classmethod
-    async def _ensure_profile_indexed(cls, client_id: int, user: Any | None) -> None:
-        """Fetch client profile and add it to dataset if missing."""
-        try:
-            client = await APIService.profile.get_client(client_id)
-        except UserServiceError as e:
-            logger.warning(f"Failed to fetch client id={client_id}: {e}")
-            return
-        if not client:
-            return
-        text = cls._client_profile_text(client)
-        dataset = cls._dataset_name(client_id)
-        dataset, created = await cls.update_dataset(
-            text,
-            dataset,
-            user,
-            node_set=["client_profile"],
-            metadata={"kind": "document", "source": "client_profile"},
-        )
-        if created:
-            await cls._process_dataset(dataset, user)
-
-    @classmethod
-    async def _process_dataset(cls, dataset: str, user: Any | None) -> None:
-        """Run cognify on a dataset with a per-dataset lock."""
-        lock = cls._cognify_locks.get(dataset)
-        async with lock:
-            alias = cls._alias_for_dataset(dataset)
-            user_ctx = cls._to_user_ctx(user)
-            try:
-                dataset_id = await cls._get_dataset_id(alias, user_ctx)
-            except ProjectionProbeError:
-                dataset_id = None
-            cls._log_once(
-                logging.DEBUG,
-                "projection:process",
-                dataset=alias,
-                dataset_id=dataset_id,
-                min_interval=5.0,
-            )
-            await cls._project_dataset(alias, user, allow_rebuild=True)
-
-    @classmethod
-    async def _wait_for_projection(
-        cls,
-        dataset: str,
-        user: Any | None,
-        *,
-        timeout: float | None = None,
-        **legacy_kwargs: Any,
-    ) -> ProjectionStatus:
-        """Wait for a dataset to be projected, with a timeout and backoff."""
-        legacy_timeout = legacy_kwargs.pop("timeout_s", None)
-        if timeout is None:
-            timeout = legacy_timeout
-        if legacy_kwargs:
-            unexpected = ", ".join(sorted(legacy_kwargs.keys()))
-            raise TypeError(f"Unexpected keyword arguments: {unexpected}")
-        alias = cls._alias_for_dataset(dataset)
-        user_ctx = cls._to_user_ctx(user)
-        if user_ctx is None:
-            cls._log_once(
-                logging.WARNING,
-                "projection:wait_skipped",
-                dataset=alias,
-                reason="user_context_unavailable",
-            )
-            return ProjectionStatus.USER_CONTEXT_UNAVAILABLE
-
-        started = monotonic()
-        probe_count = 0
-        while True:
-            probe_count += 1
-            status, reason = await cls._is_projection_ready(dataset, user_ctx)
-            if status:
-                cls._log_once(
-                    logging.DEBUG,
-                    "projection:wait_ready",
-                    dataset=alias,
-                    probes=probe_count,
-                    reason=reason,
-                    min_interval=5.0,
-                )
-                return ProjectionStatus.READY
-
-            elapsed = monotonic() - started
-            if timeout is not None and elapsed >= timeout:
-                cls._log_once(
-                    logging.WARNING,
-                    "projection:wait_timeout",
-                    dataset=alias,
-                    probes=probe_count,
-                    reason=reason,
-                    timeout_s=timeout,
-                )
-                return ProjectionStatus.TIMEOUT
-
-            backoff_idx = min(probe_count - 1, len(cls._PROJECTION_BACKOFF_SECONDS) - 1)
-            sleep_for = cls._PROJECTION_BACKOFF_SECONDS[backoff_idx]
-            cls._log_once(
-                logging.DEBUG,
-                "projection:wait_pending",
-                dataset=alias,
-                probes=probe_count,
-                reason=reason,
-                sleep_for=sleep_for,
-                min_interval=5.0,
-            )
-            await asyncio.sleep(sleep_for)
-
-    @classmethod
-    async def _is_projection_ready(cls, dataset: str, user: Any | None) -> tuple[bool, str]:
-        """Check if a dataset is fully projected and ready for use."""
-        alias = cls._alias_for_dataset(dataset)
-        user_ctx = cls._to_user_ctx(user)
-        if user_ctx is None:
-            return False, "user_context_unavailable"
-
-        try:
-            dataset_id = await cls._get_dataset_id(dataset, user_ctx)
-        except ProjectionProbeError as exc:
-            return False, f"dataset_id_unavailable: {exc}"
-        if dataset_id is None:
-            return False, "dataset_id_unavailable"
-
-        datasets_module = getattr(cognee, "datasets", None)
-        if datasets_module is None:
-            return False, "cognee_datasets_module_missing"
-
-        list_data = getattr(datasets_module, "list_data", None)
-        if not callable(list_data):
-            return False, "cognee_list_data_callable_missing"
-
-        list_data_callable = cast(Callable[..., Awaitable[Iterable[Any]]], list_data)
-        try:
-            rows = await cls._fetch_dataset_rows(list_data_callable, dataset, user_ctx)
-        except Exception as exc:
-            return False, f"list_data_fetch_failed: {exc}"
-
-        if not rows:
-            return False, "no_rows_in_dataset"
-
-        pending_rows = 0
-        empty_content_rows = 0
-        for row in rows:
-            prepared_row = cls._prepare_dataset_row(row, alias)
-            if not prepared_row.text.strip():
-                empty_content_rows += 1
-                continue
-            if not prepared_row.metadata or not prepared_row.metadata.get("digest_sha"):
-                pending_rows += 1
-                continue
-
-        if pending_rows > 0:
-            return False, f"pending_rows={pending_rows}"
-        if empty_content_rows > 0:
-            cls._log_once(
-                logging.INFO,
-                "projection:empty_content_rows",
-                dataset=alias,
-                count=empty_content_rows,
-                min_interval=30.0,
-            )
-            # If all remaining rows are empty, consider it ready but log a warning
-            if pending_rows == 0 and empty_content_rows == len(rows):
-                return True, f"all_rows_empty_content={empty_content_rows}"
-            return False, f"empty_content_rows={empty_content_rows}"
-
-        return True, "ready"
-
-    @staticmethod
-    def _log_task_exception(task: asyncio.Task[Any]) -> None:
-        """Log exception from a background task."""
-        if exc := task.exception():
-            logger.warning(f"Dataset processing failed: {exc}", exc_info=True)
-
-    @classmethod
-    def _to_user_ctx(cls, user: Any | None) -> Any | None:
-        if isinstance(user, SimpleNamespace) and isinstance(getattr(user, "id", None), UUID):
-            tenant_value = getattr(user, "tenant_id", None)
-            if tenant_value is None or isinstance(tenant_value, UUID):
-                return user
-        if user is None:
-            return None
-
-        raw_id = getattr(user, "id", None)
-        if raw_id is None and isinstance(user, CogneeUser):
-            payload = asdict(user)
-            raw_id = payload.get("id")
-            tenant_val = payload.get("tenant_id")
-        elif raw_id is None and is_dataclass(user):
-            payload = asdict(user)
-            raw_id = payload.get("id")
-            tenant_val = payload.get("tenant_id")
-        else:
-            tenant_val = getattr(user, "tenant_id", None)
-
-        uid = cls._normalize_uuid(raw_id)
-        if uid is None:
-            return None
-        tenant_uuid = cls._normalize_uuid(tenant_val)
-        return SimpleNamespace(id=uid, tenant_id=tenant_uuid)
-
-    @classmethod
-    def _to_user_id(cls, user: Any | None) -> str | None:
-        """Normalize user object into a string identifier for internal keys/logs or return None."""
-        user_ctx = cls._to_user_ctx(user)
-        return user_ctx.id.hex if user_ctx else None
-
-    @staticmethod
-    def _normalize_uuid(value: Any | None) -> UUID | None:
-        if value in (None, ""):
-            return None
-        if isinstance(value, UUID):
-            return value
-        try:
-            return UUID(str(value))
-        except Exception:
-            return uuid5(NAMESPACE_DNS, str(value))
-
-    @classmethod
-    def _bootstrap_user_ctx(cls) -> SimpleNamespace:
-        return SimpleNamespace(id=cls._BOOTSTRAP_USER_UUID, tenant_id=None)
-
-    @classmethod
-    def _is_graph_missing_error(cls, exc: Exception) -> bool:
-        message = str(exc)
-        if "Empty graph" in message or "empty graph" in message:
-            return True
-        if "EntityNotFound" in exc.__class__.__name__:
-            return True
-        status = getattr(exc, "status_code", None)
-        return status == 404
-
-    @classmethod
-    async def _warm_up_datasets(cls, datasets: list[str], user: Any | None) -> None:
-        """Ensure datasets are cognified before retrying a search."""
-        for dataset in datasets:
-            try:
-                await cls._process_dataset(dataset, user)
-            except Exception as exc:  # noqa: BLE001 - logging context is sufficient here
-                logger.warning(f"knowledge_dataset_warmup_failed dataset={dataset} detail={exc}")
-
-    @classmethod
-    async def _project_dataset(
-        cls,
-        dataset: str,
-        user: Any | None,
-        *,
-        allow_rebuild: bool = True,
-    ) -> None:
-        """Run cognify and wait for the dataset projection to become available."""
-        alias = cls._alias_for_dataset(dataset)
-        user_ctx = cls._to_user_ctx(user)
-        dataset_id = await cls._get_dataset_id(alias, user_ctx)
-        target = dataset_id or alias
-        if user_ctx is None:
-            logger.warning(f"knowledge_project_skipped dataset={alias}: user context unavailable")
-            return
-        cls._log_once(
-            logging.DEBUG,
-            "projection:cognify_start",
-            dataset=alias,
-            dataset_id=dataset_id,
-            min_interval=5.0,
-        )
-        try:
-            await cognee.cognify(datasets=[target], user=user_ctx)  # pyrefly: ignore[bad-argument-type]
-        except FileNotFoundError as exc:
-            missing_path = getattr(exc, "filename", None) or str(exc)
-            logger.debug(f"knowledge_dataset_storage_missing dataset={alias} missing={missing_path}")
-            missing, healed = await cls._heal_dataset_storage(alias, user_ctx, reason="cognify_missing")
-            cls._PROJECTED_DATASETS.discard(alias)
-            if healed > 0:
-                await cls._project_dataset(alias, user, allow_rebuild=True)
-                return
-            cls._log_once(
-                logging.WARNING,
-                "storage_missing:heal_failed",
-                dataset=alias,
-                missing=missing,
-                healed=healed,
-                min_interval=30.0,
-            )
-            cls._log_storage_state(alias, missing_count=missing, healed_count=healed)
-            if await cls.rebuild_dataset(alias, user):
-                logger.info(f"knowledge_dataset_rebuilt dataset={alias}")
-                await cls._project_dataset(alias, user, allow_rebuild=True)
-            raise
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(f"knowledge_dataset_cognify_failed dataset={dataset} detail={exc}")
-            raise
-        cls._log_once(
-            logging.DEBUG,
-            "projection:cognify_done",
-            dataset=alias,
-            dataset_id=dataset_id,
-            min_interval=5.0,
-        )
-        status = await cls._wait_for_projection(alias, user=user)
-        if status == ProjectionStatus.READY:
-            projected = True
-        else:
-            projected = False
-        if not projected:
-            logger.debug(f"knowledge_dataset_projection_pending dataset={alias} result=timeout")
-
-    @classmethod
-    async def rebuild_dataset(cls, dataset: str, user: Any | None, sha_only: bool = False) -> "RebuildResult":
-        """Rebuild dataset content by re-adding raw entries and clearing hash store."""
-        alias = cls._alias_for_dataset(dataset)
-        user_ctx = cls._to_user_ctx(user)
-        reinserted = 0
-        healed_count = 0
-        linked_from_disk = 0
-        rehydrated = 0
-
-        try:
-            await cls._ensure_dataset_exists(alias, user_ctx)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(f"knowledge_dataset_rebuild_ensure_failed dataset={alias} detail={exc}")
-        await cls._heal_dataset_storage(alias, user_ctx, reason="rebuild_preflight")
-        await HashStore.clear(alias)
-        cls._PROJECTED_DATASETS.discard(alias)
-        await cls._heal_dataset_storage(alias, user_ctx, reason="rebuild_preflight")
-        try:
-            entries = await cls._list_dataset_entries(alias, user_ctx)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(f"knowledge_dataset_rebuild_list_failed dataset={alias} detail={exc}")
-            return RebuildResult()
-        last_dataset: str | None = None
-        if not entries:
-            created_from_disk, linked_from_disk = await cls._rebuild_from_disk(alias)
-            if linked_from_disk:
-                logger.debug(
-                    f"knowledge_dataset_rebuild_disk_sync dataset={alias} created={created_from_disk} "
-                    f"linked={linked_from_disk}"
-                )
-
-            hashes = await HashStore.list(alias)
-            if hashes:
-                digest_metadata: list[tuple[str, Mapping[str, Any] | None]] = []
-                for digest in hashes:
-                    metadata = await HashStore.metadata(alias, digest)
-                    meta_payload = metadata if isinstance(metadata, Mapping) else None
-                    digest_metadata.append((digest, meta_payload))
-                await HashStore.clear(alias)
-                rehydrated, reingest_healed, last_dataset = await cls._reingest_from_hashstore(
-                    alias, user_ctx, digest_metadata
-                )
-                reinserted += int(rehydrated or 0)
-                healed_count += reingest_healed
-            try:
-                entries = await cls._list_dataset_entries(alias, user_ctx)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(f"knowledge_dataset_rebuild_list_retry_failed dataset={alias} detail={exc}")
-                return RebuildResult()
-            if not entries:
-                storage_root = cls._storage_root()
-                storage_info = CogneeConfig.describe_storage()
-                dir_count = storage_info.get("entries_count", 0)
-                root_size_bytes = storage_info.get("root_size_bytes", 0)
-                cls._log_once(
-                    logging.DEBUG,
-                    "knowledge_rebuild_scan",
-                    throttle_key=(alias, "rebuild_scan"),
-                    dataset=alias,
-                    dir_count=dir_count,
-                    root_size_bytes=root_size_bytes,
-                )
-                files = sorted(p.name for p in storage_root.glob("text_*.txt") if cls._filename_to_digest(p.name))[:5]
-                total_files = sum(1 for _ in storage_root.glob("text_*.txt"))
-                logger.warning(
-                    "knowledge_dataset_rebuild_skipped dataset={}: no_entries "
-                    "storage_files={} sample={} dir_count={} root_size_bytes={}",
-                    alias,
-                    total_files,
-                    files,
-                    dir_count,
-                    root_size_bytes,
-                )
-                return RebuildResult()
-        for entry in entries:
-            normalized = cls._normalize_text(entry.text)
-            if not normalized:
-                continue
-            metadata = entry.metadata if isinstance(entry.metadata, Mapping) else None
-            if metadata is None:
-                metadata = cls._infer_metadata_from_text(normalized)
-            meta_dict = dict(metadata) if metadata else None
-            if meta_dict is not None:
-                meta_dict.setdefault("dataset", alias)
-            try:
-                dataset_name, created = await cls.update_dataset(
-                    normalized,
-                    alias,
-                    user,
-                    node_set=None,
-                    metadata=meta_dict,
-                )
-            except (DatasetNotFoundError, PermissionDeniedError):
-                raise
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(f"knowledge_dataset_rebuild_add_failed dataset={alias} detail={exc}")
-                continue
-            last_dataset = dataset_name
-            if created:
-                reinserted += 1
-        if reinserted == 0:
-            logger.warning(f"knowledge_dataset_rebuild_skipped dataset={alias}: no_valid_entries")
-            return RebuildResult()
-        logger.info(f"knowledge_dataset_rebuild_ready dataset={alias} documents={reinserted} healed={healed_count}")
-        result = RebuildResult(
-            reinserted=reinserted, healed=healed_count, linked=linked_from_disk, rehydrated=rehydrated
-        )
-        if last_dataset:
-            cls._LAST_REBUILD_RESULT[alias] = {
-                "timestamp": time.time(),
-                "documents": result.reinserted,
-                "healed": result.healed,
-                "sha_only": sha_only,
-            }
-        return result
-
-    @classmethod
-    def _log_storage_state(
-        cls,
-        dataset: str,
-        *,
-        missing_count: int | None = None,
-        healed_count: int | None = None,
-    ) -> None:
-        storage_info = CogneeConfig.describe_storage()
-        logger.warning(
-            f"knowledge_dataset_storage_state dataset={dataset} storage_root={storage_info.get('root')} "
-            f"root_exists={storage_info.get('root_exists')} root_writable={storage_info.get('root_writable')} "
-            f"entries={storage_info.get('entries_count')} sample={storage_info.get('entries_sample')} "
-            f"package_path={storage_info.get('package_path')} package_exists={storage_info.get('package_exists')} "
-            f"package_is_symlink={storage_info.get('package_is_symlink')} "
-            f"package_target={storage_info.get('package_target')} missing_count={missing_count} "
-            f"healed_count={healed_count}"
-        )
-
-    @classmethod
-    async def _fallback_dataset_entries(
-        cls,
-        datasets: Sequence[str],
-        user_ctx: Any | None,
-        *,
-        top_k: int | None,
-    ) -> list[str]:
-        """Return raw dataset entries when graph search is unavailable."""
-        collected: list[str] = []
-        limit = top_k or 6
-        for dataset in datasets:
-            rows = await cls._list_dataset_entries(dataset, user_ctx)
-            if not rows:
-                continue
-            alias = cls._alias_for_dataset(dataset)
-            for row in rows:
-                normalized = cls._normalize_text(row.text)
-                if not normalized:
-                    continue
-                metadata = row.metadata
-                if metadata is None:
-                    metadata = cls._infer_metadata_from_text(normalized)
-                metadata_dict = dict(metadata) if metadata else {"kind": "document"}
-                dig_sha = cls._compute_digests(normalized)
-                ensured_metadata = cls._augment_metadata(metadata_dict, alias, digest_sha=dig_sha)
-                cls._ensure_storage_file(
-                    digest_sha=dig_sha,
-                    text=normalized,
-                    dataset=alias,
-                )
-                await HashStore.add(alias, dig_sha, metadata=ensured_metadata)
-                if ensured_metadata.get("kind") == "message":
-                    continue
-                collected.append(normalized)
-                if len(collected) >= limit:
-                    return collected
-        return collected
-
-    @classmethod
-    async def fallback_entries(cls, client_id: int, limit: int = 6) -> list[str]:
-        """Expose raw dataset entries for resiliency fallbacks."""
-        user = await cls._get_cognee_user()
-        aliases = [cls._dataset_name(client_id), cls.GLOBAL_DATASET]
-        datasets = [cls._resolve_dataset_alias(alias) for alias in aliases]
-        user_ctx = cls._to_user_ctx(user)
-        return await cls._fallback_dataset_entries(datasets, user_ctx, top_k=limit)
-
-    @classmethod
-    async def _list_dataset_entries(cls, dataset: str, user_ctx: Any | None) -> list[DatasetRow]:
-        alias = cls._alias_for_dataset(dataset)
-        datasets_module = getattr(cognee, "datasets", None)
-        if datasets_module is None:
-            logger.debug(f"knowledge_dataset_list_skipped dataset={alias}: datasets module missing")
-            return []
-        list_data = getattr(datasets_module, "list_data", None)
-        if not callable(list_data):
-            logger.debug(f"knowledge_dataset_list_skipped dataset={alias}: list_data missing")
-            return []
-        try:
-            await cls._ensure_dataset_exists(alias, user_ctx)
-        except Exception as exc:  # pragma: no cover - best effort to keep flow running
-            logger.debug(f"knowledge_dataset_ensure_failed dataset={alias} detail={exc}")
-        try:
-            rows = await cls._fetch_dataset_rows(
-                cast(Callable[..., Awaitable[Iterable[Any]]], list_data),
-                alias,
-                user_ctx,
-            )
-        except Exception as exc:  # noqa: BLE001 - dataset listing is best effort
-            logger.debug(f"knowledge_dataset_list_failed dataset={alias} detail={exc}")
-            return []
-        rows_data: list[DatasetRow] = []
-        for raw_row in rows:
-            prepared = cls._prepare_dataset_row(raw_row, alias)
-            normalized = cls._normalize_text(prepared.text)
-            if not normalized:
-                continue
-            rows_data.append(DatasetRow(text=normalized, metadata=prepared.metadata))
-        return rows_data
-
-    @classmethod
-    async def debug_snapshot(cls, client_id: int | None = None) -> dict[str, Any]:
-        """Return diagnostic information about configured datasets."""
-        user = await cls._get_cognee_user()
-        aliases: list[str] = []
-        if client_id is not None:
-            aliases.append(cls._dataset_name(client_id))
-        aliases.append(cls.GLOBAL_DATASET)
-        seen: set[str] = set()
-        datasets_info: list[dict[str, Any]] = []
-        for alias in aliases:
-            if alias in seen:
-                continue
-            seen.add(alias)
-            info = await cls._build_dataset_snapshot(alias, user)
-            datasets_info.append(info)
-        return {"datasets": datasets_info}
-
-    @classmethod
-    async def _build_dataset_snapshot(cls, alias: str, user: Any | None) -> dict[str, Any]:
-        resolved = cls._resolve_dataset_alias(alias)
-        user_ctx = cls._to_user_ctx(user)
-        info: dict[str, Any] = {
-            "alias": alias,
-            "resolved": resolved,
-            "id": resolved,
-            "documents": None,
-            "projected": None,
-            "last_error": None,
-        }
-        state = cls._projection_state(alias)
-        info["no_content_rows"] = state.get("no_content_rows", 0)
-        info["missing_files"] = state.get("missing_files", 0)
-        info["healed_count"] = state.get("healed_count", 0)
-        metadata = await cls._get_dataset_metadata(resolved, user_ctx)
-        if metadata is not None:
-            identifier = getattr(metadata, "id", None) or getattr(metadata, "dataset_id", None)
-            if identifier:
-                info["id"] = str(identifier)
-            updated_at = getattr(metadata, "updated_at", None) or getattr(metadata, "updatedAt", None)
-            if updated_at is not None:
-                info["updated_at"] = str(updated_at)
-        try:
-            entries = await cls._list_dataset_entries(resolved, user_ctx)
-        except Exception as exc:  # noqa: BLE001
-            info["last_error"] = str(exc)
-            entries = []
-        if entries:
-            info["documents"] = sum(
-                1
-                for row in entries
-                if row.text.strip() and cls._resolve_snippet_kind(row.metadata, row.text) != "message"
-            )
-        else:
-            info["documents"] = 0
-        try:
-            projected, projected_reason = await cls._is_projection_ready(resolved, user_ctx)
-            info["projected"] = projected
-            info["projection_reason"] = projected_reason
-        except Exception as exc:
-            info["last_error"] = str(exc)
-        return info
-
-    @classmethod
-    async def _resolve_dataset_identifier(cls, dataset: str, user_ctx: Any | None) -> str:
-        alias = cls._alias_for_dataset(dataset)
-        mapped = cls._DATASET_IDS.get(alias)
-        if mapped:
-            return mapped
-        metadata = await cls._get_dataset_metadata(alias, user_ctx)
-        if metadata is not None:
-            identifier = cls._extract_dataset_identifier(metadata)
-            if identifier:
-                cls._register_dataset_identifier(alias, identifier)
-                return identifier
-        return alias
-
-    @classmethod
-    async def _get_dataset_metadata(cls, dataset: str, user_ctx: Any | None) -> Any | None:
-        try:  # pragma: no cover - optional dependency
-            from cognee.modules.data.methods import get_authorized_dataset_by_name  # type: ignore
-        except Exception:
-            return None
-        try:
-            return await get_authorized_dataset_by_name(dataset, user_ctx, "read")
-        except Exception as exc:  # noqa: BLE001
-            logger.debug(f"knowledge_dataset_metadata_failed dataset={dataset} detail={exc}")
-            return None

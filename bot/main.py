@@ -72,6 +72,14 @@ async def main() -> None:
 
     app = web.Application()
     app["bot"] = bot
+
+    async def health_ask_ai(request: web.Request) -> web.Response:
+        notifier = get_container().notifier()
+        stats = notifier.get_stats()
+        return web.json_response(stats)
+
+    app.router.add_get("/health/ask_ai", health_ask_ai)
+
     await setup_app(app, bot, dp)
 
     runner = None

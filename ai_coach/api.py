@@ -6,11 +6,13 @@ from pydantic import ValidationError  # pyrefly: ignore[import-error]
 from typing import Any, Awaitable, Callable, cast
 from time import monotonic
 from uuid import uuid4
-import re
 from hashlib import sha1
 from cachetools import TTLCache
+import os
 
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+from ai_coach.agent.knowledge.schemas import ProjectionStatus
+from ai_coach.agent.knowledge.context import current_kb, get_or_create_kb
 from ai_coach.agent import AgentDeps, CoachAgent  # pyrefly: ignore[missing-module-attribute]
 from ai_coach.exceptions import AgentExecutionAborted
 from core.exceptions import UserServiceError
@@ -28,6 +30,36 @@ CoachAction = Callable[[AskCtx], Awaitable[Program | Subscription | QAResponse |
 DEFAULT_WORKOUT_DAYS: tuple[str, ...] = ("Пн", "Ср", "Пт", "Сб")
 
 dedupe_cache = TTLCache(maxsize=2048, ttl=15)
+
+
+def _kb() -> KnowledgeBase:
+    existing = current_kb()
+    if existing is not None:
+        return existing
+    return get_or_create_kb()
+
+
+@app.on_event("startup")
+async def startup_event():
+    storage_path = settings.COGNEE_STORAGE_PATH
+    if not os.path.exists(storage_path):
+        logger.error(f"Cognee storage path does not exist: {storage_path}")
+        # In a non-prod environment, we might want to create it
+        if settings.ENVIRONMENT != "production":
+            os.makedirs(storage_path)
+            logger.info(f"Created cognee storage path: {storage_path}")
+        else:
+            raise RuntimeError(f"Cognee storage path does not exist: {storage_path}")
+
+    # Test if the path is writable
+    try:
+        test_file_path = os.path.join(storage_path, ".write_test")
+        with open(test_file_path, "w") as f:
+            f.write("test")
+        os.remove(test_file_path)
+    except Exception as e:
+        logger.error(f"Cognee storage path is not writable: {storage_path} ({e})")
+        raise RuntimeError(f"Cognee storage path is not writable: {storage_path} ({e})")
 
 
 def _validate_refresh_credentials(credentials: HTTPBasicCredentials) -> None:
@@ -92,29 +124,35 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/health/kb")
+async def health_kb() -> dict[str, Any]:
+    kb = _kb()
+    storage_path = settings.COGNEE_STORAGE_PATH
+    storage_ok = os.path.exists(storage_path) and os.access(storage_path, os.W_OK)
+    user = getattr(kb, "_user", None)
+    if user is None:
+        user = await kb.dataset_service.get_cognee_user()
+    try:
+        projected, projection_reason = await kb.projection_service.probe(kb.GLOBAL_DATASET, user)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"kb_health.probe_failed detail={exc}")
+        projected = False
+        projection_reason = "fatal_error"
+    dataset_registry_size = kb.dataset_service.get_dataset_alias_count()
+    last_rebuild_info = kb.get_last_rebuild_result()
+    return {
+        "status": "ok" if storage_ok and projected else "error",
+        "storage_access_ok": storage_ok,
+        "projected": projected,
+        "projection_reason": projection_reason,
+        "dataset_registry_size": dataset_registry_size,
+        "last_rebuild_info": last_rebuild_info,
+    }
+
+
 @app.get("/internal/debug/ping")
 async def internal_ping() -> dict[str, bool]:
     return {"ok": True}
-
-
-@app.get("/internal/debug/knowledge")
-async def debug_knowledge(
-    client_id: int | None = None,
-    credentials: HTTPBasicCredentials = Depends(security),
-) -> dict[str, Any]:
-    _validate_refresh_credentials(credentials)
-    snapshot = await KnowledgeBase.debug_snapshot(client_id=client_id)
-    return snapshot
-
-
-@app.get("/internal/knowledge/snapshot")
-async def knowledge_snapshot(
-    client_id: int | None = None,
-    credentials: HTTPBasicCredentials = Depends(security),
-) -> dict[str, Any]:
-    _validate_refresh_credentials(credentials)
-    snapshot = await KnowledgeBase.debug_snapshot(client_id=client_id)
-    return snapshot
 
 
 @app.get("/internal/debug/llm_probe")
@@ -207,6 +245,7 @@ async def ask(
                 profile_language = _to_language_code(profile_language_raw, settings.DEFAULT_LANG)
 
         language: str = request_language or profile_language or settings.DEFAULT_LANG
+        logger.debug(f"ask.in client_id={data.client_id} mode={mode.value} language={language}")
 
         ctx: AskCtx = {
             "prompt": data.prompt,
@@ -235,16 +274,38 @@ async def ask(
 
         logger.debug(f"/ask ctx.language={language} deps.locale={deps.locale} mode={mode.value}")
 
+        kb_for_chat: KnowledgeBase | None = None
+
         try:
             if mode == CoachMode.ask_ai and data.prompt:
-                kb_chat_dataset = KnowledgeBase._chat_dataset_name(data.client_id)
-                await KnowledgeBase.add_text(
+                kb_for_chat = _kb()
+                kb_chat_dataset = kb_for_chat.chat_dataset_name(data.client_id)
+                await kb_for_chat.add_text(
                     dataset=kb_chat_dataset,
                     text=data.prompt,
                     role=MessageRole.CLIENT,
                     client_id=data.client_id,
                 )
-                logger.info(f"chat_ingest question_bytes={len(data.prompt.encode())} dataset={kb_chat_dataset}")
+                question_bytes = len(data.prompt.encode())
+                logger.debug(
+                    f"ask.ingest_chat client_id={data.client_id} dataset={kb_chat_dataset} bytes={question_bytes}"
+                )
+                chat_user = getattr(kb_for_chat, "_user", None)
+                if chat_user is None:
+                    chat_user = await kb_for_chat.dataset_service.get_cognee_user()
+                try:
+                    wait_status = await kb_for_chat.projection_service.wait(
+                        kb_chat_dataset,
+                        chat_user,
+                        timeout=2.0,
+                    )
+                except Exception as exc:  # noqa: BLE001 - projection best effort
+                    logger.debug(f"ask.wait_projection dataset={kb_chat_dataset} timeout=2.0 result=error detail={exc}")
+                else:
+                    status_label = (
+                        "ok" if wait_status in {ProjectionStatus.READY, ProjectionStatus.READY_EMPTY} else "timeout"
+                    )
+                    logger.debug(f"ask.wait_projection dataset={kb_chat_dataset} timeout=2.0 {status_label}")
 
             coach_agent_action = DISPATCH[mode]
         except KeyError as e:
@@ -297,8 +358,9 @@ async def ask(
                     origin,
                 )
                 if isinstance(answer, str):
-                    await KnowledgeBase.save_client_message(data.prompt or "", client_id=data.client_id)
-                    await KnowledgeBase.save_ai_message(answer, client_id=data.client_id)
+                    kb = kb_for_chat or _kb()
+                    await kb.save_client_message(data.prompt or "", client_id=data.client_id)
+                    await kb.save_ai_message(answer, client_id=data.client_id)
             else:
                 logger.debug(
                     "/ask agent completed rid={} request_id={} client_id={} mode={} steps_used={} kb_empty={}",
@@ -356,12 +418,18 @@ async def ask(
         finally:
             latency_ms = int((monotonic() - started) * 1000)
             model_name = CoachAgent._completion_model_name or default_model
-            kb_used = not deps.knowledge_base_empty
+            final_kb_used = bool(deps.kb_used)
             answer_len = 0
             origin = "llm"
+            sources_for_log: list[str] = []
             if isinstance(result, QAResponse):
                 answer_len = len(result.answer or "")
-                origin = "kb_fallback" if deps.fallback_used else "llm"
+                sources_for_log = [src.strip() for src in result.sources if isinstance(src, str) and src.strip()]
+                if not sources_for_log:
+                    sources_for_log = ["general_knowledge"]
+                final_kb_used = any(src != "general_knowledge" for src in sources_for_log)
+                if deps.fallback_used and final_kb_used:
+                    origin = "kb_fallback"
             elif isinstance(result, JSONResponse):
                 origin = "error"
             elif isinstance(result, list):
@@ -373,13 +441,17 @@ async def ask(
                 answer_attr = getattr(result, "answer", None)
                 if isinstance(answer_attr, str):
                     answer_len = len(answer_attr)
-                    if deps.fallback_used:
+                    if deps.fallback_used and final_kb_used:
                         origin = "kb_fallback"
                 else:
                     origin = "structured"
+            if not sources_for_log:
+                sources_for_log = ["general_knowledge"] if not final_kb_used else ["knowledge_base"]
+            sources_label = ",".join(sources_for_log)
             logger.info(
-                f"ask.done rid={rid} model={model_name} from={origin} "
-                f"answer_len={answer_len} kb_used={str(kb_used).lower()} latency_ms={latency_ms}"
+                f"ask.out rid={rid} client_id={data.client_id} mode={mode.value} model={model_name} "
+                f"from={origin} answer_len={answer_len} kb_used={str(final_kb_used).lower()} "
+                f"sources={sources_label} latency_ms={latency_ms}"
             )
 
 
@@ -388,19 +460,18 @@ async def refresh_knowledge(credentials: HTTPBasicCredentials = Depends(security
     _validate_refresh_credentials(credentials)
 
     try:
-        await KnowledgeBase.refresh()
+        kb = _kb()
+        await kb.refresh()
     except Exception as e:  # pragma: no cover - log unexpected errors
         logger.exception(f"Knowledge refresh failed: {e}")
         raise HTTPException(status_code=503, detail="Refresh failed")
     return {"status": "ok"}
 
 
-@app.post("/knowledge/prune/")
-async def prune_knowledge_base(credentials: HTTPBasicCredentials = Depends(security)) -> dict[str, str]:
-    _validate_refresh_credentials(credentials)
-
+async def _execute_prune() -> dict[str, str]:
     try:
-        await KnowledgeBase.prune()
+        kb = _kb()
+        await kb.prune()
     except UserServiceError as exc:
         logger.error(f"Knowledge prune failed: {exc}")
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -409,3 +480,27 @@ async def prune_knowledge_base(credentials: HTTPBasicCredentials = Depends(secur
         raise HTTPException(status_code=503, detail="Cognee prune failed") from exc
 
     return {"status": "ok"}
+
+
+@app.post("/internal/knowledge/prune/")
+async def prune_knowledge_base_internal() -> dict[str, str]:
+    return await _execute_prune()
+
+
+@app.post("/knowledge/prune/")
+async def prune_knowledge_base(credentials: HTTPBasicCredentials = Depends(security)):
+    _validate_refresh_credentials(credentials)
+    return await _execute_prune()
+
+
+@app.post("/knowledge/prune/")
+async def prune_knowledge_base_legacy(
+    request: Request,
+    credentials: HTTPBasicCredentials = Depends(security),
+) -> dict[str, str]:
+    _validate_refresh_credentials(credentials)
+    ip = request.client.host if request.client else "unknown"
+    auth_header = request.headers.get("authorization", "")
+    scheme = auth_header.split(" ", 1)[0] if auth_header else "unknown"
+    logger.info(f"prune_legacy_bridge_called ip={ip} auth_scheme={scheme}")
+    return await _execute_prune()

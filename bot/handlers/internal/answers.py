@@ -40,8 +40,9 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
         return web.json_response({"detail": exc.errors()}, status=400)
 
     state_tracker = AiQuestionState.create()
-    if not await state_tracker.claim_delivery(payload.request_id):
-        logger.debug(f"event=ask_ai_answer_duplicate request_id={payload.request_id} client_id={payload.client_id}")
+    request_id = payload.request_id
+    if await state_tracker.is_delivered(request_id) or await state_tracker.is_failed(request_id):
+        logger.debug(f"event=ask_ai_answer_duplicate request_id={request_id} client_id={payload.client_id}")
         return web.json_response({"result": "ignored"}, status=202)
 
     try:
@@ -131,8 +132,7 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
         )
 
     escaped_answer = html.escape(answer_text)
-    message_text = msg_text("incoming_message", language).format(name=settings.BOT_NAME, message=escaped_answer)
-    chunks = list(_chunk_message(message_text))
+    chunks = list(_chunk_message(escaped_answer))
     rendered_len = sum(len(chunk) for chunk in chunks)
     truncated = "yes" if len(chunks) > 1 else "no"
     logger.info(
@@ -144,9 +144,10 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
 
     try:
         for chunk in chunks:
+            message_text = msg_text("incoming_message", language).format(name=settings.BOT_NAME, message=chunk)
             await bot.send_message(
                 chat_id=profile.tg_id,
-                text=chunk,
+                text=message_text,
                 parse_mode=ParseMode.HTML,
                 disable_web_page_preview=True,
                 reply_to_message_id=reply_to_message_id,

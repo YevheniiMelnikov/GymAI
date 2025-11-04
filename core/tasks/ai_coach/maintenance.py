@@ -8,6 +8,7 @@ from loguru import logger
 
 from config.app_settings import settings
 from core.celery_app import app
+from core.internal_http import build_internal_hmac_auth_headers
 from core.services import APIService
 from core.utils.redis_lock import get_redis_client, redis_try_lock
 
@@ -113,15 +114,26 @@ def refresh_external_knowledge(self) -> None:  # pyrefly: ignore[valid-type]
 def prune_knowledge_base(self) -> None:  # pyrefly: ignore[valid-type]
     """Trigger Cognee prune on the AI coach service."""
     logger.info("prune_knowledge_base started")
-    url = _ai_coach_path("knowledge/prune/")
     timeout = settings.AI_COACH_TIMEOUT
-    auth = (
-        (settings.AI_COACH_REFRESH_USER or ""),
-        (settings.AI_COACH_REFRESH_PASSWORD or ""),
-    )
-
+    payload: dict[str, Any] = {}
+    body = b"{}"
+    use_hmac = bool(settings.INTERNAL_KEY_ID and settings.INTERNAL_API_KEY)
+    if use_hmac:
+        url = _ai_coach_path("internal/knowledge/prune/")
+        headers = build_internal_hmac_auth_headers(
+            key_id=settings.INTERNAL_KEY_ID,
+            api_key=settings.INTERNAL_API_KEY,
+            body=body,
+        )
+        headers.setdefault("Content-Type", "application/json")
+        request_kwargs: dict[str, Any] = {"headers": headers, "content": body}
+    else:
+        url = _ai_coach_path("knowledge/prune/")
+        basic_user = settings.AI_COACH_REFRESH_USER
+        basic_pass = settings.AI_COACH_REFRESH_PASSWORD
+        request_kwargs = {"json": payload, "auth": (basic_user, basic_pass)}
     try:
-        resp = httpx.post(url, timeout=timeout, auth=auth)
+        resp = httpx.post(url, timeout=timeout, **request_kwargs)
         resp.raise_for_status()
     except httpx.HTTPError as exc:
         logger.warning(f"AI coach call failed for prune_knowledge_base: {exc}")

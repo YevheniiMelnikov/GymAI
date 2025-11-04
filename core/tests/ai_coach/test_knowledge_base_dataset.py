@@ -749,21 +749,25 @@ async def test_global_projection_ready_with_document(monkeypatch: pytest.MonkeyP
 
 
 def test_fallback_entries_skip_messages(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_list_dataset_entries(cls, dataset: str, user: Any | None) -> list[DatasetRow]:
+    async def fake_list_dataset_entries(self, dataset: str, user: Any | None) -> list[DatasetRow]:
         return [
             DatasetRow(text=" document ", metadata={"kind": "document", "dataset": dataset}),
             DatasetRow(text="client: hi", metadata={"kind": "message", "role": "client", "dataset": dataset}),
         ]
 
-    monkeypatch.setattr(KnowledgeBase, "_list_dataset_entries", classmethod(fake_list_dataset_entries))
+    kb = KnowledgeBase()
+    monkeypatch.setattr(kb.dataset_service.__class__, "list_dataset_entries", fake_list_dataset_entries, raising=False)
     monkeypatch.setattr(
         knowledge_base_module.HashStore,
         "add",
         classmethod(_fake_hash_add),
     )
 
-    results = asyncio.run(KnowledgeBase._fallback_dataset_entries(["ds"], user=None, top_k=5))
-    assert results == ["document"]
+    async def runner() -> list[tuple[str, str]]:
+        return await kb.search_service._fallback_dataset_entries(["kb_global"], user_ctx=None, top_k=5)
+
+    results = asyncio.run(runner())
+    assert results == [("document", "kb_global")]
 
 
 def test_build_snippets_skip_unindexed(monkeypatch: pytest.MonkeyPatch) -> None:

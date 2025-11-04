@@ -1,4 +1,6 @@
 import asyncio
+import logging
+import hashlib
 import io
 
 # pyrefly: ignore-file
@@ -6,7 +8,7 @@ import io
 """Google Drive knowledge loader."""
 
 from pathlib import Path
-from typing import Any, Callable, Final, Protocol, cast
+from typing import Any, Callable, Final, cast
 
 from google.oauth2.service_account import Credentials  # pyrefly: ignore[import-error]
 from googleapiclient.discovery import build  # pyrefly: ignore[import-error]
@@ -49,15 +51,9 @@ class GDriveDocumentLoader(KnowledgeLoader):
     credentials_path: str | Path = settings.GOOGLE_APPLICATION_CREDENTIALS
     _files_service: Any | None = None
 
-    class _AddText(Protocol):
-        async def __call__(self, text: str, *, dataset: str, node_set: list[str] | None = None) -> None: ...
-
-    _add_text: _AddText
-    _dataset_name: str
-
-    def __init__(self, add_text: _AddText) -> None:
-        self._add_text = add_text
-        self._dataset_name = KnowledgeBase.GLOBAL_DATASET
+    def __init__(self, knowledge_base: KnowledgeBase) -> None:
+        self._kb = knowledge_base
+        self._dataset_name = knowledge_base.GLOBAL_DATASET
 
     def _get_drive_files_service(self) -> Any:
         if self._files_service is None:
@@ -99,6 +95,13 @@ class GDriveDocumentLoader(KnowledgeLoader):
         processed = 0
         skipped = 0
         errors = 0
+        user = getattr(self._kb, "_user", None)
+        if user is None:
+            user = await self._kb.dataset_service.get_cognee_user()
+        if user is None:
+            logger.warning("kb_gdrive.skip reason=missing_user")
+            return
+        dataset_alias = self._kb.dataset_service.alias_for_dataset(self._dataset_name)
 
         for f in files:
             name = f.get("name") or ""
@@ -124,17 +127,54 @@ class GDriveDocumentLoader(KnowledgeLoader):
                 parser = self._PARSERS[ext]
                 text = await asyncio.to_thread(parser, data) if ext != ".txt" else parser(data)
 
-                if not text.strip():
-                    logger.debug(f"Skip {name}: empty after parsing")
+                normalized = self._kb.dataset_service._normalize_text(text)
+                if not normalized.strip():
+                    self._kb.dataset_service.log_once(
+                        logging.INFO,
+                        "kb_gdrive.empty_document",
+                        dataset=dataset_alias,
+                        file_id=file_id,
+                        name=name,
+                        source="gdrive",
+                        min_interval=120.0,
+                    )
                     skipped += 1
                     continue
 
-                await self._add_text(
-                    text,
-                    dataset=self._dataset_name,
-                    node_set=[f"gdrive:{name}"],
+                metadata = {
+                    "dataset": dataset_alias,
+                    "source": "gdrive",
+                    "file_id": file_id,
+                    "name": name,
+                    "mime_type": f.get("mimeType"),
+                    "size": size,
+                }
+                modified_ts = f.get("modifiedTime") or f.get("modified_time")
+                if modified_ts:
+                    metadata["modified_ts"] = modified_ts
+
+                payload_bytes = normalized.encode("utf-8")
+                digest_sha = hashlib.sha256(payload_bytes).hexdigest()
+                resolved_dataset, created = await self._kb.update_dataset(
+                    normalized,
+                    self._dataset_name,
+                    user,
+                    node_set=[f"gdrive:{file_id}"],
+                    metadata=metadata,
                 )
-                processed += 1
+                if created:
+                    processed += 1
+                    task = asyncio.create_task(self._kb._process_dataset(resolved_dataset, user))
+                    task.add_done_callback(self._kb._log_task_exception)
+                    logger.info(
+                        f"kb_gdrive.ingested dataset={dataset_alias} file_id={file_id} "
+                        f"bytes={len(payload_bytes)} digest={digest_sha[:12]}"
+                    )
+                else:
+                    skipped += 1
+                    logger.debug(
+                        f"kb_gdrive.duplicate dataset={dataset_alias} file_id={file_id} digest={digest_sha[:12]}"
+                    )
             except Exception:
                 logger.exception(f"Failed to process {name} (id={file_id})")
                 errors += 1
