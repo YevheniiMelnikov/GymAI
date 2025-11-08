@@ -121,7 +121,8 @@ def configure_logging() -> None:
     for name in noisy_loggers:
         target = logging.getLogger(name)
         target.handlers = []
-        target.setLevel(logging.WARNING)
+        level = logging.ERROR if name == "GraphCompletionRetriever" else logging.WARNING
+        target.setLevel(level)
         target.propagate = True
 
     _CONFIGURED = True

@@ -1,5 +1,3 @@
-"""AI coach data structures."""
-
 from dataclasses import dataclass
 
 from core.schemas import Client

@@ -48,7 +48,7 @@ class ProjectionService:
             logger.warning(f"knowledge_projection_skipped dataset={alias} reason=user_context_unavailable")
             return ProjectionStatus.USER_CONTEXT_UNAVAILABLE
 
-        wait_timeout = timeout if timeout is not None else 20.0
+        wait_timeout = timeout_s if timeout_s is not None else 20.0
         for attempt in range(self._MAX_REBUILD_ATTEMPTS):
             try:
                 await self.dataset_service.ensure_dataset_exists(alias, user_ctx)

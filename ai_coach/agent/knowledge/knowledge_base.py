@@ -150,8 +150,7 @@ class KnowledgeBase:
                 counts_map[effective] = await self.dataset_service.get_counts(effective, user)
                 counts_payload = counts_map[effective]
                 if (counts_payload.get("text_rows", 0) or 0) > 0 and (
-                    (counts_payload.get("chunk_rows", 0) or 0) == 0
-                    and (counts_payload.get("graph_nodes", 0) or 0) == 0
+                    (counts_payload.get("chunk_rows", 0) or 0) == 0 and (counts_payload.get("graph_nodes", 0) or 0) == 0
                 ):
                     # This means text rows exist, but chunks/graph nodes are missing after projection
                     # This can happen if the projection failed or is still pending
@@ -164,7 +163,9 @@ class KnowledgeBase:
                         graph_nodes=counts_payload.get("graph_nodes"),
                         min_interval=60.0,
                     )
-                    logger.warning(f"projection:empty_after_text dataset={effective} reason=no_chunks_or_graph_nodes_after_text_rows")
+                    logger.warning(
+                        f"projection:empty_after_text dataset={effective} reason=no_chunks_or_graph_nodes_after_text_rows"
+                    )
                     # Do not add to searchable_aliases if projection is incomplete
                     continue
 

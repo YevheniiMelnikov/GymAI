@@ -448,6 +448,7 @@ async def ask(
                 "timeout": "request timed out",
                 "knowledge_base_empty": "knowledge base returned no data",
                 "model_empty_response": "model returned empty response",
+                "ask_ai_unavailable": "unable to process ask_ai request; credits refunded",
             }
             detail_reason = reason_map.get(exc.reason, exc.reason)
             logger.info(
@@ -471,7 +472,10 @@ async def ask(
                     return final_result
             result = JSONResponse(
                 status_code=408,
-                content={"detail": "AI coach aborted request", "reason": exc.reason},
+                content={
+                    "detail": detail_reason or "AI coach aborted request",
+                    "reason": exc.reason,
+                },
             )
             return result
         except ValidationError as e:

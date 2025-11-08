@@ -1,5 +1,4 @@
 import html
-from typing import Iterable
 
 from aiohttp import web
 from aiogram import Bot
@@ -20,11 +19,7 @@ from core.services import APIService
 from core.schemas import Profile
 
 from .tasks import _resolve_client_and_profile
-
-
-def _chunk_message(text: str, limit: int = 3500) -> Iterable[str]:
-    for start in range(0, len(text), limit):
-        yield text[start : start + limit]
+from ...utils.chat import chunk_message
 
 
 @require_internal_auth
@@ -131,9 +126,10 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
             " | ".join(payload.sources),
         )
 
+    incoming_template = msg_text("incoming_message", language)
     escaped_answer = html.escape(answer_text)
-    chunks = list(_chunk_message(escaped_answer))
-    rendered_len = sum(len(chunk) for chunk in chunks)
+    chunks = list(chunk_message(escaped_answer, template=incoming_template, sender_name=settings.BOT_NAME))
+    rendered_len = sum(len(incoming_template.format(name=settings.BOT_NAME, message=chunk)) for chunk in chunks)
     truncated = "yes" if len(chunks) > 1 else "no"
     logger.info(
         "bot.send out_len={} rendered_len={} truncated={}",
@@ -144,7 +140,7 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
 
     try:
         for chunk in chunks:
-            message_text = msg_text("incoming_message", language).format(name=settings.BOT_NAME, message=chunk)
+            message_text = incoming_template.format(name=settings.BOT_NAME, message=chunk)
             await bot.send_message(
                 chat_id=profile.tg_id,
                 text=message_text,

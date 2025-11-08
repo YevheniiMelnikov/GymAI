@@ -470,8 +470,9 @@ class StorageService:
         else:
             logger.info("kb_hashstore_sanitation_skipped reason=no_md5_entries_found")
 
+    @staticmethod
     def augment_metadata(
-        self, metadata: Mapping[str, Any] | None, dataset_alias: str | None, *, digest_sha: str
+        metadata: Mapping[str, Any] | None, dataset_alias: str | None, *, digest_sha: str
     ) -> dict[str, Any]:
         payload: dict[str, Any] = {}
         if metadata:

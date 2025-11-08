@@ -397,13 +397,10 @@ class CoachAgent:
                     model=model_name,
                 )
             if plain is None:
-                fallback_text = (
-                    "Focus on consistent training, progressive overload, balanced nutrition, and quality recovery."
-                )
                 logger.warning(
-                    "agent.ask general_fallback_used client_id={} reason=llm_unavailable".format(deps.client_id)
+                    "agent.ask general_fallback_failed client_id={} reason=llm_unavailable".format(deps.client_id)
                 )
-                return QAResponse(answer=fallback_text, sources=["general_knowledge"])
+                raise AgentExecutionAborted("ask_ai_unavailable", reason="ask_ai_unavailable")
             try:
                 normalized = cls._enforce_fitness_domain(
                     prompt,
@@ -416,13 +413,10 @@ class CoachAgent:
                     deps=deps,
                 )
             except AgentExecutionAborted:
-                fallback_text = (
-                    "Focus on consistent training, progressive overload, balanced nutrition, and quality recovery."
-                )
                 logger.warning(
-                    "agent.ask general_fallback_used client_id={} reason=empty_llm_response".format(deps.client_id)
+                    "agent.ask general_fallback_failed client_id={} reason=empty_llm_response".format(deps.client_id)
                 )
-                return QAResponse(answer=fallback_text, sources=["general_knowledge"])
+                raise AgentExecutionAborted("ask_ai_unavailable", reason="ask_ai_unavailable")
             normalized.sources = ["general_knowledge"]
             return normalized
 
@@ -772,6 +766,7 @@ class CoachAgent:
         max_tokens: int,
         model: str | None = None,
         continuation_attempt: int = 0,
+        continuation_context: str | None = None,
     ) -> QAResponse | None:
         max_attempts = 2 if settings.AI_COACH_EMPTY_COMPLETION_RETRY else 1
         model_id = model or settings.AGENT_MODEL
@@ -787,7 +782,15 @@ class CoachAgent:
                 )
             current_user_prompt = user_prompt
             if continuation_attempt > 0:
-                current_user_prompt = f"{user_prompt}\n\nContinue from here: {full_content}"
+                previous = continuation_context if continuation_context is not None else full_content
+                if previous:
+                    snippet = cls._truncate_text(previous, 1200)
+                    current_user_prompt = (
+                        f"{user_prompt}\n\n"
+                        "Continue the previous answer from where it stopped. "
+                        "Do not repeat the text below; only add the missing continuation.\n"
+                        f"Already sent to the client:\n{snippet}"
+                    )
 
             try:
                 response = await cls._run_completion(
@@ -825,6 +828,7 @@ class CoachAgent:
                     max_tokens=getattr(settings, "AI_COACH_CONTINUATION_MAX_TOKENS", 600),
                     model=model,
                     continuation_attempt=1,
+                    continuation_context=full_content,
                 )
                 if continuation_response and continuation_response.answer:
                     full_content += continuation_response.answer
@@ -836,22 +840,34 @@ class CoachAgent:
                 break  # Break if not length or already a continuation
 
         if full_content:
+            raw_text = full_content.strip()
             answer, sources = cls._parse_fallback_content(
                 full_content,
                 entry_ids,
                 client_id=client_id,
             )
+            if not answer.strip() and raw_text:
+                logger.debug(
+                    "llm.partial_content_used client_id={} reason={} model={} preserved_len={}".format(
+                        client_id,
+                        final_finish_reason,
+                        model_id,
+                        len(raw_text),
+                    )
+                )
+                answer = raw_text
+                sources = list(entry_ids) or ["general_knowledge"]
             if answer.strip():
                 normalized_sources = list(sources) if sources else list(entry_ids) or ["general_knowledge"]
                 return QAResponse(answer=answer, sources=normalized_sources)
-        logger.warning(
-            ("llm.response.empty client_id={} reason={} model={} final_content_len={}").format(
-                client_id,
-                final_finish_reason,
-                model_id,
-                len(full_content),
-            )
+        log_message = ("llm.response.empty client_id={} reason={} model={} final_content_len={}").format(
+            client_id,
+            final_finish_reason,
+            model_id,
+            len(full_content),
         )
+        log_fn = logger.info if final_finish_reason == "length" else logger.warning
+        log_fn(log_message)
         return None
 
     @classmethod
@@ -919,32 +935,56 @@ class CoachAgent:
             truncated = truncated[:last_space]
         return f"{truncated.rstrip()}..."
 
+    @classmethod
+    def _collect_text_fragments(cls, value: Any) -> list[str]:
+        fragments: list[str] = []
+        cls._append_text_fragment(value, fragments)
+        return fragments
+
+    @classmethod
+    def _append_text_fragment(cls, value: Any, fragments: list[str]) -> None:
+        if value is None:
+            return
+        if isinstance(value, (bytes, bytearray)):
+            text = value.decode("utf-8", "ignore").strip()
+            if text:
+                fragments.append(text)
+            return
+        if isinstance(value, str):
+            text = value.strip()
+            if text:
+                fragments.append(text)
+            return
+        if hasattr(value, "text") and not isinstance(value, (str, bytes)):
+            cls._append_text_fragment(getattr(value, "text"), fragments)
+            return
+        if hasattr(value, "content") and not isinstance(value, (str, bytes)):
+            cls._append_text_fragment(getattr(value, "content"), fragments)
+            return
+        if isinstance(value, Mapping):
+            for key in ("text", "content", "value", "message"):
+                if key in value:
+                    cls._append_text_fragment(value[key], fragments)
+            return
+        if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+            for item in value:
+                cls._append_text_fragment(item, fragments)
+            return
+
     @staticmethod
     def _extract_message_content(content: Any) -> str:
-        if isinstance(content, str):
-            return content.strip()
+        fragments = CoachAgent._collect_text_fragments(content)
+        if fragments:
+            return "\n".join(fragments)
         if hasattr(content, "model_dump"):
             try:
                 dumped = content.model_dump()
             except Exception:  # noqa: BLE001
                 dumped = None
-            if isinstance(dumped, dict):
-                maybe_text = dumped.get("text")
-                if isinstance(maybe_text, str):
-                    return maybe_text.strip()
-        if isinstance(content, Sequence) and not isinstance(content, (str, bytes)):
-            parts: list[str] = []
-            for part in content:
-                if isinstance(part, Mapping):
-                    maybe_text = part.get("text") or part.get("content")
-                    if isinstance(maybe_text, str) and maybe_text.strip():
-                        parts.append(maybe_text.strip())
-                elif hasattr(part, "text"):
-                    candidate = getattr(part, "text")
-                    if isinstance(candidate, str) and candidate.strip():
-                        parts.append(candidate.strip())
-            if parts:
-                return "\n".join(parts)
+            if dumped:
+                fragments = CoachAgent._collect_text_fragments(dumped)
+                if fragments:
+                    return "\n".join(fragments)
         return ""
 
     @staticmethod
@@ -1213,14 +1253,14 @@ class CoachAgent:
         if not isinstance(payload, Mapping):
             return ""
         message = payload.get("message")
-        text = cls._coerce_text_candidate(message)
-        if text:
-            return text
+        fragments = cls._collect_text_fragments(message)
+        if fragments:
+            return "\n".join(fragments)
         for key in ("content", "text"):
             candidate = payload.get(key)
-            text = cls._coerce_text_candidate(candidate)
-            if text:
-                return text
+            fragments = cls._collect_text_fragments(candidate)
+            if fragments:
+                return "\n".join(fragments)
         return ""
 
     @classmethod
@@ -1302,10 +1342,18 @@ class CoachAgent:
                     raw_keys or "na",
                 )
             )
+        finish_reason = ""
+        if choices:
+            finish_reason = str(getattr(choices[0], "finish_reason", "") or "")
+        if not extracted and client_id is not None and finish_reason == "length":
+            logger.warning(
+                "llm.parse empty_content client_id={} finish_reason=length keys={} snapshot={}".format(
+                    client_id,
+                    raw_keys or "na",
+                    raw_snapshot,
+                )
+            )
         if client_id is not None:
-            finish_reason = ""
-            if choices:
-                finish_reason = str(getattr(choices[0], "finish_reason", "") or "")
             preview = CoachAgent._message_preview(message_obj)
             logger.debug(
                 "llm.parse client_id={} empty=True reason=no_content finish_reason={} {}".format(
@@ -1392,6 +1440,7 @@ class CoachAgent:
         client_id: int,
     ) -> tuple[str, list[str]]:
         normalized_entries = [item for item in entry_ids if item]
+        default_sources = list(normalized_entries) if normalized_entries else ["general_knowledge"]
         text = content.strip()
         if not text:
             return "", []
@@ -1408,18 +1457,31 @@ class CoachAgent:
                 normalized_sources: list[str] = []
                 if isinstance(sources_payload, Sequence) and not isinstance(sources_payload, (str, bytes)):
                     for item in sources_payload:
-                        text = str(item).strip()
-                        if text:
-                            normalized_sources.append(text)
+                        text_item = str(item).strip()
+                        if text_item:
+                            normalized_sources.append(text_item)
                 if normalized_sources:
                     valid = {entry for entry in normalized_entries}
                     normalized_sources = [item for item in normalized_sources if item in valid]
-                if not normalized_sources:
-                    normalized_sources = list(normalized_entries) if normalized_entries else ["general_knowledge"]
-                return answer, normalized_sources
-        answer = text
-        default_sources = list(normalized_entries) if normalized_entries else ["general_knowledge"]
-        return answer, default_sources
+                else:
+                    normalized_sources = list(normalized_entries)
+                candidate_sources = normalized_sources or default_sources
+                if answer:
+                    return answer, candidate_sources
+                fallback_keys = ("response", "result", "text", "content", "message")
+                for key in fallback_keys:
+                    candidate = payload.get(key)
+                    candidate_text = str(candidate).strip() if isinstance(candidate, str) else ""
+                    if candidate_text:
+                        logger.debug(
+                            "agent.ask fallback_json_field client_id={} field={} len={}".format(
+                                client_id,
+                                key,
+                                len(candidate_text),
+                            )
+                        )
+                        return candidate_text, candidate_sources
+        return text, default_sources
 
     @classmethod
     def _enforce_fitness_domain(
