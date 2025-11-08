@@ -10,6 +10,8 @@ from pydantic import ValidationError
 
 from bot.handlers.internal.auth import require_internal_auth
 from bot.handlers.internal.schemas import AiAnswerNotify
+from bot.keyboards import ask_ai_again_kb
+from bot.utils.chat import chunk_message
 from bot.states import States
 from bot.texts.text_manager import msg_text
 from config.app_settings import settings
@@ -19,7 +21,6 @@ from core.services import APIService
 from core.schemas import Profile
 
 from .tasks import _resolve_client_and_profile
-from ...utils.chat import chunk_message
 
 
 @require_internal_auth
@@ -139,14 +140,17 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
     )
 
     try:
-        for chunk in chunks:
+        ask_again_keyboard = ask_ai_again_kb(language)
+        for index, chunk in enumerate(chunks):
             message_text = incoming_template.format(name=settings.BOT_NAME, message=chunk)
+            reply_markup = ask_again_keyboard if index == len(chunks) - 1 else None
             await bot.send_message(
                 chat_id=profile.tg_id,
                 text=message_text,
                 parse_mode=ParseMode.HTML,
                 disable_web_page_preview=True,
                 reply_to_message_id=reply_to_message_id,
+                reply_markup=reply_markup,
             )
     except Exception as exc:  # noqa: BLE001
         await state_tracker.mark_failed(request_id, f"send_failed:{exc!s}")

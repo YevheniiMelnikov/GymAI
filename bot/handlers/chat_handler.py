@@ -2,7 +2,7 @@ from contextlib import suppress
 from typing import cast
 
 from loguru import logger
-from aiogram import Bot, Router
+from aiogram import Bot, Router, F
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, FSInputFile
@@ -10,6 +10,7 @@ from pathlib import Path
 
 from bot.keyboards import new_message_kb, workout_results_kb
 from bot.states import States
+from bot.utils.ask_ai import start_ask_ai_prompt
 from core.cache import Cache
 from core.enums import ClientStatus
 from core.schemas import Profile
@@ -117,11 +118,8 @@ async def contact_coach(message: Message, state: FSMContext, bot: Bot) -> None:
     await show_main_menu(message, profile, state)
 
 
-@chat_router.callback_query()
+@chat_router.callback_query(F.data.startswith("yes_") | F.data.startswith("no_"))
 async def have_you_trained(callback_query: CallbackQuery, state: FSMContext) -> None:
-    if not callback_query.data or not (callback_query.data.startswith("yes_") or callback_query.data.startswith("no_")):
-        return
-
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     assert profile is not None
@@ -166,11 +164,8 @@ async def have_you_trained(callback_query: CallbackQuery, state: FSMContext) -> 
         logger.debug(f"User {profile.id} reported no training on {weekday}")
 
 
-@chat_router.callback_query()
+@chat_router.callback_query(F.data.in_({"quit", "later"}))
 async def close_notification(callback_query: CallbackQuery, state: FSMContext) -> None:
-    if not callback_query.data or callback_query.data not in ["quit", "later"]:
-        return
-
     if callback_query.message and isinstance(callback_query.message, Message):
         await del_msg(callback_query.message)
     data = await state.get_data()
@@ -181,11 +176,8 @@ async def close_notification(callback_query: CallbackQuery, state: FSMContext) -
             await show_main_menu(cast(Message, callback_query.message), profile, state)
 
 
-@chat_router.callback_query()
+@chat_router.callback_query(F.data == "subscription_view")
 async def subscription_view(callback_query: CallbackQuery, state: FSMContext) -> None:
-    if callback_query.data != "subscription_view":
-        return
-
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     assert profile is not None
@@ -202,11 +194,8 @@ async def subscription_view(callback_query: CallbackQuery, state: FSMContext) ->
     await show_exercises_menu(callback_query, state, profile)
 
 
-@chat_router.callback_query()
+@chat_router.callback_query(F.data.startswith("answer"))
 async def answer_message(callback_query: CallbackQuery, state: FSMContext) -> None:
-    if not callback_query.data or not callback_query.data.startswith("answer"):
-        return
-
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     assert profile is not None
@@ -237,11 +226,8 @@ async def answer_message(callback_query: CallbackQuery, state: FSMContext) -> No
     await state.set_state(state_to_set)
 
 
-@chat_router.callback_query()
+@chat_router.callback_query(F.data.in_({"previous", "next"}))
 async def navigate_days(callback_query: CallbackQuery, state: FSMContext) -> None:
-    if not callback_query.data or callback_query.data not in ["previous", "next"]:
-        return
-
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     assert profile is not None
@@ -262,19 +248,13 @@ async def navigate_days(callback_query: CallbackQuery, state: FSMContext) -> Non
     await program_menu_pagination(state, callback_query)
 
 
-@chat_router.callback_query()
+@chat_router.callback_query(F.data.startswith("edit_"))
 async def edit_subscription(callback_query: CallbackQuery, state: FSMContext) -> None:
-    if not callback_query.data or not callback_query.data.startswith("edit_"):
-        return
-
     await edit_subscription_exercises(callback_query, state)
 
 
-@chat_router.callback_query()
+@chat_router.callback_query(F.data.startswith("create"))
 async def create_workouts(callback_query: CallbackQuery, state: FSMContext) -> None:
-    if not callback_query.data or not callback_query.data.startswith("create"):
-        return
-
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     assert profile is not None
@@ -292,3 +272,22 @@ async def create_workouts(callback_query: CallbackQuery, state: FSMContext) -> N
         with suppress(TelegramBadRequest):
             if callback_query.message and isinstance(callback_query.message, Message):
                 await del_msg(callback_query.message)
+
+
+@chat_router.callback_query(F.data.startswith("ask_ai_again"))
+async def ask_ai_repeat(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    profile_data = data.get("profile")
+    if not profile_data:
+        await callback_query.answer()
+        return
+    profile = Profile.model_validate(profile_data)
+    handled = await start_ask_ai_prompt(
+        callback_query,
+        profile,
+        state,
+        delete_origin=False,
+        show_balance_menu_on_insufficient=False,
+    )
+    if handled:
+        await callback_query.answer()

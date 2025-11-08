@@ -21,9 +21,7 @@ from ai_coach.types import CoachMode
 from ..schemas import ProgramPayload
 from core.services import get_gif_manager
 
-
-from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
-from ai_coach.agent.knowledge.context import current_kb, get_or_create_kb
+from ai_coach.agent.utils import ProgramAdapter, get_knowledge_base
 
 
 toolset = FunctionToolset()
@@ -41,13 +39,6 @@ TOOL_ALLOWED_MODES: dict[str, set[CoachMode]] = {
     "tool_save_program": {CoachMode.program, CoachMode.update},
     "tool_create_subscription": {CoachMode.subscription},
 }
-
-
-def _kb() -> KnowledgeBase:
-    existing = current_kb()
-    if existing is not None:
-        return existing
-    return get_or_create_kb()
 
 
 def _tool_timeout(tool_name: str) -> float:
@@ -136,7 +127,7 @@ async def tool_search_knowledge(
     k: int = 6,
 ) -> list[str]:
     """Search client and global knowledge with top-k limit."""
-    kb = _kb()
+    kb = get_knowledge_base()
 
     tool_name = "tool_search_knowledge"
     deps, skipped, cached = _start_tool(ctx, tool_name)
@@ -153,6 +144,7 @@ async def tool_search_knowledge(
         deps.knowledge_base_empty = True
         deps.last_knowledge_query = normalized_query
         deps.last_knowledge_empty = True
+        deps.kb_used = False
         logger.debug(
             f"knowledge_search_skipped client_id={client_id} query='{normalized_query[:80]}' reason=prompt_guard"
         )
@@ -160,6 +152,7 @@ async def tool_search_knowledge(
     if deps.knowledge_base_empty:
         deps.last_knowledge_query = normalized_query
         deps.last_knowledge_empty = True
+        deps.kb_used = False
         logger.info(
             f"knowledge_search_aborted client_id={client_id} query='{normalized_query[:80]}' reason=knowledge_base_empty"
         )
@@ -168,6 +161,7 @@ async def tool_search_knowledge(
         logger.debug(
             f"knowledge_search_repeat client_id={client_id} query='{normalized_query[:80]}' reason=empty_previous"
         )
+        deps.kb_used = False
         return _cache_result(deps, tool_name, [])
 
     async def _load_fallback(reason: str) -> list[str]:
@@ -192,6 +186,7 @@ async def tool_search_knowledge(
         if trimmed:
             deps.last_knowledge_empty = False
             deps.knowledge_base_empty = False
+            deps.kb_used = True
             logger.info(
                 "knowledge_search_{}_fallback client_id={} query='{}' entries={}".format(
                     reason,
@@ -203,6 +198,7 @@ async def tool_search_knowledge(
             return _cache_result(deps, tool_name, trimmed)
         deps.last_knowledge_empty = True
         deps.knowledge_base_empty = True
+        deps.kb_used = False
         logger.info(
             "knowledge_search_{} client_id={} query='{}' detail=no_entries".format(
                 reason,
@@ -241,6 +237,7 @@ async def tool_search_knowledge(
     if snippets:
         deps.last_knowledge_empty = False
         deps.knowledge_base_empty = False
+        deps.kb_used = True
         logger.debug(f"tool_search_knowledge results={len(snippets)}")
         texts = [snippet.text for snippet in snippets]
         return _cache_result(deps, tool_name, texts)
@@ -254,7 +251,7 @@ async def tool_get_chat_history(
     limit: int = 20,
 ) -> list[str]:
     """Load recent chat messages for context."""
-    kb = _kb()
+    kb = get_knowledge_base()
     tool_name = "tool_get_chat_history"
     deps, skipped, cached = _start_tool(ctx, tool_name)
     timeout = _tool_timeout("tool_get_chat_history")
@@ -292,7 +289,6 @@ async def tool_save_program(
 ) -> Program:
     """Persist generated plan for the current client."""
     from core.services import APIService
-    from .coach import ProgramAdapter
 
     tool_name = "tool_save_program"
     deps, skipped, cached = _start_tool(ctx, tool_name)

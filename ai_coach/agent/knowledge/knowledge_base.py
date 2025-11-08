@@ -5,6 +5,7 @@ from hashlib import sha256
 from time import monotonic
 from typing import Any, ClassVar, Mapping, TYPE_CHECKING
 
+import cognee
 from loguru import logger
 
 from ai_coach.agent.knowledge.base_knowledge_loader import KnowledgeLoader
@@ -718,9 +719,50 @@ class KnowledgeBase:
         return self._projection_health.get(alias)
 
     async def prune(self) -> None:
+        from ai_coach.agent.knowledge.utils.hash_store import HashStore
+        from cognee.modules.data.deletion import prune_data as cognee_prune_data
+        from cognee.modules.data.deletion import prune_system as cognee_prune_system
+
         logger.info("cognee_prune.started")
-        # TODO: Implement actual pruning logic here, delegating to relevant services.
-        pass
+        steps_completed: list[str] = []
+        failures: list[str] = []
+
+        try:
+            await cognee_prune_data()
+            steps_completed.append("data_storage")
+            logger.info("cognee_prune.data_storage_cleared")
+        except Exception as exc:  # noqa: BLE001
+            failures.append(f"data:{exc}")
+            logger.warning(f"cognee_prune.data_failed detail={exc}")
+
+        try:
+            await cognee_prune_system(graph=True, vector=True, metadata=False, cache=True)
+            steps_completed.append("system_cache")
+            logger.info("cognee_prune.system_cache_cleared graph=True vector=True cache=True metadata=False")
+        except Exception as exc:  # noqa: BLE001
+            failures.append(f"system:{exc}")
+            logger.warning(f"cognee_prune.system_failed detail={exc}")
+
+        try:
+            datasets = await HashStore.list_all_datasets()
+            if datasets:
+                await asyncio.gather(*(HashStore.clear(dataset) for dataset in datasets))
+            steps_completed.append("hash_store")
+            logger.info(f"cognee_prune.hash_store_cleared datasets={len(datasets)}")
+        except Exception as exc:  # noqa: BLE001
+            failures.append(f"hash_store:{exc}")
+            logger.warning(f"cognee_prune.hash_store_failed detail={exc}")
+
+        type(self.dataset_service)._PROJECTED_DATASETS.clear()
+        type(self.dataset_service)._DATASET_IDS.clear()
+        type(self.dataset_service)._DATASET_ALIASES.clear()
+        self._projection_health.clear()
+        self.storage_service._STORAGE_CACHE.clear()
+
+        if failures:
+            raise RuntimeError(f"cognee_prune_incomplete steps={steps_completed} errors={failures}")
+
+        logger.info("cognee_prune.completed steps={}".format(",".join(steps_completed)))
 
     @staticmethod
     def _is_graph_missing_error(exc: Exception) -> bool:

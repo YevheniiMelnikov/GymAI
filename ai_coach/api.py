@@ -12,8 +12,8 @@ import os
 
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from ai_coach.agent.knowledge.schemas import ProjectionStatus
-from ai_coach.agent.knowledge.context import current_kb, get_or_create_kb
 from ai_coach.agent import AgentDeps, CoachAgent  # pyrefly: ignore[missing-module-attribute]
+from ai_coach.agent.utils import get_knowledge_base
 from ai_coach.exceptions import AgentExecutionAborted
 from core.exceptions import UserServiceError
 from core.services import APIService
@@ -30,13 +30,6 @@ CoachAction = Callable[[AskCtx], Awaitable[Program | Subscription | QAResponse |
 DEFAULT_WORKOUT_DAYS: tuple[str, ...] = ("Пн", "Ср", "Пт", "Сб")
 
 dedupe_cache = TTLCache(maxsize=2048, ttl=15)
-
-
-def _kb() -> KnowledgeBase:
-    existing = current_kb()
-    if existing is not None:
-        return existing
-    return get_or_create_kb()
 
 
 @app.on_event("startup")
@@ -126,7 +119,7 @@ async def health() -> dict[str, str]:
 
 @app.get("/health/kb")
 async def health_kb() -> dict[str, Any]:
-    kb = _kb()
+    kb = get_knowledge_base()
     storage_path = settings.COGNEE_STORAGE_PATH
     storage_ok = os.path.exists(storage_path) and os.access(storage_path, os.W_OK)
     user = getattr(kb, "_user", None)
@@ -191,7 +184,7 @@ async def debug_llm_echo(
 @app.get("/internal/kb/dump")
 async def kb_dump(credentials: HTTPBasicCredentials = Depends(security)) -> dict[str, Any]:
     _validate_refresh_credentials(credentials)
-    kb = _kb()
+    kb = get_knowledge_base()
     ds = kb.dataset_service
     user = getattr(kb, "_user", None) or await ds.get_cognee_user()
     global_alias = ds.alias_for_dataset("kb_global")
@@ -231,7 +224,7 @@ async def kb_dump(credentials: HTTPBasicCredentials = Depends(security)) -> dict
 @app.get("/internal/kb/audit")
 async def kb_audit(datasets: str, credentials: HTTPBasicCredentials = Depends(security)) -> dict[str, Any]:
     _validate_refresh_credentials(credentials)
-    kb = _kb()
+    kb = get_knowledge_base()
     ds = kb.dataset_service
     user = getattr(kb, "_user", None) or await ds.get_cognee_user()
     requested = [item.strip() for item in (datasets or "").split(",") if item.strip()]
@@ -343,7 +336,7 @@ async def ask(
 
         try:
             if mode == CoachMode.ask_ai and data.prompt:
-                kb_for_chat = _kb()
+                kb_for_chat = get_knowledge_base()
                 kb_chat_dataset = kb_for_chat.chat_dataset_name(data.client_id)
                 await kb_for_chat.add_text(
                     dataset=kb_chat_dataset,
@@ -423,7 +416,7 @@ async def ask(
                     origin,
                 )
                 if isinstance(answer, str):
-                    kb = kb_for_chat or _kb()
+                    kb = kb_for_chat or get_knowledge_base()
                     await kb.save_client_message(data.prompt or "", client_id=data.client_id)
                     await kb.save_ai_message(answer, client_id=data.client_id)
             else:
@@ -529,7 +522,7 @@ async def refresh_knowledge(credentials: HTTPBasicCredentials = Depends(security
     _validate_refresh_credentials(credentials)
 
     try:
-        kb = _kb()
+        kb = get_knowledge_base()
         await kb.refresh()
     except Exception as e:  # pragma: no cover - log unexpected errors
         logger.exception(f"Knowledge refresh failed: {e}")
@@ -539,7 +532,7 @@ async def refresh_knowledge(credentials: HTTPBasicCredentials = Depends(security
 
 async def _execute_prune() -> dict[str, str]:
     try:
-        kb = _kb()
+        kb = get_knowledge_base()
         await kb.prune()
     except UserServiceError as exc:
         logger.error(f"Knowledge prune failed: {exc}")

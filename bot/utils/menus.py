@@ -11,7 +11,7 @@ from aiogram.types import CallbackQuery, Message, FSInputFile
 from pathlib import Path
 
 from bot import keyboards as kb
-from bot.keyboards import subscription_manage_kb, program_edit_kb, program_view_kb
+from bot.keyboards import subscription_manage_kb, program_edit_kb, program_view_kb, workout_type_kb
 from bot.utils.profiles import fetch_user, answer_profile, get_assigned_coach
 from bot.utils.credits import uah_to_credits, available_packages, available_ai_services
 from decimal import Decimal
@@ -503,6 +503,8 @@ async def show_ai_services(
     profile: Profile,
     state: FSMContext,
     allowed_services: Collection[str] | None = None,
+    *,
+    auto_select_single: bool = False,
 ) -> None:
     language = cast(str, profile.language or "eng")
     client = await Cache.client.get_client(profile.id)
@@ -517,6 +519,16 @@ async def show_ai_services(
         filtered_services = [service for service in services if service.name in allowed_set]
         if filtered_services:
             services = filtered_services
+    if auto_select_single and len(services) == 1:
+        handled = await process_ai_service_selection(
+            callback_query,
+            profile,
+            state,
+            service_name=services[0].name,
+        )
+        if handled:
+            await del_msg(callback_query)
+        return
     await state.set_state(States.choose_ai_service)
     await answer_msg(
         callback_query,
@@ -525,6 +537,51 @@ async def show_ai_services(
         reply_markup=kb.ai_services_kb(language, [p.name for p in services]),
     )
     await del_msg(callback_query)
+
+
+async def process_ai_service_selection(
+    callback_query: CallbackQuery,
+    profile: Profile,
+    state: FSMContext,
+    *,
+    service_name: str,
+) -> bool:
+    language = cast(str, profile.language or "eng")
+    data = await state.get_data()
+    client_data = data.get("client")
+    if not client_data:
+        await callback_query.answer(msg_text("unexpected_error", language), show_alert=True)
+        return False
+
+    client = Client.model_validate(client_data)
+    services = {service.name: service.credits for service in available_ai_services()}
+    required = services.get(service_name)
+    if required is None:
+        await callback_query.answer(msg_text("unexpected_error", language), show_alert=True)
+        return False
+
+    if client.credits < required:
+        await callback_query.answer(msg_text("not_enough_credits", language), show_alert=True)
+        await show_balance_menu(callback_query, profile, state)
+        return False
+
+    workout_type = data.get("workout_type")
+    await state.update_data(
+        ai_service=service_name,
+        required=required,
+    )
+    if workout_type is None:
+        await state.set_state(States.workout_type)
+        await answer_msg(
+            callback_query,
+            msg_text("workout_type", language),
+            reply_markup=workout_type_kb(language),
+        )
+    else:
+        await state.update_data(workout_type=workout_type)
+        await state.set_state(States.enter_wishes)
+        await answer_msg(callback_query, msg_text("enter_wishes", language))
+    return True
 
 
 async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, profile: Profile) -> None:

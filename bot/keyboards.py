@@ -203,6 +203,12 @@ def ask_ai_prompt_kb(lang: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
+def ask_ai_again_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [[builder.add("ask_ai_again", "ask_ai_again")]]
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
 def subscription_action_kb(lang: str, webapp_url: str | None = None) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons: list[list[KbBtn]] = []
@@ -286,6 +292,7 @@ def workout_type_kb(lang: str) -> KbMarkup:
     buttons = [
         [builder.add("gym_workout", "gym")],
         [builder.add("home_workout", "home")],
+        [builder.add("prev_menu", "workouts_back")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 

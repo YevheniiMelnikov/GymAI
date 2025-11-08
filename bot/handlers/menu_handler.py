@@ -35,6 +35,7 @@ from bot.utils.menus import (
     clients_menu_pagination,
     show_balance_menu,
     show_ai_services,
+    process_ai_service_selection,
 )
 from bot.utils.menus import has_human_coach_subscription
 from bot.utils.profiles import assign_coach, get_assigned_coach
@@ -47,7 +48,6 @@ from bot.keyboards import payment_kb
 from bot.utils.credits import available_packages
 from bot.utils.ai_coach import enqueue_workout_plan_generation
 from core.enums import WorkoutPlanType, WorkoutType
-from bot.utils.credits import available_ai_services
 from core.utils.idempotency import acquire_once
 
 menu_router = Router()
@@ -155,37 +155,14 @@ async def ai_service_choice(callback_query: CallbackQuery, state: FSMContext) ->
         return
 
     if cb_data.startswith("ai_service_"):
-        client_data = data.get("client")
-        if not client_data:
-            await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
-            return
-        client = Client.model_validate(client_data)
-
-        service = cb_data.removeprefix("ai_service_")
-        services = {s.name: s.credits for s in available_ai_services()}
-        required = services.get(service, 0)
-        if client.credits < required:
-            await callback_query.answer(msg_text("not_enough_credits", profile.language), show_alert=True)
-            await show_balance_menu(callback_query, profile, state)
-            return
-
-        workout_type = data.get("workout_type")
-        await state.update_data(
-            ai_service=service,
-            required=required,
+        handled = await process_ai_service_selection(
+            callback_query,
+            profile,
+            state,
+            service_name=cb_data.removeprefix("ai_service_"),
         )
-        if workout_type is None:
-            await state.set_state(States.workout_type)
-            await answer_msg(
-                callback_query,
-                msg_text("workout_type", profile.language),
-                reply_markup=workout_type_kb(profile.language),
-            )
-        else:
-            await state.update_data(workout_type=workout_type)
-            await state.set_state(States.enter_wishes)
-            await answer_msg(callback_query, msg_text("enter_wishes", profile.language))
-        await del_msg(callback_query)
+        if handled:
+            await del_msg(callback_query)
         return
 
 
