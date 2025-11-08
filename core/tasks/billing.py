@@ -1,7 +1,5 @@
 """Billing-related Celery tasks."""
 
-from __future__ import annotations
-
 import asyncio
 from datetime import date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import importlib.util
 from pathlib import Path
 from types import ModuleType
@@ -8,7 +6,7 @@ from ai_coach.agent import AgentDeps, CoachAgent
 from config.app_settings import settings
 
 
-MODULE_PATH: Path = Path(__file__).resolve().parents[3] / "ai_coach" / "language.py"
+MODULE_PATH: Path = Path(__file__).resolve().parents[3] / "ai_coach" / "utils.py"
 SPEC = importlib.util.spec_from_file_location("ai_coach.language", MODULE_PATH)
 assert SPEC is not None and SPEC.loader is not None
 MODULE: ModuleType = importlib.util.module_from_spec(SPEC)
@@ -39,3 +37,10 @@ def test_agent_lang_returns_locale_code() -> None:
 def test_agent_lang_uses_default_when_missing() -> None:
     deps = AgentDeps(client_id=2, locale=None)
     assert CoachAgent._lang(deps) == settings.DEFAULT_LANG
+
+
+def test_language_context_returns_descriptor() -> None:
+    deps = AgentDeps(client_id=3, locale="ua")
+    code, descriptor = CoachAgent._language_context(deps)
+    assert code == "uk"
+    assert "Ukrainian" in descriptor

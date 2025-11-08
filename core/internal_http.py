@@ -1,7 +1,8 @@
 """Utilities for authenticated calls to internal bot endpoints."""
 
-from __future__ import annotations
-
+import hmac
+import hashlib
+import time
 from typing import TYPE_CHECKING, Protocol, Union
 
 import httpx
@@ -19,23 +20,16 @@ class _SupportsInternalTimeout(Protocol):
     INTERNAL_HTTP_READ_TIMEOUT: float
 
 
-def build_internal_auth_headers(
-    *,
-    internal_api_key: str | None,
-    fallback_api_key: str | None,
-) -> dict[str, str]:
-    """Return headers for calls protected by ``require_internal_auth``."""
-
-    headers: dict[str, str] = {}
-    trimmed_internal = (internal_api_key or "").strip()
-    trimmed_fallback = (fallback_api_key or "").strip()
-
-    if trimmed_internal:
-        headers["X-Internal-Api-Key"] = trimmed_internal
-    elif trimmed_fallback:
-        headers["Authorization"] = f"Api-Key {trimmed_fallback}"
-
-    return headers
+def build_internal_hmac_auth_headers(*, key_id: str, secret_key: str, body: bytes) -> dict[str, str]:
+    """Return HMAC-signed headers for an internal request."""
+    now = str(int(time.time()))
+    message = now.encode() + b"." + body
+    signature = hmac.new(secret_key.encode(), message, hashlib.sha256).hexdigest()
+    return {
+        "X-Key-Id": key_id,
+        "X-TS": now,
+        "X-Sig": signature,
+    }
 
 
 def internal_request_timeout(settings: _SupportsInternalTimeout) -> TimeoutValue:
@@ -55,6 +49,6 @@ def internal_request_timeout(settings: _SupportsInternalTimeout) -> TimeoutValue
 
 
 __all__ = [
-    "build_internal_auth_headers",
+    "build_internal_hmac_auth_headers",
     "internal_request_timeout",
 ]

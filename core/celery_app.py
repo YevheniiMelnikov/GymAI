@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import os
 from urllib.parse import urlsplit, urlunsplit
 
@@ -21,7 +19,13 @@ def _redis_backend_url() -> str:
 
 
 def _broker_url() -> str:
-    return os.getenv("CELERY_BROKER_URL") or settings.RABBITMQ_URL
+    env_value = os.getenv("CELERY_BROKER_URL")
+    if env_value:
+        return env_value
+    broker = settings.RABBITMQ_URL
+    if not broker:
+        raise RuntimeError("RABBITMQ_URL must be configured")
+    return broker
 
 
 dead_letter_exchange: Exchange = Exchange("critical.dlx", type="topic", durable=True)
@@ -69,16 +73,39 @@ CRITICAL_TASK_ROUTES: dict[str, dict[str, str]] = {
 }
 
 AI_COACH_TASK_ROUTES: dict[str, dict[str, str]] = {
-    "core.tasks.ai_coach.generate_ai_workout_plan": {
+    "core.tasks.ai_coach.plans.generate_ai_workout_plan": {
         "queue": "ai_coach",
         "routing_key": "ai_coach",
     },
-    "core.tasks.ai_coach.update_ai_workout_plan": {
+    "core.tasks.ai_coach.plans.update_ai_workout_plan": {
         "queue": "ai_coach",
         "routing_key": "ai_coach",
     },
-    "core.tasks.ai_coach.ai_coach_echo": {"queue": "ai_coach", "routing_key": "ai_coach"},
-    "core.tasks.ai_coach.ai_coach_worker_report": {
+    "core.tasks.ai_coach.plans.notify_ai_plan_ready_task": {
+        "queue": "ai_coach",
+        "routing_key": "ai_coach",
+    },
+    "core.tasks.ai_coach.plans.handle_ai_plan_failure": {
+        "queue": "ai_coach",
+        "routing_key": "ai_coach",
+    },
+    "core.tasks.ai_coach.qa.ask_ai_question": {
+        "queue": "ai_coach",
+        "routing_key": "ai_coach",
+    },
+    "core.tasks.ai_coach.qa.notify_ai_answer_ready_task": {
+        "queue": "ai_coach",
+        "routing_key": "ai_coach",
+    },
+    "core.tasks.ai_coach.qa.handle_ai_question_failure": {
+        "queue": "ai_coach",
+        "routing_key": "ai_coach",
+    },
+    "core.tasks.ai_coach.maintenance.ai_coach_echo": {
+        "queue": "ai_coach",
+        "routing_key": "ai_coach",
+    },
+    "core.tasks.ai_coach.maintenance.ai_coach_worker_report": {
         "queue": "ai_coach",
         "routing_key": "ai_coach",
     },
@@ -94,11 +121,17 @@ CELERY_INCLUDE: tuple[str, ...] = (
     "core.tasks.billing",
     "core.tasks.bot_calls",
     "core.tasks.ai_coach",
+    "core.tasks.ai_coach.qa",
+    "core.tasks.ai_coach.plans",
+    "core.tasks.ai_coach.maintenance",
     "apps.payments.tasks",
 )
 
 app = Celery("gymbot", broker=_broker_url(), backend=_redis_backend_url())
-app.conf.update(
+app_conf = getattr(app, "conf", None)
+if app_conf is None:
+    raise RuntimeError("Celery configuration is not available")
+app_conf.update(
     task_serializer="json",
     accept_content=["json"],
     result_serializer="json",

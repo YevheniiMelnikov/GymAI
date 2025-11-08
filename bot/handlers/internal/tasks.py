@@ -26,8 +26,7 @@ from bot.utils.bot import get_webapp_url
 from core.services import APIService
 from bot.utils.ai_coach import enqueue_workout_plan_update
 from core.schemas import Client, DayExercises, Profile, Subscription
-from cognee.api.v1.prune import prune  # pyrefly: ignore[import-error]
-from core.ai_plan_state import AiPlanState
+from core.ai_coach.state.plan import AiPlanState
 from .auth import require_internal_auth
 
 
@@ -546,15 +545,3 @@ async def internal_ai_coach_plan_ready(request: web.Request) -> web.Response:
 
     asyncio.create_task(_runner(), name=f"ai-plan-ready-{request_id}")
     return web.json_response({"result": "accepted"}, status=202)
-
-
-@require_internal_auth
-async def internal_prune_cognee(request: web.Request) -> web.Response:
-    """Trigger Cognee prune to cleanup local data storage."""
-
-    try:
-        await prune.prune_data()
-        return web.json_response({"result": "ok"})
-    except Exception as e:  # noqa: BLE001
-        logger.exception(f"Cognee prune failed: {e}")
-        return web.json_response({"detail": str(e)}, status=500)

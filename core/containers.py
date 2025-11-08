@@ -12,6 +12,7 @@ from core.infra.profile_repository import HTTPProfileRepository
 from core.payment import PaymentProcessor, PaymentService
 from core.payment.types import CoachResolver, CreditService, PaymentNotifier
 from core.services.internal.ai_coach_service import AiCoachService
+from core.services.internal.client_service import ClientService
 from core.services.internal.profile_service import ProfileService
 from core.services.internal.workout_service import WorkoutService
 
@@ -38,6 +39,7 @@ class App(containers.DeclarativeContainer):
     profile_repository = providers.Factory(HTTPProfileRepository, client=http_client, settings=settings)
     payment_repository = providers.Factory(HTTPPaymentRepository, client=http_client, settings=settings)
     profile_service = providers.Factory(ProfileService, repository=profile_repository)
+    client_service = providers.Factory(ClientService, repository=profile_repository)
     payment_service = providers.Factory(PaymentService, repository=payment_repository, settings=settings)
     workout_service = providers.Factory(WorkoutService, client=http_client, settings=settings)
     ai_coach_service = providers.Factory(AiCoachService, client=http_client, settings=settings)

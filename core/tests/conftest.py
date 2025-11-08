@@ -351,6 +351,9 @@ function_mod.FunctionToolset = FunctionToolset
 toolsets_mod.function = function_mod
 sys.modules.setdefault("pydantic_ai.toolsets", toolsets_mod)
 sys.modules.setdefault("pydantic_ai.toolsets.function", function_mod)
+tools_mod = types.ModuleType("pydantic_ai.tools")
+tools_mod.ToolDefinition = type("ToolDefinition", (), {})
+sys.modules.setdefault("pydantic_ai.tools", tools_mod)
 docx_mod = types.ModuleType("docx")
 
 
@@ -389,6 +392,7 @@ loguru_mod.logger = types.SimpleNamespace(
     error=lambda *a, **k: None,
     exception=lambda *a, **k: None,
     success=lambda *a, **k: None,
+    log=lambda *a, **k: None,
 )
 sys.modules.setdefault("loguru", loguru_mod)
 settings_stub = types.SimpleNamespace(
@@ -422,6 +426,30 @@ settings_stub = types.SimpleNamespace(
     WEBHOOK_PATH="/telegram/webhook",
     AI_COACH_REFRESH_USER="admin",
     AI_COACH_REFRESH_PASSWORD="pass",
+    AI_COACH_MAX_TOOL_CALLS=5,
+    AI_COACH_GLOBAL_PROJECTION_TIMEOUT=45.0,
+    COGNEE_GLOBAL_DATASET="kb_global",
+    COGNEE_STORAGE_PATH="/tmp/cognee",
+    AI_COACH_URL="http://localhost/",
+    AI_COACH_TIMEOUT=10,
+    AI_COACH_REQUEST_TIMEOUT=5.0,
+    AI_COACH_DEFAULT_TOOL_TIMEOUT=5.0,
+    AI_COACH_SEARCH_TIMEOUT=5.0,
+    AI_COACH_HISTORY_TIMEOUT=5.0,
+    AI_COACH_PROGRAM_HISTORY_TIMEOUT=5.0,
+    AI_COACH_SAVE_TIMEOUT=5.0,
+    AI_COACH_FIRST_PASS_MAX_TOKENS=900,
+    AI_COACH_RETRY_MAX_TOKENS=600,
+    AI_COACH_EMPTY_COMPLETION_RETRY=True,
+    AI_COACH_PRIMARY_CONTEXT_LIMIT=2200,
+    AI_COACH_RETRY_CONTEXT_LIMIT=1400,
+    AI_COACH_ATTACH_GIFS_MIN_BUDGET=0.0,
+    AI_COACH_ASK_MAX_SECONDS=30.0,
+    AI_COACH_ASK_MAX_TOOL_CALLS=3,
+    BACKUP_RETENTION_DAYS=7,
+    AGENT_MODEL="test/model-primary",
+    AI_COACH_SECONDARY_MODEL="test/model-secondary",
+    DISABLE_MANUAL_PLACEHOLDER=True,
 )
 sys.modules["config.app_settings"] = types.ModuleType("config.app_settings")
 sys.modules["config.app_settings"].settings = settings_stub
@@ -477,6 +505,28 @@ sys.modules.setdefault("sqlalchemy.exc", sqlalchemy_mod.exc)
 redis_async_mod = types.ModuleType("redis.asyncio")
 
 
+class DummyPipeline:
+    def __init__(self, client: "DummyRedis") -> None:
+        self._client = client
+        self._result = False
+
+    async def watch(self, *_a, **_k):  # type: ignore[no-untyped-def]
+        return None
+
+    async def reset(self):  # type: ignore[no-untyped-def]
+        self._result = False
+
+    def multi(self):  # type: ignore[no-untyped-def]
+        self._result = False
+
+    def pexpire(self, key: str, ttl_ms: int):  # type: ignore[no-untyped-def]
+        if key in self._client.storage:
+            self._result = True
+
+    async def execute(self):  # type: ignore[no-untyped-def]
+        return [self._result]
+
+
 class DummyRedis:
     def __init__(self) -> None:
         self.storage: dict[str, str] = {}
@@ -484,6 +534,9 @@ class DummyRedis:
     @classmethod
     def from_url(cls, *a, **k):
         return cls()
+
+    def pipeline(self):  # type: ignore[no-untyped-def]
+        return DummyPipeline(self)
 
     async def set(self, key: str, value: str, ex=None, nx: bool = False):  # type: ignore[no-untyped-def]
         if nx and key in self.storage:
@@ -527,6 +580,9 @@ class DummyRedis:
 
 redis_async_mod.Redis = DummyRedis
 redis_async_mod.from_url = lambda *a, **k: DummyRedis()
+redis_async_client_mod = types.ModuleType("redis.asyncio.client")
+redis_async_client_mod.Pipeline = DummyPipeline
+sys.modules.setdefault("redis.asyncio.client", redis_async_client_mod)
 sys.modules.setdefault("redis.asyncio", redis_async_mod)
 httpx_mod = types.ModuleType("httpx")
 
@@ -567,7 +623,7 @@ class AsyncClient:
                         return types.SimpleNamespace(
                             status_code=200,
                             headers={},
-                            json=lambda: {"answer": result.answer, "sources": result.sources},
+                            json=lambda: {"answer": result.answer},
                             text="",
                             is_success=True,
                         )

@@ -11,7 +11,7 @@ from aiogram.types import CallbackQuery, Message, FSInputFile
 from pathlib import Path
 
 from bot import keyboards as kb
-from bot.keyboards import subscription_manage_kb, program_edit_kb, program_view_kb
+from bot.keyboards import subscription_manage_kb, program_edit_kb, program_view_kb, workout_type_kb
 from bot.utils.profiles import fetch_user, answer_profile, get_assigned_coach
 from bot.utils.credits import uah_to_credits, available_packages, available_ai_services
 from decimal import Decimal
@@ -132,13 +132,14 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
             await state.update_data(message_ids=[profile_msg.message_id, name_msg.message_id])
 
 
-async def show_main_menu(message: Message, profile: Profile, state: FSMContext) -> None:
+async def show_main_menu(message: Message, profile: Profile, state: FSMContext, *, delete_source: bool = True) -> None:
     menu = kb.client_menu_kb if profile.role == "client" else kb.coach_menu_kb
     await state.clear()
     await state.update_data(profile=profile.model_dump())
     await state.set_state(States.main_menu)
     await answer_msg(message, msg_text("main_menu", profile.language), reply_markup=menu(profile.language))
-    await del_msg(cast(Message | CallbackQuery | None, message))
+    if delete_source:
+        await del_msg(cast(Message | CallbackQuery | None, message))
 
 
 async def show_balance_menu(callback_obj: CallbackQuery | Message, profile: Profile, state: FSMContext) -> None:
@@ -502,6 +503,8 @@ async def show_ai_services(
     profile: Profile,
     state: FSMContext,
     allowed_services: Collection[str] | None = None,
+    *,
+    auto_select_single: bool = False,
 ) -> None:
     language = cast(str, profile.language or "eng")
     client = await Cache.client.get_client(profile.id)
@@ -516,6 +519,16 @@ async def show_ai_services(
         filtered_services = [service for service in services if service.name in allowed_set]
         if filtered_services:
             services = filtered_services
+    if auto_select_single and len(services) == 1:
+        handled = await process_ai_service_selection(
+            callback_query,
+            profile,
+            state,
+            service_name=services[0].name,
+        )
+        if handled:
+            await del_msg(callback_query)
+        return
     await state.set_state(States.choose_ai_service)
     await answer_msg(
         callback_query,
@@ -526,15 +539,67 @@ async def show_ai_services(
     await del_msg(callback_query)
 
 
+async def process_ai_service_selection(
+    callback_query: CallbackQuery,
+    profile: Profile,
+    state: FSMContext,
+    *,
+    service_name: str,
+) -> bool:
+    language = cast(str, profile.language or "eng")
+    data = await state.get_data()
+    client_data = data.get("client")
+    if not client_data:
+        await callback_query.answer(msg_text("unexpected_error", language), show_alert=True)
+        return False
+
+    client = Client.model_validate(client_data)
+    services = {service.name: service.credits for service in available_ai_services()}
+    required = services.get(service_name)
+    if required is None:
+        await callback_query.answer(msg_text("unexpected_error", language), show_alert=True)
+        return False
+
+    if client.credits < required:
+        await callback_query.answer(msg_text("not_enough_credits", language), show_alert=True)
+        await show_balance_menu(callback_query, profile, state)
+        return False
+
+    workout_type = data.get("workout_type")
+    await state.update_data(
+        ai_service=service_name,
+        required=required,
+    )
+    if workout_type is None:
+        await state.set_state(States.workout_type)
+        await answer_msg(
+            callback_query,
+            msg_text("workout_type", language),
+            reply_markup=workout_type_kb(language),
+        )
+    else:
+        await state.update_data(workout_type=workout_type)
+        await state.set_state(States.enter_wishes)
+        await answer_msg(callback_query, msg_text("enter_wishes", language))
+    return True
+
+
 async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, profile: Profile) -> None:
     message = cast(Message, callback_query.message)
     assert message
     language = cast(str, profile.language)
 
+    webapp_url = get_webapp_url("program", language)
+    if webapp_url is None:
+        logger.warning(f"program_view_missing_webapp_url profile_id={profile.id} language={language}")
+        reply_markup = None
+    else:
+        reply_markup = program_view_kb(language, webapp_url)
+
     await answer_msg(
         message,
         msg_text("new_workout_plan", language),
-        reply_markup=program_view_kb(language, get_webapp_url("program", language)),
+        reply_markup=reply_markup,
         disable_web_page_preview=True,
     )
 
@@ -637,7 +702,12 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
     assert split_number is not None
 
     if data.get("client"):
-        reply_markup = program_view_kb(profile.language, get_webapp_url("program", profile.language))
+        webapp_url = get_webapp_url("program", profile.language)
+        if webapp_url is None:
+            logger.warning(f"program_pagination_missing_webapp_url profile_id={profile.id} language={profile.language}")
+            reply_markup = None
+        else:
+            reply_markup = program_view_kb(profile.language, webapp_url)
         state_to_set = States.program_view
     else:
         reply_markup = (

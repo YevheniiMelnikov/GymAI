@@ -1,9 +1,12 @@
+from contextlib import suppress
 from typing import cast
+from uuid import uuid4
 
 from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.exceptions import TelegramBadRequest
 
 from loguru import logger
 
@@ -47,9 +50,12 @@ from bot.utils.other import (
 )
 from bot.utils.bot import del_msg, answer_msg, delete_messages
 from bot.utils.workout_plans import reset_workout_plan, save_workout_plan, next_day_workout_plan
+from bot.utils.ai_coach import enqueue_ai_question
+from bot.utils.ask_ai import prepare_ask_ai_request, start_ask_ai_prompt
 from core.schemas import DayExercises, Profile
 from bot.texts import msg_text, btn_text
-from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
+from core.exceptions import AskAiPreparationError, ClientNotFoundError, SubscriptionNotFoundError
+from config.app_settings import settings
 from core.services import get_gif_manager
 
 workout_router = Router()
@@ -65,6 +71,16 @@ async def select_service(callback_query: CallbackQuery, state: FSMContext, bot: 
         await show_my_program_menu(callback_query, profile, state)
     elif callback_query.data == "contact":
         await contact_coach(callback_query, profile, state)
+    elif callback_query.data == "ask_ai":
+        await start_ask_ai_prompt(
+            callback_query,
+            profile,
+            state,
+            delete_origin=True,
+            show_balance_menu_on_insufficient=True,
+        )
+        return
+
     elif callback_query.data == "ai_coach":
         coach = await Cache.coach.get_ai_coach()
         if not coach:
@@ -103,6 +119,109 @@ async def select_service(callback_query: CallbackQuery, state: FSMContext, bot: 
         assert message is not None
         await show_main_menu(message, profile, state)
         await del_msg(cast(Message | CallbackQuery | None, callback_query))
+
+
+@workout_router.callback_query(States.ask_ai_question)
+async def ask_ai_question_navigation(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
+    data = await state.get_data()
+    profile_data = data.get("profile")
+    if not profile_data:
+        await callback_query.answer()
+        await del_msg(callback_query)
+        return
+    profile = Profile.model_validate(profile_data)
+    if callback_query.data != "ask_ai_back":
+        await callback_query.answer()
+        return
+
+    await callback_query.answer()
+    await state.update_data(ask_ai_prompt_id=None, ask_ai_prompt_chat_id=None, ask_ai_cost=None)
+    await del_msg(callback_query)
+    has_coach = await has_human_coach_subscription(profile.id)
+    await state.set_state(States.select_service)
+    await answer_msg(
+        callback_query,
+        msg_text("select_service", profile.language),
+        reply_markup=select_service_kb(profile.language, has_coach),
+    )
+
+
+@workout_router.message(States.ask_ai_question)
+async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot) -> None:
+    data = await state.get_data()
+    profile_data = data.get("profile")
+    if not profile_data:
+        await answer_msg(message, msg_text("unexpected_error", settings.DEFAULT_LANG))
+        await del_msg(message)
+        return
+
+    profile = Profile.model_validate(profile_data)
+    lang = profile.language or settings.DEFAULT_LANG
+
+    ask_ai_prompt_id = data.get("ask_ai_prompt_id")
+    ask_ai_prompt_chat_id = data.get("ask_ai_prompt_chat_id")
+    if ask_ai_prompt_id:
+        chat_id = int(ask_ai_prompt_chat_id or message.chat.id)
+        with suppress(TelegramBadRequest):
+            await bot.delete_message(chat_id, int(ask_ai_prompt_id))
+        await state.update_data(ask_ai_prompt_id=None, ask_ai_prompt_chat_id=None)
+
+    try:
+        preparation = await prepare_ask_ai_request(
+            message=message,
+            profile=profile,
+            state_data=data,
+            bot=bot,
+        )
+    except AskAiPreparationError as error:
+        response = msg_text(error.message_key, lang)
+        if error.params:
+            response = response.format(**error.params)
+        await answer_msg(message, response)
+        if error.delete_message:
+            await del_msg(message)
+        return
+
+    client = preparation.client
+    question_text = preparation.prompt
+    cost = preparation.cost
+    image_base64 = preparation.image_base64
+    image_mime = preparation.image_mime
+
+    request_id = uuid4().hex
+    logger.info(f"event=ask_ai_enqueue request_id={request_id} client_id={client.id} profile_id={profile.id}")
+    queued = await enqueue_ai_question(
+        client=client,
+        profile=profile,
+        prompt=question_text,
+        language=profile.language,
+        request_id=request_id,
+        cost=cost,
+        image_base64=image_base64,
+        image_mime=image_mime,
+    )
+
+    if not queued:
+        logger.error(f"event=ask_ai_enqueue_failed request_id={request_id} client_id={client.id}")
+        await answer_msg(
+            message,
+            msg_text("coach_agent_error", lang).format(tg=settings.TG_SUPPORT_CONTACT),
+        )
+        return
+
+    await answer_msg(message, msg_text("request_in_progress", lang))
+
+    await show_main_menu(message, profile, state, delete_source=False)
+
+    state_payload: dict[str, object] = {
+        "client": client.model_dump(),
+        "last_request_id": request_id,
+        "ask_ai_cost": cost,
+        "ask_ai_prompt_id": None,
+        "ask_ai_prompt_chat_id": None,
+        "ask_ai_question_message_id": message.message_id,
+    }
+    await state.update_data(**state_payload)
 
 
 @workout_router.message(States.workouts_number)
@@ -228,7 +347,13 @@ async def program_creation_choice(callback_query: CallbackQuery, state: FSMConte
             client=client.model_dump(),
             service_type="program",
         )
-        await show_ai_services(callback_query, profile, state, allowed_services=("program",))
+        await show_ai_services(
+            callback_query,
+            profile,
+            state,
+            allowed_services=("program",),
+            auto_select_single=True,
+        )
         return
 
     if cb_data == "program_human":

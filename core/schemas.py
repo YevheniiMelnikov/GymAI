@@ -1,20 +1,12 @@
 from datetime import datetime
 from typing import Annotated, Any
-from pydantic import BaseModel, Field, field_validator, condecimal, ConfigDict
+
+from pydantic import BaseModel, ConfigDict, Field, condecimal, field_validator
 
 from core.encryptor import Encryptor
-from core.enums import (
-    ProfileRole,
-    ClientStatus,
-    Language,
-    Gender,
-    PaymentStatus,
-    CoachType,
-)
+from core.enums import ClientStatus, CoachType, Gender, Language, PaymentStatus, ProfileRole
 
 Price = condecimal(max_digits=10, decimal_places=2, gt=0)
-# `payout_due` can legitimately be zero, therefore we define a separate
-# type that allows non-negative values for such cases.
 NonNegativePrice = condecimal(max_digits=10, decimal_places=2, ge=0)
 
 
@@ -39,14 +31,15 @@ class Client(BaseModel):
     weight: int | None = None
     status: ClientStatus = ClientStatus.initial
     assigned_to: list[int] = Field(default_factory=list)
-    credits: int = Field(default=500, ge=0)  # pyrefly: ignore [no-matching-overload]
+    credits: int = Field(default=500, ge=0)
     profile_data: dict[str, Any] = {}
 
     @field_validator("born_in", mode="before")
-    def born_in_to_str(cls, v):
-        if v is None:
-            return v
-        return str(v)
+    @classmethod
+    def born_in_to_str(cls, value: Any) -> str | None:
+        if value is None:
+            return None
+        return str(value)
 
 
 class Coach(BaseModel):
@@ -103,39 +96,43 @@ class Program(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     @field_validator("client_profile", mode="before")
-    def _normalize_client_profile(cls, v: Any) -> int:
-        if isinstance(v, dict):
-            return int(v.get("id", 0))
-        return int(v)
+    @classmethod
+    def _normalize_client_profile(cls, value: Any) -> int:
+        if isinstance(value, dict):
+            return int(value.get("id", 0))
+        return int(value)
 
     @field_validator("created_at", mode="before")
-    def _normalize_created_at(cls, v: Any) -> float:
-        if isinstance(v, (int, float)):
-            return float(v)
+    @classmethod
+    def _normalize_created_at(cls, value: Any) -> float:
+        if isinstance(value, (int, float)):
+            return float(value)
         try:
-            return datetime.fromisoformat(str(v)).timestamp()
-        except Exception:
+            return datetime.fromisoformat(str(value)).timestamp()
+        except Exception:  # noqa: BLE001
             return 0.0
 
     @field_validator("split_number", mode="before")
-    def _set_split_number(cls, v: Any, info: Any) -> int:
-        if v is None:
+    @classmethod
+    def _set_split_number(cls, value: Any, info: Any) -> int:
+        if value is None:
             data = getattr(info, "data", {}) or {}
             days: list[Any] = data.get("exercises_by_day", [])
             return len(days)
-        return int(v)
+        return int(value)
 
     @field_validator("coach_type", mode="before")
-    def _normalize_coach_type(cls, v: Any) -> CoachType:
-        if isinstance(v, dict):
-            v = v.get("coach_type")
-        if isinstance(v, str):
+    @classmethod
+    def _normalize_coach_type(cls, value: Any) -> CoachType:
+        if isinstance(value, dict):
+            value = value.get("coach_type")
+        if isinstance(value, str):
             try:
-                return CoachType(v)
+                return CoachType(value)
             except ValueError:
                 return CoachType.human
-        if isinstance(v, CoachType):
-            return v
+        if isinstance(value, CoachType):
+            return value
         return CoachType.human
 
 
@@ -153,11 +150,12 @@ class Subscription(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     @field_validator("payment_date", mode="before")
-    def normalize_payment_date(cls, v: str) -> str:
+    @classmethod
+    def normalize_payment_date(cls, value: Any) -> str:
         try:
-            return datetime.fromisoformat(v).strftime("%Y-%m-%d")
-        except Exception:
-            return v
+            return datetime.fromisoformat(str(value)).strftime("%Y-%m-%d")
+        except Exception:  # noqa: BLE001
+            return str(value)
 
 
 class Payment(BaseModel):
@@ -175,15 +173,16 @@ class Payment(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     @field_validator("created_at", "updated_at", mode="before")
-    def _normalize_timestamp(cls, v: Any) -> float:
-        if isinstance(v, (int, float)):
-            return float(v)
+    @classmethod
+    def _normalize_timestamp(cls, value: Any) -> float:
+        if isinstance(value, (int, float)):
+            return float(value)
         try:
-            return datetime.fromisoformat(str(v)).timestamp()
-        except Exception:
+            return datetime.fromisoformat(str(value)).timestamp()
+        except Exception:  # noqa: BLE001
             return 0.0
 
 
 class QAResponse(BaseModel):
     answer: str
-    sources: list[str] = []
+    sources: list[str] = Field(default_factory=list, exclude=True)

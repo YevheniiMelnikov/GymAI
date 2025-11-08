@@ -22,6 +22,7 @@ class AICoachRequest(BaseModel):
     plan_type: WorkoutPlanType | None = None
     request_id: str | None = None
     instructions: str | None = None  # User-provided custom instructions
+    attachments: list[dict[str, str]] | None = None
 
     def __init__(self, **data: Any) -> None:
         mode = data.get("mode")

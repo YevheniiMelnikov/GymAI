@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 from decimal import Decimal
 from json import JSONDecodeError, loads
@@ -110,10 +108,6 @@ class APIClient:
         if self.use_default_auth and self.api_key:
             headers.setdefault("Authorization", f"Bearer {self.api_key}")
 
-        request_client = client or getattr(self, "client", None)
-        if request_client is None:
-            raise APIClientTransportError(f"HTTP client is not configured for request {method.upper()} {url}")
-
         data = self._json_safe(data)
         timeout_value = timeout or self.default_timeout or None
         allowed = allow_statuses or set()
@@ -122,13 +116,27 @@ class APIClient:
 
         for attempt in range(1, attempts + 1):
             try:
-                response = await request_client.request(
-                    method,
-                    url,
-                    json=data,
-                    headers=headers,
-                    timeout=timeout_value,
-                )
+                if client is not None:
+                    response = await client.request(
+                        method,
+                        url,
+                        json=data,
+                        headers=headers,
+                        timeout=timeout_value,
+                    )
+                else:
+                    limits = httpx.Limits(max_connections=50, max_keepalive_connections=10)
+                    base_url_value = getattr(self, "base_url", None) or getattr(self, "api_url", None)
+                    async with httpx.AsyncClient(
+                        base_url=base_url_value, timeout=timeout_value, limits=limits
+                    ) as _client:
+                        response = await _client.request(
+                            method,
+                            url,
+                            json=data,
+                            headers=headers,
+                            timeout=timeout_value,
+                        )
 
                 if response.status_code in allowed:
                     return response.status_code, self._parse_response_json(response)

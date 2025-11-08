@@ -1,12 +1,19 @@
 from celery import chain
-from pydantic import ValidationError
+from celery.result import AsyncResult
+from typing import cast
 from loguru import logger
+from pydantic import ValidationError
 
 from core.cache import Cache
 from core.enums import WorkoutPlanType, WorkoutType
-from core.schemas import Client, DayExercises, Program, Subscription
+from core.schemas import Client, DayExercises, Program, Subscription, Profile
 from core.services.internal import APIService
-from core.ai_coach_payloads import AiPlanGenerationPayload, AiPlanUpdatePayload
+from core.ai_coach import (
+    AiAttachmentPayload,
+    AiPlanGenerationPayload,
+    AiPlanUpdatePayload,
+    AiQuestionPayload,
+)
 
 
 async def generate_workout_plan(
@@ -137,9 +144,13 @@ async def enqueue_workout_plan_generation(
     }
     options = {"queue": "ai_coach", "routing_key": "ai_coach", "headers": headers}
 
-    generate_sig = generate_ai_workout_plan.s(payload).set(**options)
-    notify_sig = notify_ai_plan_ready_task.s().set(queue="ai_coach", routing_key="ai_coach", headers=headers)
-    failure_sig = handle_ai_plan_failure.s(payload, "create").set(queue="ai_coach", routing_key="ai_coach")
+    generate_sig = generate_ai_workout_plan.s(payload).set(**options)  # pyrefly: ignore[not-callable]
+    notify_sig = notify_ai_plan_ready_task.s().set(  # pyrefly: ignore[not-callable]
+        queue="ai_coach", routing_key="ai_coach", headers=headers
+    )
+    failure_sig = handle_ai_plan_failure.s(payload, "create").set(  # pyrefly: ignore[not-callable]
+        queue="ai_coach", routing_key="ai_coach"
+    )
 
     logger.debug(
         f"dispatch_generate_plan request_id={request_id} "
@@ -147,7 +158,7 @@ async def enqueue_workout_plan_generation(
     )
 
     try:
-        async_result = chain(generate_sig, notify_sig).apply_async(link_error=[failure_sig])
+        async_result = cast(AsyncResult, chain(generate_sig, notify_sig).apply_async(link_error=[failure_sig]))
     except Exception as exc:  # noqa: BLE001
         logger.error(
             f"Celery dispatch failed client_id={client.id} plan_type={plan_type.value} "
@@ -155,11 +166,141 @@ async def enqueue_workout_plan_generation(
         )
         return False
 
+    task_id = cast(str | None, getattr(async_result, "id", None))
+    if task_id is None:
+        logger.error(
+            f"ai_plan_generate_missing_task_id request_id={request_id} "
+            f"client_id={client.id} plan_type={plan_type.value}"
+        )
+        return False
     logger.info(
-        f"ai_plan_generate_enqueued request_id={request_id} task_id={async_result.id} "
+        f"ai_plan_generate_enqueued request_id={request_id} task_id={task_id} "
         f"client_id={client.id} plan_type={plan_type.value}"
     )
     return True
+
+
+def _build_ai_question_payload(
+    *,
+    client_id: int,
+    client_profile_id: int,
+    language: str,
+    prompt: str,
+    request_id: str,
+    cost: int,
+    image_base64: str | None,
+    image_mime: str | None,
+) -> AiQuestionPayload | None:
+    attachments: list[AiAttachmentPayload] = []
+    if image_base64 and image_mime:
+        attachments.append(AiAttachmentPayload(mime=image_mime, data_base64=image_base64))
+
+    try:
+        return AiQuestionPayload(
+            client_id=client_id,
+            client_profile_id=client_profile_id,
+            language=language,
+            prompt=prompt,
+            attachments=attachments,
+            request_id=request_id,
+            cost=cost,
+        )
+    except ValidationError as exc:
+        logger.error(f"event=ask_ai_invalid_payload request_id={request_id} client_id={client_id} error={exc!s}")
+        return None
+
+
+def _dispatch_ai_question_task(
+    *,
+    payload_model: AiQuestionPayload,
+    request_id: str,
+    client_id: int,
+    client_profile_id: int,
+) -> str | None:
+    try:
+        from core.tasks.ai_coach import (  # Local import to avoid circular dependency
+            ask_ai_question,
+            handle_ai_question_failure,
+            notify_ai_answer_ready_task,
+        )
+    except Exception as exc:  # pragma: no cover - import failure
+        logger.error(f"event=ask_ai_task_import_failed request_id={request_id} error={exc!s}")
+        return None
+
+    payload = payload_model.model_dump(mode="json")
+    headers = {
+        "request_id": request_id,
+        "client_id": client_id,
+        "action": "ask_ai",
+    }
+    options = {"queue": "ai_coach", "routing_key": "ai_coach", "headers": headers}
+
+    ask_sig = ask_ai_question.s(payload).set(**options)  # pyrefly: ignore[not-callable]
+    notify_sig = notify_ai_answer_ready_task.s().set(  # pyrefly: ignore[not-callable]
+        queue="ai_coach", routing_key="ai_coach", headers=headers
+    )
+    failure_sig = handle_ai_question_failure.s(payload).set(  # pyrefly: ignore[not-callable]
+        queue="ai_coach", routing_key="ai_coach"
+    )
+
+    try:
+        async_result = cast(AsyncResult, chain(ask_sig, notify_sig).apply_async(link_error=[failure_sig]))
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"event=ask_ai_dispatch_failed request_id={request_id} client_id={client_id} error={exc!s}")
+        return None
+
+    task_id = cast(str | None, getattr(async_result, "id", None))
+    if task_id is None:
+        logger.error(
+            f"event=ask_ai_missing_task_id request_id={request_id} client_id={client_id} profile_id={client_profile_id}"
+        )
+        return None
+    logger.info(
+        f"event=ask_ai_enqueued request_id={request_id} task_id={task_id} "
+        f"client_id={client_id} profile_id={client_profile_id}"
+    )
+    return task_id
+
+
+async def enqueue_ai_question(
+    *,
+    client: Client,
+    profile: Profile,
+    prompt: str,
+    language: str,
+    request_id: str,
+    cost: int,
+    image_base64: str | None = None,
+    image_mime: str | None = None,
+) -> bool:
+    client_profile_id = int(getattr(client, "profile", profile.id))
+    if client_profile_id <= 0:
+        profile_hint = getattr(profile, "id", None)
+        logger.error(
+            f"event=ask_ai_invalid_profile request_id={request_id} client_id={client.id} profile_hint={profile_hint}"
+        )
+        return False
+
+    payload_model = _build_ai_question_payload(
+        client_id=client.id,
+        client_profile_id=client_profile_id,
+        language=language,
+        prompt=prompt,
+        request_id=request_id,
+        cost=cost,
+        image_base64=image_base64,
+        image_mime=image_mime,
+    )
+    if payload_model is None:
+        return False
+
+    task_id = _dispatch_ai_question_task(
+        payload_model=payload_model,
+        request_id=request_id,
+        client_id=client.id,
+        client_profile_id=client_profile_id,
+    )
+    return task_id is not None
 
 
 async def enqueue_workout_plan_update(
@@ -206,9 +347,13 @@ async def enqueue_workout_plan_update(
     }
     options = {"queue": "ai_coach", "routing_key": "ai_coach", "headers": headers}
 
-    update_sig = update_ai_workout_plan.s(payload).set(**options)
-    notify_sig = notify_ai_plan_ready_task.s().set(queue="ai_coach", routing_key="ai_coach", headers=headers)
-    failure_sig = handle_ai_plan_failure.s(payload, "update").set(queue="ai_coach", routing_key="ai_coach")
+    update_sig = update_ai_workout_plan.s(payload).set(**options)  # pyrefly: ignore[not-callable]
+    notify_sig = notify_ai_plan_ready_task.s().set(  # pyrefly: ignore[not-callable]
+        queue="ai_coach", routing_key="ai_coach", headers=headers
+    )
+    failure_sig = handle_ai_plan_failure.s(payload, "update").set(  # pyrefly: ignore[not-callable]
+        queue="ai_coach", routing_key="ai_coach"
+    )
 
     logger.debug(
         f"dispatch_update_plan request_id={request_id} client_id={client_id} "
@@ -216,7 +361,7 @@ async def enqueue_workout_plan_update(
     )
 
     try:
-        async_result = chain(update_sig, notify_sig).apply_async(link_error=[failure_sig])
+        async_result = cast(AsyncResult, chain(update_sig, notify_sig).apply_async(link_error=[failure_sig]))
     except Exception as exc:  # noqa: BLE001
         logger.error(
             f"Celery dispatch failed client_id={client_id} plan_type={plan_type.value} "
@@ -224,8 +369,14 @@ async def enqueue_workout_plan_update(
         )
         return False
 
+    task_id = cast(str | None, getattr(async_result, "id", None))
+    if task_id is None:
+        logger.error(
+            f"ai_plan_update_missing_task_id request_id={request_id} client_id={client_id} plan_type={plan_type.value}"
+        )
+        return False
     logger.info(
-        f"ai_plan_update_enqueued request_id={request_id} task_id={async_result.id} "
+        f"ai_plan_update_enqueued request_id={request_id} task_id={task_id} "
         f"client_id={client_id} plan_type={plan_type.value}"
     )
     return True

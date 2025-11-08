@@ -1,6 +1,5 @@
-from __future__ import annotations
-
-from typing import Protocol
+from typing import Protocol, cast
+from collections import deque
 
 from apps.payments.tasks import send_payment_message
 from bot.texts.text_manager import msg_text
@@ -18,11 +17,14 @@ class TaskPaymentNotifier(PaymentNotifier):
         self,
         task: _TaskInvoker | None = None,
     ) -> None:
-        self._task: _TaskInvoker = task or send_payment_message
+        task_impl = task if task is not None else cast(_TaskInvoker, send_payment_message)
+        self._task = task_impl
+        self._undelivered = deque()
 
     def success(self, client_id: int, language: str) -> None:
         message = msg_text("payment_success", language)
         self._task.delay(client_id, message)
+        self._undelivered.append(client_id)
 
     def failure(self, client_id: int, language: str) -> None:
         message = msg_text("payment_failure", language).format(
@@ -30,3 +32,10 @@ class TaskPaymentNotifier(PaymentNotifier):
             tg=settings.TG_SUPPORT_CONTACT,
         )
         self._task.delay(client_id, message)
+        self._undelivered.append(client_id)
+
+    def get_stats(self) -> dict[str, int]:
+        return {
+            "queue_depth": len(self._undelivered),
+            "undelivered_count": len(self._undelivered),
+        }

@@ -27,7 +27,13 @@ from core.services import APIService
 from bot.utils.chat import client_request
 from bot.utils.credits import uah_to_credits
 from bot.utils.workout_plans import process_new_subscription, edit_subscription_days
-from bot.utils.menus import show_main_menu, show_my_profile_menu, send_policy_confirmation, show_balance_menu
+from bot.utils.menus import (
+    show_main_menu,
+    show_my_profile_menu,
+    send_policy_confirmation,
+    show_balance_menu,
+    show_my_workouts_menu,
+)
 from bot.utils.profiles import update_profile_data, check_assigned_clients, get_assigned_coach
 from core.enums import CoachType
 from bot.utils.text import get_state_and_message
@@ -464,6 +470,12 @@ async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> No
 async def workout_type(callback_query: CallbackQuery, state: FSMContext):
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
+    cb_data = callback_query.data or ""
+
+    if cb_data == "workouts_back":
+        await show_my_workouts_menu(callback_query, profile, state)
+        return
+
     await state.set_state(States.enter_wishes)
     if callback_query.message is not None:
         wishes_msg = await answer_msg(

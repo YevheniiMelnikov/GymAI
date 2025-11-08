@@ -1,8 +1,7 @@
-from __future__ import annotations
-
 import logging
 import os
 import time
+import threading
 from typing import Any, Iterable, Mapping, MutableMapping, cast
 
 from urllib.parse import urlparse
@@ -10,9 +9,9 @@ from urllib.parse import urlparse
 from celery import Task, signals
 from loguru import logger
 
-from core.celery_app import AI_COACH_TASK_ROUTES
+from core.celery_app import AI_COACH_TASK_ROUTES, CRITICAL_TASK_ROUTES
 
-REQUIRED_TASK_NAMES: tuple[str, ...] = tuple(AI_COACH_TASK_ROUTES.keys())
+EXPECTED_TASK_NAMES: tuple[str, ...] = tuple(sorted({*AI_COACH_TASK_ROUTES.keys(), *CRITICAL_TASK_ROUTES.keys()}))
 _TASK_START_TIMES: MutableMapping[str, float] = {}
 _SIGNALS_ATTACHED: bool = False
 
@@ -36,7 +35,17 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
     from celery.apps.worker import WorkController  # local import for typing only
 
     worker: WorkController = cast(WorkController, sender)
-    inspect = worker.app.control.inspect(destination=[worker.hostname])
+    app_obj = getattr(worker, "app", None)
+    if app_obj is None:
+        logger.error(f"celery_worker_missing_app hostname={getattr(worker, 'hostname', 'unknown')}")
+        return
+
+    control = getattr(app_obj, "control", None)
+    if control is None:
+        logger.error(f"celery_worker_missing_control hostname={worker.hostname}")
+        return
+
+    inspect = control.inspect(destination=[worker.hostname])
 
     queue_names: list[str] = []
     if inspect is not None:
@@ -55,47 +64,99 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
                 {str(getattr(queue, "name", "")) for queue in task_queues if getattr(queue, "name", "")}
             )
 
-    registered_missing: list[str] = []
-    registered_ok: bool = False
+    tasks_map = getattr(app_obj, "tasks", {})
+    registered_tasks = {str(name) for name in getattr(tasks_map, "keys", lambda: [])()}
+
     if inspect is not None:
         registered_map = inspect.registered() or inspect.registered_tasks() or {}
         worker_registered = set(registered_map.get(worker.hostname) or [])
-        registered_missing = [name for name in REQUIRED_TASK_NAMES if name not in worker_registered]
-        registered_ok = not registered_missing
     else:
-        registered_ok = all(name in worker.app.tasks for name in REQUIRED_TASK_NAMES)
+        worker_registered = registered_tasks
 
-    broker_url = str(getattr(worker.app.conf, "broker_url", ""))
+    missing = [name for name in EXPECTED_TASK_NAMES if name not in worker_registered]
+    registered_ok = not missing
+    registered_sample = sorted(worker_registered)[:5]
+
+    conf = getattr(app_obj, "conf", None)
+    broker_url = str(getattr(conf, "broker_url", "")) if conf is not None else ""
     parsed = urlparse(broker_url)
     scheme_host = f"{parsed.scheme}://{parsed.hostname}" if parsed.scheme else (parsed.hostname or "")
     vhost = parsed.path or "/"
 
     logger.info(
         f"celery_ready hostname={worker.hostname} broker={broker_url} scheme_host={scheme_host} "
-        f"vhost={vhost} queues={queue_names} registered_ok={registered_ok} missing={registered_missing}"
+        f"vhost={vhost} queues={queue_names} registered_ok={registered_ok} expected={len(EXPECTED_TASK_NAMES)} "
+        f"missing={missing} registered_sample={registered_sample}"
     )
 
     strict_mode = os.getenv("CELERY_STRICT", "0") == "1"
 
     if "ai_coach" not in queue_names:
-        logger.warning(f"ai_coach queue missing on worker hostname={worker.hostname} queues={queue_names}")
-        if strict_mode:
-            raise SystemExit("ai_coach queue missing")
-        return
+        try:
+            control.add_consumer("ai_coach", destination=[worker.hostname])
+            queue_names.append("ai_coach")
+            queue_names = sorted(set(queue_names))
+            logger.info(f"celery_consumer_added hostname={worker.hostname} queues={queue_names} target=ai_coach")
+        except Exception as add_exc:  # noqa: BLE001
+            logger.warning(
+                f"ai_coach queue missing on worker hostname={worker.hostname} queues={queue_names} error={add_exc}"
+            )
+            if strict_mode:
+                raise SystemExit("ai_coach queue missing") from add_exc
+            return
 
     if not registered_ok:
-        logger.error(
-            "celery tasks missing "
-            f"hostname={worker.hostname} missing={registered_missing} "
-            f"available={sorted(worker.app.tasks.keys())}"
+        available_sample = sorted(registered_tasks)[:10]
+        logger.debug(
+            "celery tasks pending hostname={} missing={} available_sample={} recheck_in=3.0".format(
+                worker.hostname,
+                missing,
+                available_sample,
+            )
         )
-        if strict_mode:
-            raise SystemExit("required celery tasks missing")
+
+        def _delayed_task_report() -> None:
+            refreshed: set[str] = set(registered_tasks)
+            try:
+                follow_up = control.inspect(destination=[worker.hostname])
+                if follow_up is not None:
+                    follow_registered = follow_up.registered() or follow_up.registered_tasks() or {}
+                else:
+                    follow_registered = {}
+            except Exception as insp_exc:  # noqa: BLE001 - diagnostics only
+                logger.debug("celery task recheck failed hostname={} error={}".format(worker.hostname, insp_exc))
+                follow_registered = {}
+            if follow_registered:
+                refreshed.update(str(name) for name in follow_registered.get(worker.hostname, []) if name)
+            remaining = [name for name in EXPECTED_TASK_NAMES if name not in refreshed]
+            if remaining:
+                refreshed_sample = sorted(refreshed)[:10]
+                logger.warning(
+                    "celery tasks missing hostname={} missing={} available_sample={}".format(
+                        worker.hostname,
+                        remaining,
+                        refreshed_sample,
+                    )
+                )
+                if strict_mode:
+                    logger.error("celery strict mode exiting due to missing tasks")
+                    os._exit(1)
+            else:
+                logger.info(
+                    "celery tasks registered hostname={} recovered_missing={}".format(
+                        worker.hostname,
+                        missing,
+                    )
+                )
+
+        timer = threading.Timer(3.0, _delayed_task_report)
+        timer.daemon = True
+        timer.start()
         return
 
 
 def _on_task_prerun(task_id: str, task: Task, **_: Any) -> None:
-    if task.name not in REQUIRED_TASK_NAMES:
+    if task.name not in EXPECTED_TASK_NAMES:
         return
     request_id, retries = _extract_request_context(task)
     _TASK_START_TIMES[task_id] = time.perf_counter()
@@ -103,7 +164,7 @@ def _on_task_prerun(task_id: str, task: Task, **_: Any) -> None:
 
 
 def _on_task_postrun(task_id: str, task: Task, state: str, retval: Any, **_: Any) -> None:
-    if task.name not in REQUIRED_TASK_NAMES:
+    if task.name not in EXPECTED_TASK_NAMES:
         return
     start_time = _TASK_START_TIMES.pop(task_id, None)
     duration_ms: float | None = None
@@ -141,4 +202,5 @@ def _extract_request_context(task: Task) -> tuple[str | None, int]:
 
 __all__ = [
     "setup_celery_signals",
+    "EXPECTED_TASK_NAMES",
 ]

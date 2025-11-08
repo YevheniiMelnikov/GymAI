@@ -19,11 +19,11 @@ def configure_routers(dp: "Dispatcher") -> None:
     routers: list["Router"] = [
         admin_router,
         cmd_router,
+        chat_router,
         questionnaire_router,
         menu_router,
         payment_router,
         workout_router,
-        chat_router,
         invalid_content_router,
     ]
     for router in routers:

@@ -12,7 +12,7 @@ from bot.handlers.internal.tasks import (
     internal_ai_coach_plan_ready,
     internal_export_coach_payouts,
 )
-from core.ai_plan_state import AiPlanState
+from core.ai_coach.state.plan import AiPlanState
 from bot.states import States
 from bot.utils.ai_coach import enqueue_workout_plan_generation, enqueue_workout_plan_update
 from config.app_settings import settings

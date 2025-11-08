@@ -1,22 +1,20 @@
-from __future__ import annotations
-
 import asyncio
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, Coroutine, cast
 
 import httpx
-
-
+import orjson
 from loguru import logger
 
 from config.app_settings import settings
 from core.celery_app import app
-from core.internal_http import build_internal_auth_headers, internal_request_timeout
+from core.internal_http import build_internal_hmac_auth_headers, internal_request_timeout
 
 
-def _internal_headers() -> dict[str, str]:
-    return build_internal_auth_headers(
-        internal_api_key=settings.INTERNAL_API_KEY,
-        fallback_api_key=settings.API_KEY,
+def _internal_headers(body: bytes) -> dict[str, str]:
+    return build_internal_hmac_auth_headers(
+        key_id=settings.INTERNAL_KEY_ID,
+        secret_key=settings.INTERNAL_API_KEY,
+        body=body,
     )
 
 
@@ -28,10 +26,11 @@ def _internal_url(path: str) -> str:
 
 async def _post_internal_json(path: str, payload: dict[str, Any]) -> None:
     url = _internal_url(path)
-    headers = _internal_headers()
+    body = orjson.dumps(payload)
+    headers = _internal_headers(body=body)
     timeout = internal_request_timeout(settings)
     async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(url, json=payload, headers=headers)
+        response = await client.post(url, content=body, headers=headers)
         response.raise_for_status()
 
 
@@ -41,7 +40,8 @@ def _retryable_call(
     coro_factory: Callable[[], Awaitable[None]],
 ) -> None:
     try:
-        asyncio.run(coro_factory())
+        coroutine = coro_factory()
+        asyncio.run(cast(Coroutine[Any, Any, None], coroutine))
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code if exc.response is not None else None
         logger.warning(f"bot_call_failed status={status} description={description} error={exc}")

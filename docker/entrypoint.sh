@@ -22,9 +22,10 @@ if [ "${RUN_MIGRATIONS}" = "true" ]; then
   python apps/manage.py ensure_ai_coach || echo "▶ ensure_ai_coach failed"
 fi
 
-if [ "$ROLE" = "web" ]; then
+if [ "${SKIP_COLLECTSTATIC}" = "true" ]; then
+  echo "▶ Skipping collectstatic (disabled)"
+elif [ "$ROLE" = "web" ] || [ "$ROLE" = "api" ]; then
   echo "▶ Collecting static files..."
-  rm -rf /app/staticfiles/js /app/staticfiles/css || true
   python apps/manage.py collectstatic --noinput || echo "Skipping collectstatic"
 else
   echo "▶ Skipping collectstatic for role $ROLE"

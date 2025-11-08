@@ -1,163 +1,29 @@
-from __future__ import annotations
-
-from datetime import datetime
 import inspect
-from typing import Any, Optional
+from datetime import datetime
 
 from zoneinfo import ZoneInfo
 
-from openai import AsyncOpenAI  # pyrefly: ignore[import-error]
-from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
-from pydantic import BaseModel
 from loguru import logger  # pyrefly: ignore[import-error]
+from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
 
 from config.app_settings import settings
 from core.enums import WorkoutType
 from core.schemas import Program, QAResponse, Subscription
-from core.enums import CoachType
+from ai_coach.exceptions import AgentExecutionAborted
 
 from .base import AgentDeps
+from .llm_helper import LLMHelper
 from .prompts import (
-    COACH_SYSTEM_PROMPT,
-    UPDATE_WORKOUT,
-    GENERATE_WORKOUT,
+    ASK_AI_USER_PROMPT,
     COACH_INSTRUCTIONS,
-    agent_instructions,
+    GENERATE_WORKOUT,
+    UPDATE_WORKOUT,
 )
-
-from .tools import toolset
-from ..schemas import ProgramPayload
-from pydantic_ai import Agent, RunContext  # pyrefly: ignore[import-error]
-from pydantic_ai.messages import ModelMessage, ModelRequest, ModelResponse, TextPart  # pyrefly: ignore[import-error]
-from pydantic_ai.models.openai import OpenAIChatModel  # pyrefly: ignore[import-error]
-from ai_coach.types import CoachMode, MessageRole
-from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+from ai_coach.types import CoachMode
 
 
-class ProgramAdapter:
-    """Utility to convert agent payloads to API models."""
-
-    @staticmethod
-    def to_domain(payload: ProgramPayload) -> Program:
-        data = payload.model_dump(exclude={"schema_version"})
-        coach_type = getattr(payload, "_coach_type_raw", data.get("coach_type"))
-        if isinstance(coach_type, str):
-            normalized = coach_type.lower()
-            mapping = {
-                "ai": CoachType.ai_coach,
-                "ai_coach": CoachType.ai_coach,
-                "human": CoachType.human,
-            }
-            data["coach_type"] = mapping.get(normalized, CoachType.ai_coach)
-        if data.get("split_number") is None:
-            data["split_number"] = len(getattr(payload, "exercises_by_day", []))
-        return Program.model_validate(data)
-
-
-class CoachAgent:
+class CoachAgent(LLMHelper):
     """PydanticAI wrapper for program generation."""
-
-    _agent: Optional[Agent] = None
-
-    @staticmethod
-    def _lang(deps: AgentDeps) -> str:
-        language: str = deps.locale or getattr(settings, "DEFAULT_LANG", "en")
-        return language
-
-    @classmethod
-    def _init_agent(cls) -> Any:
-        if Agent is None or OpenAIChatModel is None:
-            raise RuntimeError("pydantic_ai package is required")
-
-        provider_config: Any = settings.AGENT_PROVIDER
-        if isinstance(provider_config, str):
-            provider_name: str | None = provider_config.strip().lower()
-        else:
-            provider_name = None
-
-        provider: Any = provider_config
-        client_override: AsyncOpenAI | None = None
-
-        if provider_name == "openrouter":
-            try:
-                from pydantic_ai.providers.openrouter import OpenRouterProvider  # pyrefly: ignore[import-error]
-            except Exception as exc:  # pragma: no cover - optional dependency
-                raise RuntimeError("OpenRouter provider is not available") from exc
-
-            api_key: str = settings.LLM_API_KEY
-            if not api_key:
-                raise RuntimeError("LLM_API_KEY must be configured when using the OpenRouter provider")
-            provider = OpenRouterProvider(api_key=api_key)
-        else:
-            if settings.LLM_API_KEY or settings.LLM_API_URL:
-                client_override = AsyncOpenAI(
-                    api_key=settings.LLM_API_KEY or None,
-                    base_url=settings.LLM_API_URL or None,
-                )
-
-        model = OpenAIChatModel(
-            model_name=settings.AGENT_MODEL,
-            provider=provider,
-            settings=ModelSettings(
-                timeout=float(settings.COACH_AGENT_TIMEOUT),
-            ),
-        )
-
-        if client_override is not None:
-            model.client = client_override
-
-        cls._agent = Agent(
-            model=model,
-            deps_type=AgentDeps,
-            toolsets=[toolset],
-            retries=settings.COACH_AGENT_RETRIES,
-            system_prompt=COACH_SYSTEM_PROMPT,
-        )  # pyrefly: ignore[no-matching-overload]
-
-        @cls._agent.system_prompt  # pyrefly: ignore[no-matching-overload]
-        async def coach_sys(ctx: RunContext[AgentDeps]) -> str:  # pyrefly: ignore[unsupported-operation]
-            lang = ctx.deps.locale or settings.DEFAULT_LANG
-            client_name = ctx.deps.client_name or "the client"
-            return f"Client's name: {client_name}\nClient's language: {lang}"
-
-        @cls._agent.instructions  # pyrefly: ignore[no-matching-overload]
-        def agent_instr(ctx: RunContext[AgentDeps]) -> str:  # pragma: no cover - runtime config
-            mode = ctx.deps.mode.value if ctx.deps.mode else "ask_ai"
-            return agent_instructions(mode)
-
-        return cls._agent
-
-    @classmethod
-    def _get_agent(cls) -> Any:
-        if cls._agent is None:
-            return cls._init_agent()
-        return cls._agent
-
-    @staticmethod
-    def _normalize_output(
-        raw: Any,
-        expected: type[Program] | type[Subscription] | type[QAResponse],
-    ) -> Program | Subscription | QAResponse:
-        value = getattr(raw, "output", raw)
-        if isinstance(value, expected):
-            return value
-        if issubclass(expected, BaseModel):
-            return expected.model_validate(value)
-        return expected(**value)
-
-    @staticmethod
-    async def _message_history(client_id: int) -> list[ModelMessage]:
-        """Prepare past messages for the agent."""
-        raw = await KnowledgeBase.get_message_history(client_id)
-        history: list[ModelMessage] = []
-        for item in raw:
-            if item.startswith(f"{MessageRole.CLIENT.value}:"):
-                text = item.split(":", 1)[1]
-                history.append(ModelRequest.user_text_prompt(text.strip()))
-            elif item.startswith(f"{MessageRole.AI_COACH.value}:"):
-                text = item.split(":", 1)[1]
-                history.append(ModelResponse(parts=[TextPart(content=text.strip())]))
-        return history
 
     @classmethod
     async def generate_workout_plan(
@@ -209,7 +75,10 @@ class CoachAgent:
             message_history=history,
             model_settings=ModelSettings(response_format={"type": "json_object"}, temperature=0.2),
         )
-        normalized = cls._normalize_output(raw_result, output_type)
+        if output_type is Program:
+            normalized = cls._normalize_output(raw_result, Program)
+        else:
+            normalized = cls._normalize_output(raw_result, Subscription)
         logger.debug(
             "agent.done client_id=%s mode=%s tools_called=%s",
             deps.client_id,
@@ -255,7 +124,9 @@ class CoachAgent:
             message_history=history,
             model_settings=ModelSettings(response_format={"type": "json_object"}, temperature=0.2),
         )
-        return cls._normalize_output(raw_result, output_type)
+        if output_type is Program:
+            return cls._normalize_output(raw_result, Program)
+        return cls._normalize_output(raw_result, Subscription)
 
     @classmethod
     async def answer_question(
@@ -263,17 +134,55 @@ class CoachAgent:
         prompt: str,
         deps: AgentDeps,
     ) -> QAResponse:
-        agent = cls._get_agent()
         deps.mode = CoachMode.ask_ai
-        user_prompt = f"MODE: ask_ai\n{prompt}"
-        history = cls._message_history(deps.client_id)
-        if inspect.isawaitable(history):
-            history = await history
-        raw_result = await agent.run(
-            user_prompt,
-            deps=deps,
-            output_type=QAResponse,
-            model_settings=ModelSettings(temperature=0.3, max_tokens=256),
-            message_history=history,
+        agent = cls._get_agent()
+        _, language_label = cls._language_context(deps)
+        history = await cls._message_history(deps.client_id)
+        user_prompt = ASK_AI_USER_PROMPT.format(
+            language=language_label,
+            question=prompt,
         )
-        return cls._normalize_output(raw_result, QAResponse)
+        try:
+            raw_result = await agent.run(
+                user_prompt,
+                deps=deps,
+                output_type=QAResponse,
+                message_history=history,
+                model_settings=ModelSettings(response_format={"type": "json_object"}, temperature=0.2),
+            )
+        except AgentExecutionAborted as exc:
+            logger.info(f"agent.ask completion_aborted client_id={deps.client_id} reason={exc.reason}")
+            if exc.reason == "knowledge_base_empty":
+                deps.knowledge_base_empty = True
+            fallback = await cls._fallback_answer_question(
+                prompt,
+                deps,
+                history,
+                prefetched_knowledge=None,
+            )
+            if fallback is not None:
+                return fallback
+            raise AgentExecutionAborted("ask_ai_unavailable", reason="ask_ai_unavailable")
+        normalized = cls._normalize_output(raw_result, QAResponse)
+        normalized.answer = normalized.answer.strip()
+        if not normalized.answer:
+            fallback = await cls._fallback_answer_question(
+                prompt,
+                deps,
+                history,
+                prefetched_knowledge=None,
+            )
+            if fallback is not None:
+                return fallback
+            raise AgentExecutionAborted("ask_ai_unavailable", reason="model_empty_response")
+        if not normalized.sources:
+            normalized.sources = ["knowledge_base"] if deps.kb_used else ["general_knowledge"]
+        logger.info(
+            "agent.ask.done client_id={} answer_len={} sources={} kb_used={}".format(
+                deps.client_id,
+                len(normalized.answer),
+                ",".join(normalized.sources),
+                deps.kb_used,
+            )
+        )
+        return normalized

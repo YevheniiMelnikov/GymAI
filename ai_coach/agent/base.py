@@ -2,7 +2,8 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol
 from time import monotonic
 
-from core.schemas import Program, QAResponse, Subscription
+from core.schemas import Program, Subscription
+from core.schemas import QAResponse
 from core.enums import WorkoutType
 from ai_coach.types import CoachMode
 from config.app_settings import settings
@@ -14,6 +15,7 @@ class AgentDeps:
     locale: str | None = None
     allow_save: bool = True
     client_name: str | None = None
+    request_rid: str | None = None
     mode: CoachMode | None = None
     last_knowledge_query: str | None = None
     last_knowledge_empty: bool = False
@@ -21,6 +23,7 @@ class AgentDeps:
     max_run_seconds: float = float(settings.AI_COACH_REQUEST_TIMEOUT)
     tool_calls: int = 0
     knowledge_base_empty: bool = False
+    kb_used: bool = False
     fallback_used: bool = False
     cached_history: list[str] | None = None
     started_at: float = field(default_factory=monotonic)

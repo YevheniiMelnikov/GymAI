@@ -1,7 +1,3 @@
-"""Validated payloads for AI coach Celery tasks."""
-
-from __future__ import annotations
-
 from pydantic import BaseModel, Field, field_validator
 
 from core.enums import WorkoutPlanType, WorkoutType
@@ -49,3 +45,41 @@ class AiPlanUpdatePayload(AiPlanBasePayload):
     expected_workout_result: str
     feedback: str
     workout_type: WorkoutType | None = None
+
+
+class AiAttachmentPayload(BaseModel):
+    mime: str
+    data_base64: str
+
+
+class AiQuestionPayload(BaseModel):
+    client_id: int
+    client_profile_id: int
+    language: str
+    prompt: str
+    request_id: str
+    cost: int
+    attachments: list[AiAttachmentPayload] = Field(default_factory=list)
+
+    model_config = {"use_enum_values": True}
+
+    @field_validator("client_id", "client_profile_id")
+    @classmethod
+    def _ensure_positive(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("identifiers must be positive")
+        return value
+
+    @field_validator("prompt")
+    @classmethod
+    def _ensure_prompt(cls, value: str) -> str:
+        if not value or not value.strip():
+            raise ValueError("prompt must not be empty")
+        return value
+
+    @field_validator("request_id")
+    @classmethod
+    def _ensure_request_id(cls, value: str) -> str:
+        if not value:
+            raise ValueError("request_id is required")
+        return value

@@ -186,15 +186,26 @@ def new_message_kb(lang: str, profile_id: int) -> KbMarkup:
 
 def select_service_kb(lang: str, has_coach: bool = False) -> KbMarkup:
     builder = ButtonsBuilder(lang)
-    buttons = [
+    buttons: list[list[KbBtn]] = [
         [builder.add("subscription", "subscription")],
         [builder.add("program", "program")],
-        [builder.add("ai_coach", "ai_coach")],
-        [builder.add("choose_coach", "choose_coach")],
+        [builder.add("ask_ai", "ask_ai")],
     ]
     if has_coach:
         buttons.append([builder.add("contact_coach", "contact")])
     buttons.append([builder.add("prev_menu", "back")])
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
+def ask_ai_prompt_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [[builder.add("prev_menu", "ask_ai_back")]]
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
+def ask_ai_again_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [[builder.add("ask_ai_again", "ask_ai_again")]]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
@@ -281,6 +292,7 @@ def workout_type_kb(lang: str) -> KbMarkup:
     buttons = [
         [builder.add("gym_workout", "gym")],
         [builder.add("home_workout", "home")],
+        [builder.add("prev_menu", "workouts_back")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 

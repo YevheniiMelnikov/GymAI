@@ -1,6 +1,6 @@
 import pytest
 
-from core.ai_plan_state import AiPlanState
+from core.ai_coach.state.plan import AiPlanState
 from redis.asyncio import Redis
 
 

@@ -1,6 +1,7 @@
 import json
 import os
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
+from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import SplitResult, quote, quote_plus, urlsplit, urlunsplit
 from uuid import NAMESPACE_DNS, uuid5
@@ -47,6 +48,33 @@ def normalize_service_host(
     return normalized
 
 
+def normalize_service_url(
+    url: str,
+    *,
+    default_scheme: str = "http",
+    ensure_trailing_slash: bool = True,
+) -> str:
+    """Ensure service URLs have a scheme and stable trailing slash semantics."""
+
+    raw = (url or "").strip()
+    if not raw:
+        return url
+
+    candidate = raw if "://" in raw else f"{default_scheme}://{raw}"
+    parsed = urlsplit(candidate)
+    scheme = parsed.scheme or default_scheme
+    netloc = parsed.netloc or parsed.path
+    path = parsed.path if parsed.netloc else "/"
+    normalized = urlunsplit((scheme, netloc, path or "/", parsed.query, parsed.fragment))
+
+    if ensure_trailing_slash:
+        original_path = parsed.path or "/"
+        if (original_path == "/" or original_path.endswith("/")) and not normalized.endswith("/"):
+            normalized = f"{normalized}/"
+
+    return normalized
+
+
 class Settings(BaseSettings):
     DEBUG: bool = False
     PAYMENT_CHECK_INTERVAL: int = 60
@@ -65,45 +93,9 @@ class Settings(BaseSettings):
     CACHE_TTL: int = 60 * 5  # Django cache TTL
     BACKUP_RETENTION_DAYS: int = 30  # Postgres/Redis backup retention
 
-    KNOWLEDGE_BASE_FOLDER_ID: Annotated[str, Field(default="")]
-    KNOWLEDGE_REFRESH_INTERVAL: int = 60 * 60
-    KNOWLEDGE_REFRESH_START_DELAY: int = 180
-    AI_COACH_TIMEOUT: int = 420
-    LLM_COOLDOWN: int = 60
-    COACH_AGENT_RETRIES: int = 1
-    COACH_AGENT_TIMEOUT: int = 60
-    CHAT_HISTORY_LIMIT: int = 20
-    AI_COACH_MAX_TOOL_CALLS: Annotated[int, Field(default=5)]
-    AI_COACH_REQUEST_TIMEOUT: Annotated[int, Field(default=60)]
-    AI_COACH_DEFAULT_TOOL_TIMEOUT: Annotated[float, Field(default=3.0)]
-    AI_COACH_SEARCH_TIMEOUT: Annotated[float, Field(default=2.0)]
-    AI_COACH_HISTORY_TIMEOUT: Annotated[float, Field(default=6.0)]
-    AI_COACH_PROGRAM_HISTORY_TIMEOUT: Annotated[float, Field(default=6.0)]
-    AI_COACH_SAVE_TIMEOUT: Annotated[float, Field(default=30.0)]
-    AI_COACH_ATTACH_GIFS_MIN_BUDGET: Annotated[float, Field(default=10.0)]
-    AI_PLAN_DEDUP_TTL: Annotated[int, Field(default=3600)]
-    AI_PLAN_NOTIFY_TIMEOUT: Annotated[int, Field(default=900)]
-    AI_PLAN_NOTIFY_POLL_INTERVAL: Annotated[int, Field(default=30)]
-    AI_PLAN_NOTIFY_FAILURE_TTL: Annotated[int, Field(default=86400)]
-
-    AI_COACH_REFRESH_USER: Annotated[str, Field(default="admin")]
-    AI_COACH_REFRESH_PASSWORD: Annotated[str, Field(default="password")]
-
-    OPENAI_BASE_URL: Annotated[str, Field(default="https://api.openai.com/v1")]
-    EMBEDDING_API_KEY: Annotated[str, Field(default="")]
-    LLM_API_URL: Annotated[str, Field(default="https://openrouter.ai/api/v1")]
-    LLM_API_KEY: Annotated[str, Field(default="")]
-    LLM_MODEL: Annotated[str, Field(default="gpt-5-mini")]  # for cognee
-    LLM_PROVIDER: Annotated[str, Field(default="custom")]  # for cognee
-    AGENT_MODEL: Annotated[str, Field(default="openai/gpt-5-mini")]
-    AGENT_PROVIDER: Annotated[str, Field(default="openrouter")]
-
-    EMBEDDING_MODEL: Annotated[str, Field(default="openai/text-embedding-3-large")]
-    EMBEDDING_PROVIDER: Annotated[str, Field(default="openai")]
-    EMBEDDING_ENDPOINT: Annotated[str, Field(default="https://api.openai.com/v1")]
-
     BOT_TOKEN: Annotated[str, Field(default="")]
     BOT_LINK: Annotated[str, Field(default="")]
+    BOT_NAME: str = "Lifty"
     WEBHOOK_HOST: Annotated[str, Field(default="")]
     HOST_NGINX_PORT: Annotated[str, Field(default="8000")]
     WEBAPP_PUBLIC_URL: Annotated[str | None, Field(default=None)]
@@ -142,7 +134,8 @@ class Settings(BaseSettings):
     COGNEE_CLIENT_DATASET_NAMESPACE: Annotated[str | None, Field(default=None)]
 
     API_KEY: Annotated[str, Field(default="")]
-    INTERNAL_API_KEY: Annotated[str | None, Field(default=None)]
+    INTERNAL_KEY_ID: Annotated[str, Field(default="gymbot-internal-v1")]
+    INTERNAL_API_KEY: Annotated[str, Field(default="")]
     INTERNAL_IP_ALLOWLIST: Annotated[list[str], Field(default_factory=list)]
     SECRET_KEY: Annotated[str, Field(default="")]
     API_HOST: Annotated[str, Field(default="http://127.0.0.1")]
@@ -182,7 +175,65 @@ class Settings(BaseSettings):
     AI_PROGRAM_PRICE: Decimal = Decimal("350")
     REGULAR_AI_SUBSCRIPTION_PRICE: Decimal = Decimal("450")
     LARGE_AI_SUBSCRIPTION_PRICE: Decimal = Decimal("2000")
-    ASK_AI_PRICE: Decimal = Decimal("10")
+    ASK_AI_PRICE: Annotated[int, Field(default=10)]
+
+    AI_COACH_TIMEOUT: int = 420
+    LLM_COOLDOWN: int = 60
+    COACH_AGENT_RETRIES: int = 1
+    COACH_AGENT_TIMEOUT: int = 60
+    CHAT_HISTORY_LIMIT: int = 20
+    AI_COACH_REFRESH_USER: Annotated[str, Field(default="admin")]
+    AI_COACH_REFRESH_PASSWORD: Annotated[str, Field(default="password")]
+    AI_COACH_MAX_TOOL_CALLS: Annotated[int, Field(default=5)]
+    AI_COACH_REQUEST_TIMEOUT: Annotated[int, Field(default=60)]
+    AI_COACH_GLOBAL_PROJECTION_TIMEOUT: Annotated[float, Field(default=15.0)]
+    AI_COACH_DEFAULT_TOOL_TIMEOUT: Annotated[float, Field(default=3.0)]
+    AI_COACH_SEARCH_TIMEOUT: Annotated[float, Field(default=8.0)]
+    AI_COACH_HISTORY_TIMEOUT: Annotated[float, Field(default=6.0)]
+    AI_COACH_PROGRAM_HISTORY_TIMEOUT: Annotated[float, Field(default=6.0)]
+    AI_COACH_SAVE_TIMEOUT: Annotated[float, Field(default=30.0)]
+    AI_COACH_ATTACH_GIFS_MIN_BUDGET: Annotated[float, Field(default=10.0)]
+    AI_COACH_SECONDARY_MODEL: Annotated[str | None, Field(default=None)]
+    AI_COACH_FIRST_PASS_MAX_TOKENS: Annotated[int, Field(default=8192)]
+    AI_COACH_RETRY_MAX_TOKENS: Annotated[int, Field(default=8192)]
+    AI_COACH_CONTINUATION_MAX_TOKENS: Annotated[int, Field(default=4096)]
+    AI_COACH_EMPTY_COMPLETION_RETRY: Annotated[bool, Field(default=True)]
+    AI_COACH_PRIMARY_CONTEXT_LIMIT: Annotated[int, Field(default=2200)]
+    AI_COACH_RETRY_CONTEXT_LIMIT: Annotated[int, Field(default=1400)]
+    DISABLE_MANUAL_PLACEHOLDER: Annotated[bool, Field(default=True)]
+    AI_PLAN_DEDUP_TTL: Annotated[int, Field(default=3600)]
+    AI_PLAN_NOTIFY_TIMEOUT: Annotated[int, Field(default=900)]
+    AI_PLAN_NOTIFY_POLL_INTERVAL: Annotated[int, Field(default=30)]
+    AI_PLAN_NOTIFY_FAILURE_TTL: Annotated[int, Field(default=86400)]
+    AI_QA_IMAGE_MAX_BYTES: Annotated[int, Field(default=512_000)]
+    # TTL for Ask AI request deduplication. This is the time window during which a request
+    # with the same ID will be considered a duplicate and ignored. Set to 24 hours.
+    AI_QA_DEDUP_TTL: Annotated[int, Field(default=86400)]
+    AI_QA_MAX_RETRIES: Annotated[int, Field(default=5)]
+    AI_QA_RETRY_BACKOFF_S: Annotated[int, Field(default=30)]
+
+    COGNEE_STORAGE_PATH: Annotated[str, Field(default="cognee_storage")]
+    KB_CHAT_PROJECT_DEBOUNCE_MIN: Annotated[float, Field(default=5.0)]
+    COGNEE_STORAGE_SHA_PRIMARY: Annotated[bool, Field(default=True)]
+    COGNEE_GLOBAL_DATASET: Annotated[str, Field(default="kb_global")]
+    COGNEE_ENABLE_AGGRESSIVE_REBUILD: Annotated[bool, Field(default=False)]
+    KB_BOOTSTRAP_ALWAYS: Annotated[bool, Field(default=False)]
+    KNOWLEDGE_BASE_FOLDER_ID: Annotated[str, Field(default="")]
+    KNOWLEDGE_REFRESH_INTERVAL: int = 60 * 60
+    KNOWLEDGE_REFRESH_START_DELAY: int = 180
+
+    OPENAI_BASE_URL: Annotated[str, Field(default="https://api.openai.com/v1")]
+    EMBEDDING_API_KEY: Annotated[str, Field(default="")]
+    LLM_API_URL: Annotated[str, Field(default="https://openrouter.ai/api/v1")]
+    LLM_API_KEY: Annotated[str, Field(default="")]
+    LLM_MODEL: Annotated[str, Field(default="gpt-5-mini")]  # for cognee
+    LLM_PROVIDER: Annotated[str, Field(default="custom")]  # for cognee
+    AGENT_MODEL: Annotated[str, Field(default="openai/gpt-5-mini")]
+    AGENT_PROVIDER: Annotated[str, Field(default="openrouter")]
+
+    EMBEDDING_MODEL: Annotated[str, Field(default="openai/text-embedding-3-large")]
+    EMBEDDING_PROVIDER: Annotated[str, Field(default="openai")]
+    EMBEDDING_ENDPOINT: Annotated[str, Field(default="https://api.openai.com/v1")]
 
     model_config = {
         "env_file": ".env",
@@ -212,6 +263,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _compute_derived_fields(self) -> "Settings":
         in_docker: bool = os.path.exists("/.dockerenv") or os.getenv("KUBERNETES_SERVICE_HOST") is not None
+        self.AI_COACH_URL = normalize_service_url(self.AI_COACH_URL)
 
         # WEBHOOK_URL
         if not self.WEBHOOK_URL:
@@ -228,6 +280,15 @@ class Settings(BaseSettings):
         # API_URL
         if not self.API_URL:
             self.API_URL = self._derive_api_url(in_docker)
+
+        storage_path_candidate = Path(self.COGNEE_STORAGE_PATH).expanduser()
+        if in_docker and not storage_path_candidate.is_absolute():
+            storage_path_candidate = Path("/app") / storage_path_candidate
+        try:
+            resolved_storage = storage_path_candidate.resolve(strict=False)
+        except RuntimeError:
+            resolved_storage = storage_path_candidate
+        self.COGNEE_STORAGE_PATH = str(resolved_storage)
 
         # Cognee dataset namespace
         if not self.COGNEE_CLIENT_DATASET_NAMESPACE:
@@ -268,6 +329,8 @@ class Settings(BaseSettings):
                     bot_service_host,
                     force=force_override,
                 )
+
+        self.AI_COACH_URL = normalize_service_url(self.AI_COACH_URL)
 
         return self
 
