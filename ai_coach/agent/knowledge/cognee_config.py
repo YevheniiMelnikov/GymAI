@@ -1,10 +1,7 @@
-# pyrefly: ignore-file
-# ruff: noqa
-"""Cognee configuration helpers."""
-
 import importlib
 import inspect
 import os
+import cognee
 from importlib import import_module
 from pathlib import Path
 from types import ModuleType
@@ -112,7 +109,7 @@ def _collect_storage_info(root: Path | None) -> dict[str, Any]:
 
 def _log_storage_details(root: Path) -> None:
     info = _collect_storage_info(root)
-    logger.info(
+    logger.debug(
         "cognee_storage prepared path={} exists={} writable={} entries={} sample={} "
         "package_path={} package_exists={} package_is_symlink={} package_target={}",
         info["root"],

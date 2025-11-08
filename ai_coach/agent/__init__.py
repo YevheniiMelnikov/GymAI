@@ -7,7 +7,10 @@ __all__ = ["AgentDeps", "CoachAgentProtocol", "CoachAgent", "ProgramAdapter", "Q
 
 
 def __getattr__(name: str) -> Any:  # pragma: no cover - simple lazy import
-    if name in {"CoachAgent", "ProgramAdapter", "QAResponse"}:
+    if name in {"CoachAgent", "QAResponse"}:
         module = import_module(".coach", __name__)
+        return getattr(module, name)
+    if name == "ProgramAdapter":
+        module = import_module(".utils", __name__)
         return getattr(module, name)
     raise AttributeError(name)

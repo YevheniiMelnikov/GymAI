@@ -4,14 +4,17 @@ import asyncio
 from typing import Any
 
 import httpx
+from asgiref.sync import async_to_sync
 from celery import Task
 from loguru import logger
+
+import orjson
 
 from config.app_settings import settings
 from core.ai_coach.state.ask_ai import AiQuestionState
 from core.celery_app import app
-from core.internal_http import build_internal_auth_headers, internal_request_timeout
-from core.schemas import QAResponse
+from core.internal_http import build_internal_hmac_auth_headers, internal_request_timeout
+from core.schemas import QAResponse, Client
 from core.services import APIService
 from core.services.internal.api_client import APIClientHTTPError, APIClientTransportError
 
@@ -19,19 +22,67 @@ __all__ = [
     "ask_ai_question",
     "notify_ai_answer_ready_task",
     "handle_ai_question_failure",
+    "refund_ai_qa_credits_task",
 ]
 
 AI_QA_SOFT_TIME_LIMIT = settings.AI_COACH_TIMEOUT
 AI_QA_TIME_LIMIT = AI_QA_SOFT_TIME_LIMIT + 30
 AI_QA_NOTIFY_SOFT_LIMIT = settings.AI_PLAN_NOTIFY_TIMEOUT
 AI_QA_NOTIFY_TIME_LIMIT = AI_QA_NOTIFY_SOFT_LIMIT + 30
+AI_QA_REFUND_SOFT_LIMIT = 120
+AI_QA_REFUND_TIME_LIMIT = 150
 
 
-async def _claim_answer_request(request_id: str, *, attempt: int) -> bool:
+async def _refund_credits_impl(payload: dict[str, Any]) -> None:
+    request_id = str(payload["request_id"])
+    state = AiQuestionState.create()
+    if not await state.is_charged(request_id) or not await state.unmark_charged(request_id):
+        logger.info(f"event=ask_ai_refund_skip request_id={request_id}")
+        return
+
+    client_id = int(payload["client_id"])
+    cost = int(payload["cost"])
+    try:
+        client: Client = await APIService.client.refund_credits(client_id, cost)
+    except APIClientHTTPError as exc:
+        logger.error(f"event=ask_ai_refund_failed request_id={request_id} client_id={client_id} error={exc.reason}")
+        raise
+    except Exception as exc:
+        logger.error(f"event=ask_ai_refund_failed request_id={request_id} client_id={client_id} error={exc!s}")
+        raise
+
+    logger.info(
+        f"event=ask_ai_refund_ok request_id={request_id} client_id={client_id} cost={cost} balance={client.credits}"
+    )
+
+
+@app.task(
+    bind=True,
+    queue="ai_coach",
+    routing_key="ai_coach",
+    autoretry_for=(APIClientTransportError, APIClientHTTPError),
+    retry_backoff=settings.AI_QA_RETRY_BACKOFF_S,
+    retry_jitter=True,
+    max_retries=3,
+    acks_late=True,
+    task_acks_on_failure_or_timeout=False,
+    soft_time_limit=AI_QA_REFUND_SOFT_LIMIT,
+    time_limit=AI_QA_REFUND_TIME_LIMIT,
+)
+def refund_ai_qa_credits_task(self, payload: dict[str, Any]) -> None:  # pyrefly: ignore[valid-type]
+    try:
+        async_to_sync(_refund_credits_impl)(payload)
+    except Exception:
+        logger.error(
+            f"event=ask_ai_refund_gave_up request_id={payload.get('request_id')} client_id={payload.get('client_id')}"
+        )
+        raise
+
+
+async def _claim_answer_request(request_id: str, state: AiQuestionState, *, attempt: int) -> bool:
     """Deduplicate task execution without touching delivery claim state."""
     if not request_id or attempt > 0:
         return True
-    state = AiQuestionState.create()
     claimed = await state.claim_task(request_id, ttl_s=settings.AI_QA_DEDUP_TTL)
     if not claimed:
         logger.debug(f"event=ask_ai_request_duplicate request_id={request_id}")
@@ -41,9 +92,11 @@ async def _claim_answer_request(request_id: str, *, attempt: int) -> bool:
 async def _notify_ai_answer_ready(payload: dict[str, Any]) -> None:
     base_url: str = settings.BOT_INTERNAL_URL.rstrip("/")
     url: str = f"{base_url}/internal/tasks/ai_answer_ready/"
-    headers = build_internal_auth_headers(
-        internal_api_key=settings.INTERNAL_API_KEY,
-        fallback_api_key=settings.API_KEY,
+    body = orjson.dumps(payload)
+    headers = build_internal_hmac_auth_headers(
+        key_id=settings.INTERNAL_KEY_ID,
+        secret_key=settings.INTERNAL_API_KEY,
+        body=body,
     )
     timeout = internal_request_timeout(settings)
     request_id = str(payload.get("request_id", ""))
@@ -62,7 +115,7 @@ async def _notify_ai_answer_ready(payload: dict[str, Any]) -> None:
     logger.info(f"event=ask_ai_notify_start request_id={request_id} status={status}")
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response: httpx.Response = await client.post(url, json=payload, headers=headers)
+            response: httpx.Response = await client.post(url, content=body, headers=headers)
             response.raise_for_status()
     except httpx.HTTPStatusError as exc:
         status_code = exc.response.status_code if exc.response is not None else None
@@ -84,8 +137,19 @@ async def _handle_notify_answer_failure(payload: dict[str, Any], exc: Exception)
     client_id = payload.get("client_id")
     detail = f"{type(exc).__name__}: {exc!s}"
     state = AiQuestionState.create()
-    await state.mark_failed(request_id, detail)
-    logger.error(f"event=ask_ai_notify_gave_up request_id={request_id} client_id={client_id} detail={detail}")
+    if await state.mark_failed(request_id, detail):
+        logger.error(f"event=ask_ai_notify_gave_up request_id={request_id} client_id={client_id} detail={detail}")
+        if await state.is_charged(request_id):
+            refund_payload = {
+                "request_id": request_id,
+                "client_id": client_id,
+                "cost": payload.get("cost", 0),
+            }
+            refund_ai_qa_credits_task.apply_async(  # pyrefly: ignore[not-callable]
+                args=[refund_payload],
+                queue="ai_coach",
+                routing_key="ai_coach",
+            )
 
 
 def _extract_failure_detail(exc_info: tuple[Any, ...]) -> str:
@@ -131,6 +195,21 @@ async def _notify_ai_answer_error(
 async def _handle_ai_answer_failure_impl(payload: dict[str, Any], detail: str) -> None:
     client_id = int(payload.get("client_id", 0))
     request_id = str(payload.get("request_id", ""))
+    state = AiQuestionState.create()
+    if await state.mark_failed(request_id, detail):
+        logger.error(f"event=ask_ai_gave_up request_id={request_id} client_id={client_id} detail={detail}")
+        if await state.is_charged(request_id):
+            refund_payload = {
+                "request_id": request_id,
+                "client_id": client_id,
+                "cost": payload.get("cost", 0),
+            }
+            refund_ai_qa_credits_task.apply_async(  # pyrefly: ignore[not-callable]
+                args=[refund_payload],
+                queue="ai_coach",
+                routing_key="ai_coach",
+            )
+
     client_profile_raw = payload.get("client_profile_id")
     try:
         client_profile_id = int(client_profile_raw) if client_profile_raw is not None else None
@@ -144,9 +223,6 @@ async def _handle_ai_answer_failure_impl(payload: dict[str, Any], detail: str) -
         error=reason,
         dispatch=True,
     )
-    if request_id:
-        state = AiQuestionState.create()
-        await state.mark_failed(request_id, reason)
 
 
 async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str, Any] | None:
@@ -179,13 +255,36 @@ async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str
         attachments.append({"mime": mime_val, "data_base64": data_val})
     attempt = getattr(task.request, "retries", 0)
 
-    if not await _claim_answer_request(request_id, attempt=attempt):
+    cost = int(payload["cost"])
+
+    state = AiQuestionState.create()
+    if not await _claim_answer_request(request_id, state, attempt=attempt):
         logger.info(f"event=ask_ai_duplicate request_id={request_id} client_id={client_id}")
         return {
             "client_id": client_id,
             "request_id": request_id,
             "status": "duplicate",
         }
+
+    if await state.mark_charged(request_id):
+        try:
+            client: Client = await APIService.client.charge_credits(client_id, cost)
+        except APIClientHTTPError as exc:
+            logger.error(
+                f"event=ask_ai_charge_failed client_id={client_id} request_id={request_id} "
+                f"status={exc.status} reason={exc.reason}"
+            )
+            if not exc.retryable:
+                await state.unmark_charged(request_id)
+            raise
+        except Exception:
+            logger.error(f"event=ask_ai_charge_failed client_id={client_id} request_id={request_id}")
+            raise
+        logger.info(
+            f"event=ask_ai_charged request_id={request_id} client_id={client_id} cost={cost} balance={client.credits}"
+        )
+    else:
+        logger.warning(f"event=ask_ai_charge_skipped request_id={request_id} client_id={client_id}")
 
     logger.info(
         (
@@ -251,6 +350,7 @@ async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str
         "status": "success",
         "request_id": request_id,
         "answer": qa_response.answer,
+        "cost": cost,
     }
     if sources:
         notify_payload["sources"] = sources
@@ -274,7 +374,7 @@ async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str
 )
 def ask_ai_question(self, payload: dict[str, Any]) -> dict[str, Any] | None:  # pyrefly: ignore[valid-type]
     try:
-        notify_payload = asyncio.run(_ask_ai_question_impl(payload, self))
+        notify_payload = async_to_sync(_ask_ai_question_impl)(payload, self)
     except APIClientHTTPError as exc:
         retries = int(getattr(self.request, "retries", 0))
         max_retries = int(getattr(self, "max_retries", 0) or 0)
@@ -292,6 +392,10 @@ def ask_ai_question(self, payload: dict[str, Any]) -> dict[str, Any] | None:  # 
     bind=True,
     queue="ai_coach",
     routing_key="ai_coach",
+    autoretry_for=(httpx.RequestError, httpx.HTTPStatusError),
+    retry_backoff=settings.AI_QA_RETRY_BACKOFF_S,
+    retry_jitter=True,
+    max_retries=settings.AI_QA_MAX_RETRIES,
     acks_late=True,
     task_acks_on_failure_or_timeout=False,
     soft_time_limit=AI_QA_NOTIFY_SOFT_LIMIT,
@@ -302,9 +406,9 @@ def notify_ai_answer_ready_task(self, payload: dict[str, Any]) -> None:  # pyref
         logger.error(f"event=ask_ai_notify_invalid_payload payload_type={type(payload)!r}")
         return
     try:
-        asyncio.run(_notify_ai_answer_ready(payload))
+        async_to_sync(_notify_ai_answer_ready)(payload)
     except Exception as exc:  # noqa: BLE001
-        asyncio.run(_handle_notify_answer_failure(payload, exc))
+        async_to_sync(_handle_notify_answer_failure)(payload, exc)
         raise
 
 
@@ -317,6 +421,23 @@ def notify_ai_answer_ready_task(self, payload: dict[str, Any]) -> None:  # pyref
     soft_time_limit=AI_QA_NOTIFY_SOFT_LIMIT,
     time_limit=AI_QA_NOTIFY_TIME_LIMIT,
 )
-def handle_ai_question_failure(self, payload: dict[str, Any], *exc_info: Any) -> None:  # pyrefly: ignore[valid-type]
+def handle_ai_question_failure(self, payload: Any, *exc_info: Any) -> None:  # pyrefly: ignore[valid-type]
+    def _coerce_payload(obj: Any) -> dict[str, Any]:
+        if isinstance(obj, dict):
+            return obj
+        if isinstance(obj, (bytes, str)):
+            try:
+                return orjson.loads(obj)
+            except orjson.JSONDecodeError:
+                try:
+                    text = obj.decode() if isinstance(obj, bytes) else str(obj)
+                except Exception:
+                    text = repr(obj)
+                return {"raw": text}
+        return {"raw": repr(obj)}
+
     detail = _extract_failure_detail(exc_info)
-    asyncio.run(_handle_ai_answer_failure_impl(payload, detail))
+    safe_payload = _coerce_payload(payload)
+    preview = str(safe_payload)[:200]
+    logger.info(f"event=ask_ai_failure_payload shape={type(payload).__name__} preview={preview}")
+    async_to_sync(_handle_ai_answer_failure_impl)(safe_payload, detail)

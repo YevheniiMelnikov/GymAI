@@ -1,5 +1,4 @@
 import html
-from typing import Iterable
 
 from aiohttp import web
 from aiogram import Bot
@@ -11,6 +10,8 @@ from pydantic import ValidationError
 
 from bot.handlers.internal.auth import require_internal_auth
 from bot.handlers.internal.schemas import AiAnswerNotify
+from bot.keyboards import ask_ai_again_kb
+from bot.utils.chat import chunk_message
 from bot.states import States
 from bot.texts.text_manager import msg_text
 from config.app_settings import settings
@@ -20,11 +21,6 @@ from core.services import APIService
 from core.schemas import Profile
 
 from .tasks import _resolve_client_and_profile
-
-
-def _chunk_message(text: str, limit: int = 3500) -> Iterable[str]:
-    for start in range(0, len(text), limit):
-        yield text[start : start + limit]
 
 
 @require_internal_auth
@@ -40,8 +36,9 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
         return web.json_response({"detail": exc.errors()}, status=400)
 
     state_tracker = AiQuestionState.create()
-    if not await state_tracker.claim_delivery(payload.request_id):
-        logger.debug(f"event=ask_ai_answer_duplicate request_id={payload.request_id} client_id={payload.client_id}")
+    request_id = payload.request_id
+    if await state_tracker.is_delivered(request_id) or await state_tracker.is_failed(request_id):
+        logger.debug(f"event=ask_ai_answer_duplicate request_id={request_id} client_id={payload.client_id}")
         return web.json_response({"result": "ignored"}, status=202)
 
     try:
@@ -130,10 +127,10 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
             " | ".join(payload.sources),
         )
 
+    incoming_template = msg_text("incoming_message", language)
     escaped_answer = html.escape(answer_text)
-    message_text = msg_text("incoming_message", language).format(name=settings.BOT_NAME, message=escaped_answer)
-    chunks = list(_chunk_message(message_text))
-    rendered_len = sum(len(chunk) for chunk in chunks)
+    chunks = list(chunk_message(escaped_answer, template=incoming_template, sender_name=settings.BOT_NAME))
+    rendered_len = sum(len(incoming_template.format(name=settings.BOT_NAME, message=chunk)) for chunk in chunks)
     truncated = "yes" if len(chunks) > 1 else "no"
     logger.info(
         "bot.send out_len={} rendered_len={} truncated={}",
@@ -143,13 +140,17 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
     )
 
     try:
-        for chunk in chunks:
+        ask_again_keyboard = ask_ai_again_kb(language)
+        for index, chunk in enumerate(chunks):
+            message_text = incoming_template.format(name=settings.BOT_NAME, message=chunk)
+            reply_markup = ask_again_keyboard if index == len(chunks) - 1 else None
             await bot.send_message(
                 chat_id=profile.tg_id,
-                text=chunk,
+                text=message_text,
                 parse_mode=ParseMode.HTML,
                 disable_web_page_preview=True,
                 reply_to_message_id=reply_to_message_id,
+                reply_markup=reply_markup,
             )
     except Exception as exc:  # noqa: BLE001
         await state_tracker.mark_failed(request_id, f"send_failed:{exc!s}")

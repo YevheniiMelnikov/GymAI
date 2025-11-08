@@ -22,7 +22,7 @@ def test_tool_search_knowledge_k(monkeypatch: pytest.MonkeyPatch) -> None:
             called["client_id"] = client_id
             return []
 
-        async def fake_fallback_entries(client_id: int, limit: int = 6) -> list[str]:
+        async def fake_fallback_entries(client_id: int, limit: int = 6) -> list[tuple[str, str]]:
             return []
 
         monkeypatch.setattr(KnowledgeBase, "search", fake_search)
@@ -44,7 +44,7 @@ def test_tool_search_knowledge_duplicate_returns_empty(monkeypatch: pytest.Monke
         async def fake_search(query: str, client_id: int, k: int) -> list[str]:
             return []
 
-        async def fake_fallback_entries(client_id: int, limit: int = 6) -> list[str]:
+        async def fake_fallback_entries(client_id: int, limit: int = 6) -> list[tuple[str, str]]:
             return []
 
         monkeypatch.setattr(KnowledgeBase, "search", fake_search)
@@ -63,8 +63,8 @@ def test_tool_search_knowledge_timeout_fallback(monkeypatch: pytest.MonkeyPatch)
             coro.close()
             raise TimeoutError
 
-        async def fake_fallback_entries(client_id: int, limit: int = 6) -> list[str]:
-            return ["Fallback guidance"]
+        async def fake_fallback_entries(client_id: int, limit: int = 6) -> list[tuple[str, str]]:
+            return [("Fallback guidance", "kb_global")]
 
         monkeypatch.setattr("ai_coach.agent.tools.wait_for", fake_wait_for)
         monkeypatch.setattr(KnowledgeBase, "fallback_entries", fake_fallback_entries)
@@ -82,8 +82,8 @@ def test_tool_search_knowledge_uses_fallback_entries(monkeypatch: pytest.MonkeyP
         async def fake_search(query: str, client_id: int, k: int) -> list[str]:
             return []
 
-        async def fake_fallback_entries(client_id: int, limit: int = 6) -> list[str]:
-            return [" First entry ", "Second entry"]
+        async def fake_fallback_entries(client_id: int, limit: int = 6) -> list[tuple[str, str]]:
+            return [(" First entry ", "kb_global"), ("Second entry", "kb_chat_1")]
 
         monkeypatch.setattr(KnowledgeBase, "search", fake_search)
         monkeypatch.setattr(KnowledgeBase, "fallback_entries", fake_fallback_entries)

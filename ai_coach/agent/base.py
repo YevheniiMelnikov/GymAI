@@ -23,6 +23,7 @@ class AgentDeps:
     max_run_seconds: float = float(settings.AI_COACH_REQUEST_TIMEOUT)
     tool_calls: int = 0
     knowledge_base_empty: bool = False
+    kb_used: bool = False
     fallback_used: bool = False
     cached_history: list[str] | None = None
     started_at: float = field(default_factory=monotonic)

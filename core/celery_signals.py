@@ -1,6 +1,7 @@
 import logging
 import os
 import time
+import threading
 from typing import Any, Iterable, Mapping, MutableMapping, cast
 
 from urllib.parse import urlparse
@@ -106,11 +107,51 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
 
     if not registered_ok:
         available_sample = sorted(registered_tasks)[:10]
-        logger.error(
-            f"celery tasks missing hostname={worker.hostname} missing={missing} available_sample={available_sample}"
+        logger.debug(
+            "celery tasks pending hostname={} missing={} available_sample={} recheck_in=3.0".format(
+                worker.hostname,
+                missing,
+                available_sample,
+            )
         )
-        if strict_mode:
-            raise SystemExit("required celery tasks missing")
+
+        def _delayed_task_report() -> None:
+            refreshed: set[str] = set(registered_tasks)
+            try:
+                follow_up = control.inspect(destination=[worker.hostname])
+                if follow_up is not None:
+                    follow_registered = follow_up.registered() or follow_up.registered_tasks() or {}
+                else:
+                    follow_registered = {}
+            except Exception as insp_exc:  # noqa: BLE001 - diagnostics only
+                logger.debug("celery task recheck failed hostname={} error={}".format(worker.hostname, insp_exc))
+                follow_registered = {}
+            if follow_registered:
+                refreshed.update(str(name) for name in follow_registered.get(worker.hostname, []) if name)
+            remaining = [name for name in EXPECTED_TASK_NAMES if name not in refreshed]
+            if remaining:
+                refreshed_sample = sorted(refreshed)[:10]
+                logger.warning(
+                    "celery tasks missing hostname={} missing={} available_sample={}".format(
+                        worker.hostname,
+                        remaining,
+                        refreshed_sample,
+                    )
+                )
+                if strict_mode:
+                    logger.error("celery strict mode exiting due to missing tasks")
+                    os._exit(1)
+            else:
+                logger.info(
+                    "celery tasks registered hostname={} recovered_missing={}".format(
+                        worker.hostname,
+                        missing,
+                    )
+                )
+
+        timer = threading.Timer(3.0, _delayed_task_report)
+        timer.daemon = True
+        timer.start()
         return
 
 

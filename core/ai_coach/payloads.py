@@ -1,5 +1,3 @@
-"""Validated payloads for AI coach Celery tasks."""
-
 from pydantic import BaseModel, Field, field_validator
 
 from core.enums import WorkoutPlanType, WorkoutType
@@ -60,6 +58,7 @@ class AiQuestionPayload(BaseModel):
     language: str
     prompt: str
     request_id: str
+    cost: int
     attachments: list[AiAttachmentPayload] = Field(default_factory=list)
 
     model_config = {"use_enum_values": True}

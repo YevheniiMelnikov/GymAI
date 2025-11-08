@@ -1,5 +1,5 @@
 import html
-from typing import Any, cast
+from typing import Any, cast, Iterable
 
 from aiogram import Bot
 from aiogram.enums import ParseMode
@@ -275,3 +275,18 @@ async def process_feedback_content(message: Message, profile: Profile, bot: Bot)
 
     await answer_msg(message, msg_text("invalid_content", profile.language))
     return False
+
+
+def chunk_message(text: str, *, template: str, sender_name: str) -> Iterable[str]:
+    """Split text so that template.format(..., message=chunk) stays within Telegram limit."""
+    base_render = template.format(name=sender_name, message="")
+    overhead = len(base_render)
+    allowance = 3900 - overhead  # telegram message limit
+    if allowance <= 0:
+        # Fallback to a safe slice size if template alone is close to the limit
+        allowance = max(3900 // 2, 512)
+    if len(text) <= allowance:
+        yield text
+        return
+    for start in range(0, len(text), allowance):
+        yield text[start : start + allowance]

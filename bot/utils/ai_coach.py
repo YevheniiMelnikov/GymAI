@@ -187,6 +187,7 @@ def _build_ai_question_payload(
     language: str,
     prompt: str,
     request_id: str,
+    cost: int,
     image_base64: str | None,
     image_mime: str | None,
 ) -> AiQuestionPayload | None:
@@ -202,6 +203,7 @@ def _build_ai_question_payload(
             prompt=prompt,
             attachments=attachments,
             request_id=request_id,
+            cost=cost,
         )
     except ValidationError as exc:
         logger.error(f"event=ask_ai_invalid_payload request_id={request_id} client_id={client_id} error={exc!s}")
@@ -267,6 +269,7 @@ async def enqueue_ai_question(
     prompt: str,
     language: str,
     request_id: str,
+    cost: int,
     image_base64: str | None = None,
     image_mime: str | None = None,
 ) -> bool:
@@ -284,6 +287,7 @@ async def enqueue_ai_question(
         language=language,
         prompt=prompt,
         request_id=request_id,
+        cost=cost,
         image_base64=image_base64,
         image_mime=image_mime,
     )

@@ -4,6 +4,7 @@ import asyncio
 from typing import Any
 
 import httpx
+import orjson
 from celery import Task
 from loguru import logger
 
@@ -11,7 +12,7 @@ from config.app_settings import settings
 from core.ai_coach.state.plan import AiPlanState
 from core.celery_app import app
 from core.enums import WorkoutPlanType, WorkoutType
-from core.internal_http import build_internal_auth_headers, internal_request_timeout
+from core.internal_http import build_internal_hmac_auth_headers, internal_request_timeout
 from core.schemas import Program, Subscription
 from core.services import APIService
 from core.services.internal.api_client import APIClientHTTPError, APIClientTransportError
@@ -45,9 +46,11 @@ async def _claim_plan_request(request_id: str, action: str, *, attempt: int) -> 
 async def _notify_ai_plan_ready(payload: dict[str, Any]) -> None:
     base_url: str = settings.BOT_INTERNAL_URL.rstrip("/")
     url: str = f"{base_url}/internal/tasks/ai_plan_ready/"
-    headers = build_internal_auth_headers(
-        internal_api_key=settings.INTERNAL_API_KEY,
-        fallback_api_key=settings.API_KEY,
+    body = orjson.dumps(payload)
+    headers = build_internal_hmac_auth_headers(
+        key_id=settings.INTERNAL_KEY_ID,
+        secret_key=settings.INTERNAL_API_KEY,
+        body=body,
     )
     timeout = internal_request_timeout(settings)
     request_id = str(payload.get("request_id", ""))
@@ -64,7 +67,7 @@ async def _notify_ai_plan_ready(payload: dict[str, Any]) -> None:
     logger.info(f"ai_plan_notify_start action={action} request_id={request_id} url={url}")
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            response: httpx.Response = await client.post(url, json=payload, headers=headers)
+            response: httpx.Response = await client.post(url, content=body, headers=headers)
             response.raise_for_status()
     except httpx.HTTPStatusError as exc:
         status_code: int | None = exc.response.status_code if exc.response is not None else None

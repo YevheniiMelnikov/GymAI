@@ -1,11 +1,12 @@
 """Celery tasks that proxy calls to the bot service."""
 
 import httpx
+import orjson
 from loguru import logger
 
 from config.app_settings import settings
 from core.celery_app import app
-from core.internal_http import build_internal_auth_headers, internal_request_timeout
+from core.internal_http import build_internal_hmac_auth_headers, internal_request_timeout
 
 __all__ = [
     "export_coach_payouts",
@@ -19,10 +20,11 @@ def _bot_request_path(path: str) -> str:
     return f"{base_url}{path}"
 
 
-def _bot_headers() -> dict[str, str]:
-    return build_internal_auth_headers(
-        internal_api_key=settings.INTERNAL_API_KEY,
-        fallback_api_key=settings.API_KEY,
+def _bot_headers(body: bytes = b"") -> dict[str, str]:
+    return build_internal_hmac_auth_headers(
+        key_id=settings.INTERNAL_KEY_ID,
+        secret_key=settings.INTERNAL_API_KEY,
+        body=body,
     )
 
 
@@ -78,16 +80,17 @@ def send_daily_survey(self) -> None:
 def send_workout_result(self, coach_profile_id: int, client_profile_id: int, text: str) -> None:
     """Forward workout survey results to the appropriate recipient."""
     url = _bot_request_path("/internal/tasks/send_workout_result/")
-    headers = _bot_headers()
-    timeout = internal_request_timeout(settings)
     payload = {
         "coach_id": coach_profile_id,
         "client_id": client_profile_id,
         "text": text,
     }
+    body = orjson.dumps(payload)
+    headers = _bot_headers(body=body)
+    timeout = internal_request_timeout(settings)
 
     try:
-        resp = httpx.post(url, json=payload, timeout=timeout, headers=headers)
+        resp = httpx.post(url, content=body, timeout=timeout, headers=headers)
         resp.raise_for_status()
     except httpx.HTTPError as exc:
         logger.warning(f"Bot call failed for workout result: {exc!s}")

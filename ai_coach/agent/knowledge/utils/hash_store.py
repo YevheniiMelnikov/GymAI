@@ -1,16 +1,12 @@
-import logging
-
 import json
 from hashlib import sha256
 from typing import Any, Awaitable, Iterable, Mapping, cast
 
 from redis.asyncio import Redis
+from loguru import logger
 
-from ai_coach.agent.knowledge.utils.text import normalize_text
+from ai_coach.agent.knowledge.utils.helpers import normalize_text
 from config.app_settings import settings
-
-
-logger = logging.getLogger(__name__)
 
 
 class HashStore:
@@ -115,6 +111,15 @@ class HashStore:
             logger.error(f"HashStore.list error {dataset}: {e}")
             return set()
         return {str(item) for item in members}
+
+    @classmethod
+    async def count(cls, dataset: str) -> int:
+        try:
+            value = await cast(Awaitable[int], cls.redis.scard(cls._key(dataset)))
+        except Exception as e:  # pragma: no cover - best effort
+            logger.error(f"HashStore.count error {dataset}: {e}")
+            return 0
+        return int(value or 0)
 
     @classmethod
     async def list_all_datasets(cls) -> set[str]:

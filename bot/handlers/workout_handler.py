@@ -1,12 +1,10 @@
 from contextlib import suppress
-from pathlib import Path
 from typing import cast
 from uuid import uuid4
 
 from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
-from aiogram.types.input_file import FSInputFile
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.exceptions import TelegramBadRequest
 
@@ -22,7 +20,6 @@ from bot.keyboards import (
     workout_type_kb,
     subscription_creation_kb,
     program_creation_kb,
-    ask_ai_prompt_kb,
 )
 from bot.states import States
 from bot.texts.exercises import exercise_dict
@@ -45,7 +42,6 @@ from bot.utils.menus import (
     show_subscription_page,
     show_coaches_menu,
     show_ai_services,
-    show_balance_menu,
 )
 from bot.utils.menus import has_human_coach_subscription
 from bot.utils.profiles import get_assigned_coach
@@ -55,14 +51,12 @@ from bot.utils.other import (
 from bot.utils.bot import del_msg, answer_msg, delete_messages
 from bot.utils.workout_plans import reset_workout_plan, save_workout_plan, next_day_workout_plan
 from bot.utils.ai_coach import enqueue_ai_question
-from bot.utils.credits import available_ai_services
-from bot.utils.ask_ai import prepare_ask_ai_request
+from bot.utils.ask_ai import prepare_ask_ai_request, start_ask_ai_prompt
 from core.schemas import DayExercises, Profile
 from bot.texts import msg_text, btn_text
 from core.exceptions import AskAiPreparationError, ClientNotFoundError, SubscriptionNotFoundError
 from config.app_settings import settings
 from core.services import get_gif_manager
-from core.ai_coach.state.ask_ai import AiQuestionState
 
 workout_router = Router()
 
@@ -78,54 +72,15 @@ async def select_service(callback_query: CallbackQuery, state: FSMContext, bot: 
     elif callback_query.data == "contact":
         await contact_coach(callback_query, profile, state)
     elif callback_query.data == "ask_ai":
-        try:
-            client = await Cache.client.get_client(profile.id)
-        except ClientNotFoundError:
-            await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
-            await del_msg(callback_query)
-            return
-        if client.status == ClientStatus.initial:
-            await callback_query.answer(
-                msg_text("finish_registration_to_get_credits", profile.language), show_alert=True
-            )
-            await del_msg(callback_query)
-            return
-
-        services = {service.name: service.credits for service in available_ai_services()}
-        cost = int(services.get("ask_ai", int(settings.ASK_AI_PRICE)))
-        if client.credits < cost:
-            await callback_query.answer(msg_text("not_enough_credits", profile.language), show_alert=True)
-            await show_balance_menu(callback_query, profile, state)
-            return
-
-        file_path = Path(__file__).resolve().parent.parent / "images" / "ai_coach.png"
-        keyboard = ask_ai_prompt_kb(profile.language)
-        await state.set_state(States.ask_ai_question)
-        prompt_text = msg_text("ask_ai_prompt", profile.language).format(cost=cost, balance=client.credits)
-        if file_path.exists():
-            prompt_message = await answer_msg(
-                callback_query,
-                caption=prompt_text,
-                photo=FSInputFile(file_path),
-                reply_markup=keyboard,
-            )
-        else:
-            logger.warning(f"event=ask_ai_prompt_image_missing path={file_path} client_id={client.id}")
-            prompt_message = await answer_msg(
-                callback_query,
-                prompt_text,
-                reply_markup=keyboard,
-            )
-        update_payload: dict[str, object] = {
-            "client": client.model_dump(),
-            "ask_ai_cost": cost,
-        }
-        if prompt_message is not None:
-            update_payload["ask_ai_prompt_id"] = prompt_message.message_id
-            update_payload["ask_ai_prompt_chat_id"] = prompt_message.chat.id
-        await state.update_data(**update_payload)
-        await del_msg(callback_query)
+        await start_ask_ai_prompt(
+            callback_query,
+            profile,
+            state,
+            delete_origin=True,
+            show_balance_menu_on_insufficient=True,
+        )
         return
+
     elif callback_query.data == "ai_coach":
         coach = await Cache.coach.get_ai_coach()
         if not coach:
@@ -241,6 +196,7 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
         prompt=question_text,
         language=profile.language,
         request_id=request_id,
+        cost=cost,
         image_base64=image_base64,
         image_mime=image_mime,
     )
@@ -252,19 +208,6 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
             msg_text("coach_agent_error", lang).format(tg=settings.TG_SUPPORT_CONTACT),
         )
         return
-
-    charge_state = AiQuestionState.create()
-    charged = await charge_state.mark_charged(request_id)
-    if charged:
-        await APIService.profile.adjust_client_credits(profile.id, -cost)
-        new_balance = client.credits - cost
-        await Cache.client.update_client(client.profile, {"credits": new_balance})
-        client = client.model_copy(update={"credits": new_balance})
-        logger.info(
-            f"event=ask_ai_charged request_id={request_id} client_id={client.id} cost={cost} balance={new_balance}"
-        )
-    else:
-        logger.warning(f"event=ask_ai_charge_skipped request_id={request_id} client_id={client.id}")
 
     await answer_msg(message, msg_text("request_in_progress", lang))
 
@@ -404,7 +347,13 @@ async def program_creation_choice(callback_query: CallbackQuery, state: FSMConte
             client=client.model_dump(),
             service_type="program",
         )
-        await show_ai_services(callback_query, profile, state, allowed_services=("program",))
+        await show_ai_services(
+            callback_query,
+            profile,
+            state,
+            allowed_services=("program",),
+            auto_select_single=True,
+        )
         return
 
     if cb_data == "program_human":

@@ -1,7 +1,3 @@
-# pyrefly: ignore-file
-# ruff: noqa
-"""Tool definitions for the coach agent."""
-
 from asyncio import TimeoutError, wait_for
 from time import monotonic
 from typing import Any, Callable, Coroutine, TypeVar, cast
@@ -24,6 +20,8 @@ from ai_coach.types import CoachMode
 
 from ..schemas import ProgramPayload
 from core.services import get_gif_manager
+
+from ai_coach.agent.utils import ProgramAdapter, get_knowledge_base
 
 
 toolset = FunctionToolset()
@@ -129,7 +127,7 @@ async def tool_search_knowledge(
     k: int = 6,
 ) -> list[str]:
     """Search client and global knowledge with top-k limit."""
-    from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+    kb = get_knowledge_base()
 
     tool_name = "tool_search_knowledge"
     deps, skipped, cached = _start_tool(ctx, tool_name)
@@ -146,6 +144,7 @@ async def tool_search_knowledge(
         deps.knowledge_base_empty = True
         deps.last_knowledge_query = normalized_query
         deps.last_knowledge_empty = True
+        deps.kb_used = False
         logger.debug(
             f"knowledge_search_skipped client_id={client_id} query='{normalized_query[:80]}' reason=prompt_guard"
         )
@@ -153,6 +152,7 @@ async def tool_search_knowledge(
     if deps.knowledge_base_empty:
         deps.last_knowledge_query = normalized_query
         deps.last_knowledge_empty = True
+        deps.kb_used = False
         logger.info(
             f"knowledge_search_aborted client_id={client_id} query='{normalized_query[:80]}' reason=knowledge_base_empty"
         )
@@ -161,11 +161,12 @@ async def tool_search_knowledge(
         logger.debug(
             f"knowledge_search_repeat client_id={client_id} query='{normalized_query[:80]}' reason=empty_previous"
         )
+        deps.kb_used = False
         return _cache_result(deps, tool_name, [])
 
     async def _load_fallback(reason: str) -> list[str]:
         try:
-            fallback_values = await KnowledgeBase.fallback_entries(client_id, limit=k)
+            fallback_pairs = await kb.fallback_entries(client_id, limit=k)
         except Exception as fallback_exc:  # noqa: BLE001 - diagnostics only
             logger.debug(
                 "knowledge_search_fallback_failed client_id={} query='{}' reason={} detail={}".format(
@@ -175,9 +176,9 @@ async def tool_search_knowledge(
                     fallback_exc,
                 )
             )
-            fallback_values = []
+            fallback_pairs = []
         trimmed: list[str] = []
-        for value in fallback_values:
+        for value, dataset in fallback_pairs:
             text = str(value).strip()
             if text:
                 trimmed.append(text)
@@ -185,6 +186,7 @@ async def tool_search_knowledge(
         if trimmed:
             deps.last_knowledge_empty = False
             deps.knowledge_base_empty = False
+            deps.kb_used = True
             logger.info(
                 "knowledge_search_{}_fallback client_id={} query='{}' entries={}".format(
                     reason,
@@ -196,6 +198,7 @@ async def tool_search_knowledge(
             return _cache_result(deps, tool_name, trimmed)
         deps.last_knowledge_empty = True
         deps.knowledge_base_empty = True
+        deps.kb_used = False
         logger.info(
             "knowledge_search_{} client_id={} query='{}' detail=no_entries".format(
                 reason,
@@ -207,7 +210,7 @@ async def tool_search_knowledge(
 
     try:
         snippets = await wait_for(
-            KnowledgeBase.search(
+            kb.search(
                 normalized_query,
                 client_id,
                 k,
@@ -234,6 +237,7 @@ async def tool_search_knowledge(
     if snippets:
         deps.last_knowledge_empty = False
         deps.knowledge_base_empty = False
+        deps.kb_used = True
         logger.debug(f"tool_search_knowledge results={len(snippets)}")
         texts = [snippet.text for snippet in snippets]
         return _cache_result(deps, tool_name, texts)
@@ -247,8 +251,7 @@ async def tool_get_chat_history(
     limit: int = 20,
 ) -> list[str]:
     """Load recent chat messages for context."""
-    from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
-
+    kb = get_knowledge_base()
     tool_name = "tool_get_chat_history"
     deps, skipped, cached = _start_tool(ctx, tool_name)
     timeout = _tool_timeout("tool_get_chat_history")
@@ -257,12 +260,16 @@ async def tool_get_chat_history(
     if skipped:
         cached_history = cast(list[str], cached if cached is not None else [])
         return list(cached_history)
+
     try:
         if deps.cached_history is None:
-            history = await wait_for(KnowledgeBase.get_message_history(client_id, limit), timeout=timeout)
+            history = await wait_for(kb.get_message_history(client_id, limit), timeout=timeout)
             deps.cached_history = history
         else:
             history = deps.cached_history
+    except Exception as e:
+        logger.error(f"Error getting chat history: {e}")
+        return []
         if limit is None:
             return _cache_result(deps, tool_name, list(history))
         limited = list(history[:limit])
@@ -282,7 +289,6 @@ async def tool_save_program(
 ) -> Program:
     """Persist generated plan for the current client."""
     from core.services import APIService
-    from .coach import ProgramAdapter
 
     tool_name = "tool_save_program"
     deps, skipped, cached = _start_tool(ctx, tool_name)

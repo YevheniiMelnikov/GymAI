@@ -1,18 +1,28 @@
+import hmac
+import hashlib
 from types import SimpleNamespace
 
 import httpx
 
-from core.internal_http import build_internal_auth_headers, internal_request_timeout
+from core.internal_http import build_internal_hmac_auth_headers, internal_request_timeout
 
 
-def test_build_internal_auth_headers_prefers_internal_key() -> None:
-    headers = build_internal_auth_headers(internal_api_key="secret", fallback_api_key="public")
-    assert headers == {"X-Internal-Api-Key": "secret"}
+def test_build_internal_hmac_auth_headers():
+    key_id = "test_key_id"
+    secret_key = "test_secret_key"
+    body = b'{"test": "body"}'
 
+    headers = build_internal_hmac_auth_headers(key_id=key_id, secret_key=secret_key, body=body)
 
-def test_build_internal_auth_headers_fallback_to_authorization() -> None:
-    headers = build_internal_auth_headers(internal_api_key=None, fallback_api_key="public")
-    assert headers == {"Authorization": "Api-Key public"}
+    assert headers["X-Key-Id"] == key_id
+    assert "X-TS" in headers
+    assert "X-Sig" in headers
+
+    now = headers["X-TS"]
+    message = now.encode() + b"." + body
+    expected_signature = hmac.new(secret_key.encode(), message, hashlib.sha256).hexdigest()
+
+    assert headers["X-Sig"] == expected_signature
 
 
 def test_internal_request_timeout_uses_settings() -> None:
