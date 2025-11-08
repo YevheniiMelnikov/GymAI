@@ -421,7 +421,23 @@ def notify_ai_answer_ready_task(self, payload: dict[str, Any]) -> None:  # pyref
     soft_time_limit=AI_QA_NOTIFY_SOFT_LIMIT,
     time_limit=AI_QA_NOTIFY_TIME_LIMIT,
 )
-def handle_ai_question_failure(self, payload: str, *exc_info: Any) -> None:  # pyrefly: ignore[valid-type]
+def handle_ai_question_failure(self, payload: Any, *exc_info: Any) -> None:  # pyrefly: ignore[valid-type]
+    def _coerce_payload(obj: Any) -> dict[str, Any]:
+        if isinstance(obj, dict):
+            return obj
+        if isinstance(obj, (bytes, str)):
+            try:
+                return orjson.loads(obj)
+            except orjson.JSONDecodeError:
+                try:
+                    text = obj.decode() if isinstance(obj, bytes) else str(obj)
+                except Exception:
+                    text = repr(obj)
+                return {"raw": text}
+        return {"raw": repr(obj)}
+
     detail = _extract_failure_detail(exc_info)
-    payload_dict = orjson.loads(payload)
-    async_to_sync(_handle_ai_answer_failure_impl)(payload_dict, detail)
+    safe_payload = _coerce_payload(payload)
+    preview = str(safe_payload)[:200]
+    logger.info(f"event=ask_ai_failure_payload shape={type(payload).__name__} preview={preview}")
+    async_to_sync(_handle_ai_answer_failure_impl)(safe_payload, detail)

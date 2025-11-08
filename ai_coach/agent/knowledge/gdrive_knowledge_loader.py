@@ -2,11 +2,6 @@ import asyncio
 import logging
 import hashlib
 import io
-
-# pyrefly: ignore-file
-# ruff: noqa
-"""Google Drive knowledge loader."""
-
 from pathlib import Path
 from typing import Any, Callable, Final, cast
 
@@ -164,16 +159,27 @@ class GDriveDocumentLoader(KnowledgeLoader):
                 )
                 if created:
                     processed += 1
-                    task = asyncio.create_task(self._kb._process_dataset(resolved_dataset, user))
-                    task.add_done_callback(self._kb._log_task_exception)
+                    # Force projection and wait for readiness for immediate availability
+                    try:
+                        await self._kb.projection_service.project_dataset(resolved_dataset, user, allow_rebuild=False)
+                        await self._kb._wait_for_projection(resolved_dataset, user, timeout_s=15.0)
+                        counts = await self._kb.dataset_service.get_counts(dataset_alias, user)
+                        logger.info(
+                            f"projection:ready dataset_alias={dataset_alias} ident={resolved_dataset} "
+                            f"text_rows={counts.get('text_rows')} chunk_rows={counts.get('chunk_rows')} "
+                            f"graph_nodes={counts.get('graph_nodes')} graph_edges={counts.get('graph_edges')}"
+                        )
+                    except Exception as exc:
+                        logger.debug(f"kb_gdrive.projection_skip dataset={resolved_dataset} detail={exc}")
                     logger.info(
-                        f"kb_gdrive.ingested dataset={dataset_alias} file_id={file_id} "
+                        f"kb_gdrive.ingested dataset_alias={dataset_alias} ident={resolved_dataset} file_id={file_id} "
                         f"bytes={len(payload_bytes)} digest={digest_sha[:12]}"
                     )
                 else:
                     skipped += 1
+                    ident = self._kb.dataset_service.get_registered_identifier(dataset_alias)
                     logger.debug(
-                        f"kb_gdrive.duplicate dataset={dataset_alias} file_id={file_id} digest={digest_sha[:12]}"
+                        f"kb_gdrive.skip file={name} digest={digest_sha[:12]} dataset={dataset_alias} ident={ident} reason=duplicate_digest"
                     )
             except Exception:
                 logger.exception(f"Failed to process {name} (id={file_id})")

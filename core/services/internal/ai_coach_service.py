@@ -1,4 +1,5 @@
 # ai_coach_service.py
+import asyncio
 import base64
 import json
 from enum import Enum
@@ -196,43 +197,66 @@ class AiCoachService(APIClient):
             f"language={payload_dict.get('language')}"
         )
         logger.debug(f"AI coach ask request_id={request_id} client_id={payload.client_id}")
-        async with httpx.AsyncClient(base_url=self.base_url, timeout=self.settings.AI_COACH_TIMEOUT) as client:
-            ping_path = "internal/debug/ping"
-            ping_url = urljoin(self.base_url, ping_path)
+        ping_path = "internal/debug/ping"
+        ping_url = urljoin(self.base_url, ping_path)
+        # Retry readiness ping with exponential backoff
+        attempts = 5
+        delay = 0.5
+        for attempt in range(1, attempts + 1):
             try:
-                ping_status, _ = await self._api_request(
-                    "get",
-                    ping_path,
-                    timeout=5,
-                    client=client,
-                )
+                async with httpx.AsyncClient(base_url=self.base_url, timeout=self.settings.AI_COACH_TIMEOUT) as client:
+                    ping_status, _ = await self._api_request(
+                        "get",
+                        ping_path,
+                        timeout=5,
+                        client=client,
+                    )
                 logger.debug(f"AI coach ping request_id={request_id} status={ping_status} url={ping_url}")
-            except APIClientTransportError as exc:
-                logger.warning(f"AI coach ping transport error request_id={request_id} url={ping_url} error={exc}")
-            except APIClientHTTPError as exc:
-                logger.warning(
-                    f"AI coach ping failed request_id={request_id} status={exc.status} url={ping_url} error={exc.text}"
-                )
+                break
+            except (APIClientTransportError, APIClientHTTPError) as exc:
+                if attempt >= attempts:
+                    logger.warning(f"ai_coach.ping.giveup request_id={request_id} attempts={attempts} error={exc}")
+                    # Continue to main request; POST will also have its own retries
+                    break
+                logger.info(f"ai_coach.ping.retry attempt={attempt} delay={delay:.2f}s error={exc} url={ping_url}")
+                await asyncio.sleep(delay)
+                delay = min(delay * 2.0, 4.5)
 
+        # Main POST /ask with retries and per-call client
+        attempts = 5
+        delay = 0.5
+        last_exc: Exception | None = None
+        for attempt in range(1, attempts + 1):
             try:
-                status, data = await self._api_request(
-                    "post",
-                    "ask/",
-                    payload_dict,
-                    headers=headers or None,
-                    timeout=self.settings.AI_COACH_TIMEOUT,
-                    client=client,
+                async with httpx.AsyncClient(base_url=self.base_url, timeout=self.settings.AI_COACH_TIMEOUT) as client:
+                    status, data = await self._api_request(
+                        "post",
+                        "ask/",
+                        payload_dict,
+                        headers=headers or None,
+                        timeout=self.settings.AI_COACH_TIMEOUT,
+                        client=client,
+                    )
+                break
+            except (APIClientHTTPError, APIClientTransportError) as exc:
+                last_exc = exc
+                if attempt >= attempts:
+                    if isinstance(exc, APIClientHTTPError):
+                        logger.error(
+                            "AI coach request failed "
+                            f"request_id={request_id} client_id={payload.client_id} "
+                            f"status={exc.status} reason={exc.reason}"
+                        )
+                        raise
+                    logger.error(
+                        f"AI coach request transport failed request_id={request_id} client_id={payload.client_id} error={exc}"
+                    )
+                    raise
+                logger.info(
+                    f"ai_coach.ask.retry attempt={attempt} delay={delay:.2f}s request_id={request_id} error={exc}"
                 )
-            except APIClientHTTPError as exc:
-                logger.error(
-                    "AI coach request failed "
-                    f"request_id={request_id} client_id={payload.client_id} "
-                    f"status={exc.status} reason={exc.reason}"
-                )
-                raise
-            except APIClientTransportError:
-                logger.error(f"AI coach request failed request_id={request_id} client_id={payload.client_id}")
-                raise
+                await asyncio.sleep(delay)
+                delay = min(delay * 2.0, 4.5)
 
         logger.debug(f"AI coach ask response request_id={request_id} HTTP={status}: {data}")
         if status == 200:

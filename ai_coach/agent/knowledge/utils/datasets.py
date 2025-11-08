@@ -38,14 +38,16 @@ class DatasetService:
         self._list_data_requires_user: bool | None = None
 
     def alias_for_dataset(self, dataset: str) -> str:
-        stripped = dataset.strip()
-        if stripped in self._DATASET_ALIASES:
-            return self._DATASET_ALIASES[stripped]
-        return self._resolve_dataset_alias(stripped)
+        return self.resolve_dataset_alias(dataset)
 
     def resolve_dataset_alias(self, alias: str) -> str:
-        # map alias→canonical dataset name (keep kb_global, kb_chat_<id>, kb_client_<id>)
-        return alias.strip()
+        stripped = (alias or "").strip()
+        if not stripped:
+            return alias
+        mapped = self._DATASET_ALIASES.get(stripped)
+        if mapped:
+            return mapped
+        return self._resolve_dataset_alias(stripped)
 
     def _dataset_from_metadata(self, meta: Mapping[str, Any] | None) -> str | None:
         if not meta:
@@ -97,6 +99,19 @@ class DatasetService:
             return
         self._DATASET_IDS[canonical] = identifier
         self._DATASET_ALIASES[identifier] = canonical
+
+    def get_registered_identifier(self, dataset_or_alias: str) -> str | None:
+        name = (dataset_or_alias or "").strip()
+        if not name:
+            return None
+        # If a UUID-like is passed, treat it as identifier already
+        if self._looks_like_uuid(name):
+            return name
+        canonical = self._resolve_dataset_alias(name)
+        return self._DATASET_IDS.get(canonical)
+
+    def dump_identifier_map(self) -> dict[str, str]:
+        return dict(self._DATASET_IDS)
 
     async def get_dataset_id(self, dataset: str, user_ctx: Any | None) -> str | None:
         alias = self.alias_for_dataset(dataset)
@@ -426,22 +441,40 @@ class DatasetService:
         return alias.startswith("kb_chat_")
 
     async def get_row_count(self, dataset: str, user: Any | None = None) -> int:
-        alias = self.alias_for_dataset(dataset)
+        raw_name = (dataset or "").strip()
+        alias = self.resolve_dataset_alias(raw_name)
+        names_to_check: list[str] = []
+        if raw_name and raw_name != alias:
+            names_to_check.append(raw_name)
+        if alias:
+            names_to_check.append(alias)
+        elif raw_name:
+            names_to_check.append(raw_name)
+
+        hash_store = None
         try:
-            from ai_coach.agent.knowledge.utils.hash_store import HashStore
-
-            hash_count = await HashStore.count(alias)
+            from ai_coach.agent.knowledge.utils.hash_store import HashStore  # noqa: WPS433
         except Exception:
-            hash_count = 0
+            hash_store = None
+        else:
+            hash_store = HashStore
 
-        if hash_count:
-            return hash_count
+        if hash_store is not None:
+            for name in names_to_check:
+                try:
+                    hash_count = await hash_store.count(name)
+                except Exception:
+                    hash_count = 0
+                if hash_count:
+                    return hash_count
 
         user_ctx = self.to_user_ctx(user)
         if user_ctx is None:
             user_ctx = self.to_user_ctx(await self.get_cognee_user())
 
         metadata = await self._get_dataset_metadata(alias, user_ctx)
+        if metadata is None and raw_name and raw_name != alias:
+            metadata = await self._get_dataset_metadata(raw_name, user_ctx)
         if metadata is None:
             return 0
 
@@ -497,6 +530,59 @@ class DatasetService:
         except (ValueError, TypeError):
             return False
         return True
+
+    async def get_row_count_text(self, dataset: str, user: Any | None = None) -> int:
+        return await self.get_row_count(dataset, user=user)
+
+    async def get_row_count_chunks(self, dataset: str, user: Any | None = None) -> int:
+        try:
+            import cognee  # type: ignore
+
+            datasets_module = getattr(cognee, "datasets", None)
+            if datasets_module is None:
+                return 0
+            # Best-effort: if metadata exposes document count only, reuse it
+            return await self.get_row_count(dataset, user=user)
+        except Exception:
+            return 0
+
+    async def get_graph_counts(self, dataset: str, user: Any | None = None) -> tuple[int, int]:
+        try:
+            import cognee  # type: ignore
+
+            graphs_module = getattr(cognee, "graphs", None)
+            if graphs_module is None:
+                return 0, 0
+            # If no direct API, return zeros; adjust when graph API is available
+            return 0, 0
+        except Exception:
+            return 0, 0
+
+    async def get_counts(self, dataset: str, user: Any | None = None) -> dict[str, int]:
+        raw_name = (dataset or "").strip()
+        alias = self.alias_for_dataset(raw_name)
+        identifier = await self.get_dataset_id(raw_name, user)
+
+        names_to_check = list(dict.fromkeys([n for n in [raw_name, alias, identifier] if n]))
+
+        text_rows = 0
+        chunk_rows = 0
+        nodes = 0
+        edges = 0
+
+        for name in names_to_check:
+            text_rows = await self.get_row_count_text(name, user=user)
+            if text_rows > 0:
+                chunk_rows = await self.get_row_count_chunks(name, user=user)
+                nodes, edges = await self.get_graph_counts(name, user=user)
+                break
+
+        return {
+            "text_rows": int(text_rows or 0),
+            "chunk_rows": int(chunk_rows or 0),
+            "graph_nodes": int(nodes or 0),
+            "graph_edges": int(edges or 0),
+        }
 
     def _prepare_dataset_row(self, raw: Any, alias: str) -> DatasetRow:
         from ai_coach.agent.knowledge.utils.storage import StorageService

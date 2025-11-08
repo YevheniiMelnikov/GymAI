@@ -77,7 +77,7 @@ class SearchService:
             status = await self.projection_service.ensure_dataset_projected(
                 self.dataset_service.GLOBAL_DATASET,
                 actor,
-                timeout=0.3,
+                timeout_s=0.3,
             )
             if status in (ProjectionStatus.READY, ProjectionStatus.READY_EMPTY):
                 self.dataset_service.add_projected_dataset(global_alias)
@@ -180,11 +180,12 @@ class SearchService:
         query_hash = sha256(query.encode()).hexdigest()[:12]
         skipped_aliases: list[str] = []
         rid_value = request_id or "na"
+        user_ctx = self.dataset_service.to_user_ctx(user)
 
         async def _search_targets(targets: list[str]) -> list[str]:
             params: dict[str, Any] = {
                 "datasets": targets,
-                "user": self.dataset_service.to_user_ctx(user),
+                "user": user_ctx,
             }
             if k is not None:
                 params["top_k"] = k
@@ -192,17 +193,31 @@ class SearchService:
 
         ready_datasets: list[str] = []
         for dataset in datasets:
+            target = (dataset or "").strip() or dataset
             alias = self.dataset_service.alias_for_dataset(dataset)
-            row_count = await self.dataset_service.get_row_count(alias, user)
-            if row_count <= 0:
+            try:
+                counts = await self.dataset_service.get_counts(alias, user)
+            except Exception as exc:
+                logger.debug(f"projection:count_unavailable dataset={alias} detail={exc}")
+                fallback_rows = await self.dataset_service.get_row_count(alias, user)
+                counts = {"text_rows": fallback_rows, "chunk_rows": 0, "graph_nodes": 0, "graph_edges": 0}
+            text_rows = int(counts.get("text_rows") or 0)
+            chunk_rows = int(counts.get("chunk_rows") or 0)
+            legacy_rows = 0
+            if target and target != alias:
+                legacy_rows = await self.dataset_service.get_row_count(target, user)
+                if legacy_rows > 0 and text_rows <= 0 and chunk_rows <= 0:
+                    logger.debug(f"projection.legacy_rows dataset={target} alias={alias} legacy_rows={legacy_rows}")
+            has_rows = (text_rows > 0 or chunk_rows > 0) or legacy_rows > 0
+            if not has_rows:
                 self.dataset_service.log_once(
                     logging.INFO,
-                    "search:skip_empty_graph",
+                    "projection:skip_no_rows",
                     dataset=alias,
                     stage="search",
                     min_interval=120.0,
                 )
-                logger.debug(f"search.skip_empty_graph dataset={alias}")
+                logger.debug(f"projection.skip_no_rows dataset={alias} stage=search")
                 skipped_aliases.append(alias)
                 continue
             try:
@@ -214,16 +229,16 @@ class SearchService:
                 skipped_aliases.append(alias)
                 continue
             if alias in self.dataset_service._PROJECTED_DATASETS:
-                ready_datasets.append(alias)
+                ready_datasets.append(target)
                 continue
             try:
-                status = await self.projection_service.ensure_dataset_projected(alias, user, timeout=2.0)
+                status = await self.projection_service.ensure_dataset_projected(alias, user, timeout_s=2.0)
             except Exception as exc:  # noqa: BLE001
                 logger.warning(f"knowledge_projection_ensure_failed dataset={alias} detail={exc}")
                 skipped_aliases.append(alias)
                 continue
             if status in (ProjectionStatus.READY, ProjectionStatus.READY_EMPTY):
-                ready_datasets.append(alias)
+                ready_datasets.append(target)
             else:
                 skipped_aliases.append(alias)
 
@@ -258,8 +273,9 @@ class SearchService:
             logger.debug(f"knowledge_search_empty client_id={client_id} rid={rid_value} datasets={','.join(datasets)}")
             return []
 
-        for alias in ready_datasets:
-            logger.debug(f"kb.search alias={alias} q_hash={query_hash}")
+        for dataset_name in ready_datasets:
+            alias_name = self.dataset_service.alias_for_dataset(dataset_name)
+            logger.debug(f"kb.search alias={alias_name} target={dataset_name} q_hash={query_hash}")
 
         try:
             results = await _search_targets(ready_datasets)

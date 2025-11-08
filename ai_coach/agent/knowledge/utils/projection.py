@@ -39,7 +39,7 @@ class ProjectionService:
         logger.debug(f"projection.wait dataset={alias} attempts={attempts} status={status.name.lower()}")
 
     async def ensure_dataset_projected(
-        self, dataset: str, user: Any | None, *, timeout: float | None = None
+        self, dataset: str, user: Any | None, *, timeout_s: float | None = None
     ) -> ProjectionStatus:
         alias = self.dataset_service.alias_for_dataset(dataset)
         user_ctx = self.dataset_service.to_user_ctx(user)

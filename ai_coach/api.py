@@ -188,6 +188,71 @@ async def debug_llm_echo(
     return {"answer": response.answer.strip()}
 
 
+@app.get("/internal/kb/dump")
+async def kb_dump(credentials: HTTPBasicCredentials = Depends(security)) -> dict[str, Any]:
+    _validate_refresh_credentials(credentials)
+    kb = _kb()
+    ds = kb.dataset_service
+    user = getattr(kb, "_user", None) or await ds.get_cognee_user()
+    global_alias = ds.alias_for_dataset("kb_global")
+    global_ident = ds.get_registered_identifier("kb_global")
+    global_effective = global_ident or global_alias
+    global_counts = await ds.get_counts(global_effective, user=user)
+
+    chat_alias = ds.alias_for_dataset(ds.chat_dataset_name(1))
+    chat_ident = ds.get_registered_identifier(chat_alias)
+    chat_effective = chat_ident or chat_alias
+    chat_counts = await ds.get_counts(chat_effective, user=user)
+
+    projected_global = kb.get_projection_health(global_alias)
+    projected_chat = kb.get_projection_health(chat_alias)
+    return {
+        "kb_global": {
+            "alias": global_alias,
+            "identifier": global_ident,
+            "effective": global_effective,
+            "counts": global_counts,
+        },
+        "kb_chat_1": {
+            "alias": chat_alias,
+            "identifier": chat_ident,
+            "effective": chat_effective,
+            "counts": chat_counts,
+        },
+        "ident_map": ds.dump_identifier_map(),
+        "projection": {
+            "kb_global": projected_global,
+            "kb_chat_1": projected_chat,
+        },
+        "last_reingest": kb.get_last_rebuild_result(),
+    }
+
+
+@app.get("/internal/kb/audit")
+async def kb_audit(datasets: str, credentials: HTTPBasicCredentials = Depends(security)) -> dict[str, Any]:
+    _validate_refresh_credentials(credentials)
+    kb = _kb()
+    ds = kb.dataset_service
+    user = getattr(kb, "_user", None) or await ds.get_cognee_user()
+    requested = [item.strip() for item in (datasets or "").split(",") if item.strip()]
+    resolved: list[dict[str, Any]] = []
+    for raw in requested:
+        canonical = ds.resolve_dataset_alias(raw)
+        identifier = ds.get_registered_identifier(canonical)
+        effective = identifier or canonical
+        counts = await ds.get_counts(effective, user)
+        resolved.append(
+            {
+                "raw": raw,
+                "canonical": canonical,
+                "identifier": identifier,
+                "effective": effective,
+                "counts": counts,
+            }
+        )
+    return {"requested": requested, "resolved": resolved}
+
+
 @app.post("/ask/", response_model=Program | Subscription | QAResponse | list[str] | None)
 async def ask(
     data: AICoachRequest, request: Request

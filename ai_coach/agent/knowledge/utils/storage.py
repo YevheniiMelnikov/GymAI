@@ -372,6 +372,14 @@ class StorageService:
                 result.last_dataset or "",
                 result.reason or "ok",
             )
+        # Ensure alias→identifier mapping is registered even if no new documents were created in this run
+        try:
+            if result.last_dataset:
+                self.dataset_service.register_dataset_identifier(alias, result.last_dataset)
+        except Exception as exc:
+            logger.debug(
+                f"reingest_register_identifier_failed dataset={alias} ident={result.last_dataset} detail={exc}"
+            )
         return result
 
     def filename_to_digest(self, filename: str | None) -> str | None:

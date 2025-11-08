@@ -573,6 +573,7 @@ class CoachAgent:
             kb.dataset_service.alias_for_dataset(dataset) if dataset else "" for dataset in entry_datasets
         ]
         deps.knowledge_base_empty = len(entry_ids) == 0
+        deps.kb_used = not deps.knowledge_base_empty
         _, language_label = cls._language_context(deps)
         knowledge_section = cls._format_knowledge_entries(entry_ids, entries)
         system_prompt = COACH_SYSTEM_PROMPT
@@ -711,7 +712,7 @@ class CoachAgent:
             unique_datasets.append(alias)
         for dataset in unique_datasets:
             try:
-                await kb.projection_service.ensure_dataset_projected(dataset, actor, timeout=2.0)
+                await kb.projection_service.ensure_dataset_projected(dataset, actor, timeout_s=2.0)
             except Exception as exc:  # noqa: BLE001
                 logger.debug(f"knowledge_projection_skip dataset={dataset} detail={exc}")
 

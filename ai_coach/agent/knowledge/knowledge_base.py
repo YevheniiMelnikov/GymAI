@@ -109,29 +109,81 @@ class KnowledgeBase:
         q_hash = sha256(normalized_query.encode("utf-8")).hexdigest()[:12] if normalized_query else "empty"
         user = await self.dataset_service.get_cognee_user()
         datasets_order = [
-            self.dataset_service.dataset_name(client_id),
             self.dataset_service.chat_dataset_name(client_id),
             self.GLOBAL_DATASET,
         ]
         searchable_aliases: list[str] = []
         seen: set[str] = set()
+        effective_list: list[str] = []
+        raw_list: list[str] = []
+        counts_map: dict[str, dict[str, int]] = {}
         for dataset in datasets_order:
-            alias = self.dataset_service.alias_for_dataset(dataset)
-            if alias in seen:
+            raw = dataset
+            # Resolve canonical alias and any registered identifier
+            alias = self.dataset_service.resolve_dataset_alias(raw)
+            identifier = self.dataset_service.get_registered_identifier(alias)
+            # Probe row counts for alias and identifier separately
+            row_count_ident: int | None = None
+            row_count_alias = await self.dataset_service.get_row_count(alias, user=user)
+            if identifier and identifier != alias:
+                row_count_ident = await self.dataset_service.get_row_count(identifier, user=user)
+            logger.debug(
+                f"ask.search.alias_resolve raw={raw} alias={alias} ident={identifier} "
+                f"rows_alias={row_count_alias} rows_ident={row_count_ident}"
+            )
+            if row_count_alias == 0 and (row_count_ident or 0) > 0:
+                logger.warning(
+                    f"ask.search.mismatch raw={raw} alias={alias} ident={identifier} reason=rows_under_identifier_only"
+                )
+            # Choose effective target for search: prefer alias if non-empty, otherwise identifier rows
+            row_count = row_count_alias if row_count_alias is not None else 0
+            effective = alias
+            if row_count == 0 and (row_count_ident or 0) > 0 and identifier:
+                row_count = int(row_count_ident or 0)
+                effective = identifier
+            if effective in seen:
                 continue
-            seen.add(alias)
-            row_count = await self.dataset_service.get_row_count(alias, user=user)
+            seen.add(effective)
             if row_count > 0:
-                searchable_aliases.append(alias)
+                # Ensure projection is ready before searching
+                await self.projection_service.ensure_dataset_projected(effective, user, timeout_s=2.0)
+                counts_map[effective] = await self.dataset_service.get_counts(effective, user)
+                counts_payload = counts_map[effective]
+                if (counts_payload.get("text_rows", 0) or 0) > 0 and (
+                    (counts_payload.get("chunk_rows", 0) or 0) == 0
+                    and (counts_payload.get("graph_nodes", 0) or 0) == 0
+                ):
+                    # This means text rows exist, but chunks/graph nodes are missing after projection
+                    # This can happen if the projection failed or is still pending
+                    self.dataset_service.log_once(
+                        logging.ERROR,
+                        "projection:empty_after_text",
+                        dataset=effective,
+                        text_rows=counts_payload.get("text_rows"),
+                        chunk_rows=counts_payload.get("chunk_rows"),
+                        graph_nodes=counts_payload.get("graph_nodes"),
+                        min_interval=60.0,
+                    )
+                    logger.warning(f"projection:empty_after_text dataset={effective} reason=no_chunks_or_graph_nodes_after_text_rows")
+                    # Do not add to searchable_aliases if projection is incomplete
+                    continue
+
+                searchable_aliases.append(effective)
+                effective_list.append(effective)
+                raw_list.append(raw)
+                # The original logic for counts_map update is now handled by the diagnostic check above
                 continue
             self.dataset_service.log_once(
                 logging.INFO,
                 "projection:skip_no_rows",
-                dataset=alias,
+                dataset=effective,
                 stage="search",
                 min_interval=120.0,
             )
-            logger.debug(f"projection:skip_no_rows dataset={alias} stage=search")
+            logger.debug(f"projection:skip_no_rows dataset={effective} stage=search")
+        if effective_list:
+            rows_payload = {k: v for k, v in counts_map.items()}
+            logger.debug(f"search.inputs raw={raw_list} effective={effective_list} rows={rows_payload}")
         dataset_label = ",".join(searchable_aliases) if searchable_aliases else "none"
         logger.debug(f"ask.search.start client_id={client_id} datasets={dataset_label} q_hash={q_hash}")
         if not searchable_aliases:
@@ -344,7 +396,36 @@ class KnowledgeBase:
             resolved = identifier
         resolved_alias = self.dataset_service.alias_for_dataset(resolved)
         rows_after = await self.dataset_service.get_row_count(resolved_alias, user=actor)
-        logger.debug(f"kb.update dataset={resolved_alias} rows_before={rows_before} rows_after={rows_after}")
+        logger.debug(
+            "kb.update rows raw=%s alias=%s resolved=%s rows_before=%s rows_after=%s digest=%s",
+            dataset,
+            ds_name,
+            resolved_alias,
+            rows_before,
+            rows_after,
+            digest_sha[:12],
+        )
+        # Trigger projection and wait briefly to avoid projection:skip_no_rows
+        try:
+            self.dataset_service.log_once(logging.INFO, "projection:requested", dataset=resolved_alias, reason="ingest")
+            await self.projection_service.project_dataset(resolved_alias, actor, allow_rebuild=False)
+            await self._wait_for_projection(resolved_alias, actor, timeout_s=15.0)
+            # Diagnostics per layer
+            counts = await self.dataset_service.get_counts(resolved_alias, actor)
+            logger.info(
+                (
+                    f"projection:ready dataset={resolved_alias} text_rows={counts.get('text_rows')} "
+                    f"chunk_rows={counts.get('chunk_rows')} graph_nodes={counts.get('graph_nodes')} "
+                    f"graph_edges={counts.get('graph_edges')}"
+                )
+            )
+            if (counts.get("text_rows", 0) or 0) > 0 and (counts.get("chunk_rows", 0) or 0) == 0:
+                preview = (normalized_text or "")[:400]
+                logger.error(
+                    f"projection:empty_after_text dataset={resolved_alias} digest={digest_sha[:12]} preview={preview}"
+                )
+        except Exception as exc:
+            logger.debug(f"projection:post_ingest_diag_skipped dataset={resolved_alias} detail={exc}")
         return resolved, True
 
     async def _process_dataset(self, dataset: str, user: Any | None = None) -> None:
@@ -384,9 +465,20 @@ class KnowledgeBase:
         dataset: str,
         user: Any | None = None,
         *,
-        timeout: float | None = None,
+        timeout_s: float | None = None,
+        **kwargs: Any,
     ) -> ProjectionStatus:
+        timeout_legacy = kwargs.pop("timeout", None)
+        if timeout_s is None and timeout_legacy is not None:
+            try:
+                timeout_s = float(timeout_legacy)
+            except (TypeError, ValueError):
+                timeout_s = None
+        extra_keys = tuple(kwargs.keys())
         alias = self.dataset_service.alias_for_dataset(dataset)
+        if extra_keys:
+            logger.debug(f"projection:wait_extra_args dataset={alias} keys={list(extra_keys)}")
+
         actor = user if user is not None else self._user
         if actor is None:
             self.dataset_service.log_once(
@@ -415,7 +507,7 @@ class KnowledgeBase:
             self.projection_service.record_wait_attempts(alias, 0, status)
             return status
 
-        effective_timeout = timeout if timeout is not None else 45.0
+        effective_timeout = timeout_s if timeout_s is not None else 45.0
         deadline = monotonic() + max(effective_timeout, 0.0)
         backoff = (0.5, 1.0, 2.0, 5.0, 8.0)
         attempts = 0
