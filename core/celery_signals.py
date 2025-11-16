@@ -118,7 +118,7 @@ def _on_worker_ready(sender: Any, **_: Any) -> None:
         def _delayed_task_report() -> None:
             refreshed: set[str] = set(registered_tasks)
             try:
-                follow_up = control.inspect(destination=[worker.hostname])
+                follow_up = control.inspect(destination=[worker.hostname])  # pyrefly: ignore[missing-attribute]
                 if follow_up is not None:
                     follow_registered = follow_up.registered() or follow_up.registered_tasks() or {}
                 else:

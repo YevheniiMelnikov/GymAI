@@ -1,9 +1,11 @@
 import asyncio
 import pytest  # pyrefly: ignore[import-error]
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 
 from ai_coach.application import app
 from ai_coach.agent import CoachAgent
+import ai_coach.api as coach_api
+from ai_coach.api import DEFAULT_WORKOUT_DAYS
 from core.enums import CoachType, WorkoutType
 from core.schemas import DayExercises, Exercise, Program, Subscription
 
@@ -38,6 +40,11 @@ def _sample_subscription() -> Subscription:
     )
 
 
+def _patch_agent(monkeypatch: pytest.MonkeyPatch, attr: str, value) -> None:
+    monkeypatch.setattr(CoachAgent, attr, value)
+    monkeypatch.setattr(coach_api.CoachAgent, attr, value)
+
+
 def test_program_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
         async def fake_generate(
@@ -53,8 +60,9 @@ def test_program_mode(monkeypatch: pytest.MonkeyPatch) -> None:
             assert kwargs.get("output_type") is Program
             return _sample_program()
 
-        monkeypatch.setattr(CoachAgent, "generate_workout_plan", staticmethod(fake_generate))
-        async with AsyncClient(app=app, base_url="http://test") as ac:  # pyrefly: ignore[unexpected-keyword]
+        _patch_agent(monkeypatch, "generate_workout_plan", staticmethod(fake_generate))
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post(
                 "/ask/",
                 json={
@@ -84,14 +92,15 @@ def test_subscription_mode(monkeypatch: pytest.MonkeyPatch) -> None:
         ) -> Subscription:
             assert workout_type is WorkoutType.HOME
             assert kwargs.get("period") == "1m"
-            assert kwargs.get("workout_days") == ["mon"]
+            assert kwargs.get("workout_days") == list(DEFAULT_WORKOUT_DAYS)
             assert kwargs.get("wishes") == "w"
             assert kwargs.get("instructions") == "i"
             assert kwargs.get("output_type") is Subscription
             return _sample_subscription()
 
-        monkeypatch.setattr(CoachAgent, "generate_workout_plan", staticmethod(fake_generate))
-        async with AsyncClient(app=app, base_url="http://test") as ac:  # pyrefly: ignore[unexpected-keyword]
+        _patch_agent(monkeypatch, "generate_workout_plan", staticmethod(fake_generate))
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post(
                 "/ask/",
                 json={
@@ -127,8 +136,9 @@ def test_update_mode(monkeypatch: pytest.MonkeyPatch) -> None:
             assert instructions == "i"
             return _sample_program()
 
-        monkeypatch.setattr(CoachAgent, "update_workout_plan", staticmethod(fake_update))
-        async with AsyncClient(app=app, base_url="http://test") as ac:  # pyrefly: ignore[unexpected-keyword]
+        _patch_agent(monkeypatch, "update_workout_plan", staticmethod(fake_update))
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post(
                 "/ask/",
                 json={
@@ -149,7 +159,8 @@ def test_update_mode(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_update_requires_plan_type() -> None:
     async def runner() -> None:
-        async with AsyncClient(app=app, base_url="http://test") as ac:  # pyrefly: ignore[unexpected-keyword]
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post(
                 "/ask/",
                 json={"client_id": 1, "prompt": "p", "mode": "update", "workout_type": "home"},

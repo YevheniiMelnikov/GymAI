@@ -35,10 +35,15 @@ class SamplingFilter(logging.Filter):
 
     def _allow(self, key: str) -> tuple[bool, int]:
         now = time.monotonic()
-        last_ts, suppressed = self._state.get(key, (0.0, 0))
+        if key not in self._state:
+            self._state[key] = (now, 0)
+            return True, 0
+
+        last_ts, suppressed = self._state[key]
         if now - last_ts >= self.ttl:
             self._state[key] = (now, 0)
             return True, suppressed
+
         self._state[key] = (last_ts, suppressed + 1)
         return False, 0
 

@@ -126,7 +126,8 @@ class APIClient:
                     )
                 else:
                     limits = httpx.Limits(max_connections=50, max_keepalive_connections=10)
-                    base_url_value = getattr(self, "base_url", None) or getattr(self, "api_url", None)
+                    base_url_candidate = getattr(self, "base_url", None) or getattr(self, "api_url", None)
+                    base_url_value = str(base_url_candidate or "")
                     async with httpx.AsyncClient(
                         base_url=base_url_value, timeout=timeout_value, limits=limits
                     ) as _client:
@@ -171,6 +172,32 @@ class APIClient:
 
             except APIClientHTTPError:
                 raise
+
+            except httpx.HTTPStatusError as exc:
+                status = exc.response.status_code if exc.response else None
+                body = exc.response.text if exc.response else ""
+                reason = self._extract_reason(body)
+                retryable = status == 429 or (
+                    retry_server_errors
+                    and status is not None
+                    and status >= 500
+                    and reason not in {"timeout", "knowledge_base_empty"}
+                )
+                if retryable and attempt < attempts:
+                    logger.warning(
+                        f"Retrying {method.upper()} {url} after HTTP {status} (attempt {attempt}/{attempts})"
+                    )
+                    await self._sleep(delay)
+                    delay = self._next_delay(delay)
+                    continue
+                raise APIClientHTTPError(
+                    status or 0,
+                    body,
+                    method=method,
+                    url=url,
+                    retryable=retryable,
+                    reason=reason,
+                ) from exc
 
             except httpx.RequestError as exc:
                 if attempt >= attempts:

@@ -25,7 +25,7 @@ def test_agent_header(monkeypatch: pytest.MonkeyPatch) -> None:
             client: httpx.AsyncClient | None = None,
         ) -> tuple[int, dict[str, object]]:
             self.sent_headers = headers
-            return 200, {}
+            return 200, {"answer": "ok"}
 
         async with httpx.AsyncClient() as client:
             service = AiCoachService(client, DummySettings())

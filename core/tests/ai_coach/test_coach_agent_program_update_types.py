@@ -1,5 +1,6 @@
 import asyncio
 import types
+from typing import Any
 import pytest  # pyrefly: ignore[import-error]
 
 from ai_coach.agent import AgentDeps, CoachAgent
@@ -14,6 +15,7 @@ def test_generate_plan_returns_program(monkeypatch: pytest.MonkeyPatch) -> None:
             deps: AgentDeps,
             output_type: type[Program] | None = None,
             message_history: list | None = None,
+            **kwargs: Any,
         ) -> Program:
             assert message_history is not None
             assert len(message_history) == 2
@@ -43,6 +45,7 @@ def test_update_workout_plan_returns_program(monkeypatch: pytest.MonkeyPatch) ->
             deps: AgentDeps,
             output_type: type[Program] | None = None,
             message_history: list | None = None,
+            **kwargs: Any,
         ) -> Program:
             assert "MODE: update" in prompt
             assert "Client Feedback" in prompt
@@ -75,6 +78,7 @@ def test_generate_plan_returns_subscription(monkeypatch: pytest.MonkeyPatch) -> 
             deps: AgentDeps,
             output_type: type[Subscription] | None = None,
             message_history: list | None = None,
+            **kwargs: Any,
         ) -> Subscription:
             assert "MODE: subscription" in prompt
             assert "WORKOUT PROGRAM RULES" in prompt
@@ -114,6 +118,7 @@ def test_custom_rules_append(monkeypatch: pytest.MonkeyPatch) -> None:
             deps: AgentDeps,
             output_type: type[Program] | None = None,
             message_history: list | None = None,
+            **kwargs: Any,
         ) -> Program:
             assert "WORKOUT PROGRAM RULES" in prompt
             assert "extra" in prompt

@@ -1,6 +1,5 @@
 import logging
 
-import pytest
 
 from ai_coach.logging_config import SamplingFilter
 import ai_coach.logging_config as logging_config

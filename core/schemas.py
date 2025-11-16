@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, condecimal, field_validator
+from pydantic import BaseModel, ConfigDict, Field, condecimal, field_validator, model_validator
 
 from core.encryptor import Encryptor
 from core.enums import ClientStatus, CoachType, Gender, Language, PaymentStatus, ProfileRole
@@ -16,6 +16,15 @@ class Profile(BaseModel):
     tg_id: int
     language: Annotated[Language, Field()]
     model_config = ConfigDict(extra="ignore")
+
+    @field_validator("language", mode="before")
+    @classmethod
+    def normalize_language(cls, value: Any) -> str:
+        if isinstance(value, str) and value.lower() == "en":
+            return "eng"
+        if hasattr(value, "value"):
+            return value.value
+        return value
 
 
 class Client(BaseModel):
@@ -112,28 +121,38 @@ class Program(BaseModel):
         except Exception:  # noqa: BLE001
             return 0.0
 
-    @field_validator("split_number", mode="before")
-    @classmethod
-    def _set_split_number(cls, value: Any, info: Any) -> int:
-        if value is None:
-            data = getattr(info, "data", {}) or {}
-            days: list[Any] = data.get("exercises_by_day", [])
-            return len(days)
-        return int(value)
+    @model_validator(mode="after")
+    def _set_split_number(self) -> "Program":
+        if self.split_number is None:
+            self.split_number = len(self.exercises_by_day) or 1
+        return self
 
     @field_validator("coach_type", mode="before")
     @classmethod
     def _normalize_coach_type(cls, value: Any) -> CoachType:
         if isinstance(value, dict):
             value = value.get("coach_type")
-        if isinstance(value, str):
-            try:
-                return CoachType(value)
-            except ValueError:
-                return CoachType.human
         if isinstance(value, CoachType):
             return value
-        return CoachType.human
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            alias_map = {
+                "ai": CoachType.ai_coach,
+                "ai_coach": CoachType.ai_coach,
+                "ai-coach": CoachType.ai_coach,
+                "coach": CoachType.ai_coach,
+                "human": CoachType.human,
+            }
+            if normalized in alias_map:
+                return alias_map[normalized]
+            try:
+                return CoachType(normalized)
+            except ValueError:
+                return CoachType.human
+        try:
+            return CoachType(value)
+        except Exception:
+            return CoachType.human
 
 
 class Subscription(BaseModel):
@@ -185,4 +204,4 @@ class Payment(BaseModel):
 
 class QAResponse(BaseModel):
     answer: str
-    sources: list[str] = Field(default_factory=list, exclude=True)
+    sources: list[str] = Field(default_factory=list)

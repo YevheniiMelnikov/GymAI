@@ -171,7 +171,7 @@ def _patch_local_file_storage(root: Path) -> None:
     storage_attr = getattr(local_storage_cls, "storage_path", None) or getattr(local_storage_cls, "STORAGE_PATH", None)
 
     if hasattr(local_storage_cls, "storage_path"):
-        setattr(local_storage_cls, "storage_path", str(root))
+        setattr(local_storage_cls, "storage_path", root)
     if hasattr(local_storage_cls, "STORAGE_PATH"):
         setattr(local_storage_cls, "STORAGE_PATH", str(root))
 

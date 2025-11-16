@@ -1,5 +1,6 @@
 import inspect
 from datetime import datetime
+from typing import Sequence
 
 from zoneinfo import ZoneInfo
 
@@ -10,6 +11,7 @@ from config.app_settings import settings
 from core.enums import WorkoutType
 from core.schemas import Program, QAResponse, Subscription
 from ai_coach.exceptions import AgentExecutionAborted
+from ai_coach.agent.knowledge.schemas import KnowledgeSnippet
 
 from .base import AgentDeps
 from .llm_helper import LLMHelper
@@ -73,7 +75,10 @@ class CoachAgent(LLMHelper):
             deps=deps,
             output_type=output_type,
             message_history=history,
-            model_settings=ModelSettings(response_format={"type": "json_object"}, temperature=0.2),
+            model_settings=ModelSettings(  # pyrefly: ignore[unexpected-keyword]
+                response_format={"type": "json_object"},  # pyrefly: ignore[unexpected-keyword]
+                temperature=0.2,
+            ),
         )
         if output_type is Program:
             normalized = cls._normalize_output(raw_result, Program)
@@ -122,7 +127,10 @@ class CoachAgent(LLMHelper):
             deps=deps,
             output_type=output_type,
             message_history=history,
-            model_settings=ModelSettings(response_format={"type": "json_object"}, temperature=0.2),
+            model_settings=ModelSettings(  # pyrefly: ignore[unexpected-keyword]
+                response_format={"type": "json_object"},  # pyrefly: ignore[unexpected-keyword]
+                temperature=0.2,
+            ),
         )
         if output_type is Program:
             return cls._normalize_output(raw_result, Program)
@@ -148,7 +156,10 @@ class CoachAgent(LLMHelper):
                 deps=deps,
                 output_type=QAResponse,
                 message_history=history,
-                model_settings=ModelSettings(response_format={"type": "json_object"}, temperature=0.2),
+                model_settings=ModelSettings(  # pyrefly: ignore[unexpected-keyword]
+                    response_format={"type": "json_object"},  # pyrefly: ignore[unexpected-keyword]
+                    temperature=0.2,
+                ),
             )
         except AgentExecutionAborted as exc:
             logger.info(f"agent.ask completion_aborted client_id={deps.client_id} reason={exc.reason}")
@@ -178,11 +189,32 @@ class CoachAgent(LLMHelper):
         if not normalized.sources:
             normalized.sources = ["knowledge_base"] if deps.kb_used else ["general_knowledge"]
         logger.info(
-            "agent.ask.done client_id={} answer_len={} sources={} kb_used={}".format(
-                deps.client_id,
-                len(normalized.answer),
-                ",".join(normalized.sources),
-                deps.kb_used,
-            )
+            f"agent.ask.done client_id={deps.client_id} answer_len={len(normalized.answer)} "
+            f"sources={','.join(normalized.sources)} kb_used={deps.kb_used}"
         )
         return normalized
+
+    @staticmethod
+    def _build_knowledge_entries(
+        entries: Sequence[KnowledgeSnippet | str],
+    ) -> tuple[list[str], list[str]]:
+        """Prepare knowledge entries for the prompt, skipping non-content items."""
+        texts: list[str] = []
+        ids: list[str] = []
+        for i, entry in enumerate(entries):
+            text = ""
+            kind = "document"
+            if isinstance(entry, str):
+                text = entry
+            else:
+                text = getattr(entry, "text", "")
+                kind = getattr(entry, "kind", "document")
+
+            if kind not in ("document", "note"):
+                continue
+
+            normalized = CoachAgent._normalize_text(text)
+            if normalized:
+                texts.append(normalized)
+                ids.append(f"KB-{i + 1}")
+        return ids, texts

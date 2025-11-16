@@ -47,11 +47,15 @@ async def _notify_ai_plan_ready(payload: dict[str, Any]) -> None:
     base_url: str = settings.BOT_INTERNAL_URL.rstrip("/")
     url: str = f"{base_url}/internal/tasks/ai_plan_ready/"
     body = orjson.dumps(payload)
-    headers = build_internal_hmac_auth_headers(
-        key_id=settings.INTERNAL_KEY_ID,
-        secret_key=settings.INTERNAL_API_KEY,
-        body=body,
-    )
+    if settings.INTERNAL_API_KEY:
+        headers = build_internal_hmac_auth_headers(
+            key_id=settings.INTERNAL_KEY_ID,
+            secret_key=settings.INTERNAL_API_KEY,
+            body=body,
+        )
+        headers.setdefault("X-Internal-Api-Key", settings.INTERNAL_API_KEY)
+    else:
+        headers = {"Authorization": f"Api-Key {settings.API_KEY}"}
     timeout = internal_request_timeout(settings)
     request_id = str(payload.get("request_id", ""))
     action = str(payload.get("action", ""))

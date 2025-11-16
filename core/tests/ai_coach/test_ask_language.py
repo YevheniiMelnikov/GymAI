@@ -4,9 +4,10 @@ from typing import Any
 from types import SimpleNamespace
 
 import pytest  # pyrefly: ignore[import-error]
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 
 from ai_coach.agent import CoachAgent
+import ai_coach.api as coach_api
 from ai_coach.application import app
 from config.app_settings import settings
 from core.enums import CoachType, Language, ProfileRole
@@ -29,9 +30,15 @@ def _sample_program() -> Program:
 
 
 async def _run_ask(json_payload: dict[str, Any]) -> tuple[int, dict[str, Any]]:
-    async with AsyncClient(app=app, base_url="http://test") as ac:  # pyrefly: ignore[unexpected-keyword]
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
         response = await ac.post("/ask/", json=json_payload)
     return response.status_code, response.json()
+
+
+def _patch_agent(monkeypatch: pytest.MonkeyPatch, attr: str, value) -> None:
+    monkeypatch.setattr(CoachAgent, attr, value)
+    monkeypatch.setattr(coach_api.CoachAgent, attr, value)
 
 
 def test_request_language_overrides_profile(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -53,7 +60,7 @@ def test_request_language_overrides_profile(monkeypatch: pytest.MonkeyPatch) -> 
     async def fake_get_profile(self: ProfileService, profile_id: int) -> Profile | None:
         return Profile(id=profile_id, role=ProfileRole.client, tg_id=1, language=Language.ru)
 
-    monkeypatch.setattr(CoachAgent, "generate_workout_plan", staticmethod(fake_generate))
+    _patch_agent(monkeypatch, "generate_workout_plan", staticmethod(fake_generate))
     monkeypatch.setattr(ProfileService, "get_client", fake_get_client)
     monkeypatch.setattr(ProfileService, "get_profile", fake_get_profile)
 
@@ -61,7 +68,7 @@ def test_request_language_overrides_profile(monkeypatch: pytest.MonkeyPatch) -> 
         status, _ = await _run_ask(
             {
                 "client_id": 1,
-                "prompt": "p",
+                "prompt": "p-request-language",
                 "mode": "program",
                 "language": "ua",
                 "workout_type": "home",
@@ -92,7 +99,7 @@ def test_profile_language_used_when_request_missing(monkeypatch: pytest.MonkeyPa
     async def fake_get_profile(self: ProfileService, profile_id: int) -> Profile | None:
         return Profile(id=profile_id, role=ProfileRole.client, tg_id=1, language=Language.ua)
 
-    monkeypatch.setattr(CoachAgent, "generate_workout_plan", staticmethod(fake_generate))
+    _patch_agent(monkeypatch, "generate_workout_plan", staticmethod(fake_generate))
     monkeypatch.setattr(ProfileService, "get_client", fake_get_client)
     monkeypatch.setattr(ProfileService, "get_profile", fake_get_profile)
 
@@ -100,7 +107,7 @@ def test_profile_language_used_when_request_missing(monkeypatch: pytest.MonkeyPa
         status, _ = await _run_ask(
             {
                 "client_id": 2,
-                "prompt": "p",
+                "prompt": "p-profile-language",
                 "mode": "program",
                 "workout_type": "home",
             }
@@ -130,7 +137,7 @@ def test_default_language_used_when_profile_missing(monkeypatch: pytest.MonkeyPa
     async def fake_get_profile(self: ProfileService, profile_id: int) -> Profile | None:
         return None
 
-    monkeypatch.setattr(CoachAgent, "generate_workout_plan", staticmethod(fake_generate))
+    _patch_agent(monkeypatch, "generate_workout_plan", staticmethod(fake_generate))
     monkeypatch.setattr(ProfileService, "get_client", fake_get_client)
     monkeypatch.setattr(ProfileService, "get_profile", fake_get_profile)
 
@@ -138,7 +145,7 @@ def test_default_language_used_when_profile_missing(monkeypatch: pytest.MonkeyPa
         status, _ = await _run_ask(
             {
                 "client_id": 3,
-                "prompt": "p",
+                "prompt": "p-default-language",
                 "mode": "program",
                 "workout_type": "home",
             }
@@ -171,7 +178,7 @@ def test_profile_language_enum_without_str(monkeypatch: pytest.MonkeyPatch) -> N
     async def fake_get_profile(self: ProfileService, profile_id: int) -> Profile | None:
         return SimpleNamespace(id=profile_id, role=ProfileRole.client, tg_id=1, language=RawLanguage.ua)
 
-    monkeypatch.setattr(CoachAgent, "generate_workout_plan", staticmethod(fake_generate))
+    _patch_agent(monkeypatch, "generate_workout_plan", staticmethod(fake_generate))
     monkeypatch.setattr(ProfileService, "get_client", fake_get_client)
     monkeypatch.setattr(ProfileService, "get_profile", fake_get_profile)
 
@@ -179,7 +186,7 @@ def test_profile_language_enum_without_str(monkeypatch: pytest.MonkeyPatch) -> N
         status, _ = await _run_ask(
             {
                 "client_id": 4,
-                "prompt": "p",
+                "prompt": "p-enum-language",
                 "mode": "program",
                 "workout_type": "home",
             }

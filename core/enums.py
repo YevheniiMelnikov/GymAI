@@ -80,6 +80,7 @@ class WorkoutPlanType(str, Enum):
 class WorkoutType(str, Enum):
     HOME = "home"
     GYM = "gym"
+    STRENGTH = "strength"
 
     def __str__(self) -> str:
         return self.value

@@ -1,4 +1,5 @@
 from asyncio import TimeoutError, wait_for
+from inspect import signature
 from time import monotonic
 from typing import Any, Callable, Coroutine, TypeVar, cast
 
@@ -45,6 +46,27 @@ def _tool_timeout(tool_name: str) -> float:
     return TOOL_TIMEOUTS.get(tool_name, DEFAULT_TOOL_TIMEOUT)
 
 
+def _as_text(value: Any) -> str:
+    if value is None:
+        return ""
+    text_attr = getattr(value, "text", None)
+    if text_attr is not None:
+        return str(text_attr or "").strip()
+    return str(value).strip()
+
+
+def _needs_instance_argument(func: Callable[..., Any]) -> bool:
+    try:
+        sig = signature(func)
+    except (ValueError, TypeError):
+        return True
+    params = list(sig.parameters.values())
+    if not params:
+        return False
+    first = params[0]
+    return first.name in {"self", "cls"}
+
+
 def _looks_like_prompt(query: str) -> bool:
     lowered = query.lower()
     if "mode:" in lowered:
@@ -56,9 +78,13 @@ def _looks_like_prompt(query: str) -> bool:
 
 def _raise_tool_limit(deps: AgentDeps, tool_name: str) -> None:
     mode_value = deps.mode.value if deps.mode else "unknown"
-    logger.info(
-        f"agent_tool_limit_exceeded client_id={deps.client_id} tool={tool_name} steps={deps.tool_calls} mode={mode_value}"
+    message = ("agent_tool_limit_exceeded client_id={client_id} tool={tool} steps={steps} mode={mode}").format(
+        client_id=deps.client_id,
+        tool=tool_name,
+        steps=deps.tool_calls,
+        mode=mode_value,
     )
+    logger.info(message)
     raise AgentExecutionAborted("AI coach tool budget exhausted", reason="max_tool_calls_exceeded")
 
 
@@ -84,19 +110,23 @@ def _log_tool_disabled(deps: AgentDeps, tool_name: str, *, reason: str) -> None:
 
 
 def _start_tool(
-    ctx: RunContext[AgentDeps], tool_name: str
+    ctx: RunContext[AgentDeps], tool_name: str, *, cache_key: tuple[str, ...] | None = None
 ) -> tuple[AgentDeps, bool, Any]:  # pyrefly: ignore[unsupported-operation]
     deps = ctx.deps
-    if tool_name in deps.called_tools:
+    normalized_key = tuple(cache_key or (tool_name,))
+    cached = deps.tool_cache.get(normalized_key)
+    if normalized_key in deps.tool_call_keys:
         _log_tool_disabled(deps, tool_name, reason="tool_repeat_skipped")
-        return deps, True, deps.tool_cache.get(tool_name)
+        return deps, True, cached
     prepared = _prepare_tool(ctx, tool_name)
     prepared.called_tools.add(tool_name)
-    return prepared, False, None
+    prepared.tool_call_keys.add(normalized_key)
+    return prepared, False, cached
 
 
-def _cache_result(deps: AgentDeps, tool_name: str, result: T) -> T:
-    deps.tool_cache[tool_name] = result
+def _cache_result(deps: AgentDeps, tool_name: str, result: T, *, cache_key: tuple[str, ...] | None = None) -> T:
+    normalized_key = tuple(cache_key or (tool_name,))
+    deps.tool_cache[normalized_key] = result
     return result
 
 
@@ -120,7 +150,7 @@ def _single_use_prepare(
     return _prepare
 
 
-@toolset.tool(prepare=_single_use_prepare("tool_search_knowledge"))
+@toolset.tool(prepare=_single_use_prepare("tool_search_knowledge"))  # pyrefly: ignore[no-matching-overload]
 async def tool_search_knowledge(
     ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
     query: str,
@@ -130,10 +160,11 @@ async def tool_search_knowledge(
     kb = get_knowledge_base()
 
     tool_name = "tool_search_knowledge"
-    deps, skipped, cached = _start_tool(ctx, tool_name)
+    normalized_query = query.strip()
+    cache_key = (tool_name, normalized_query, str(k))
+    deps, skipped, cached = _start_tool(ctx, tool_name, cache_key=cache_key)
     timeout = _tool_timeout("tool_search_knowledge")
     client_id = deps.client_id
-    normalized_query = query.strip()
     logger.debug(f"tool_search_knowledge client_id={client_id} query='{normalized_query[:80]}' k={k}")
     if skipped:
         cached_result = cast(list[str], cached if cached is not None else [])
@@ -148,40 +179,49 @@ async def tool_search_knowledge(
         logger.debug(
             f"knowledge_search_skipped client_id={client_id} query='{normalized_query[:80]}' reason=prompt_guard"
         )
-        return _cache_result(deps, tool_name, [])
+        return _cache_result(deps, tool_name, [], cache_key=cache_key)
     if deps.knowledge_base_empty:
         deps.last_knowledge_query = normalized_query
         deps.last_knowledge_empty = True
         deps.kb_used = False
         logger.info(
-            f"knowledge_search_aborted client_id={client_id} query='{normalized_query[:80]}' reason=knowledge_base_empty"
+            "knowledge_search_aborted client_id=%s query='%s' reason=knowledge_base_empty",
+            client_id,
+            normalized_query[:80],
         )
-        return _cache_result(deps, tool_name, [])
+        return _cache_result(deps, tool_name, [], cache_key=cache_key)
     if deps.last_knowledge_query == normalized_query and deps.last_knowledge_empty:
         logger.debug(
             f"knowledge_search_repeat client_id={client_id} query='{normalized_query[:80]}' reason=empty_previous"
         )
         deps.kb_used = False
-        return _cache_result(deps, tool_name, [])
+        return _cache_result(deps, tool_name, [], cache_key=cache_key)
 
     async def _load_fallback(reason: str) -> list[str]:
-        try:
-            fallback_pairs = await kb.fallback_entries(client_id, limit=k)
-        except Exception as fallback_exc:  # noqa: BLE001 - diagnostics only
-            logger.debug(
-                "knowledge_search_fallback_failed client_id={} query='{}' reason={} detail={}".format(
-                    client_id,
-                    normalized_query[:80],
-                    reason,
-                    fallback_exc,
+        fallback_pairs: list[tuple[str, str]] = []
+        fallback_fn = getattr(type(kb), "fallback_entries", None)
+        if fallback_fn is not None:
+            try:
+                if _needs_instance_argument(fallback_fn):
+                    fallback_pairs = await fallback_fn(kb, client_id, limit=k)
+                else:
+                    fallback_pairs = await fallback_fn(client_id, limit=k)
+            except Exception as fallback_exc:  # noqa: BLE001 - diagnostics only
+                logger.debug(
+                    "knowledge_search_fallback_failed client_id={} query='{}' reason={} detail={}".format(
+                        client_id,
+                        normalized_query[:80],
+                        reason,
+                        fallback_exc,
+                    )
                 )
-            )
-            fallback_pairs = []
+                fallback_pairs = []
         trimmed: list[str] = []
         for value, dataset in fallback_pairs:
-            text = str(value).strip()
-            if text:
-                trimmed.append(text)
+            text = _as_text(value)
+            if not text:
+                continue
+            trimmed.append(text)
         deps.last_knowledge_query = normalized_query
         if trimmed:
             deps.last_knowledge_empty = False
@@ -195,7 +235,7 @@ async def tool_search_knowledge(
                     len(trimmed),
                 )
             )
-            return _cache_result(deps, tool_name, trimmed)
+            return _cache_result(deps, tool_name, trimmed, cache_key=cache_key)
         deps.last_knowledge_empty = True
         deps.knowledge_base_empty = True
         deps.kb_used = False
@@ -206,8 +246,9 @@ async def tool_search_knowledge(
                 normalized_query[:80],
             )
         )
-        return _cache_result(deps, tool_name, [])
+        return _cache_result(deps, tool_name, [], cache_key=cache_key)
 
+    snippets: list[Any] = []
     try:
         snippets = await wait_for(
             kb.search(
@@ -239,13 +280,14 @@ async def tool_search_knowledge(
         deps.knowledge_base_empty = False
         deps.kb_used = True
         logger.debug(f"tool_search_knowledge results={len(snippets)}")
-        texts = [snippet.text for snippet in snippets]
-        return _cache_result(deps, tool_name, texts)
+        texts = [text for text in (_as_text(snippet) for snippet in snippets) if text]
+        if texts:
+            return _cache_result(deps, tool_name, texts, cache_key=cache_key)
 
     return await _load_fallback("empty")
 
 
-@toolset.tool(prepare=_single_use_prepare("tool_get_chat_history"))
+@toolset.tool(prepare=_single_use_prepare("tool_get_chat_history"))  # pyrefly: ignore[no-matching-overload]
 async def tool_get_chat_history(
     ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
     limit: int = 20,
@@ -253,36 +295,43 @@ async def tool_get_chat_history(
     """Load recent chat messages for context."""
     kb = get_knowledge_base()
     tool_name = "tool_get_chat_history"
-    deps, skipped, cached = _start_tool(ctx, tool_name)
+    cache_key = (tool_name, str(limit))
+    deps, skipped, cached = _start_tool(ctx, tool_name, cache_key=cache_key)
     timeout = _tool_timeout("tool_get_chat_history")
     client_id = deps.client_id
     logger.debug(f"tool_get_chat_history client_id={client_id} limit={limit}")
     if skipped:
         cached_history = cast(list[str], cached if cached is not None else [])
-        return list(cached_history)
+        limited = list(cached_history[:limit]) if limit is not None else list(cached_history)
+        return limited
 
+    if deps.cached_history:
+        limited = list(deps.cached_history[:limit]) if limit is not None else list(deps.cached_history)
+        return _cache_result(deps, tool_name, limited, cache_key=cache_key)
+
+    history: list[str] = deps.cached_history or []
     try:
         if deps.cached_history is None:
             history = await wait_for(kb.get_message_history(client_id, limit), timeout=timeout)
             deps.cached_history = history
         else:
             history = deps.cached_history
-    except Exception as e:
-        logger.error(f"Error getting chat history: {e}")
-        return []
-        if limit is None:
-            return _cache_result(deps, tool_name, list(history))
-        limited = list(history[:limit])
-        return _cache_result(deps, tool_name, limited)
     except TimeoutError:
         logger.info(f"chat_history_timeout client_id={client_id} tool=tool_get_chat_history timeout={timeout}")
-        deps.cached_history = deps.cached_history or []
-        return _cache_result(deps, tool_name, list(deps.cached_history))
-    except Exception as e:  # pragma: no cover - forward to model
-        raise ModelRetry(f"Chat history unavailable: {e}. Try calling again.") from e
+        history = deps.cached_history or []
+        limited = list(history[:limit]) if limit is not None else list(history)
+        if limited:
+            return _cache_result(deps, tool_name, limited, cache_key=cache_key)
+        raise
+    except Exception as e:
+        logger.error(f"Error getting chat history: {e}")
+        raise
+
+    limited = list(history[:limit]) if limit is not None else list(history)
+    return _cache_result(deps, tool_name, limited, cache_key=cache_key)
 
 
-@toolset.tool(prepare=_single_use_prepare("tool_save_program"))
+@toolset.tool(prepare=_single_use_prepare("tool_save_program"))  # pyrefly: ignore[no-matching-overload]
 async def tool_save_program(
     ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
     plan: "ProgramPayload",
@@ -321,7 +370,7 @@ async def tool_save_program(
         raise ModelRetry(f"Program saving failed: {e}. Ensure plan data is valid and retry.") from e
 
 
-@toolset.tool(prepare=_single_use_prepare("tool_get_program_history"))
+@toolset.tool(prepare=_single_use_prepare("tool_get_program_history"))  # pyrefly: ignore[no-matching-overload]
 async def tool_get_program_history(
     ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
 ) -> list[Program]:
@@ -346,7 +395,7 @@ async def tool_get_program_history(
         raise ModelRetry(f"Program history unavailable: {e}. Try calling the tool again later.") from e
 
 
-@toolset.tool(prepare=_single_use_prepare("tool_attach_gifs"))
+@toolset.tool(prepare=_single_use_prepare("tool_attach_gifs"))  # pyrefly: ignore[no-matching-overload]
 async def tool_attach_gifs(
     ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
     exercises: list[DayExercises],
@@ -399,7 +448,7 @@ async def tool_attach_gifs(
     return _cache_result(deps, tool_name, result)
 
 
-@toolset.tool(prepare=_single_use_prepare("tool_create_subscription"))
+@toolset.tool(prepare=_single_use_prepare("tool_create_subscription"))  # pyrefly: ignore[no-matching-overload]
 async def tool_create_subscription(
     ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
     workout_days: list[str],

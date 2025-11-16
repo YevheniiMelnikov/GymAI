@@ -1,5 +1,4 @@
 import asyncio
-from collections import defaultdict
 from dataclasses import dataclass
 from hashlib import md5, sha256
 from pathlib import Path
@@ -11,57 +10,13 @@ import pytest
 
 import ai_coach.agent.knowledge.knowledge_base as knowledge_base_module
 from ai_coach.agent.coach import CoachAgent
-from ai_coach.agent.knowledge.knowledge_base import (
+from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+from ai_coach.agent.knowledge.schemas import (
     DatasetRow,
-    KnowledgeBase,
     KnowledgeSnippet,
     ProjectionStatus,
 )
 from core.schemas import Client, QAResponse
-
-
-@pytest.fixture()
-def memory_hash_store(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    datasets: dict[str, set[str]] = defaultdict(set)
-    metadata_map: dict[tuple[str, str], dict[str, Any]] = {}
-
-    class FakeHashStore:
-        @classmethod
-        async def contains(cls, dataset: str, digest: str) -> bool:
-            return digest in datasets.get(dataset, set())
-
-        @classmethod
-        async def add(cls, dataset: str, digest: str, metadata: Mapping[str, Any] | None = None) -> None:
-            datasets.setdefault(dataset, set()).add(digest)
-            if metadata is not None:
-                metadata_map[(dataset, digest)] = dict(metadata)
-
-        @classmethod
-        async def clear(cls, dataset: str) -> None:
-            datasets.pop(dataset, None)
-            for key in list(metadata_map.keys()):
-                if key[0] == dataset:
-                    metadata_map.pop(key, None)
-
-        @classmethod
-        async def list(cls, dataset: str) -> set[str]:
-            return set(datasets.get(dataset, set()))
-
-        @classmethod
-        async def metadata(cls, dataset: str, digest: str) -> dict[str, Any] | None:
-            data = metadata_map.get((dataset, digest))
-            return dict(data) if data is not None else None
-
-        @classmethod
-        async def get_md5_for_sha(cls, dataset: str, digest: str) -> str | None:
-            data = metadata_map.get((dataset, digest))
-            if data is None:
-                return None
-            value = data.get("digest_md5")
-            return str(value) if value else None
-
-    monkeypatch.setattr(knowledge_base_module, "HashStore", FakeHashStore)
-    return {"datasets": datasets, "metadata": metadata_map}
 
 
 async def _fake_hash_add(cls, dataset: str, digest: str, metadata: dict[str, Any] | None = None) -> None:
@@ -263,7 +218,6 @@ async def test_add_text_merges_metadata(monkeypatch: pytest.MonkeyPatch) -> None
 async def test_rebuild_from_disk_populates_hashstore_when_graph_empty(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    memory_hash_store: dict[str, Any],
 ) -> None:
     storage_root = tmp_path / "cognee"
     storage_root.mkdir()
@@ -293,7 +247,7 @@ async def test_rebuild_from_disk_populates_hashstore_when_graph_empty(
 
 
 @pytest.mark.asyncio
-async def test_wait_for_projection_timeout_returns_false(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_wait_for_projection_timeout_returns_timeout_status(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_ready(cls, dataset: str, user: Any | None) -> tuple[bool, str]:
         return False, "pending"
 
@@ -308,13 +262,12 @@ async def test_wait_for_projection_timeout_returns_false(monkeypatch: pytest.Mon
     monkeypatch.setattr(knowledge_base_module.asyncio, "sleep", fake_sleep)
 
     status = await KnowledgeBase._wait_for_projection("kb_global", user=None, timeout_s=0.01)
-    assert status == ProjectionStatus.USER_CONTEXT_UNAVAILABLE
+    assert status == ProjectionStatus.TIMEOUT
 
 
 @pytest.mark.asyncio
 async def test_wait_for_projection_timeout_skips_global_during_search(
     monkeypatch: pytest.MonkeyPatch,
-    memory_hash_store: dict[str, Any],
 ) -> None:
     captured: dict[str, Any] = {}
 
@@ -364,7 +317,6 @@ async def test_wait_for_projection_timeout_skips_global_during_search(
 async def test_md5_files_are_promoted_to_sha_once(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    memory_hash_store: dict[str, Any],
 ) -> None:
     alias = "kb_client_5"
     storage_root = tmp_path / "cognee"

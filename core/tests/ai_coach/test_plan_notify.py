@@ -1,112 +1,15 @@
 import importlib
-import os
-import sys
-from types import ModuleType, SimpleNamespace
+from types import SimpleNamespace
 from typing import Any, Callable
 
 import pytest
+import httpx
 
-try:
-    import dateutil  # noqa: F401
-except ModuleNotFoundError:
-    dateutil_module = ModuleType("dateutil")
-    relativedelta_module = ModuleType("dateutil.relativedelta")
-
-    class _Relativedelta:  # pragma: no cover - stub for optional dependency
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            self.args = args
-            self.kwargs = kwargs
-
-    relativedelta_module.relativedelta = _Relativedelta
-    dateutil_module.relativedelta = relativedelta_module
-    sys.modules.setdefault("dateutil", dateutil_module)
-    sys.modules.setdefault("dateutil.relativedelta", relativedelta_module)
-
-try:
-    import kombu  # noqa: F401
-except ModuleNotFoundError:
-    kombu_module = ModuleType("kombu")
-
-    class _Exchange:  # pragma: no cover - stub for tests
-        def __init__(self, name: str, *args: Any, **kwargs: Any) -> None:
-            self.name = name
-
-    class _Queue:  # pragma: no cover - stub for tests
-        def __init__(self, *args: Any, **kwargs: Any) -> None:
-            self.args = args
-            self.kwargs = kwargs
-
-    kombu_module.Exchange = _Exchange
-    kombu_module.Queue = _Queue
-    sys.modules.setdefault("kombu", kombu_module)
-
-celery_module = ModuleType("celery")
-
-
-class _Task:  # pragma: no cover - stub for tests
-    request: SimpleNamespace
-
-
-class _Conf:  # pragma: no cover - stub for tests
-    def update(self, **kwargs: Any) -> None:
-        self.settings = kwargs
-
-
-class _Celery:  # pragma: no cover - stub for tests
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        self.conf = _Conf()
-
-    def task(self, *args: Any, **kwargs: Any):
-        def decorator(func):
-            return func
-
-        return decorator
-
-
-celery_module.Task = _Task
-celery_module.Celery = _Celery
-sys.modules["celery"] = celery_module
-
-if "core.celery_app" not in sys.modules:
-    celery_app_module = ModuleType("core.celery_app")
-
-    class _AppConf:  # pragma: no cover - stub for tests
-        def update(self, **kwargs: Any) -> None:
-            self.options = kwargs
-
-    class _App:  # pragma: no cover - stub for tests
-        def __init__(self) -> None:
-            self.conf = _AppConf()
-
-        def task(self, *args: Any, **kwargs: Any):
-            def decorator(func):
-                return func
-
-            return decorator
-
-    celery_app_module.app = _App()
-    sys.modules.setdefault("core.celery_app", celery_app_module)
-
-redis_asyncio_module = ModuleType("redis.asyncio")
-redis_asyncio_client_module = ModuleType("redis.asyncio.client")
-
-
-class _Pipeline:  # pragma: no cover - stub for tests
-    pass
-
-
-redis_asyncio_client_module.Pipeline = _Pipeline
-redis_asyncio_module.Redis = SimpleNamespace  # type: ignore[assignment]
-redis_asyncio_module.client = redis_asyncio_client_module
-sys.modules["redis.asyncio"] = redis_asyncio_module
-sys.modules["redis.asyncio.client"] = redis_asyncio_client_module
-
-os.environ.setdefault("RABBITMQ_URL", "amqp://guest:guest@localhost:5672//")
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
+from config import app_settings as app_settings_module
 
 
 class _SettingsStub(SimpleNamespace):
-    def __getattr__(self, name: str) -> Any:  # pragma: no cover - defensive default
+    def __getattr__(self, name: str) -> Any:  # pragma: no cover - fallback for typed attrs
         if name.endswith(("_TIMEOUT", "_TTL", "_DAYS")):
             return 0
         return "stub"
@@ -127,15 +30,32 @@ _REQUIRED_SETTINGS: dict[str, Any] = {
     "BOT_INTERNAL_URL": "http://bot:8000/",
     "API_KEY": "api",
     "INTERNAL_API_KEY": "internal",
+    "INTERNAL_KEY_ID": "internal",
     "INTERNAL_HTTP_CONNECT_TIMEOUT": 5.0,
     "INTERNAL_HTTP_READ_TIMEOUT": 10.0,
     "API_TIMEOUT": 10,
 }
 
-settings = _SettingsStub(**_REQUIRED_SETTINGS)
-sys.modules["config.app_settings"].settings = settings
 
-ai_coach_tasks = importlib.import_module("core.tasks.ai_coach")
+@pytest.fixture(name="ai_coach_context")
+def ai_coach_context_fixture(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
+    """Provide a reloaded core.tasks.ai_coach module with predictable settings."""
+    settings = _SettingsStub(**_REQUIRED_SETTINGS)
+    monkeypatch.setattr(app_settings_module, "settings", settings, raising=False)
+    module = importlib.reload(importlib.import_module("core.tasks.ai_coach"))
+    module.plans.settings = settings
+    yield SimpleNamespace(tasks=module, settings=settings)
+    importlib.reload(importlib.import_module("core.tasks.ai_coach"))
+
+
+@pytest.fixture(name="ai_coach_tasks")
+def ai_coach_tasks_fixture(ai_coach_context: SimpleNamespace):
+    return ai_coach_context.tasks
+
+
+@pytest.fixture(name="plan_notify_settings")
+def plan_notify_settings_fixture(ai_coach_context: SimpleNamespace):
+    return ai_coach_context.settings
 
 
 class DummyResponse:
@@ -144,10 +64,10 @@ class DummyResponse:
 
     def raise_for_status(self) -> None:
         if self.status_code >= 400:
-            raise ai_coach_tasks.httpx.HTTPStatusError(
+            raise httpx.HTTPStatusError(
                 "error",
-                request=ai_coach_tasks.httpx.Request("POST", "http://example.com"),
-                response=ai_coach_tasks.httpx.Response(self.status_code),
+                request=httpx.Request("POST", "http://example.com"),
+                response=httpx.Response(self.status_code),
             )
 
 
@@ -163,10 +83,17 @@ class DummyClient:
     async def __aexit__(self, exc_type, exc, tb) -> bool:  # type: ignore[override]
         return False
 
-    async def post(self, url: str, json: dict[str, Any], headers: dict[str, str]) -> DummyResponse:
+    async def post(
+        self,
+        url: str,
+        json: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        **kwargs: Any,
+    ) -> DummyResponse:
         self._recorder["url"] = url
         self._recorder["json"] = json
-        self._recorder["headers"] = headers
+        self._recorder["headers"] = headers or {}
+        self._recorder["content"] = kwargs.get("content")
         return self._response_factory()
 
 
@@ -189,16 +116,22 @@ class DummyState:
 
 
 @pytest.mark.asyncio
-async def test_notify_ai_plan_ready_uses_internal_header(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_notify_ai_plan_ready_uses_internal_header(
+    ai_coach_tasks,
+    plan_notify_settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     recorder: dict[str, Any] = {}
 
-    monkeypatch.setattr(settings, "BOT_INTERNAL_URL", "http://bot:8000/")
-    monkeypatch.setattr(settings, "INTERNAL_API_KEY", "secret")
-    monkeypatch.setattr(settings, "API_KEY", "fallback")
-    monkeypatch.setattr(settings, "INTERNAL_HTTP_CONNECT_TIMEOUT", 5.0)
-    monkeypatch.setattr(settings, "INTERNAL_HTTP_READ_TIMEOUT", 12.0)
+    monkeypatch.setattr(plan_notify_settings, "BOT_INTERNAL_URL", "http://bot:8000/")
+    monkeypatch.setattr(plan_notify_settings, "INTERNAL_API_KEY", "secret")
+    monkeypatch.setattr(plan_notify_settings, "API_KEY", "fallback")
+    monkeypatch.setattr(plan_notify_settings, "INTERNAL_HTTP_CONNECT_TIMEOUT", 5.0)
+    monkeypatch.setattr(plan_notify_settings, "INTERNAL_HTTP_READ_TIMEOUT", 12.0)
 
-    monkeypatch.setattr(ai_coach_tasks, "AiPlanState", SimpleNamespace(create=lambda: DummyState()))
+    state_factory = SimpleNamespace(create=lambda: DummyState())
+    monkeypatch.setattr(ai_coach_tasks, "AiPlanState", state_factory)
+    monkeypatch.setattr(ai_coach_tasks.plans, "AiPlanState", state_factory, raising=False)
     monkeypatch.setattr(ai_coach_tasks.httpx, "AsyncClient", lambda **kwargs: DummyClient(recorder, **kwargs))
 
     payload = {
@@ -212,7 +145,7 @@ async def test_notify_ai_plan_ready_uses_internal_header(monkeypatch: pytest.Mon
 
     await ai_coach_tasks._notify_ai_plan_ready(payload)
 
-    assert recorder["headers"] == {"X-Internal-Api-Key": "secret"}
+    assert recorder["headers"].get("X-Internal-Api-Key") == "secret"
     timeout = recorder["timeout"]
     if hasattr(timeout, "connect"):
         assert timeout.connect == 5.0
@@ -222,16 +155,22 @@ async def test_notify_ai_plan_ready_uses_internal_header(monkeypatch: pytest.Mon
 
 
 @pytest.mark.asyncio
-async def test_notify_ai_plan_ready_fallback_authorization(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_notify_ai_plan_ready_fallback_authorization(
+    ai_coach_tasks,
+    plan_notify_settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     recorder: dict[str, Any] = {}
 
-    monkeypatch.setattr(settings, "BOT_INTERNAL_URL", "http://bot:8000/")
-    monkeypatch.setattr(settings, "INTERNAL_API_KEY", None)
-    monkeypatch.setattr(settings, "API_KEY", "fallback")
-    monkeypatch.setattr(settings, "INTERNAL_HTTP_CONNECT_TIMEOUT", 3.0)
-    monkeypatch.setattr(settings, "INTERNAL_HTTP_READ_TIMEOUT", 9.0)
+    monkeypatch.setattr(plan_notify_settings, "BOT_INTERNAL_URL", "http://bot:8000/")
+    monkeypatch.setattr(plan_notify_settings, "INTERNAL_API_KEY", None)
+    monkeypatch.setattr(plan_notify_settings, "API_KEY", "fallback")
+    monkeypatch.setattr(plan_notify_settings, "INTERNAL_HTTP_CONNECT_TIMEOUT", 3.0)
+    monkeypatch.setattr(plan_notify_settings, "INTERNAL_HTTP_READ_TIMEOUT", 9.0)
 
-    monkeypatch.setattr(ai_coach_tasks, "AiPlanState", SimpleNamespace(create=lambda: DummyState()))
+    state_factory = SimpleNamespace(create=lambda: DummyState())
+    monkeypatch.setattr(ai_coach_tasks, "AiPlanState", state_factory)
+    monkeypatch.setattr(ai_coach_tasks.plans, "AiPlanState", state_factory, raising=False)
     monkeypatch.setattr(ai_coach_tasks.httpx, "AsyncClient", lambda **kwargs: DummyClient(recorder, **kwargs))
 
     payload = {
@@ -245,32 +184,45 @@ async def test_notify_ai_plan_ready_fallback_authorization(monkeypatch: pytest.M
 
     await ai_coach_tasks._notify_ai_plan_ready(payload)
 
-    assert recorder["headers"] == {"Authorization": "Api-Key fallback"}
+    assert recorder["headers"].get("Authorization") == "Api-Key fallback"
 
 
 @pytest.mark.asyncio
-async def test_notify_ai_plan_ready_skips_duplicate_delivery(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_notify_ai_plan_ready_skips_duplicate_delivery(
+    ai_coach_tasks,
+    plan_notify_settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     recorder: dict[str, Any] = {"calls": 0}
 
     state = DummyState()
     state.delivered.add("req-3")
 
-    monkeypatch.setattr(settings, "BOT_INTERNAL_URL", "http://bot:8000/")
-    monkeypatch.setattr(settings, "INTERNAL_API_KEY", "secret")
-    monkeypatch.setattr(settings, "API_KEY", "fallback")
-    monkeypatch.setattr(settings, "INTERNAL_HTTP_CONNECT_TIMEOUT", 1.0)
-    monkeypatch.setattr(settings, "INTERNAL_HTTP_READ_TIMEOUT", 2.0)
+    monkeypatch.setattr(plan_notify_settings, "BOT_INTERNAL_URL", "http://bot:8000/")
+    monkeypatch.setattr(plan_notify_settings, "INTERNAL_API_KEY", "secret")
+    monkeypatch.setattr(plan_notify_settings, "API_KEY", "fallback")
+    monkeypatch.setattr(plan_notify_settings, "INTERNAL_HTTP_CONNECT_TIMEOUT", 1.0)
+    monkeypatch.setattr(plan_notify_settings, "INTERNAL_HTTP_READ_TIMEOUT", 2.0)
 
-    monkeypatch.setattr(ai_coach_tasks, "AiPlanState", SimpleNamespace(create=lambda: state))
+    state_factory = SimpleNamespace(create=lambda: state)
+    monkeypatch.setattr(ai_coach_tasks, "AiPlanState", state_factory)
+    monkeypatch.setattr(ai_coach_tasks.plans, "AiPlanState", state_factory, raising=False)
 
-    async def _noop_post(url: str, json: dict[str, Any], headers: dict[str, str]) -> DummyResponse:
+    async def _noop_post(
+        url: str,
+        json: dict[str, Any] | None,
+        headers: dict[str, str] | None,
+        **kwargs: Any,
+    ) -> DummyResponse:
         recorder["calls"] += 1
         return DummyResponse()
 
     class CountingClient(DummyClient):
-        async def post(self, url: str, json: dict[str, Any], headers: dict[str, str]) -> DummyResponse:
+        async def post(
+            self, url: str, json: dict[str, Any] | None = None, headers: dict[str, str] | None = None, **kwargs: Any
+        ) -> DummyResponse:
             recorder["calls"] += 1
-            return await _noop_post(url, json, headers)
+            return await _noop_post(url, json, headers, **kwargs)
 
     monkeypatch.setattr(ai_coach_tasks.httpx, "AsyncClient", lambda **kwargs: CountingClient(recorder, **kwargs))
 
@@ -289,21 +241,29 @@ async def test_notify_ai_plan_ready_skips_duplicate_delivery(monkeypatch: pytest
 
 
 @pytest.mark.asyncio
-async def test_claim_plan_request_logs_duplicate(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_claim_plan_request_logs_duplicate(
+    ai_coach_tasks,
+    plan_notify_settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class DuplicateState:
         async def claim_delivery(self, plan_id: str, ttl_s: int | None = None) -> bool:
             return False
 
     dummy_logger_calls: list[str] = []
 
-    monkeypatch.setattr(ai_coach_tasks, "AiPlanState", SimpleNamespace(create=lambda: DuplicateState()))
-    monkeypatch.setattr(settings, "AI_PLAN_DEDUP_TTL", 10)
+    state_factory = SimpleNamespace(create=lambda: DuplicateState())
+    monkeypatch.setattr(ai_coach_tasks, "AiPlanState", state_factory)
+    monkeypatch.setattr(ai_coach_tasks.plans, "AiPlanState", state_factory, raising=False)
+    monkeypatch.setattr(plan_notify_settings, "AI_PLAN_DEDUP_TTL", 10)
 
     class DummyLogger:
         def debug(self, message: str) -> None:
             dummy_logger_calls.append(message)
 
-    monkeypatch.setattr(ai_coach_tasks, "logger", DummyLogger())
+    logger_instance = DummyLogger()
+    monkeypatch.setattr(ai_coach_tasks, "logger", logger_instance)
+    monkeypatch.setattr(ai_coach_tasks.plans, "logger", logger_instance, raising=False)
 
     allowed = await ai_coach_tasks._claim_plan_request("req-4", "create", attempt=0)
 

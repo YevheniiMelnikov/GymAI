@@ -21,8 +21,7 @@ class PaymentRepository:
     @staticmethod
     def get_model(pk: int) -> Payment:
         try:
-            payment = Payment.objects.get(pk=pk)  # pyrefly: ignore[missing-attribute]
-            return cast(Payment, payment)
+            return Payment.objects.get(pk=pk)  # pyrefly: ignore[missing-attribute]
         except Payment.DoesNotExist:  # pyrefly: ignore[missing-attribute]
             raise NotFound(f"Payment pk={pk} not found")
 
@@ -40,7 +39,9 @@ class PaymentRepository:
 
         if isinstance(cached, dict):
             payment = Payment(**cached)
-            payment.pk = cached.get("id")
+            pk_value = cached.get("id")
+            if pk_value is not None:
+                payment.pk = int(pk_value)
             payment._state.adding = False
             return payment
 

@@ -3,9 +3,9 @@ import base64
 import sys
 import types
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 
-import conftest
+from core.tests import conftest
 from ai_coach.application import app
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 
@@ -37,7 +37,8 @@ def test_refresh_knowledge(monkeypatch: pytest.MonkeyPatch) -> None:
         token = base64.b64encode(b"user:pass").decode()
         headers = {"Authorization": f"Basic {token}"}
 
-        async with AsyncClient(app=app, base_url="http://test") as ac:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post("/knowledge/refresh/", headers=headers)
 
         assert resp.status_code == 200
@@ -55,7 +56,8 @@ def test_refresh_knowledge_unauthorized(monkeypatch: pytest.MonkeyPatch) -> None
         token = base64.b64encode(b"user:wrong").decode()
         headers = {"Authorization": f"Basic {token}"}
 
-        async with AsyncClient(app=app, base_url="http://test") as ac:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post("/knowledge/refresh/", headers=headers)
 
         assert resp.status_code == 401

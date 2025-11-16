@@ -48,7 +48,7 @@ async def test_enqueue_generation_uses_chain(monkeypatch: pytest.MonkeyPatch) ->
         client=client,
         language="en",
         plan_type=WorkoutPlanType.PROGRAM,
-        workout_type=WorkoutType.strength,
+        workout_type=WorkoutType.STRENGTH,
         wishes="focus",
         request_id="req-1",
     )
@@ -89,7 +89,7 @@ async def test_enqueue_generation_requires_profile() -> None:
         client=client,
         language="en",
         plan_type=WorkoutPlanType.PROGRAM,
-        workout_type=WorkoutType.strength,
+        workout_type=WorkoutType.STRENGTH,
         wishes="",
         request_id="req-3",
     )

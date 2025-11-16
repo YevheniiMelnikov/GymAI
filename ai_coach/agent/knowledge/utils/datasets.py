@@ -453,7 +453,7 @@ class DatasetService:
 
         hash_store = None
         try:
-            from ai_coach.agent.knowledge.utils.hash_store import HashStore  # noqa: WPS433
+            from ai_coach.agent.knowledge.utils.hash_store import HashStore  # noqa: PLC0415
         except Exception:
             hash_store = None
         else:

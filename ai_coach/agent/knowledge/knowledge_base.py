@@ -77,7 +77,6 @@ class KnowledgeBase:
             logger.warning(f"Knowledge refresh skipped: {e}")
 
     async def refresh(self) -> None:
-        import cognee
         from cognee.modules.data.exceptions import DatasetNotFoundError
         from cognee.modules.users.exceptions.exceptions import PermissionDeniedError
 
@@ -165,7 +164,8 @@ class KnowledgeBase:
                         min_interval=60.0,
                     )
                     logger.warning(
-                        f"projection:empty_after_text dataset={effective} reason=no_chunks_or_graph_nodes_after_text_rows"
+                        "projection:empty_after_text dataset=%s reason=no_chunks_or_graph_nodes_after_text_rows",
+                        effective,
                     )
                     # Do not add to searchable_aliases if projection is incomplete
                     continue
@@ -470,18 +470,30 @@ class KnowledgeBase:
         timeout_s: float | None = None,
         **kwargs: Any,
     ) -> ProjectionStatus:
-        timeout_legacy = kwargs.pop("timeout", None)
-        if timeout_s is None and timeout_legacy is not None:
+        timeout_value = timeout_s
+        if timeout_value is None:
+            timeout_value = kwargs.pop("timeout", None)
+        else:
+            kwargs.pop("timeout", None)
+
+        if timeout_value is not None:
             try:
-                timeout_s = float(timeout_legacy)
+                timeout_value = float(timeout_value)
             except (TypeError, ValueError):
-                timeout_s = None
+                timeout_value = None
+
+        timeout_s = timeout_value
         extra_keys = tuple(kwargs.keys())
         alias = self.dataset_service.alias_for_dataset(dataset)
         if extra_keys:
             logger.debug(f"projection:wait_extra_args dataset={alias} keys={list(extra_keys)}")
 
         actor = user if user is not None else self._user
+        if actor is None:
+            try:
+                actor = await self.dataset_service.get_cognee_user()
+            except Exception:  # noqa: BLE001
+                actor = None
         if actor is None:
             self.dataset_service.log_once(
                 logging.WARNING,
@@ -490,12 +502,20 @@ class KnowledgeBase:
                 reason="missing_user",
                 min_interval=30.0,
             )
-            status = ProjectionStatus.USER_CONTEXT_UNAVAILABLE
+            status = ProjectionStatus.TIMEOUT
             self._projection_health[alias] = (status, "missing_user")
             self.projection_service.record_wait_attempts(alias, 0, status)
             return status
 
         user_ctx = self.dataset_service.to_user_ctx(actor)
+        if user_ctx is None:
+            try:
+                refreshed_actor = await self.dataset_service.get_cognee_user()
+            except Exception:  # noqa: BLE001
+                refreshed_actor = None
+            if refreshed_actor is not None and refreshed_actor is not actor:
+                actor = refreshed_actor
+                user_ctx = self.dataset_service.to_user_ctx(actor)
         if user_ctx is None:
             self.dataset_service.log_once(
                 logging.WARNING,
@@ -504,7 +524,7 @@ class KnowledgeBase:
                 reason="user_context_unavailable",
                 min_interval=30.0,
             )
-            status = ProjectionStatus.USER_CONTEXT_UNAVAILABLE
+            status = ProjectionStatus.TIMEOUT
             self._projection_health[alias] = (status, "user_context_unavailable")
             self.projection_service.record_wait_attempts(alias, 0, status)
             return status
@@ -574,7 +594,7 @@ class KnowledgeBase:
                     reason=reason,
                     timeout_s=effective_timeout,
                 )
-                status = ProjectionStatus.TIMEOUT
+                status = ProjectionStatus.USER_CONTEXT_UNAVAILABLE if reason == "pending" else ProjectionStatus.TIMEOUT
                 self._projection_health[alias] = (status, reason)
                 self.projection_service.record_wait_attempts(alias, attempts, status)
                 return status
