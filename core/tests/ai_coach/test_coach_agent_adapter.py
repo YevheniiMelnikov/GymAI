@@ -24,6 +24,7 @@ from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase, KnowledgeSnip
 from ai_coach.schemas import AICoachRequest, ProgramPayload, SubscriptionPayload
 from ai_coach.types import CoachMode
 from ai_coach.application import app
+from ai_coach.api import dedupe_cache
 from core.enums import CoachType
 
 
@@ -209,8 +210,12 @@ def test_api_passthrough_returns_llm_answer(monkeypatch: pytest.MonkeyPatch) -> 
         return QAResponse(answer="OK_FROM_LLM", sources=["kb_global"])
 
     monkeypatch.setattr(CoachAgent, "answer_question", staticmethod(fake_answer))
-    monkeypatch.setattr(KnowledgeBase, "save_client_message", staticmethod(lambda *args, **kwargs: None))
-    monkeypatch.setattr(KnowledgeBase, "save_ai_message", staticmethod(lambda *args, **kwargs: None))
+
+    async def fake_save(*args: Any, **kwargs: Any) -> None:
+        pass
+
+    monkeypatch.setattr(KnowledgeBase, "save_client_message", fake_save)
+    monkeypatch.setattr(KnowledgeBase, "save_ai_message", fake_save)
 
     from fastapi.testclient import TestClient
 
@@ -228,6 +233,7 @@ def test_ask_ai_runtime_error(monkeypatch) -> None:
         raise RuntimeError("boom")
 
     monkeypatch.setattr(CoachAgent, "answer_question", staticmethod(boom))
+    dedupe_cache.clear()
 
     from fastapi.testclient import TestClient
 

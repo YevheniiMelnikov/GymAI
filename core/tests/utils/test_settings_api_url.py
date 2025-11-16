@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-import conftest
+from core.tests import conftest
 
 
 def _patched_base_settings_init(self: object, **data: object) -> None:

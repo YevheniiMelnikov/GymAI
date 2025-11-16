@@ -1,5 +1,4 @@
-class RedisError(Exception):
-    ...
+class RedisError(Exception): ...
 
 
 __all__ = ["RedisError"]

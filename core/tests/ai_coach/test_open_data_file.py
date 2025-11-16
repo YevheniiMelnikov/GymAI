@@ -11,7 +11,7 @@ def test_windows_file_uri(tmp_path, monkeypatch):
     test_file = tmp_path / "doc.txt"
     test_file.write_text("hello")
     monkeypatch.setattr(
-        "cognee.base_config.get_base_config",
+        "core.tests.stubs.base_config_module.get_base_config",
         lambda: SimpleNamespace(data_root_directory=str(tmp_path)),
     )
     CogneeConfig._patch_cognee()
@@ -31,7 +31,7 @@ def test_windows_bad_uri(tmp_path, monkeypatch):
     test_file = tmp_path / "doc.txt"
     test_file.write_text("hello")
     monkeypatch.setattr(
-        "cognee.base_config.get_base_config",
+        "core.tests.stubs.base_config_module.get_base_config",
         lambda: SimpleNamespace(data_root_directory=str(tmp_path)),
     )
     CogneeConfig._patch_cognee()

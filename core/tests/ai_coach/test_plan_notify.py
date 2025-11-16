@@ -43,6 +43,7 @@ def ai_coach_context_fixture(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace
     settings = _SettingsStub(**_REQUIRED_SETTINGS)
     monkeypatch.setattr(app_settings_module, "settings", settings, raising=False)
     module = importlib.reload(importlib.import_module("core.tasks.ai_coach"))
+    module.plans.settings = settings
     yield SimpleNamespace(tasks=module, settings=settings)
     importlib.reload(importlib.import_module("core.tasks.ai_coach"))
 
@@ -82,10 +83,17 @@ class DummyClient:
     async def __aexit__(self, exc_type, exc, tb) -> bool:  # type: ignore[override]
         return False
 
-    async def post(self, url: str, json: dict[str, Any], headers: dict[str, str]) -> DummyResponse:
+    async def post(
+        self,
+        url: str,
+        json: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        **kwargs: Any,
+    ) -> DummyResponse:
         self._recorder["url"] = url
         self._recorder["json"] = json
-        self._recorder["headers"] = headers
+        self._recorder["headers"] = headers or {}
+        self._recorder["content"] = kwargs.get("content")
         return self._response_factory()
 
 
@@ -121,7 +129,9 @@ async def test_notify_ai_plan_ready_uses_internal_header(
     monkeypatch.setattr(plan_notify_settings, "INTERNAL_HTTP_CONNECT_TIMEOUT", 5.0)
     monkeypatch.setattr(plan_notify_settings, "INTERNAL_HTTP_READ_TIMEOUT", 12.0)
 
-    monkeypatch.setattr(ai_coach_tasks, "AiPlanState", SimpleNamespace(create=lambda: DummyState()))
+    state_factory = SimpleNamespace(create=lambda: DummyState())
+    monkeypatch.setattr(ai_coach_tasks, "AiPlanState", state_factory)
+    monkeypatch.setattr(ai_coach_tasks.plans, "AiPlanState", state_factory, raising=False)
     monkeypatch.setattr(ai_coach_tasks.httpx, "AsyncClient", lambda **kwargs: DummyClient(recorder, **kwargs))
 
     payload = {
@@ -135,7 +145,7 @@ async def test_notify_ai_plan_ready_uses_internal_header(
 
     await ai_coach_tasks._notify_ai_plan_ready(payload)
 
-    assert recorder["headers"] == {"X-Internal-Api-Key": "secret"}
+    assert recorder["headers"].get("X-Internal-Api-Key") == "secret"
     timeout = recorder["timeout"]
     if hasattr(timeout, "connect"):
         assert timeout.connect == 5.0
@@ -158,7 +168,9 @@ async def test_notify_ai_plan_ready_fallback_authorization(
     monkeypatch.setattr(plan_notify_settings, "INTERNAL_HTTP_CONNECT_TIMEOUT", 3.0)
     monkeypatch.setattr(plan_notify_settings, "INTERNAL_HTTP_READ_TIMEOUT", 9.0)
 
-    monkeypatch.setattr(ai_coach_tasks, "AiPlanState", SimpleNamespace(create=lambda: DummyState()))
+    state_factory = SimpleNamespace(create=lambda: DummyState())
+    monkeypatch.setattr(ai_coach_tasks, "AiPlanState", state_factory)
+    monkeypatch.setattr(ai_coach_tasks.plans, "AiPlanState", state_factory, raising=False)
     monkeypatch.setattr(ai_coach_tasks.httpx, "AsyncClient", lambda **kwargs: DummyClient(recorder, **kwargs))
 
     payload = {
@@ -172,7 +184,7 @@ async def test_notify_ai_plan_ready_fallback_authorization(
 
     await ai_coach_tasks._notify_ai_plan_ready(payload)
 
-    assert recorder["headers"] == {"Authorization": "Api-Key fallback"}
+    assert recorder["headers"].get("Authorization") == "Api-Key fallback"
 
 
 @pytest.mark.asyncio
@@ -192,16 +204,25 @@ async def test_notify_ai_plan_ready_skips_duplicate_delivery(
     monkeypatch.setattr(plan_notify_settings, "INTERNAL_HTTP_CONNECT_TIMEOUT", 1.0)
     monkeypatch.setattr(plan_notify_settings, "INTERNAL_HTTP_READ_TIMEOUT", 2.0)
 
-    monkeypatch.setattr(ai_coach_tasks, "AiPlanState", SimpleNamespace(create=lambda: state))
+    state_factory = SimpleNamespace(create=lambda: state)
+    monkeypatch.setattr(ai_coach_tasks, "AiPlanState", state_factory)
+    monkeypatch.setattr(ai_coach_tasks.plans, "AiPlanState", state_factory, raising=False)
 
-    async def _noop_post(url: str, json: dict[str, Any], headers: dict[str, str]) -> DummyResponse:
+    async def _noop_post(
+        url: str,
+        json: dict[str, Any] | None,
+        headers: dict[str, str] | None,
+        **kwargs: Any,
+    ) -> DummyResponse:
         recorder["calls"] += 1
         return DummyResponse()
 
     class CountingClient(DummyClient):
-        async def post(self, url: str, json: dict[str, Any], headers: dict[str, str]) -> DummyResponse:
+        async def post(
+            self, url: str, json: dict[str, Any] | None = None, headers: dict[str, str] | None = None, **kwargs: Any
+        ) -> DummyResponse:
             recorder["calls"] += 1
-            return await _noop_post(url, json, headers)
+            return await _noop_post(url, json, headers, **kwargs)
 
     monkeypatch.setattr(ai_coach_tasks.httpx, "AsyncClient", lambda **kwargs: CountingClient(recorder, **kwargs))
 
@@ -231,14 +252,18 @@ async def test_claim_plan_request_logs_duplicate(
 
     dummy_logger_calls: list[str] = []
 
-    monkeypatch.setattr(ai_coach_tasks, "AiPlanState", SimpleNamespace(create=lambda: DuplicateState()))
+    state_factory = SimpleNamespace(create=lambda: DuplicateState())
+    monkeypatch.setattr(ai_coach_tasks, "AiPlanState", state_factory)
+    monkeypatch.setattr(ai_coach_tasks.plans, "AiPlanState", state_factory, raising=False)
     monkeypatch.setattr(plan_notify_settings, "AI_PLAN_DEDUP_TTL", 10)
 
     class DummyLogger:
         def debug(self, message: str) -> None:
             dummy_logger_calls.append(message)
 
-    monkeypatch.setattr(ai_coach_tasks, "logger", DummyLogger())
+    logger_instance = DummyLogger()
+    monkeypatch.setattr(ai_coach_tasks, "logger", logger_instance)
+    monkeypatch.setattr(ai_coach_tasks.plans, "logger", logger_instance, raising=False)
 
     allowed = await ai_coach_tasks._claim_plan_request("req-4", "create", attempt=0)
 

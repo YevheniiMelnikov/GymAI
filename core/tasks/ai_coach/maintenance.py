@@ -122,7 +122,7 @@ def prune_knowledge_base(self) -> None:  # pyrefly: ignore[valid-type]
         url = _ai_coach_path("internal/knowledge/prune/")
         headers = build_internal_hmac_auth_headers(
             key_id=settings.INTERNAL_KEY_ID,
-            api_key=settings.INTERNAL_API_KEY,
+            secret_key=settings.INTERNAL_API_KEY,
             body=body,
         )
         headers.setdefault("Content-Type", "application/json")

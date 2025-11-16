@@ -1,4 +1,5 @@
 import asyncio
+import json
 import sys
 from importlib import import_module
 from types import SimpleNamespace
@@ -41,9 +42,10 @@ def test_programs_history_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
         response: JsonResponse = await views.programs_history(request)
         assert response.status_code == 200
-        assert response["programs"][0]["id"] == 1
-        assert response["programs"][0]["coach_type"] == CoachType.ai_coach
-        assert response["language"] == "eng"
+        data = json.loads(response.content)
+        assert data["programs"][0]["id"] == 1
+        assert data["programs"][0]["coach_type"] == CoachType.ai_coach
+        assert data["language"] == "eng"
 
     asyncio.run(runner())
 

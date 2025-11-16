@@ -1,5 +1,4 @@
 import asyncio
-import sys
 from types import SimpleNamespace
 from pathlib import Path
 from typing import Any
@@ -8,7 +7,8 @@ import pytest
 
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 import ai_coach.agent.knowledge.knowledge_base as coach
-from ai_coach.application import knowledge_ready_event, init_knowledge_base
+import ai_coach.application as coach_application
+from ai_coach.application import init_knowledge_base
 from ai_coach.agent.knowledge.cognee_config import _patch_local_file_storage
 
 
@@ -29,16 +29,17 @@ def test_reinit_on_failure(monkeypatch):
             return SimpleNamespace(id="test")
 
         monkeypatch.setattr("ai_coach.agent.knowledge.knowledge_base.get_default_user", fake_user)
-        if knowledge_ready_event is not None:
-            knowledge_ready_event.clear()
+        if coach_application.knowledge_ready_event is not None:
+            coach_application.knowledge_ready_event.clear()
+        kb = KnowledgeBase()
         with pytest.raises(RuntimeError):
-            await init_knowledge_base()
+            await init_knowledge_base(kb)
 
         async def ok(*args, **kwargs):
             KnowledgeBase._user = SimpleNamespace(id="ok")
 
         monkeypatch.setattr(KnowledgeBase, "initialize", ok)
-        await init_knowledge_base()
+        await init_knowledge_base(kb)
         assert KnowledgeBase._user is not None
 
     asyncio.run(runner())
@@ -67,7 +68,7 @@ def test_empty_context_does_not_crash(monkeypatch):
         expected_dataset = KnowledgeBase._dataset_name(42)
         fallback_dataset = coach.KnowledgeBase._resolve_dataset_alias(coach.KnowledgeBase.GLOBAL_DATASET)
         assert calls == [
-            [expected_dataset, coach.KnowledgeBase.GLOBAL_DATASET],
+            [expected_dataset],
             [fallback_dataset],
         ]
         assert res == []
@@ -84,9 +85,7 @@ def test_local_file_storage_patch(monkeypatch, tmp_path):
         def open(self, file_path: str, mode: str = "r", **kwargs: Any) -> Any:
             raise FileNotFoundError(file_path)
 
-    module_name = "cognee.infrastructure.files.storage"
-    dummy_module = SimpleNamespace(LocalFileStorage=DummyStorage)
-    monkeypatch.setitem(sys.modules, module_name, dummy_module)
+    monkeypatch.setattr("ai_coach.agent.knowledge.cognee_config._resolve_localfilestorage_class", lambda: DummyStorage)
 
     sample = tmp_path / "text_abc.txt"
     sample.write_text("hello", encoding="utf-8")

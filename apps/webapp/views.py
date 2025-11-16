@@ -1,5 +1,4 @@
 import inspect
-import json
 import os
 import time
 from datetime import datetime
@@ -89,26 +88,6 @@ async def _call_repo(func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
     return cast(T, result)
 
 
-class PayloadJsonResponse(JsonResponse):
-    """JsonResponse exposing decoded payload via dictionary access."""
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        super().__init__(*args, **kwargs)
-        self._payload_cache: dict[str, Any] | None = None
-
-    def _payload(self) -> dict[str, Any]:
-        if self._payload_cache is None:
-            self._payload_cache = json.loads(self.content.decode("utf-8"))
-        return self._payload_cache
-
-    def __getitem__(self, key: str) -> Any:
-        return self._payload()[key]
-
-
-def _json(data: dict[str, Any], *, status: int = 200) -> JsonResponse:
-    return PayloadJsonResponse(data, status=status)
-
-
 def _read_init_data(request: HttpRequest) -> str:
     init_data_raw = request.GET.get("init_data", "")
     init_data: str = str(init_data_raw or "")
@@ -142,7 +121,7 @@ async def _auth_and_get_client(
         data: dict[str, Any] = verify_init_data(init_data)
     except Exception as exc:
         logger.warning(f"Init data verification failed: {exc} | length={len(init_data)}")
-        return None, lang, _json({"error": "unauthorized"}, status=403), 0
+        return None, lang, JsonResponse({"error": "unauthorized"}, status=403), 0
 
     user: dict[str, Any] = data.get("user", {})  # type: ignore[arg-type]
     tg_id: int = int(str(user.get("id", "0")))
@@ -154,7 +133,7 @@ async def _auth_and_get_client(
     except Exception as exc:
         if exc.__class__ is NotFound:
             logger.warning(f"Profile not found for tg_id={tg_id}")
-            return None, lang, _json({"error": "not_found"}, status=404), tg_id
+            return None, lang, JsonResponse({"error": "not_found"}, status=404), tg_id
         raise
 
     lang = str(getattr(profile, "language", "eng") or "eng")
@@ -166,7 +145,7 @@ async def _auth_and_get_client(
     except Exception as exc:
         if exc.__class__ is NotFound:
             logger.warning(f"Client profile not found for profile_id={profile.id}")
-            return None, lang, _json({"error": "not_found"}, status=404), tg_id
+            return None, lang, JsonResponse({"error": "not_found"}, status=404), tg_id
         raise
 
     return client, lang, None, tg_id
@@ -180,7 +159,7 @@ def _parse_program_id(request: HttpRequest) -> Tuple[int | None, JsonResponse | 
         return int(raw), None
     except ValueError:
         logger.warning(f"Invalid program_id={raw}")
-        return None, _json({"error": "bad_request"}, status=400)
+        return None, JsonResponse({"error": "bad_request"}, status=400)
 
 
 def _format_program_text(raw_exercises: Any) -> str:
@@ -208,7 +187,7 @@ async def program_data(request: HttpRequest) -> JsonResponse:
         client, lang, auth_error, _tg = await _auth_and_get_client(request)
     except Exception:
         logger.exception("Auth resolution failed")
-        return _json({"error": "server_error"}, status=500)
+        return JsonResponse({"error": "server_error"}, status=500)
     if auth_error:
         return auth_error
     assert client is not None
@@ -224,10 +203,10 @@ async def program_data(request: HttpRequest) -> JsonResponse:
         )
         if subscription_obj is None:
             logger.warning(f"Subscription not found for client_profile_id={client.id}")
-            return _json({"error": "not_found"}, status=404)
+            return JsonResponse({"error": "not_found"}, status=404)
 
         text: str = _format_program_text(subscription_obj.exercises)
-        return _json({"program": text, "language": lang})
+        return JsonResponse({"program": text, "language": lang})
 
     program_obj: Program | None = cast(
         Program | None,
@@ -238,10 +217,10 @@ async def program_data(request: HttpRequest) -> JsonResponse:
 
     if program_obj is None:
         logger.warning(f"Program not found for client_profile_id={client.id} program_id={program_id}")
-        return _json({"error": "not_found"}, status=404)
+        return JsonResponse({"error": "not_found"}, status=404)
 
     text = _format_program_text(program_obj.exercises_by_day)
-    return _json(
+    return JsonResponse(
         {
             "program": text,
             "created_at": int(cast(datetime, program_obj.created_at).timestamp()),
@@ -260,7 +239,7 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
         client, lang, auth_error, tg_id = await _auth_and_get_client(request)
     except Exception:
         logger.exception("Auth resolution failed")
-        return _json({"error": "server_error"}, status=500)
+        return JsonResponse({"error": "server_error"}, status=500)
     if auth_error:
         return auth_error
     assert client is not None
@@ -274,7 +253,7 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
         )
     except Exception:
         logger.exception(f"Failed to fetch programs for tg_id={tg_id}")
-        return _json({"error": "server_error"}, status=500)
+        return JsonResponse({"error": "server_error"}, status=500)
 
     items = [
         {
@@ -284,7 +263,7 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
         }
         for p in programs
     ]
-    return _json({"programs": items, "language": lang})
+    return JsonResponse({"programs": items, "language": lang})
 
 
 # type checking of async views with require_GET is not supported by stubs
@@ -296,7 +275,7 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
         client, lang, auth_error, _tg = await _auth_and_get_client(request)
     except Exception:
         logger.exception("Auth resolution failed")
-        return _json({"error": "server_error"}, status=500)
+        return JsonResponse({"error": "server_error"}, status=500)
     if auth_error:
         return auth_error
     assert client is not None
@@ -309,10 +288,10 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
     )
     if subscription is None:
         logger.warning(f"Subscription not found for client_profile_id={client.id}")
-        return _json({"error": "not_found"}, status=404)
+        return JsonResponse({"error": "not_found"}, status=404)
 
     text: str = _format_program_text(subscription.exercises)
-    return _json({"program": text, "language": lang})
+    return JsonResponse({"program": text, "language": lang})
 
 
 def index(request: HttpRequest) -> HttpResponse:

@@ -19,8 +19,7 @@ class Celery:
         return None
 
 
-class Task:
-    ...
+class Task: ...
 
 
 __all__ = ["Celery", "Task", "signals", "chain", "canvas"]

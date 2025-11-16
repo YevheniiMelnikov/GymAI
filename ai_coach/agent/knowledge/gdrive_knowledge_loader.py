@@ -178,9 +178,16 @@ class GDriveDocumentLoader(KnowledgeLoader):
                 else:
                     skipped += 1
                     ident = self._kb.dataset_service.get_registered_identifier(dataset_alias)
-                    logger.debug(
-                        f"kb_gdrive.skip file={name} digest={digest_sha[:12]} dataset={dataset_alias} ident={ident} reason=duplicate_digest"
+                    message = (
+                        "kb_gdrive.skip file={file} digest={digest} dataset={dataset} ident={ident} "
+                        "reason=duplicate_digest"
+                    ).format(
+                        file=name,
+                        digest=digest_sha[:12],
+                        dataset=dataset_alias,
+                        ident=ident,
                     )
+                    logger.debug(message)
             except Exception:
                 logger.exception(f"Failed to process {name} (id={file_id})")
                 errors += 1

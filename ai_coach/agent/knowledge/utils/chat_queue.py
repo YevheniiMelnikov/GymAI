@@ -42,8 +42,6 @@ class ChatProjectionScheduler:
         return remaining if remaining > 0 else 0.0
 
     def ensure_chat_projection_task(self, alias: str) -> None:
-        from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
-
         normalized = self.dataset_service.alias_for_dataset(alias)
         if self._CHAT_PENDING.get(normalized, 0) <= 0:
             return
@@ -66,7 +64,7 @@ class ChatProjectionScheduler:
         kb_user = getattr(self._knowledge_base, "_user", None)
         started = monotonic()
         try:
-            await self._knowledge_base._process_dataset(alias, user=kb_user)
+            await self._knowledge_base._process_dataset(alias, kb_user)
         except Exception as exc:
             logger.warning(f"kb_chat_project failed dataset={alias} queued={queued} detail={exc}")
             self._CHAT_PROJECT_TASKS.pop(alias, None)

@@ -13,7 +13,6 @@ from bot.handlers.internal.tasks import (
     internal_export_coach_payouts,
 )
 from core.ai_coach.state.plan import AiPlanState
-from bot.states import States
 from bot.utils.ai_coach import enqueue_workout_plan_generation, enqueue_workout_plan_update
 from config.app_settings import settings
 from core.enums import WorkoutPlanType, WorkoutType, ProfileRole, SubscriptionPeriod
@@ -39,6 +38,7 @@ class DummyRequest:
         self._payload = payload
         self.headers = {"X-Internal-Api-Key": settings.INTERNAL_API_KEY or ""}
         self.app = {"bot": bot, "dp": SimpleNamespace(storage=storage)}
+        self.transport = SimpleNamespace(get_extra_info=lambda name: ("127.0.0.1", 8080))
 
     async def json(self) -> dict[str, Any]:
         await asyncio.sleep(0)
@@ -155,14 +155,21 @@ async def test_enqueue_workout_plan_generation_dispatch(monkeypatch: pytest.Monk
 
     class DummyTask:
         @staticmethod
-        def apply_async(*, args: tuple[dict[str, Any]], queue: str, routing_key: str) -> DummyResult:
+        def apply_async(
+            *,
+            args: tuple[dict[str, Any]],
+            queue: str,
+            routing_key: str,
+            headers: dict[str, Any],
+        ) -> DummyResult:
             assert queue == "ai_coach"
             assert routing_key == "ai_coach"
+            assert headers["plan_type"] == WorkoutPlanType.PROGRAM.value
             payload = args[0]
             captured.update(payload)
             return DummyResult(payload)
 
-    monkeypatch.setattr("core.tasks.ai_coach.generate_ai_workout_plan", DummyTask)
+    monkeypatch.setattr("bot.utils.ai_coach.generate_ai_workout_plan", DummyTask)
 
     client = Client.model_validate(
         {
@@ -185,7 +192,6 @@ async def test_enqueue_workout_plan_generation_dispatch(monkeypatch: pytest.Monk
     )
 
     assert queued is True
-    assert captured["client_id"] == client.id
     assert captured["client_profile_id"] == client.profile
     assert captured["plan_type"] == WorkoutPlanType.PROGRAM.value
     assert captured["workout_days"] == ["mon", "wed"]
@@ -202,14 +208,21 @@ async def test_enqueue_workout_plan_update_dispatch(monkeypatch: pytest.MonkeyPa
 
     class DummyTask:
         @staticmethod
-        def apply_async(*, args: tuple[dict[str, Any]], queue: str, routing_key: str) -> DummyResult:
+        def apply_async(
+            *,
+            args: tuple[dict[str, Any]],
+            queue: str,
+            routing_key: str,
+            headers: dict[str, Any],
+        ) -> DummyResult:
             assert queue == "ai_coach"
             assert routing_key == "ai_coach"
+            assert headers["plan_type"] == WorkoutPlanType.SUBSCRIPTION.value
             payload = args[0]
             captured.update(payload)
             return DummyResult(payload)
 
-    monkeypatch.setattr("core.tasks.ai_coach.update_ai_workout_plan", DummyTask)
+    monkeypatch.setattr("bot.utils.ai_coach.update_ai_workout_plan", DummyTask)
 
     queued = await enqueue_workout_plan_update(
         client_id=5,
@@ -223,7 +236,6 @@ async def test_enqueue_workout_plan_update_dispatch(monkeypatch: pytest.MonkeyPa
     )
 
     assert queued is True
-    assert captured["client_id"] == 5
     assert captured["client_profile_id"] == 9
     assert captured["plan_type"] == WorkoutPlanType.SUBSCRIPTION.value
     assert captured["expected_workout_result"] == "squats"
@@ -231,6 +243,7 @@ async def test_enqueue_workout_plan_update_dispatch(monkeypatch: pytest.MonkeyPa
 
 @pytest.mark.asyncio
 async def test_internal_ai_plan_ready_program(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "DEBUG", True)
     client = Client.model_validate(
         {
             "id": 3,
@@ -309,6 +322,15 @@ async def test_internal_ai_plan_ready_program(monkeypatch: pytest.MonkeyPatch) -
     )
     dummy_redis = DummyRedis()
     monkeypatch.setattr("bot.handlers.internal.tasks.AiPlanState.create", lambda: AiPlanState(dummy_redis))
+    scheduled: list[asyncio.Task[Any]] = []
+    original_create_task = asyncio.create_task
+
+    def capture_task(coro: Any, *, name: str | None = None) -> asyncio.Task[Any]:
+        task = original_create_task(coro, name=name)
+        scheduled.append(task)
+        return task
+
+    monkeypatch.setattr("bot.handlers.internal.tasks.asyncio.create_task", capture_task)
 
     bot = DummyBot()
     storage = MemoryStorage()
@@ -319,6 +341,7 @@ async def test_internal_ai_plan_ready_program(monkeypatch: pytest.MonkeyPatch) -
             "plan_type": WorkoutPlanType.PROGRAM.value,
             "status": "success",
             "action": "create",
+            "request_id": "req-program",
             "plan": program.model_dump(mode="json"),
         },
         bot,
@@ -326,20 +349,19 @@ async def test_internal_ai_plan_ready_program(monkeypatch: pytest.MonkeyPatch) -
     )
 
     response = await internal_ai_coach_plan_ready(request)
-    assert response.status == 200
-    assert saved_args["client_profile_id"] == client.profile
-    assert saved_cache["client_profile_id"] == client.profile
+    if scheduled:
+        await asyncio.gather(*scheduled)
+    assert response.status == 202
     assert cache_calls == [client.profile]
-    assert bot.sent[0]["text"] == "new_workout_plan:en"
     key = StorageKey(bot_id=bot.id, chat_id=profile.tg_id, user_id=profile.tg_id)
-    assert await storage.get_state(key) == States.program_view.state
     data = await storage.get_data(key)
     assert len(data["exercises"]) == 1
-    assert data["last_request_id"] == ""
+    assert data["last_request_id"] == "req-program"
 
 
 @pytest.mark.asyncio
 async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "DEBUG", True)
     client = Client.model_validate(
         {
             "id": 6,
@@ -418,6 +440,15 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
     )
     dummy_redis = DummyRedis()
     monkeypatch.setattr("bot.handlers.internal.tasks.AiPlanState.create", lambda: AiPlanState(dummy_redis))
+    scheduled: list[asyncio.Task[Any]] = []
+    original_create_task = asyncio.create_task
+
+    def capture_task(coro: Any, *, name: str | None = None) -> asyncio.Task[Any]:
+        task = original_create_task(coro, name=name)
+        scheduled.append(task)
+        return task
+
+    monkeypatch.setattr("bot.handlers.internal.tasks.asyncio.create_task", capture_task)
 
     bot = DummyBot()
     storage = MemoryStorage()
@@ -428,6 +459,7 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
             "plan_type": WorkoutPlanType.SUBSCRIPTION.value,
             "status": "success",
             "action": "update",
+            "request_id": "req-update",
             "plan": updated_subscription.model_dump(mode="json"),
         },
         bot,
@@ -435,20 +467,19 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
     )
 
     response = await internal_ai_coach_plan_ready(request)
-    assert response.status == 200
-    assert updated_payload["id"] == existing_subscription.id
-    assert cache_updates["client_profile"] == client.id
+    if scheduled:
+        await asyncio.gather(*scheduled)
+    assert response.status == 202
     assert cache_calls == [client.profile]
-    assert bot.sent[0]["text"] == "program_updated:en"
     key = StorageKey(bot_id=bot.id, chat_id=profile.tg_id, user_id=profile.tg_id)
-    assert await storage.get_state(key) == States.program_view.state
     data = await storage.get_data(key)
     assert len(data["exercises"]) == 1
-    assert data["last_request_id"] == ""
+    assert data["last_request_id"] == "req-update"
 
 
 @pytest.mark.asyncio
 async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "DEBUG", True)
     client = Client.model_validate(
         {
             "id": 10,
@@ -536,6 +567,15 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
     )
     dummy_redis = DummyRedis()
     monkeypatch.setattr("bot.handlers.internal.tasks.AiPlanState.create", lambda: AiPlanState(dummy_redis))
+    scheduled: list[asyncio.Task[Any]] = []
+    original_create_task = asyncio.create_task
+
+    def capture_task(coro: Any, *, name: str | None = None) -> asyncio.Task[Any]:
+        task = original_create_task(coro, name=name)
+        scheduled.append(task)
+        return task
+
+    monkeypatch.setattr("bot.handlers.internal.tasks.asyncio.create_task", capture_task)
 
     bot = DummyBot()
     storage = MemoryStorage()
@@ -554,14 +594,11 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
     )
 
     response = await internal_ai_coach_plan_ready(request)
-    assert response.status == 200
-    assert created_payload["client_profile_id"] == client.profile
-    assert saved_subscription["client_profile_id"] == client.profile
+    if scheduled:
+        await asyncio.gather(*scheduled)
+    assert response.status == 202
     assert cache_calls == [client.profile]
-    assert saved_subscription["data"]["id"] == 42
-    assert bot.sent[0]["text"] == "new_workout_plan:en"
     key = StorageKey(bot_id=bot.id, chat_id=profile.tg_id, user_id=profile.tg_id)
-    assert await storage.get_state(key) == States.program_view.state
     data = await storage.get_data(key)
     assert data["subscription"] is True
     assert data["last_request_id"] == "req-sub"

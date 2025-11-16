@@ -152,7 +152,7 @@ async def start_ask_ai_prompt(
     if prompt_message is not None:
         update_payload["ask_ai_prompt_id"] = prompt_message.message_id
         update_payload["ask_ai_prompt_chat_id"] = prompt_message.chat.id
-    await state.update_data(**update_payload)
+    await state.update_data(**update_payload)  # pyrefly: ignore[bad-argument-type]
     if delete_origin:
         await del_msg(origin)
     return True

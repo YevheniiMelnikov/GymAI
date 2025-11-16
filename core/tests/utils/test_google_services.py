@@ -4,7 +4,7 @@ import types
 from pathlib import Path
 from typing import Any
 
-import conftest
+from core.tests import conftest
 
 settings_mod = sys.modules.get("config.app_settings")
 if settings_mod is None:

@@ -4,8 +4,16 @@ import pytest  # pyrefly: ignore[import-error]
 
 from ai_coach.agent import AgentDeps
 from ai_coach.exceptions import AgentExecutionAborted
+from ai_coach.agent import tools as agent_tools
 from ai_coach.agent.tools import tool_get_chat_history, tool_search_knowledge
-from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+from core.tests.conftest import _KB
+
+KnowledgeBase = agent_tools.KnowledgeBase
+
+
+def _patch_kb_attr(monkeypatch: pytest.MonkeyPatch, attr: str, value: Any) -> None:
+    monkeypatch.setattr(KnowledgeBase, attr, value, raising=False)
+    monkeypatch.setattr(_KB, attr, value, raising=False)
 
 
 class _Ctx:
@@ -17,7 +25,7 @@ def test_tool_search_knowledge_k(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
         called: dict[str, int] = {}
 
-        async def fake_search(query: str, client_id: int, k: int, **kwargs: Any) -> list[str]:
+        async def fake_search(cls, query: str, client_id: int, k: int, **kwargs: Any) -> list[str]:
             called["k"] = k
             called["client_id"] = client_id
             return []
@@ -25,8 +33,8 @@ def test_tool_search_knowledge_k(monkeypatch: pytest.MonkeyPatch) -> None:
         async def fake_fallback_entries(client_id: int, limit: int = 6) -> list[tuple[str, str]]:
             return []
 
-        monkeypatch.setattr(KnowledgeBase, "search", fake_search)
-        monkeypatch.setattr(KnowledgeBase, "fallback_entries", fake_fallback_entries)
+        _patch_kb_attr(monkeypatch, "search", fake_search)
+        _patch_kb_attr(monkeypatch, "fallback_entries", fake_fallback_entries)
         ctx = _Ctx()
         result = await tool_search_knowledge(ctx, "hi", k=5)
         assert result == []
@@ -41,14 +49,14 @@ def test_tool_search_knowledge_k(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_tool_search_knowledge_duplicate_returns_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
-        async def fake_search(query: str, client_id: int, k: int, **kwargs: Any) -> list[str]:
+        async def fake_search(cls, query: str, client_id: int, k: int, **kwargs: Any) -> list[str]:
             return []
 
         async def fake_fallback_entries(client_id: int, limit: int = 6) -> list[tuple[str, str]]:
             return []
 
-        monkeypatch.setattr(KnowledgeBase, "search", fake_search)
-        monkeypatch.setattr(KnowledgeBase, "fallback_entries", fake_fallback_entries)
+        _patch_kb_attr(monkeypatch, "search", fake_search)
+        _patch_kb_attr(monkeypatch, "fallback_entries", fake_fallback_entries)
         ctx = _Ctx()
         await tool_search_knowledge(ctx, "  hello  ")
         result = await tool_search_knowledge(ctx, "hello")
@@ -67,7 +75,7 @@ def test_tool_search_knowledge_timeout_fallback(monkeypatch: pytest.MonkeyPatch)
             return [("Fallback guidance", "kb_global")]
 
         monkeypatch.setattr("ai_coach.agent.tools.wait_for", fake_wait_for)
-        monkeypatch.setattr(KnowledgeBase, "fallback_entries", fake_fallback_entries)
+        _patch_kb_attr(monkeypatch, "fallback_entries", fake_fallback_entries)
         ctx = _Ctx()
         result = await tool_search_knowledge(ctx, "timeout case", k=3)
         assert result == ["Fallback guidance"]
@@ -79,14 +87,14 @@ def test_tool_search_knowledge_timeout_fallback(monkeypatch: pytest.MonkeyPatch)
 
 def test_tool_search_knowledge_uses_fallback_entries(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
-        async def fake_search(query: str, client_id: int, k: int, **kwargs: Any) -> list[str]:
+        async def fake_search(cls, query: str, client_id: int, k: int, **kwargs: Any) -> list[str]:
             return []
 
         async def fake_fallback_entries(client_id: int, limit: int = 6) -> list[tuple[str, str]]:
             return [(" First entry ", "kb_global"), ("Second entry", "kb_chat_1")]
 
-        monkeypatch.setattr(KnowledgeBase, "search", fake_search)
-        monkeypatch.setattr(KnowledgeBase, "fallback_entries", fake_fallback_entries)
+        _patch_kb_attr(monkeypatch, "search", fake_search)
+        _patch_kb_attr(monkeypatch, "fallback_entries", fake_fallback_entries)
         ctx = _Ctx()
         result = await tool_search_knowledge(ctx, "need fallback", k=2)
         assert result == ["First entry", "Second entry"]
@@ -98,14 +106,14 @@ def test_tool_search_knowledge_uses_fallback_entries(monkeypatch: pytest.MonkeyP
 
 def test_tool_budget_exceeded(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
-        async def fake_search(query: str, client_id: int, k: int, **kwargs: Any) -> list[str]:
+        async def fake_search(cls, query: str, client_id: int, k: int, **kwargs: Any) -> list[str]:
             return ["result"]
 
         async def fake_history(client_id: int, limit: int) -> list[str]:
             return ["msg"]
 
-        monkeypatch.setattr(KnowledgeBase, "search", fake_search)
-        monkeypatch.setattr(KnowledgeBase, "get_message_history", fake_history)
+        _patch_kb_attr(monkeypatch, "search", fake_search)
+        _patch_kb_attr(monkeypatch, "get_message_history", fake_history)
         deps = AgentDeps(client_id=1, max_tool_calls=1)
         ctx = _Ctx(deps=deps)
         await tool_search_knowledge(ctx, "hello")
@@ -119,11 +127,11 @@ def test_tool_get_chat_history_cached(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
         calls: list[int] = []
 
-        async def fake_history(client_id: int, limit: int) -> list[str]:
+        async def fake_history(cls_or_self, client_id: int, limit: int) -> list[str]:
             calls.append(limit)
             return ["msg1", "msg2", "msg3"]
 
-        monkeypatch.setattr(KnowledgeBase, "get_message_history", fake_history)
+        _patch_kb_attr(monkeypatch, "get_message_history", fake_history)
         ctx = _Ctx()
         first = await tool_get_chat_history(ctx, limit=2)
         second = await tool_get_chat_history(ctx, limit=3)

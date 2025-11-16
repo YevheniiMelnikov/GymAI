@@ -1,4 +1,5 @@
 import asyncio
+import json
 import sys
 from importlib import import_module
 from types import SimpleNamespace
@@ -39,8 +40,9 @@ def test_subscription_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
 
         response: JsonResponse = await views.subscription_data(request)
         assert response.status_code == 200
-        assert response["program"] == ""
-        assert response["language"] == "eng"
+        data = json.loads(response.content)
+        assert data["program"] == ""
+        assert data["language"] == "eng"
 
     asyncio.run(runner())
 

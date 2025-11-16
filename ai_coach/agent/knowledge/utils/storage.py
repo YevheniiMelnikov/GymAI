@@ -5,6 +5,7 @@ import os
 import re
 from pathlib import Path
 from typing import Any, Awaitable, Mapping, Sequence, TYPE_CHECKING, Optional
+from uuid import uuid4
 
 from loguru import logger
 
@@ -485,4 +486,6 @@ class StorageService:
         payload["digest_sha"] = digest_sha
         if "kind" not in payload:
             payload["kind"] = "document"
+        if "dataset_id" not in payload:
+            payload["dataset_id"] = str(uuid4())
         return payload

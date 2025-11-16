@@ -225,7 +225,8 @@ class AiCoachService(APIClient):
         # Main POST /ask with retries and per-call client
         attempts = 5
         delay = 0.5
-        last_exc: Exception | None = None
+        status: int = 0
+        data: Any | None = None
         for attempt in range(1, attempts + 1):
             try:
                 async with httpx.AsyncClient(base_url=self.base_url, timeout=self.settings.AI_COACH_TIMEOUT) as client:
@@ -239,7 +240,6 @@ class AiCoachService(APIClient):
                     )
                 break
             except (APIClientHTTPError, APIClientTransportError) as exc:
-                last_exc = exc
                 if attempt >= attempts:
                     if isinstance(exc, APIClientHTTPError):
                         logger.error(
@@ -249,7 +249,10 @@ class AiCoachService(APIClient):
                         )
                         raise
                     logger.error(
-                        f"AI coach request transport failed request_id={request_id} client_id={payload.client_id} error={exc}"
+                        "AI coach request transport failed request_id=%s client_id=%s error=%s",
+                        request_id,
+                        payload.client_id,
+                        exc,
                     )
                     raise
                 logger.info(

@@ -52,7 +52,7 @@ def patch_liqpay(monkeypatch):
 
 
 def test_get_payment_link():
-    gateway = LiqPayGateway("pub", "priv")
+    gateway = LiqPayGateway("pub", "priv", checkout_url=settings.CHECKOUT_URL)
     url = asyncio.run(
         gateway.get_payment_link(
             "pay",

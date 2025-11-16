@@ -1,5 +1,4 @@
-class WorkController:
-    ...
+class WorkController: ...
 
 
 __all__ = ["WorkController"]

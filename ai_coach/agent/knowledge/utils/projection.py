@@ -252,7 +252,7 @@ class ProjectionService:
             if allow_rebuild and settings.COGNEE_ENABLE_AGGRESSIVE_REBUILD:
                 kb = self._knowledge_base
                 if kb is not None:
-                    result = await kb.rebuild_dataset(alias, user)
+                    await kb.rebuild_dataset(alias, user)
                     logger.info(f"knowledge_dataset_rebuilt dataset={alias}")
                     await self.project_dataset(alias, user, allow_rebuild=True)
                 else:

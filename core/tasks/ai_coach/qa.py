@@ -1,6 +1,5 @@
 """Celery tasks for Ask AI question flow."""
 
-import asyncio
 from typing import Any
 
 import httpx

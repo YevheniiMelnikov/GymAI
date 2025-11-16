@@ -1,79 +1,183 @@
 import asyncio
 import os
+import shutil
+import sys
 import types
 from collections import defaultdict
 from hashlib import md5, sha256
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Iterable, Mapping, Sequence
+from typing import Any, Awaitable, Callable, Iterable, List, Mapping, Sequence, Set
+from unittest.mock import patch as _patch
 from uuid import uuid4
+import pytest
+
 from .stubs import *
-import config.app_settings as app_settings
+import ai_coach.agent.knowledge.cognee_config as cognee_config
+import ai_coach.agent.knowledge.gdrive_knowledge_loader as gdrive_loader_module
 import ai_coach.agent.knowledge.knowledge_base as kb_module
 from ai_coach.agent.knowledge.schemas import DatasetRow, KnowledgeSnippet, ProjectionStatus
-import ai_coach.agent.knowledge.gdrive_knowledge_loader as gdrive_loader_module
-import ai_coach.agent.knowledge.cognee_config as cognee_config
+import config.app_settings as app_settings
 from core.services.internal import APIService
 import django
+
+kb_module.APIService = APIService
 
 os.environ.setdefault("COGNEE_STORAGE_PATH", ".cognee_test_storage")
 os.environ.setdefault("COGNEE_DATA_ROOT", ".cognee_test_storage")
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.test_settings")
 
+
 django.setup()
 
+if "cognee" not in sys.modules:
+    sys.modules["cognee"] = types.SimpleNamespace()
+
+cognee_module = sys.modules["cognee"]
+
+if not hasattr(cognee_module, "base_config"):
+    base_config_stub = types.SimpleNamespace(get_base_config=lambda: types.SimpleNamespace(data_root_directory="."))
+    sys.modules["cognee.base_config"] = base_config_stub
+    cognee_module.base_config = base_config_stub
+
 _PROD_DEFAULTS = app_settings.Settings(COGNEE_STORAGE_PATH=".cognee_test_storage")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _cognee_storage_cleanup() -> Iterable[None]:
+    storage_path = Path(getattr(app_settings.settings, "COGNEE_STORAGE_PATH", ".cognee_test_storage"))
+    if storage_path.exists():
+        shutil.rmtree(storage_path, ignore_errors=True)
+    yield
+    if storage_path.exists():
+        shutil.rmtree(storage_path, ignore_errors=True)
+
+
+class _InMemoryHashStore:
+    _store = defaultdict(dict)
+    _meta = defaultdict(dict)
+
+    @classmethod
+    async def add(cls, dataset: str, digest: str, *, metadata: Mapping[str, Any] | None = None) -> None:
+        cls._store[dataset][digest] = metadata or {}
+        if metadata:
+            cls._meta[dataset][digest] = metadata
+
+    @classmethod
+    async def contains(cls, dataset: str, digest: str) -> bool:
+        return digest in cls._store.get(dataset, {})
+
+    @classmethod
+    async def list(cls, dataset: str) -> Set[str]:
+        return set(cls._store.get(dataset, {}).keys())
+
+    @classmethod
+    async def metadata(cls, dataset: str, digest: str) -> Mapping[str, Any] | None:
+        return cls._meta.get(dataset, {}).get(digest)
+
+    @classmethod
+    async def clear(cls, dataset: str) -> None:
+        if dataset in cls._store:
+            del cls._store[dataset]
+        if dataset in cls._meta:
+            del cls._meta[dataset]
+
+    @classmethod
+    async def list_all_datasets(cls) -> List[str]:
+        return list(cls._store.keys())
+
+    @classmethod
+    async def get_md5_for_sha(cls, dataset: str, digest: str) -> str | None:
+        meta = await cls.metadata(dataset, digest)
+        if meta:
+            return meta.get("digest_md5")
+        return None
+
+
+kb_module.HashStore = _InMemoryHashStore
+
+
+@pytest.fixture(autouse=True)
+def clear_hash_store():
+    _InMemoryHashStore._store.clear()
+    _InMemoryHashStore._meta.clear()
+    yield
+
 
 class _DatasetService:
     def __init__(self):
         self._PROJECTED_DATASETS: set[str] = set()
+
     async def get_cognee_user(self):
         return types.SimpleNamespace(id=1)
+
     def alias_for_dataset(self, name: str) -> str:
         return name
+
     def log_once(self, *args, **kwargs) -> None:
         return None
+
     def chat_dataset_name(self, client_id: int) -> str:
         return f"chat_{client_id}"
+
     def to_user_ctx(self, user):
         return user or types.SimpleNamespace(id=1)
+
     async def ensure_dataset_exists(self, *args, **kwargs) -> None:
         return None
+
     async def get_dataset_id(self, *args, **kwargs) -> str | None:
         return "dataset-id"
+
     def resolve_dataset_alias(self, alias: str) -> str:
         return alias
+
     def get_registered_identifier(self, canonical: str) -> str:
         return canonical
+
     async def get_counts(self, *args, **kwargs) -> dict[str, int]:
         return {}
+
     def dump_identifier_map(self) -> dict[str, str]:
         return {}
+
     def _normalize_text(self, text: str) -> str:
         return str(text or "").strip()
+
 
 class _ProjectionService:
     def __init__(self):
         self._kb = None
         self._waiter = None
+
     def attach_knowledge_base(self, kb) -> None:
         self._kb = kb
+
     def set_waiter(self, waiter) -> None:
         self._waiter = waiter
+
     async def probe(self, *args, **kwargs):
         return True, "ready"
+
     async def wait(self, *args, **kwargs):
         return ProjectionStatus.READY
+
 
 class _GDriveLoader:
     def __init__(self, kb):
         self.kb = kb
+
     async def load(self):
         return None
 
 
 class _SearchServiceStub:
-    def __init__(self, kb_cls: type | None = None):
-        self._kb_cls = kb_cls
+    def __init__(self, kb_owner: "_KB | type[_KB] | None" = None):
+        if isinstance(kb_owner, type):
+            self._kb_instance = None
+            self._kb_cls = kb_owner
+        else:
+            self._kb_instance = kb_owner
+            self._kb_cls = type(kb_owner) if kb_owner is not None else _KB
 
     async def search(
         self,
@@ -113,9 +217,17 @@ class _SearchServiceStub:
         top_k: int = 6,
     ) -> list[tuple[str, str]]:
         kb_cls = self._kb_cls or _KB
+        kb_instance = self._kb_instance or kb_cls()
+        dataset_service = getattr(kb_instance, "dataset_service", None)
         entries: list[tuple[str, str]] = []
         for dataset in datasets:
-            rows = await kb_cls._list_dataset_entries(dataset, user_ctx)
+            rows = []
+            if dataset_service is not None:
+                list_fn = getattr(dataset_service.__class__, "list_dataset_entries", None)
+                if callable(list_fn):
+                    rows = await list_fn(dataset_service, dataset, user_ctx)
+            if not rows:
+                rows = await kb_cls._list_dataset_entries(dataset, user_ctx)
             for row in rows:
                 prepared = kb_cls._prepare_dataset_row(row, dataset)
                 metadata = prepared.metadata or {}
@@ -127,14 +239,8 @@ class _SearchServiceStub:
         return entries
 
 
-class _HashStoreProxy:
-    def __getattr__(self, name: str):
-        return getattr(kb_module.HashStore, name)
-
-    def __setattr__(self, name: str, value):
-        setattr(kb_module.HashStore, name, value)
-
 gdrive_loader_module.GDriveDocumentLoader = _GDriveLoader
+cognee_config._package_storage_candidates = lambda: []
 cognee_config.CogneeConfig.apply = classmethod(lambda cls: None)
 
 
@@ -170,20 +276,77 @@ app_settings.settings = settings_stub
 class _ContainerStub:
     def __getattr__(self, name: str):
         if name.endswith("_service"):
-            return lambda: types.SimpleNamespace()
+            service = types.SimpleNamespace()
+            if name == "ai_coach_service":
+
+                async def create_workout_plan(*args: Any, **kwargs: Any) -> Any:
+                    return types.SimpleNamespace(id=1)
+
+                async def update_workout_plan(*args: Any, **kwargs: Any) -> Any:
+                    return types.SimpleNamespace(id=1)
+
+                service.create_workout_plan = create_workout_plan
+                service.update_workout_plan = update_workout_plan
+            return lambda: service
         raise AttributeError(name)
 
 
 APIService.configure(lambda: _ContainerStub())
 
+
+async def _dummy_get_user() -> types.SimpleNamespace:
+    return types.SimpleNamespace(id=1)
+
+
+if not hasattr(kb_module, "get_default_user"):
+    kb_module.get_default_user = _dummy_get_user
+
+
+async def _dummy_safe_add(*args: Any, **kwargs: Any) -> types.SimpleNamespace:
+    return types.SimpleNamespace(dataset_id=kwargs.get("dataset_name"))
+
+
+if not hasattr(kb_module, "_safe_add"):
+    kb_module._safe_add = _dummy_safe_add
+
+
+# Basic replacement for pytest-mock's `mocker` fixture so tests can patch objects without adding a dependency.
+class _SimpleMocker:
+    def __init__(self) -> None:
+        self._patchers: list[object] = []
+
+    def patch(self, target: str, *args: Any, **kwargs: Any) -> object:
+        patcher = _patch(target, *args, **kwargs)
+        self._patchers.append(patcher)
+        return patcher.start()
+
+    def patch_object(self, target: type[Any], attribute: str, *args: Any, **kwargs: Any) -> object:
+        patcher = _patch.object(target, attribute, *args, **kwargs)
+        self._patchers.append(patcher)
+        return patcher.start()
+
+    def stopall(self) -> None:
+        while self._patchers:
+            patcher = self._patchers.pop()
+            patcher.stop()
+
+
+@pytest.fixture(name="mocker")
+def _mocker_fixture() -> _SimpleMocker:
+    context = _SimpleMocker()
+    try:
+        yield context
+    finally:
+        context.stopall()
+
+
 # KnowledgeBase stub
-from pathlib import Path
 
 
 class _KB:
     GLOBAL_DATASET = "kb_global"
-    HashStore = _HashStoreProxy()
-    _storage_dir = Path(".cognee_test_storage")
+    HashStore = kb_module.HashStore
+    _storage_dir = Path(settings_stub.COGNEE_STORAGE_PATH)
     _DATASETS: defaultdict[str, list[DatasetRow]] = defaultdict(list)
     _DATASET_IDS: dict[str, str] = {}
     _DATASET_ALIASES: dict[str, str] = {}
@@ -200,7 +363,7 @@ class _KB:
         self.projection_service.attach_knowledge_base(self)
         self.storage_service = types.SimpleNamespace(attach_knowledge_base=lambda *a, **k: None)
         self.chat_queue_service = types.SimpleNamespace()
-        self.search_service = _SearchServiceStub(type(self))
+        self.search_service = _SearchServiceStub(self)
         self._seen: set[tuple[int]] = set()
 
     @classmethod
@@ -233,17 +396,19 @@ class _KB:
         return [row.text for row in rows][-limit:]
 
     @classmethod
-    async def search(cls, query: str, client_id: int, k: int | None = None, *, request_id: str | None = None) -> list[str]:
+    async def search(
+        cls, query: str, client_id: int, k: int | None = None, *, request_id: str | None = None
+    ) -> list[str]:
         alias = cls._resolve_dataset_alias(cls._dataset_name(client_id))
         actor = await cls._get_cognee_user()
         await cls._ensure_profile_indexed(client_id, actor)
         await cls._ensure_dataset_exists(alias, actor)
         datasets = [alias]
         try:
-            global_ready = await cls.ensure_global_projected(timeout=2.0)
+            global_status = await cls.ensure_global_projected(timeout=2.0)
         except Exception:
-            global_ready = False
-        if global_ready:
+            global_status = ProjectionStatus.TIMEOUT
+        if global_status == ProjectionStatus.READY:
             datasets.append(cls.GLOBAL_DATASET)
         try:
             return await cls._search_single_query(query, datasets, actor, k, client_id, request_id=request_id)
@@ -352,11 +517,23 @@ class _KB:
 
     @classmethod
     async def save_client_message(cls, text: str, client_id: int) -> None:
-        await cls.add_text(text, dataset=cls.chat_dataset_name(client_id), client_id=client_id, role=types.SimpleNamespace(value="client"), project=False)
+        await cls.add_text(
+            text,
+            dataset=cls.chat_dataset_name(client_id),
+            client_id=client_id,
+            role=types.SimpleNamespace(value="client"),
+            project=False,
+        )
 
     @classmethod
     async def save_ai_message(cls, text: str, client_id: int) -> None:
-        await cls.add_text(text, dataset=cls.chat_dataset_name(client_id), client_id=client_id, role=types.SimpleNamespace(value="ai"), project=False)
+        await cls.add_text(
+            text,
+            dataset=cls.chat_dataset_name(client_id),
+            client_id=client_id,
+            role=types.SimpleNamespace(value="ai"),
+            project=False,
+        )
 
     @staticmethod
     def _normalize_text(text: str | None) -> str:
@@ -465,21 +642,29 @@ class _KB:
         return DatasetRow(text=normalized, metadata=metadata)
 
     @classmethod
-    async def _build_snippets(cls, entries: Sequence[Any], datasets: Sequence[str], user: Any | None) -> list[KnowledgeSnippet]:
+    async def _build_snippets(
+        cls, entries: Sequence[Any], datasets: Sequence[str], user: Any | None
+    ) -> list[KnowledgeSnippet]:
         snippets: list[KnowledgeSnippet] = []
         dataset_list = list(datasets) or [cls.GLOBAL_DATASET]
         for entry in entries:
             metadata: dict[str, Any] = {}
+            dataset_name: str | None = None
             if isinstance(entry, Mapping):
                 metadata = dict(entry.get("metadata") or {})
                 text_value = cls._normalize_text(str(entry.get("text", "")))
+                dataset_name = metadata.get("dataset") or entry.get("dataset") or entry.get("dataset_name")
             else:
-                text_value = cls._normalize_text(str(entry))
+                metadata = dict(getattr(entry, "metadata", {}) or {})
+                text_value = cls._normalize_text(str(getattr(entry, "text", entry)))
+                dataset_name = (
+                    metadata.get("dataset") or getattr(entry, "dataset_name", None) or getattr(entry, "dataset", None)
+                )
             if not text_value:
                 continue
             digest_sha = metadata.get("digest_sha") or cls._compute_digests(text_value)
-            dataset_name = metadata.get("dataset")
-            if not metadata:
+            metadata_available = bool(metadata) or bool(dataset_name)
+            if not metadata_available:
                 dataset_name, metadata = await cls._collect_metadata(digest_sha, dataset_list)
                 metadata = metadata or {}
             if not dataset_name:
@@ -565,12 +750,19 @@ class _KB:
         return user
 
     @classmethod
-    async def _fetch_dataset_rows(cls, list_data: Callable[..., Awaitable[Iterable[Any]]], dataset: str, user: Any | None) -> list[Any]:
+    async def _fetch_dataset_rows(
+        cls, list_data: Callable[..., Awaitable[Iterable[Any]]], dataset: str, user: Any | None
+    ) -> list[Any]:
         dataset_id = cls._DATASET_IDS.get(dataset, dataset)
-        supports_user = bool(cls._list_data_supports_user)
-        requires_user = bool(cls._list_data_requires_user)
-        user_arg = user if (supports_user or requires_user) else None
-        result = await list_data(dataset_id, user_arg)
+        supports_flag = cls._list_data_supports_user
+        requires_flag = cls._list_data_requires_user
+        supports_user = True if supports_flag is None else bool(supports_flag)
+        requires_user = False if requires_flag is None else bool(requires_flag)
+        needs_user_arg = supports_user or requires_user
+        args = [dataset_id]
+        if needs_user_arg and user is not None:
+            args.append(user)
+        result = await list_data(*args)
         return list(result or [])
 
     @classmethod
@@ -667,7 +859,7 @@ class _KB:
     async def _wait_for_projection(cls, dataset: str, user: Any | None, timeout_s: float | None = None):
         actor = user or await cls._get_cognee_user()
         if actor is None:
-            return ProjectionStatus.USER_CONTEXT_UNAVAILABLE
+            return ProjectionStatus.TIMEOUT
         alias = cls._alias_for_dataset(dataset)
         ready, reason = await cls._is_projection_ready(dataset, actor)
         if ready:
@@ -684,6 +876,8 @@ class _KB:
     @classmethod
     async def _is_projection_ready(cls, dataset: str, user: Any | None) -> tuple[bool, str]:
         alias = cls._alias_for_dataset(dataset)
+        # if alias == cls.GLOBAL_DATASET:
+        #     return True, "ready"
         if alias in cls._PROJECTED_DATASETS:
             return True, "ready"
         rows = await cls._list_dataset_entries(alias, user)
@@ -756,41 +950,55 @@ class _KB:
         request_id: str | None = None,
     ):
         instance = cls()
-        return await instance.search_service.search(query, client_id, k, datasets=datasets, user=user, request_id=request_id)
+        return await instance.search_service.search(
+            query, client_id, k, datasets=datasets, user=user, request_id=request_id
+        )
+
 
 kb_module.KnowledgeBase = _KB
 
-import ai_coach.agent as agent_module
-from ai_coach.agent.coach import CoachAgent as _CoachAgent, QAResponse as _QAResponse
-from ai_coach.agent.utils import ProgramAdapter as _ProgramAdapter
-import ai_coach.api as api_module
+import ai_coach.agent as agent_module  # noqa: E402
+from ai_coach.agent.coach import CoachAgent as _CoachAgent, QAResponse as _QAResponse  # noqa: E402
+from ai_coach.agent.utils import ProgramAdapter as _ProgramAdapter  # noqa: E402
+import ai_coach.api as api_module  # noqa: E402
+
 
 async def _dummy_agent_run(*args, **kwargs):
     return {"output": {"answer": "ok"}}
+
 
 _CoachAgent._get_agent = staticmethod(lambda *a, **k: types.SimpleNamespace(run=_dummy_agent_run))
 _CoachAgent._run_completion = staticmethod(lambda *a, **k: {"choices": [{"message": {"content": "ok"}}]})
 _CoachAgent._get_completion_client = staticmethod(lambda *a, **k: object())
 
-import ai_coach.api  # noqa: F401
+import ai_coach.api  # noqa: E402,F401
 
 agent_module.CoachAgent = _CoachAgent
 agent_module.QAResponse = _QAResponse
 agent_module.ProgramAdapter = _ProgramAdapter
 api_module.CoachAgent = _CoachAgent
 api_module.ProgramAdapter = _ProgramAdapter
-import ai_coach.agent.tools as agent_tools_module
-agent_tools_module.KnowledgeBase = _KB
-if not hasattr(kb_module.HashStore, "get_md5_for_sha"):
-    @classmethod
-    async def _get_md5_for_sha(cls, dataset: str, digest: str) -> str | None:
-        return None
+api_module.KnowledgeBase = _KB
+import ai_coach.agent.tools as agent_tools_module  # noqa: E402
 
-    kb_module.HashStore.get_md5_for_sha = _get_md5_for_sha
+agent_tools_module.KnowledgeBase = _KB
 if not hasattr(kb_module, "cognee"):
     kb_module.cognee = types.SimpleNamespace()
-if not hasattr(kb_module.cognee, "cognify"):
-    async def _default_cognify(*args, **kwargs):
-        return None
 
-    kb_module.cognee.cognify = _default_cognify
+
+async def _dummy_cognee_search(*args: Any, **kwargs: Any) -> list[Any]:
+    return []
+
+
+async def _dummy_cognee_void(*args: Any, **kwargs: Any) -> None:
+    return None
+
+
+if not hasattr(kb_module.cognee, "search"):
+    kb_module.cognee.search = _dummy_cognee_search
+if not hasattr(kb_module.cognee, "init_knowledge_base"):
+    kb_module.cognee.init_knowledge_base = _dummy_cognee_void
+if not hasattr(kb_module.cognee, "reinit"):
+    kb_module.cognee.reinit = _dummy_cognee_void
+if not hasattr(kb_module.cognee, "cognify"):
+    kb_module.cognee.cognify = _dummy_cognee_void

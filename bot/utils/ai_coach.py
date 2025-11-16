@@ -1,6 +1,4 @@
-import celery
 from celery import chain
-
 from celery.result import AsyncResult
 from typing import cast
 from loguru import logger
@@ -15,6 +13,12 @@ from core.ai_coach import (
     AiPlanGenerationPayload,
     AiPlanUpdatePayload,
     AiQuestionPayload,
+)
+from core.tasks.ai_coach import (
+    generate_ai_workout_plan,
+    update_ai_workout_plan,
+    handle_ai_plan_failure,
+    notify_ai_plan_ready_task,
 )
 
 
@@ -128,16 +132,6 @@ async def enqueue_workout_plan_generation(
         logger.error(f"ai_plan_generate_invalid_payload request_id={request_id} client_id={client.id} error={exc!s}")
         return False
 
-    try:
-        from core.tasks.ai_coach import (
-            generate_ai_workout_plan,
-            handle_ai_plan_failure,
-            notify_ai_plan_ready_task,
-        )
-    except Exception as exc:  # pragma: no cover - import failure
-        logger.error(f"Celery task import failed request_id={request_id}: {exc}")
-        return False
-
     payload = payload_model.model_dump(mode="json")
     headers = {
         "request_id": request_id,
@@ -146,21 +140,34 @@ async def enqueue_workout_plan_generation(
     }
     options = {"queue": "ai_coach", "routing_key": "ai_coach", "headers": headers}
 
-    generate_sig = generate_ai_workout_plan.s(payload).set(**options)  # pyrefly: ignore[not-callable]
-    notify_sig = notify_ai_plan_ready_task.s().set(  # pyrefly: ignore[not-callable]
-        queue="ai_coach", routing_key="ai_coach", headers=headers
-    )
-    failure_sig = handle_ai_plan_failure.s(payload, "create").set(  # pyrefly: ignore[not-callable]
-        queue="ai_coach", routing_key="ai_coach"
-    )
-
     logger.debug(
         f"dispatch_generate_plan request_id={request_id} "
         f"client_id={client.id} plan_type={plan_type.value} headers={headers}"
     )
 
     try:
-        async_result = cast(AsyncResult, chain(generate_sig, notify_sig).apply_async(link_error=[failure_sig]))
+        if hasattr(generate_ai_workout_plan, "s"):
+            generate_sig = generate_ai_workout_plan.s(payload).set(**options)  # pyrefly: ignore[not-callable]
+            notify_sig = notify_ai_plan_ready_task.s().set(  # pyrefly: ignore[not-callable]
+                queue="ai_coach",
+                routing_key="ai_coach",
+                headers=headers,
+            )
+            failure_sig = handle_ai_plan_failure.s(payload, "create").set(  # pyrefly: ignore[not-callable]
+                queue="ai_coach",
+                routing_key="ai_coach",
+            )
+            async_result = cast(
+                AsyncResult,
+                chain(generate_sig, notify_sig).apply_async(link_error=[failure_sig]),
+            )
+        else:
+            async_result = generate_ai_workout_plan.apply_async(  # pyrefly: ignore[not-callable]
+                args=(payload,),
+                queue="ai_coach",
+                routing_key="ai_coach",
+                headers=headers,
+            )
     except Exception as exc:  # noqa: BLE001
         logger.error(
             f"Celery dispatch failed client_id={client.id} plan_type={plan_type.value} "
@@ -331,16 +338,6 @@ async def enqueue_workout_plan_update(
         logger.error(f"ai_plan_update_invalid_payload request_id={request_id} client_id={client_id} error={exc!s}")
         return False
 
-    try:
-        from core.tasks.ai_coach import (
-            handle_ai_plan_failure,
-            notify_ai_plan_ready_task,
-            update_ai_workout_plan,
-        )
-    except Exception as exc:  # pragma: no cover - import failure
-        logger.error(f"Celery task import failed request_id={request_id}: {exc}")
-        return False
-
     payload = payload_model.model_dump(mode="json")
     headers = {
         "request_id": request_id,
@@ -349,21 +346,34 @@ async def enqueue_workout_plan_update(
     }
     options = {"queue": "ai_coach", "routing_key": "ai_coach", "headers": headers}
 
-    update_sig = update_ai_workout_plan.s(payload).set(**options)  # pyrefly: ignore[not-callable]
-    notify_sig = notify_ai_plan_ready_task.s().set(  # pyrefly: ignore[not-callable]
-        queue="ai_coach", routing_key="ai_coach", headers=headers
-    )
-    failure_sig = handle_ai_plan_failure.s(payload, "update").set(  # pyrefly: ignore[not-callable]
-        queue="ai_coach", routing_key="ai_coach"
-    )
-
     logger.debug(
         f"dispatch_update_plan request_id={request_id} client_id={client_id} "
         f"plan_type={plan_type.value} headers={headers}"
     )
 
     try:
-        async_result = cast(AsyncResult, chain(update_sig, notify_sig).apply_async(link_error=[failure_sig]))
+        if hasattr(update_ai_workout_plan, "s"):
+            update_sig = update_ai_workout_plan.s(payload).set(**options)  # pyrefly: ignore[not-callable]
+            notify_sig = notify_ai_plan_ready_task.s().set(  # pyrefly: ignore[not-callable]
+                queue="ai_coach",
+                routing_key="ai_coach",
+                headers=headers,
+            )
+            failure_sig = handle_ai_plan_failure.s(payload, "update").set(  # pyrefly: ignore[not-callable]
+                queue="ai_coach",
+                routing_key="ai_coach",
+            )
+            async_result = cast(
+                AsyncResult,
+                chain(update_sig, notify_sig).apply_async(link_error=[failure_sig]),
+            )
+        else:
+            async_result = update_ai_workout_plan.apply_async(  # pyrefly: ignore[not-callable]
+                args=(payload,),
+                queue="ai_coach",
+                routing_key="ai_coach",
+                headers=headers,
+            )
     except Exception as exc:  # noqa: BLE001
         logger.error(
             f"Celery dispatch failed client_id={client_id} plan_type={plan_type.value} "

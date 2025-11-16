@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 
@@ -25,6 +26,27 @@ from config.app_settings import settings
 configure_logging()
 
 knowledge_ready_event: asyncio.Event | None = None
+
+
+def _ensure_storage_path() -> None:
+    storage_path = settings.COGNEE_STORAGE_PATH
+    if not os.path.exists(storage_path):
+        logger.error(f"Cognee storage path does not exist: {storage_path}")
+        environment = getattr(settings, "ENVIRONMENT", None) or os.environ.get("ENVIRONMENT", "development")
+        if environment != "production":
+            os.makedirs(storage_path, exist_ok=True)
+            logger.info(f"Created cognee storage path: {storage_path}")
+        else:
+            raise RuntimeError(f"Cognee storage path does not exist: {storage_path}")
+
+    try:
+        test_file_path = os.path.join(storage_path, ".write_test")
+        with open(test_file_path, "w", encoding="utf-8") as handle:
+            handle.write("test")
+        os.remove(test_file_path)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"Cognee storage path is not writable: {storage_path} ({exc})")
+        raise RuntimeError(f"Cognee storage path is not writable: {storage_path} ({exc})") from exc
 
 
 async def _bootstrap_global_dataset(kb: KnowledgeBase) -> tuple[bool, str]:
@@ -177,6 +199,8 @@ async def init_knowledge_base(kb: KnowledgeBase, knowledge_loader: KnowledgeLoad
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from ai_coach.agent.knowledge.gdrive_knowledge_loader import GDriveDocumentLoader
 
+    _ensure_storage_path()
+
     container = create_container()
     container.notifier.override(providers.Factory(TaskPaymentNotifier))
     container.credit_service.override(providers.Factory(BotCreditService))
@@ -194,7 +218,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     kb = KnowledgeBase()
     set_current_kb(kb)
     app.state.kb = kb
-    loader = GDriveDocumentLoader(kb)
+    loader = GDriveDocumentLoader(kb)  # pyrefly: ignore[bad-instantiation]
     await init_knowledge_base(kb, loader)
     try:
         yield

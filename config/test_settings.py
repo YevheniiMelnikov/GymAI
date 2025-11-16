@@ -37,6 +37,7 @@ os.environ["TIME_ZONE"] = "Europe/Kyiv"
 from .settings import *  # noqa
 
 TIME_ZONE = "Europe/Kyiv"
+SECRET_KEY = "dummy-key-for-testing"
 
 DATABASES = {
     "default": {

@@ -1,3 +1,4 @@
+import sys
 from fastapi import Depends, HTTPException, Request  # pyrefly: ignore[import-error]
 from fastapi.responses import JSONResponse  # pyrefly: ignore[import-error]
 from fastapi.security import HTTPBasicCredentials  # pyrefly: ignore[import-error]
@@ -22,6 +23,7 @@ from ai_coach.schemas import AICoachRequest
 from ai_coach.types import AskCtx, CoachMode, MessageRole
 from core.enums import WorkoutPlanType, SubscriptionPeriod
 from config.app_settings import settings
+import config.app_settings as app_settings
 from core.schemas import Client, Profile, Program, Subscription
 from core.schemas import QAResponse
 
@@ -32,34 +34,20 @@ DEFAULT_WORKOUT_DAYS: tuple[str, ...] = ("Пн", "Ср", "Пт", "Сб")
 dedupe_cache = TTLCache(maxsize=2048, ttl=15)
 
 
-@app.on_event("startup")
-async def startup_event():
-    storage_path = settings.COGNEE_STORAGE_PATH
-    if not os.path.exists(storage_path):
-        logger.error(f"Cognee storage path does not exist: {storage_path}")
-        # In a non-prod environment, we might want to create it
-        if settings.ENVIRONMENT != "production":
-            os.makedirs(storage_path)
-            logger.info(f"Created cognee storage path: {storage_path}")
-        else:
-            raise RuntimeError(f"Cognee storage path does not exist: {storage_path}")
-
-    # Test if the path is writable
-    try:
-        test_file_path = os.path.join(storage_path, ".write_test")
-        with open(test_file_path, "w") as f:
-            f.write("test")
-        os.remove(test_file_path)
-    except Exception as e:
-        logger.error(f"Cognee storage path is not writable: {storage_path} ({e})")
-        raise RuntimeError(f"Cognee storage path is not writable: {storage_path} ({e})")
+def _get_refresh_settings() -> Any:
+    module = sys.modules.get("config.app_settings")
+    if module is not None and hasattr(module, "settings"):
+        return getattr(module, "settings")
+    return getattr(app_settings, "settings", settings)
 
 
 def _validate_refresh_credentials(credentials: HTTPBasicCredentials) -> None:
-    if (
-        credentials.username != settings.AI_COACH_REFRESH_USER
-        or credentials.password != settings.AI_COACH_REFRESH_PASSWORD
-    ):
+    cfg = _get_refresh_settings()
+    username = str(credentials.username or "")
+    password = str(credentials.password or "")
+    expected_user = str(getattr(cfg, "AI_COACH_REFRESH_USER", "") or "")
+    expected_pass = str(getattr(cfg, "AI_COACH_REFRESH_PASSWORD", "") or "")
+    if username != expected_user or password != expected_pass:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
@@ -419,6 +407,15 @@ async def ask(
                     kb = kb_for_chat or get_knowledge_base()
                     await kb.save_client_message(data.prompt or "", client_id=data.client_id)
                     await kb.save_ai_message(answer, client_id=data.client_id)
+
+                response_data = {"answer": answer}
+                if sources:
+                    response_data["sources"] = sources
+
+                if dedupe_key:
+                    dedupe_cache[dedupe_key] = JSONResponse(content=response_data)
+
+                return JSONResponse(content=response_data)
             else:
                 logger.debug(
                     "/ask agent completed rid={} request_id={} client_id={} mode={} steps_used={} kb_empty={}",
@@ -452,7 +449,7 @@ async def ask(
                 final_result = deps.final_result
                 if final_result is None:
                     for cache_key in ("tool_save_program", "tool_create_subscription"):
-                        cached_value = deps.tool_cache.get(cache_key)
+                        cached_value = deps.tool_cache.get(cache_key)  # pyrefly: ignore[no-matching-overload]
                         if cached_value is not None:
                             final_result = cast(Program | Subscription, cached_value)
                             break

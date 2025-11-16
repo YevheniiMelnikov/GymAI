@@ -47,9 +47,9 @@ tasks:
     desc: Run tests
     env:
       DJANGO_SETTINGS_MODULE: config.test_settings
+      XDG_CACHE_HOME: .uv-cache
     cmds:
-      - |
-        uv run --with pytest-asyncio pytest -q {{.CLI_ARGS}}
+      - uv run --with pytest-asyncio pytest -q {{.CLI_ARGS}}
 
   update:
     desc: Update dependencies (main + dev)

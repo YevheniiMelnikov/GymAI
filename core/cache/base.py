@@ -5,7 +5,6 @@ from typing import Any, ClassVar
 
 from loguru import logger
 from redis.asyncio import Redis, from_url
-
 from typing import Awaitable, cast
 from redis.exceptions import RedisError
 

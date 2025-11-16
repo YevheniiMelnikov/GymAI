@@ -11,8 +11,7 @@ class ProfileRepository:
     @staticmethod
     def get_model_by_id(profile_id: int) -> Profile:
         try:
-            profile = Profile.objects.get(pk=profile_id)  # pyrefly: ignore[missing-attribute]
-            return cast(Profile, profile)
+            return Profile.objects.get(pk=profile_id)  # pyrefly: ignore[missing-attribute]
         except Profile.DoesNotExist:  # pyrefly: ignore[missing-attribute]
             raise NotFound(f"Profile pk={profile_id} not found")
 
@@ -30,7 +29,9 @@ class ProfileRepository:
 
         if isinstance(cached, dict):
             profile = Profile(**cached)
-            profile.pk = cached.get("id")
+            pk_value = cached.get("id")
+            if pk_value is not None:
+                profile.pk = int(pk_value)
             profile._state.adding = False
             return profile
 
@@ -41,7 +42,6 @@ class ProfileRepository:
         def fetch_profile() -> Dict[str, Any]:
             try:
                 instance = Profile.objects.get(tg_id=tg_id)  # pyrefly: ignore[missing-attribute]
-                instance = cast(Profile, instance)
             except Profile.DoesNotExist:  # pyrefly: ignore[missing-attribute]
                 raise NotFound(f"Profile with tg_id={tg_id} not found")
             return ProfileSerializer(instance).data
@@ -54,7 +54,9 @@ class ProfileRepository:
 
         if isinstance(cached, dict):
             profile = Profile(**cached)
-            profile.pk = cached.get("id")
+            pk_value = cached.get("id")
+            if pk_value is not None:
+                profile.pk = int(pk_value)
             profile._state.adding = False
             return profile
 
@@ -66,7 +68,6 @@ class CoachProfileRepository:
     def get(pk: int) -> CoachProfile:
         try:
             coach_profile = CoachProfile.objects.get(pk=pk)  # pyrefly: ignore[missing-attribute]
-            coach_profile = cast(CoachProfile, coach_profile)
         except CoachProfile.DoesNotExist:  # pyrefly: ignore[missing-attribute]
             raise NotFound(f"CoachProfile pk={pk} not found")
         if coach_profile.profile.role != "coach":  # type: ignore[attr-defined]
@@ -77,8 +78,10 @@ class CoachProfileRepository:
     def get_or_create_by_profile(profile: Profile) -> CoachProfile:
         if profile.role != "coach":
             raise ValidationError("Profile role is not 'coach'")
-        coach_profile, _ = CoachProfile.objects.get_or_create(profile=profile)  # pyrefly: ignore[missing-attribute]
-        return cast(CoachProfile, coach_profile)
+        coach_profile, _ = CoachProfile.objects.get_or_create(  # pyrefly: ignore[missing-attribute]
+            profile=profile
+        )
+        return coach_profile
 
 
 class ClientProfileRepository:
@@ -86,7 +89,6 @@ class ClientProfileRepository:
     def get(pk: int) -> ClientProfile:
         try:
             client_profile = ClientProfile.objects.get(pk=pk)  # pyrefly: ignore[missing-attribute]
-            client_profile = cast(ClientProfile, client_profile)
         except ClientProfile.DoesNotExist:  # pyrefly: ignore[missing-attribute]
             raise NotFound(f"ClientProfile pk={pk} not found")
         if client_profile.profile.role != "client":  # type: ignore[attr-defined]
@@ -97,7 +99,6 @@ class ClientProfileRepository:
     def get_by_profile_id(profile_id: int) -> ClientProfile:
         try:
             client_profile = ClientProfile.objects.get(profile_id=profile_id)  # pyrefly: ignore[missing-attribute]
-            client_profile = cast(ClientProfile, client_profile)
         except ClientProfile.DoesNotExist:  # pyrefly: ignore[missing-attribute]
             raise NotFound(f"ClientProfile for profile_id={profile_id} not found")
         if client_profile.profile.role != "client":  # type: ignore[attr-defined]
@@ -108,5 +109,7 @@ class ClientProfileRepository:
     def get_or_create_by_profile(profile: Profile) -> ClientProfile:
         if profile.role != "client":
             raise ValidationError("Profile role is not 'client'")
-        client_profile, _ = ClientProfile.objects.get_or_create(profile=profile)  # pyrefly: ignore[missing-attribute]
-        return cast(ClientProfile, client_profile)
+        client_profile, _ = ClientProfile.objects.get_or_create(  # pyrefly: ignore[missing-attribute]
+            profile=profile
+        )
+        return client_profile

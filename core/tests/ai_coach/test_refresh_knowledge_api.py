@@ -5,7 +5,7 @@ import types
 import pytest
 from httpx import AsyncClient, ASGITransport
 
-import conftest
+from core.tests import conftest
 from ai_coach.application import app
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 
