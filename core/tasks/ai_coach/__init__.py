@@ -2,6 +2,9 @@
 
 import asyncio  # noqa: F401
 
+from core.ai_coach.state.plan import AiPlanState  # noqa: F401
+from . import plans as _plans
+
 from .maintenance import (  # noqa: F401
     ai_coach_echo,
     ai_coach_worker_report,
@@ -42,4 +45,8 @@ __all__ = (
     "ai_coach_worker_report",
     "refresh_external_knowledge",
     "prune_knowledge_base",
+    "AiPlanState",
 )
+
+httpx = _plans.httpx
+logger = _plans.logger

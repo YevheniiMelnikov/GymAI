@@ -7,6 +7,7 @@ from typing import Any, Iterable, Mapping, MutableMapping, cast
 from urllib.parse import urlparse
 
 from celery import Task, signals
+
 from loguru import logger
 
 from core.celery_app import AI_COACH_TASK_ROUTES, CRITICAL_TASK_ROUTES

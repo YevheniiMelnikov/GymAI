@@ -3,7 +3,8 @@ import time
 import logging
 from hashlib import sha256
 from time import monotonic
-from typing import Any, ClassVar, Mapping, TYPE_CHECKING
+from pathlib import Path
+from typing import Any, ClassVar, Mapping, Optional, Sequence, TYPE_CHECKING
 
 import cognee
 from loguru import logger
@@ -13,16 +14,31 @@ from ai_coach.agent.knowledge.schemas import KnowledgeSnippet, ProjectionStatus,
 from ai_coach.agent.knowledge.utils.chat_queue import ChatProjectionScheduler
 from ai_coach.agent.knowledge.cognee_config import CogneeConfig
 from ai_coach.agent.knowledge.utils.datasets import DatasetService
+from ai_coach.agent.knowledge.utils.hash_store import HashStore
 from ai_coach.agent.knowledge.utils.projection import ProjectionService
 from ai_coach.agent.knowledge.utils.search import SearchService
 from ai_coach.agent.knowledge.utils.storage import StorageService
 from ai_coach.agent.knowledge.utils.lock_cache import LockCache
 from ai_coach.types import MessageRole
-
 from config.app_settings import settings
+from core.services import APIService as _APIService
 
 if TYPE_CHECKING:
     from core.schemas import Client
+
+APIService = _APIService
+
+
+async def _safe_add(
+    text: str,
+    *,
+    dataset_name: str,
+    user: Any,
+    node_set: list[str] | None,
+) -> Any:
+    import cognee
+
+    return await cognee.add(text, dataset_name=dataset_name, user=user, node_set=list(node_set or []))
 
 
 class KnowledgeBase:
@@ -34,6 +50,9 @@ class KnowledgeBase:
     _warned_missing_user: bool = False
     _PENDING_REBUILDS: ClassVar[set[str]] = set()
     _LAST_REBUILD_RESULT: ClassVar[dict[str, Any]] = {}
+    _legacy_singleton: ClassVar[Optional["KnowledgeBase"]] = None
+    _PROJECTED_DATASETS: ClassVar[set[str]] = DatasetService._PROJECTED_DATASETS
+    _DATASET_IDS: ClassVar[dict[str, str]] = DatasetService._DATASET_IDS
     GLOBAL_DATASET: str = settings.COGNEE_GLOBAL_DATASET
 
     def __init__(self) -> None:
@@ -384,9 +403,7 @@ class KnowledgeBase:
 
         info: Any | None = None
         try:
-            import cognee
-
-            info = await cognee.add(normalized_text, dataset_name=ds_name, user=user_ctx, node_set=list(node_set or []))
+            info = await _safe_add(normalized_text, dataset_name=ds_name, user=user_ctx, node_set=list(node_set or []))
         except Exception as exc:
             raise RuntimeError(f"Failed to add dataset entry for {ds_name}") from exc
 
@@ -792,3 +809,134 @@ class KnowledgeBase:
         if client.health_notes:
             parts.append(f"health_notes: {client.health_notes}")
         return "profile: " + "; ".join(parts)
+
+    @classmethod
+    def _legacy_instance(cls) -> "KnowledgeBase":
+        if cls._legacy_singleton is None:
+            cls._legacy_singleton = cls()
+        return cls._legacy_singleton
+
+    @staticmethod
+    def _normalize_text(value: str | None) -> str:
+        return DatasetService._normalize_text(value)
+
+    @classmethod
+    def _dataset_name(cls, client_id: int) -> str:
+        return cls._legacy_instance().dataset_service.dataset_name(client_id)
+
+    @classmethod
+    def _resolve_dataset_alias(cls, name: str) -> str:
+        return cls._legacy_instance().dataset_service._resolve_dataset_alias(str(name))
+
+    @classmethod
+    def _storage_root(cls) -> Path:
+        return cls._legacy_instance().storage_service.storage_root()
+
+    @classmethod
+    def _ensure_storage_file(cls, digest_md5: str, text: str, *, dataset: str | None = None) -> tuple[Path | None, bool]:
+        instance = cls._legacy_instance()
+        normalized = instance.dataset_service._normalize_text(text)
+        digest_sha = sha256(normalized.encode("utf-8")).hexdigest()
+        return instance.storage_service.ensure_storage_file(
+            digest_sha=digest_sha,
+            text=normalized,
+            dataset=dataset,
+        )
+
+    @classmethod
+    async def _ensure_dataset_exists(cls, name: str, user: Any | None) -> None:
+        instance = cls._legacy_instance()
+        user_ctx = instance.dataset_service.to_user_ctx(user)
+        if user_ctx is None:
+            base_user = user or await instance.dataset_service.get_cognee_user()
+            user_ctx = instance.dataset_service.to_user_ctx(base_user)
+        await instance.dataset_service.ensure_dataset_exists(name, user_ctx)
+
+    @classmethod
+    async def _list_dataset_entries(cls, dataset: str, user: Any | None) -> list[Any]:
+        instance = cls._legacy_instance()
+        user_ctx = instance.dataset_service.to_user_ctx(user)
+        if user_ctx is None:
+            base_user = user or await instance.dataset_service.get_cognee_user()
+            user_ctx = instance.dataset_service.to_user_ctx(base_user)
+        return await instance.dataset_service.list_dataset_entries(dataset, user_ctx)
+
+    @classmethod
+    async def _collect_metadata(
+        cls, digest: str, datasets: Sequence[str]
+    ) -> tuple[str | None, Mapping[str, Any] | None]:
+        instance = cls._legacy_instance()
+        return await instance.search_service._collect_metadata(digest, list(datasets))
+
+    @classmethod
+    async def _ensure_profile_indexed(cls, client_id: int, user: Any | None) -> None:
+        try:
+            client = await APIService.profile.get_client(client_id)
+        except Exception:
+            return
+        if not client:
+            return
+        instance = cls._legacy_instance()
+        actor = user
+        if actor is None:
+            actor = await instance.dataset_service.get_cognee_user()
+        if actor is None:
+            return
+        text = instance._client_profile_text(client)
+        dataset = instance.dataset_service.dataset_name(client_id)
+        dataset, created = await instance.update_dataset(
+            text,
+            dataset,
+            actor,
+            node_set=["client_profile"],
+            metadata={"kind": "document", "source": "client_profile"},
+        )
+        if created:
+            await instance._process_dataset(dataset, actor)
+
+    @classmethod
+    async def _get_cognee_user(cls) -> Any | None:
+        return await cls._legacy_instance().dataset_service.get_cognee_user()
+
+    @classmethod
+    async def _process_dataset(cls, dataset: str, user: Any | None = None) -> None:
+        await cls._legacy_instance()._process_dataset(dataset, user)
+
+    @classmethod
+    async def _ensure_dataset_projected(
+        cls, dataset: str, user: Any | None, *, timeout: float | None = None
+    ) -> bool:
+        instance = cls._legacy_instance()
+        actor = user
+        if actor is None:
+            actor = await instance.dataset_service.get_cognee_user()
+        if actor is None:
+            return False
+        await instance.projection_service.ensure_dataset_projected(dataset, actor, timeout_s=timeout)
+        return True
+
+    @classmethod
+    async def ensure_global_projected(cls, timeout: float | None = None) -> ProjectionStatus:
+        instance = cls._legacy_instance()
+        actor = instance._user or await instance.dataset_service.get_cognee_user()
+        return await instance._wait_for_projection(instance.GLOBAL_DATASET, actor, timeout_s=timeout)
+
+    @classmethod
+    async def _search_single_query(
+        cls,
+        query: str,
+        datasets: list[str],
+        user: Any | None,
+        k: int | None,
+        client_id: int,
+        *,
+        request_id: str | None = None,
+    ) -> list[KnowledgeSnippet]:
+        return await cls._legacy_instance().search_service._search_single_query(
+            query,
+            datasets,
+            user,
+            k,
+            client_id,
+            request_id=request_id,
+        )

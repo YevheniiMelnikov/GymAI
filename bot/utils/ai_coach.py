@@ -1,4 +1,6 @@
+import celery
 from celery import chain
+
 from celery.result import AsyncResult
 from typing import cast
 from loguru import logger

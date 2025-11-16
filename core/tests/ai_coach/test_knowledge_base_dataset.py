@@ -11,9 +11,9 @@ import pytest
 
 import ai_coach.agent.knowledge.knowledge_base as knowledge_base_module
 from ai_coach.agent.coach import CoachAgent
-from ai_coach.agent.knowledge.knowledge_base import (
+from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+from ai_coach.agent.knowledge.schemas import (
     DatasetRow,
-    KnowledgeBase,
     KnowledgeSnippet,
     ProjectionStatus,
 )

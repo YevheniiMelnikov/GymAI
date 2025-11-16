@@ -4,9 +4,15 @@ import asyncio
 
 from ai_coach.api import DISPATCH
 from ai_coach.agent import CoachAgent
+import ai_coach.api as coach_api
 from ai_coach.types import CoachMode
 from core.schemas import Program, Subscription
 from core.enums import WorkoutPlanType, WorkoutType
+
+
+def _patch_agent(monkeypatch: pytest.MonkeyPatch, attr: str, value) -> None:
+    monkeypatch.setattr(CoachAgent, attr, value)
+    monkeypatch.setattr(coach_api.CoachAgent, attr, value)
 
 
 def test_program_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -23,7 +29,7 @@ def test_program_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
             captured["args"] = (prompt, deps, workout_type, kwargs)
             return "program-result"
 
-        monkeypatch.setattr(CoachAgent, "generate_workout_plan", staticmethod(fake_generate))
+        _patch_agent(monkeypatch, "generate_workout_plan", staticmethod(fake_generate))
         ctx = {
             "prompt": "p",
             "deps": "d",
@@ -57,7 +63,7 @@ def test_subscription_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
             captured["args"] = (prompt, deps, workout_type, kwargs)
             return "subscription-result"
 
-        monkeypatch.setattr(CoachAgent, "generate_workout_plan", staticmethod(fake_generate))
+        _patch_agent(monkeypatch, "generate_workout_plan", staticmethod(fake_generate))
         ctx = {
             "prompt": "p",
             "period": "1m",
@@ -110,7 +116,7 @@ def test_update_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
             )
             return "update-result"
 
-        monkeypatch.setattr(CoachAgent, "update_workout_plan", staticmethod(fake_update))
+        _patch_agent(monkeypatch, "update_workout_plan", staticmethod(fake_update))
         ctx = {
             "prompt": "p",
             "expected_workout": "ew",
@@ -136,7 +142,7 @@ def test_ask_ai_dispatch_and_keys(monkeypatch: pytest.MonkeyPatch) -> None:
             captured["args"] = (prompt, deps)
             return "ask_ai-result"
 
-        monkeypatch.setattr(CoachAgent, "answer_question", staticmethod(fake_answer))
+        _patch_agent(monkeypatch, "answer_question", staticmethod(fake_answer))
         ctx = {"prompt": "p", "deps": "d"}
         result = await DISPATCH[CoachMode.ask_ai](ctx)  # pyrefly: ignore[bad-argument-type]
         assert result == "ask_ai-result"

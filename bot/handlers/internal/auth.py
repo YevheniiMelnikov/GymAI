@@ -66,15 +66,29 @@ def require_internal_auth(handler: Handler) -> Handler:
             )
             return web.json_response({"detail": "IP address not allowed"}, status=403)
 
+        internal_key = settings.INTERNAL_API_KEY or ""
+        api_key_header = request.headers.get("Authorization", "")
+        shared_key = request.headers.get("X-Internal-Api-Key")
         key_id = request.headers.get("X-Key-Id")
         ts_header = request.headers.get("X-TS")
         sig_header = request.headers.get("X-Sig")
 
         if not all((key_id, ts_header, sig_header)):
+            if internal_key:
+                if shared_key == internal_key:
+                    return await handler(request, *args, **kwargs)
+                if api_key_header == f"Api-Key {internal_key}":
+                    return await handler(request, *args, **kwargs)
+                if shared_key:
+                    return web.json_response({"detail": "Invalid internal key"}, status=401)
+            if api_key_header == f"Api-Key {settings.API_KEY}":
+                return await handler(request, *args, **kwargs)
+            if not internal_key and is_allowed:
+                return await handler(request, *args, **kwargs)
             logger.warning(
                 f"internal_auth_denied reason=missing_headers path={request.rel_url} client_ip={client_ip or 'unknown'}"
             )
-            return web.json_response({"detail": "Missing signature headers"}, status=403)
+            return web.json_response({"detail": "Missing signature headers"}, status=401)
 
         if key_id != settings.INTERNAL_KEY_ID:
             logger.warning(

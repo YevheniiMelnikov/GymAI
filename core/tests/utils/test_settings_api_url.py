@@ -31,11 +31,11 @@ Settings = app_settings_module.Settings
 
 
 def _build_settings(api_host: str, host_port: str, internal_port: str) -> Settings:
-    instance: Settings = Settings.__new__(Settings)
-    instance.API_HOST = api_host
-    instance.HOST_API_PORT = host_port
-    instance.API_INTERNAL_PORT = internal_port
-    return instance
+    return Settings(
+        API_HOST=api_host,
+        HOST_API_PORT=host_port,
+        API_INTERNAL_PORT=internal_port,
+    )
 
 
 def _clear_env(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -36,23 +36,21 @@ def _settings() -> types.SimpleNamespace:
     )
 
 
-def test_api_request_success():
+def test_api_request_success(mocker):
     import asyncio
 
     async def fake_request(*a, **kw):
         return make_response(200, {"ok": True})
 
-    class _Client:
-        async def request(self, *a, **kw):
-            return await fake_request(*a, **kw)
+    mocker.patch("httpx.AsyncClient.request", fake_request)
 
-    api = APIClient(_Client(), _settings())
+    api = APIClient(None, _settings())
     code, data = asyncio.run(api._api_request("get", "http://x"))
     assert code == 200
     assert data == {"ok": True}
 
 
-def test_api_request_retries():
+def test_api_request_retries(mocker):
     import asyncio
 
     calls = []
@@ -64,44 +62,38 @@ def test_api_request_retries():
             raise httpx.HTTPStatusError("boom", request=response.request, response=response)
         return make_response(200, {"ok": True})
 
-    class _Client2:
-        async def request(self, *a, **kw):
-            return await fake_request(*a, **kw)
+    mocker.patch("httpx.AsyncClient.request", fake_request)
 
-    api = APIClient(_Client2(), _settings())
+    api = APIClient(None, _settings())
     api.max_retries = 2
     code, _ = asyncio.run(api._api_request("get", "http://x"))
     assert len(calls) == 2
     assert code == 200
 
 
-def test_api_request_gives_up():
+def test_api_request_gives_up(mocker):
     import asyncio
 
     async def fake_request(*a, **kw):
         response = make_response(503)
         raise httpx.HTTPStatusError("boom", request=response.request, response=response)
 
-    class _Client3:
-        async def request(self, *a, **kw):
-            return await fake_request(*a, **kw)
+    mocker.patch("httpx.AsyncClient.request", fake_request)
 
-    api = APIClient(_Client3(), _settings())
+    api = APIClient(None, _settings())
     api.max_retries = 2
     with pytest.raises(APIClientHTTPError):
         asyncio.run(api._api_request("get", "http://x"))
 
 
-def test_api_request_transport_error():
+def test_api_request_transport_error(mocker):
     import asyncio
 
     async def fake_request(*a, **kw):
         raise httpx.ConnectError("down", request=httpx.Request("GET", "http://x"))
 
-    class _Client4:
-        async def request(self, *a, **kw):
-            return await fake_request(*a, **kw)
+    mocker.patch("httpx.AsyncClient.request", fake_request)
 
-    api = APIClient(_Client4(), _settings())
+    api = APIClient(None, _settings())
     with pytest.raises(APIClientTransportError):
         asyncio.run(api._api_request("get", "http://x"))

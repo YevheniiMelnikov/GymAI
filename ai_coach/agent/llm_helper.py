@@ -77,6 +77,9 @@ class LLMHelper:
 
     @classmethod
     def _lang(cls, deps: AgentDeps) -> str:
+        if not deps.locale:
+            default_lang: str = getattr(settings, "DEFAULT_LANG", "en") or "en"
+            return default_lang
         code, _ = cls._language_context(deps)
         return code
 
@@ -185,6 +188,9 @@ class LLMHelper:
         *,
         prefetched_knowledge: Sequence[KnowledgeSnippet] | None = None,
     ) -> QAResponse | None:
+        if getattr(deps, "knowledge_base_empty", False):
+            logger.debug(f"agent.ask fallback skipped client_id={deps.client_id} reason=kb_empty_flag")
+            return None
         if deps.fallback_used:
             logger.debug(f"agent.ask fallback skipped client_id={deps.client_id} reason=already_used")
             return None
@@ -216,7 +222,7 @@ class LLMHelper:
         ]
         deps.knowledge_base_empty = len(entry_ids) == 0
         deps.kb_used = not deps.knowledge_base_empty
-        _, language_label = cls._language_context(deps)
+        language_code, language_label = cls._language_context(deps)
         knowledge_section = format_knowledge_entries(entry_ids, entries)
         system_prompt = COACH_SYSTEM_PROMPT
         user_prompt = ASK_AI_USER_PROMPT.format(
@@ -256,7 +262,18 @@ class LLMHelper:
                     len(entry_ids),
                 )
             )
-            return None
+            summary_text = "\n".join(entry for entry in entries if entry).strip()
+            if not summary_text:
+                summary_text = "Knowledge base summary is unavailable."
+            prefix_map = {
+                "uk": "Ось ключові пункти:",
+                "ru": "Вот ключевые пункты:",
+                "en": "Here are the key points:",
+            }
+            prefix = prefix_map.get(language_code, prefix_map["en"])
+            fallback_answer = f"{prefix}\n{summary_text}"
+            fallback_sources = unique_sources(entry_datasets) or ["knowledge_base"]
+            return QAResponse(answer=fallback_answer, sources=fallback_sources)
         deps.knowledge_base_empty = True
         logger.warning(f"agent.ask fallback missing_answer client_id={deps.client_id} kb_empty=True")
         return None
@@ -319,7 +336,7 @@ class LLMHelper:
             full_content += content
             final_finish_reason = meta.get("finish_reason") or "unknown"
 
-            if final_finish_reason == "length" and continuation_attempt == 0:
+            if final_finish_reason == "length" and continuation_attempt == 0 and not content.strip():
                 logger.info(
                     ("llm.continuation_needed client_id={} model={} max_tokens={} current_len={}").format(
                         client_id, model_id, max_tokens, len(full_content)

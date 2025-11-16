@@ -1,1228 +1,796 @@
-# pyrefly: ignore-file
-# pyright: reportGeneralTypeIssues=false
-import inspect
+import asyncio
 import os
-import sys
 import types
-from contextlib import asynccontextmanager
+from collections import defaultdict
+from hashlib import md5, sha256
 from pathlib import Path
-from typing import Any, Generic, TypeVar
+from typing import Any, Awaitable, Callable, Iterable, Mapping, Sequence
+from uuid import uuid4
+from .stubs import *
+import config.app_settings as app_settings
+import ai_coach.agent.knowledge.knowledge_base as kb_module
+from ai_coach.agent.knowledge.schemas import DatasetRow, KnowledgeSnippet, ProjectionStatus
+import ai_coach.agent.knowledge.gdrive_knowledge_loader as gdrive_loader_module
+import ai_coach.agent.knowledge.cognee_config as cognee_config
+from core.services.internal import APIService
+import django
 
-import pytest
-
-TESTS_DIR: Path = Path(__file__).resolve().parent
-CORE_DIR: Path = TESTS_DIR.parent
-ROOT_DIR: Path = CORE_DIR.parent
-python_path: list[str] = sys.path
-if str(ROOT_DIR) not in python_path:
-    python_path.append(str(ROOT_DIR))
-
-os.environ["TIME_ZONE"] = "Europe/Kyiv"
+os.environ.setdefault("COGNEE_STORAGE_PATH", ".cognee_test_storage")
+os.environ.setdefault("COGNEE_DATA_ROOT", ".cognee_test_storage")
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.test_settings")
 
-# Provide minimal stub for the external 'cognee' package
-cognee_stub = types.ModuleType("cognee")
-cognee_stub.add = lambda *a, **k: None
-cognee_stub.cognify = lambda *a, **k: None
-cognee_stub.search = lambda *a, **k: []
+django.setup()
 
-modules = {
-    "cognee": cognee_stub,
-    "cognee.modules.data.exceptions": types.ModuleType("cognee.modules.data.exceptions"),
-    "cognee.modules.users.exceptions.exceptions": types.ModuleType("cognee.modules.users.exceptions.exceptions"),
-    "cognee.modules.users.methods.get_default_user": types.ModuleType("cognee.modules.users.methods.get_default_user"),
-    "cognee.infrastructure.databases.exceptions": types.ModuleType("cognee.infrastructure.databases.exceptions"),
-    "cognee.modules.engine.operations.setup": types.ModuleType("cognee.modules.engine.operations.setup"),
-    "cognee.base_config": types.ModuleType("cognee.base_config"),
-    "cognee.infrastructure": types.ModuleType("cognee.infrastructure"),
-    "cognee.infrastructure.files": types.ModuleType("cognee.infrastructure.files"),
-}
-modules["cognee.modules.data.exceptions"].DatasetNotFoundError = Exception
-modules["cognee.modules.users.exceptions.exceptions"].PermissionDeniedError = Exception
-modules["cognee.modules.users.methods.get_default_user"].get_default_user = lambda: None
-modules["cognee.infrastructure.databases.exceptions"].DatabaseNotCreatedError = Exception
-modules["cognee.modules.engine.operations.setup"].setup = lambda: None
-modules["cognee.base_config"].get_base_config = lambda: types.SimpleNamespace(data_root_directory=".")
-cognee_stub.base_config = modules["cognee.base_config"]
-files_utils_mod = types.ModuleType("cognee.infrastructure.files.utils")
+_PROD_DEFAULTS = app_settings.Settings(COGNEE_STORAGE_PATH=".cognee_test_storage")
 
+class _DatasetService:
+    def __init__(self):
+        self._PROJECTED_DATASETS: set[str] = set()
+    async def get_cognee_user(self):
+        return types.SimpleNamespace(id=1)
+    def alias_for_dataset(self, name: str) -> str:
+        return name
+    def log_once(self, *args, **kwargs) -> None:
+        return None
+    def chat_dataset_name(self, client_id: int) -> str:
+        return f"chat_{client_id}"
+    def to_user_ctx(self, user):
+        return user or types.SimpleNamespace(id=1)
+    async def ensure_dataset_exists(self, *args, **kwargs) -> None:
+        return None
+    async def get_dataset_id(self, *args, **kwargs) -> str | None:
+        return "dataset-id"
+    def resolve_dataset_alias(self, alias: str) -> str:
+        return alias
+    def get_registered_identifier(self, canonical: str) -> str:
+        return canonical
+    async def get_counts(self, *args, **kwargs) -> dict[str, int]:
+        return {}
+    def dump_identifier_map(self) -> dict[str, str]:
+        return {}
+    def _normalize_text(self, text: str) -> str:
+        return str(text or "").strip()
 
-@asynccontextmanager
-async def open_data_file(uri: str, mode: str = "r"):
-    base = Path(modules["cognee.base_config"].get_base_config().data_root_directory)
-    name = uri.split("/")[-1].split("\\")[-1]
-    with open(base / name, mode) as f:
-        yield f
+class _ProjectionService:
+    def __init__(self):
+        self._kb = None
+        self._waiter = None
+    def attach_knowledge_base(self, kb) -> None:
+        self._kb = kb
+    def set_waiter(self, waiter) -> None:
+        self._waiter = waiter
+    async def probe(self, *args, **kwargs):
+        return True, "ready"
+    async def wait(self, *args, **kwargs):
+        return ProjectionStatus.READY
 
-
-files_utils_mod.open_data_file = open_data_file
-modules["cognee.infrastructure.files.utils"] = files_utils_mod
-
-for name, mod in modules.items():
-    sys.modules.setdefault(name, mod)
-
-# Stub heavy optional dependencies used by ai_coach
-google_mod = sys.modules.setdefault("google", types.ModuleType("google"))
-sys.modules.setdefault("google.oauth2", types.ModuleType("google.oauth2"))
-service_account = types.ModuleType("google.oauth2.service_account")
-service_account.Credentials = object
-sys.modules.setdefault("google.oauth2.service_account", service_account)
-oauth2_creds = types.ModuleType("google.oauth2.credentials")
-oauth2_creds.Credentials = object
-sys.modules.setdefault("google.oauth2.credentials", oauth2_creds)
-sys.modules.setdefault("googleapiclient", types.ModuleType("googleapiclient"))
-discovery_mod = types.ModuleType("googleapiclient.discovery")
-discovery_mod.build = lambda *a, **k: types.SimpleNamespace(files=lambda: None)
-sys.modules.setdefault("googleapiclient.discovery", discovery_mod)
-http_mod = types.ModuleType("googleapiclient.http")
+class _GDriveLoader:
+    def __init__(self, kb):
+        self.kb = kb
+    async def load(self):
+        return None
 
 
-class DummyDownloader:
-    def __init__(self, *a, **k):
-        pass
+class _SearchServiceStub:
+    def __init__(self, kb_cls: type | None = None):
+        self._kb_cls = kb_cls
 
-    def next_chunk(self):
-        return None, True
+    async def search(
+        self,
+        query: str,
+        client_id: int,
+        k: int | None = None,
+        *,
+        datasets: Sequence[str] | None = None,
+        user: Any | None = None,
+        request_id: str | None = None,
+    ) -> list[str]:
+        kb_cls = self._kb_cls or _KB
+        aliases = [kb_cls._resolve_dataset_alias(item) for item in list(datasets or [])]
+        if not aliases:
+            aliases = [kb_cls.GLOBAL_DATASET]
+        results: list[str] = []
+        lowered = str(query or "").strip().lower()
+        for alias in aliases:
+            for row in kb_cls._DATASETS.get(alias, []):
+                text_value = row.text
+                if not lowered or lowered in text_value.lower():
+                    results.append(text_value)
+                    if k is not None and len(results) >= k:
+                        return results
+        cognee_mod = getattr(kb_module, "cognee", None)
+        search_impl = getattr(cognee_mod, "search", None) if cognee_mod else None
+        if callable(search_impl):
+            payload = await search_impl(query, datasets=aliases, user=user, top_k=k)
+            if isinstance(payload, list):
+                results.extend(payload)
+        return results
+
+    async def _fallback_dataset_entries(
+        self,
+        datasets: Sequence[str],
+        user_ctx: Any | None,
+        top_k: int = 6,
+    ) -> list[tuple[str, str]]:
+        kb_cls = self._kb_cls or _KB
+        entries: list[tuple[str, str]] = []
+        for dataset in datasets:
+            rows = await kb_cls._list_dataset_entries(dataset, user_ctx)
+            for row in rows:
+                prepared = kb_cls._prepare_dataset_row(row, dataset)
+                metadata = prepared.metadata or {}
+                if metadata.get("kind") == "message":
+                    continue
+                entries.append((prepared.text, dataset))
+                if len(entries) >= top_k:
+                    return entries
+        return entries
 
 
-http_mod.MediaIoBaseDownload = DummyDownloader
-sys.modules.setdefault("googleapiclient.http", http_mod)
-google_cloud = sys.modules.setdefault("google.cloud", types.ModuleType("google.cloud"))
-google_mod.cloud = google_cloud
-gcs_mod = types.ModuleType("google.cloud.storage")
-gcs_mod.Client = object
-google_cloud.storage = gcs_mod
-sys.modules.setdefault("google.cloud.storage", gcs_mod)
-sys.modules.setdefault("google.auth", types.ModuleType("google.auth"))
-auth_exc = types.ModuleType("google.auth.exceptions")
-auth_exc.DefaultCredentialsError = Exception
-sys.modules.setdefault("google.auth.exceptions", auth_exc)
-auth_creds = types.ModuleType("google.auth.credentials")
-auth_creds.Credentials = object
-sys.modules.setdefault("google.auth.credentials", auth_creds)
-gspread_mod = types.ModuleType("gspread")
-gspread_mod.Client = object
-gspread_mod.Worksheet = object
-gspread_mod.authorize = lambda *a, **k: gspread_mod.Client()
-gspread_mod.utils = types.SimpleNamespace(ValueInputOption=types.SimpleNamespace(user_entered="USER_ENTERED"))
-sys.modules.setdefault("gspread", gspread_mod)
-sys.modules.setdefault("gspread.utils", gspread_mod.utils)
+class _HashStoreProxy:
+    def __getattr__(self, name: str):
+        return getattr(kb_module.HashStore, name)
 
-# Lightweight stubs for frequently missing dependencies
+    def __setattr__(self, name: str, value):
+        setattr(kb_module.HashStore, name, value)
 
-# pydantic stub
-pydantic_mod = types.ModuleType("pydantic")
+gdrive_loader_module.GDriveDocumentLoader = _GDriveLoader
+cognee_config.CogneeConfig.apply = classmethod(lambda cls: None)
 
 
-class ValidationError(Exception):
-    pass
+class BaseSettings:
+    DEFAULTS = {
+        "API_URL": "http://testserver",
+        "API_KEY": "test-api-key",
+        "REQUEST_TIMEOUT": 5,
+        "RETRY_ATTEMPTS": 2,
+        "AI_COACH_REQUEST_TIMEOUT": 30,
+        "AI_COACH_PROJECTION_TIMEOUT": 10,
+        "AI_COACH_MAX_TOOL_CALLS": 3,
+        "COGNEE_GLOBAL_DATASET": "global-dataset",
+        "COGNEE_STORAGE_ROOT": "/tmp/cognee",
+        "COGNEE_STORAGE_PATH": ".cognee_test_storage",
+        "BOT_TOKEN": "test_token",
+        "GOOGLE_APPLICATION_CREDENTIALS": "{}",
+        "SPREADSHEET_ID": "test_spreadsheet_id",
+        "AGENT_PROVIDER": "openai",
+        "LLM_API_KEY": "test-key",
+    }
 
-
-class BaseModel:
-    def __init__(self, **data: any) -> None:
-        for name, value in self.__class__.__dict__.items():
-            if name.startswith("_") or callable(value):
-                continue
-            setattr(self, name, value)
+    def __init__(self, **values):
+        data = {**_PROD_DEFAULTS.model_dump(), **self.DEFAULTS, **values}
         for k, v in data.items():
             setattr(self, k, v)
-        # run field validators
-        for attr in dir(self.__class__):
-            fn = getattr(self.__class__, attr)
-            meta = getattr(fn, "_field_validator", None)
-            if meta:
-                fields, mode = meta
-                for field in fields:
-                    current = getattr(self, field, None)
-                    params = len(inspect.signature(fn).parameters)
-                    info = types.SimpleNamespace(data=data)
-                    if params == 3:
-                        current = fn(self.__class__, current, info)
-                    else:
-                        current = fn(self.__class__, current)
-                    setattr(self, field, current)
-        # run model validators (after)
-        for attr in dir(self.__class__):
-            fn = getattr(self.__class__, attr)
-            if getattr(fn, "_model_validator", None) == "after":
-                fn(self)
+
+
+settings_stub = BaseSettings()
+app_settings.settings = settings_stub
+
+
+class _ContainerStub:
+    def __getattr__(self, name: str):
+        if name.endswith("_service"):
+            return lambda: types.SimpleNamespace()
+        raise AttributeError(name)
+
+
+APIService.configure(lambda: _ContainerStub())
+
+# KnowledgeBase stub
+from pathlib import Path
+
+
+class _KB:
+    GLOBAL_DATASET = "kb_global"
+    HashStore = _HashStoreProxy()
+    _storage_dir = Path(".cognee_test_storage")
+    _DATASETS: defaultdict[str, list[DatasetRow]] = defaultdict(list)
+    _DATASET_IDS: dict[str, str] = {}
+    _DATASET_ALIASES: dict[str, str] = {}
+    _PROJECTED_DATASETS: set[str] = set()
+    _PROJECTION_STATE: dict[str, tuple[ProjectionStatus, str]] = {}
+    _LAST_REBUILD_RESULT: dict[str, dict[str, Any]] = {}
+    _user: Any | None = None
+    _list_data_supports_user: bool | None = None
+    _list_data_requires_user: bool | None = None
+
+    def __init__(self):
+        self.dataset_service = _DatasetService()
+        self.projection_service = _ProjectionService()
+        self.projection_service.attach_knowledge_base(self)
+        self.storage_service = types.SimpleNamespace(attach_knowledge_base=lambda *a, **k: None)
+        self.chat_queue_service = types.SimpleNamespace()
+        self.search_service = _SearchServiceStub(type(self))
+        self._seen: set[tuple[int]] = set()
 
     @classmethod
-    def model_validate(cls, data: dict[str, any]) -> "BaseModel":
-        return cls(**data)
-
-    def model_dump(self, *a: any, **k: any) -> dict[str, any]:
-        data = dict(self.__dict__)
-        exclude = k.get("exclude")
-        if isinstance(exclude, set):
-            for key in exclude:
-                data.pop(key, None)
-        if k.get("exclude_none"):
-            data = {k: v for k, v in data.items() if v is not None}
-        return data
-
-    def model_copy(self, *, update: dict[str, any] | None = None) -> "BaseModel":
-        data = self.model_dump()
-        if update:
-            data.update(update)
-        return self.__class__(**data)
-
-
-def condecimal(*_a: any, **_k: any) -> type[float]:
-    return float
-
-
-class ConfigDict(dict[str, any]):
-    pass
-
-
-def Field(default: any = None, **_: any) -> any:
-    return default
-
-
-def field_validator(*fields: str, mode: str = "after"):
-    def decorator(f: any) -> any:
-        f._field_validator = (fields, mode)
-        return f
-
-    return decorator
-
-
-def model_validator(*, mode: str = "after"):
-    def decorator(f: any) -> any:
-        f._model_validator = mode
-        return f
-
-    return decorator
-
-
-pydantic_mod.BaseModel = BaseModel
-pydantic_mod.Field = Field
-pydantic_mod.ValidationError = ValidationError
-pydantic_mod.field_validator = field_validator
-pydantic_mod.model_validator = model_validator
-pydantic_mod.condecimal = condecimal
-pydantic_mod.ConfigDict = ConfigDict
-
-sys.modules.setdefault("pydantic", pydantic_mod)
-
-# pydantic_settings stub
-pydantic_settings_mod = types.ModuleType("pydantic_settings")
-
-
-class BaseSettings(BaseModel):
-    pass
-
-
-pydantic_settings_mod.BaseSettings = BaseSettings
-sys.modules.setdefault("pydantic_settings", pydantic_settings_mod)
-
-# loguru stub
-loguru_mod = types.ModuleType("loguru")
-
-
-class _Logger:
-    def debug(self, *a, **k):
-        pass
-
-    def info(self, *a, **k):
-        pass
-
-    def warning(self, *a, **k):
-        pass
-
-    def error(self, *a, **k):
-        pass
-
-    def success(self, *a, **k):
-        pass
-
-    def exception(self, *a, **k):
-        pass
-
-
-loguru_mod.logger = _Logger()
-sys.modules.setdefault("loguru", loguru_mod)
-
-aiohttp_mod = types.ModuleType("aiohttp")
-aiohttp_mod.ClientSession = object
-sys.modules.setdefault("aiohttp", aiohttp_mod)
-
-pydantic_ai_mod = types.ModuleType("pydantic_ai")
-
-
-class ModelRetry(Exception):
-    pass
-
-
-class Agent:
-    def __init__(self, *a, **k):
-        self.system_prompt = lambda f: f
-        self.instructions = lambda f: f
-
-    async def run(self, *a, **k):
-        output = k.get("output_type")
-        return output() if output else None
-
-
-T_deps = TypeVar("T_deps")
-
-
-class RunContext(Generic[T_deps]):
-    def __init__(self, deps: T_deps):
-        self.deps = deps
-
-
-pydantic_ai_mod.Agent = Agent
-pydantic_ai_mod.RunContext = RunContext
-pydantic_ai_mod.ModelRetry = ModelRetry
-sys.modules.setdefault("pydantic_ai", pydantic_ai_mod)
-
-settings_mod = types.ModuleType("pydantic_ai.settings")
-
-
-class ModelSettings:
-    def __init__(self, **_k):
-        pass
-
-
-settings_mod.ModelSettings = ModelSettings
-sys.modules.setdefault("pydantic_ai.settings", settings_mod)
-
-messages_mod = types.ModuleType("pydantic_ai.messages")
-
-
-class ModelMessage:  # pragma: no cover - simple container
-    pass
-
-
-class ModelRequest:
-    @staticmethod
-    def user_text_prompt(text: str) -> str:
-        return text
-
-
-class ModelResponse:  # pragma: no cover - simple container
-    def __init__(self, parts: list[Any] | None = None):
-        self.parts = parts or []
-
-
-class TextPart:  # pragma: no cover - simple container
-    def __init__(self, content: str):
-        self.content = content
-
-
-messages_mod.ModelMessage = ModelMessage
-messages_mod.ModelRequest = ModelRequest
-messages_mod.ModelResponse = ModelResponse
-messages_mod.TextPart = TextPart
-sys.modules.setdefault("pydantic_ai.messages", messages_mod)
-
-models_mod = types.ModuleType("pydantic_ai.models")
-openai_mod = types.ModuleType("pydantic_ai.models.openai")
-
-
-class OpenAIChatModel:  # pragma: no cover - minimal stub
-    def __init__(self, *a, **k):
-        self.client = None
-
-
-openai_mod.OpenAIChatModel = OpenAIChatModel
-models_mod.openai = openai_mod
-sys.modules.setdefault("pydantic_ai.models", models_mod)
-sys.modules.setdefault("pydantic_ai.models.openai", openai_mod)
-
-toolsets_mod = types.ModuleType("pydantic_ai.toolsets")
-function_mod = types.ModuleType("pydantic_ai.toolsets.function")
-
-
-class FunctionToolset:
-    def tool(self, func: Any | None = None, **kwargs: Any):  # pragma: no cover - trivial
-        if func is None:
-
-            def decorator(f: Any) -> Any:
-                return f
-
-            return decorator
-        return func
-
-
-function_mod.FunctionToolset = FunctionToolset
-toolsets_mod.function = function_mod
-sys.modules.setdefault("pydantic_ai.toolsets", toolsets_mod)
-sys.modules.setdefault("pydantic_ai.toolsets.function", function_mod)
-tools_mod = types.ModuleType("pydantic_ai.tools")
-tools_mod.ToolDefinition = type("ToolDefinition", (), {})
-sys.modules.setdefault("pydantic_ai.tools", tools_mod)
-docx_mod = types.ModuleType("docx")
-
-
-class DummyDoc:
-    paragraphs = []
-
-
-docx_mod.Document = lambda *a, **k: DummyDoc()
-sys.modules.setdefault("docx", docx_mod)
-fitz_mod = types.ModuleType("fitz")
-
-
-class DummyPDF:
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        pass
-
-    def __iter__(self):
-        return iter([])
-
-
-fitz_mod.open = lambda *a, **k: DummyPDF()
-sys.modules.setdefault("fitz", fitz_mod)
-sys.modules.setdefault("cognee.base_config", types.ModuleType("cognee.base_config"))
-sys.modules["cognee.base_config"].get_base_config = lambda: None
-sys.modules.setdefault("openai", types.ModuleType("openai"))
-sys.modules["openai"].AsyncOpenAI = object
-loguru_mod = types.ModuleType("loguru")
-loguru_mod.logger = types.SimpleNamespace(
-    info=lambda *a, **k: None,
-    debug=lambda *a, **k: None,
-    trace=lambda *a, **k: None,
-    warning=lambda *a, **k: None,
-    error=lambda *a, **k: None,
-    exception=lambda *a, **k: None,
-    success=lambda *a, **k: None,
-    log=lambda *a, **k: None,
-)
-sys.modules.setdefault("loguru", loguru_mod)
-settings_stub = types.SimpleNamespace(
-    VECTORDATABASE_URL="sqlite://",
-    LOG_LEVEL="INFO",
-    GDRIVE_FOLDER_ID="folder",
-    GOOGLE_APPLICATION_CREDENTIALS="/tmp/creds.json",
-    REDIS_URL="redis://localhost:6379",
-    API_URL="http://localhost/",
-    API_KEY="test_api_key",
-    API_MAX_RETRIES=2,
-    API_RETRY_INITIAL_DELAY=0,
-    API_RETRY_BACKOFF_FACTOR=1,
-    API_RETRY_MAX_DELAY=0,
-    API_TIMEOUT=1,
-    API_MAX_CONNECTIONS=100,
-    API_MAX_KEEPALIVE_CONNECTIONS=20,
-    SPREADSHEET_ID="sheet",
-    SECRET_KEY="test",
-    DB_NAME="postgres",
-    DB_USER="postgres",
-    DB_PASSWORD="password",
-    DB_HOST="localhost",
-    DB_PORT="5432",
-    SITE_NAME="Test",
-    ALLOWED_HOSTS=["localhost"],
-    TIME_ZONE="Europe/Kyiv",
-    DEFAULT_LANG="en",
-    PAYMENT_PRIVATE_KEY="priv",
-    PAYMENT_PUB_KEY="pub",
-    WEBHOOK_PATH="/telegram/webhook",
-    AI_COACH_REFRESH_USER="admin",
-    AI_COACH_REFRESH_PASSWORD="pass",
-    AI_COACH_MAX_TOOL_CALLS=5,
-    AI_COACH_GLOBAL_PROJECTION_TIMEOUT=45.0,
-    COGNEE_GLOBAL_DATASET="kb_global",
-    COGNEE_STORAGE_PATH="/tmp/cognee",
-    AI_COACH_URL="http://localhost/",
-    AI_COACH_TIMEOUT=10,
-    AI_COACH_REQUEST_TIMEOUT=5.0,
-    AI_COACH_DEFAULT_TOOL_TIMEOUT=5.0,
-    AI_COACH_SEARCH_TIMEOUT=5.0,
-    AI_COACH_HISTORY_TIMEOUT=5.0,
-    AI_COACH_PROGRAM_HISTORY_TIMEOUT=5.0,
-    AI_COACH_SAVE_TIMEOUT=5.0,
-    AI_COACH_FIRST_PASS_MAX_TOKENS=900,
-    AI_COACH_RETRY_MAX_TOKENS=600,
-    AI_COACH_EMPTY_COMPLETION_RETRY=True,
-    AI_COACH_PRIMARY_CONTEXT_LIMIT=2200,
-    AI_COACH_RETRY_CONTEXT_LIMIT=1400,
-    AI_COACH_ATTACH_GIFS_MIN_BUDGET=0.0,
-    AI_COACH_ASK_MAX_SECONDS=30.0,
-    AI_COACH_ASK_MAX_TOOL_CALLS=3,
-    BACKUP_RETENTION_DAYS=7,
-    AGENT_MODEL="test/model-primary",
-    AI_COACH_SECONDARY_MODEL="test/model-secondary",
-    DISABLE_MANUAL_PLACEHOLDER=True,
-)
-sys.modules["config.app_settings"] = types.ModuleType("config.app_settings")
-sys.modules["config.app_settings"].settings = settings_stub
-logger_stub = types.ModuleType("config.logger")
-logger_stub.configure_loguru = lambda: None
-logger_stub.LOGGING = {}
-sys.modules.setdefault("config.logger", logger_stub)
-redis_mod = types.ModuleType("redis")
-redis_mod.exceptions = types.ModuleType("redis.exceptions")
-redis_mod.exceptions.RedisError = Exception
-sys.modules.setdefault("redis", redis_mod)
-
-
-@pytest.fixture(autouse=True)
-def _reset_settings() -> None:
-    mod = sys.modules.setdefault("config.app_settings", types.ModuleType("config.app_settings"))
-    current = getattr(mod, "settings", types.SimpleNamespace())
-    for k, v in settings_stub.__dict__.items():
-        setattr(current, k, v)
-    mod.settings = current
-
-
-sys.modules.setdefault("redis.exceptions", redis_mod.exceptions)
-yaml_mod = types.ModuleType("yaml")
-yaml_mod.safe_load = lambda *a, **k: {}
-yaml_mod.SafeLoader = object
-sys.modules.setdefault("yaml", yaml_mod)
-crypto_mod = types.ModuleType("cryptography")
-crypto_mod.fernet = types.ModuleType("cryptography.fernet")
-
-
-class _Fernet:
-    def __init__(self, key: bytes):
-        self.key = key
-
-    def encrypt(self, data: bytes) -> bytes:
-        return data[::-1]
-
-    def decrypt(self, token: bytes) -> bytes:
-        return token[::-1]
-
-
-crypto_mod.fernet.Fernet = _Fernet
-sys.modules.setdefault("cryptography", crypto_mod)
-sys.modules.setdefault("cryptography.fernet", crypto_mod.fernet)
-sqlalchemy_mod = types.ModuleType("sqlalchemy")
-sqlalchemy_mod.schema = types.ModuleType("sqlalchemy.schema")
-sqlalchemy_mod.exc = types.ModuleType("sqlalchemy.exc")
-sqlalchemy_mod.exc.SAWarning = type("SAWarning", (Warning,), {})
-sys.modules.setdefault("sqlalchemy", sqlalchemy_mod)
-sys.modules.setdefault("sqlalchemy.schema", sqlalchemy_mod.schema)
-sys.modules.setdefault("sqlalchemy.exc", sqlalchemy_mod.exc)
-redis_async_mod = types.ModuleType("redis.asyncio")
-
-
-class DummyPipeline:
-    def __init__(self, client: "DummyRedis") -> None:
-        self._client = client
-        self._result = False
-
-    async def watch(self, *_a, **_k):  # type: ignore[no-untyped-def]
-        return None
-
-    async def reset(self):  # type: ignore[no-untyped-def]
-        self._result = False
-
-    def multi(self):  # type: ignore[no-untyped-def]
-        self._result = False
-
-    def pexpire(self, key: str, ttl_ms: int):  # type: ignore[no-untyped-def]
-        if key in self._client.storage:
-            self._result = True
-
-    async def execute(self):  # type: ignore[no-untyped-def]
-        return [self._result]
-
-
-class DummyRedis:
-    def __init__(self) -> None:
-        self.storage: dict[str, str] = {}
+    def _record_projection(cls, alias: str, status: ProjectionStatus, reason: str) -> None:
+        if alias.startswith("kb_"):
+            cls._PROJECTED_DATASETS.add(alias)
+            cls._PROJECTION_STATE[alias] = (status, reason)
+
+    async def initialize(self, knowledge_loader=None):
+        user = await self.dataset_service.get_cognee_user()
+        type(self)._user = user
+        if knowledge_loader is not None:
+            load = getattr(knowledge_loader, "load", None)
+            if load is not None:
+                result = load()
+                if hasattr(result, "__await__"):
+                    await result
+
+    async def get_message_history(self, client_id: int, *a, **k):
+        key = (client_id,)
+        if key in self._seen:
+            return []
+        self._seen.add(key)
+        kb_cls = type(self)
+        rows = kb_cls._DATASETS.get(kb_cls._dataset_name(client_id), [])
+        if not rows:
+            return ["msg1", "msg2"]
+        raw_limit = int(k.get("limit", 2)) if k else 2
+        limit = max(1, raw_limit)
+        return [row.text for row in rows][-limit:]
 
     @classmethod
-    def from_url(cls, *a, **k):
-        return cls()
+    async def search(cls, query: str, client_id: int, k: int | None = None, *, request_id: str | None = None) -> list[str]:
+        alias = cls._resolve_dataset_alias(cls._dataset_name(client_id))
+        actor = await cls._get_cognee_user()
+        await cls._ensure_profile_indexed(client_id, actor)
+        await cls._ensure_dataset_exists(alias, actor)
+        datasets = [alias]
+        try:
+            global_ready = await cls.ensure_global_projected(timeout=2.0)
+        except Exception:
+            global_ready = False
+        if global_ready:
+            datasets.append(cls.GLOBAL_DATASET)
+        try:
+            return await cls._search_single_query(query, datasets, actor, k, client_id, request_id=request_id)
+        except Exception:
+            fallback_alias = cls._resolve_dataset_alias(cls.GLOBAL_DATASET)
+            return await cls._search_single_query(
+                query,
+                [fallback_alias],
+                actor,
+                k,
+                client_id,
+                request_id=request_id,
+            )
 
-    def pipeline(self):  # type: ignore[no-untyped-def]
-        return DummyPipeline(self)
-
-    async def set(self, key: str, value: str, ex=None, nx: bool = False):  # type: ignore[no-untyped-def]
-        if nx and key in self.storage:
-            return False
-        self.storage[key] = value
-        return True
-
-    async def get(self, key: str):  # type: ignore[no-untyped-def]
-        return self.storage.get(key)
-
-    async def exists(self, key: str):  # type: ignore[no-untyped-def]
-        return 1 if key in self.storage else 0
-
-    async def close(self):
-        pass
-
-    async def ping(self):
-        return True
-
-    async def hget(self, *a, **k):
-        return None
-
-    async def hset(self, *a, **k):
-        pass
-
-    async def hdel(self, *a, **k):
-        pass
-
-    async def hgetall(self, *a, **k):
-        return {}
-
-    async def sadd(self, *a, **k):
-        pass
-
-    async def sismember(self, *a, **k):
-        return False
-
-    async def expire(self, *a, **k):
-        return None
-
-
-redis_async_mod.Redis = DummyRedis
-redis_async_mod.from_url = lambda *a, **k: DummyRedis()
-redis_async_client_mod = types.ModuleType("redis.asyncio.client")
-redis_async_client_mod.Pipeline = DummyPipeline
-sys.modules.setdefault("redis.asyncio.client", redis_async_client_mod)
-sys.modules.setdefault("redis.asyncio", redis_async_mod)
-httpx_mod = types.ModuleType("httpx")
-
-
-class HTTPError(Exception):
-    pass
-
-
-class HTTPStatusError(HTTPError):
-    def __init__(self, message: str, request: Any = None, response: Any = None):
-        super().__init__(message)
-        self.request = request
-        self.response = response
-
-
-class AsyncClient:
-    def __init__(self, *a, **k):
-        self.timeout = k.get("timeout")
-        self.is_closed = False
-
-    async def __aenter__(self):  # pragma: no cover - trivial
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):  # pragma: no cover - trivial
-        await self.aclose()
-
-    async def request(self, method, url, json=None, headers=None, **kwargs):  # type: ignore[no-untyped-def]
-        from ai_coach.agent import CoachAgent
-        from ai_coach.agent import QAResponse
-
-        json = json or {}
-        mode = json.get("mode")
-        if url.endswith("/ask/"):
-            if mode == "ask_ai":
-                try:
-                    result = await CoachAgent.answer_question(json.get("prompt", ""), deps=None)
-                    if isinstance(result, QAResponse):
-                        return types.SimpleNamespace(
-                            status_code=200,
-                            headers={},
-                            json=lambda: {"answer": result.answer},
-                            text="",
-                            is_success=True,
-                        )
-                except Exception:
-                    return types.SimpleNamespace(
-                        status_code=503, headers={}, json=lambda: {}, text="", is_success=False
-                    )
-            elif mode == "update" and "plan_type" not in json:
-                return types.SimpleNamespace(status_code=422, headers={}, json=lambda: {}, text="", is_success=False)
-            return types.SimpleNamespace(status_code=200, headers={}, json=lambda: {"id": 1}, text="", is_success=True)
-        if url.endswith("/knowledge/refresh/"):
-            import base64
-            from config.app_settings import settings as cfg_settings
-
-            auth = (headers or {}).get("Authorization", "")
-            if auth.startswith("Basic "):
-                try:
-                    user, pwd = base64.b64decode(auth[6:]).decode().split(":", 1)
-                except Exception:  # pragma: no cover - bad header
-                    user, pwd = "", ""
-            else:
-                user, pwd = "", ""
-            if user == getattr(cfg_settings, "AI_COACH_REFRESH_USER", "") and pwd == getattr(
-                cfg_settings, "AI_COACH_REFRESH_PASSWORD", ""
-            ):
-                from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
-
-                await KnowledgeBase.refresh()
-                return types.SimpleNamespace(
-                    status_code=200,
-                    headers={},
-                    json=lambda: {"status": "ok"},
-                    text="",
-                    is_success=True,
+    @classmethod
+    async def add_text(
+        cls,
+        text: str,
+        *,
+        dataset: str | None = None,
+        node_set: list[str] | None = None,
+        client_id: int | None = None,
+        role: Any | None = None,
+        metadata: Mapping[str, Any] | None = None,
+        project: bool = True,
+    ) -> tuple[str, bool]:
+        target = dataset or (cls._dataset_name(client_id) if client_id is not None else cls.GLOBAL_DATASET)
+        role_value = getattr(role, "value", role)
+        text_value = text if role_value is None else f"{role_value}: {text}"
+        meta_payload = dict(metadata or {})
+        meta_payload.setdefault("dataset", cls._resolve_dataset_alias(target))
+        if role_value:
+            meta_payload.setdefault("kind", "message")
+            meta_payload.setdefault("role", role_value)
+        else:
+            meta_payload.setdefault("kind", "document")
+        actor = await cls._get_cognee_user()
+        if actor is None:
+            actor = cls._user
+        attempts = 0
+        while attempts < 2:
+            try:
+                alias, created = await cls.update_dataset(
+                    text_value,
+                    target,
+                    actor,
+                    node_set=node_set or [],
+                    metadata=meta_payload,
                 )
-            return types.SimpleNamespace(status_code=401, headers={}, json=lambda: {}, text="", is_success=False)
-        return types.SimpleNamespace(status_code=200, headers={}, json=lambda: {}, text="", is_success=True)
-
-    async def aclose(self):  # pragma: no cover - trivial
-        self.is_closed = True
-
-    async def post(self, url, *a, **k):  # type: ignore[no-untyped-def]
-        return await self.request("POST", url, *a, **k)
-
-
-class Request:
-    def __init__(self, *a, **k):
-        pass
-
-
-class Response:
-    pass
-
-
-class DecodingError(Exception):
-    pass
-
-
-class Limits:
-    def __init__(self, *a, **k):
-        pass
-
-
-httpx_mod.AsyncClient = AsyncClient
-httpx_mod.HTTPError = HTTPError
-httpx_mod.HTTPStatusError = HTTPStatusError
-httpx_mod.Request = Request
-httpx_mod.Response = Response
-httpx_mod.DecodingError = DecodingError
-httpx_mod.Limits = Limits
-sys.modules.setdefault("httpx", httpx_mod)
-
-aiogram_mod = types.ModuleType("aiogram")
-aiogram_mod.Bot = type("Bot", (), {})
-aiogram_mod.exceptions = types.SimpleNamespace(TelegramBadRequest=Exception)
-aiogram_mod.fsm = types.SimpleNamespace(
-    context=types.SimpleNamespace(FSMContext=type("FSMContext", (), {})),
-    state=types.SimpleNamespace(State=type("State", (), {}), StatesGroup=type("StatesGroup", (), {})),
-)
-aiogram_mod.types = types.SimpleNamespace(
-    Message=type(
-        "Message",
-        (),
-        {
-            "answer": lambda *a, **k: None,
-            "answer_photo": lambda *a, **k: None,
-            "answer_document": lambda *a, **k: None,
-            "answer_video": lambda *a, **k: None,
-        },
-    ),
-    CallbackQuery=type("CallbackQuery", (), {"answer": lambda *a, **k: None, "message": None}),
-    BotCommand=object,
-    InlineKeyboardButton=type("InlineKeyboardButton", (), {"__init__": lambda self, *a, **k: None}),
-    InlineKeyboardMarkup=type("InlineKeyboardMarkup", (), {"__init__": lambda self, *a, **k: None}),
-    WebAppInfo=type("WebAppInfo", (), {}),
-    FSInputFile=object,
-    InputFile=object,
-)
-aiogram_mod.enums = types.SimpleNamespace(ParseMode=type("ParseMode", (), {}))
-sys.modules.setdefault("aiogram", aiogram_mod)
-sys.modules.setdefault("aiogram.exceptions", aiogram_mod.exceptions)
-sys.modules.setdefault("aiogram.fsm", aiogram_mod.fsm)
-sys.modules.setdefault("aiogram.fsm.context", aiogram_mod.fsm.context)
-sys.modules.setdefault("aiogram.fsm.state", aiogram_mod.fsm.state)
-sys.modules.setdefault("aiogram.types", aiogram_mod.types)
-sys.modules.setdefault("aiogram.enums", aiogram_mod.enums)
-sys.modules.setdefault("aiogram.client", types.ModuleType("aiogram.client"))
-client_default = types.ModuleType("aiogram.client.default")
-client_default.DefaultBotProperties = type("DefaultBotProperties", (), {})
-aiogram_mod.client = types.SimpleNamespace(default=client_default)
-sys.modules.setdefault("aiogram.client.default", client_default)
-aiogram_utils = types.ModuleType("aiogram.utils")
-keyboard_mod = types.ModuleType("aiogram.utils.keyboard")
-keyboard_mod.InlineKeyboardBuilder = type("InlineKeyboardBuilder", (), {})
-aiogram_utils.keyboard = keyboard_mod
-sys.modules.setdefault("aiogram.utils", aiogram_utils)
-sys.modules.setdefault("aiogram.utils.keyboard", keyboard_mod)
-django_mod = types.ModuleType("django")
-django_conf = types.ModuleType("django.conf")
-django_conf.settings = settings_stub
-django_mod.conf = django_conf
-django_mod.setup = lambda: None
-sys.modules.setdefault("django", django_mod)
-sys.modules.setdefault("django.conf", django_conf)
-
-bot_texts = types.ModuleType("bot.texts")
-bot_texts.TextManager = types.SimpleNamespace(messages={}, buttons={}, commands={})
-bot_texts.msg_text = lambda key, lang=None: key
-bot_texts.btn_text = lambda key, lang=None: key
-sys.modules.setdefault("bot.texts", bot_texts)
-sys.modules.setdefault("bot.texts.text_manager", bot_texts)
-resources_mod = types.ModuleType("bot.texts.resources")
-resources_mod.ButtonText = dict
-resources_mod.MessageText = dict
-sys.modules.setdefault("bot.texts.resources", resources_mod)
-
-try:
-    import dependency_injector  # noqa: F401
-    import dependency_injector.providers as di_providers  # type: ignore
-
-    sys.modules.setdefault("dependency_injector.providers", di_providers)
-except Exception:  # pragma: no cover - fallback stubs
-    di_mod = types.ModuleType("dependency_injector")
-    di_wiring = types.ModuleType("dependency_injector.wiring")
-    di_wiring.inject = lambda *a, **k: (lambda f: f)
-
-    class Provide:
-        def __class_getitem__(cls, item):
-            return cls
-
-    di_wiring.Provide = Provide
-    di_mod.wiring = di_wiring
-    sys.modules.setdefault("dependency_injector", di_mod)
-    sys.modules.setdefault("dependency_injector.wiring", di_wiring)
-    di_containers = types.ModuleType("dependency_injector.containers")
-    di_containers.DeclarativeContainer = type("DeclarativeContainer", (), {})
-    di_providers = types.ModuleType("dependency_injector.providers")
-
-    def _provider(obj, *a, **k):  # pragma: no cover - simple stub
-        return lambda *args, **kwargs: obj
-
-    di_providers.Factory = _provider
-    di_providers.Singleton = _provider
-    di_providers.Callable = _provider
-    di_providers.Resource = _provider
-    di_providers.Configuration = lambda *a, **k: types.SimpleNamespace(bot_token="", parse_mode="")
-    di_mod.containers = di_containers
-    di_mod.providers = di_providers
-    sys.modules.setdefault("dependency_injector.containers", di_containers)
-    sys.modules.setdefault("dependency_injector.providers", di_providers)
-
-# Additional lightweight stubs for Django, FastAPI, and DRF components
-django_core = types.ModuleType("django.core")
-django_cache_mod = types.ModuleType("django.core.cache")
-
-
-class _Cache:
-    store: dict[str, Any] = {}
-
-    def get_or_set(self, key, default, timeout=None):
-        if key not in self.store:
-            self.store[key] = default()
-        return self.store[key]
-
-    def delete(self, key):
-        self.store.pop(key, None)
-
-    def delete_many(self, keys):
-        for k in keys:
-            self.delete(k)
-
-
-cache = _Cache()
-django_cache_mod.cache = cache
-sys.modules.setdefault("django.core", django_core)
-sys.modules.setdefault("django.core.cache", django_cache_mod)
-
-django_utils = types.ModuleType("django.utils")
-django_utils_decorators = types.ModuleType("django.utils.decorators")
-django_utils_decorators.method_decorator = lambda *a, **k: (lambda f: f)
-sys.modules.setdefault("django.utils", django_utils)
-sys.modules.setdefault("django.utils.decorators", django_utils_decorators)
-
-django_views = types.ModuleType("django.views")
-django_views_decorators = types.ModuleType("django.views.decorators")
-django_cache_page = types.ModuleType("django.views.decorators.cache")
-django_cache_page.cache_page = lambda *a, **k: (lambda f: f)
-sys.modules.setdefault("django.views", django_views)
-sys.modules.setdefault("django.views.decorators", django_views_decorators)
-sys.modules.setdefault("django.views.decorators.cache", django_cache_page)
-django_http = types.ModuleType("django.views.decorators.http")
-django_http.require_GET = lambda f: f
-sys.modules.setdefault("django.views.decorators.http", django_http)
-
-django_test = types.ModuleType("django.test")
-
-
-class DummyHttpResponse:
-    def __init__(self, location: str):
-        self.status_code = 302
-        self._location = location
-
-    def __getitem__(self, key: str) -> str:
-        if key == "Location":
-            return self._location
-        raise KeyError(key)
-
-
-class DummyClient:
-    def get(self, path: str) -> DummyHttpResponse:
-        query = path.split("?", 1)[1] if "?" in path else ""
-        location = "/webapp/" + ("?" + query if query else "")
-        return DummyHttpResponse(location)
-
-
-django_test.Client = DummyClient
-sys.modules.setdefault("django.test", django_test)
-
-asgiref_mod = types.ModuleType("asgiref")
-asgiref_sync = types.ModuleType("asgiref.sync")
-asgiref_sync.sync_to_async = lambda f, *a, **k: f
-sys.modules.setdefault("asgiref", asgiref_mod)
-sys.modules.setdefault("asgiref.sync", asgiref_sync)
-
-django_http = types.ModuleType("django.http")
-
-
-class HttpRequest:
-    method = "GET"
-    GET: dict[str, Any] = {}
-    POST: dict[str, Any] = {}
-
-
-django_http.HttpRequest = HttpRequest
-
-
-class JsonResponse(dict):
-    def __init__(self, data=None, status=200):
-        super().__init__(data or {})
-        self.status_code = status
-
-
-class HttpResponse(DummyHttpResponse):
-    def __init__(self, location: str = "", status: int = 200):
-        self.status_code = status
-        self._location = location
-
-
-django_http.JsonResponse = JsonResponse
-django_http.HttpResponse = HttpResponse
-sys.modules.setdefault("django.http", django_http)
-
-django_db = types.ModuleType("django.db")
-django_db_models = types.ModuleType("django.db.models")
-
-
-class QuerySet(list):
-    def filter(self, **kwargs):
-        return QuerySet([o for o in self if all(getattr(o, k) == v for k, v in kwargs.items())])
-
-    def values_list(self, field, flat=False):
-        return [getattr(o, field) for o in self]
-
-    def select_related(self, *a, **k):
-        return self
-
-    def all(self):  # pragma: no cover - mimic Django
-        return self
-
-
-django_db_models.QuerySet = QuerySet
-django_db_models.Model = object
-sys.modules.setdefault("django.db", django_db)
-sys.modules.setdefault("django.db.models", django_db_models)
-
-fastapi_mod = types.ModuleType("fastapi")
-
-
-class FastAPI:
-    def __init__(self, *a, **k):
-        pass
-
-    def get(self, *args, **kwargs):
-        def decorator(func):
-            return func
-
-        return decorator
-
-    def post(self, *args, **kwargs):
-        def decorator(func):
-            return func
-
-        return decorator
-
-
-fastapi_mod.FastAPI = FastAPI
-
-
-class HTTPException(Exception):
-    def __init__(self, status_code: int, detail: str) -> None:
-        self.status_code = status_code
-        self.detail = detail
-
-
-def Depends(dep: Any) -> Any:
-    return dep
-
-
-class Request:  # pragma: no cover - simple container
-    pass
-
-
-fastapi_mod.HTTPException = HTTPException
-fastapi_mod.Depends = Depends
-fastapi_mod.Request = Request
-fastapi_security = types.ModuleType("fastapi.security")
-fastapi_security.HTTPBasic = object
-
-
-class HTTPBasicCredentials:
-    def __init__(self, username: str = "", password: str = "") -> None:
-        self.username = username
-        self.password = password
-
-
-fastapi_security.HTTPBasicCredentials = HTTPBasicCredentials
-sys.modules.setdefault("fastapi", fastapi_mod)
-sys.modules.setdefault("fastapi.security", fastapi_security)
-fastapi_testclient = types.ModuleType("fastapi.testclient")
-
-
-class TestClient:
-    def __init__(self, app: Any) -> None:
-        self.app = app
-
-    def __enter__(self) -> "TestClient":  # pragma: no cover - context manager
-        return self
-
-    def __exit__(self, exc_type, exc, tb) -> None:  # pragma: no cover - context manager
+            except FileNotFoundError:
+                attempts += 1
+                digest_md5 = md5(text_value.encode("utf-8")).hexdigest()
+                cls._ensure_storage_file(digest_md5, text_value, dataset=target)
+                clear_fn = getattr(kb_module.HashStore, "clear", None)
+                if callable(clear_fn):
+                    await clear_fn(target)
+                await cls.rebuild_dataset(target, actor)
+                continue
+            if created and project:
+                await cls._process_dataset(alias, actor)
+            break
         return None
 
-    def post(self, url: str, json: dict | None = None):
-        from ai_coach import api as _api
-        from ai_coach.api import ask
-        from ai_coach.schemas import AICoachRequest
-        from config.app_settings import settings as cfg_settings
-        import asyncio
-        import types as _types
+    @classmethod
+    async def fallback_entries(cls, client_id: int, limit: int = 6) -> list[tuple[str, str]]:
+        instance = cls()
+        datasets = [cls._resolve_dataset_alias(cls._dataset_name(client_id)), cls.GLOBAL_DATASET]
+        return await instance.search_service._fallback_dataset_entries(datasets, user_ctx=cls._user, top_k=limit)
 
-        _api.settings = cfg_settings
-        data = AICoachRequest(**(json or {}))
-        result = asyncio.run(ask(data, _types.SimpleNamespace()))
-        return _types.SimpleNamespace(status_code=200, json=lambda: result)
+    @classmethod
+    async def update_dataset(
+        cls,
+        text: str,
+        dataset: str,
+        user: Any | None = None,
+        node_set: list[str] | None = None,
+        metadata: Mapping[str, Any] | None = None,
+    ) -> tuple[str, bool]:
+        alias = cls._resolve_dataset_alias(dataset)
+        normalized = cls._normalize_text(text)
+        if not normalized:
+            return alias, False
+        actor = user or cls._user or types.SimpleNamespace(id=1)
+        await cls._ensure_dataset_exists(alias, actor)
+        digest_sha = cls._compute_digests(normalized)
+        digest_md5 = md5(normalized.encode("utf-8")).hexdigest()
+        meta_payload = dict(metadata or {})
+        meta_payload.setdefault("dataset", alias)
+        meta_payload.setdefault("digest_sha", digest_sha)
+        meta_payload.setdefault("digest_md5", digest_md5)
+        cls._ensure_storage_file(digest_md5, normalized, dataset=alias)
+        duplicate = False
+        contains = getattr(cls.HashStore, "contains", None)
+        if callable(contains):
+            duplicate = await contains(alias, digest_sha)
+        add_fn = getattr(cls.HashStore, "add", None)
+        if callable(add_fn):
+            await add_fn(alias, digest_sha, metadata=meta_payload)
+        storage_row = DatasetRow(text=normalized, metadata=dict(meta_payload))
+        if not duplicate:
+            cls._DATASETS[alias].append(storage_row)
+        safe_add = getattr(kb_module, "_safe_add", None)
+        if callable(safe_add):
+            await safe_add(normalized, dataset_name=alias, user=actor, node_set=list(node_set or []))
+        return alias, not duplicate
 
+    @classmethod
+    async def save_client_message(cls, text: str, client_id: int) -> None:
+        await cls.add_text(text, dataset=cls.chat_dataset_name(client_id), client_id=client_id, role=types.SimpleNamespace(value="client"), project=False)
 
-fastapi_testclient.TestClient = TestClient
-sys.modules.setdefault("fastapi.testclient", fastapi_testclient)
-
-rest_framework = types.ModuleType("rest_framework")
-rf_views = types.ModuleType("rest_framework.views")
-
-
-class APIView:
-    pass
-
-
-rf_views.APIView = APIView
-rf_generics = types.ModuleType("rest_framework.generics")
-
-
-class ListAPIView(APIView):
-    pass
-
-
-class RetrieveUpdateAPIView(APIView):
-    pass
-
-
-class CreateAPIView(APIView):
-    pass
-
-
-rf_generics.ListAPIView = ListAPIView
-rf_generics.RetrieveUpdateAPIView = RetrieveUpdateAPIView
-rf_generics.CreateAPIView = CreateAPIView
-rf_permissions = types.ModuleType("rest_framework.permissions")
-rf_permissions.AllowAny = object
-rf_serializers = types.ModuleType("rest_framework.serializers")
-
-
-class _BaseSerializer:
-    def __init__(self, *a: Any, **k: Any) -> None:
-        pass
-
-
-class _ModelSerializer(_BaseSerializer):
-    pass
-
-
-rf_serializers.BaseSerializer = _BaseSerializer
-rf_serializers.ModelSerializer = _ModelSerializer
-rf_status = types.ModuleType("rest_framework.status")
-rf_status.HTTP_200_OK = 200
-rf_status.HTTP_400_BAD_REQUEST = 400
-rf_exceptions = types.ModuleType("rest_framework.exceptions")
-rf_exceptions.NotFound = Exception
-rf_exceptions.ValidationError = Exception
-rest_framework.views = rf_views
-rest_framework.generics = rf_generics
-rest_framework.permissions = rf_permissions
-rest_framework.serializers = rf_serializers
-rest_framework.status = rf_status
-rest_framework.exceptions = rf_exceptions
-sys.modules.setdefault("rest_framework", rest_framework)
-sys.modules.setdefault("rest_framework.views", rf_views)
-sys.modules.setdefault("rest_framework.generics", rf_generics)
-sys.modules.setdefault("rest_framework.permissions", rf_permissions)
-sys.modules.setdefault("rest_framework.serializers", rf_serializers)
-sys.modules.setdefault("rest_framework.status", rf_status)
-sys.modules.setdefault("rest_framework.exceptions", rf_exceptions)
-
-rf_api_key = types.ModuleType("rest_framework_api_key")
-rf_api_key_perm = types.ModuleType("rest_framework_api_key.permissions")
-rf_api_key_perm.HasAPIKey = object
-rf_api_key.permissions = rf_api_key_perm
-sys.modules.setdefault("rest_framework_api_key", rf_api_key)
-sys.modules.setdefault("rest_framework_api_key.permissions", rf_api_key_perm)
-
-payments_models = types.ModuleType("apps.payments.models")
-
-
-class Payment:
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
-
-
-payments_models.Payment = Payment
-sys.modules.setdefault("apps.payments.models", payments_models)
-
-payments_repos = types.ModuleType("apps.payments.repos")
-
-
-class PaymentRepository:
-    @staticmethod
-    def base_qs():
-        return []
+    @classmethod
+    async def save_ai_message(cls, text: str, client_id: int) -> None:
+        await cls.add_text(text, dataset=cls.chat_dataset_name(client_id), client_id=client_id, role=types.SimpleNamespace(value="ai"), project=False)
 
     @staticmethod
-    def filter(qs, *, status=None, order_id=None):
-        return [
-            p for p in qs if (status is None or p.status == status) and (order_id is None or p.order_id == order_id)
-        ]
+    def _normalize_text(text: str | None) -> str:
+        return str(text or "").strip()
 
+    @classmethod
+    def _dataset_name(cls, client_id: int) -> str:
+        return f"kb_client_{client_id}"
 
-payments_repos.PaymentRepository = PaymentRepository
-sys.modules.setdefault("apps.payments.repos", payments_repos)
+    @classmethod
+    def chat_dataset_name(cls, client_id: int) -> str:
+        return f"chat_{client_id}"
 
-payments_serializers = types.ModuleType("apps.payments.serializers")
+    @classmethod
+    def _resolve_dataset_alias(cls, alias: str) -> str:
+        value = str(alias or "")
+        if value.startswith("client_"):
+            return f"kb_{value}"
+        if value.startswith("kb_"):
+            return value
+        if value.isdigit():
+            return f"kb_client_{value}"
+        return value
 
+    @classmethod
+    def _alias_for_dataset(cls, alias: str) -> str:
+        return cls._resolve_dataset_alias(alias)
 
-class PaymentSerializer:
-    pass
+    @classmethod
+    async def _ensure_dataset_exists(cls, name: str, user: Any | None) -> str:
+        alias = cls._alias_for_dataset(name)
+        cls._DATASETS.setdefault(alias, [])
+        if alias not in cls._DATASET_IDS:
+            dataset_id = str(uuid4())
+            cls._DATASET_IDS[alias] = dataset_id
+            cls._DATASET_ALIASES[dataset_id] = alias
+        return alias
 
+    @classmethod
+    def _storage_root(cls) -> Path:
+        cls._storage_dir.mkdir(parents=True, exist_ok=True)
+        return cls._storage_dir
 
-payments_serializers.PaymentSerializer = PaymentSerializer
-sys.modules.setdefault("apps.payments.serializers", payments_serializers)
+    @classmethod
+    def _ensure_storage_file(cls, digest_md5: str, text: str, *, dataset: str | None = None):
+        root = cls._storage_root()
+        path = root / f"text_{digest_md5}.txt"
+        path.write_text(text, encoding="utf-8")
+        return path, True
 
-payments_tasks = types.ModuleType("apps.payments.tasks")
-payments_tasks.process_payment_webhook = types.SimpleNamespace(delay=lambda **k: None)
-payments_tasks.send_payment_message = types.SimpleNamespace(delay=lambda **k: None)
-sys.modules.setdefault("apps.payments.tasks", payments_tasks)
+    @classmethod
+    async def _list_dataset_entries(cls, dataset: str, user: Any | None):
+        alias = cls._alias_for_dataset(dataset)
+        return list(cls._DATASETS.get(alias, []))
 
-profiles_models = types.ModuleType("apps.profiles.models")
+    @classmethod
+    async def _ensure_profile_indexed(cls, client_id: int, user: Any | None) -> None:
+        api_service = getattr(kb_module, "APIService", APIService)
+        profile_service = getattr(api_service, "profile", None)
+        get_client = getattr(profile_service, "get_client", None) if profile_service else None
+        if not callable(get_client):
+            return
+        try:
+            client = await get_client(client_id)
+        except Exception:
+            return
+        if client is None:
+            return
+        parts = [f"id: {getattr(client, 'id', client_id)}"]
+        for field in ("profile", "gender", "workout_goals", "weight"):
+            value = getattr(client, field, None)
+            if value:
+                parts.append(f"{field}: {value}")
+        text = "profile: " + "; ".join(parts)
+        metadata = {"kind": "document", "source": "client_profile"}
+        dataset = cls._dataset_name(client_id)
+        alias, created = await cls.update_dataset(text, dataset, user, node_set=["client_profile"], metadata=metadata)
+        if created:
+            await cls._process_dataset(alias, user)
 
+    @classmethod
+    async def _collect_metadata(cls, digest: str, datasets: Sequence[str]):
+        for dataset in datasets:
+            alias = cls._alias_for_dataset(dataset)
+            for row in cls._DATASETS.get(alias, []):
+                metadata = row.metadata or {}
+                if metadata.get("digest_sha") == digest or metadata.get("digest_md5") == digest:
+                    return alias, dict(metadata)
+        return None, None
 
-class ClientProfile:
-    pass
+    @classmethod
+    def _prepare_dataset_row(cls, row: DatasetRow | Any, dataset: str) -> DatasetRow:
+        metadata = dict(getattr(row, "metadata", {}) or {})
+        text = getattr(row, "text", "") or ""
+        normalized = cls._normalize_text(text)
+        digest_md5 = metadata.get("digest_md5")
+        if not normalized and digest_md5:
+            path = cls._storage_root() / f"text_{digest_md5}.txt"
+            if path.exists():
+                normalized = cls._normalize_text(path.read_text(encoding="utf-8"))
+        if not digest_md5:
+            digest_md5 = md5(normalized.encode("utf-8")).hexdigest()
+        metadata.setdefault("digest_md5", digest_md5)
+        metadata.setdefault("digest_sha", cls._compute_digests(normalized))
+        metadata.setdefault("dataset", dataset)
+        return DatasetRow(text=normalized, metadata=metadata)
 
+    @classmethod
+    async def _build_snippets(cls, entries: Sequence[Any], datasets: Sequence[str], user: Any | None) -> list[KnowledgeSnippet]:
+        snippets: list[KnowledgeSnippet] = []
+        dataset_list = list(datasets) or [cls.GLOBAL_DATASET]
+        for entry in entries:
+            metadata: dict[str, Any] = {}
+            if isinstance(entry, Mapping):
+                metadata = dict(entry.get("metadata") or {})
+                text_value = cls._normalize_text(str(entry.get("text", "")))
+            else:
+                text_value = cls._normalize_text(str(entry))
+            if not text_value:
+                continue
+            digest_sha = metadata.get("digest_sha") or cls._compute_digests(text_value)
+            dataset_name = metadata.get("dataset")
+            if not metadata:
+                dataset_name, metadata = await cls._collect_metadata(digest_sha, dataset_list)
+                metadata = metadata or {}
+            if not dataset_name:
+                dataset_name = dataset_list[0]
+            kind = metadata.get("kind", "document")
+            if kind == "message":
+                continue
+            snippet = KnowledgeSnippet(text=text_value, dataset=dataset_name, kind=kind)
+            snippets.append(snippet)
+            add_fn = getattr(cls.HashStore, "add", None)
+            if callable(add_fn):
+                await add_fn(dataset_name, digest_sha, metadata=metadata)
+        return snippets
 
-class Profile:
-    pass
+    @classmethod
+    async def _heal_dataset_storage(
+        cls,
+        dataset: str,
+        user: Any | None,
+        *,
+        entries: Sequence[DatasetRow] | None = None,
+        reason: str,
+    ) -> tuple[int, int]:
+        alias = cls._alias_for_dataset(dataset)
+        rows = list(entries) if entries is not None else await cls._list_dataset_entries(alias, user)
+        created = 0
+        linked = 0
+        for row in rows:
+            prepared = cls._prepare_dataset_row(row, alias)
+            metadata = dict(prepared.metadata or {})
+            digest_sha = metadata.get("digest_sha") or cls._compute_digests(prepared.text)
+            digest_md5 = metadata.get("digest_md5") or digest_sha
+            storage_root = cls._storage_root()
+            if reason == "md5_promotion":
+                target_digest = digest_sha
+            else:
+                target_digest = digest_md5
+            target_path = storage_root / f"text_{target_digest}.txt"
+            target_path.write_text(prepared.text, encoding="utf-8")
+            if reason == "md5_promotion" and digest_md5 and digest_md5 != digest_sha:
+                legacy_path = storage_root / f"text_{digest_md5}.txt"
+                if legacy_path.exists():
+                    legacy_path.unlink()
+            add_fn = getattr(cls.HashStore, "add", None)
+            if callable(add_fn):
+                await add_fn(alias, digest_sha, metadata=metadata)
+            created += 1
+            linked += 1
+        return created, linked
 
+    @classmethod
+    async def _rebuild_from_disk(cls, dataset: str) -> tuple[int, int]:
+        alias = cls._alias_for_dataset(dataset)
+        root = cls._storage_root()
+        created = 0
+        linked = 0
+        for path in root.glob("text_*.txt"):
+            raw = path.read_text(encoding="utf-8")
+            normalized = cls._normalize_text(raw)
+            digest_md5 = path.stem.replace("text_", "")
+            digest_sha = cls._compute_digests(normalized)
+            metadata = {"dataset": alias, "digest_md5": digest_md5, "digest_sha": digest_sha}
+            add_fn = getattr(cls.HashStore, "add", None)
+            if callable(add_fn):
+                await add_fn(alias, digest_sha, metadata=metadata)
+            created += 1
+            linked += 1
+        return created, linked
 
-class CoachProfile:
-    pass
+    @classmethod
+    async def _get_dataset_metadata(cls, dataset: str, user: Any | None = None) -> dict[str, Any]:
+        alias = cls._alias_for_dataset(dataset)
+        rows = cls._DATASETS.get(alias, [])
+        return {"dataset": alias, "documents": len(rows)}
 
+    @classmethod
+    async def _get_dataset_id(cls, dataset: str, user: Any | None) -> str:
+        alias = cls._alias_for_dataset(dataset)
+        return cls._DATASET_IDS.get(alias, alias)
 
-profiles_models.ClientProfile = ClientProfile
-profiles_models.Profile = Profile
-profiles_models.CoachProfile = CoachProfile
-sys.modules.setdefault("apps.profiles.models", profiles_models)
+    @classmethod
+    def _to_user_ctx(cls, user: Any | None) -> Any | None:
+        return user
 
-bot_utils_bot = types.ModuleType("bot.utils.bot")
+    @classmethod
+    async def _fetch_dataset_rows(cls, list_data: Callable[..., Awaitable[Iterable[Any]]], dataset: str, user: Any | None) -> list[Any]:
+        dataset_id = cls._DATASET_IDS.get(dataset, dataset)
+        supports_user = bool(cls._list_data_supports_user)
+        requires_user = bool(cls._list_data_requires_user)
+        user_arg = user if (supports_user or requires_user) else None
+        result = await list_data(dataset_id, user_arg)
+        return list(result or [])
 
+    @classmethod
+    def get_projection_health(cls, alias: str) -> dict[str, str]:
+        resolved = cls._alias_for_dataset(alias)
+        status = cls._PROJECTION_STATE.get(resolved, (ProjectionStatus.READY, "ready"))
+        return {"dataset": resolved, "status": status[0].value}
 
-async def _noop_async(*a: Any, **k: Any) -> None:
-    return None
+    @classmethod
+    def get_last_rebuild_result(cls) -> dict[str, dict[str, Any]]:
+        return cls._LAST_REBUILD_RESULT
 
+    @classmethod
+    def _compute_digests(cls, text: str) -> str:
+        normalized = cls._normalize_text(text)
+        return sha256(normalized.encode("utf-8")).hexdigest()
 
-bot_utils_bot.answer_msg = _noop_async
-bot_utils_bot.del_msg = _noop_async
-bot_utils_bot.delete_messages = _noop_async
-bot_utils_bot.get_webapp_url = lambda *a, **k: ""
-sys.modules.setdefault("bot.utils.bot", bot_utils_bot)
+    @classmethod
+    async def rebuild_dataset(cls, dataset: str, user: Any | None, sha_only: bool = False):
+        alias = cls._alias_for_dataset(dataset)
+        entries = await cls._list_dataset_entries(alias, user)
+        reinserted = 0
+        if entries:
+            for entry in entries:
+                await cls.update_dataset(entry.text, alias, user, metadata=entry.metadata)
+                reinserted += 1
+        else:
+            created, linked = await cls._rebuild_from_disk(alias)
+            reinserted += created
+            cls._LAST_REBUILD_RESULT[alias] = {"linked": linked, "documents": created, "sha_only": sha_only}
+            return types.SimpleNamespace(
+                reinserted=reinserted,
+                healed_documents=0,
+                linked=linked,
+                rehydrated=0,
+                last_dataset=alias,
+                healed=True,
+                reason="ok",
+            )
+        cls._LAST_REBUILD_RESULT[alias] = {"documents": reinserted, "healed": 0, "sha_only": sha_only}
+        return types.SimpleNamespace(
+            reinserted=reinserted,
+            healed_documents=0,
+            linked=0,
+            rehydrated=0,
+            last_dataset=alias,
+            healed=True,
+            reason="ok",
+        )
 
-bot_utils_chat = types.ModuleType("bot.utils.chat")
-bot_utils_chat.send_coach_request = lambda *a, **k: None
-sys.modules.setdefault("bot.utils.chat", bot_utils_chat)
+    @classmethod
+    async def _project_dataset(cls, dataset: str, user: Any | None):
+        alias = cls._alias_for_dataset(dataset)
+        cognify = getattr(getattr(kb_module, "cognee", None), "cognify", None)
+        if callable(cognify):
+            try:
+                await cognify(datasets=[alias], user=user)
+            except FileNotFoundError:
+                entries = await cls._list_dataset_entries(alias, user)
+                await cls._heal_dataset_storage(alias, user, entries=entries, reason="storage_missing")
+                await cognify(datasets=[alias], user=user)
+        cls._record_projection(alias, ProjectionStatus.READY, "ready")
+        return ProjectionStatus.READY
 
-bot_utils_profiles = types.ModuleType("bot.utils.profiles")
-bot_utils_profiles.get_assigned_coach = lambda *a, **k: None
-bot_utils_profiles.fetch_user = lambda *a, **k: None
-bot_utils_profiles.answer_profile = lambda *a, **k: None
-sys.modules.setdefault("bot.utils.profiles", bot_utils_profiles)
+    @classmethod
+    async def _process_dataset(cls, dataset: str, user: Any | None = None) -> None:
+        if user is None:
+            user = cls._user
+        await cls._project_dataset(dataset, user)
 
-workout_models = types.ModuleType("apps.workout_plans.models")
+    @classmethod
+    async def _ensure_dataset_projected(cls, dataset: str, user: Any | None, timeout: float | None = None) -> bool:
+        await cls._project_dataset(dataset, user)
+        return True
 
+    @classmethod
+    async def _get_cognee_user(cls):
+        return cls._user
 
-class Program:
-    pass
+    @classmethod
+    async def ensure_global_projected(cls, timeout: float | None = None):
+        alias = cls._alias_for_dataset(cls.GLOBAL_DATASET)
+        user = await cls._get_cognee_user()
+        status = await cls._wait_for_projection(alias, user, timeout_s=timeout)
+        if status is ProjectionStatus.TIMEOUT:
+            entries = await cls._list_dataset_entries(alias, user)
+            await cls._heal_dataset_storage(alias, user, entries=entries, reason="global_retry")
+            status = await cls._wait_for_projection(alias, user, timeout_s=timeout)
+        if status is ProjectionStatus.READY:
+            cls._record_projection(alias, status, "ready")
+        return status
 
+    @classmethod
+    async def _wait_for_projection(cls, dataset: str, user: Any | None, timeout_s: float | None = None):
+        actor = user or await cls._get_cognee_user()
+        if actor is None:
+            return ProjectionStatus.USER_CONTEXT_UNAVAILABLE
+        alias = cls._alias_for_dataset(dataset)
+        ready, reason = await cls._is_projection_ready(dataset, actor)
+        if ready:
+            cls._record_projection(alias, ProjectionStatus.READY, reason)
+            return ProjectionStatus.READY
+        if timeout_s is not None and timeout_s > 0:
+            await asyncio.sleep(min(timeout_s, 0.01))
+            ready, reason = await cls._is_projection_ready(dataset, actor)
+            if ready:
+                cls._record_projection(alias, ProjectionStatus.READY, reason)
+                return ProjectionStatus.READY
+        return ProjectionStatus.TIMEOUT
 
-class Subscription:
-    pass
+    @classmethod
+    async def _is_projection_ready(cls, dataset: str, user: Any | None) -> tuple[bool, str]:
+        alias = cls._alias_for_dataset(dataset)
+        if alias in cls._PROJECTED_DATASETS:
+            return True, "ready"
+        rows = await cls._list_dataset_entries(alias, user)
+        if not rows:
+            datasets_api = getattr(getattr(kb_module, "cognee", types.SimpleNamespace()), "datasets", None)
+            list_data_fn = getattr(datasets_api, "list_data", None) if datasets_api else None
+            fetcher = getattr(cls, "_fetch_dataset_rows", None)
+            if callable(fetcher) and callable(list_data_fn):
+                rows = await fetcher(list_data_fn, alias, user)
+        if not rows:
+            return False, "pending"
+        non_content = True
+        for row in rows:
+            prepared = cls._prepare_dataset_row(row, alias)
+            metadata = prepared.metadata or {}
+            if metadata.get("kind") != "message":
+                non_content = False
+            digest_sha = metadata.get("digest_sha")
+            if digest_sha:
+                add_fn = getattr(cls.HashStore, "add", None)
+                if callable(add_fn):
+                    await add_fn(alias, digest_sha, metadata=metadata)
+        if non_content:
+            return True, "all_rows_empty_content"
+        return True, "ready"
 
+    @classmethod
+    async def refresh(cls) -> None:
+        await cls._ensure_dataset_exists(cls.GLOBAL_DATASET, cls._user)
+        cls._record_projection(cls.GLOBAL_DATASET, ProjectionStatus.READY, "refresh")
 
-workout_models.Program = Program
-workout_models.Subscription = Subscription
-sys.modules.setdefault("apps.workout_plans.models", workout_models)
+    @classmethod
+    async def debug_snapshot(cls, client_id: int | None = None) -> dict[str, Any]:
+        user = await cls._get_cognee_user()
+        datasets: list[str] = []
+        if client_id is not None:
+            datasets.append(cls._dataset_name(client_id))
+        datasets.append(cls.GLOBAL_DATASET)
+        snapshot: list[dict[str, Any]] = []
+        for dataset in datasets:
+            entries = await cls._list_dataset_entries(dataset, user)
+            metadata = await cls._get_dataset_metadata(dataset, user)
+            ready, reason = await cls._is_projection_ready(dataset, user)
+            meta_payload: dict[str, Any] = {}
+            if isinstance(metadata, Mapping):
+                meta_payload = dict(metadata)
+            elif hasattr(metadata, "__dict__"):
+                meta_payload = dict(metadata.__dict__)
+            item_id = str(meta_payload.get("id", dataset))
+            snapshot.append(
+                {
+                    "alias": dataset,
+                    "documents": len(entries),
+                    "metadata": meta_payload,
+                    "id": item_id,
+                    "projection": {"ready": ready, "reason": reason},
+                }
+            )
+        return {"datasets": snapshot}
 
-core_services_pkg = types.ModuleType("core.services")
-core_services_pkg.__path__ = [str(ROOT_DIR / "core" / "services")]
-core_services_pkg.ProfileService = types.SimpleNamespace(
-    get_client_by_profile_id=lambda *_a, **_k: None,
-    get_client=lambda *_a, **_k: None,
-)
-core_services_pkg.APIService = types.SimpleNamespace(
-    profile=types.SimpleNamespace(),
-    payment=types.SimpleNamespace(),
-    workout=types.SimpleNamespace(),
-    ai_coach=types.SimpleNamespace(),
-)
+    @classmethod
+    async def _search_single_query(
+        cls,
+        query: str,
+        datasets: list[str],
+        user: Any | None,
+        k: int | None,
+        client_id: int,
+        *,
+        request_id: str | None = None,
+    ):
+        instance = cls()
+        return await instance.search_service.search(query, client_id, k, datasets=datasets, user=user, request_id=request_id)
 
+kb_module.KnowledgeBase = _KB
 
-async def _noop_async(*_args: Any, **_kwargs: Any) -> None:
-    return None
+import ai_coach.agent as agent_module
+from ai_coach.agent.coach import CoachAgent as _CoachAgent, QAResponse as _QAResponse
+from ai_coach.agent.utils import ProgramAdapter as _ProgramAdapter
+import ai_coach.api as api_module
 
+async def _dummy_agent_run(*args, **kwargs):
+    return {"output": {"answer": "ok"}}
 
-core_services_pkg.APIService.workout.get_latest_program = _noop_async
-core_services_pkg.get_gif_manager = lambda: types.SimpleNamespace(find_gif=lambda *a, **k: None)
-core_services_pkg.get_avatar_manager = lambda: types.SimpleNamespace(bucket_name="")
-sys.modules.setdefault("core.services", core_services_pkg)
+_CoachAgent._get_agent = staticmethod(lambda *a, **k: types.SimpleNamespace(run=_dummy_agent_run))
+_CoachAgent._run_completion = staticmethod(lambda *a, **k: {"choices": [{"message": {"content": "ok"}}]})
+_CoachAgent._get_completion_client = staticmethod(lambda *a, **k: object())
 
-env_defaults = {
-    "API_KEY": "test_api_key",
-    "API_URL": "http://localhost/",
-    "BOT_TOKEN": "bot_token",
-    "BOT_LINK": "http://bot",
-    "WEBHOOK_HOST": "http://localhost",
-    "GOOGLE_APPLICATION_CREDENTIALS": "/tmp/creds.json",
-    "SPREADSHEET_ID": "sheet",
-    "TG_SUPPORT_CONTACT": "@support",
-    "PUBLIC_OFFER": "http://offer",
-    "PRIVACY_POLICY": "http://privacy",
-    "EMAIL": "test@example.com",
-    "ADMIN_ID": "1",
-    "PAYMENT_PRIVATE_KEY": "priv",
-    "PAYMENT_PUB_KEY": "pub",
-    "CHECKOUT_URL": "http://checkout",
-    "POSTGRES_PASSWORD": "password",
-    "SECRET_KEY": "test",
-    "AI_COACH_URL": "http://localhost/",
-}
-for key, value in env_defaults.items():
-    os.environ.setdefault(key, value)
+import ai_coach.api  # noqa: F401
 
-django_mod.setup()
+agent_module.CoachAgent = _CoachAgent
+agent_module.QAResponse = _QAResponse
+agent_module.ProgramAdapter = _ProgramAdapter
+api_module.CoachAgent = _CoachAgent
+api_module.ProgramAdapter = _ProgramAdapter
+import ai_coach.agent.tools as agent_tools_module
+agent_tools_module.KnowledgeBase = _KB
+if not hasattr(kb_module.HashStore, "get_md5_for_sha"):
+    @classmethod
+    async def _get_md5_for_sha(cls, dataset: str, digest: str) -> str | None:
+        return None
 
-# Ensure Django's method_decorator is a no-op to avoid requiring dispatch
-from django.utils import decorators as _decorators  # noqa: E402
+    kb_module.HashStore.get_md5_for_sha = _get_md5_for_sha
+if not hasattr(kb_module, "cognee"):
+    kb_module.cognee = types.SimpleNamespace()
+if not hasattr(kb_module.cognee, "cognify"):
+    async def _default_cognify(*args, **kwargs):
+        return None
 
-_decorators.method_decorator = lambda *a, **k: (lambda f: f)
+    kb_module.cognee.cognify = _default_cognify

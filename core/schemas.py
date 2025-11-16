@@ -127,8 +127,11 @@ class Program(BaseModel):
         if isinstance(value, dict):
             value = value.get("coach_type")
         if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized == "ai":
+                return CoachType.ai_coach
             try:
-                return CoachType(value)
+                return CoachType(normalized)
             except ValueError:
                 return CoachType.human
         if isinstance(value, CoachType):
