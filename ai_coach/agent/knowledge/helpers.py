@@ -1,7 +1,15 @@
+from dataclasses import dataclass
 from typing import Iterable, Sequence
 
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeSnippet
 from config.app_settings import settings
+
+
+@dataclass(frozen=True)
+class KnowledgeEntry:
+    entry_id: str
+    text: str
+    dataset: str
 
 
 def truncate_text(text: str, limit: int) -> str:
@@ -29,10 +37,8 @@ def build_knowledge_entries(
     raw_entries: Sequence[KnowledgeSnippet | str],
     *,
     default_dataset: str | None = None,
-) -> tuple[list[str], list[str], list[str]]:
-    entry_ids: list[str] = []
-    entries: list[str] = []
-    datasets: list[str] = []
+) -> list[KnowledgeEntry]:
+    entries: list[KnowledgeEntry] = []
     for index, raw in enumerate(raw_entries, start=1):
         if isinstance(raw, KnowledgeSnippet):
             if not raw.is_content():
@@ -45,30 +51,26 @@ def build_knowledge_entries(
         if not text:
             continue
         entry_id = f"KB-{index}"
-        entry_ids.append(entry_id)
-        entries.append(text)
-        datasets.append(dataset)
-    return entry_ids, entries, datasets
+        entries.append(KnowledgeEntry(entry_id=entry_id, text=text, dataset=dataset))
+    return entries
 
 
 def filter_entries_for_prompt(
-    prompt: str,
-    entry_ids: Sequence[str],
-    entries: Sequence[str],
-    datasets: Sequence[str],
-) -> tuple[list[str], list[str], list[str]]:
-    if not entry_ids or not entries:
-        return list(entry_ids), list(entries), list(datasets)
-    return list(entry_ids), list(entries), list(datasets)
+    _prompt: str,
+    entries: Sequence[KnowledgeEntry],
+) -> list[KnowledgeEntry]:
+    if not entries:
+        return list(entries)
+    return list(entries)
 
 
-def format_knowledge_entries(entry_ids: Sequence[str], entries: Sequence[str]) -> str:
-    if not entry_ids or not entries:
+def format_knowledge_entries(entries: Sequence[KnowledgeEntry]) -> str:
+    if not entries:
         return ""
     formatted: list[str] = []
-    for entry_id, text in zip(entry_ids, entries, strict=False):
-        snippet = truncate_text(text, 500)
-        formatted.append(f"{entry_id}: {snippet}")
+    for entry in entries:
+        snippet = truncate_text(entry.text, 500)
+        formatted.append(f"{entry.entry_id}: {snippet}")
     return "\n\n".join(formatted)
 
 

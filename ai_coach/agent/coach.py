@@ -1,6 +1,6 @@
 import inspect
 from datetime import datetime
-from typing import Sequence
+from typing import Any, ClassVar, Sequence
 
 from zoneinfo import ZoneInfo
 
@@ -14,7 +14,7 @@ from ai_coach.exceptions import AgentExecutionAborted
 from ai_coach.agent.knowledge.schemas import KnowledgeSnippet
 
 from .base import AgentDeps
-from .llm_helper import LLMHelper
+from .llm_helper import LLMHelper, LLMHelperProto
 from .prompts import (
     ASK_AI_USER_PROMPT,
     COACH_INSTRUCTIONS,
@@ -24,8 +24,21 @@ from .prompts import (
 from ai_coach.types import CoachMode
 
 
-class CoachAgent(LLMHelper):
+class CoachAgentMeta(type):
+    def __getattr__(cls, name: str) -> Any:
+        helper = getattr(cls, "llm_helper", None)
+        if helper is None:
+            raise AttributeError(f"{cls.__name__} has no attribute {name!r} (llm_helper is not configured)")
+        try:
+            return getattr(helper, name)
+        except AttributeError as exc:
+            raise AttributeError(f"{cls.__name__} has no attribute {name!r}") from exc
+
+
+class CoachAgent(metaclass=CoachAgentMeta):
     """PydanticAI wrapper for program generation."""
+
+    llm_helper: ClassVar[type[LLMHelperProto]] = LLMHelper
 
     @classmethod
     async def generate_workout_plan(

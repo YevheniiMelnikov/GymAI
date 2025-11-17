@@ -2,7 +2,7 @@ import json
 import os
 from functools import wraps
 from time import perf_counter
-from typing import Any, Awaitable, Callable, ClassVar, Mapping, Optional, Sequence, TypeVar, cast
+from typing import Any, Awaitable, Callable, ClassVar, Mapping, Optional, Sequence, TypeVar, cast, Protocol
 
 from loguru import logger  # pyrefly: ignore[import-error]
 from openai import AsyncOpenAI  # pyrefly: ignore[import-error]
@@ -14,10 +14,10 @@ from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
 
 from config.app_settings import settings
 from ai_coach.agent.base import AgentDeps
+from ai_coach.agent.knowledge.knowledge_base import KnowledgeSnippet
 from ai_coach.agent.prompts import COACH_SYSTEM_PROMPT, ASK_AI_USER_PROMPT, agent_instructions
 from ai_coach.agent.tools import toolset
 from ai_coach.agent.utils import get_knowledge_base, resolve_language_name
-from ai_coach.agent.knowledge.knowledge_base import KnowledgeSnippet
 from ai_coach.agent.knowledge.helpers import (
     build_knowledge_entries,
     filter_entries_for_prompt,
@@ -31,6 +31,51 @@ from core.schemas import QAResponse
 
 
 TOutput = TypeVar("TOutput", bound=BaseModel)
+
+
+class LLMHelperProto(Protocol):
+    @classmethod
+    def _get_agent(cls) -> Any: ...
+
+    @classmethod
+    def _lang(cls, deps: AgentDeps) -> str: ...
+
+    @classmethod
+    def _language_context(cls, deps: AgentDeps) -> tuple[str, str]: ...
+
+    @staticmethod
+    async def _message_history(client_id: int) -> list[ModelMessage]: ...
+
+    @staticmethod
+    def _normalize_output(raw: Any, expected: type[Any]) -> Any: ...
+
+    @classmethod
+    async def _fallback_answer_question(
+        cls,
+        prompt: str,
+        deps: AgentDeps,
+        history: list[ModelMessage],
+        *,
+        prefetched_knowledge: Sequence[KnowledgeSnippet] | None = None,
+    ) -> QAResponse | None: ...
+
+    @staticmethod
+    def _normalize_text(text: str | None) -> str: ...
+
+    @classmethod
+    async def _complete_with_retries(
+        cls,
+        client: Any,
+        system_prompt: str,
+        user_prompt: str,
+        entry_ids: Sequence[str],
+        *,
+        client_id: int,
+        max_tokens: int,
+        model: str | None = None,
+        continuation_attempt: int = 0,
+        continuation_context: str | None = None,
+    ) -> QAResponse | None: ...
 
 
 class LLMHelper:
@@ -215,15 +260,17 @@ class LLMHelper:
             except Exception as exc:  # noqa: BLE001 - log and continue with empty knowledge
                 logger.warning(f"agent.ask fallback knowledge_failed client_id={deps.client_id} error={exc}")
                 knowledge = []
-        entry_ids, entries, entry_datasets = build_knowledge_entries(knowledge)
-        entry_ids, entries, entry_datasets = filter_entries_for_prompt(prompt, entry_ids, entries, entry_datasets)
+        entries = build_knowledge_entries(knowledge)
+        entries = filter_entries_for_prompt(prompt, entries)
+        entry_ids = [entry.entry_id for entry in entries]
+        entry_texts = [entry.text for entry in entries]
         entry_datasets = [
-            kb.dataset_service.alias_for_dataset(dataset) if dataset else "" for dataset in entry_datasets
+            kb.dataset_service.alias_for_dataset(entry.dataset) if entry.dataset else "" for entry in entries
         ]
-        deps.knowledge_base_empty = len(entry_ids) == 0
+        deps.knowledge_base_empty = len(entries) == 0
         deps.kb_used = not deps.knowledge_base_empty
         _, language_label = cls._language_context(deps)
-        knowledge_section = format_knowledge_entries(entry_ids, entries)
+        knowledge_section = format_knowledge_entries(entries)
         system_prompt = COACH_SYSTEM_PROMPT
         user_prompt = ASK_AI_USER_PROMPT.format(
             language=language_label,
@@ -264,12 +311,7 @@ class LLMHelper:
             }
             prefix = prefix_map.get(code, prefix_map["en"])
 
-            def _entry_text(value: KnowledgeSnippet | str) -> str:
-                if isinstance(value, str):
-                    return value
-                return value.text or ""
-
-            summary_chunks = [chunk for chunk in (_entry_text(entry).strip() for entry in entries) if chunk]
+            summary_chunks = [chunk for chunk in (entry.strip() for entry in entry_texts) if chunk]
             summary_text = knowledge_section or " ".join(summary_chunks)
             if not summary_text:
                 summary_text = prefix
