@@ -10,6 +10,7 @@ from django.http import HttpRequest, JsonResponse
 
 from rest_framework.exceptions import NotFound
 from core.enums import CoachType
+from apps.webapp import utils
 
 django_http = sys.modules["django.http"]
 django_http.HttpResponse = object  # type: ignore[attr-defined]
@@ -20,14 +21,14 @@ views = import_module("apps.webapp.views")
 
 def test_program_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
-        monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
+        monkeypatch.setattr("apps.webapp.utils.verify_init_data", lambda _d: {"user": {"id": 1}})
         monkeypatch.setattr(
-            views.ProfileRepository,
+            utils.ProfileRepository,
             "get_by_telegram_id",
             lambda _tg_id: SimpleNamespace(id=1, language="eng"),
         )
         monkeypatch.setattr(
-            views.ClientProfileRepository,
+            utils.ClientProfileRepository,
             "get_by_profile_id",
             lambda _id: SimpleNamespace(id=1),
         )
@@ -64,14 +65,14 @@ def test_program_data_header_init_data(monkeypatch: pytest.MonkeyPatch) -> None:
             captured["value"] = data
             return {"user": {"id": 1}}
 
-        monkeypatch.setattr(views, "verify_init_data", fake_verify)
+        monkeypatch.setattr("apps.webapp.utils.verify_init_data", fake_verify)
         monkeypatch.setattr(
-            views.ProfileRepository,
+            utils.ProfileRepository,
             "get_by_telegram_id",
             lambda _tg_id: SimpleNamespace(id=1, language="eng"),
         )
         monkeypatch.setattr(
-            views.ClientProfileRepository,
+            utils.ClientProfileRepository,
             "get_by_profile_id",
             lambda _id: SimpleNamespace(id=1),
         )
@@ -100,14 +101,14 @@ def test_program_data_header_init_data(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_program_data_with_id(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
-        monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
+        monkeypatch.setattr("apps.webapp.utils.verify_init_data", lambda _d: {"user": {"id": 1}})
         monkeypatch.setattr(
-            views.ProfileRepository,
+            utils.ProfileRepository,
             "get_by_telegram_id",
             lambda _tg_id: SimpleNamespace(id=1, language="eng"),
         )
         monkeypatch.setattr(
-            views.ClientProfileRepository,
+            utils.ClientProfileRepository,
             "get_by_profile_id",
             lambda _id: SimpleNamespace(id=1),
         )
@@ -137,7 +138,7 @@ def test_program_data_with_id(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_program_data_bad_id(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
-        monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
+        monkeypatch.setattr("apps.webapp.utils.verify_init_data", lambda _d: {"user": {"id": 1}})
 
         request: HttpRequest = HttpRequest()
         request.method = "GET"
@@ -154,7 +155,7 @@ def test_program_data_unauthorized(monkeypatch: pytest.MonkeyPatch) -> None:
         def raise_error(_d: str) -> dict[str, object]:
             raise ValueError
 
-        monkeypatch.setattr(views, "verify_init_data", raise_error)
+        monkeypatch.setattr("apps.webapp.utils.verify_init_data", raise_error)
 
         request: HttpRequest = HttpRequest()
         request.method = "GET"
@@ -168,9 +169,9 @@ def test_program_data_unauthorized(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_program_data_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
-        monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
+        monkeypatch.setattr("apps.webapp.utils.verify_init_data", lambda _d: {"user": {"id": 1}})
         monkeypatch.setattr(
-            views.ProfileRepository,
+            utils.ProfileRepository,
             "get_by_telegram_id",
             lambda _tg_id: (_ for _ in ()).throw(NotFound("missing")),
         )
@@ -187,9 +188,9 @@ def test_program_data_not_found(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_program_data_server_error(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
-        monkeypatch.setattr(views, "verify_init_data", lambda _d: {"user": {"id": 1}})
+        monkeypatch.setattr("apps.webapp.utils.verify_init_data", lambda _d: {"user": {"id": 1}})
         monkeypatch.setattr(
-            views.ProfileRepository,
+            utils.ProfileRepository,
             "get_by_telegram_id",
             lambda _tg_id: (_ for _ in ()).throw(RuntimeError("boom")),
         )

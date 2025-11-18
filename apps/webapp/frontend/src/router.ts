@@ -1,6 +1,7 @@
 export type ProgramRoute = { kind: 'program'; source: 'direct' | 'subscription' };
 export type HistoryRoute = { kind: 'history' };
-export type Route = ProgramRoute | HistoryRoute;
+export type PaymentRoute = { kind: 'payment'; orderId: string | null };
+export type Route = ProgramRoute | HistoryRoute | PaymentRoute;
 
 type NavCb = (r: Route) => void;
 let listeners: NavCb[] = [];
@@ -9,6 +10,9 @@ export function parseRoute(loc: Location): Route {
   const url = new URL(loc.href);
   const type = (url.searchParams.get('type') || 'program').toLowerCase();
   if (type === 'history') return { kind: 'history' };
+  if (type === 'payment') {
+    return { kind: 'payment', orderId: url.searchParams.get('order_id') };
+  }
   const source = (url.searchParams.get('source') || 'direct') as 'direct' | 'subscription';
   return { kind: 'program', source };
 }

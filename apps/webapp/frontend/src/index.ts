@@ -1,9 +1,10 @@
 import { applyLang, t } from './i18n/i18n';
 import { initRouter, onRouteChange, goToHistory, goToProgram } from './router';
-import type { ProgramRoute } from './router';
+import type { ProgramRoute, PaymentRoute } from './router';
 import { renderProgram } from './views/program';
 import { renderHistoryView } from './views/history';
 import { renderSubscriptions } from './views/subscriptions';
+import { renderPayment } from './views/payment';
 import { renderSegmented } from './components/Segmented';
 import { tmeExpand, tmeMatchBackground } from './telegram';
 
@@ -172,6 +173,7 @@ async function bootstrap(): Promise<void> {
     clearCleanup();
 
     if (historyButton) {
+      historyButton.style.display = '';
       historyButton.disabled = true;
     }
 
@@ -183,6 +185,7 @@ async function bootstrap(): Promise<void> {
       if (segmentState.renderToken === token) {
         cleanup.current = dispose;
         if (historyButton) {
+          historyButton.style.display = '';
           historyButton.textContent = t('program.view_history');
           historyButton.disabled = false;
           historyButton.onclick = () => goToHistory();
@@ -205,6 +208,7 @@ async function bootstrap(): Promise<void> {
     content.removeAttribute('aria-busy');
     await renderSubscriptions(content);
     if (historyButton) {
+      historyButton.style.display = '';
       historyButton.textContent = t('program.view_history');
       historyButton.disabled = false;
       historyButton.onclick = () => goToHistory();
@@ -229,21 +233,58 @@ async function bootstrap(): Promise<void> {
     clearCleanup();
 
     if (historyButton) {
+      historyButton.style.display = '';
       historyButton.disabled = true;
     }
 
     await renderHistoryView(titleEl ?? undefined);
 
     if (historyButton) {
+      historyButton.style.display = '';
       historyButton.textContent = t('back');
       historyButton.disabled = false;
       historyButton.onclick = () => goToProgram(resolveSourceFromLocation());
     }
   };
 
+  const handlePaymentRoute = async (route: PaymentRoute): Promise<void> => {
+    segmentState.lastRoute = null;
+    segmentState.renderToken += 1;
+    const token = segmentState.renderToken;
+
+    if (segmented) {
+      segmentedCleanup?.();
+      segmentedCleanup = undefined;
+      segmented.setAttribute('aria-hidden', 'true');
+      segmented.innerHTML = '';
+    }
+    clearCleanup();
+
+    if (historyButton) {
+      historyButton.disabled = true;
+      historyButton.style.display = 'none';
+      historyButton.textContent = '';
+      historyButton.onclick = null;
+    }
+
+    const dispose = await renderPayment({ root, content, dateEl, titleEl }, route.orderId);
+    if (segmentState.renderToken === token) {
+      cleanup.current = dispose;
+    } else {
+      try {
+        dispose();
+      } catch {
+      }
+    }
+  };
+
   onRouteChange((route) => {
     if (route.kind === 'history') {
       void handleHistoryRoute();
+      return;
+    }
+    if (route.kind === 'payment') {
+      void handlePaymentRoute(route);
       return;
     }
     void handleProgramRoute(route);

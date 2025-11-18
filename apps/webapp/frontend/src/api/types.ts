@@ -74,3 +74,13 @@ export type SubscriptionResp = {
   error?: string;
   language?: string;
 };
+
+export type PaymentPayloadResp = {
+  data: string;
+  signature: string;
+  checkout_url: string;
+  amount: string;
+  currency?: string;
+  payment_type?: string;
+  language?: string | null;
+};

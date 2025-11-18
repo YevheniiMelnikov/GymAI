@@ -222,6 +222,68 @@ h1.page-title,
   color: var(--text);
 }
 
+.payment-card{
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: clamp(18px, 2.6vw, 24px);
+  border: 1px solid var(--border);
+  border-radius: clamp(14px, 2.4vw, 18px);
+  background: color-mix(in oklab, var(--surface) 94%, var(--bg));
+  box-shadow: var(--shadow);
+}
+.payment-heading{
+  margin: 0;
+  font-size: clamp(18px, 2.4vw, 21px);
+  font-weight: 700;
+}
+.payment-amount{
+  margin: 0;
+  font-weight: 700;
+  font-size: clamp(18px, 2.6vw, 22px);
+}
+.payment-note{
+  margin: 0;
+  color: var(--muted);
+}
+.payment-frame{
+  min-height: 420px;
+  border: 1px solid var(--border);
+  border-radius: clamp(12px, 2vw, 16px);
+  background: color-mix(in oklab, var(--bg) 92%, var(--surface));
+  box-shadow: 0 2px 10px color-mix(in oklab, var(--text) 12%, transparent);
+  overflow: hidden;
+}
+.payment-frame[aria-busy="true"]{
+  position: relative;
+}
+.payment-frame[aria-busy="true"]::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background: color-mix(in oklab, var(--bg) 35%, transparent);
+}
+.payment-frame[aria-busy="true"]::before{
+  content:"";
+  position:absolute;
+  top:50%;
+  left:50%;
+  width:32px;
+  height:32px;
+  margin:-16px 0 0 -16px;
+  border-radius:50%;
+  border:3px solid color-mix(in oklab, var(--text) 22%, transparent);
+  border-top-color: var(--link);
+  animation: spin .95s linear infinite;
+  z-index:1;
+}
+.payment-actions{
+  margin-top: 4px;
+}
+.payment-actions .primary-button{
+  width: 100%;
+}
+
 .notice{
   border: 1px dashed var(--border);
   border-radius: 10px;

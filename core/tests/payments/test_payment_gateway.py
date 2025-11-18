@@ -67,6 +67,28 @@ def test_get_payment_link():
     assert "signature=" in url
 
 
+def test_build_checkout_payload():
+    gateway = LiqPayGateway(
+        "pub",
+        "priv",
+        checkout_url=settings.CHECKOUT_URL,
+        email="test@example.com",
+        result_url=settings.BOT_LINK,
+    )
+    payload = gateway.build_checkout(
+        "pay",
+        Decimal("12.5"),
+        "ord-567",
+        "credits",
+        42,
+    )
+    assert payload.checkout_url.startswith("https://")
+    decoded = gateway.client.decode_data_from_str(payload.data, payload.signature)
+    assert decoded["order_id"] == "ord-567"
+    assert decoded["description"] == "credits payment from client 42"
+    assert decoded.get("rro_info", {}).get("delivery_emails") == ["test@example.com"]
+
+
 @pytest.mark.parametrize(
     "field",
     [
