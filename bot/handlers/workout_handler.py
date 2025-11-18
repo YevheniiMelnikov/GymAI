@@ -211,8 +211,6 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
 
     await answer_msg(message, msg_text("request_in_progress", lang))
 
-    await show_main_menu(message, profile, state, delete_source=False)
-
     state_payload: dict[str, object] = {
         "client": client.model_dump(),
         "last_request_id": request_id,
@@ -221,6 +219,9 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
         "ask_ai_prompt_chat_id": None,
         "ask_ai_question_message_id": message.message_id,
     }
+    if not data.get("ask_ai_menu_shown"):
+        await show_main_menu(message, profile, state, delete_source=False)
+        state_payload["ask_ai_menu_shown"] = True
     await state.update_data(**state_payload)
 
 
