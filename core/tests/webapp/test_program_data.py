@@ -49,7 +49,7 @@ def test_program_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
         response: JsonResponse = await views.program_data(request)
         assert response.status_code == 200
         data = json.loads(response.content)
-        assert data["program"] == ""
+        assert data["program"] == []
         assert data["created_at"] == 1
         assert data["coach_type"] == CoachType.human
         assert data["language"] == "eng"

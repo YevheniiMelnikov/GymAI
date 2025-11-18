@@ -43,7 +43,7 @@ def test_subscription_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
         response: JsonResponse = await views.subscription_data(request)
         assert response.status_code == 200
         data = json.loads(response.content)
-        assert data["program"] == ""
+        assert data["program"] == []
         assert data["language"] == "eng"
 
     asyncio.run(runner())

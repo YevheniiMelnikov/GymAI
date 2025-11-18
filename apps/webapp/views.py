@@ -20,7 +20,6 @@ from .utils import (
     build_payment_gateway,
     call_repo,
     ensure_container_ready,
-    format_program_text,
     parse_program_id,
 )
 
@@ -76,8 +75,7 @@ async def program_data(request: HttpRequest) -> JsonResponse:
             logger.warning(f"Subscription not found for client_profile_id={client.id}")
             return JsonResponse({"error": "not_found"}, status=404)
 
-        text: str = format_program_text(subscription_obj.exercises)
-        return JsonResponse({"program": text, "language": lang})
+        return JsonResponse({"program": subscription_obj.exercises, "language": lang})
 
     program_obj: Program | None = cast(
         Program | None,
@@ -90,10 +88,9 @@ async def program_data(request: HttpRequest) -> JsonResponse:
         logger.warning(f"Program not found for client_profile_id={client.id} program_id={program_id}")
         return JsonResponse({"error": "not_found"}, status=404)
 
-    text = format_program_text(program_obj.exercises_by_day)
     return JsonResponse(
         {
-            "program": text,
+            "program": program_obj.exercises_by_day,
             "created_at": int(cast(datetime, program_obj.created_at).timestamp()),
             "coach_type": program_obj.coach_type,
             "language": lang,
@@ -157,8 +154,7 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
         logger.warning(f"Subscription not found for client_profile_id={client.id}")
         return JsonResponse({"error": "not_found"}, status=404)
 
-    text: str = format_program_text(subscription.exercises)
-    return JsonResponse({"program": text, "language": lang})
+    return JsonResponse({"program": subscription.exercises, "language": lang})
 
 
 # type checking of async views with require_GET is not supported by stubs

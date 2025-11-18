@@ -3,8 +3,7 @@ import hashlib
 import hmac
 import inspect
 import json
-import re
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Iterable, Protocol, Sequence, TypeVar, cast
+from typing import Any, Awaitable, Callable, Protocol, TypeVar, cast
 from urllib.parse import parse_qsl
 
 from asgiref.sync import sync_to_async
@@ -14,14 +13,9 @@ from rest_framework.exceptions import NotFound
 
 from config.app_settings import settings
 from core.payment.providers.liqpay import LiqPayGateway
-from core.schemas import DayExercises
 
-if TYPE_CHECKING:
-    from apps.profiles.repos import ClientProfileRepository, ProfileRepository
-else:
-    from apps.profiles.repos import ClientProfileRepository, ProfileRepository
+from apps.profiles.repos import ClientProfileRepository, ProfileRepository
 
-_DAY_INDEX_RE = re.compile(r"\d+")
 T = TypeVar("T")
 
 
@@ -128,12 +122,6 @@ def parse_program_id(request: HttpRequest) -> tuple[int | None, JsonResponse | N
         return None, JsonResponse({"error": "bad_request"}, status=400)
 
 
-def format_program_text(raw_exercises: Any) -> str:
-    raw = normalize_day_exercises(raw_exercises)
-    exercises = [DayExercises.model_validate(e) for e in raw]
-    return _format_full_program(exercises)
-
-
 def build_payment_gateway() -> LiqPayGateway:
     return LiqPayGateway(
         settings.PAYMENT_PUB_KEY,
@@ -197,69 +185,3 @@ def verify_init_data(init_data: str) -> dict[str, object]:
             result[k] = v
 
     return result
-
-
-def _extract_day_index(label: str) -> int | None:
-    match = _DAY_INDEX_RE.search(label)
-    if not match:
-        return None
-    try:
-        return int(match.group())
-    except ValueError:
-        return None
-
-
-def _sort_day_entries(entries: Iterable[tuple[int, str, Any]]) -> list[tuple[str, Any]]:
-    def sort_key(item: tuple[int, str, Any]) -> tuple[int, int]:
-        position, label, _ = item
-        numeric = _extract_day_index(label)
-        return (numeric if numeric is not None else position, position)
-
-    ordered = sorted(entries, key=sort_key)
-    return [(label, value) for _, label, value in ordered]
-
-
-def normalize_day_exercises(raw: Any) -> list[dict[str, Any]]:
-    if isinstance(raw, dict):
-        entries = [(idx, str(key), value) for idx, (key, value) in enumerate(raw.items())]
-        ordered = _sort_day_entries(entries)
-        return [{"day": label, "exercises": value} for label, value in ordered]
-    if isinstance(raw, list):
-        return raw
-    return []
-
-
-def _sorted_exercises(exercises: Sequence[DayExercises]) -> list[DayExercises]:
-    enumerated = [(idx, day) for idx, day in enumerate(exercises)]
-
-    def sort_key(item: tuple[int, DayExercises]) -> tuple[int, int]:
-        position, day = item
-        numeric = _extract_day_index(day.day)
-        return (numeric if numeric is not None else position, position)
-
-    ordered = sorted(enumerated, key=sort_key)
-    return [day for _, day in ordered]
-
-
-def _format_full_program(exercises: list[DayExercises]) -> str:
-    lines: list[str] = []
-    for order, day in enumerate(_sorted_exercises(exercises)):
-        label = day.day.strip()
-        if label.isdigit():
-            header = f"Day {int(label) + 1}"
-        elif label:
-            header = label
-        else:
-            header = f"Day {order + 1}"
-        lines.append(header)
-        for idx, ex in enumerate(day.exercises):
-            line = f"{idx + 1}. {ex.name} | {ex.sets} x {ex.reps}"
-            if ex.weight:
-                line += f" | {ex.weight}"
-            if ex.set_id is not None:
-                line += f" | Set {ex.set_id}"
-            if ex.drop_set:
-                line += " | Drop set"
-            lines.append(line)
-        lines.append("")
-    return "\n".join(lines).strip()
