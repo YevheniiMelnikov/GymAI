@@ -8,7 +8,7 @@
   "not_found": "Не найдено",
   "server_error": "Ошибка сервера",
   "unexpected_error": "Неизвестная ошибка",
-  "no_programs": "Программы не найдены",
+  "no_programs": "У вас пока нет программ",
   "sort_newest": "Сортировка: новые",
   "sort_oldest": "Сортировка: старые",
   "show_ai": "Показывать планы ИИ",
@@ -27,7 +27,7 @@
   "tabs.program": "Программы",
   "tabs.subscriptions": "Подписки",
   "subscriptions.title": "Подписки",
-  "subscriptions.empty": "Пока пусто",
+  "subscriptions.empty": "Пока нет подписок",
 
   "page.program": "Программа",
   "page.history": "История",

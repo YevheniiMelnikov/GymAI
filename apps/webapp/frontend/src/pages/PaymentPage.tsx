@@ -8,6 +8,7 @@ const LIQPAY_SCRIPT_ID = 'liqpay-checkout-script';
 const LIQPAY_SCRIPT_SRC = 'https://static.liqpay.ua/libjs/checkout.js';
 
 let liqpayLoader: Promise<void> | null = null;
+const PAYMENT_ORDER_KEY = 'webapp:payment:order_id';
 
 function loadCheckoutScript(): Promise<void> {
     if (typeof (window as any).LiqPayCheckout !== 'undefined') {
@@ -57,7 +58,14 @@ function mountCheckout(container: HTMLElement, data: string, signature: string):
 
 const PaymentPage: React.FC = () => {
     const [searchParams] = useSearchParams();
-    const orderId = searchParams.get('order_id');
+    const orderId =
+        searchParams.get('order_id') ?? searchParams.get('orderId') ?? (() => {
+            try {
+                return sessionStorage.getItem(PAYMENT_ORDER_KEY);
+            } catch {
+                return null;
+            }
+        })();
     const checkoutRef = useRef<HTMLDivElement>(null);
 
     const [loading, setLoading] = useState(true);

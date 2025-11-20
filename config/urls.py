@@ -20,7 +20,7 @@ urlpatterns = [
     path("api/v1/", include("apps.workout_plans.urls")),
     path("webapp", RedirectView.as_view(url="/webapp/", permanent=False)),
     path("webapp/", include("apps.webapp.urls")),
-    path("", include("apps.webapp.urls")),
+    path("", RedirectView.as_view(url="/webapp/", permanent=False, query_string=True)),
 ]
 
 

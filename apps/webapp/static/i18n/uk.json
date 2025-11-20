@@ -8,7 +8,7 @@
   "not_found": "Не знайдено",
   "server_error": "Помилка сервера",
   "unexpected_error": "Невідома помилка",
-  "no_programs": "Програм не знайдено",
+  "no_programs": "У вас поки немає програм",
   "sort_newest": "Сортування: нові",
   "sort_oldest": "Сортування: старі",
   "show_ai": "Показувати плани ШІ",
@@ -27,7 +27,7 @@
   "tabs.program": "Програми",
   "tabs.subscriptions": "Підписки",
   "subscriptions.title": "Підписки",
-  "subscriptions.empty": "Тут поки що порожньо",
+  "subscriptions.empty": "У вас поки немає підписок",
 
   "page.program": "Програма",
   "page.history": "Історія",

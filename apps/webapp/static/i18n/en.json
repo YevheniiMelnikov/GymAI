@@ -8,7 +8,7 @@
   "not_found": "Not found",
   "server_error": "Server error",
   "unexpected_error": "Unexpected error",
-  "no_programs": "No programs found",
+  "no_programs": "You have no programs yet",
   "sort_newest": "Sort: Newest",
   "sort_oldest": "Sort: Oldest",
   "show_ai": "Show AI workout plans",
@@ -27,7 +27,7 @@
   "tabs.program": "Programs",
   "tabs.subscriptions": "Subscriptions",
   "subscriptions.title": "Subscriptions",
-  "subscriptions.empty": "No subscriptions yet",
+  "subscriptions.empty": "You have no subscriptions yet",
 
   "page.program": "Program",
   "page.history": "History",

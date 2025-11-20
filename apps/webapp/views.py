@@ -3,8 +3,9 @@ import time
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
+from django.conf import settings
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET
@@ -27,6 +28,9 @@ STATIC_VERSION_FILE: Path = Path(__file__).resolve().parents[2] / "VERSION"
 
 
 def _resolve_static_version() -> str:
+    if settings.DEBUG:
+        return str(int(time.time()))
+
     env_value: str | None = os.getenv("STATIC_VERSION")
     if STATIC_VERSION_FILE.exists():
         version: str = STATIC_VERSION_FILE.read_text(encoding="utf-8").strip()
@@ -54,23 +58,27 @@ def _transform_days(exercises_by_day: list) -> list[dict]:
                 else:
                     weight = {"value": weight_str, "unit": ""}
 
-            exercises.append({
-                "id": str(ex_data.get("set_id") or f"ex-{idx}-{ex_idx}"),
-                "name": ex_data.get("name", ""),
-                "sets": ex_data.get("sets"),
-                "reps": ex_data.get("reps"),
-                "weight": weight,
-                "equipment": None,
-                "notes": None,
-            })
+            exercises.append(
+                {
+                    "id": str(ex_data.get("set_id") or f"ex-{idx}-{ex_idx}"),
+                    "name": ex_data.get("name", ""),
+                    "sets": ex_data.get("sets"),
+                    "reps": ex_data.get("reps"),
+                    "weight": weight,
+                    "equipment": None,
+                    "notes": None,
+                }
+            )
 
-        days.append({
-            "id": f"day-{idx}",
-            "index": idx,
-            "type": "workout",
-            "title": day_data.get("day"),
-            "exercises": exercises,
-        })
+        days.append(
+            {
+                "id": f"day-{idx}",
+                "index": idx,
+                "type": "workout",
+                "title": day_data.get("day"),
+                "exercises": exercises,
+            }
+        )
     return days
 
 
@@ -109,7 +117,6 @@ async def program_data(request: HttpRequest) -> JsonResponse:
             logger.warning(f"Subscription not found for client_profile_id={client.id}")
             return JsonResponse({"error": "not_found"}, status=404)
 
-        # Use the same transformation for subscription data
         days = _transform_days(subscription_obj.exercises)
         return JsonResponse({"days": days, "id": str(subscription_obj.id), "language": lang})
 
@@ -122,23 +129,24 @@ async def program_data(request: HttpRequest) -> JsonResponse:
 
     if program_obj is None:
         logger.warning(f"Program not found for client_profile_id={client.id} program_id={program_id}")
-        # Debug logging
-        latest = await call_repo(ProgramRepository.get_latest, client_id)
-        all_programs = await call_repo(ProgramRepository.filter_by_client, client_id)
-        logger.info(f"DEBUG: client_id={client_id} program_id={program_id} latest_program={latest.id if latest else 'None'}")
-        logger.info(f"DEBUG: all_program_ids={[p.id for p in all_programs] if all_programs else 'None'}")
-        print(f"DEBUG PRINT: client_id={client_id} program_id={program_id} latest_program={latest.id if latest else 'None'}")
         return JsonResponse({"error": "not_found"}, status=404)
 
-    data = {
+    data: dict[str, object] = {
         "created_at": int(cast(datetime, program_obj.created_at).timestamp()),
         "coach_type": program_obj.coach_type,
         "language": lang,
     }
 
+    program_id_value = getattr(program_obj, "id", None)
     if isinstance(program_obj.exercises_by_day, list):
-        data["days"] = _transform_days(program_obj.exercises_by_day)
-        data["id"] = str(program_obj.id)
+        days_payload = cast(list[dict[str, Any]], program_obj.exercises_by_day)
+        transformed = _transform_days(days_payload)
+        data["days"] = transformed
+        data["program"] = transformed
+        if program_id_value is not None:
+            data["id"] = str(program_id_value)
+        elif program_id is not None:
+            data["id"] = str(program_id)
         data["locale"] = lang
     else:
         data["program"] = program_obj.exercises_by_day
@@ -202,8 +210,12 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
         logger.warning(f"Subscription not found for client_profile_id={client.id}")
         return JsonResponse({"error": "not_found"}, status=404)
 
+    subscription_id = getattr(subscription, "id", None)
     days = _transform_days(subscription.exercises)
-    return JsonResponse({"days": days, "id": str(subscription.id), "language": lang})
+    response: dict[str, object] = {"days": days, "language": lang, "program": days}
+    if subscription_id is not None:
+        response["id"] = str(subscription_id)
+    return JsonResponse(response)
 
 
 # type checking of async views with require_GET is not supported by stubs

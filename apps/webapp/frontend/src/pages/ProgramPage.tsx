@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getProgram, getSubscription, HttpError } from '../api/http';
 import { applyLang, t } from '../i18n/i18n';
 import { renderProgramDays, renderLegacyProgram, fmtDate } from '../ui/render_program';
@@ -9,15 +9,22 @@ import { renderSegmented, SegmentId } from '../components/Segmented';
 
 const ProgramPage: React.FC = () => {
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
     const contentRef = useRef<HTMLDivElement>(null);
     const switcherRef = useRef<HTMLDivElement>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [dateText, setDateText] = useState('');
-    const [activeSegment, setActiveSegment] = useState<SegmentId>('program');
+    const initialSegment: SegmentId =
+        (searchParams.get('source') || '') === 'subscription' ? 'subscriptions' : 'program';
+    const [activeSegment, setActiveSegment] = useState<SegmentId>(initialSegment);
 
     const programId = searchParams.get('id') || '';
-    const source = (searchParams.get('source') || 'direct') as 'direct' | 'subscription';
+    const paramLang = searchParams.get('lang') || undefined;
+
+    useEffect(() => {
+        void applyLang(paramLang);
+    }, [paramLang]);
 
     useEffect(() => {
         if (switcherRef.current) {
@@ -44,8 +51,8 @@ const ProgramPage: React.FC = () => {
                 let createdAt: string | null = null;
 
                 if (activeSegment === 'program') {
-                    const load = await getProgram(programId, { initData, source, signal: controller.signal });
-                    appliedLocale = await applyLang(load.locale);
+                    const load = await getProgram(programId, { initData, source: 'direct', signal: controller.signal });
+                    appliedLocale = await applyLang(load.locale || paramLang);
 
                     if (load.kind === 'structured') {
                         programData = load.program;
@@ -56,7 +63,7 @@ const ProgramPage: React.FC = () => {
                 } else {
                     // Subscriptions
                     const sub = await getSubscription(initData, controller.signal);
-                    appliedLocale = await applyLang(sub.language);
+                    appliedLocale = await applyLang(sub.language || paramLang);
 
                     if (sub.days) {
                         programData = {
@@ -92,8 +99,15 @@ const ProgramPage: React.FC = () => {
                 tmeReady();
             } catch (e) {
                 let key = 'unexpected_error';
-                if (e instanceof HttpError) key = e.message;
-                else if (e instanceof Error && e.message === 'no_programs') key = 'subscriptions.empty';
+                if (e instanceof HttpError) {
+                    if (e.status === 404) {
+                        key = activeSegment === 'subscriptions' ? 'subscriptions.empty' : 'no_programs';
+                    } else {
+                        key = e.message;
+                    }
+                } else if (e instanceof Error && e.message === 'no_programs') {
+                    key = 'subscriptions.empty';
+                }
                 setError(t(key as any));
             } finally {
                 setLoading(false);
@@ -105,19 +119,30 @@ const ProgramPage: React.FC = () => {
         return () => {
             controller.abort();
         };
-    }, [programId, source, activeSegment]);
+    }, [programId, activeSegment, paramLang]);
 
     return (
         <div className="page-container">
-            <h1 id="page-title">{t(activeSegment === 'program' ? 'program.title' : 'subscriptions.title')}</h1>
+            <h1 id="page-title">{t('program.title')}</h1>
 
-            <div ref={switcherRef} className="segmented-container" />
+            <div ref={switcherRef} id="segmented" className="segmented-container" />
 
             <div id="content" ref={contentRef} aria-busy={loading} />
             <div id="program-date" hidden={!dateText}>{dateText}</div>
 
             {loading && <div aria-busy="true">Loading...</div>}
             {error && <div className="notice">{error}</div>}
+
+            <div className="history-footer">
+                <button
+                    type="button"
+                    id="history-button"
+                    className="primary-button"
+                    onClick={() => navigate('/history')}
+                >
+                    {t('program.view_history')}
+                </button>
+            </div>
         </div>
     );
 };

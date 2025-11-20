@@ -119,6 +119,14 @@ main#app{
   text-align: center;
 }
 
+.page-container{
+  display: flex;
+  flex-direction: column;
+  gap: clamp(16px, 2.2vw, 22px);
+  flex: 1 1 auto;
+  min-height: 100%;
+}
+
 .app-header h1,
 h1.page-title,
 #page-title{
@@ -294,7 +302,7 @@ h1.page-title,
 
 .history-footer{
   margin-top: auto;
-  padding-top: clamp(18px, 2.4vw, 26px);
+  padding-top: clamp(30px, 4vw, 40px);
   display: flex;
   justify-content: center;
   border: none;
@@ -581,10 +589,21 @@ h1.page-title,
 .history-list li:hover .history-link{ color: var(--link); }
 
 /* ===== Segmented control (wide, centered) ===== */
+.segmented-container{
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin-top: clamp(40px, 6vw, 60px);
+  margin-bottom: clamp(40px, 6vw, 60px);
+}
+
 #segmented{
   display:flex;
   justify-content:center;
-  padding-top: clamp(8px, 1.4vw, 12px);
+  margin-top: clamp(40px, 6vw, 60px);
+  margin-bottom: clamp(40px, 6vw, 60px);
+  padding: 0;
+  width: 100%;
 }
 
 .segmented{
@@ -698,7 +717,7 @@ a:hover{ opacity: .9; }
   background: color-mix(in oklab, var(--surface) 72%, transparent);
 }
 
-#segmented { display:flex; justify-content:center; padding-top: clamp(8px, 1.4vw, 12px); }
+#segmented { display:flex; justify-content:center; margin-top: clamp(40px, 6vw, 60px); margin-bottom: clamp(40px, 6vw, 60px); padding: 0; width:100%; }
 
 #segmented .segmented {
   display:flex; align-items:center;

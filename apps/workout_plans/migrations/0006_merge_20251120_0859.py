@@ -4,11 +4,9 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('workout_plans', '0004_exercises_default_list'),
-        ('workout_plans', '0005_update_period_choices'),
+        ("workout_plans", "0004_exercises_default_list"),
+        ("workout_plans", "0005_update_period_choices"),
     ]
 
-    operations = [
-    ]
+    operations = []
