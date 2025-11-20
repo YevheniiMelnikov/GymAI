@@ -40,7 +40,13 @@ export const fallbackEn = {
   'subscriptions.empty': 'No subscriptions yet',
   'page.program': 'Program',
   'page.history': 'History',
-  'page.subscriptions': 'Subscriptions'
+  'page.subscriptions': 'Subscriptions',
+  'payment.title': 'Payment',
+  'payment.amount': 'Amount: {amount} {currency}',
+  'payment.loading': 'Loading payment info...',
+  'payment.launch': 'Launching payment...',
+  'payment.open': 'Open Payment',
+  'payment.unavailable': 'Payment service unavailable'
 } as const;
 
 export type TranslationKey = keyof typeof fallbackEn;

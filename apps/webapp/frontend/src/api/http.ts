@@ -1,5 +1,5 @@
 import { readLocale } from '../telegram';
-import { Locale, PaymentPayloadResp, Program, ProgramResp, ProgramStructuredResponse } from './types';
+import { Locale, PaymentPayloadResp, Program, ProgramResp, ProgramStructuredResponse, SubscriptionResp } from './types';
 
 const KNOWN_LOCALES: readonly Locale[] = ['en', 'ru', 'uk'];
 const LOCALE_ALIASES: Record<string, Locale> = { ua: 'uk' };
@@ -144,6 +144,23 @@ export async function getProgram(
   }
 
   return { kind: 'legacy', programText: data.program, locale: resolvedLocale, createdAt };
+}
+
+export async function getSubscription(
+  initData: string,
+  signal?: AbortSignal
+): Promise<SubscriptionResp> {
+  const locale = readLocale();
+  const url = new URL('api/subscription/', window.location.href);
+  const headers: Record<string, string> = {};
+  if (initData) headers['X-Telegram-InitData'] = initData;
+
+  const raw = await getJSON<SubscriptionResp>(url.toString(), { headers, signal });
+  const resolvedLocale = normalizeLocale(raw.language, locale);
+  return {
+    ...raw,
+    language: resolvedLocale,
+  };
 }
 
 export async function getPaymentData(

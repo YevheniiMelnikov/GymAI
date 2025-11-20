@@ -90,14 +90,8 @@ async def auth_and_get_client(request: HttpRequest) -> AuthResult:
 
     try:
         profile = cast(_Profile, await call_repo(ProfileRepository.get_by_telegram_id, tg_id))
-    except Exception as exc:
-        if exc.__class__ is NotFound:
-            logger.warning(f"Profile not found for tg_id={tg_id}")
-            return None, lang, JsonResponse({"error": "not_found"}, status=404), tg_id
-        raise
-
-    lang = str(getattr(profile, "language", "eng") or "eng")
-    try:
+        if profile.language:
+            lang = profile.language
         client = cast(
             _ClientProfile,
             await call_repo(ClientProfileRepository.get_by_profile_id, int(profile.id or 0)),

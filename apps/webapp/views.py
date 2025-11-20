@@ -40,6 +40,40 @@ def _resolve_static_version() -> str:
 STATIC_VERSION: str = _resolve_static_version()
 
 
+def _transform_days(exercises_by_day: list) -> list[dict]:
+    days = []
+    for idx, day_data in enumerate(exercises_by_day, start=1):
+        exercises = []
+        for ex_idx, ex_data in enumerate(day_data.get("exercises", [])):
+            weight_str = ex_data.get("weight")
+            weight = None
+            if weight_str:
+                parts = str(weight_str).split(" ", 1)
+                if len(parts) == 2:
+                    weight = {"value": parts[0], "unit": parts[1]}
+                else:
+                    weight = {"value": weight_str, "unit": ""}
+
+            exercises.append({
+                "id": str(ex_data.get("set_id") or f"ex-{idx}-{ex_idx}"),
+                "name": ex_data.get("name", ""),
+                "sets": ex_data.get("sets"),
+                "reps": ex_data.get("reps"),
+                "weight": weight,
+                "equipment": None,
+                "notes": None,
+            })
+
+        days.append({
+            "id": f"day-{idx}",
+            "index": idx,
+            "type": "workout",
+            "title": day_data.get("day"),
+            "exercises": exercises,
+        })
+    return days
+
+
 # type checking of async views with require_GET is not supported by stubs
 @require_GET  # type: ignore[misc]
 async def program_data(request: HttpRequest) -> JsonResponse:
@@ -75,7 +109,9 @@ async def program_data(request: HttpRequest) -> JsonResponse:
             logger.warning(f"Subscription not found for client_profile_id={client.id}")
             return JsonResponse({"error": "not_found"}, status=404)
 
-        return JsonResponse({"program": subscription_obj.exercises, "language": lang})
+        # Use the same transformation for subscription data
+        days = _transform_days(subscription_obj.exercises)
+        return JsonResponse({"days": days, "id": str(subscription_obj.id), "language": lang})
 
     program_obj: Program | None = cast(
         Program | None,
@@ -86,16 +122,28 @@ async def program_data(request: HttpRequest) -> JsonResponse:
 
     if program_obj is None:
         logger.warning(f"Program not found for client_profile_id={client.id} program_id={program_id}")
+        # Debug logging
+        latest = await call_repo(ProgramRepository.get_latest, client_id)
+        all_programs = await call_repo(ProgramRepository.filter_by_client, client_id)
+        logger.info(f"DEBUG: client_id={client_id} program_id={program_id} latest_program={latest.id if latest else 'None'}")
+        logger.info(f"DEBUG: all_program_ids={[p.id for p in all_programs] if all_programs else 'None'}")
+        print(f"DEBUG PRINT: client_id={client_id} program_id={program_id} latest_program={latest.id if latest else 'None'}")
         return JsonResponse({"error": "not_found"}, status=404)
 
-    return JsonResponse(
-        {
-            "program": program_obj.exercises_by_day,
-            "created_at": int(cast(datetime, program_obj.created_at).timestamp()),
-            "coach_type": program_obj.coach_type,
-            "language": lang,
-        }
-    )
+    data = {
+        "created_at": int(cast(datetime, program_obj.created_at).timestamp()),
+        "coach_type": program_obj.coach_type,
+        "language": lang,
+    }
+
+    if isinstance(program_obj.exercises_by_day, list):
+        data["days"] = _transform_days(program_obj.exercises_by_day)
+        data["id"] = str(program_obj.id)
+        data["locale"] = lang
+    else:
+        data["program"] = program_obj.exercises_by_day
+
+    return JsonResponse(data)
 
 
 # type checking of async views with require_GET is not supported by stubs
@@ -154,7 +202,8 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
         logger.warning(f"Subscription not found for client_profile_id={client.id}")
         return JsonResponse({"error": "not_found"}, status=404)
 
-    return JsonResponse({"program": subscription.exercises, "language": lang})
+    days = _transform_days(subscription.exercises)
+    return JsonResponse({"days": days, "id": str(subscription.id), "language": lang})
 
 
 # type checking of async views with require_GET is not supported by stubs

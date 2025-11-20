@@ -123,7 +123,7 @@ async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
                 "credits",
                 client.id,
             )
-        await state.update_data(order_id=order_id, amount=pkg.price, service_type="credits")
+        await state.update_data(order_id=order_id, amount=str(pkg.price), service_type="credits")
         await state.set_state(States.handle_payment)
         await answer_msg(
             callback_query,

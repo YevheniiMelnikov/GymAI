@@ -109,6 +109,9 @@ class ExerciseGIFStorage(GCStorageService):
 
                 return file_url
         except Exception as exc:
-            logger.error(f"Failed to find gif for exercise {exercise}: {exc}")
+            if "403" in str(exc) and "billing account" in str(exc):
+                logger.debug(f"Billing disabled, skipping GIF search for {exercise}")
+                return None
+            logger.debug(f"Failed to find gif for exercise {exercise}: {exc}")
 
         return None

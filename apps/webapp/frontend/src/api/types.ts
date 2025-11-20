@@ -71,6 +71,8 @@ export type HistoryResp = {
 
 export type SubscriptionResp = {
   program?: string;
+  days?: Day[];
+  id?: string;
   error?: string;
   language?: string;
 };
