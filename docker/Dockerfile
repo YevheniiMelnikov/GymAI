@@ -14,6 +14,7 @@ FROM ghcr.io/astral-sh/uv:0.4.20 AS uvbin
 FROM node:20-alpine AS webbuild
 WORKDIR /app/apps/webapp
 COPY apps/webapp/package*.json ./
+COPY apps/webapp/vite.config.ts ./
 RUN --mount=type=cache,target=/root/.npm npm ci
 COPY apps/webapp/frontend ./frontend
 COPY apps/webapp/scripts ./scripts

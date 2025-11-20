@@ -41,7 +41,7 @@ from bot.utils.menus import has_human_coach_subscription
 from bot.utils.profiles import assign_coach, get_assigned_coach
 from bot.utils.workout_plans import manage_program, cancel_subscription
 from bot.utils.other import generate_order_id
-from bot.utils.bot import del_msg, answer_msg
+from bot.utils.bot import del_msg, answer_msg, get_webapp_url
 from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
 from core.services import APIService
 from bot.keyboards import payment_kb
@@ -108,18 +108,27 @@ async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
 
         order_id = generate_order_id()
         await APIService.payment.create_payment(client.id, "credits", order_id, pkg.price)
-        link = await APIService.payment.get_payment_link(
-            "pay",
-            pkg.price,
-            order_id,
-            "credits",
-            client.id,
+        webapp_url = get_webapp_url(
+            "payment",
+            profile.language,
+            {"order_id": order_id, "payment_type": "credits"},
         )
+        link: str | None = None
+        if webapp_url is None:
+            logger.warning("WEBAPP_PUBLIC_URL is missing, falling back to LiqPay link for payment")
+            link = await APIService.payment.get_payment_link(
+                "pay",
+                pkg.price,
+                order_id,
+                "credits",
+                client.id,
+            )
+        await state.update_data(order_id=order_id, amount=str(pkg.price), service_type="credits")
         await state.set_state(States.handle_payment)
         await answer_msg(
             callback_query,
             msg_text("follow_link", profile.language).format(amount=format(pkg.price, "f")),
-            reply_markup=payment_kb(profile.language, link, "credits"),
+            reply_markup=payment_kb(profile.language, "credits", webapp_url=webapp_url, link=link),
         )
     await del_msg(callback_query)
 

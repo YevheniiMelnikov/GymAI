@@ -456,9 +456,14 @@ def yes_no_kb(lang: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def payment_kb(lang: str, link: str, service_type: str) -> KbMarkup:
+def payment_kb(lang: str, service_type: str, *, webapp_url: str | None = None, link: str | None = None) -> KbMarkup:
     builder = ButtonsBuilder(lang)
-    pay_button = KbBtn(text=btn_text("pay", lang), callback_data=service_type, url=link)
+    if webapp_url:
+        pay_button = KbBtn(text=btn_text("pay", lang), web_app=WebAppInfo(url=webapp_url))
+    elif link:
+        pay_button = KbBtn(text=btn_text("pay", lang), url=link)
+    else:
+        raise ValueError("payment_kb requires either webapp_url or link")
     done_button = builder.add("done", "done")
     buttons = [
         [pay_button, done_button],

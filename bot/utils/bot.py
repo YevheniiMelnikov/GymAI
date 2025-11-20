@@ -25,6 +25,7 @@ _WEBAPP_TARGETS: dict[str, _WebAppTarget] = {
     "program": _WebAppTarget("program", "direct", "program", "#/program"),
     "subscription": _WebAppTarget("program", "subscription", "subscriptions", "#/subscriptions"),
     "subscriptions": _WebAppTarget("program", "subscription", "subscriptions", "#/subscriptions"),
+    "payment": _WebAppTarget("payment", None, None, None),
 }
 
 
@@ -98,7 +99,11 @@ async def set_bot_commands(bot: Bot, lang: Optional[str] = None) -> None:
     await bot.set_my_commands(commands)
 
 
-def get_webapp_url(page_type: str, lang: str | None = None) -> str | None:
+def get_webapp_url(
+    page_type: str,
+    lang: str | None = None,
+    extra_params: dict[str, str] | None = None,
+) -> str | None:
     source = settings.WEBAPP_PUBLIC_URL
     if not source:
         logger.error("WEBAPP_PUBLIC_URL is not configured; webapp button hidden")
@@ -124,8 +129,16 @@ def get_webapp_url(page_type: str, lang: str | None = None) -> str | None:
     else:
         query_params.pop("lang", None)
 
+    merged_params = dict(query_params)
+    if extra_params:
+        for key, value in extra_params.items():
+            if value is None:
+                merged_params.pop(key, None)
+                continue
+            merged_params[str(key)] = str(value)
+
     fragment = (target.fragment or "").lstrip("#")
-    new_query = urlencode(query_params)
+    new_query = urlencode(merged_params)
     path = parsed.path or "/webapp/"
     updated = parsed._replace(path=path, query=new_query, fragment=fragment)
     return str(urlunparse(updated))

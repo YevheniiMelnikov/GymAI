@@ -1,30 +1,36 @@
-import inspect
 import os
 import time
 from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
-from types import SimpleNamespace
-from typing import Any, Awaitable, Callable, Tuple, TypeVar, TYPE_CHECKING, cast, Protocol
+from typing import Any, cast
 
-from asgiref.sync import sync_to_async
-from django.http import JsonResponse, HttpRequest, HttpResponse
+from django.conf import settings
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET
 from loguru import logger
 from rest_framework.exceptions import NotFound
 
-from core.schemas import DayExercises, Program, Subscription
+from apps.payments.repos import PaymentRepository
+from apps.workout_plans.repos import ProgramRepository, SubscriptionRepository
+from core.schemas import Program, Subscription
+
 from .utils import (
-    verify_init_data,
-    _format_full_program,
+    auth_and_get_client,
+    build_payment_gateway,
+    call_repo,
     ensure_container_ready,
-    normalize_day_exercises,
+    parse_program_id,
 )
 
 STATIC_VERSION_FILE: Path = Path(__file__).resolve().parents[2] / "VERSION"
 
 
 def _resolve_static_version() -> str:
+    if settings.DEBUG:
+        return str(int(time.time()))
+
     env_value: str | None = os.getenv("STATIC_VERSION")
     if STATIC_VERSION_FILE.exists():
         version: str = STATIC_VERSION_FILE.read_text(encoding="utf-8").strip()
@@ -38,134 +44,42 @@ def _resolve_static_version() -> str:
 STATIC_VERSION: str = _resolve_static_version()
 
 
-class _Profile(Protocol):
-    id: int | None
-    language: str | None
+def _transform_days(exercises_by_day: list) -> list[dict]:
+    days = []
+    for idx, day_data in enumerate(exercises_by_day, start=1):
+        exercises = []
+        for ex_idx, ex_data in enumerate(day_data.get("exercises", [])):
+            weight_str = ex_data.get("weight")
+            weight = None
+            if weight_str:
+                parts = str(weight_str).split(" ", 1)
+                if len(parts) == 2:
+                    weight = {"value": parts[0], "unit": parts[1]}
+                else:
+                    weight = {"value": weight_str, "unit": ""}
 
+            exercises.append(
+                {
+                    "id": str(ex_data.get("set_id") or f"ex-{idx}-{ex_idx}"),
+                    "name": ex_data.get("name", ""),
+                    "sets": ex_data.get("sets"),
+                    "reps": ex_data.get("reps"),
+                    "weight": weight,
+                    "equipment": None,
+                    "notes": None,
+                }
+            )
 
-class _ClientProfile(Protocol):
-    id: int | None
-
-
-if TYPE_CHECKING:
-    from apps.profiles.repos import ClientProfileRepository, ProfileRepository
-    from apps.workout_plans.repos import ProgramRepository, SubscriptionRepository
-else:  # attributes for monkeypatching in tests
-
-    class _RepoStub(SimpleNamespace):
-        pass
-
-    try:
-        from apps.profiles.repos import ClientProfileRepository as _ClientProfileRepo
-        from apps.profiles.repos import ProfileRepository as _ProfileRepo
-        from apps.workout_plans.repos import (
-            ProgramRepository as _ProgramRepo,
-            SubscriptionRepository as _SubscriptionRepo,
+        days.append(
+            {
+                "id": f"day-{idx}",
+                "index": idx,
+                "type": "workout",
+                "title": day_data.get("day"),
+                "exercises": exercises,
+            }
         )
-    except Exception:  # pragma: no cover - fall back to stubs in exceptional cases
-        _ClientProfileRepo = _RepoStub(get_by_profile_id=lambda *a, **k: None)
-        _ProfileRepo = _RepoStub(get_by_telegram_id=lambda *a, **k: None)
-        _ProgramRepo = _RepoStub(
-            get_latest=lambda *a, **k: None,
-            get_by_id=lambda *a, **k: None,
-            get_all=lambda *a, **k: [],
-        )
-        _SubscriptionRepo = _RepoStub(get_latest=lambda *a, **k: None)
-
-    ClientProfileRepository = _ClientProfileRepo
-    ProfileRepository = _ProfileRepo
-    ProgramRepository = _ProgramRepo
-    SubscriptionRepository = _SubscriptionRepo
-
-T = TypeVar("T")
-
-
-async def _call_repo(func: Callable[..., T], *args: Any, **kwargs: Any) -> T:
-    """Execute repository call regardless of sync_to_async stubbing."""
-    result = sync_to_async(func)(*args, **kwargs)
-    if inspect.isawaitable(result):
-        return await cast(Awaitable[T], result)
-    return cast(T, result)
-
-
-def _read_init_data(request: HttpRequest) -> str:
-    init_data_raw = request.GET.get("init_data", "")
-    init_data: str = str(init_data_raw or "")
-    if init_data:
-        return init_data
-
-    headers = getattr(request, "headers", None)
-    if headers is not None:
-        header_value = headers.get("X-Telegram-InitData")
-        if header_value:
-            return str(header_value)
-
-    meta_value = request.META.get("HTTP_X_TELEGRAM_INITDATA")
-    if isinstance(meta_value, str):
-        return meta_value
-    return ""
-
-
-async def _auth_and_get_client(
-    request: HttpRequest,
-) -> Tuple[_ClientProfile | None, str, JsonResponse | None, int]:
-    """
-    Verify Telegram init_data, resolve tg_id -> Profile -> ClientProfile.
-
-    Returns (client | None, language, error_response | None, tg_id).
-    """
-    init_data: str = _read_init_data(request)
-    logger.debug(f"Webapp request: init_data length={len(init_data)}")
-    lang: str = "eng"
-    try:
-        data: dict[str, Any] = verify_init_data(init_data)
-    except Exception as exc:
-        logger.warning(f"Init data verification failed: {exc} | length={len(init_data)}")
-        return None, lang, JsonResponse({"error": "unauthorized"}, status=403), 0
-
-    user: dict[str, Any] = data.get("user", {})  # type: ignore[arg-type]
-    tg_id: int = int(str(user.get("id", "0")))
-
-    global ClientProfileRepository, ProfileRepository
-
-    try:
-        profile = cast(_Profile, await _call_repo(ProfileRepository.get_by_telegram_id, tg_id))
-    except Exception as exc:
-        if exc.__class__ is NotFound:
-            logger.warning(f"Profile not found for tg_id={tg_id}")
-            return None, lang, JsonResponse({"error": "not_found"}, status=404), tg_id
-        raise
-
-    lang = str(getattr(profile, "language", "eng") or "eng")
-    try:
-        client = cast(
-            _ClientProfile,
-            await _call_repo(ClientProfileRepository.get_by_profile_id, int(profile.id or 0)),
-        )
-    except Exception as exc:
-        if exc.__class__ is NotFound:
-            logger.warning(f"Client profile not found for profile_id={profile.id}")
-            return None, lang, JsonResponse({"error": "not_found"}, status=404), tg_id
-        raise
-
-    return client, lang, None, tg_id
-
-
-def _parse_program_id(request: HttpRequest) -> Tuple[int | None, JsonResponse | None]:
-    raw = request.GET.get("program_id")
-    if not isinstance(raw, str) or not raw:
-        return None, None
-    try:
-        return int(raw), None
-    except ValueError:
-        logger.warning(f"Invalid program_id={raw}")
-        return None, JsonResponse({"error": "bad_request"}, status=400)
-
-
-def _format_program_text(raw_exercises: Any) -> str:
-    raw = normalize_day_exercises(raw_exercises)
-    exercises = [DayExercises.model_validate(e) for e in raw]
-    return _format_full_program(exercises)
+    return days
 
 
 # type checking of async views with require_GET is not supported by stubs
@@ -179,12 +93,12 @@ async def program_data(request: HttpRequest) -> JsonResponse:
         logger.warning(f"Unsupported program source={source}")
         source = "direct"
 
-    program_id, pid_error = _parse_program_id(request)
+    program_id, pid_error = parse_program_id(request)
     if pid_error:
         return pid_error
 
     try:
-        client, lang, auth_error, _tg = await _auth_and_get_client(request)
+        client, lang, auth_error, _tg = await auth_and_get_client(request)
     except Exception:
         logger.exception("Auth resolution failed")
         return JsonResponse({"error": "server_error"}, status=500)
@@ -192,42 +106,52 @@ async def program_data(request: HttpRequest) -> JsonResponse:
         return auth_error
     assert client is not None
 
-    global ProgramRepository, SubscriptionRepository
-
     client_id = int(getattr(client, "id", 0))
 
     if source == "subscription":
         subscription_obj: Subscription | None = cast(
             Subscription | None,
-            await _call_repo(SubscriptionRepository.get_latest, client_id),
+            await call_repo(SubscriptionRepository.get_latest, client_id),
         )
         if subscription_obj is None:
             logger.warning(f"Subscription not found for client_profile_id={client.id}")
             return JsonResponse({"error": "not_found"}, status=404)
 
-        text: str = _format_program_text(subscription_obj.exercises)
-        return JsonResponse({"program": text, "language": lang})
+        days = _transform_days(subscription_obj.exercises)
+        return JsonResponse({"days": days, "id": str(subscription_obj.id), "language": lang})
 
     program_obj: Program | None = cast(
         Program | None,
-        await _call_repo(ProgramRepository.get_by_id, client_id, program_id)
+        await call_repo(ProgramRepository.get_by_id, client_id, program_id)
         if program_id is not None
-        else await _call_repo(ProgramRepository.get_latest, client_id),
+        else await call_repo(ProgramRepository.get_latest, client_id),
     )
 
     if program_obj is None:
         logger.warning(f"Program not found for client_profile_id={client.id} program_id={program_id}")
         return JsonResponse({"error": "not_found"}, status=404)
 
-    text = _format_program_text(program_obj.exercises_by_day)
-    return JsonResponse(
-        {
-            "program": text,
-            "created_at": int(cast(datetime, program_obj.created_at).timestamp()),
-            "coach_type": program_obj.coach_type,
-            "language": lang,
-        }
-    )
+    data: dict[str, object] = {
+        "created_at": int(cast(datetime, program_obj.created_at).timestamp()),
+        "coach_type": program_obj.coach_type,
+        "language": lang,
+    }
+
+    program_id_value = getattr(program_obj, "id", None)
+    if isinstance(program_obj.exercises_by_day, list):
+        days_payload = cast(list[dict[str, Any]], program_obj.exercises_by_day)
+        transformed = _transform_days(days_payload)
+        data["days"] = transformed
+        data["program"] = transformed
+        if program_id_value is not None:
+            data["id"] = str(program_id_value)
+        elif program_id is not None:
+            data["id"] = str(program_id)
+        data["locale"] = lang
+    else:
+        data["program"] = program_obj.exercises_by_day
+
+    return JsonResponse(data)
 
 
 # type checking of async views with require_GET is not supported by stubs
@@ -236,7 +160,7 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
     try:
-        client, lang, auth_error, tg_id = await _auth_and_get_client(request)
+        client, lang, auth_error, tg_id = await auth_and_get_client(request)
     except Exception:
         logger.exception("Auth resolution failed")
         return JsonResponse({"error": "server_error"}, status=500)
@@ -244,12 +168,10 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
         return auth_error
     assert client is not None
 
-    global ProgramRepository
-
     try:
         programs = cast(
             list[Program],
-            await _call_repo(ProgramRepository.get_all, int(getattr(client, "id", 0))),
+            await call_repo(ProgramRepository.get_all, int(getattr(client, "id", 0))),
         )
     except Exception:
         logger.exception(f"Failed to fetch programs for tg_id={tg_id}")
@@ -272,7 +194,7 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
     try:
-        client, lang, auth_error, _tg = await _auth_and_get_client(request)
+        client, lang, auth_error, _tg = await auth_and_get_client(request)
     except Exception:
         logger.exception("Auth resolution failed")
         return JsonResponse({"error": "server_error"}, status=500)
@@ -280,18 +202,80 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
         return auth_error
     assert client is not None
 
-    global SubscriptionRepository
-
     subscription = cast(
         Subscription | None,
-        await _call_repo(SubscriptionRepository.get_latest, int(getattr(client, "id", 0))),
+        await call_repo(SubscriptionRepository.get_latest, int(getattr(client, "id", 0))),
     )
     if subscription is None:
         logger.warning(f"Subscription not found for client_profile_id={client.id}")
         return JsonResponse({"error": "not_found"}, status=404)
 
-    text: str = _format_program_text(subscription.exercises)
-    return JsonResponse({"program": text, "language": lang})
+    subscription_id = getattr(subscription, "id", None)
+    days = _transform_days(subscription.exercises)
+    response: dict[str, object] = {"days": days, "language": lang, "program": days}
+    if subscription_id is not None:
+        response["id"] = str(subscription_id)
+    return JsonResponse(response)
+
+
+# type checking of async views with require_GET is not supported by stubs
+@require_GET  # type: ignore[misc]
+async def payment_data(request: HttpRequest) -> JsonResponse:
+    await ensure_container_ready()
+
+    order_raw = request.GET.get("order_id", "")
+    order_id: str = str(order_raw or "").strip()
+    if not order_id:
+        logger.warning("Payment data requested without order_id")
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    try:
+        client, lang, auth_error, tg_id = await auth_and_get_client(request)
+    except Exception:
+        logger.exception("Auth resolution failed")
+        return JsonResponse({"error": "server_error"}, status=500)
+    if auth_error:
+        return auth_error
+    assert client is not None
+
+    try:
+        payment = await call_repo(PaymentRepository.get_by_order_id, order_id)
+    except Exception as exc:
+        if exc.__class__ is NotFound:
+            logger.warning(f"Payment not found for order_id={order_id} tg_id={tg_id}")
+            return JsonResponse({"error": "not_found"}, status=404)
+        raise
+
+    client_profile_id = int(getattr(client, "id", 0))
+    payment_client_id = int(getattr(payment, "client_profile_id", 0))
+    if payment_client_id != client_profile_id:
+        logger.warning(
+            f"Payment order_id={order_id} belongs to client_profile_id={payment_client_id}, "
+            f"requested by {client_profile_id}"
+        )
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    gateway = build_payment_gateway()
+    amount_value = Decimal(str(getattr(payment, "amount", "0"))).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    checkout = gateway.build_checkout(
+        "pay",
+        amount_value,
+        order_id,
+        str(getattr(payment, "payment_type", "")),
+        client_profile_id,
+    )
+
+    return JsonResponse(
+        {
+            "data": checkout.data,
+            "signature": checkout.signature,
+            "checkout_url": checkout.checkout_url,
+            "amount": str(amount_value),
+            "currency": "UAH",
+            "payment_type": getattr(payment, "payment_type", ""),
+            "language": lang,
+        }
+    )
 
 
 def index(request: HttpRequest) -> HttpResponse:

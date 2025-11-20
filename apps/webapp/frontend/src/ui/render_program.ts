@@ -217,11 +217,6 @@ export function renderProgramDays(program: Program): RenderedProgram {
   weeks.forEach((week) => {
     const wrap = document.createElement('section');
     wrap.className = 'week';
-
-    const h2 = document.createElement('h2');
-    h2.textContent = t('program.week', { n: week.index });
-    wrap.appendChild(h2);
-
     week.days.forEach((day) => {
       wrap.appendChild(renderDay(day));
     });

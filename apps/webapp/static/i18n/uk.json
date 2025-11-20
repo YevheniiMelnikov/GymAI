@@ -3,11 +3,12 @@
   "created": "Створено",
   "ai_label": "ШІ",
   "service_unavailable": "Сервіс тимчасово недоступний",
+  "bad_request": "Некоректний запит",
   "unauthorized": "Немає доступу",
   "not_found": "Не знайдено",
   "server_error": "Помилка сервера",
   "unexpected_error": "Невідома помилка",
-  "no_programs": "Програм не знайдено",
+  "no_programs": "У вас поки немає програм",
   "sort_newest": "Сортування: нові",
   "sort_oldest": "Сортування: старі",
   "show_ai": "Показувати плани ШІ",
@@ -26,9 +27,17 @@
   "tabs.program": "Програми",
   "tabs.subscriptions": "Підписки",
   "subscriptions.title": "Підписки",
-  "subscriptions.empty": "Тут поки що порожньо",
+  "subscriptions.empty": "У вас поки немає підписок",
 
   "page.program": "Програма",
   "page.history": "Історія",
-  "page.subscriptions": "Підписки"
+  "page.subscriptions": "Підписки",
+  "page.payment": "Оплата",
+
+  "payment.title": "Оплата",
+  "payment.loading": "Завантажуємо форму оплати...",
+  "payment.amount": "До сплати: {amount} {currency}",
+  "payment.launch": "Форма оплати відкриється всередині Telegram. Якщо цього не сталося, натисніть кнопку нижче.",
+  "payment.open": "Відкрити сторінку оплати",
+  "payment.unavailable": "Зараз оплата недоступна, спробуйте пізніше"
 }

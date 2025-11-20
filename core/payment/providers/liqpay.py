@@ -3,10 +3,10 @@ import hashlib
 import json
 from copy import deepcopy
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Any
+from typing import Any, NamedTuple
 from urllib.parse import urlencode, urljoin
 
-from core.payment.providers.payment_gateway import PaymentGateway
+from core.payment.providers.payment_gateway import CheckoutPayload, PaymentGateway
 
 
 class ParamValidationError(Exception):
@@ -93,6 +93,12 @@ class LiqPay:
         return json.loads(decoded_json)
 
 
+class LiqPayCheckout(NamedTuple):
+    data: str
+    signature: str
+    checkout_url: str
+
+
 class LiqPayGateway(PaymentGateway):
     def __init__(
         self,
@@ -110,14 +116,14 @@ class LiqPayGateway(PaymentGateway):
         self._email = email or ""
         self._checkout_url = checkout_url or ""
 
-    async def get_payment_link(
+    def _build_params(
         self,
         action: str,
         amount: Decimal,
         order_id: str,
         payment_type: str,
         client_id: int,
-    ) -> str:
+    ) -> dict[str, Any]:
         params: dict[str, Any] = {
             "action": action,
             "amount": str(amount.quantize(Decimal("0.01"), ROUND_HALF_UP)),
@@ -132,7 +138,33 @@ class LiqPayGateway(PaymentGateway):
             params["result_url"] = self._result_url
         if self._email:
             params["rro_info"] = {"delivery_emails": [self._email]}
+        return params
+
+    def build_checkout(
+        self,
+        action: str,
+        amount: Decimal,
+        order_id: str,
+        payment_type: str,
+        client_id: int,
+    ) -> CheckoutPayload:
+        params = self._build_params(action, amount, order_id, payment_type, client_id)
         data: str = self.client.cnb_data(params)
         signature: str = self.client.cnb_signature(params)
         checkout_url: str = str(self._checkout_url)
-        return urljoin(checkout_url, f"?{urlencode({'data': data, 'signature': signature})}")
+        return LiqPayCheckout(
+            data=data,
+            signature=signature,
+            checkout_url=urljoin(checkout_url, f"?{urlencode({'data': data, 'signature': signature})}"),
+        )
+
+    async def get_payment_link(
+        self,
+        action: str,
+        amount: Decimal,
+        order_id: str,
+        payment_type: str,
+        client_id: int,
+    ) -> str:
+        checkout = self.build_checkout(action, amount, order_id, payment_type, client_id)
+        return checkout.checkout_url

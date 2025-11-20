@@ -3,11 +3,12 @@
   "created": "Created",
   "ai_label": "AI",
   "service_unavailable": "Service temporarily unavailable",
+  "bad_request": "Invalid request",
   "unauthorized": "Unauthorized",
   "not_found": "Not found",
   "server_error": "Server error",
   "unexpected_error": "Unexpected error",
-  "no_programs": "No programs found",
+  "no_programs": "You have no programs yet",
   "sort_newest": "Sort: Newest",
   "sort_oldest": "Sort: Oldest",
   "show_ai": "Show AI workout plans",
@@ -26,9 +27,17 @@
   "tabs.program": "Programs",
   "tabs.subscriptions": "Subscriptions",
   "subscriptions.title": "Subscriptions",
-  "subscriptions.empty": "No subscriptions yet",
+  "subscriptions.empty": "You have no subscriptions yet",
 
   "page.program": "Program",
   "page.history": "History",
-  "page.subscriptions": "Subscriptions"
+  "page.subscriptions": "Subscriptions",
+  "page.payment": "Payment",
+
+  "payment.title": "Payment",
+  "payment.loading": "Loading payment form...",
+  "payment.amount": "Amount to pay: {amount} {currency}",
+  "payment.launch": "The payment form will open inside Telegram. If it does not, use the button below.",
+  "payment.open": "Open payment page",
+  "payment.unavailable": "Payment checkout is unavailable right now"
 }

@@ -1,4 +1,5 @@
-import { Locale, Program, ProgramResp, ProgramStructuredResponse } from './types';
+import { readLocale } from '../telegram';
+import { Locale, PaymentPayloadResp, Program, ProgramResp, ProgramStructuredResponse, SubscriptionResp } from './types';
 
 const KNOWN_LOCALES: readonly Locale[] = ['en', 'ru', 'uk'];
 const LOCALE_ALIASES: Record<string, Locale> = { ua: 'uk' };
@@ -25,6 +26,8 @@ export class HttpError extends Error {
 
 export function statusToMessage(status: number): string {
   switch (status) {
+    case 400:
+      return 'bad_request';
     case 401:
     case 403:
       return 'unauthorized';
@@ -40,6 +43,16 @@ export function statusToMessage(status: number): string {
 export type LoadedProgram =
   | { kind: 'structured'; program: Program; locale: Locale }
   | { kind: 'legacy'; programText: string; locale: Locale; createdAt?: string | null };
+
+export type PaymentData = {
+  data: string;
+  signature: string;
+  checkoutUrl: string;
+  amount: string;
+  currency: string;
+  paymentType: string;
+  locale: Locale;
+};
 
 export async function getJSON<T>(url: string, options: RequestInit = {}): Promise<T> {
   const resp = await fetch(url, options);
@@ -131,4 +144,45 @@ export async function getProgram(
   }
 
   return { kind: 'legacy', programText: data.program, locale: resolvedLocale, createdAt };
+}
+
+export async function getSubscription(
+  initData: string,
+  signal?: AbortSignal
+): Promise<SubscriptionResp> {
+  const locale = readLocale();
+  const url = new URL('api/subscription/', window.location.href);
+  const headers: Record<string, string> = {};
+  if (initData) headers['X-Telegram-InitData'] = initData;
+
+  const raw = await getJSON<SubscriptionResp>(url.toString(), { headers, signal });
+  const resolvedLocale = normalizeLocale(raw.language, locale);
+  return {
+    ...raw,
+    language: resolvedLocale,
+  };
+}
+
+export async function getPaymentData(
+  orderId: string,
+  initData: string,
+  signal?: AbortSignal
+): Promise<PaymentData> {
+  const locale = readLocale();
+  const url = new URL('api/payment/', window.location.href);
+  url.searchParams.set('order_id', orderId);
+  const headers: Record<string, string> = {};
+  if (initData) headers['X-Telegram-InitData'] = initData;
+
+  const raw = await getJSON<PaymentPayloadResp>(url.toString(), { headers, signal });
+  const resolvedLocale = normalizeLocale(raw.language, locale);
+  return {
+    data: raw.data,
+    signature: raw.signature,
+    checkoutUrl: raw.checkout_url,
+    amount: raw.amount,
+    currency: raw.currency ?? 'UAH',
+    paymentType: raw.payment_type ?? '',
+    locale: resolvedLocale,
+  };
 }

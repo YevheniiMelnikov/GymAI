@@ -59,3 +59,10 @@ class PaymentRepository:
         if order_id:
             qs = qs.filter(order_id=order_id)
         return qs
+
+    @staticmethod
+    def get_by_order_id(order_id: str) -> Payment:
+        try:
+            return Payment.objects.get(order_id=order_id)  # pyrefly: ignore[missing-attribute]
+        except Payment.DoesNotExist:  # pyrefly: ignore[missing-attribute]
+            raise NotFound(f"Payment order_id={order_id} not found")
