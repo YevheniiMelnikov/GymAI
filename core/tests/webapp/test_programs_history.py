@@ -8,7 +8,6 @@ from datetime import datetime
 import pytest
 from django.http import HttpRequest, JsonResponse
 
-from core.enums import CoachType
 from apps.webapp import utils
 
 django_http = sys.modules["django.http"]
@@ -34,7 +33,7 @@ def test_programs_history_success(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             views.ProgramRepository,
             "get_all",
-            lambda _id: [SimpleNamespace(id=1, created_at=datetime.fromtimestamp(1), coach_type=CoachType.ai_coach)],
+            lambda _id: [SimpleNamespace(id=1, created_at=datetime.fromtimestamp(1))],
         )
 
         request: HttpRequest = HttpRequest()
@@ -45,7 +44,6 @@ def test_programs_history_success(monkeypatch: pytest.MonkeyPatch) -> None:
         assert response.status_code == 200
         data = json.loads(response.content)
         assert data["programs"][0]["id"] == 1
-        assert data["programs"][0]["coach_type"] == CoachType.ai_coach
         assert data["language"] == "eng"
 
     asyncio.run(runner())

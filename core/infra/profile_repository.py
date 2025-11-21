@@ -3,8 +3,7 @@ from typing import Any
 import httpx
 from loguru import logger
 
-from core.encryptor import Encryptor
-from core.schemas import Client, Coach, Profile
+from core.schemas import Client, Profile
 from core.services.internal.api_client import (
     APIClient,
     APIClientHTTPError,
@@ -14,8 +13,6 @@ from core.services.internal.api_client import (
 
 
 class HTTPProfileRepository(APIClient):
-    encrypter = Encryptor
-
     def __init__(self, client: httpx.AsyncClient, settings: APISettings) -> None:
         super().__init__(client, settings)
         self.use_default_auth = False
@@ -62,9 +59,9 @@ class HTTPProfileRepository(APIClient):
             return self._parse_profile(data)
         return None
 
-    async def create_profile(self, tg_id: int, role: str, language: str) -> Profile | None:
+    async def create_profile(self, tg_id: int, language: str) -> Profile | None:
         url = self._build_url("api/v1/profiles/")
-        payload = {"tg_id": tg_id, "role": role, "language": language}
+        payload = {"tg_id": tg_id, "language": language}
         try:
             status_code, data = await self._api_request(
                 "post", url, payload, headers={"Authorization": f"Api-Key {self.api_key}"}
@@ -152,62 +149,6 @@ class HTTPProfileRepository(APIClient):
         new_credits = max(0, int(client.credits) + int_delta)
         return await self.update_client_profile(client.id, {"credits": int(new_credits)})
 
-    async def adjust_coach_payout_due(self, profile_id: int, delta: Decimal) -> bool:
-        coach = await self.get_coach_by_profile_id(profile_id)
-        if coach is None:
-            logger.error(f"CoachProfile not found for profile_id={profile_id}")
-            return False
-
-        new_due = (coach.payout_due or Decimal("0")) + delta
-        return await self.update_coach_profile(coach.id, {"payout_due": str(new_due)})
-
-    async def create_coach_profile(self, profile_id: int, data: dict[str, Any] | None = None) -> Coach | None:
-        url = self._build_url("api/v1/coach-profiles/")
-        payload: dict[str, Any] = {"profile": profile_id}
-        if data:
-            data.pop("profile", None)
-            for k, v in data.items():
-                payload[k] = str(v) if isinstance(v, Decimal) else v
-
-        if payload.get("payment_details"):
-            payload["payment_details"] = self.encrypter.encrypt(payload["payment_details"])
-
-        try:
-            status, resp = await self._api_request(
-                "post", url, payload, headers={"Authorization": f"Api-Key {self.api_key}"}
-            )
-        except (APIClientHTTPError, APIClientTransportError) as exc:
-            logger.error(f"Failed to create CoachProfile profile_id={profile_id}: {exc}")
-            return None
-        if status == 201 and resp:
-            logger.info(f"Created coach profile for profile_id={profile_id}")
-            return Coach.model_validate(resp)
-
-        logger.error(f"Failed to create CoachProfile profile_id={profile_id}. HTTP={status}")
-        return None
-
-    async def update_coach_profile(self, coach_id: int, data: dict[str, Any]) -> bool:
-        url = self._build_url(f"api/v1/coach-profiles/pk/{coach_id}/")
-
-        for price_field in ("program_price", "subscription_price"):
-            if price_field in data and isinstance(data[price_field], Decimal):
-                data[price_field] = str(data[price_field])
-
-        if "payment_details" in data and data["payment_details"]:
-            data["payment_details"] = self.encrypter.encrypt(data["payment_details"])
-        try:
-            status, _ = await self._api_request(
-                "patch", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
-            )
-        except (APIClientHTTPError, APIClientTransportError) as exc:
-            logger.error(f"Failed to update CoachProfile {coach_id}: {exc}")
-            return False
-        if status in (200, 204):
-            logger.info(f"CoachProfile {coach_id} updated")
-            return True
-        logger.error(f"Failed to update CoachProfile {coach_id}. HTTP={status}")
-        return False
-
     async def _get_by_profile(self, tail: str, model):
         url = self._build_url(tail)
         try:
@@ -243,35 +184,6 @@ class HTTPProfileRepository(APIClient):
     async def get_client_by_profile_id(self, profile_id: int) -> Client | None:
         return await self._get_by_profile(f"api/v1/client-profiles/by-profile/{profile_id}/", Client)
 
-    async def get_coach_by_profile_id(self, profile_id: int) -> Coach | None:
-        return await self._get_by_profile(f"api/v1/coach-profiles/by-profile/{profile_id}/", Coach)
-
     async def get_client_by_tg_id(self, tg_id: int) -> Client | None:
         profile = await self.get_profile_by_tg_id(tg_id)
         return await self.get_client_by_profile_id(profile.id) if profile else None
-
-    async def get_coach_by_tg_id(self, tg_id: int) -> Coach | None:
-        profile = await self.get_profile_by_tg_id(tg_id)
-        return await self.get_coach_by_profile_id(profile.id) if profile else None
-
-    async def list_coach_profiles(self) -> list[Coach]:
-        url = self._build_url("api/v1/coach-profiles/")
-        try:
-            status, data = await self._api_request(
-                "get",
-                url,
-                headers={"Authorization": f"Api-Key {self.api_key}"},
-            )
-        except (APIClientHTTPError, APIClientTransportError) as exc:
-            logger.error(f"Failed to fetch coaches list: {exc}")
-            return []
-
-        if status != 200:
-            logger.error(f"Failed to fetch coaches list. HTTP={status}")
-            return []
-
-        items: list[dict] = (
-            data if isinstance(data, list) else data.get("results", []) if isinstance(data, dict) else []
-        )
-
-        return [Coach.model_validate(item) for item in items]

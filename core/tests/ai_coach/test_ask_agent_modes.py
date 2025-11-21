@@ -6,7 +6,7 @@ from ai_coach.application import app
 from ai_coach.agent import CoachAgent
 import ai_coach.api as coach_api
 from ai_coach.api import DEFAULT_WORKOUT_DAYS
-from core.enums import CoachType, WorkoutType
+from core.enums import WorkoutType
 from core.schemas import DayExercises, Exercise, Program, Subscription
 
 
@@ -20,7 +20,6 @@ def _sample_program() -> Program:
         split_number=1,
         workout_type="",
         wishes="",
-        coach_type=CoachType.human,
     )
 
 

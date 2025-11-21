@@ -6,12 +6,10 @@ class States(StatesGroup):
     feedback = State()
 
     select_language = State()
-    account_type = State()
 
     gender = State()
     born_in = State()
     name = State()
-    surname = State()
     workout_goals = State()
     workout_type = State()
     workouts_number = State()
@@ -20,12 +18,6 @@ class States(StatesGroup):
     workout_experience = State()
     health_notes = State()
     enter_wishes = State()
-    work_experience = State()
-    additional_info = State()
-    payment_details = State()
-    program_price = State()
-    subscription_price = State()
-    profile_photo = State()
     accept_policy = State()
 
     edit_profile = State()
@@ -33,7 +25,6 @@ class States(StatesGroup):
     profile_delete = State()
 
     workout_survey = State()
-    workout_description = State()
     program_view = State()
     confirm_subscription_reset = State()
     exercise_weight = State()
@@ -53,14 +44,6 @@ class States(StatesGroup):
     subscription_history = State()
     program_action_choice = State()
 
-    new_coach_request = State()
-    choose_coach = State()
-    coach_selection = State()
-    contact_coach = State()
-
-    show_clients = State()
-    contact_client = State()
-
     payment_choice = State()
     handle_payment = State()
     gift = State()
@@ -72,5 +55,3 @@ class States(StatesGroup):
     confirm_service = State()
     ai_confirm_service = State()
     subscription_action_choice = State()
-    subscription_creation_choice = State()
-    program_creation_choice = State()

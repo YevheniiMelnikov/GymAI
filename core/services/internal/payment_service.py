@@ -46,9 +46,6 @@ class PaymentService:
     async def update_payment(self, payment_id: int, data: dict[str, Any]) -> bool:
         return await self._repository.update_payment(payment_id, data)
 
-    async def get_unclosed_payments(self) -> list[Payment]:
-        return await self._repository.get_unclosed_payments()
-
     async def get_expired_subscriptions(self, expired_before: str) -> list[Subscription]:
         return await self._repository.get_expired_subscriptions(expired_before)
 

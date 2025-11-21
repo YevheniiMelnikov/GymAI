@@ -66,10 +66,6 @@ CRITICAL_TASK_ROUTES: dict[str, dict[str, str]] = {
         "queue": "critical",
         "routing_key": "critical",
     },
-    "apps.payments.tasks.send_client_request": {
-        "queue": "critical",
-        "routing_key": "critical",
-    },
 }
 
 AI_COACH_TASK_ROUTES: dict[str, dict[str, str]] = {

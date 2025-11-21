@@ -7,13 +7,13 @@ from core.services.internal.client_service import ClientService
 from core.services.internal.profile_service import ProfileService
 from core.services.internal.workout_service import WorkoutService
 
-BUCKET_COACH_AVATARS: Final[str] = "coach_avatars"
+BUCKET_CLIENT_AVATARS: Final[str] = "client_avatars"
 BUCKET_EXERCISES_GUIDE: Final[str] = "exercises_guide"
 
 
 @lru_cache(maxsize=1)
 def get_avatar_manager() -> GCStorageService:
-    return GCStorageService(BUCKET_COACH_AVATARS)
+    return GCStorageService(BUCKET_CLIENT_AVATARS)
 
 
 @lru_cache(maxsize=1)

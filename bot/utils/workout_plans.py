@@ -1,6 +1,6 @@
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from typing import cast
 
 from aiogram import Bot
@@ -8,12 +8,12 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from loguru import logger
 
-from bot.keyboards import program_edit_kb, program_manage_kb, subscription_view_kb, program_view_kb
+from bot.keyboards import program_manage_kb, subscription_view_kb, program_view_kb
 from bot.states import States
 from config.app_settings import settings
 from core.cache import Cache
 from core.enums import ClientStatus, PaymentStatus, SubscriptionPeriod
-from core.schemas import Profile, DayExercises, Subscription, Program
+from core.schemas import Profile, DayExercises, Subscription
 from core.exceptions import (
     ClientNotFoundError,
     SubscriptionNotFoundError,
@@ -23,12 +23,9 @@ from core.exceptions import (
 from core.services import APIService
 from bot.utils.chat import send_message
 from bot.utils.menus import show_main_menu, show_subscription_page, show_balance_menu
-from bot.utils.profiles import get_assigned_coach
-from core.enums import CoachType
 from bot.utils.text import get_translated_week_day
 from bot.utils.bot import del_msg, answer_msg, delete_messages, get_webapp_url
 from bot.keyboards import yes_no_kb
-from bot.utils.credits import uah_to_credits
 from bot.texts import msg_text, btn_text
 
 
@@ -274,64 +271,6 @@ async def next_day_workout_plan(callback_query: CallbackQuery, state: FSMContext
     )
 
 
-async def manage_program(callback_query: CallbackQuery, profile: Profile, profile_id: str, state: FSMContext) -> None:
-    program_paid = await Cache.payment.is_payed(int(profile_id), "program")
-    workout_program: Program | None = None
-    try:
-        workout_program = await Cache.workout.get_latest_program(int(profile_id))
-    except ProgramNotFoundError:
-        logger.info(f"Program not found for client {profile_id} in manage_program.")
-
-    if not program_paid and not workout_program:
-        await callback_query.answer(msg_text("payment_required", profile.language), show_alert=True)
-        await state.set_state(States.show_clients)
-        return
-
-    message = callback_query.message
-    if not message or not isinstance(message, Message):
-        return
-
-    if workout_program and getattr(workout_program, "exercises_by_day", None):
-        program_msg = await answer_msg(
-            message,
-            msg_text("new_workout_plan", profile.language),
-            reply_markup=program_edit_kb(profile.language),
-            disable_web_page_preview=True,
-        )  # TODO: REPLACE WITH WEBAPP
-
-        message_ids = []
-        if program_msg:
-            message_ids.append(program_msg.message_id)
-
-        await state.update_data(
-            chat_id=message.chat.id,
-            message_ids=message_ids,
-            exercises=workout_program.exercises_by_day,
-            client_id=profile_id,
-            day_index=0,
-        )
-        await state.set_state(States.program_edit)
-        await del_msg(message)
-        return
-
-    no_program_msg = await answer_msg(message, msg_text("no_program", profile.language))
-    workouts_number_msg = await answer_msg(message, msg_text("workouts_number", profile.language))
-
-    message_ids = []
-    if no_program_msg:
-        message_ids.append(no_program_msg.message_id)
-    if workouts_number_msg:
-        message_ids.append(workouts_number_msg.message_id)
-
-    await state.update_data(
-        chat_id=message.chat.id,
-        message_ids=message_ids,
-        client_id=profile_id,
-    )
-    await state.set_state(States.workouts_number)
-    await del_msg(message)
-
-
 async def cache_program_data(data: dict, profile_id: int) -> None:
     program_data = {
         "id": 1,
@@ -362,13 +301,7 @@ async def process_new_subscription(
     await callback_query.answer(msg_text("checkbox_reminding", language), show_alert=True)
     data = await state.get_data()
     client = await Cache.client.get_client(profile.id)
-    if not client or not client.assigned_to:
-        return
-    coach = await get_assigned_coach(client, coach_type=CoachType.human)
-    if not coach:
-        return
-
-    required = uah_to_credits(coach.subscription_price or Decimal("0"))
+    required = int(data.get("required", 0))
     if client.credits < required:
         await callback_query.answer(msg_text("not_enough_credits", language), show_alert=True)
         await show_balance_menu(callback_query, profile, state)
@@ -382,7 +315,7 @@ async def process_new_subscription(
     period = period_map.get(service_type, SubscriptionPeriod.one_month)
 
     if not confirmed:
-        await state.update_data(required=required, period=period, coach=coach.model_dump())
+        await state.update_data(required=required, period=period.value)
         await state.set_state(States.confirm_service)
         await answer_msg(
             callback_query,
@@ -404,9 +337,6 @@ async def process_new_subscription(
 
     await APIService.profile.adjust_client_credits(profile.id, -required)
     await Cache.client.update_client(client.profile, {"credits": client.credits - required})
-    payout = (coach.subscription_price or Decimal("0")).quantize(Decimal("0.01"), ROUND_HALF_UP)
-    await APIService.profile.adjust_coach_payout_due(coach.profile, payout)
-    await Cache.coach.update_coach(coach.profile, {"payout_due": str((coach.payout_due or Decimal("0")) + payout)})
     next_payment = _next_payment_date(period)
     await APIService.workout.update_subscription(sub_id, {"enabled": True, "payment_date": next_payment})
     await Cache.workout.update_subscription(
@@ -419,6 +349,7 @@ async def process_new_subscription(
             "price": required,
         },
     )
+    await Cache.payment.reset_status(client.id, "subscription")
     await callback_query.answer(msg_text("payment_success", language), show_alert=True)
 
 

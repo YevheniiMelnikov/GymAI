@@ -7,44 +7,29 @@ from typing import cast
 from loguru import logger
 from uuid import uuid4
 
-from bot.keyboards import (
-    select_service_kb,
-    choose_coach_kb,
-    select_days_kb,
-    gift_kb,
-    yes_no_kb,
-    workout_type_kb,
-)
 from bot.states import States
 from bot.texts.text_manager import msg_text
 from config.app_settings import settings
 from core.cache import Cache
-from core.enums import CoachType, SubscriptionPeriod
-from core.schemas import Coach, Client, Profile
-from bot.utils.chat import contact_client, process_feedback_content
+from core.enums import SubscriptionPeriod
+from core.schemas import Client, Profile
+from bot.utils.chat import process_feedback_content
 from bot.utils.menus import (
     show_main_menu,
     show_exercises_menu,
-    manage_subscription,
-    show_coaches_menu,
     show_profile_editing_menu,
     show_my_workouts_menu,
-    show_my_clients_menu,
     show_my_profile_menu,
     show_subscription_history,
-    clients_menu_pagination,
     show_balance_menu,
-    show_ai_services,
     process_ai_service_selection,
 )
-from bot.utils.menus import has_human_coach_subscription
-from bot.utils.profiles import assign_coach, get_assigned_coach
-from bot.utils.workout_plans import manage_program, cancel_subscription
+from bot.utils.workout_plans import cancel_subscription
 from bot.utils.other import generate_order_id
 from bot.utils.bot import del_msg, answer_msg, get_webapp_url
 from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
 from core.services import APIService
-from bot.keyboards import payment_kb
+from bot.keyboards import payment_kb, select_service_kb, select_days_kb, yes_no_kb
 from bot.utils.credits import available_packages
 from bot.utils.ai_coach import enqueue_workout_plan_generation
 from core.enums import WorkoutPlanType, WorkoutType
@@ -73,9 +58,6 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
 
     elif cb_data == "my_profile":
         await show_my_profile_menu(callback_query, profile, state)
-
-    elif cb_data == "my_clients":
-        await show_my_clients_menu(callback_query, profile, state)
 
     elif cb_data == "my_workouts":
         await show_my_workouts_menu(callback_query, profile, state)
@@ -143,26 +125,6 @@ async def ai_service_choice(callback_query: CallbackQuery, state: FSMContext) ->
         await show_my_workouts_menu(callback_query, profile, state)
         return
 
-    if cb_data.startswith("ai_plan_"):
-        coach_data = data.get("ai_coach")
-        client_data = data.get("client")
-        if not coach_data or not client_data:
-            await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
-            return
-        coach = Coach.model_validate(coach_data)
-        client = Client.model_validate(client_data)
-        await assign_coach(coach, client)
-        await callback_query.answer(msg_text("saved", profile.language))
-        await state.set_state(States.workout_type)
-        await answer_msg(
-            callback_query,
-            msg_text("workout_type", profile.language),
-            reply_markup=workout_type_kb(profile.language),
-        )
-        await state.update_data(new_client=True)
-        await del_msg(callback_query)
-        return
-
     if cb_data.startswith("ai_service_"):
         handled = await process_ai_service_selection(
             callback_query,
@@ -207,15 +169,6 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
     await answer_msg(callback_query, msg_text("request_in_progress", profile.language))
     if isinstance(callback_query.message, Message):
         await show_main_menu(callback_query.message, profile, state)
-    assigned_coaches = [await Cache.coach.get_coach(coach_id) for coach_id in client.assigned_to]
-    if any(coach.coach_type == CoachType.ai_coach for coach in assigned_coaches):
-        pass  # already assigned to AI
-    else:
-        fetched = await Cache.coach.get_ai_coach()
-        if fetched:
-            await assign_coach(fetched, client)
-        else:
-            logger.error("AI coach not found when assigning to client")
 
     if service == "program":
         queued = await enqueue_workout_plan_generation(
@@ -349,190 +302,6 @@ async def handle_feedback(message: Message, state: FSMContext, bot: Bot) -> None
         await show_main_menu(message, profile, state)
 
 
-@menu_router.callback_query(States.choose_coach)
-async def choose_coach_menu(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
-    data = await state.get_data()
-    profile_data = data.get("profile")
-    if not profile_data:
-        return
-    profile = Profile.model_validate(profile_data)
-    message = callback_query.message
-    if message is None or not isinstance(message, Message):
-        return
-    cb_data = callback_query.data or ""
-
-    if cb_data == "back":
-        await show_main_menu(message, profile, state)
-    elif cb_data == "ai_coach":
-        coach = await Cache.coach.get_ai_coach()
-        if not coach:
-            await callback_query.answer(msg_text("no_coaches", profile.language), show_alert=True)
-            return
-        try:
-            client = await Cache.client.get_client(profile.id)
-        except ClientNotFoundError:
-            await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
-            await del_msg(message)
-            return
-        await state.update_data(ai_coach=coach.model_dump(mode="json"), client=client.model_dump())
-        await show_ai_services(callback_query, profile, state)
-    else:
-        coaches = await Cache.coach.get_coaches()
-        if not coaches:
-            await callback_query.answer(msg_text("no_coaches", profile.language), show_alert=True)
-            return
-
-        try:
-            client = await Cache.client.get_client(profile.id)
-        except ClientNotFoundError:
-            client = None
-
-        if client and client.assigned_to:
-            human = await get_assigned_coach(client, coach_type=CoachType.human)
-            if human:
-                coaches = [c for c in coaches if c.profile != human.profile]
-
-        await state.set_state(States.coach_selection)
-        await state.update_data(coaches=[coach.model_dump(mode="json") for coach in coaches])
-        await show_coaches_menu(message, coaches, bot)
-
-    await del_msg(message)
-
-
-@menu_router.callback_query(States.coach_selection)
-async def paginate_coaches(cbq: CallbackQuery, state: FSMContext, bot: Bot) -> None:
-    data = await state.get_data()
-    profile = Profile.model_validate(data.get("profile"))
-    message: Message = cbq.message  # type: ignore
-    if message is None:
-        return
-
-    cb_data = cbq.data or ""
-
-    if cb_data == "quit":
-        await message.answer(
-            msg_text("no_program", profile.language),
-            reply_markup=choose_coach_kb(profile.language),
-        )
-        await state.set_state(States.choose_coach)
-        await del_msg(message)
-        return
-
-    if "_" not in cb_data:
-        await cbq.answer(msg_text("out_of_range", profile.language))
-        return
-
-    action, param = cb_data.split("_", maxsplit=1)
-
-    coaches = [Coach.model_validate(d) for d in data.get("coaches", [])]
-    if not coaches:
-        await cbq.answer(msg_text("no_coaches", profile.language))
-        return
-
-    if action in {"prev", "next"}:
-        try:
-            page = int(param)
-        except ValueError:
-            await message.answer(msg_text("out_of_range", profile.language))
-            return
-
-        if page < 0 or page >= len(coaches):
-            await cbq.answer(msg_text("out_of_range", profile.language))
-            return
-
-        await show_coaches_menu(message, coaches, bot, current_index=page)
-        return
-
-    if action == "selected":
-        try:
-            coach_id = int(param)
-        except ValueError:
-            await message.answer(msg_text("unexpected_error", profile.language))
-            return
-
-        selected_coach = next((c for c in coaches if c.id == coach_id), None)
-        if selected_coach is None:
-            logger.warning(f"Coach not found for id {coach_id}")
-            await message.answer(msg_text("unexpected_error", profile.language))
-            return
-
-        try:
-            client = await Cache.client.get_client(profile.id)
-        except ClientNotFoundError:
-            logger.warning(f"Client not found for profile_id {profile.id}")
-            await message.answer(msg_text("unexpected_error", profile.language))
-            return
-
-        if client.assigned_to:
-            human = await get_assigned_coach(client, coach_type=CoachType.human)
-            if human and human.profile == selected_coach.profile:
-                await cbq.answer(msg_text("same_coach_selected", profile.language), show_alert=True)
-                await del_msg(message)
-                return
-
-        if client.assigned_to:
-            try:
-                subscription = await Cache.workout.get_latest_subscription(client.id)
-            except SubscriptionNotFoundError:
-                subscription = None
-            if subscription and subscription.enabled:
-                await cancel_subscription(client.id, subscription.id)
-
-        await assign_coach(selected_coach, client)
-        await cbq.answer(msg_text("saved", profile.language))
-        await state.set_state(States.gift)
-        await message.answer(
-            msg_text("gift", profile.language),
-            reply_markup=gift_kb(profile.language),
-        )
-        await del_msg(message)
-        return
-
-    await message.answer(msg_text("unexpected_error", profile.language))
-
-
-@menu_router.callback_query(States.show_clients)
-async def client_paginator(callback_query: CallbackQuery, state: FSMContext) -> None:
-    data = await state.get_data()
-    profile_data = data.get("profile")
-    if not profile_data:
-        return
-    profile = Profile.model_validate(profile_data)
-    message = callback_query.message
-    if message is None or not isinstance(message, Message):
-        return
-    data_str = callback_query.data or ""
-
-    if data_str == "back":
-        await callback_query.answer()
-        await show_main_menu(message, profile, state)
-        return
-
-    parts = data_str.split("_")
-    if len(parts) != 2:
-        await callback_query.answer(msg_text("out_of_range", profile.language))
-        return
-
-    action, profile_id_str = parts
-    if action == "contact":
-        await contact_client(callback_query, profile, profile_id_str, state)
-        return
-    if action == "program":
-        await manage_program(callback_query, profile, profile_id_str, state)
-        return
-    if action == "subscription":
-        await manage_subscription(callback_query, profile.language, profile_id_str, state)
-        return
-
-    try:
-        index = int(profile_id_str)
-    except ValueError:
-        await callback_query.answer(msg_text("out_of_range", profile.language))
-        return
-
-    await clients_menu_pagination(callback_query, profile, index, state)
-
-
 @menu_router.callback_query(States.show_subscription)
 async def show_subscription_actions(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()
@@ -555,10 +324,9 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
     if cb_data == "back":
         await callback_query.answer()
         await state.set_state(States.select_service)
-        has_coach: bool = await has_human_coach_subscription(profile.id)
         await message.answer(
             msg_text("select_service", profile.language),
-            reply_markup=select_service_kb(profile.language, has_coach),
+            reply_markup=select_service_kb(profile.language),
         )
 
     elif cb_data == "change_days":
@@ -572,17 +340,6 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
 
     elif cb_data == "history":
         await show_subscription_history(callback_query, profile, state)
-
-    elif cb_data == "contact":
-        await callback_query.answer()
-        coach = await get_assigned_coach(client, coach_type=CoachType.human)
-        if not coach:
-            await callback_query.answer(msg_text("client_not_assigned_to_coach", profile.language), show_alert=True)
-            return
-        coach_id = coach.profile
-        await state.update_data(recipient_id=coach_id, sender_name=client.name)
-        await state.set_state(States.contact_coach)
-        await message.answer(msg_text("enter_your_message", profile.language))
 
     elif cb_data == "cancel":
         logger.info(f"User {profile.id} requested to stop the subscription")

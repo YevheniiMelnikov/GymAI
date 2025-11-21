@@ -6,11 +6,8 @@ from .views import (
     ProfileByTelegramIDView,
     ProfileAPIDestroy,
     ClientProfileList,
-    CoachProfileList,
     ClientProfileUpdate,
-    CoachProfileUpdate,
     ClientProfileByProfile,
-    CoachProfileByProfile,
 )
 
 urlpatterns = [
@@ -25,11 +22,5 @@ urlpatterns = [
         "client-profiles/by-profile/<int:profile_id>/",
         ClientProfileByProfile.as_view(),
         name="client_profile_by_profile",
-    ),
-    path("coach-profiles/", CoachProfileList.as_view(), name="coach_profile_list"),
-    path("coach-profiles/<int:profile_id>/", CoachProfileUpdate.as_view(), name="coach_profile_update"),
-    path("coach-profiles/pk/<int:pk>/", CoachProfileUpdate.as_view(), name="coach_profile_update_pk"),  # <— NEW
-    path(
-        "coach-profiles/by-profile/<int:profile_id>/", CoachProfileByProfile.as_view(), name="coach_profile_by_profile"
     ),
 ]

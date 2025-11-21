@@ -9,17 +9,9 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_api_key.permissions import HasAPIKey
 
-from apps.profiles.models import ClientProfile, CoachProfile
-from apps.profiles.serializers import (
-    ProfileSerializer,
-    CoachProfileSerializer,
-    ClientProfileSerializer,
-)
-from apps.profiles.repos import (
-    ProfileRepository,
-    CoachProfileRepository,
-    ClientProfileRepository,
-)
+from apps.profiles.models import ClientProfile
+from apps.profiles.serializers import ProfileSerializer, ClientProfileSerializer
+from apps.profiles.repos import ProfileRepository, ClientProfileRepository
 
 
 class ProfileByTelegramIDView(APIView):
@@ -65,22 +57,6 @@ class ProfileAPIList(generics.ListCreateAPIView):
 
 
 @method_decorator(cache_page(60), name="dispatch")
-class CoachProfileList(generics.ListCreateAPIView):
-    serializer_class = CoachProfileSerializer  # pyrefly: ignore[bad-override]
-    permission_classes = [HasAPIKey]  # pyrefly: ignore[bad-override]
-
-    def get_queryset(self):
-        return CoachProfile.objects.all()  # pyrefly: ignore[missing-attribute]
-
-    def perform_create(self, serializer: CoachProfileSerializer) -> None:  # type: ignore[override]
-        raw_id: Any = self.request.data.get("profile")
-        profile_id: int = cast(int, raw_id)
-        profile = ProfileRepository.get_model_by_id(profile_id)
-        if profile.role != "coach":
-            raise ValueError("Profile role must be 'coach'")
-        serializer.save(profile=profile)
-
-
 @method_decorator(cache_page(60), name="dispatch")
 class ClientProfileList(generics.ListCreateAPIView):
     serializer_class = ClientProfileSerializer  # pyrefly: ignore[bad-override]
@@ -93,20 +69,7 @@ class ClientProfileList(generics.ListCreateAPIView):
         raw_id: Any = self.request.data.get("profile")
         profile_id: int = cast(int, raw_id)
         profile = ProfileRepository.get_model_by_id(profile_id)
-        if profile.role != "client":
-            raise ValueError("Profile role must be 'client'")
         serializer.save(profile=profile)
-
-
-class CoachProfileUpdate(generics.RetrieveUpdateAPIView):
-    serializer_class = CoachProfileSerializer  # pyrefly: ignore[bad-override]
-    permission_classes = [HasAPIKey]  # pyrefly: ignore[bad-override]
-
-    def get_object(self):
-        if "pk" in self.kwargs:
-            return CoachProfileRepository.get(self.kwargs["pk"])
-        profile = ProfileRepository.get_model_by_id(self.kwargs["profile_id"])
-        return CoachProfileRepository.get_or_create_by_profile(profile)
 
 
 class ClientProfileUpdate(generics.RetrieveUpdateAPIView):
@@ -118,15 +81,6 @@ class ClientProfileUpdate(generics.RetrieveUpdateAPIView):
             return ClientProfileRepository.get(self.kwargs["pk"])
         profile = ProfileRepository.get_model_by_id(self.kwargs["profile_id"])
         return ClientProfileRepository.get_or_create_by_profile(profile)
-
-
-class CoachProfileByProfile(APIView):
-    permission_classes = [HasAPIKey]  # pyrefly: ignore[bad-override]
-    serializer_class = CoachProfileSerializer
-
-    def get(self, request: Request, profile_id: int) -> Response:
-        coach_profile = CoachProfileRepository.get_or_create_by_profile(ProfileRepository.get_model_by_id(profile_id))
-        return Response(self.serializer_class(coach_profile).data, status=status.HTTP_200_OK)
 
 
 class ClientProfileByProfile(APIView):

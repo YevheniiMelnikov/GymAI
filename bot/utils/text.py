@@ -4,7 +4,7 @@ from typing import Any, Optional
 from aiogram.fsm.state import State
 
 from bot.states import States
-from core.schemas import Client, Coach
+from core.schemas import Client
 from bot.texts import msg_text, btn_text
 
 
@@ -53,33 +53,20 @@ def days_of_week_map(lang: str) -> dict[str, str]:
     }
 
 
-def get_profile_attributes(role: str, user: Optional[Client | Coach], lang: str) -> dict[str, str]:
+def get_profile_attributes(user: Optional[Client], lang: str) -> dict[str, str]:
     def attr(name: str) -> str:
         val = getattr(user, name, "") if user else ""
         return str(val) if val is not None else ""
 
-    if role == "client":
-        gender_key = attr("gender").strip().lower().split(".", 1)[-1]
-        return {
-            "name": attr("name"),
-            "gender": genders_map(lang).get(gender_key, ""),
-            "born_in": attr("born_in"),
-            "experience": attr("workout_experience"),
-            "goals": attr("workout_goals"),
-            "weight": attr("weight"),
-            "notes": attr("health_notes"),
-        }
-
-    verified_value = bool(getattr(user, "verified", False) if user else False)
+    gender_key = attr("gender").strip().lower().split(".", 1)[-1]
     return {
         "name": attr("name"),
-        "experience": attr("work_experience"),
-        "notes": attr("additional_info"),
-        "payment_details": attr("payment_details_plain"),
-        "subscription_price": attr("subscription_price"),
-        "program_price": attr("program_price"),
-        "payout_due": attr("payout_due"),
-        "verif_status": verification_status_map(lang).get(verified_value, msg_text("not_verified", lang)),
+        "gender": genders_map(lang).get(gender_key, ""),
+        "born_in": attr("born_in"),
+        "experience": attr("workout_experience"),
+        "goals": attr("workout_goals"),
+        "weight": attr("weight"),
+        "notes": attr("health_notes"),
     }
 
 
@@ -90,12 +77,6 @@ _STATE_MESSAGE_KEYS: dict[str, StateMessageKey] = {
     "workout_goals": (States.workout_goals, "workout_goals"),
     "weight": (States.weight, "weight"),
     "health_notes": (States.health_notes, "health_notes"),
-    "work_experience": (States.work_experience, "work_experience"),
-    "additional_info": (States.additional_info, "additional_info"),
-    "payment_details": (States.payment_details, "payment_details"),
-    "subscription_price": (States.subscription_price, "enter_subscription_price"),
-    "program_price": (States.program_price, "enter_program_price"),
-    "photo": (States.profile_photo, "upload_photo"),
 }
 
 

@@ -3,9 +3,9 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any, Awaitable, Callable
 
-from core.enums import CoachType, PaymentStatus
+from core.enums import PaymentStatus
 from core.payment import PaymentProcessor
-from core.payment.types import CoachResolver, CreditService, PaymentNotifier
+from core.payment.types import CreditService, PaymentNotifier
 
 
 class DummyCreditService(CreditService):
@@ -15,16 +15,6 @@ class DummyCreditService(CreditService):
     def credits_for_amount(self, amount: Decimal) -> int:
         self.requested.append(amount)
         return int(amount)
-
-
-class DummyCoachResolver(CoachResolver):
-    def __init__(self, coach: Any | None = None) -> None:
-        self.coach = coach
-        self.calls: list[tuple[Any, Any | None]] = []
-
-    async def get_assigned_coach(self, client: Any, *, coach_type: Any | None = None) -> Any | None:
-        self.calls.append((client, coach_type))
-        return self.coach
 
 
 class DummyNotifier(PaymentNotifier):
@@ -65,7 +55,7 @@ def test_process_payment_invokes_strategy() -> None:
             updates.append((payment_id, data))
             return True
 
-        cache = SimpleNamespace(client=SimpleNamespace(get_client=get_client), coach=object(), payment=object())
+        cache = SimpleNamespace(client=SimpleNamespace(get_client=get_client), payment=object())
         strategy = DummyStrategy()
         processor = PaymentProcessor(
             cache=cache,
@@ -74,7 +64,6 @@ def test_process_payment_invokes_strategy() -> None:
             workout_service=object(),
             notifier=DummyNotifier(),
             credit_service=DummyCreditService(),
-            coach_resolver=DummyCoachResolver(),
             strategies={PaymentStatus.SUCCESS: strategy},
         )
 
@@ -106,7 +95,7 @@ def test_process_payment_skips_when_processed() -> None:
         async def get_client(profile_id: int) -> Any:
             raise AssertionError("should not be called")
 
-        cache = SimpleNamespace(client=SimpleNamespace(get_client=get_client), coach=object(), payment=object())
+        cache = SimpleNamespace(client=SimpleNamespace(get_client=get_client), payment=object())
         processor = PaymentProcessor(
             cache=cache,
             payment_service=SimpleNamespace(update_payment=lambda *_: True),
@@ -114,7 +103,6 @@ def test_process_payment_skips_when_processed() -> None:
             workout_service=object(),
             notifier=DummyNotifier(),
             credit_service=DummyCreditService(),
-            coach_resolver=DummyCoachResolver(),
             strategies={PaymentStatus.SUCCESS: DummyStrategy()},
         )
 
@@ -152,7 +140,7 @@ def test_process_payment_no_strategy() -> None:
             updates.append(data)
             return True
 
-        cache = SimpleNamespace(client=SimpleNamespace(get_client=get_client), coach=object(), payment=object())
+        cache = SimpleNamespace(client=SimpleNamespace(get_client=get_client), payment=object())
         processor = PaymentProcessor(
             cache=cache,
             payment_service=SimpleNamespace(update_payment=update_payment),
@@ -160,7 +148,6 @@ def test_process_payment_no_strategy() -> None:
             workout_service=object(),
             notifier=DummyNotifier(),
             credit_service=DummyCreditService(),
-            coach_resolver=DummyCoachResolver(),
             strategies={},
         )
 
@@ -214,7 +201,6 @@ def test_process_credit_topup_uses_credit_service_and_updates_profile_and_cache(
             workout_service=object(),
             notifier=DummyNotifier(),
             credit_service=credit_service,
-            coach_resolver=DummyCoachResolver(),
             strategies={PaymentStatus.SUCCESS: DummyStrategy()},
         )
 
@@ -223,113 +209,5 @@ def test_process_credit_topup_uses_credit_service_and_updates_profile_and_cache(
         assert credit_service.requested == [amount]
         assert profile_calls == [(client.profile, int(amount))]
         assert cache_updates == [(client.profile, {"credits": client.credits + int(amount)})]
-
-    run(runner)
-
-
-def test__process_payout_marks_handled_and_returns_row_for_human_coach() -> None:
-    async def runner() -> None:
-        payment = SimpleNamespace(
-            id=5,
-            client_profile=21,
-            amount=Decimal("10.005"),
-            order_id="order-123",
-        )
-        client = SimpleNamespace(assigned_to=34)
-
-        async def get_client(profile_id: int) -> Any:
-            assert profile_id == payment.client_profile
-            return client
-
-        payment_updates: list[tuple[int, dict[str, Any]]] = []
-
-        async def update_payment(payment_id: int, data: dict[str, Any]) -> bool:
-            payment_updates.append((payment_id, data))
-            return True
-
-        coach = SimpleNamespace(
-            id=99,
-            coach_type=CoachType.human,
-            name="John",
-            surname="Doe",
-            payment_details="UA123",
-        )
-        resolver = DummyCoachResolver(coach)
-
-        cache = SimpleNamespace(
-            client=SimpleNamespace(get_client=get_client),
-            coach=object(),
-            payment=object(),
-        )
-        processor = PaymentProcessor(
-            cache=cache,
-            payment_service=SimpleNamespace(update_payment=update_payment),
-            profile_service=object(),
-            workout_service=object(),
-            notifier=DummyNotifier(),
-            credit_service=DummyCreditService(),
-            coach_resolver=resolver,
-            strategies={PaymentStatus.SUCCESS: DummyStrategy()},
-        )
-
-        result = await processor._process_payout(payment)
-
-        assert resolver.calls == [(client, CoachType.human)]
-        assert payment_updates == [(payment.id, {"payout_handled": True})]
-        assert result == ["John", "Doe", "UA123", payment.order_id, "10.01"]
-
-    run(runner)
-
-
-def test__process_payout_returns_none_for_ai_coach() -> None:
-    async def runner() -> None:
-        payment = SimpleNamespace(
-            id=7,
-            client_profile=55,
-            amount=Decimal("42.00"),
-            order_id="order-ai",
-        )
-        client = SimpleNamespace(assigned_to=1)
-
-        async def get_client(profile_id: int) -> Any:
-            assert profile_id == payment.client_profile
-            return client
-
-        payment_updates: list[tuple[int, dict[str, Any]]] = []
-
-        async def update_payment(payment_id: int, data: dict[str, Any]) -> bool:
-            payment_updates.append((payment_id, data))
-            return True
-
-        coach = SimpleNamespace(
-            id=100,
-            coach_type=CoachType.ai_coach,
-            name="AI",
-            surname="Coach",
-            payment_details="",
-        )
-        resolver = DummyCoachResolver(coach)
-
-        cache = SimpleNamespace(
-            client=SimpleNamespace(get_client=get_client),
-            coach=object(),
-            payment=object(),
-        )
-        processor = PaymentProcessor(
-            cache=cache,
-            payment_service=SimpleNamespace(update_payment=update_payment),
-            profile_service=object(),
-            workout_service=object(),
-            notifier=DummyNotifier(),
-            credit_service=DummyCreditService(),
-            coach_resolver=resolver,
-            strategies={PaymentStatus.SUCCESS: DummyStrategy()},
-        )
-
-        result = await processor._process_payout(payment)
-
-        assert resolver.calls == [(client, CoachType.human)]
-        assert result is None
-        assert payment_updates == []
 
     run(runner)

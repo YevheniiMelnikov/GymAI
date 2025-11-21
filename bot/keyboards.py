@@ -1,6 +1,5 @@
 from aiogram.types import InlineKeyboardButton as KbBtn
 from aiogram.types import InlineKeyboardMarkup as KbMarkup, WebAppInfo
-from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.buttons_builder import ButtonsBuilder
 from bot.texts.text_manager import btn_text
@@ -49,30 +48,11 @@ def ai_services_kb(lang: str, services: list[str]) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def coach_menu_kb(lang: str) -> KbMarkup:
-    builder = ButtonsBuilder(lang)
-    buttons = [
-        [builder.add("my_profile", "my_profile")],
-        [builder.add("my_clients", "my_clients")],
-        [builder.add("feedback", "feedback")],
-    ]
-    return KbMarkup(inline_keyboard=buttons, row_width=1)
-
-
 def select_gender_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
         [builder.add("male", "male")],
         [builder.add("female", "female")],
-    ]
-    return KbMarkup(inline_keyboard=buttons)
-
-
-def select_role_kb(lang: str) -> KbMarkup:
-    builder = ButtonsBuilder(lang)
-    buttons = [
-        [builder.add("client", "client")],
-        [builder.add("coach", "coach")],
     ]
     return KbMarkup(inline_keyboard=buttons)
 
@@ -105,20 +85,6 @@ def edit_client_profile_kb(lang: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def edit_coach_profile_kb(lang: str) -> KbMarkup:
-    builder = ButtonsBuilder(lang)
-    buttons = [
-        [builder.add("work_experience", "work_experience")],
-        [builder.add("additional_info", "additional_info")],
-        [builder.add("payment_details", "payment_details")],
-        [builder.add("program_price", "program_price")],
-        [builder.add("subscription_price", "subscription_price")],
-        [builder.add("photo", "photo")],
-        [builder.add("prev_menu", "back")],
-    ]
-    return KbMarkup(inline_keyboard=buttons, row_width=1)
-
-
 def workout_experience_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
@@ -130,70 +96,14 @@ def workout_experience_kb(lang: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def new_coach_kb(profile_id: int) -> KbMarkup:
-    kb = InlineKeyboardBuilder()
-    kb.button(text="👍", callback_data=f"approve_{profile_id}")
-    kb.button(text="👎", callback_data=f"decline_{profile_id}")
-    return kb.as_markup(one_time_keyboard=True)
-
-
-def choose_coach_kb(lang: str) -> KbMarkup:
+def select_service_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
-        [builder.add("ai_coach", "ai_coach")],
-        [builder.add("choose_coach", "choose_coach")],
-        [builder.add("prev_menu", "back")],
-    ]
-    return KbMarkup(inline_keyboard=buttons)
-
-
-def coach_select_kb(lang: str, coach_id: int, current_index: int) -> KbMarkup:
-    builder = ButtonsBuilder(lang)
-    buttons = [
-        [builder.add("select", f"selected_{coach_id}")],
-        [
-            builder.add("back", f"prev_{current_index - 1}"),
-            builder.add("forward", f"next_{current_index + 1}"),
-        ],
-        [builder.add("prev_menu", "quit")],
-    ]
-    return KbMarkup(inline_keyboard=buttons)
-
-
-def client_select_kb(lang: str, profile_id: int, current_index: int) -> KbMarkup:
-    builder = ButtonsBuilder(lang)
-    buttons = [
-        [
-            builder.add("back", f"prev_{current_index - 1}"),
-            builder.add("forward", f"next_{current_index + 1}"),
-        ],
-        [builder.add("program", f"program_{profile_id}")],
-        [builder.add("subscription", f"subscription_{profile_id}")],
-        [builder.add("contact_client", f"contact_{profile_id}")],
-        [builder.add("prev_menu", "back")],
-    ]
-    return KbMarkup(inline_keyboard=buttons)
-
-
-def new_message_kb(lang: str, profile_id: int) -> KbMarkup:
-    builder = ButtonsBuilder(lang)
-    buttons = [
-        [builder.add("answer", f"answer_{profile_id}")],
-        [builder.add("quit", "quit")],
-    ]
-    return KbMarkup(inline_keyboard=buttons)
-
-
-def select_service_kb(lang: str, has_coach: bool = False) -> KbMarkup:
-    builder = ButtonsBuilder(lang)
-    buttons: list[list[KbBtn]] = [
         [builder.add("subscription", "subscription")],
         [builder.add("program", "program")],
         [builder.add("ask_ai", "ask_ai")],
+        [builder.add("prev_menu", "back")],
     ]
-    if has_coach:
-        buttons.append([builder.add("contact_coach", "contact")])
-    buttons.append([builder.add("prev_menu", "back")])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
@@ -216,26 +126,6 @@ def subscription_action_kb(lang: str, webapp_url: str | None = None) -> KbMarkup
         buttons.append([builder.add("view", webapp_url=webapp_url)])
     buttons.append([builder.add("new_workout_plan", "new_subscription")])
     buttons.append([builder.add("prev_menu", "back")])
-    return KbMarkup(inline_keyboard=buttons, row_width=1)
-
-
-def subscription_creation_kb(lang: str) -> KbMarkup:
-    builder = ButtonsBuilder(lang)
-    buttons = [
-        [builder.add("ai_coach", "subscription_ai")],
-        [builder.add("choose_coach", "subscription_human")],
-        [builder.add("prev_menu", "back")],
-    ]
-    return KbMarkup(inline_keyboard=buttons, row_width=1)
-
-
-def program_creation_kb(lang: str) -> KbMarkup:
-    builder = ButtonsBuilder(lang)
-    buttons = [
-        [builder.add("ai_coach", "program_ai")],
-        [builder.add("choose_coach", "program_human")],
-        [builder.add("prev_menu", "back")],
-    ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
@@ -267,15 +157,6 @@ def client_msg_bk(lang: str, profile_id: int) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
         [builder.add("answer", f"answer_{profile_id}")],
-        [builder.add("later", "later")],
-    ]
-    return KbMarkup(inline_keyboard=buttons)
-
-
-def incoming_request_kb(lang: str, service: str, profile_id: int) -> KbMarkup:
-    builder = ButtonsBuilder(lang)
-    buttons = [
-        [builder.add("create", f"create_{service}_{profile_id}")],
         [builder.add("later", "later")],
     ]
     return KbMarkup(inline_keyboard=buttons)
@@ -365,20 +246,6 @@ def reps_number_kb() -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=2)
 
 
-def workout_feedback_kb(lang: str, profile_id: int, day: str) -> KbMarkup:
-    builder = ButtonsBuilder(lang)
-    buttons = [
-        [
-            builder.add("contact_client", f"answer_{profile_id}"),
-            builder.add("edit", f"edit_{profile_id}_{day}"),
-        ],
-        [
-            builder.add("quit", "quit"),
-        ],
-    ]
-    return KbMarkup(inline_keyboard=buttons)
-
-
 def program_edit_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
@@ -403,7 +270,6 @@ def show_subscriptions_kb(lang: str, webapp_url: str | None = None) -> KbMarkup:
     buttons.extend(
         [
             [builder.add("history", "history")],
-            [builder.add("contact_coach", "contact")],
             [builder.add("edit_days", "change_days")],
             [builder.add("cancel_subscription", "cancel")],
             [builder.add("prev_menu", "back")],

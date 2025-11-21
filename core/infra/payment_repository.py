@@ -55,7 +55,6 @@ class HTTPPaymentRepository(APIClient):
                 "amount": str(amount.quantize(Decimal("0.01"), ROUND_HALF_UP)),
                 "status": PaymentStatus.PENDING,
                 "processed": False,
-                "payout_handled": False,
             },
         )
         return status_code == 201
@@ -65,20 +64,6 @@ class HTTPPaymentRepository(APIClient):
             method="put", endpoint=f"{self.API_BASE_PATH}{payment_id}/", data=data
         )
         return status_code in {200, 204}
-
-    async def _get_filtered_payments(self, filter_func) -> list[Payment]:
-        status_code, response = await self._handle_payment_api_request(method="get", endpoint=self.API_BASE_PATH)
-        if status_code != 200:
-            return []
-        payments = response.get("results", [])
-        return [Payment.model_validate(p) for p in payments if filter_func(p)]
-
-    async def get_unclosed_payments(self) -> list[Payment]:
-        return await self._get_filtered_payments(
-            lambda p: (
-                p.get("status") == PaymentStatus.SUCCESS and p.get("processed") is True and not p.get("payout_handled")
-            )
-        )
 
     async def get_expired_subscriptions(self, expired_before: str) -> list[Subscription]:
         status_code, response = await self._handle_payment_api_request(
@@ -104,7 +89,6 @@ class HTTPPaymentRepository(APIClient):
                 "status": PaymentStatus(status_),
                 "error": error,
                 "processed": False,
-                "payout_handled": False,
             },
         )
         if not ok:
@@ -115,7 +99,6 @@ class HTTPPaymentRepository(APIClient):
         payment.status = PaymentStatus(status_)
         payment.error = error
         payment.processed = False
-        payment.payout_handled = False
         return payment
 
     async def _get_payment_by_order_id(self, order_id: str) -> tuple[Payment | None, int | None]:

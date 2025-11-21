@@ -2,7 +2,6 @@ import asyncio
 from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
-from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from aiohttp import web
@@ -18,13 +17,10 @@ from bot.texts.text_manager import msg_text
 from bot.utils.profiles import get_clients_to_survey
 from config.app_settings import settings
 from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
-from core.containers import get_container
 from core.cache import Cache
-from core.enums import CoachType, SubscriptionPeriod, WorkoutPlanType
-from bot.utils.chat import send_message
+from core.enums import SubscriptionPeriod, WorkoutPlanType
 from bot.utils.bot import get_webapp_url
 from core.services import APIService
-from bot.utils.ai_coach import enqueue_workout_plan_update
 from core.schemas import Client, DayExercises, Profile, Subscription
 from core.ai_coach.state.plan import AiPlanState
 from .auth import require_internal_auth
@@ -409,71 +405,6 @@ async def internal_send_daily_survey(request: web.Request) -> web.Response:
             logger.info(f"Survey sent to profile {client_profile.id}")
         except Exception as e:
             logger.error(f"Survey push failed for profile_id={client_profile.id}: {e}")
-
-    return web.json_response({"result": "ok"})
-
-
-@require_internal_auth
-async def internal_export_coach_payouts(request: web.Request) -> web.Response:
-    try:
-        await get_container().payment_processor().export_coach_payouts()
-        return web.json_response({"result": "ok"})
-    except Exception as e:
-        logger.exception(f"Failed to export coach payouts: {e}")
-        return web.json_response({"detail": str(e)}, status=500)
-
-
-@require_internal_auth
-async def internal_send_workout_result(request: web.Request) -> web.Response:
-    """Forward workout survey result to a coach or AI system."""
-
-    try:
-        payload = await request.json()
-    except Exception:
-        return web.json_response({"detail": "Invalid JSON"}, status=400)
-
-    coach_id = payload.get("coach_id")
-    client_id = payload.get("client_id")
-    client_workout_feedback = payload.get("text")
-    expected_workout_result = payload.get("program")
-    request_id = payload.get("request_id") or uuid4().hex
-
-    if not coach_id or not client_id or client_workout_feedback is None:
-        return web.json_response({"detail": "Missing parameters"}, status=400)
-
-    bot: Bot = request.app["bot"]
-    coach = await Cache.coach.get_coach(int(coach_id))
-    if not coach:
-        return web.json_response({"detail": "Coach not found"}, status=404)
-
-    if coach.coach_type == CoachType.ai_coach:
-        client = await Cache.client.get_client(int(client_id))
-        profile = await APIService.profile.get_profile(client.profile)
-        language = profile.language if profile else settings.DEFAULT_LANG
-        client_profile_pk = client.id
-        client_profile_id = client.profile
-        queued = await enqueue_workout_plan_update(
-            client_id=client_profile_pk,
-            client_profile_id=client_profile_id,
-            expected_workout_result=str(expected_workout_result or ""),
-            feedback=str(client_workout_feedback),
-            language=language,
-            plan_type=WorkoutPlanType.SUBSCRIPTION,
-            workout_type=None,
-            request_id=request_id,
-        )
-        if not queued:
-            logger.error(f"AI workout update dispatch failed client_id={client_id} request_id={request_id}")
-            return web.json_response({"detail": "dispatch_failed"}, status=503)
-        return web.json_response({"result": "queued", "request_id": request_id})
-    else:
-        await send_message(
-            recipient=coach,
-            text=str(client_workout_feedback),
-            bot=bot,
-            state=None,
-            include_incoming_message=False,
-        )
 
     return web.json_response({"result": "ok"})
 

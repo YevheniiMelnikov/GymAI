@@ -56,10 +56,6 @@ class ProgramPayload(Program):
 
     schema_version: str | None = None
 
-    def __init__(self, **data: Any) -> None:
-        self._coach_type_raw = data.get("coach_type")
-        super().__init__(**data)
-
     @model_validator(mode="after")
     def _validate(self) -> "ProgramPayload":
         if not self.exercises_by_day:

@@ -3,8 +3,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, condecimal, field_validator, model_validator
 
-from core.encryptor import Encryptor
-from core.enums import ClientStatus, CoachType, Gender, Language, PaymentStatus, ProfileRole
+from core.enums import ClientStatus, Gender, Language, PaymentStatus
 
 Price = condecimal(max_digits=10, decimal_places=2, gt=0)
 NonNegativePrice = condecimal(max_digits=10, decimal_places=2, ge=0)
@@ -12,7 +11,6 @@ NonNegativePrice = condecimal(max_digits=10, decimal_places=2, ge=0)
 
 class Profile(BaseModel):
     id: int
-    role: Annotated[ProfileRole, Field()]
     tg_id: int
     language: Annotated[Language, Field()]
     model_config = ConfigDict(extra="ignore")
@@ -39,7 +37,6 @@ class Client(BaseModel):
     health_notes: str | None = None
     weight: int | None = None
     status: ClientStatus = ClientStatus.initial
-    assigned_to: list[int] = Field(default_factory=list)
     credits: int = Field(default=500, ge=0)
     profile_data: dict[str, Any] = {}
 
@@ -49,31 +46,6 @@ class Client(BaseModel):
         if value is None:
             return None
         return str(value)
-
-
-class Coach(BaseModel):
-    id: int
-    profile: int
-    name: str | None = None
-    surname: str | None = None
-    work_experience: int | None = None
-    additional_info: str | None = None
-    payment_details: str | None = None
-    profile_photo: str | None = None
-    subscription_price: Price | None = None
-    program_price: Price | None = None
-    assigned_to: list[int] = Field(default_factory=list)
-    verified: bool = False
-    coach_type: CoachType = CoachType.human
-    payout_due: NonNegativePrice | None = None
-    profile_data: dict[str, Any] = {}
-    model_config = ConfigDict(extra="ignore")
-
-    @property
-    def payment_details_plain(self) -> str:
-        if not self.payment_details:
-            return ""
-        return Encryptor.decrypt(self.payment_details) or ""
 
 
 class Exercise(BaseModel):
@@ -101,7 +73,6 @@ class Program(BaseModel):
     split_number: int | None = None
     workout_type: str | None = None
     wishes: str | None = None
-    coach_type: CoachType = CoachType.human
     model_config = ConfigDict(extra="ignore")
 
     @field_validator("client_profile", mode="before")
@@ -126,33 +97,6 @@ class Program(BaseModel):
         if self.split_number is None:
             self.split_number = len(self.exercises_by_day) or 1
         return self
-
-    @field_validator("coach_type", mode="before")
-    @classmethod
-    def _normalize_coach_type(cls, value: Any) -> CoachType:
-        if isinstance(value, dict):
-            value = value.get("coach_type")
-        if isinstance(value, CoachType):
-            return value
-        if isinstance(value, str):
-            normalized = value.strip().lower()
-            alias_map = {
-                "ai": CoachType.ai_coach,
-                "ai_coach": CoachType.ai_coach,
-                "ai-coach": CoachType.ai_coach,
-                "coach": CoachType.ai_coach,
-                "human": CoachType.human,
-            }
-            if normalized in alias_map:
-                return alias_map[normalized]
-            try:
-                return CoachType(normalized)
-            except ValueError:
-                return CoachType.human
-        try:
-            return CoachType(value)
-        except Exception:
-            return CoachType.human
 
 
 class Subscription(BaseModel):
@@ -187,7 +131,6 @@ class Payment(BaseModel):
     created_at: float
     updated_at: float
     processed: bool = False
-    payout_handled: bool = False
     error: str | None = None
     model_config = ConfigDict(extra="ignore")
 

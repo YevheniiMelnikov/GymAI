@@ -1,14 +1,6 @@
 from enum import Enum
 
 
-class ProfileRole(str, Enum):
-    client = "client"
-    coach = "coach"
-
-    def __str__(self) -> str:
-        return self.value
-
-
 class ClientStatus(str, Enum):
     waiting_for_text = "waiting_for_text"
     default = "default"
@@ -42,15 +34,6 @@ class PaymentStatus(str, Enum):
     SUCCESS = "SUCCESS"
     FAILURE = "FAILURE"
     CLOSED = "CLOSED"
-
-    def __str__(self) -> str:
-        return self.value
-
-
-class CoachType(str, Enum):
-    human = "human"
-    ai_coach = "ai_coach"
-    ai = ai_coach  # alias for backward compatibility
 
     def __str__(self) -> str:
         return self.value

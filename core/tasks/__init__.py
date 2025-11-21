@@ -20,9 +20,7 @@ from core.tasks.billing import (
     warn_low_credits,
 )
 from core.tasks.bot_calls import (
-    export_coach_payouts,
     send_daily_survey,
-    send_workout_result,
 )
 
 __all__ = [
@@ -43,7 +41,5 @@ __all__ = [
     "charge_due_subscriptions",
     "deactivate_expired_subscriptions",
     "warn_low_credits",
-    "export_coach_payouts",
     "send_daily_survey",
-    "send_workout_result",
 ]

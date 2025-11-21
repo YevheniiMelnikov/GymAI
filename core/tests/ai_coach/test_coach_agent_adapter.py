@@ -25,7 +25,6 @@ from ai_coach.schemas import AICoachRequest, ProgramPayload, SubscriptionPayload
 from ai_coach.types import CoachMode
 from ai_coach.application import app
 from ai_coach.api import dedupe_cache
-from core.enums import CoachType
 
 
 @pytest.fixture(autouse=True)
@@ -51,7 +50,6 @@ def _sample_program(**kwargs) -> ProgramPayload:
         "exercises_by_day": [day],
         "created_at": 0,
         "split_number": 1,
-        "coach_type": "human",
     }
     base.update(kwargs)
     return ProgramPayload(**base)
@@ -62,12 +60,6 @@ def test_adapter_drops_schema_version() -> None:
     program = ProgramAdapter.to_domain(payload)
     dumped = program.model_dump()
     assert "schema_version" not in dumped
-
-
-def test_enum_mapping_to_coach_type() -> None:
-    payload = _sample_program(coach_type="ai")
-    program = ProgramAdapter.to_domain(payload)
-    assert program.coach_type is CoachType.ai
 
 
 def test_split_number_defaults() -> None:

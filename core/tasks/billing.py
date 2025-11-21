@@ -2,7 +2,6 @@
 
 import asyncio
 from datetime import date, datetime, timedelta
-from decimal import ROUND_HALF_UP, Decimal
 from typing import cast
 
 from dateutil.relativedelta import relativedelta
@@ -10,11 +9,10 @@ from loguru import logger
 
 from apps.payments.tasks import send_payment_message
 from bot.texts.text_manager import msg_text
-from bot.utils.profiles import get_assigned_coach
 from config.app_settings import settings
 from core.cache import Cache
 from core.celery_app import app
-from core.enums import CoachType, SubscriptionPeriod
+from core.enums import SubscriptionPeriod
 from core.services import APIService
 
 __all__ = [
@@ -128,15 +126,6 @@ def charge_due_subscriptions(self) -> None:
 
             await APIService.profile.adjust_client_credits(client.profile, -required)
             await Cache.client.update_client(client.profile, {"credits": client.credits - required})
-            if client.assigned_to:
-                coach = await get_assigned_coach(client, coach_type=CoachType.human)
-                if coach:
-                    payout = (Decimal(sub.price) * settings.CREDIT_RATE_MAX_PACK).quantize(
-                        Decimal("0.01"), ROUND_HALF_UP
-                    )
-                    await APIService.profile.adjust_coach_payout_due(coach.profile, payout)
-                    new_due = (coach.payout_due or Decimal("0")) + payout
-                    await Cache.coach.update_coach(coach.profile, {"payout_due": str(new_due)})
             period_str = getattr(sub, "period", SubscriptionPeriod.one_month.value)
             period = SubscriptionPeriod(period_str)
             next_date = _next_payment_date(period)

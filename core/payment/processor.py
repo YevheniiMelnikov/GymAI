@@ -1,14 +1,11 @@
-import asyncio
-from datetime import datetime
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from typing import Dict
 
 from loguru import logger
 
-from core.enums import CoachType, PaymentStatus
+from core.enums import PaymentStatus
 from core.exceptions import ClientNotFoundError
 from core.schemas import Client, Payment
-from core.services.gsheets_service import GSheetsService
 from core.services.internal.profile_service import ProfileService
 from core.services.internal.workout_service import WorkoutService
 
@@ -20,7 +17,7 @@ from .strategies import (
     PendingPayment,
     SuccessPayment,
 )
-from .types import CacheProtocol, CoachResolver, CreditService, PaymentNotifier
+from .types import CacheProtocol, CreditService, PaymentNotifier
 
 
 class PaymentProcessor:
@@ -32,7 +29,6 @@ class PaymentProcessor:
         workout_service: WorkoutService,
         notifier: PaymentNotifier,
         credit_service: CreditService,
-        coach_resolver: CoachResolver,
         strategies: Dict[PaymentStatus, PaymentStrategy] | None = None,
     ) -> None:
         self.cache = cache
@@ -40,7 +36,6 @@ class PaymentProcessor:
         self.profile_service = profile_service
         self.workout_service = workout_service
         self._credit_service = credit_service
-        self._coach_resolver = coach_resolver
         self.strategies = strategies or {
             PaymentStatus.SUCCESS: SuccessPayment(
                 cache,
@@ -70,39 +65,6 @@ class PaymentProcessor:
         except Exception as e:  # noqa: BLE001
             logger.exception(f"Payment processing failed for {payment.id}: {e}")
 
-    async def _process_payout(self, payment: Payment) -> list[str] | None:
-        try:
-            client = await self.cache.client.get_client(payment.client_profile)
-            if not client or not client.assigned_to:
-                logger.warning(f"Skip payment {payment.order_id}: client/coach missing")
-                return None
-            coach = await self._coach_resolver.get_assigned_coach(
-                client,
-                coach_type=CoachType.human,
-            )
-            if not coach:
-                logger.error(f"Coach not found for payment {payment.order_id}")
-                return None
-            if coach.coach_type == CoachType.ai_coach:
-                logger.info(f"Skip AI coach {coach.id} for payment {payment.order_id}")
-                return None
-            amount = payment.amount.quantize(Decimal("0.01"), ROUND_HALF_UP)
-            ok = await self.payment_service.update_payment(payment.id, {"payout_handled": True})
-            if not ok:
-                logger.error(f"Cannot mark payment {payment.order_id} as handled")
-                return None
-            logger.info(f"Payment {payment.order_id} processed, payout {amount} UAH")
-            return [
-                coach.name or "",
-                coach.surname or "",
-                coach.payment_details or "",
-                payment.order_id,
-                str(amount),
-            ]
-        except Exception as e:  # noqa: BLE001
-            logger.exception(f"Failed to process payment {payment.order_id}: {e}")
-            return None
-
     async def process_credit_topup(self, client: Client, amount: Decimal) -> None:
         credits = self._credit_service.credits_for_amount(amount)
         await self.profile_service.adjust_client_credits(client.profile, credits)
@@ -114,31 +76,3 @@ class PaymentProcessor:
             logger.warning(f"Payment not found for order_id {order_id}")
             return
         await self._process_payment(payment)
-
-    async def export_coach_payouts(self) -> None:
-        """Accrue coach payouts based on their monthly due amount."""
-        try:
-            coaches = await self.profile_service.list_coach_profiles()
-            payout_rows = []
-            for coach in coaches:
-                if coach.coach_type == CoachType.ai_coach:
-                    continue
-                amount = (coach.payout_due or Decimal("0")).quantize(Decimal("0.01"), ROUND_HALF_UP)
-                if amount <= 0:
-                    continue
-                payout_rows.append(
-                    [
-                        coach.name or "",
-                        coach.surname or "",
-                        coach.payment_details_plain,
-                        datetime.today().strftime("%Y-%m"),
-                        str(amount),
-                    ]
-                )
-                await self.profile_service.update_coach_profile(coach.id, {"payout_due": "0"})
-                await self.cache.coach.update_coach(coach.profile, {"payout_due": "0"})
-            if payout_rows:
-                await asyncio.to_thread(GSheetsService.create_new_payment_sheet, payout_rows)
-                logger.info(f"Payout sheet created: {len(payout_rows)} rows")
-        except Exception as e:  # noqa: BLE001
-            logger.exception(f"Failed batch payout: {e}")

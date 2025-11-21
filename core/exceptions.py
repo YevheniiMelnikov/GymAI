@@ -32,12 +32,6 @@ class ClientNotFoundError(Exception):
         self.profile_id = profile_id
 
 
-class CoachNotFoundError(Exception):
-    def __init__(self, profile_id: int):
-        super().__init__(f"Coach data not found for profile_id {profile_id}")
-        self.profile_id = profile_id
-
-
 class SubscriptionNotFoundError(Exception):
     def __init__(self, profile_id: int):
         super().__init__(f"Subscription not found for profile_id {profile_id}")
@@ -54,7 +48,3 @@ class PaymentNotFoundError(Exception):
     def __init__(self, profile_id: int):
         super().__init__(f"Payment not found for profile_id {profile_id}")
         self.profile_id = profile_id
-
-
-class ClientNotAssignedError(Exception):
-    """Raised when client is not assigned to a coach."""

@@ -133,7 +133,6 @@ async def program_data(request: HttpRequest) -> JsonResponse:
 
     data: dict[str, object] = {
         "created_at": int(cast(datetime, program_obj.created_at).timestamp()),
-        "coach_type": program_obj.coach_type,
         "language": lang,
     }
 
@@ -181,7 +180,6 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
         {
             "id": int(p.id),
             "created_at": int(cast(datetime, p.created_at).timestamp()),
-            "coach_type": p.coach_type,
         }
         for p in programs
     ]

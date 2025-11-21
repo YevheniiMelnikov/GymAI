@@ -10,7 +10,7 @@ from ai_coach.agent import CoachAgent
 import ai_coach.api as coach_api
 from ai_coach.application import app
 from config.app_settings import settings
-from core.enums import CoachType, Language, ProfileRole
+from core.enums import Language
 from core.schemas import Client, DayExercises, Exercise, Profile, Program
 from core.services.internal.profile_service import ProfileService
 
@@ -25,7 +25,6 @@ def _sample_program() -> Program:
         split_number=1,
         workout_type="",
         wishes="",
-        coach_type=CoachType.human,
     )
 
 
@@ -58,7 +57,7 @@ def test_request_language_overrides_profile(monkeypatch: pytest.MonkeyPatch) -> 
         return Client(id=client_id, profile=10)
 
     async def fake_get_profile(self: ProfileService, profile_id: int) -> Profile | None:
-        return Profile(id=profile_id, role=ProfileRole.client, tg_id=1, language=Language.ru)
+        return Profile(id=profile_id, tg_id=1, language=Language.ru)
 
     _patch_agent(monkeypatch, "generate_workout_plan", staticmethod(fake_generate))
     monkeypatch.setattr(ProfileService, "get_client", fake_get_client)
@@ -97,7 +96,7 @@ def test_profile_language_used_when_request_missing(monkeypatch: pytest.MonkeyPa
         return Client(id=client_id, profile=20)
 
     async def fake_get_profile(self: ProfileService, profile_id: int) -> Profile | None:
-        return Profile(id=profile_id, role=ProfileRole.client, tg_id=1, language=Language.ua)
+        return Profile(id=profile_id, tg_id=1, language=Language.ua)
 
     _patch_agent(monkeypatch, "generate_workout_plan", staticmethod(fake_generate))
     monkeypatch.setattr(ProfileService, "get_client", fake_get_client)
@@ -176,7 +175,7 @@ def test_profile_language_enum_without_str(monkeypatch: pytest.MonkeyPatch) -> N
         return Client(id=client_id, profile=50)
 
     async def fake_get_profile(self: ProfileService, profile_id: int) -> Profile | None:
-        return SimpleNamespace(id=profile_id, role=ProfileRole.client, tg_id=1, language=RawLanguage.ua)
+        return SimpleNamespace(id=profile_id, tg_id=1, language=RawLanguage.ua)
 
     _patch_agent(monkeypatch, "generate_workout_plan", staticmethod(fake_generate))
     monkeypatch.setattr(ProfileService, "get_client", fake_get_client)

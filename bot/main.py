@@ -16,7 +16,7 @@ from bot.utils.bot import set_bot_commands, check_webhook_alive
 from dependency_injector import providers
 
 from core.containers import create_container, set_container, get_container
-from core.infra.payment import BotCoachResolver, BotCreditService, TaskPaymentNotifier
+from core.infra.payment import BotCreditService, TaskPaymentNotifier
 from core.services.internal import APIService
 
 
@@ -34,7 +34,6 @@ async def main() -> None:
     container = create_container()
     container.notifier.override(providers.Factory(TaskPaymentNotifier))
     container.credit_service.override(providers.Factory(BotCreditService))
-    container.coach_resolver.override(providers.Factory(BotCoachResolver))
     set_container(container)
     APIService.configure(get_container)
     container.config.bot_token.from_value(settings.BOT_TOKEN)  # type: ignore[attr-defined]

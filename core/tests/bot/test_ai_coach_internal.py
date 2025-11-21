@@ -10,12 +10,11 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from bot.handlers.internal.tasks import (
     _resolve_client_and_profile,
     internal_ai_coach_plan_ready,
-    internal_export_coach_payouts,
 )
 from core.ai_coach.state.plan import AiPlanState
 from bot.utils.ai_coach import enqueue_workout_plan_generation, enqueue_workout_plan_update
 from config.app_settings import settings
-from core.enums import WorkoutPlanType, WorkoutType, ProfileRole, SubscriptionPeriod
+from core.enums import WorkoutPlanType, WorkoutType, SubscriptionPeriod
 from core.exceptions import ClientNotFoundError
 from core.schemas import Client, DayExercises, Exercise, Program, Profile, Subscription
 
@@ -64,7 +63,7 @@ class DummyRedis:
 
 @pytest.mark.asyncio
 async def test_resolve_client_and_profile_from_cache(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = Client.model_validate({"id": 1, "profile": 2, "credits": 0, "assigned_to": []})
+    client = Client.model_validate({"id": 1, "profile": 2, "credits": 0})
 
     calls: list[int] = []
 
@@ -89,7 +88,7 @@ async def test_resolve_client_and_profile_from_cache(monkeypatch: pytest.MonkeyP
 
 @pytest.mark.asyncio
 async def test_resolve_client_and_profile_fetches_when_cache_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = Client.model_validate({"id": 3, "profile": 4, "credits": 0, "assigned_to": []})
+    client = Client.model_validate({"id": 3, "profile": 4, "credits": 0})
 
     async def missing_cache(_: int, *, use_fallback: bool = True) -> Client:
         raise ClientNotFoundError(4)
@@ -119,7 +118,7 @@ async def test_resolve_client_and_profile_fetches_when_cache_missing(monkeypatch
 
 @pytest.mark.asyncio
 async def test_resolve_client_and_profile_without_profile_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = Client.model_validate({"id": 6, "profile": 7, "credits": 0, "assigned_to": []})
+    client = Client.model_validate({"id": 6, "profile": 7, "credits": 0})
 
     async def fail_cache(_: int, *, use_fallback: bool = True) -> Client:
         raise AssertionError("cache should not be used without profile id")
@@ -176,7 +175,6 @@ async def test_enqueue_workout_plan_generation_dispatch(monkeypatch: pytest.Monk
             "id": 7,
             "profile": 12,
             "credits": 0,
-            "assigned_to": [],
         }
     )
 
@@ -249,13 +247,11 @@ async def test_internal_ai_plan_ready_program(monkeypatch: pytest.MonkeyPatch) -
             "id": 3,
             "profile": 4,
             "credits": 0,
-            "assigned_to": [],
         }
     )
     profile = Profile.model_validate(
         {
             "id": 4,
-            "role": ProfileRole.client,
             "tg_id": 100,
             "language": "en",
         }
@@ -367,13 +363,11 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
             "id": 6,
             "profile": 7,
             "credits": 0,
-            "assigned_to": [],
         }
     )
     profile = Profile.model_validate(
         {
             "id": 7,
-            "role": ProfileRole.client,
             "tg_id": 101,
             "language": "en",
         }
@@ -485,13 +479,11 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
             "id": 10,
             "profile": 11,
             "credits": 0,
-            "assigned_to": [],
         }
     )
     profile = Profile.model_validate(
         {
             "id": 11,
-            "role": ProfileRole.client,
             "tg_id": 103,
             "language": "en",
         }
@@ -602,47 +594,3 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
     data = await storage.get_data(key)
     assert data["subscription"] is True
     assert data["last_request_id"] == "req-sub"
-
-
-class FakeRequest:
-    def __init__(self, headers: dict[str, str]) -> None:
-        self.headers = headers
-        self.rel_url = "/internal/test"
-        self.transport = SimpleNamespace(get_extra_info=lambda name: ("127.0.0.1", 0))
-        self.app: dict[str, Any] = {}
-
-    async def json(self) -> dict[str, Any]:  # pragma: no cover - not used
-        return {}
-
-
-@pytest.mark.asyncio
-async def test_internal_auth_requires_key() -> None:
-    settings.DEBUG = False
-    settings.INTERNAL_API_KEY = "secret"
-    request = FakeRequest({})
-    response = await internal_export_coach_payouts(request)  # type: ignore[arg-type]
-    assert response.status == 401
-
-
-@pytest.mark.asyncio
-async def test_internal_auth_accepts_valid_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    settings.DEBUG = False
-    settings.INTERNAL_API_KEY = "secret"
-
-    class DummyProcessor:
-        def __init__(self) -> None:
-            self.called = False
-
-        async def export_coach_payouts(self) -> None:
-            self.called = True
-
-    processor = DummyProcessor()
-    monkeypatch.setattr(
-        "bot.handlers.internal.tasks.get_container",
-        lambda: SimpleNamespace(payment_processor=lambda: processor),
-    )
-
-    request = FakeRequest({"X-Internal-Api-Key": "secret"})
-    response = await internal_export_coach_payouts(request)  # type: ignore[arg-type]
-    assert response.status == 200
-    assert processor.called is True

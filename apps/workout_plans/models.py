@@ -3,7 +3,6 @@ from django.db.models import JSONField
 from django.contrib.postgres.fields import ArrayField
 
 from apps.profiles.models import ClientProfile
-from apps.profiles.choices import CoachType
 
 
 class SubscriptionPeriod(models.TextChoices):
@@ -17,11 +16,6 @@ class Program(models.Model):
     split_number = models.IntegerField(null=True, blank=True)
     wishes = models.CharField(max_length=500, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    coach_type = models.CharField(
-        max_length=10,
-        choices=CoachType.choices,
-        default=CoachType.HUMAN,
-    )
 
     class Meta:
         verbose_name = "Program"

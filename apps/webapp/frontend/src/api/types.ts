@@ -49,7 +49,6 @@ export type Program = {
 export type ProgramLegacyResponse = {
   program: string;
   created_at?: number | string | null;
-  coach_type?: string;
   language?: string;
 };
 
@@ -60,7 +59,6 @@ export type ProgramResp = ProgramLegacyResponse | ProgramStructuredResponse;
 export type HistoryItem = {
   id: number;
   created_at: number;
-  coach_type: string;
 };
 
 export type HistoryResp = {
