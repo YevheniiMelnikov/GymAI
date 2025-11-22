@@ -34,6 +34,7 @@ class ButtonText(AutoName):
     subscription_6_months = auto()
     subscription_1_month = auto()
     ask_ai = auto()
+    ask_ai_again = auto()
 
     my_profile = auto()
     my_program = auto()
@@ -49,6 +50,7 @@ class ButtonText(AutoName):
     toggle_drop_set = auto()
     health_notes = auto()
     weight = auto()
+    photo = auto()
 
     feedback = auto()
 
@@ -90,6 +92,7 @@ class MessageText(AutoName):
     invalid_content = auto()
     questionnaire_not_completed = auto()
     unexpected_error = auto()
+    error_generic = auto()
     coach_agent_error = auto()
 
     profile_info = auto()
@@ -115,12 +118,14 @@ class MessageText(AutoName):
     finish_registration_to_get_credits = auto()
     initial_credits_granted = auto()
     credit_balance = auto()
+    tariff_plans = auto()
     not_enough_credits = auto()
     ai_services = auto()
     confirm_service = auto()
 
     unable_to_delete_profile = auto()
     profile_deleted = auto()
+    profile_data_not_found_error = auto()
     accept_policy = auto()
     your_data_updated = auto()
     select_language = auto()
@@ -149,6 +154,7 @@ class MessageText(AutoName):
     complete_all_days = auto()
     no_program = auto()
     no_exercises_to_save = auto()
+    no_exercises_found = auto()
     program_view = auto()
     program_delete_warning = auto()
     workout_results = auto()
@@ -183,12 +189,16 @@ class MessageText(AutoName):
     incoming_message = auto()
     incoming_request = auto()
 
+    ask_ai_prompt = auto()
+    ask_ai_answer = auto()
+
     out_of_range = auto()
     image_error = auto()
     no_profiles_found = auto()
     new_workout_plan = auto()
     program_updated = auto()
     subscription_created = auto()
+    subscription_not_found_error = auto()
     wait_for_verification = auto()
     not_verified = auto()
     gift = auto()

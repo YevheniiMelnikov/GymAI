@@ -1,3 +1,4 @@
+from enum import Enum
 from pathlib import Path
 
 import yaml
@@ -5,7 +6,7 @@ import yaml
 from bot.texts.resources import ButtonText, MessageText
 from config.app_settings import settings
 
-ResourceType = str | MessageText | ButtonText
+ResourceType = MessageText | ButtonText | str
 
 TEXTS_DIR = Path(__file__).parent.parent / "texts"
 RESOURCES = {
@@ -32,26 +33,32 @@ class TextManager:
                 elif resource_type == "commands":
                     cls.commands = data  # pyrefly: ignore[bad-assignment]
 
+    @staticmethod
+    def _resolve_key(key: ResourceType) -> str:
+        if isinstance(key, Enum):
+            return key.value
+        return key
+
     @classmethod
-    def get_message(cls, key: str, lang: str | None) -> str:
+    def get_message(cls, key: ResourceType, lang: str | None) -> str:
         lang = lang or settings.DEFAULT_LANG
         try:
-            return cls.messages[key][lang]
+            return cls.messages[cls._resolve_key(key)][lang]
         except KeyError as e:
             raise ValueError(f"Message key '{key}' ({lang}) not found") from e
 
     @classmethod
-    def get_button(cls, key: str, lang: str | None) -> str:
+    def get_button(cls, key: ResourceType, lang: str | None) -> str:
         lang = lang or settings.DEFAULT_LANG
         try:
-            return cls.buttons[key][lang]
+            return cls.buttons[cls._resolve_key(key)][lang]
         except KeyError as e:
             raise ValueError(f"Button key '{key}' ({lang}) not found") from e
 
 
-def msg_text(msg_key: str, lang: str | None) -> str:
+def msg_text(msg_key: MessageText, lang: str | None) -> str:
     return TextManager.get_message(msg_key, lang)
 
 
-def btn_text(btn_key: str, lang: str | None) -> str:
+def btn_text(btn_key: ButtonText, lang: str | None) -> str:
     return TextManager.get_button(btn_key, lang)

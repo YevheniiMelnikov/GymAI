@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, cast
 
 from loguru import logger
 
-from bot.texts.text_manager import msg_text
+from bot.texts import MessageText, msg_text
 from bot.utils.bot import answer_msg, del_msg, delete_messages
 from config.app_settings import settings
 from core.cache import Cache
@@ -45,7 +45,7 @@ async def update_profile_data(
         await Cache.profile.update_profile(message.chat.id, user_data)
         await APIService.profile.update_profile(profile.id, user_data)
 
-        await answer_msg(message, msg_text("your_data_updated", data.get("lang", settings.DEFAULT_LANG)))
+        await answer_msg(message, msg_text(MessageText.your_data_updated, data.get("lang", settings.DEFAULT_LANG)))
 
         from bot.utils.menus import show_main_menu
 
@@ -53,7 +53,7 @@ async def update_profile_data(
 
     except Exception as e:
         logger.error(f"Unexpected error updating profile: {e}")
-        await answer_msg(message, msg_text("unexpected_error", data.get("lang", settings.DEFAULT_LANG)))
+        await answer_msg(message, msg_text(MessageText.unexpected_error, data.get("lang", settings.DEFAULT_LANG)))
 
     finally:
         await del_msg(cast("TgMessage | TgCallbackQuery | None", message))

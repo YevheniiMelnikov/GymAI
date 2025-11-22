@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 
 from bot import keyboards as kb
 from bot.utils import menus
-from bot.texts import msg_text
+from bot.texts import MessageText, msg_text
 from core.cache import Cache
 from core.enums import ProfileStatus
 from core.exceptions import ProgramNotFoundError
@@ -81,7 +81,7 @@ def test_show_my_program_menu_alerts_when_no_program(monkeypatch: pytest.MonkeyP
 
         await menus.show_my_program_menu(cb, profile, state)
 
-        answer.assert_awaited_with(msg_text("no_program", profile.language), show_alert=True)
+        answer.assert_awaited_with(msg_text(MessageText.no_program, profile.language), show_alert=True)
         workouts.assert_awaited_once_with(cb, profile, state)
 
     asyncio.run(runner())

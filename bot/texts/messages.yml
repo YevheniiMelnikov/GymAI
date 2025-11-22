@@ -38,6 +38,11 @@ unexpected_error:
   ru: "Непредвиденная ошибка. Если я не буду отвечать - воспользуйтесь командой /start ❗"
   ua: "Непередбачена помилка. Якщо я не відповідатиму - скористайтеся командою /start ❗"
 
+error_generic:
+  eng: "Something went wrong. Please try again later."
+  ru: "Что-то пошло не так. Попробуйте позже."
+  ua: "Щось пішло не так. Спробуйте пізніше."
+
 select_action:
   eng: "Choose an action 👇"
   ru: "Выберите действие 👇"
@@ -116,6 +121,11 @@ no_exercises_to_save:
   ru: "Нет упражнений ❗️"
   ua: "Нема вправ ❗️"
 
+no_exercises_found:
+  eng: "No exercises found matching your request ❗️"
+  ru: "Упражнения, соответствующие запросу, не найдены ❗️"
+  ua: "Вправи, що відповідають запиту, не знайдені ❗️"
+
 new_workout_plan:
   eng: "<b>A new training program has been put together for you</b> 🥳"
   ru: "<b>Для вас была составлена новая тренировочная программа</b> 🥳"
@@ -130,6 +140,11 @@ subscription_created:
   eng: "<b>Your AI subscription plan is ready</b> ✅"
   ru: "<b>Ваш план по подписке готов</b> ✅"
   ua: "<b>Ваш план за підпискою готовий</b> ✅"
+
+subscription_not_found_error:
+  eng: "Subscription not found."
+  ru: "Подписка не найдена."
+  ua: "Підписку не знайдено."
 
 program_guide:
   eng: "Start sending exercise titles one at a time in a message. When finished, click Save ✅\nIn case of an error, use Reset 🔄"
@@ -356,6 +371,11 @@ profile_deleted:
   eng: "Your profile has been deleted 😢"
   ru: "Ваш профиль был удален 😢"
   ua: "Ваш профіль було видалено 😢"
+
+profile_data_not_found_error:
+  eng: "Profile data not found."
+  ru: "Данные профиля не найдены."
+  ua: "Дані профілю не знайдено."
 
 no_program:
   eng: "At this time, the training program has not yet been set up 😲"

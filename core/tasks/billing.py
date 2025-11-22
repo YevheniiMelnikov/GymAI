@@ -8,7 +8,7 @@ from dateutil.relativedelta import relativedelta
 from loguru import logger
 
 from apps.payments.tasks import send_payment_message
-from bot.texts.text_manager import msg_text
+from bot.texts import MessageText, msg_text
 from config.app_settings import settings
 from core.cache import Cache
 from core.celery_app import app
@@ -85,7 +85,7 @@ def warn_low_credits(self) -> None:
                 lang = profile.language if profile else settings.DEFAULT_LANG
                 send_payment_message.delay(  # pyrefly: ignore[not-callable]
                     sub.profile,
-                    msg_text("not_enough_credits", lang),
+                    msg_text(MessageText.not_enough_credits, lang),
                 )
 
     try:

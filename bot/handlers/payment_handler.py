@@ -19,7 +19,7 @@ from core.services import APIService
 from bot.utils.menus import show_main_menu, show_my_workouts_menu, show_balance_menu
 from core.schemas import Profile
 from bot.utils.workout_plans import cache_program_data, process_new_subscription
-from bot.texts import msg_text, btn_text
+from bot.texts import ButtonText, MessageText, btn_text, msg_text
 from core.exceptions import ProfileNotFoundError
 
 payment_router = Router()
@@ -32,12 +32,12 @@ async def get_the_gift(callback_query: CallbackQuery, state: FSMContext) -> None
 
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
-    await callback_query.answer(btn_text("done", profile.language))
+    await callback_query.answer(btn_text(ButtonText.done, profile.language))
     profile_record = await Cache.profile.get_record(profile.id)
     await Cache.profile.update_record(profile_record.id, dict(status=ProfileStatus.waiting_for_text))
     await answer_msg(
         msg_obj=callback_query,
-        text=msg_text("workout_type", profile.language),
+        text=msg_text(MessageText.workout_type, profile.language),
         reply_markup=workout_type_kb(profile.language),
     )
     await state.update_data(new_profile=True)
@@ -53,7 +53,7 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext) -> No
         await state.set_state(States.select_service)
         await answer_msg(
             msg_obj=callback_query,
-            text=msg_text("select_service", profile.language),
+            text=msg_text(MessageText.select_service, profile.language),
             reply_markup=select_service_kb(profile.language),
         )
         await del_msg(cast(Message | CallbackQuery | None, callback_query))
@@ -73,13 +73,15 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext) -> No
         profile_record = await Cache.profile.get_record(profile.id)
     except ProfileNotFoundError:
         logger.warning(f"Profile record not found for profile {profile.id} in payment_choice.")
-        await callback_query.answer(msg_text("profile_data_not_found_error", profile.language), show_alert=True)
+        await callback_query.answer(
+            msg_text(MessageText.profile_data_not_found_error, profile.language), show_alert=True
+        )
         return
 
     await state.update_data(service_type=option, profile=profile_record.model_dump())
     await answer_msg(
         msg_obj=callback_query,
-        text=msg_text("workout_type", profile.language),
+        text=msg_text(MessageText.workout_type, profile.language),
         reply_markup=workout_type_kb(profile.language),
     )
     await state.set_state(States.workout_type)
@@ -119,7 +121,9 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext) -> No
 
     profile_data = data.get("profile")
     if not profile_data:
-        await callback_query.answer(msg_text("profile_data_not_found_error", profile.language), show_alert=True)
+        await callback_query.answer(
+            msg_text(MessageText.profile_data_not_found_error, profile.language), show_alert=True
+        )
         return
     selected_profile = Profile.model_validate(profile_data)
 
@@ -128,7 +132,7 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext) -> No
         await APIService.profile.adjust_credits(profile.id, -required)
         await Cache.profile.update_record(selected_profile.id, {"credits": selected_profile.credits - required})
         await cache_program_data(data, selected_profile.id)
-        await callback_query.answer(msg_text("payment_success", profile.language), show_alert=True)
+        await callback_query.answer(msg_text(MessageText.payment_success, profile.language), show_alert=True)
         if callback_query.message:
             await show_main_menu(cast(Message, callback_query.message), profile, state)
         await del_msg(callback_query)
@@ -164,7 +168,7 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext) -> No
 
     await PaymentCacheManager.set_status(selected_profile.id, service_type, PaymentStatus.PENDING)
     await APIService.payment.create_payment(selected_profile.id, service_type, order_id, amount)
-    await callback_query.answer(msg_text("payment_in_progress", profile.language), show_alert=True)
+    await callback_query.answer(msg_text(MessageText.payment_in_progress, profile.language), show_alert=True)
 
     msg = callback_query.message
     if msg and isinstance(msg, Message):

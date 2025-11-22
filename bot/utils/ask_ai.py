@@ -11,7 +11,7 @@ from aiogram.types.input_file import FSInputFile
 from loguru import logger
 
 from bot.keyboards import ask_ai_prompt_kb
-from bot.texts import msg_text
+from bot.texts import MessageText, msg_text
 from bot.states import States
 from bot.utils.bot import answer_msg, del_msg
 from bot.utils.credits import available_ai_services
@@ -110,11 +110,11 @@ async def start_ask_ai_prompt(
     try:
         user_profile = await Cache.profile.get_record(profile.id)
     except ProfileNotFoundError:
-        await _notify_user(origin, msg_text("unexpected_error", lang), show_alert=True)
+        await _notify_user(origin, msg_text(MessageText.unexpected_error, lang), show_alert=True)
         return False
 
     if user_profile.status == ProfileStatus.initial:
-        await _notify_user(origin, msg_text("finish_registration_to_get_credits", lang), show_alert=True)
+        await _notify_user(origin, msg_text(MessageText.finish_registration_to_get_credits, lang), show_alert=True)
         if delete_origin:
             await del_msg(origin)
         return False
@@ -122,7 +122,7 @@ async def start_ask_ai_prompt(
     services = {service.name: service.credits for service in available_ai_services()}
     cost = int(services.get("ask_ai", int(settings.ASK_AI_PRICE)))
     if user_profile.credits < cost:
-        await _notify_user(origin, msg_text("not_enough_credits", lang), show_alert=True)
+        await _notify_user(origin, msg_text(MessageText.not_enough_credits, lang), show_alert=True)
         if show_balance_menu_on_insufficient:
             await show_balance_menu(origin, profile, state)
         return False
@@ -130,7 +130,7 @@ async def start_ask_ai_prompt(
     file_path = Path(__file__).resolve().parent.parent / "images" / "ai_coach.png"
     keyboard = ask_ai_prompt_kb(lang)
     await state.set_state(States.ask_ai_question)
-    prompt_text = msg_text("ask_ai_prompt", lang).format(cost=cost, balance=user_profile.credits)
+    prompt_text = msg_text(MessageText.ask_ai_prompt, lang).format(cost=cost, balance=user_profile.credits)
     update_payload: dict[str, object] = {
         "profile": user_profile.model_dump(),
         "ask_ai_cost": cost,

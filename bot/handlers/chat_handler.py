@@ -12,7 +12,7 @@ from core.cache import Cache
 from core.schemas import Profile
 from bot.utils.exercises import edit_subscription_exercises
 from bot.utils.menus import show_main_menu, show_exercises_menu, program_menu_pagination
-from bot.texts.text_manager import msg_text
+from bot.texts import MessageText, msg_text
 from bot.utils.bot import del_msg, answer_msg
 
 chat_router = Router()
@@ -52,7 +52,7 @@ async def have_you_trained(callback_query: CallbackQuery, state: FSMContext) -> 
         if callback_query.message and isinstance(callback_query.message, Message):
             await answer_msg(
                 callback_query.message,
-                msg_text("workout_results", profile.language),
+                msg_text(MessageText.workout_results, profile.language),
                 reply_markup=workout_results_kb(profile.language),
             )
             await del_msg(callback_query.message)

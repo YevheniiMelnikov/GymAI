@@ -13,7 +13,7 @@ from bot.keyboards import subscription_manage_kb, program_edit_kb, program_view_
 from bot.utils.profiles import fetch_user, answer_profile
 from bot.utils.credits import available_packages, available_ai_services
 from bot.states import States
-from bot.texts import msg_text
+from bot.texts import MessageText, msg_text
 from core.cache import Cache
 from core.enums import ProfileStatus
 from core.exceptions import (
@@ -46,7 +46,7 @@ async def show_subscription_page(callback_query: CallbackQuery, state: FSMContex
     if message and isinstance(message, Message):
         await answer_msg(
             message,
-            msg_text("subscription_page", lang).format(
+            msg_text(MessageText.subscription_page, lang).format(
                 next_payment_date=next_payment_date_str,
                 enabled=enabled_status,
                 price=subscription.price,
@@ -70,7 +70,7 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
         logger.info(f"Profile data not found for profile {profile.id} during profile editing setup.")
 
     state_to_set = States.edit_profile if user_profile else States.name
-    response_text = "choose_profile_parameter" if user_profile else "edit_profile"
+    response_text = MessageText.choose_profile_parameter if user_profile else MessageText.edit_profile
 
     profile_msg = await answer_msg(
         message,
@@ -88,7 +88,7 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
     await state.set_state(state_to_set)
 
     if not user_profile:
-        name_msg = await answer_msg(message, msg_text("name", profile.language))
+        name_msg = await answer_msg(message, msg_text(MessageText.name, profile.language))
         if name_msg is not None:
             await state.update_data(message_ids=[profile_msg.message_id, name_msg.message_id])
 
@@ -98,7 +98,7 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext, 
     await state.clear()
     await state.update_data(profile=profile.model_dump())
     await state.set_state(States.main_menu)
-    await answer_msg(message, msg_text("main_menu", profile.language), reply_markup=menu(profile.language))
+    await answer_msg(message, msg_text(MessageText.main_menu, profile.language), reply_markup=menu(profile.language))
     if delete_source:
         await del_msg(cast(Message | CallbackQuery | None, message))
 
@@ -115,9 +115,9 @@ async def show_balance_menu(callback_obj: CallbackQuery | Message, profile: Prof
     await answer_msg(
         callback_obj,
         caption=(
-            msg_text("credit_balance", lang).format(credits=cached_profile.credits)
+            msg_text(MessageText.credit_balance, lang).format(credits=cached_profile.credits)
             + "\n"
-            + msg_text("tariff_plans", lang)
+            + msg_text(MessageText.tariff_plans, lang)
         ),
         photo=packages_img,
         reply_markup=kb.tariff_plans_kb(lang, plans),
@@ -134,7 +134,7 @@ async def show_tariff_plans(callback_query: CallbackQuery, profile: Profile, sta
     packages_img = FSInputFile(file_path)
     await answer_msg(
         callback_query,
-        caption=msg_text("tariff_plans", language),
+        caption=msg_text(MessageText.tariff_plans, language),
         photo=packages_img,
         reply_markup=kb.tariff_plans_kb(language, plans),
     )
@@ -147,7 +147,7 @@ async def send_policy_confirmation(message: Message, state: FSMContext) -> None:
 
     info_msg = await answer_msg(
         message,
-        msg_text("contract_info_message", lang).format(
+        msg_text(MessageText.contract_info_message, lang).format(
             public_offer=settings.PUBLIC_OFFER,
             privacy_policy=settings.PRIVACY_POLICY,
         ),
@@ -155,7 +155,7 @@ async def send_policy_confirmation(message: Message, state: FSMContext) -> None:
     )
     confirm_msg = await answer_msg(
         message,
-        msg_text("accept_policy", lang),
+        msg_text(MessageText.accept_policy, lang),
         reply_markup=kb.yes_no_kb(lang),
     )
     message_ids: list[int] = []
@@ -172,15 +172,15 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
     lang = cast(str, profile.language)
 
     if isinstance(user, Profile) and user.status == ProfileStatus.initial:
-        await callback_query.answer(msg_text("finish_registration_to_get_credits", lang), show_alert=True)
+        await callback_query.answer(msg_text(MessageText.finish_registration_to_get_credits, lang), show_alert=True)
         await state.set_state(States.workout_goals)
-        msg = await answer_msg(callback_query, msg_text("workout_goals", lang))
+        msg = await answer_msg(callback_query, msg_text(MessageText.workout_goals, lang))
         if msg is not None:
             await state.update_data(chat_id=callback_query.from_user.id, message_ids=[msg.message_id])
         await del_msg(cast(Message | CallbackQuery | None, callback_query))
         return
 
-    text = msg_text("profile_info", lang).format(**get_profile_attributes(user, lang))
+    text = msg_text(MessageText.profile_info, lang).format(**get_profile_attributes(user, lang))
 
     await answer_profile(
         callback_query,
@@ -199,8 +199,8 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
     try:
         cached_profile = await Cache.profile.get_record(profile.id)
     except ProfileNotFoundError:
-        logger.error(f"Client data not found for profile {profile.id} in show_my_workouts_menu.")
-        await callback_query.answer(msg_text("questionnaire_not_completed", lang), show_alert=True)
+        logger.error(f"Profile data not found for profile {profile.id} in show_my_workouts_menu.")
+        await callback_query.answer(msg_text(MessageText.questionnaire_not_completed, lang), show_alert=True)
         message = cast(Message, callback_query.message)
         assert message
         await show_profile_editing_menu(message, profile, state)
@@ -210,9 +210,9 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
     assert message
 
     if cached_profile.status == ProfileStatus.initial:
-        await callback_query.answer(msg_text("finish_registration_to_get_credits", lang), show_alert=True)
+        await callback_query.answer(msg_text(MessageText.finish_registration_to_get_credits, lang), show_alert=True)
         await state.set_state(States.workout_goals)
-        msg = await answer_msg(callback_query, msg_text("workout_goals", lang))
+        msg = await answer_msg(callback_query, msg_text(MessageText.workout_goals, lang))
         if msg is not None:
             await state.update_data(chat_id=callback_query.from_user.id, message_ids=[msg.message_id])
         return
@@ -220,7 +220,7 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
     await state.set_state(States.select_service)
     await answer_msg(
         message,
-        msg_text("select_service", lang),
+        msg_text(MessageText.select_service, lang),
         reply_markup=kb.select_service_kb(lang),
     )
 
@@ -244,7 +244,7 @@ async def show_my_subscription_menu(
     await state.set_state(States.subscription_action_choice)
     await answer_msg(
         message,
-        msg_text("select_action", language),
+        msg_text(MessageText.select_action, language),
         reply_markup=kb.subscription_action_kb(language, webapp_url),
     )
     await del_msg(cast(Message | CallbackQuery | None, message))
@@ -256,14 +256,14 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
         await Cache.workout.get_latest_program(cached_profile.id)
     except ProgramNotFoundError:
         if hasattr(callback_query, "answer"):
-            await callback_query.answer(msg_text("no_program", profile.language), show_alert=True)
+            await callback_query.answer(msg_text(MessageText.no_program, profile.language), show_alert=True)
         await show_my_workouts_menu(callback_query, profile, state)
         return
     message = cast(Message, callback_query.message)
     assert message
     await answer_msg(
         message,
-        msg_text("select_action", profile.language),
+        msg_text(MessageText.select_action, profile.language),
         reply_markup=kb.program_action_kb(profile.language, get_webapp_url("program", profile.language)),
     )
     await state.set_state(States.program_action_choice)
@@ -281,7 +281,7 @@ async def show_ai_services(
     language = cast(str, profile.language or "eng")
     cached_profile = await Cache.profile.get_record(profile.id)
     if cached_profile.status == ProfileStatus.initial:
-        await callback_query.answer(msg_text("finish_registration_to_get_credits", language), show_alert=True)
+        await callback_query.answer(msg_text(MessageText.finish_registration_to_get_credits, language), show_alert=True)
     else:
         await callback_query.answer()
     file_path = Path(__file__).resolve().parent.parent / "images" / "ai_coach.png"
@@ -304,7 +304,7 @@ async def show_ai_services(
     await state.set_state(States.choose_ai_service)
     await answer_msg(
         callback_query,
-        caption=msg_text("ai_services", language).format(balance=cached_profile.credits),
+        caption=msg_text(MessageText.ai_services, language).format(balance=cached_profile.credits),
         photo=FSInputFile(file_path),
         reply_markup=kb.ai_services_kb(language, [p.name for p in services]),
     )
@@ -322,18 +322,18 @@ async def process_ai_service_selection(
     data = await state.get_data()
     profile_data = data.get("profile")
     if not profile_data:
-        await callback_query.answer(msg_text("unexpected_error", language), show_alert=True)
+        await callback_query.answer(msg_text(MessageText.unexpected_error, language), show_alert=True)
         return False
 
     selected_profile = Profile.model_validate(profile_data)
     services = {service.name: service.credits for service in available_ai_services()}
     required = services.get(service_name)
     if required is None:
-        await callback_query.answer(msg_text("unexpected_error", language), show_alert=True)
+        await callback_query.answer(msg_text(MessageText.unexpected_error, language), show_alert=True)
         return False
 
     if selected_profile.credits < required:
-        await callback_query.answer(msg_text("not_enough_credits", language), show_alert=True)
+        await callback_query.answer(msg_text(MessageText.not_enough_credits, language), show_alert=True)
         await show_balance_menu(callback_query, profile, state)
         return False
 
@@ -346,13 +346,13 @@ async def process_ai_service_selection(
         await state.set_state(States.workout_type)
         await answer_msg(
             callback_query,
-            msg_text("workout_type", language),
+            msg_text(MessageText.workout_type, language),
             reply_markup=workout_type_kb(language),
         )
     else:
         await state.update_data(workout_type=workout_type)
         await state.set_state(States.enter_wishes)
-        await answer_msg(callback_query, msg_text("enter_wishes", language))
+        await answer_msg(callback_query, msg_text(MessageText.enter_wishes, language))
     return True
 
 
@@ -370,7 +370,7 @@ async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, 
 
     await answer_msg(
         message,
-        msg_text("new_workout_plan", language),
+        msg_text(MessageText.new_workout_plan, language),
         reply_markup=reply_markup,
         disable_web_page_preview=True,
     )
@@ -416,7 +416,7 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
 
     if current_day < 0 or current_day >= split_number:
         current_day = max(0, min(current_day, split_number - 1))
-        await callback_query.answer(msg_text("out_of_range", profile.language))
+        await callback_query.answer(msg_text(MessageText.out_of_range, profile.language))
         await state.update_data(day_index=current_day)
         return
 
@@ -426,7 +426,7 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
         message = callback_query.message
         if message and isinstance(message, Message):
             await message.edit_text(
-                msg_text("new_workout_plan", profile.language),
+                msg_text(MessageText.new_workout_plan, profile.language),
                 reply_markup=reply_markup,
                 disable_web_page_preview=True,
             )
@@ -442,7 +442,7 @@ async def show_subscription_history(
 ) -> None:
     subscriptions = await Cache.workout.get_all_subscriptions(profile.id)
     if not subscriptions:
-        await callback_query.answer(msg_text("subscription_canceled", profile.language), show_alert=True)
+        await callback_query.answer(msg_text(MessageText.subscription_canceled, profile.language), show_alert=True)
         return
 
     index %= len(subscriptions)
@@ -456,7 +456,7 @@ async def show_subscription_history(
     message = callback_query.message
     if message and isinstance(message, Message):
         await message.edit_text(
-            msg_text("subscription_history_page", profile.language).format(program=program_text, date=date),
+            msg_text(MessageText.subscription_history_page, profile.language).format(program=program_text, date=date),
             reply_markup=kb.history_nav_kb(profile.language, "sh", index),
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
@@ -474,11 +474,11 @@ async def subscription_history_pagination(
     subscriptions = [Subscription.model_validate(s) for s in subs_data]
 
     if not subscriptions:
-        await callback_query.answer(msg_text("subscription_canceled", profile.language))
+        await callback_query.answer(msg_text(MessageText.subscription_canceled, profile.language))
         return
 
     if index < 0 or index >= len(subscriptions):
-        await callback_query.answer(msg_text("out_of_range", profile.language))
+        await callback_query.answer(msg_text(MessageText.out_of_range, profile.language))
         return
 
     sub = subscriptions[index]
@@ -487,7 +487,7 @@ async def subscription_history_pagination(
     message = callback_query.message
     if message and isinstance(message, Message):
         await message.edit_text(
-            msg_text("subscription_history_page", profile.language).format(program=program_text, date=date),
+            msg_text(MessageText.subscription_history_page, profile.language).format(program=program_text, date=date),
             reply_markup=kb.history_nav_kb(profile.language, "sh", index),
             parse_mode=ParseMode.HTML,
             disable_web_page_preview=True,
