@@ -1,14 +1,15 @@
 import asyncio
-import types
 import pytest
 
 from core.cache.base import BaseCacheManager
 from core.cache import Cache
-from core.cache.client_profile import ClientCacheManager
-from core.enums import ClientStatus
+from core.enums import ProfileStatus
+from core.exceptions import ProfileNotFoundError
+
+from unittest.mock import AsyncMock
 
 
-def test_update_client_uses_profile_key(monkeypatch):
+def test_update_profile_uses_profile_key(monkeypatch):
     async def runner():
         called = {}
 
@@ -22,23 +23,22 @@ def test_update_client_uses_profile_key(monkeypatch):
         monkeypatch.setattr(BaseCacheManager, "set", fake_set)
 
         profile_id = 5
-        await Cache.client.update_client(profile_id, {"status": ClientStatus.default})
+        await Cache.profile.update_record(profile_id, {"status": ProfileStatus.default})
         assert called.get("field") == str(profile_id)
 
     asyncio.run(runner())
 
 
-def test_get_client_not_found(monkeypatch):
+def test_get_profile_not_found(monkeypatch):
     async def runner():
         async def fake_get(_: int):
             return None
 
         monkeypatch.setattr(
-            ClientCacheManager,
-            "_service",
-            types.SimpleNamespace(get_client_by_profile_id=fake_get),
+            "core.cache.profile.APIService.profile.get_profile",
+            AsyncMock(return_value=None),
         )
-        with pytest.raises(Exception):
-            await Cache.client.get_client(999)
+        with pytest.raises(ProfileNotFoundError):
+            await Cache.profile.get_record(999)
 
     asyncio.run(runner())

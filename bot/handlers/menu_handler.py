@@ -12,7 +12,7 @@ from bot.texts.text_manager import msg_text
 from config.app_settings import settings
 from core.cache import Cache
 from core.enums import SubscriptionPeriod
-from core.schemas import Client, Profile
+from core.schemas import Profile
 from bot.utils.chat import process_feedback_content
 from bot.utils.menus import (
     show_main_menu,
@@ -27,7 +27,7 @@ from bot.utils.menus import (
 from bot.utils.workout_plans import cancel_subscription
 from bot.utils.other import generate_order_id
 from bot.utils.bot import del_msg, answer_msg, get_webapp_url
-from core.exceptions import ClientNotFoundError, SubscriptionNotFoundError
+from core.exceptions import ProfileNotFoundError, SubscriptionNotFoundError
 from core.services import APIService
 from bot.keyboards import payment_kb, select_service_kb, select_days_kb, yes_no_kb
 from bot.utils.credits import available_packages
@@ -82,14 +82,14 @@ async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
             return
 
         try:
-            client: Client = await Cache.client.get_client(profile.id)
-        except ClientNotFoundError:
+            user_profile: Profile = await Cache.profile.get_record(profile.id)
+        except ProfileNotFoundError:
             await callback_query.answer(msg_text("questionnaire_not_completed", profile.language), show_alert=True)
             await del_msg(callback_query)
             return
 
         order_id = generate_order_id()
-        await APIService.payment.create_payment(client.id, "credits", order_id, pkg.price)
+        await APIService.payment.create_payment(user_profile.id, "credits", order_id, pkg.price)
         webapp_url = get_webapp_url(
             "payment",
             profile.language,
@@ -103,7 +103,7 @@ async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
                 pkg.price,
                 order_id,
                 "credits",
-                client.id,
+                user_profile.id,
             )
         await state.update_data(order_id=order_id, amount=str(pkg.price), service_type="credits")
         await state.set_state(States.handle_payment)
@@ -141,7 +141,7 @@ async def ai_service_choice(callback_query: CallbackQuery, state: FSMContext) ->
 async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     profile = Profile.model_validate(data.get("profile"))
-    client = Client.model_validate(data.get("client"))
+    user_profile = Profile.model_validate(data.get("profile"))
     service = data.get("ai_service", "program")
     required = int(data.get("required", 0))
     wishes = data.get("wishes", "")
@@ -154,25 +154,27 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
     request_id = str(uuid4())
 
     if service == "program":
-        if not await acquire_once(f"gen_program:{client.id}", settings.LLM_COOLDOWN):
-            logger.warning(f"Duplicate program generation suppressed for client_id={client.id} request_id={request_id}")
+        if not await acquire_once(f"gen_program:{user_profile.id}", settings.LLM_COOLDOWN):
+            logger.warning(
+                f"Duplicate program generation suppressed for profile_id={user_profile.id} request_id={request_id}"
+            )
             await del_msg(callback_query)
             return
 
         logger.debug(
             "AI coach plan generation started plan_type=program "
-            f"client_id={client.id} request_id={request_id} ttl={settings.LLM_COOLDOWN}"
+            f"profile_id={user_profile.id} request_id={request_id} ttl={settings.LLM_COOLDOWN}"
         )
 
-    await APIService.profile.adjust_client_credits(profile.id, -required)
-    await Cache.client.update_client(client.profile, {"credits": client.credits - required})
+    await APIService.profile.adjust_credits(profile.id, -required)
+    await Cache.profile.update_record(user_profile.id, {"credits": user_profile.credits - required})
     await answer_msg(callback_query, msg_text("request_in_progress", profile.language))
     if isinstance(callback_query.message, Message):
         await show_main_menu(callback_query.message, profile, state)
 
     if service == "program":
         queued = await enqueue_workout_plan_generation(
-            client=client,
+            client=user_profile,
             language=profile.language,
             plan_type=WorkoutPlanType.PROGRAM,
             workout_type=WorkoutType(data.get("workout_type", "")),
@@ -184,7 +186,9 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
                 callback_query,
                 msg_text("coach_agent_error", profile.language).format(tg=settings.TG_SUPPORT_CONTACT),
             )
-            logger.error(f"ai_plan_dispatch_failed plan_type=program client_id={client.id} request_id={request_id}")
+            logger.error(
+                f"ai_plan_dispatch_failed plan_type=program profile_id={user_profile.id} request_id={request_id}"
+            )
         return
 
     period_map = {
@@ -228,14 +232,14 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
         return
 
     await state.update_data(workout_days=days)
-    client = Client.model_validate(data.get("client"))
+    selected_profile = Profile.model_validate(data.get("profile"))
     wishes = data.get("wishes", "")
     period = data.get("period", "1m")
     request_id = uuid4().hex
     await answer_msg(callback_query, msg_text("request_in_progress", lang))
     await show_main_menu(cast(Message, callback_query.message), profile, state)
     queued = await enqueue_workout_plan_generation(
-        client=client,
+        client=selected_profile,
         language=lang,
         plan_type=WorkoutPlanType.SUBSCRIPTION,
         workout_type=WorkoutType(data.get("workout_type", "")),
@@ -249,14 +253,13 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
             callback_query,
             msg_text("coach_agent_error", lang).format(tg=settings.TG_SUPPORT_CONTACT),
         )
-        logger.error(f"ai_plan_dispatch_failed plan_type=subscription client_id={client.id} request_id={request_id}")
+        logger.error(
+            f"ai_plan_dispatch_failed plan_type=subscription profile_id={selected_profile.id} request_id={request_id}"
+        )
         return
     logger.info(
-        "ai_plan_generation_requested request_id=%s client_id=%s profile_id=%s plan_type=%s",
-        request_id,
-        client.id,
-        profile.id,
-        WorkoutPlanType.SUBSCRIPTION.value,
+        f"ai_plan_generation_requested request_id={request_id} profile_id={selected_profile.id} "
+        f"plan_type={WorkoutPlanType.SUBSCRIPTION.value}"
     )
 
 
@@ -315,9 +318,9 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
     cb_data = callback_query.data or ""
 
     try:
-        client = await Cache.client.get_client(profile.id)
-    except ClientNotFoundError:
-        logger.warning(f"Client not found for profile_id {profile.id}")
+        profile_record = await Cache.profile.get_record(profile.id)
+    except ProfileNotFoundError:
+        logger.warning(f"Profile not found for profile_id {profile.id}")
         await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
         return
 
@@ -347,20 +350,20 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
 
         if not callback_query.from_user:
             return
-        subscription = await Cache.workout.get_latest_subscription(client.id)
+        subscription = await Cache.workout.get_latest_subscription(profile_record.id)
         if subscription is None:
             return
 
-        await cancel_subscription(client.id, subscription.id)
-        logger.info(f"Subscription for client_id {client.id} deactivated")
+        await cancel_subscription(profile_record.id, subscription.id)
+        logger.info(f"Subscription for profile_id {profile_record.id} deactivated")
         await show_main_menu(message, profile, state)
 
     else:
         await callback_query.answer()
         try:
-            subscription = await Cache.workout.get_latest_subscription(client.id)
+            subscription = await Cache.workout.get_latest_subscription(profile_record.id)
         except SubscriptionNotFoundError:
-            logger.warning(f"Subscription not found for client_id {client.id}")
+            logger.warning(f"Subscription not found for profile_id {profile_record.id}")
             await callback_query.answer(msg_text("unexpected_error", profile.language), show_alert=True)
             return
 

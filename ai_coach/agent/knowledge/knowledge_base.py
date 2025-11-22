@@ -22,7 +22,7 @@ from ai_coach.types import MessageRole
 from config.app_settings import settings
 
 if TYPE_CHECKING:
-    from core.schemas import Client
+    from core.schemas import Profile
 
 
 class KnowledgeBase:
@@ -103,13 +103,13 @@ class KnowledgeBase:
             logger.error(f"Knowledge base update skipped: {e}")
 
     async def search(
-        self, query: str, client_id: int, k: int | None = None, *, request_id: str | None = None
+        self, query: str, profile_id: int, k: int | None = None, *, request_id: str | None = None
     ) -> list[KnowledgeSnippet]:
         normalized_query = self.dataset_service._normalize_text(query)
         q_hash = sha256(normalized_query.encode("utf-8")).hexdigest()[:12] if normalized_query else "empty"
         user = await self.dataset_service.get_cognee_user()
         datasets_order = [
-            self.dataset_service.chat_dataset_name(client_id),
+            self.dataset_service.chat_dataset_name(profile_id),
             self.GLOBAL_DATASET,
         ]
         searchable_aliases: list[str] = []
@@ -164,8 +164,8 @@ class KnowledgeBase:
                         min_interval=60.0,
                     )
                     logger.warning(
-                        "projection:empty_after_text dataset=%s reason=no_chunks_or_graph_nodes_after_text_rows",
-                        effective,
+                        f"projection:empty_after_text dataset={effective} "
+                        "reason=no_chunks_or_graph_nodes_after_text_rows"
                     )
                     # Do not add to searchable_aliases if projection is incomplete
                     continue
@@ -187,15 +187,15 @@ class KnowledgeBase:
             rows_payload = {k: v for k, v in counts_map.items()}
             logger.debug(f"search.inputs raw={raw_list} effective={effective_list} rows={rows_payload}")
         dataset_label = ",".join(searchable_aliases) if searchable_aliases else "none"
-        logger.debug(f"ask.search.start client_id={client_id} datasets={dataset_label} q_hash={q_hash}")
+        logger.debug(f"ask.search.start profile_id={profile_id} datasets={dataset_label} q_hash={q_hash}")
         if not searchable_aliases:
             logger.debug(f"kb.search dataset={dataset_label} q_hash={q_hash} hits=0")
-            logger.debug(f"ask.search.done client_id={client_id} datasets={dataset_label} entries=0")
+            logger.debug(f"ask.search.done profile_id={profile_id} datasets={dataset_label} entries=0")
             return []
         try:
             results = await self.search_service.search(
                 query,
-                client_id,
+                profile_id,
                 k,
                 request_id=request_id,
                 datasets=searchable_aliases,
@@ -206,7 +206,7 @@ class KnowledgeBase:
             raise
         hits = len(results)
         logger.debug(f"kb.search dataset={dataset_label} q_hash={q_hash} hits={hits}")
-        logger.debug(f"ask.search.done client_id={client_id} datasets={dataset_label} entries={hits}")
+        logger.debug(f"ask.search.done profile_id={profile_id} datasets={dataset_label} entries={hits}")
         return results
 
     async def add_text(
@@ -215,13 +215,15 @@ class KnowledgeBase:
         *,
         dataset: str | None = None,
         node_set: list[str] | None = None,
-        client_id: int | None = None,
+        profile_id: int | None = None,
         role: MessageRole | None = None,
         metadata: dict[str, Any] | None = None,
         project: bool = True,
     ) -> None:
         user = await self.dataset_service.get_cognee_user()
-        ds = dataset or (self.dataset_service.dataset_name(client_id) if client_id is not None else self.GLOBAL_DATASET)
+        ds = dataset or (
+            self.dataset_service.dataset_name(profile_id) if profile_id is not None else self.GLOBAL_DATASET
+        )
         target_alias = self.dataset_service.alias_for_dataset(ds)
         meta_payload: dict[str, Any] = {}
         if metadata:
@@ -279,47 +281,47 @@ class KnowledgeBase:
                 logger.debug(f"kb_append.retry dataset={target_alias} attempt={attempts} sleep_for={sleep_for}")
                 await asyncio.sleep(sleep_for)
 
-    async def save_client_message(self, text: str, client_id: int) -> None:
+    async def save_client_message(self, text: str, profile_id: int) -> None:
         await self.add_text(
             text,
-            dataset=self.dataset_service.chat_dataset_name(client_id),
-            client_id=client_id,
+            dataset=self.dataset_service.chat_dataset_name(profile_id),
+            profile_id=profile_id,
             role=MessageRole.CLIENT,
-            node_set=[f"client:{client_id}", "chat_message"],
+            node_set=[f"profile:{profile_id}", "chat_message"],
             metadata={"channel": "chat"},
             project=False,
         )
 
-    async def save_ai_message(self, text: str, client_id: int) -> None:
+    async def save_ai_message(self, text: str, profile_id: int) -> None:
         await self.add_text(
             text,
-            dataset=self.dataset_service.chat_dataset_name(client_id),
-            client_id=client_id,
+            dataset=self.dataset_service.chat_dataset_name(profile_id),
+            profile_id=profile_id,
             role=MessageRole.AI_COACH,
-            node_set=[f"client:{client_id}", "chat_message"],
+            node_set=[f"profile:{profile_id}", "chat_message"],
             metadata={"channel": "chat"},
             project=False,
         )
 
-    async def get_message_history(self, client_id: int, limit: int | None = None) -> list[str]:
-        dataset: str = self.dataset_service.alias_for_dataset(self.dataset_service.chat_dataset_name(client_id))
+    async def get_message_history(self, profile_id: int, limit: int | None = None) -> list[str]:
+        dataset: str = self.dataset_service.alias_for_dataset(self.dataset_service.chat_dataset_name(profile_id))
         user: Any | None = await self.dataset_service.get_cognee_user()
         if user is None:
             if not self._warned_missing_user:
-                logger.warning(f"History fetch skipped client_id={client_id}: default user unavailable")
+                logger.warning(f"History fetch skipped profile_id={profile_id}: default user unavailable")
                 self._warned_missing_user = True
             else:
-                logger.debug(f"History fetch skipped client_id={client_id}: default user unavailable")
+                logger.debug(f"History fetch skipped profile_id={profile_id}: default user unavailable")
             return []
         user_ctx: Any | None = self.dataset_service.to_user_ctx(user)
         try:
             await self.dataset_service.ensure_dataset_exists(dataset, user_ctx)
         except Exception as exc:
-            logger.debug(f"Dataset ensure skipped client_id={client_id}: {exc}")
+            logger.debug(f"Dataset ensure skipped profile_id={profile_id}: {exc}")
         try:
             data = await self.dataset_service.list_dataset_entries(dataset, user_ctx)
         except Exception:
-            logger.info(f"No message history found for client_id={client_id}")
+            logger.info(f"No message history found for profile_id={profile_id}")
             return []
         messages: list[str] = []
         for item in data:
@@ -399,13 +401,8 @@ class KnowledgeBase:
         resolved_alias = self.dataset_service.alias_for_dataset(resolved)
         rows_after = await self.dataset_service.get_row_count(resolved_alias, user=actor)
         logger.debug(
-            "kb.update rows raw=%s alias=%s resolved=%s rows_before=%s rows_after=%s digest=%s",
-            dataset,
-            ds_name,
-            resolved_alias,
-            rows_before,
-            rows_after,
-            digest_sha[:12],
+            f"kb.update rows raw={dataset} alias={ds_name} resolved={resolved_alias} "
+            f"rows_before={rows_before} rows_after={rows_after} digest={digest_sha[:12]}"
         )
         # Trigger projection and wait briefly to avoid projection:skip_no_rows
         try:
@@ -725,11 +722,11 @@ class KnowledgeBase:
             }
         return result
 
-    async def fallback_entries(self, client_id: int, limit: int = 6) -> list[tuple[str, str]]:
-        return await self.search_service.fallback_entries(client_id, limit)
+    async def fallback_entries(self, profile_id: int, limit: int = 6) -> list[tuple[str, str]]:
+        return await self.search_service.fallback_entries(profile_id, limit)
 
-    def chat_dataset_name(self, client_id: int) -> str:
-        return self.dataset_service.chat_dataset_name(client_id)
+    def chat_dataset_name(self, profile_id: int) -> str:
+        return self.dataset_service.chat_dataset_name(profile_id)
 
     def get_last_rebuild_result(self) -> dict[str, Any]:
         return self._LAST_REBUILD_RESULT
@@ -795,20 +792,20 @@ class KnowledgeBase:
         return status == 404
 
     @staticmethod
-    def _client_profile_text(client: "Client") -> str:
+    def _profile_text(profile: "Profile") -> str:
         parts = []
-        if client.name:
-            parts.append(f"name: {client.name}")
-        if client.gender:
-            parts.append(f"gender: {client.gender}")
-        if client.born_in:
-            parts.append(f"born_in: {client.born_in}")
-        if client.weight:
-            parts.append(f"weight: {client.weight}")
-        if client.workout_experience:
-            parts.append(f"workout_experience: {client.workout_experience}")
-        if client.workout_goals:
-            parts.append(f"workout_goals: {client.workout_goals}")
-        if client.health_notes:
-            parts.append(f"health_notes: {client.health_notes}")
+        if profile.name:
+            parts.append(f"name: {profile.name}")
+        if profile.gender:
+            parts.append(f"gender: {profile.gender}")
+        if profile.born_in:
+            parts.append(f"born_in: {profile.born_in}")
+        if profile.weight:
+            parts.append(f"weight: {profile.weight}")
+        if profile.workout_experience:
+            parts.append(f"workout_experience: {profile.workout_experience}")
+        if profile.workout_goals:
+            parts.append(f"workout_goals: {profile.workout_goals}")
+        if profile.health_notes:
+            parts.append(f"health_notes: {profile.health_notes}")
         return "profile: " + "; ".join(parts)

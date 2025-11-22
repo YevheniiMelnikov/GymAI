@@ -21,7 +21,7 @@ from bot.keyboards import (
 from bot.states import States
 from bot.texts.exercises import exercise_dict
 from core.cache import Cache
-from core.enums import ClientStatus
+from core.enums import ProfileStatus
 from core.services import APIService
 from bot.utils.chat import send_message
 from bot.utils.exercises import update_exercise_data, save_exercise, create_exercise
@@ -30,9 +30,6 @@ from bot.utils.menus import (
     show_my_subscription_menu,
     show_my_program_menu,
     program_menu_pagination,
-    show_exercises_menu,
-    show_program_history,
-    program_history_pagination,
     subscription_history_pagination,
     show_subscription_page,
     show_ai_services,
@@ -139,17 +136,16 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
             await del_msg(message)
         return
 
-    client = preparation.client
+    user_profile = preparation.profile
     question_text = preparation.prompt
     cost = preparation.cost
     image_base64 = preparation.image_base64
     image_mime = preparation.image_mime
 
     request_id = uuid4().hex
-    logger.info(f"event=ask_ai_enqueue request_id={request_id} client_id={client.id} profile_id={profile.id}")
+    logger.info(f"event=ask_ai_enqueue request_id={request_id} profile_id={profile.id}")
     queued = await enqueue_ai_question(
-        client=client,
-        profile=profile,
+        profile=user_profile,
         prompt=question_text,
         language=profile.language,
         request_id=request_id,
@@ -159,7 +155,7 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
     )
 
     if not queued:
-        logger.error(f"event=ask_ai_enqueue_failed request_id={request_id} client_id={client.id}")
+        logger.error(f"event=ask_ai_enqueue_failed request_id={request_id} profile_id={profile.id}")
         await answer_msg(
             message,
             msg_text("coach_agent_error", lang).format(tg=settings.TG_SUPPORT_CONTACT),
@@ -169,7 +165,7 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
     await answer_msg(message, msg_text("request_in_progress", lang))
 
     state_payload: dict[str, object] = {
-        "client": client.model_dump(),
+        "profile": user_profile.model_dump(),
         "last_request_id": request_id,
         "ask_ai_cost": cost,
         "ask_ai_prompt_id": None,
@@ -415,13 +411,13 @@ async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMCon
         return
 
     if data.get("subscription"):
-        profile_id = cast(int, data.get("client_id"))
+        profile_id = cast(int, data.get("profile_id"))
         try:
             subscription = await Cache.workout.get_latest_subscription(profile_id)
             exercises_to_modify: list[DayExercises] = subscription.exercises
         except SubscriptionNotFoundError:
             logger.info(
-                f"Subscription not found for client_id={profile_id} "
+                f"Subscription not found for profile_id={profile_id} "
                 "in set_exercise_weight – starting with empty exercises list."
             )
             exercises_to_modify = []
@@ -455,7 +451,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     exercises = [DayExercises.model_validate(e) for e in data.get("exercises", [])]
-    profile_id = cast(int, data.get("client_id"))
+    profile_id = cast(int, data.get("profile_id"))
     day_index = str(data.get("day_index", 0))
 
     day_data = next((d for d in exercises if d.day == day_index), None)
@@ -534,24 +530,23 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
 
     elif callback_query.data == "finish_editing":
         await callback_query.answer(btn_text("done", profile.language))
-        client = await Cache.client.get_client(profile_id)
-        client_profile = await APIService.profile.get_profile(client.profile)
-        client_lang = cast(str, client_profile.language)
+        profile_record = await Cache.profile.get_record(profile_id)
+        profile_data = await APIService.profile.get_profile(profile_record.id)
+        client_lang = cast(str, profile_data.language)
 
         if data.get("subscription"):
             if subscription := await Cache.workout.get_latest_subscription(profile_id):
                 subscription_data = subscription.model_dump()
-                subscription_data.update(client_profile=profile_id, exercises=exercises)
+                subscription_data.update(profile=profile_id, exercises=exercises)
                 await APIService.workout.update_subscription(
                     cast(int, subscription_data.get("id", 0)), subscription_data
                 )
                 await Cache.workout.update_subscription(
-                    client_profile_id=profile_id,
-                    updates=dict(exercises=exercises, client_profile=profile_id),
+                    profile_id, updates=dict(exercises=exercises, profile=profile_id)
                 )
                 await Cache.payment.reset_status(profile_id, "subscription")
                 await send_message(
-                    recipient=client,
+                    recipient=profile_record,
                     text=msg_text("program_updated", client_lang),
                     bot=bot,
                     state=state,
@@ -569,14 +564,14 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
                     await Cache.workout.save_program(profile_id, program_data)
                     await Cache.payment.reset_status(profile_id, "program")
             await send_message(
-                recipient=client,
+                recipient=profile_record,
                 text=msg_text("program_updated", client_lang),
                 bot=bot,
                 state=state,
                 include_incoming_message=False,
             )
 
-        await Cache.client.update_client(client.profile, dict(status=ClientStatus.default))
+        await Cache.profile.update_record(profile_record.id, dict(status=ProfileStatus.default))
         message = cast(Message, callback_query.message)
         assert message is not None
         await show_main_menu(message, profile, state)
@@ -632,42 +627,13 @@ async def view_program(callback_query: CallbackQuery, state: FSMContext) -> None
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
 
-    if callback_query.data == "history":
-        await show_program_history(callback_query, profile, state)
-        await callback_query.answer()
-    elif callback_query.data == "quit":
+    if callback_query.data == "quit":
         await show_main_menu(cast(Message, callback_query.message), profile, state)
         await del_msg(cast(Message | CallbackQuery | None, callback_query))
         await callback_query.answer()
-    else:
-        await program_menu_pagination(state, callback_query)
-
-
-@workout_router.callback_query(States.program_history)
-async def program_history_nav(callback_query: CallbackQuery, state: FSMContext) -> None:
-    cb_data = callback_query.data or ""
-    data = await state.get_data()
-
-    if cb_data == "back":
-        await show_exercises_menu(callback_query, state, Profile.model_validate(data["profile"]))
         return
 
-    if "_" not in cb_data:
-        lang = (await Cache.profile.get_profile(callback_query.from_user.id)).language
-        await callback_query.answer(msg_text("out_of_range", lang))
-        return
-
-    _, index_str = cb_data.rsplit("_", 1)
-    try:
-        index = int(index_str)
-    except ValueError:
-        lang = (await Cache.profile.get_profile(callback_query.from_user.id)).language
-        await callback_query.answer(msg_text("out_of_range", lang))
-        return
-
-    profile = Profile.model_validate(data["profile"])
-    assert profile is not None
-    await program_history_pagination(callback_query, profile, index, state)
+    await program_menu_pagination(state, callback_query)
 
 
 @workout_router.callback_query(States.subscription_history)
@@ -676,8 +642,8 @@ async def subscription_history_nav(callback_query: CallbackQuery, state: FSMCont
     if cb_data == "back":
         data = await state.get_data()
         profile = Profile.model_validate(data.get("profile"))
-        client = await Cache.client.get_client(profile.id)
-        subscription = await Cache.workout.get_latest_subscription(client.id)
+        profile_record = await Cache.profile.get_record(profile.id)
+        subscription = await Cache.workout.get_latest_subscription(profile_record.id)
         await show_subscription_page(callback_query, state, subscription)
         return
 

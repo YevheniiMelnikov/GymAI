@@ -26,12 +26,6 @@ class ProfileNotFoundError(Exception):
         self.tg_id = tg_id
 
 
-class ClientNotFoundError(Exception):
-    def __init__(self, profile_id: int):
-        super().__init__(f"Client data not found for profile_id {profile_id}")
-        self.profile_id = profile_id
-
-
 class SubscriptionNotFoundError(Exception):
     def __init__(self, profile_id: int):
         super().__init__(f"Subscription not found for profile_id {profile_id}")

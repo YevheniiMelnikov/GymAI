@@ -14,11 +14,11 @@ from apps.workout_plans.repos import ProgramRepository, SubscriptionRepository
 from apps.workout_plans.models import Subscription
 
 
-def _parse_client_profile_id(client_id_str: Optional[str]) -> Optional[int]:
-    if client_id_str is None:
+def _parse_profile_id(profile_id_str: Optional[str]) -> Optional[int]:
+    if profile_id_str is None:
         return None
     try:
-        return int(client_id_str)
+        return int(profile_id_str)
     except (ValueError, TypeError):
         return None
 
@@ -31,23 +31,23 @@ class ProgramViewSet(ModelViewSet):
 
     def get_queryset(self):  # pyrefly: ignore[bad-override]
         qs = ProgramRepository.base_qs()
-        client_id_str = self.request.query_params.get("client_profile")
-        client_profile_id = _parse_client_profile_id(client_id_str)
-        return ProgramRepository.filter_by_client(qs, client_profile_id)
+        profile_id_str = self.request.query_params.get("profile")
+        profile_id = _parse_profile_id(profile_id_str)
+        return ProgramRepository.filter_by_profile(qs, profile_id)
 
     def create(self, request: Any, *args: Any, **kwargs: Any) -> Response:
-        client_profile_raw = request.data.get("client_profile")
+        profile_raw = request.data.get("profile")
         exercises = request.data.get("exercises_by_day")
-        if not client_profile_raw:
-            return Response({"error": "client_profile is required"}, status=status.HTTP_400_BAD_REQUEST)
+        if not profile_raw:
+            return Response({"error": "profile is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        client = ProgramRepository.get_client(int(client_profile_raw))
-        program = ProgramRepository.create_or_update(client, exercises)
+        profile_id = int(profile_raw)
+        program = ProgramRepository.create_or_update(profile_id, exercises)
 
         cache.delete_many(
             [
                 "program:list",
-                f"program:list:{client.id}",  # type: ignore[attr-defined]
+                f"program:list:{profile_id}",
                 f"program:{program.id}",  # type: ignore[attr-defined]
             ]
         )
@@ -65,15 +65,15 @@ class ProgramViewSet(ModelViewSet):
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
         serializer.is_valid(raise_exception=True)
 
-        client_profile_raw = request.data.get("client_profile") or instance.client_profile_id
-        client = ProgramRepository.get_client(int(client_profile_raw))
+        profile_raw = request.data.get("profile") or instance.profile_id
+        profile_id = int(profile_raw)
         exercises = serializer.validated_data.get("exercises_by_day", instance.exercises_by_day)
-        program = ProgramRepository.create_or_update(client, exercises, instance=instance)
+        program = ProgramRepository.create_or_update(profile_id, exercises, instance=instance)
 
         cache.delete_many(
             [
                 "program:list",
-                f"program:list:{client.id}",  # type: ignore[attr-defined]
+                f"program:list:{profile_id}",
                 f"program:{program.id}",  # type: ignore[attr-defined]
             ]
         )
@@ -90,16 +90,16 @@ class SubscriptionViewSet(ModelViewSet):
 
     def get_queryset(self):  # pyrefly: ignore[bad-override]
         qs = SubscriptionRepository.base_qs()
-        client_id_str = self.request.query_params.get("client_profile")
-        client_profile_id = _parse_client_profile_id(client_id_str)
-        return SubscriptionRepository.filter_by_client(qs, client_profile_id)
+        profile_id_str = self.request.query_params.get("profile")
+        profile_id = _parse_profile_id(profile_id_str)
+        return SubscriptionRepository.filter_by_profile(qs, profile_id)
 
     def perform_create(self, serializer: serializers.BaseSerializer) -> None:  # pyrefly: ignore[bad-override]
         sub = serializer.save()
         cache.delete_many(
             [
                 "subscriptions:list",
-                f"subscriptions:list:client:{sub.client_profile_id}",  # pyrefly: ignore[missing-attribute]
+                f"subscriptions:list:profile:{sub.profile_id}",  # pyrefly: ignore[missing-attribute]
             ]
         )
 
@@ -108,16 +108,16 @@ class SubscriptionViewSet(ModelViewSet):
         cache.delete_many(
             [
                 "subscriptions:list",
-                f"subscriptions:list:client:{sub.client_profile_id}",  # pyrefly: ignore[missing-attribute]
+                f"subscriptions:list:profile:{sub.profile_id}",  # pyrefly: ignore[missing-attribute]
             ]
         )
 
     def perform_destroy(self, instance: Subscription) -> None:  # pyrefly: ignore[bad-override]
-        client_profile_id = instance.client_profile_id  # pyrefly: ignore[missing-attribute]
+        profile_id = instance.profile_id  # pyrefly: ignore[missing-attribute]
         super().perform_destroy(instance)
         cache.delete_many(
             [
                 "subscriptions:list",
-                f"subscriptions:list:client:{client_profile_id}",
+                f"subscriptions:list:profile:{profile_id}",
             ]
         )

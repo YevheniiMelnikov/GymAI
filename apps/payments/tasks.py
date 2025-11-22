@@ -71,13 +71,13 @@ def process_payment_webhook(
 
 
 @app.task(bind=True, max_retries=3, retry_backoff=30, retry_backoff_max=300)  # pyrefly: ignore[not-callable]
-def send_payment_message(self, client_profile_id: int, text: str) -> None:
-    payload: dict[str, Any] = {"client_id": client_profile_id, "text": text}
+def send_payment_message(self, profile_id: int, text: str) -> None:
+    payload: dict[str, Any] = {"profile_id": profile_id, "text": text}
 
     def runner() -> Awaitable[None]:
         return _post_internal_json("/internal/payments/send_message/", payload)
 
-    _retryable_call(self, f"payment_message client_profile_id={client_profile_id}", runner)
+    _retryable_call(self, f"payment_message profile_id={profile_id}", runner)
 
 
 __all__ = [

@@ -1,11 +1,11 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict
 
 from loguru import logger
 
 from core.enums import PaymentStatus
-from core.exceptions import ClientNotFoundError
-from core.schemas import Client, Payment
+from core.exceptions import ProfileNotFoundError
+from core.schemas import Payment, Profile
 from core.services.internal.profile_service import ProfileService
 from core.services.internal.workout_service import WorkoutService
 
@@ -17,7 +17,8 @@ from .strategies import (
     PendingPayment,
     SuccessPayment,
 )
-from .types import CacheProtocol, CreditService, PaymentNotifier
+from .types import CacheProtocol, PaymentNotifier
+from bot.utils.credits import available_packages
 
 
 class PaymentProcessor:
@@ -28,14 +29,12 @@ class PaymentProcessor:
         profile_service: ProfileService,
         workout_service: WorkoutService,
         notifier: PaymentNotifier,
-        credit_service: CreditService,
         strategies: Dict[PaymentStatus, PaymentStrategy] | None = None,
     ) -> None:
         self.cache = cache
         self.payment_service = payment_service
         self.profile_service = profile_service
         self.workout_service = workout_service
-        self._credit_service = credit_service
         self.strategies = strategies or {
             PaymentStatus.SUCCESS: SuccessPayment(
                 cache,
@@ -53,22 +52,28 @@ class PaymentProcessor:
             logger.info(f"Payment {payment.id} already processed")
             return
         try:
-            client = await self.cache.client.get_client(payment.client_profile)
+            profile = await self.cache.profile.get_record(payment.profile)
             strategy = self.strategies.get(payment.status)
             if strategy:
-                await strategy.handle(payment, client)
+                await strategy.handle(payment, profile)
                 await self.payment_service.update_payment(payment.id, {"processed": True})
             else:
                 logger.warning(f"No strategy for payment {payment.id} with status {payment.status}")
-        except ClientNotFoundError:
-            logger.error(f"Client profile not found for payment {payment.id}")
+        except ProfileNotFoundError:
+            logger.error(f"Profile not found for payment {payment.id}")
         except Exception as e:  # noqa: BLE001
             logger.exception(f"Payment processing failed for {payment.id}: {e}")
 
-    async def process_credit_topup(self, client: Client, amount: Decimal) -> None:
-        credits = self._credit_service.credits_for_amount(amount)
-        await self.profile_service.adjust_client_credits(client.profile, credits)
-        await self.cache.client.update_client(client.profile, {"credits": client.credits + credits})
+    async def process_credit_topup(self, profile: Profile, amount: Decimal) -> None:
+        normalized = amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        package_map = {package.price: package.credits for package in available_packages()}
+        credits = package_map.get(normalized)
+        if credits is None:
+            message = f"Unsupported payment amount for credits: {normalized}"
+            logger.error(message)
+            raise ValueError(message)
+        await self.profile_service.adjust_credits(profile.id, credits)
+        await self.cache.profile.update_record(profile.id, {"credits": profile.credits + credits})
 
     async def handle_webhook_event(self, order_id: str, status_: str, error: str = "") -> None:
         payment = await self.payment_service.update_payment_status(order_id, status_, error)

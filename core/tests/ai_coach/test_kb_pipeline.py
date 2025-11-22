@@ -16,8 +16,8 @@ async def test_add_text_skips_empty_content(monkeypatch):
         async def get_cognee_user(self) -> object:
             return object()
 
-        def dataset_name(self, client_id: int) -> str:
-            return f"kb_client_{client_id}"
+        def dataset_name(self, profile_id: int) -> str:
+            return f"kb_profile_{profile_id}"
 
         def alias_for_dataset(self, dataset: str) -> str:
             return dataset

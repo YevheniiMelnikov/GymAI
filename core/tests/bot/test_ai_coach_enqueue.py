@@ -4,7 +4,11 @@ import pytest
 
 from bot.utils.ai_coach import enqueue_workout_plan_generation, enqueue_workout_plan_update
 from core.enums import WorkoutPlanType, WorkoutType
-from core.schemas import Client
+from core.schemas import Profile
+
+
+def _make_profile(id: int) -> Profile:
+    return Profile.model_validate({"id": id, "tg_id": id, "language": "en", "credits": 0})
 
 
 class DummySignature:
@@ -43,9 +47,9 @@ async def test_enqueue_generation_uses_chain(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr("bot.utils.ai_coach.handle_ai_plan_failure", DummyTask("failure"))
     monkeypatch.setattr("bot.utils.ai_coach.chain", lambda *sigs: DummyChain(sigs, record))
 
-    client = Client(id=5, profile=10)
+    profile = _make_profile(5)
     ok = await enqueue_workout_plan_generation(
-        client=client,
+        profile=profile,
         language="en",
         plan_type=WorkoutPlanType.PROGRAM,
         workout_type=WorkoutType.STRENGTH,
@@ -54,7 +58,7 @@ async def test_enqueue_generation_uses_chain(monkeypatch: pytest.MonkeyPatch) ->
     )
 
     assert ok is True
-    assert record["signatures"][0]["payload"]["client_profile_id"] == client.profile
+    assert record["signatures"][0]["payload"]["profile_id"] == profile.id
     assert record["link_error"][0]["action"] == "create"
 
 
@@ -67,8 +71,7 @@ async def test_enqueue_update_uses_chain(monkeypatch: pytest.MonkeyPatch) -> Non
     monkeypatch.setattr("bot.utils.ai_coach.chain", lambda *sigs: DummyChain(sigs, record))
 
     ok = await enqueue_workout_plan_update(
-        client_id=7,
-        client_profile_id=11,
+        profile_id=11,
         expected_workout_result="result",
         feedback="good",
         language="en",
@@ -78,15 +81,15 @@ async def test_enqueue_update_uses_chain(monkeypatch: pytest.MonkeyPatch) -> Non
     )
 
     assert ok is True
-    assert record["signatures"][0]["payload"]["client_profile_id"] == 11
+    assert record["signatures"][0]["payload"]["profile_id"] == 11
     assert record["link_error"][0]["action"] == "update"
 
 
 @pytest.mark.asyncio
 async def test_enqueue_generation_requires_profile() -> None:
-    client = Client(id=1, profile=0)
+    profile = _make_profile(1)
     ok = await enqueue_workout_plan_generation(
-        client=client,
+        profile=profile,
         language="en",
         plan_type=WorkoutPlanType.PROGRAM,
         workout_type=WorkoutType.STRENGTH,

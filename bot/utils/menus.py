@@ -1,5 +1,4 @@
 from contextlib import suppress
-from datetime import datetime
 from typing import Collection, cast
 
 from loguru import logger
@@ -16,12 +15,12 @@ from bot.utils.credits import available_packages, available_ai_services
 from bot.states import States
 from bot.texts import msg_text
 from core.cache import Cache
-from core.enums import ClientStatus
+from core.enums import ProfileStatus
 from core.exceptions import (
-    ClientNotFoundError,
+    ProfileNotFoundError,
     ProgramNotFoundError,
 )
-from core.schemas import Client, Profile, Subscription, Program
+from core.schemas import Profile, Subscription
 from bot.utils.text import (
     get_profile_attributes,
     get_translated_week_day,
@@ -62,13 +61,13 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
     await state.clear()
     await state.update_data(lang=profile.language)
 
-    user_profile: Client | None = None
+    user_profile: Profile | None = None
     reply_markup = None
     try:
-        user_profile = await Cache.client.get_client(profile.id)
-        reply_markup = kb.edit_client_profile_kb(profile.language)
-    except ClientNotFoundError:
-        logger.info(f"Client data not found for profile {profile.id} during profile editing setup.")
+        user_profile = await Cache.profile.get_record(profile.id)
+        reply_markup = kb.edit_profile_kb(profile.language)
+    except ProfileNotFoundError:
+        logger.info(f"Profile data not found for profile {profile.id} during profile editing setup.")
 
     state_to_set = States.edit_profile if user_profile else States.name
     response_text = "choose_profile_parameter" if user_profile else "edit_profile"
@@ -95,7 +94,7 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
 
 
 async def show_main_menu(message: Message, profile: Profile, state: FSMContext, *, delete_source: bool = True) -> None:
-    menu = kb.client_menu_kb
+    menu = kb.main_menu_kb
     await state.clear()
     await state.update_data(profile=profile.model_dump())
     await state.set_state(States.main_menu)
@@ -106,7 +105,7 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext, 
 
 async def show_balance_menu(callback_obj: CallbackQuery | Message, profile: Profile, state: FSMContext) -> None:
     lang = cast(str, profile.language)
-    client = await Cache.client.get_client(profile.id)
+    cached_profile = await Cache.profile.get_record(profile.id)
     plans = [p.name for p in available_packages()]
     file_path = Path(settings.BOT_PAYMENT_OPTIONS) / f"credit_packages_{lang}.png"
     packages_img = FSInputFile(file_path)
@@ -116,7 +115,9 @@ async def show_balance_menu(callback_obj: CallbackQuery | Message, profile: Prof
     await answer_msg(
         callback_obj,
         caption=(
-            msg_text("credit_balance", lang).format(credits=client.credits) + "\n" + msg_text("tariff_plans", lang)
+            msg_text("credit_balance", lang).format(credits=cached_profile.credits)
+            + "\n"
+            + msg_text("tariff_plans", lang)
         ),
         photo=packages_img,
         reply_markup=kb.tariff_plans_kb(lang, plans),
@@ -170,7 +171,7 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
     user = await fetch_user(profile)
     lang = cast(str, profile.language)
 
-    if isinstance(user, Client) and user.status == ClientStatus.initial:
+    if isinstance(user, Profile) and user.status == ProfileStatus.initial:
         await callback_query.answer(msg_text("finish_registration_to_get_credits", lang), show_alert=True)
         await state.set_state(States.workout_goals)
         msg = await answer_msg(callback_query, msg_text("workout_goals", lang))
@@ -179,7 +180,7 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
         await del_msg(cast(Message | CallbackQuery | None, callback_query))
         return
 
-    text = msg_text("client_profile", lang).format(**get_profile_attributes(user, lang))
+    text = msg_text("profile_info", lang).format(**get_profile_attributes(user, lang))
 
     await answer_profile(
         callback_query,
@@ -196,8 +197,8 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
     lang = cast(str, profile.language)
 
     try:
-        client = await Cache.client.get_client(profile.id)
-    except ClientNotFoundError:
+        cached_profile = await Cache.profile.get_record(profile.id)
+    except ProfileNotFoundError:
         logger.error(f"Client data not found for profile {profile.id} in show_my_workouts_menu.")
         await callback_query.answer(msg_text("questionnaire_not_completed", lang), show_alert=True)
         message = cast(Message, callback_query.message)
@@ -208,7 +209,7 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
     message = cast(Message, callback_query.message)
     assert message
 
-    if client.status == ClientStatus.initial:
+    if cached_profile.status == ProfileStatus.initial:
         await callback_query.answer(msg_text("finish_registration_to_get_credits", lang), show_alert=True)
         await state.set_state(States.workout_goals)
         msg = await answer_msg(callback_query, msg_text("workout_goals", lang))
@@ -250,9 +251,9 @@ async def show_my_subscription_menu(
 
 
 async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    client = await Cache.client.get_client(profile.id)
+    cached_profile = await Cache.profile.get_record(profile.id)
     try:
-        await Cache.workout.get_latest_program(client.id)
+        await Cache.workout.get_latest_program(cached_profile.id)
     except ProgramNotFoundError:
         if hasattr(callback_query, "answer"):
             await callback_query.answer(msg_text("no_program", profile.language), show_alert=True)
@@ -278,8 +279,8 @@ async def show_ai_services(
     auto_select_single: bool = False,
 ) -> None:
     language = cast(str, profile.language or "eng")
-    client = await Cache.client.get_client(profile.id)
-    if client.status == ClientStatus.initial:
+    cached_profile = await Cache.profile.get_record(profile.id)
+    if cached_profile.status == ProfileStatus.initial:
         await callback_query.answer(msg_text("finish_registration_to_get_credits", language), show_alert=True)
     else:
         await callback_query.answer()
@@ -303,7 +304,7 @@ async def show_ai_services(
     await state.set_state(States.choose_ai_service)
     await answer_msg(
         callback_query,
-        caption=msg_text("ai_services", language).format(balance=client.credits),
+        caption=msg_text("ai_services", language).format(balance=cached_profile.credits),
         photo=FSInputFile(file_path),
         reply_markup=kb.ai_services_kb(language, [p.name for p in services]),
     )
@@ -319,19 +320,19 @@ async def process_ai_service_selection(
 ) -> bool:
     language = cast(str, profile.language or "eng")
     data = await state.get_data()
-    client_data = data.get("client")
-    if not client_data:
+    profile_data = data.get("profile")
+    if not profile_data:
         await callback_query.answer(msg_text("unexpected_error", language), show_alert=True)
         return False
 
-    client = Client.model_validate(client_data)
+    selected_profile = Profile.model_validate(profile_data)
     services = {service.name: service.credits for service in available_ai_services()}
     required = services.get(service_name)
     if required is None:
         await callback_query.answer(msg_text("unexpected_error", language), show_alert=True)
         return False
 
-    if client.credits < required:
+    if selected_profile.credits < required:
         await callback_query.answer(msg_text("not_enough_credits", language), show_alert=True)
         await show_balance_menu(callback_query, profile, state)
         return False
@@ -374,7 +375,7 @@ async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, 
         disable_web_page_preview=True,
     )
 
-    await state.update_data(client=True, day_index=0)
+    await state.update_data(profile_view=True, day_index=0)
     await state.set_state(States.program_view)
     await del_msg(cast(Message | CallbackQuery | None, message))
 
@@ -396,7 +397,7 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
     split_number = data.get("split")
     assert split_number is not None
 
-    if data.get("client"):
+    if data.get("profile_view"):
         webapp_url = get_webapp_url("program", profile.language)
         if webapp_url is None:
             logger.warning(f"program_pagination_missing_webapp_url profile_id={profile.id} language={profile.language}")
@@ -430,68 +431,6 @@ async def program_menu_pagination(state: FSMContext, callback_query: CallbackQue
                 disable_web_page_preview=True,
             )
 
-    await callback_query.answer()
-
-
-async def show_program_history(
-    callback_query: CallbackQuery,
-    profile: Profile,
-    state: FSMContext,
-    index: int = 0,
-) -> None:  # TODO: remove
-    programs = await Cache.workout.get_all_programs(profile.id)
-    if not programs:
-        await callback_query.answer(msg_text("no_program", profile.language), show_alert=True)
-        return
-
-    index %= len(programs)
-    program = programs[index]
-    program_text = await format_full_program(program.exercises_by_day)
-    date = datetime.fromtimestamp(program.created_at).strftime("%Y-%m-%d")
-
-    await state.update_data(programs_history=[p.model_dump() for p in programs])
-    await state.set_state(States.program_history)
-
-    message = callback_query.message
-    if message and isinstance(message, Message):
-        await message.edit_text(
-            msg_text("program_history_page", profile.language).format(program=program_text, date=date),
-            reply_markup=kb.history_nav_kb(profile.language, "ph", index),
-            parse_mode=ParseMode.HTML,
-            disable_web_page_preview=True,
-        )
-
-
-async def program_history_pagination(
-    callback_query: CallbackQuery,
-    profile: Profile,
-    index: int,
-    state: FSMContext,
-) -> None:
-    data = await state.get_data()
-    programs_data = data.get("programs_history", [])
-    programs = [Program.model_validate(p) for p in programs_data]
-
-    if not programs:
-        await callback_query.answer(msg_text("no_program", profile.language))
-        return
-
-    if index < 0 or index >= len(programs):
-        await callback_query.answer(msg_text("out_of_range", profile.language))
-        return
-
-    program = programs[index]
-    program_text = await format_full_program(program.exercises_by_day)
-    date = datetime.fromtimestamp(program.created_at).strftime("%Y-%m-%d")
-
-    message = callback_query.message
-    if message and isinstance(message, Message):
-        await message.edit_text(
-            msg_text("program_history_page", profile.language).format(program=program_text, date=date),
-            reply_markup=kb.history_nav_kb(profile.language, "ph", index),
-            parse_mode=ParseMode.HTML,
-            disable_web_page_preview=True,
-        )
     await callback_query.answer()
 
 

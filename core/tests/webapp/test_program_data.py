@@ -20,6 +20,11 @@ views = import_module("apps.webapp.views")
 
 def test_program_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
+        async def noop_ready() -> None:
+            return None
+
+        monkeypatch.setattr(utils, "ensure_container_ready", noop_ready)
+        monkeypatch.setattr(views, "ensure_container_ready", noop_ready)
         monkeypatch.setattr("apps.webapp.utils.verify_init_data", lambda _d: {"user": {"id": 1}})
         monkeypatch.setattr(
             utils.ProfileRepository,
@@ -27,7 +32,7 @@ def test_program_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
             lambda _tg_id: SimpleNamespace(id=1, language="eng"),
         )
         monkeypatch.setattr(
-            utils.ClientProfileRepository,
+            utils.ProfileRepository,
             "get_by_profile_id",
             lambda _id: SimpleNamespace(id=1),
         )
@@ -69,7 +74,7 @@ def test_program_data_header_init_data(monkeypatch: pytest.MonkeyPatch) -> None:
             lambda _tg_id: SimpleNamespace(id=1, language="eng"),
         )
         monkeypatch.setattr(
-            utils.ClientProfileRepository,
+            utils.ProfileRepository,
             "get_by_profile_id",
             lambda _id: SimpleNamespace(id=1),
         )
@@ -104,7 +109,7 @@ def test_program_data_with_id(monkeypatch: pytest.MonkeyPatch) -> None:
             lambda _tg_id: SimpleNamespace(id=1, language="eng"),
         )
         monkeypatch.setattr(
-            utils.ClientProfileRepository,
+            utils.ProfileRepository,
             "get_by_profile_id",
             lambda _id: SimpleNamespace(id=1),
         )

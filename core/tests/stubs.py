@@ -2,7 +2,7 @@ import os
 import sys
 import types
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 from types import SimpleNamespace
 from urllib.parse import urlparse
 from urllib.request import url2pathname
@@ -34,6 +34,19 @@ class Redis:
 
     async def expire(self, key, ttl):
         return True
+
+    async def hget(self, key, field):
+        bucket = self._kv.get(key)
+        if isinstance(bucket, dict):
+            return bucket.get(field)
+        return None
+
+    async def hset(self, key, field, value, nx=False):
+        bucket = self._kv.setdefault(key, {})
+        if nx and field in bucket:
+            return 0
+        bucket[field] = value
+        return 1
 
     def pipeline(self):
         return Pipeline(self)
@@ -305,10 +318,12 @@ class MemoryStorage:
         stored = self._data.get(self._key_tuple(key))
         return dict(stored) if stored is not None else {}
 
-    async def update_data(self, key: Any, **kwargs: Any) -> dict[str, Any]:
+    async def update_data(self, key: Any, data: Mapping[str, Any] | None = None, **kwargs: Any) -> dict[str, Any]:
         storage_key = self._key_tuple(key)
         current = self._data.setdefault(storage_key, {})
-        current.update(kwargs)
+        updates = dict(data or {})
+        updates.update(kwargs)
+        current.update(updates)
         return dict(current)
 
     async def clear_data(self, key: Any) -> None:

@@ -80,7 +80,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
             language=cls._lang(deps),
         )
         user_prompt = f"MODE: {mode}\n{formatted}"
-        history = cls._message_history(deps.client_id)
+        history = cls._message_history(deps.profile_id)
         if inspect.isawaitable(history):
             history = await history
         raw_result = await agent.run(
@@ -98,10 +98,8 @@ class CoachAgent(metaclass=CoachAgentMeta):
         else:
             normalized = cls._normalize_output(raw_result, Subscription)
         logger.debug(
-            "agent.done client_id=%s mode=%s tools_called=%s",
-            deps.client_id,
-            deps.mode.value if deps.mode else "unknown",
-            sorted(deps.called_tools),
+            f"agent.done profile_id={deps.profile_id} mode={deps.mode.value if deps.mode else 'unknown'} "
+            f"tools_called={sorted(deps.called_tools)}"
         )
         return normalized
 
@@ -132,7 +130,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
         )
         rules = "\n".join(filter(None, [COACH_INSTRUCTIONS, instructions]))
         user_prompt = f"MODE: update\n{formatted}\nRules:\n{rules}"
-        history = cls._message_history(deps.client_id)
+        history = cls._message_history(deps.profile_id)
         if inspect.isawaitable(history):
             history = await history
         raw_result = await agent.run(
@@ -158,7 +156,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
         deps.mode = CoachMode.ask_ai
         agent = cls._get_agent()
         _, language_label = cls._language_context(deps)
-        history = await cls._message_history(deps.client_id)
+        history = await cls._message_history(deps.profile_id)
         user_prompt = ASK_AI_USER_PROMPT.format(
             language=language_label,
             question=prompt,
@@ -175,7 +173,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
                 ),
             )
         except AgentExecutionAborted as exc:
-            logger.info(f"agent.ask completion_aborted client_id={deps.client_id} reason={exc.reason}")
+            logger.info(f"agent.ask completion_aborted profile_id={deps.profile_id} reason={exc.reason}")
             if exc.reason == "knowledge_base_empty":
                 deps.knowledge_base_empty = True
             fallback = await cls._fallback_answer_question(
@@ -202,7 +200,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
         if not normalized.sources:
             normalized.sources = ["knowledge_base"] if deps.kb_used else ["general_knowledge"]
         logger.info(
-            f"agent.ask.done client_id={deps.client_id} answer_len={len(normalized.answer)} "
+            f"agent.ask.done profile_id={deps.profile_id} answer_len={len(normalized.answer)} "
             f"sources={','.join(normalized.sources)} kb_used={deps.kb_used}"
         )
         return normalized

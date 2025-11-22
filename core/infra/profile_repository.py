@@ -3,7 +3,7 @@ from typing import Any
 import httpx
 from loguru import logger
 
-from core.schemas import Client, Profile
+from core.schemas import Profile
 from core.services.internal.api_client import (
     APIClient,
     APIClientHTTPError,
@@ -105,85 +105,12 @@ class HTTPProfileRepository(APIClient):
         logger.error(f"Failed to update profile id={profile_id}. HTTP={status}")
         return False
 
-    async def create_client_profile(self, profile_id: int, data: dict[str, Any] | None = None) -> Client | None:
-        url = self._build_url("api/v1/client-profiles/")
-        payload: dict[str, Any] = {"profile": profile_id}
-        if data:
-            payload.update(data)
-        try:
-            status, resp = await self._api_request(
-                "post", url, payload, headers={"Authorization": f"Api-Key {self.api_key}"}
-            )
-        except (APIClientHTTPError, APIClientTransportError) as exc:
-            logger.error(f"Failed to create ClientProfile profile_id={profile_id}: {exc}")
-            return None
-        if status == 201 and resp:
-            logger.info(f"ClientProfile created profile_id={profile_id}")
-            return Client.model_validate(resp)
-        logger.error(f"Failed to create ClientProfile profile_id={profile_id}. HTTP={status}")
-        return None
-
-    async def update_client_profile(self, client_profile_id: int, data: dict[str, Any]) -> bool:
-        url = self._build_url(f"api/v1/client-profiles/pk/{client_profile_id}/")
-        data = {k: v for k, v in data.items() if k != "profile"}
-        try:
-            status, _ = await self._api_request(
-                "patch", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
-            )
-        except (APIClientHTTPError, APIClientTransportError) as exc:
-            logger.error(f"Failed to update ClientProfile {client_profile_id}: {exc}")
-            return False
-        if status in (200, 204):
-            logger.info(f"ClientProfile {client_profile_id} updated")
-            return True
-        logger.error(f"Failed to update ClientProfile {client_profile_id}. HTTP={status}")
-        return False
-
-    async def adjust_client_credits(self, profile_id: int, delta: int | Decimal) -> bool:
-        client = await self.get_client_by_profile_id(profile_id)
-        if client is None:
-            logger.error(f"ClientProfile not found for profile_id={profile_id}")
+    async def adjust_credits(self, profile_id: int, delta: int | Decimal) -> bool:
+        profile = await self.get_profile(profile_id)
+        if profile is None:
+            logger.error(f"Profile not found for profile_id={profile_id}")
             return False
 
         int_delta = int(delta)
-        new_credits = max(0, int(client.credits) + int_delta)
-        return await self.update_client_profile(client.id, {"credits": int(new_credits)})
-
-    async def _get_by_profile(self, tail: str, model):
-        url = self._build_url(tail)
-        try:
-            status, data = await self._api_request(
-                "get",
-                url,
-                headers={"Authorization": f"Api-Key {self.api_key}"},
-                allow_statuses={404},
-            )
-        except (APIClientHTTPError, APIClientTransportError) as exc:
-            logger.error(f"Failed to fetch profile resource tail={tail}: {exc}")
-            return None
-        if status == 200 and data:
-            return model.model_validate(data)
-        return None
-
-    async def get_client(self, client_id: int) -> Client | None:
-        url = self._build_url(f"api/v1/client-profiles/pk/{client_id}/")
-        try:
-            status, data = await self._api_request(
-                "get",
-                url,
-                headers={"Authorization": f"Api-Key {self.api_key}"},
-                allow_statuses={404},
-            )
-        except (APIClientHTTPError, APIClientTransportError) as exc:
-            logger.error(f"Failed to fetch client id={client_id}: {exc}")
-            return None
-        if status == 200 and data:
-            return Client.model_validate(data)
-        return None
-
-    async def get_client_by_profile_id(self, profile_id: int) -> Client | None:
-        return await self._get_by_profile(f"api/v1/client-profiles/by-profile/{profile_id}/", Client)
-
-    async def get_client_by_tg_id(self, tg_id: int) -> Client | None:
-        profile = await self.get_profile_by_tg_id(tg_id)
-        return await self.get_client_by_profile_id(profile.id) if profile else None
+        target = max(0, profile.credits + int_delta)
+        return await self.update_profile(profile_id, {"credits": target})

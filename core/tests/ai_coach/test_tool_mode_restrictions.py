@@ -9,7 +9,7 @@ from ai_coach.types import CoachMode
 
 @pytest.mark.asyncio
 async def test_subscription_tool_disabled_for_program_mode() -> None:
-    deps = AgentDeps(client_id=1)
+    deps = AgentDeps(profile_id=1)
     deps.mode = CoachMode.program
     ctx = SimpleNamespace(deps=deps)
     prepare = _single_use_prepare("tool_create_subscription")
@@ -23,7 +23,7 @@ async def test_subscription_tool_disabled_for_program_mode() -> None:
 
 @pytest.mark.asyncio
 async def test_subscription_tool_allowed_for_subscription_mode() -> None:
-    deps = AgentDeps(client_id=1)
+    deps = AgentDeps(profile_id=1)
     deps.mode = CoachMode.subscription
     ctx = SimpleNamespace(deps=deps)
     prepare = _single_use_prepare("tool_create_subscription")

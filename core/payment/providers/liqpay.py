@@ -122,13 +122,13 @@ class LiqPayGateway(PaymentGateway):
         amount: Decimal,
         order_id: str,
         payment_type: str,
-        client_id: int,
+        profile_id: int,
     ) -> dict[str, Any]:
         params: dict[str, Any] = {
             "action": action,
             "amount": str(amount.quantize(Decimal("0.01"), ROUND_HALF_UP)),
             "currency": "UAH",
-            "description": f"{payment_type} payment from client {client_id}",
+            "description": f"{payment_type} payment from client {profile_id}",
             "order_id": order_id,
             "version": "3",
         }
@@ -146,9 +146,9 @@ class LiqPayGateway(PaymentGateway):
         amount: Decimal,
         order_id: str,
         payment_type: str,
-        client_id: int,
+        profile_id: int,
     ) -> CheckoutPayload:
-        params = self._build_params(action, amount, order_id, payment_type, client_id)
+        params = self._build_params(action, amount, order_id, payment_type, profile_id)
         data: str = self.client.cnb_data(params)
         signature: str = self.client.cnb_signature(params)
         checkout_url: str = str(self._checkout_url)
@@ -164,7 +164,7 @@ class LiqPayGateway(PaymentGateway):
         amount: Decimal,
         order_id: str,
         payment_type: str,
-        client_id: int,
+        profile_id: int,
     ) -> str:
-        checkout = self.build_checkout(action, amount, order_id, payment_type, client_id)
+        checkout = self.build_checkout(action, amount, order_id, payment_type, profile_id)
         return checkout.checkout_url

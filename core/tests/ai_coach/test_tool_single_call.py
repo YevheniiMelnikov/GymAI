@@ -13,12 +13,12 @@ async def test_tool_search_knowledge_skips_repeat(monkeypatch: pytest.MonkeyPatc
 
     class DummyKnowledgeBase:
         @staticmethod
-        async def search(query: str, client_id: int, k: int, request_id: str | None = None) -> list[str]:
+        async def search(query: str, profile_id: int, k: int, request_id: str | None = None) -> list[str]:
             calls.append(query)
             return [f"result:{query}"]
 
     monkeypatch.setattr("ai_coach.agent.tools.get_knowledge_base", lambda: DummyKnowledgeBase())
-    deps = AgentDeps(client_id=1)
+    deps = AgentDeps(profile_id=1)
     deps.mode = CoachMode.program
     ctx = SimpleNamespace(deps=deps)
     first = await tool_search_knowledge(ctx, "Goal", k=2)

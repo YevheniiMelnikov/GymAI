@@ -7,9 +7,9 @@ from bot import keyboards as kb
 from bot.utils import menus
 from bot.texts import msg_text
 from core.cache import Cache
-from core.enums import ClientStatus
+from core.enums import ProfileStatus
 from core.exceptions import ProgramNotFoundError
-from core.schemas import Client, Profile
+from core.schemas import Profile
 
 
 class DummyState:
@@ -20,18 +20,18 @@ class DummyState:
         return None
 
 
-def test_show_my_program_menu_uses_client_id(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_show_my_program_menu_uses_profile_id(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
         profile = Profile(id=2, tg_id=1, language="en")
-        client = Client(id=1, profile=2, status=ClientStatus.default)
+        cached_profile = Profile(id=2, tg_id=1, language="en", status=ProfileStatus.default)
         called: dict[str, int] = {}
 
-        async def fake_get_client(profile_id: int) -> Client:
+        async def fake_get_profile(profile_id: int) -> Profile:
             assert profile_id == profile.id
-            return client
+            return cached_profile
 
-        async def fake_get_latest_program(client_id: int) -> SimpleNamespace:
-            called["id"] = client_id
+        async def fake_get_latest_program(profile_id: int) -> SimpleNamespace:
+            called["id"] = profile_id
             return SimpleNamespace(id=1)
 
         markup = SimpleNamespace()
@@ -39,7 +39,7 @@ def test_show_my_program_menu_uses_client_id(monkeypatch: pytest.MonkeyPatch) ->
         delete = AsyncMock()
         state = DummyState()
 
-        monkeypatch.setattr(Cache.client, "get_client", fake_get_client)
+        monkeypatch.setattr(Cache.profile, "get_record", fake_get_profile)
         monkeypatch.setattr(Cache.workout, "get_latest_program", fake_get_latest_program)
         monkeypatch.setattr(kb, "program_action_kb", lambda lang, url: markup)
         monkeypatch.setattr(menus, "get_webapp_url", lambda page, lang=None: "https://webapp")
@@ -50,7 +50,7 @@ def test_show_my_program_menu_uses_client_id(monkeypatch: pytest.MonkeyPatch) ->
 
         await menus.show_my_program_menu(cb, profile, state)
 
-        assert called["id"] == client.id
+        assert called["id"] == cached_profile.id
         answer.assert_awaited()
         delete.assert_awaited_once_with(cb.message)
 
@@ -60,20 +60,20 @@ def test_show_my_program_menu_uses_client_id(monkeypatch: pytest.MonkeyPatch) ->
 def test_show_my_program_menu_alerts_when_no_program(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
         profile = Profile(id=2, tg_id=1, language="en")
-        client = Client(id=1, profile=2, status=ClientStatus.default)
+        cached_profile = Profile(id=2, tg_id=1, language="en", status=ProfileStatus.default)
 
-        async def fake_get_client(profile_id: int) -> Client:
+        async def fake_get_profile(profile_id: int) -> Profile:
             assert profile_id == profile.id
-            return client
+            return cached_profile
 
-        async def fake_get_latest_program(client_id: int) -> None:
-            raise ProgramNotFoundError(client_id)
+        async def fake_get_latest_program(profile_id: int) -> None:
+            raise ProgramNotFoundError(profile_id)
 
         answer = AsyncMock()
         workouts = AsyncMock()
         state = DummyState()
 
-        monkeypatch.setattr(Cache.client, "get_client", fake_get_client)
+        monkeypatch.setattr(Cache.profile, "get_record", fake_get_profile)
         monkeypatch.setattr(Cache.workout, "get_latest_program", fake_get_latest_program)
         monkeypatch.setattr(menus, "show_my_workouts_menu", workouts)
 

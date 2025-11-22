@@ -19,10 +19,10 @@ from bot.utils.media import download_limited_file, get_ai_qa_image_limit
 from bot.utils.menus import show_balance_menu
 from config.app_settings import settings
 from core.cache import Cache
-from core.enums import ClientStatus
+from core.enums import ProfileStatus
 from core.ai_coach.models import AskAiPreparationResult
-from core.exceptions import AskAiPreparationError, ClientNotFoundError
-from core.schemas import Client, Profile
+from core.exceptions import AskAiPreparationError, ProfileNotFoundError
+from core.schemas import Profile
 
 
 async def prepare_ask_ai_request(
@@ -32,14 +32,14 @@ async def prepare_ask_ai_request(
     state_data: dict[str, Any],
     bot: Bot,
 ) -> AskAiPreparationResult:
-    client_data = state_data.get("client")
-    if client_data is None:
+    profile_data = state_data.get("profile")
+    if profile_data is None:
         try:
-            client = await Cache.client.get_client(profile.id)
-        except ClientNotFoundError as exc:
+            user_profile = await Cache.profile.get_record(profile.id)
+        except ProfileNotFoundError as exc:
             raise AskAiPreparationError("unexpected_error") from exc
     else:
-        client = Client.model_validate(client_data)
+        user_profile = Profile.model_validate(profile_data)
 
     prompt_raw = (message.text or message.caption or "").strip()
     if not prompt_raw:
@@ -50,7 +50,7 @@ async def prepare_ask_ai_request(
     cost_hint = state_data.get("ask_ai_cost")
     cost = int(cost_hint or services.get("ask_ai", default_cost))
 
-    if client.credits < cost:
+    if user_profile.credits < cost:
         raise AskAiPreparationError("not_enough_credits")
 
     image_base64: str | None = None
@@ -77,7 +77,7 @@ async def prepare_ask_ai_request(
         image_mime = document.mime_type
 
     return AskAiPreparationResult(
-        client=client,
+        profile=user_profile,
         prompt=prompt_raw,
         cost=cost,
         image_base64=image_base64,
@@ -108,12 +108,12 @@ async def start_ask_ai_prompt(
     """Display Ask AI prompt if user has enough credits."""
     lang = profile.language or settings.DEFAULT_LANG
     try:
-        client = await Cache.client.get_client(profile.id)
-    except ClientNotFoundError:
+        user_profile = await Cache.profile.get_record(profile.id)
+    except ProfileNotFoundError:
         await _notify_user(origin, msg_text("unexpected_error", lang), show_alert=True)
         return False
 
-    if client.status == ClientStatus.initial:
+    if user_profile.status == ProfileStatus.initial:
         await _notify_user(origin, msg_text("finish_registration_to_get_credits", lang), show_alert=True)
         if delete_origin:
             await del_msg(origin)
@@ -121,7 +121,7 @@ async def start_ask_ai_prompt(
 
     services = {service.name: service.credits for service in available_ai_services()}
     cost = int(services.get("ask_ai", int(settings.ASK_AI_PRICE)))
-    if client.credits < cost:
+    if user_profile.credits < cost:
         await _notify_user(origin, msg_text("not_enough_credits", lang), show_alert=True)
         if show_balance_menu_on_insufficient:
             await show_balance_menu(origin, profile, state)
@@ -130,7 +130,11 @@ async def start_ask_ai_prompt(
     file_path = Path(__file__).resolve().parent.parent / "images" / "ai_coach.png"
     keyboard = ask_ai_prompt_kb(lang)
     await state.set_state(States.ask_ai_question)
-    prompt_text = msg_text("ask_ai_prompt", lang).format(cost=cost, balance=client.credits)
+    prompt_text = msg_text("ask_ai_prompt", lang).format(cost=cost, balance=user_profile.credits)
+    update_payload: dict[str, object] = {
+        "profile": user_profile.model_dump(),
+        "ask_ai_cost": cost,
+    }
     if file_path.exists():
         prompt_message = await answer_msg(
             origin,
@@ -139,16 +143,12 @@ async def start_ask_ai_prompt(
             reply_markup=keyboard,
         )
     else:
-        logger.warning(f"event=ask_ai_prompt_image_missing path={file_path} client_id={client.id}")
+        logger.warning(f"event=ask_ai_prompt_image_missing path={file_path} profile_id={user_profile.id}")
         prompt_message = await answer_msg(
             origin,
             prompt_text,
             reply_markup=keyboard,
         )
-    update_payload: dict[str, object] = {
-        "client": client.model_dump(),
-        "ask_ai_cost": cost,
-    }
     if prompt_message is not None:
         update_payload["ask_ai_prompt_id"] = prompt_message.message_id
         update_payload["ask_ai_prompt_chat_id"] = prompt_message.chat.id

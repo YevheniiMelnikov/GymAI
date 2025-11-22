@@ -4,8 +4,7 @@ from pydantic import BaseModel, Field, field_validator
 class AiAnswerNotify(BaseModel):
     request_id: str
     status: str = "success"
-    client_id: int
-    client_profile_id: int | None = None
+    profile_id: int
     answer: str | None = None
     sources: list[str] = Field(default_factory=list)
     error: str | None = None

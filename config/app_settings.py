@@ -165,6 +165,7 @@ class Settings(BaseSettings):
     WEBHOOK_URL: str | None = None
     PAYMENT_CALLBACK_URL: str | None = None
 
+    DEFAULT_CREDITS: int = 500
     PACKAGE_START_CREDITS: int = 500
     PACKAGE_START_PRICE: Decimal = Decimal("250")
     PACKAGE_OPTIMUM_CREDITS: int = 1200

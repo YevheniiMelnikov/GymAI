@@ -46,7 +46,7 @@ def _sample_program(**kwargs) -> ProgramPayload:
     day = {"day": "day1", "exercises": [{"name": "Squat", "sets": "3", "reps": "10"}]}
     base = {
         "id": 1,
-        "client_profile": 1,
+        "profile": 1,
         "exercises_by_day": [day],
         "created_at": 0,
         "split_number": 1,
@@ -93,7 +93,7 @@ def test_subscription_payload_validation() -> None:
 
 
 def test_ask_request_accepts_ask_ai() -> None:
-    req = AICoachRequest(client_id=1, prompt="hi", mode="ask_ai")
+    req = AICoachRequest(profile_id=1, prompt="hi", mode="ask_ai")
     assert req.mode is CoachMode.ask_ai
 
 
@@ -104,7 +104,7 @@ async def test_answer_question_uses_primary_completion(monkeypatch: pytest.Monke
             return QAResponse(answer="Final", sources=["kb_global"])
 
     monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: SuccessAgent()))
-    deps = AgentDeps(client_id=7, locale="en", allow_save=False)
+    deps = AgentDeps(profile_id=7, locale="en", allow_save=False)
     result = await CoachAgent.answer_question("question", deps)
     assert result.answer == "Final"
     assert result.sources == ["kb_global"]
@@ -128,7 +128,7 @@ async def test_answer_question_uses_fallback_when_completion_fails(monkeypatch: 
 
     monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: AbortingAgent()))
     monkeypatch.setattr(CoachAgent, "_fallback_answer_question", classmethod(fake_fallback))
-    deps = AgentDeps(client_id=9, locale="en", allow_save=False)
+    deps = AgentDeps(profile_id=9, locale="en", allow_save=False)
     result = await CoachAgent.answer_question("question", deps)
     assert result.answer == "Fallback"
     assert result.sources == ["kb_global"]
@@ -152,7 +152,7 @@ async def test_answer_question_manual_answer_when_everything_fails(monkeypatch: 
 
     monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: AbortingAgent()))
     monkeypatch.setattr(CoachAgent, "_fallback_answer_question", classmethod(fake_fallback))
-    deps = AgentDeps(client_id=5, locale="en", allow_save=False)
+    deps = AgentDeps(profile_id=5, locale="en", allow_save=False)
     with pytest.raises(AgentExecutionAborted) as exc_info:
         await CoachAgent.answer_question("question", deps)
     assert exc_info.value.reason == "ask_ai_unavailable"
@@ -167,7 +167,7 @@ async def test_answer_question_handles_agent_aborted(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: AbortingAgent()))
     monkeypatch.setattr(CoachAgent, "_get_completion_client", classmethod(lambda cls: _dummy_completion_client()))
     monkeypatch.setattr(CoachAgent, "_ensure_llm_logging", classmethod(lambda cls, target, model_id=None: None))
-    deps = AgentDeps(client_id=11, locale="en", allow_save=False)
+    deps = AgentDeps(profile_id=11, locale="en", allow_save=False)
     with pytest.raises(AgentExecutionAborted) as exc_info:
         await CoachAgent.answer_question("question", deps)
     assert exc_info.value.reason == "ask_ai_unavailable"
@@ -186,7 +186,7 @@ def test_extract_choice_content_tool_arguments() -> None:
             )
         ]
     )
-    extracted = CoachAgent._extract_choice_content(response, client_id=42)
+    extracted = CoachAgent._extract_choice_content(response, profile_id=42)
     assert "answer" in extracted
 
 
@@ -212,7 +212,7 @@ def test_api_passthrough_returns_llm_answer(monkeypatch: pytest.MonkeyPatch) -> 
     from fastapi.testclient import TestClient
 
     with TestClient(app) as client:
-        resp = client.post("/ask/", json={"client_id": 1, "prompt": "hi", "mode": "ask_ai"})
+        resp = client.post("/ask/", json={"profile_id": 1, "prompt": "hi", "mode": "ask_ai"})
 
     assert resp.status_code == 200
     payload = resp.json()
@@ -230,6 +230,6 @@ def test_ask_ai_runtime_error(monkeypatch) -> None:
     from fastapi.testclient import TestClient
 
     with TestClient(app) as client:
-        resp = client.post("/ask/", json={"client_id": 1, "prompt": "hi", "mode": "ask_ai"})
+        resp = client.post("/ask/", json={"profile_id": 1, "prompt": "hi", "mode": "ask_ai"})
     assert resp.status_code == 503
     assert resp.json()["detail"] == "Service unavailable"

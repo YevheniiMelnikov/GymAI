@@ -1,10 +1,10 @@
 from functools import lru_cache
-from typing import Any, Optional
+from typing import Optional
 
 from aiogram.fsm.state import State
 
 from bot.states import States
-from core.schemas import Client
+from core.schemas import Profile
 from bot.texts import msg_text, btn_text
 
 
@@ -19,7 +19,7 @@ def verification_status_map(lang: str) -> dict[bool, str]:
 
 
 @lru_cache(maxsize=None)
-def client_params_map(lang: str) -> dict[str, str]:
+def profile_params_map(lang: str) -> dict[str, str]:
     return {
         "male": btn_text("male", lang),
         "female": btn_text("female", lang),
@@ -27,7 +27,7 @@ def client_params_map(lang: str) -> dict[str, str]:
         "disabled": btn_text("disabled", lang),
         "waiting_for_subscription": msg_text("waiting_for_subscription", lang),
         "waiting_for_program": msg_text("waiting_for_program", lang),
-        "default": msg_text("client_default_status", lang),
+        "default": msg_text("default_status", lang),
         "waiting_for_text": msg_text("waiting_for_text", lang),
     }
 
@@ -53,7 +53,7 @@ def days_of_week_map(lang: str) -> dict[str, str]:
     }
 
 
-def get_profile_attributes(user: Optional[Client], lang: str) -> dict[str, str]:
+def get_profile_attributes(user: Optional[Profile], lang: str) -> dict[str, str]:
     def attr(name: str) -> str:
         val = getattr(user, name, "") if user else ""
         return str(val) if val is not None else ""
@@ -84,49 +84,6 @@ def get_state_and_message(callback: str, lang: str) -> tuple[State, str]:
     state, msg_key = _STATE_MESSAGE_KEYS.get(callback, (States.name, ""))
     message = msg_text(msg_key, lang) if msg_key else ""
     return state, message
-
-
-async def get_client_page(
-    client: Client,
-    lang_code: str,
-    subscription: bool,
-    data: dict[str, Any],
-) -> dict[str, Any]:
-    params = client_params_map(lang_code)
-    gender_key = (client.gender or "").strip().lower()
-
-    from core.services import APIService
-
-    profile = await APIService.profile.get_profile(client.profile)
-    page = {
-        "name": client.name,
-        "gender": params.get(gender_key, ""),
-        "born_in": client.born_in,
-        "workout_experience": client.workout_experience,
-        "workout_goals": client.workout_goals,
-        "health_notes": client.health_notes,
-        "weight": client.weight,
-        "language": profile.language if profile and hasattr(profile, "language") else "",
-        "subscription": params.get("enabled") if subscription else params.get("disabled"),
-        "status": params.get(client.status, ""),
-    }
-    if data.get("new_client"):
-        page["status"] = params["waiting_for_text"]
-    return page
-
-
-async def format_new_client_message(
-    data: dict[str, Any],
-    coach_lang: str,
-    client_lang: str,
-    preferable_type: str,
-) -> str:
-    if data.get("new_client"):
-        return msg_text("new_client", coach_lang).format(lang=client_lang, workout_type=preferable_type)
-    service = service_types_map(coach_lang).get(data.get("service_type", ""), "")
-    return msg_text("incoming_request", coach_lang).format(
-        service=service, lang=client_lang, workout_type=preferable_type
-    )
 
 
 @lru_cache(maxsize=None)

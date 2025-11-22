@@ -14,7 +14,7 @@ def test_program_split_number_default(split_number: int | None, expected: int) -
     exercises: list[DayExercises] = [DayExercises(day="0", exercises=[Exercise(name="Test", sets="3", reps="10")])]
     data: dict[str, object] = {
         "id": 1,
-        "client_profile": 1,
+        "profile": 1,
         "exercises_by_day": [ex.model_dump() for ex in exercises],
         "created_at": 0,
     }

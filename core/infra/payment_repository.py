@@ -44,12 +44,12 @@ class HTTPPaymentRepository(APIClient):
             logger.error(f"API {method.upper()} transport failure to {endpoint}: {exc}")
             return 503, {}
 
-    async def create_payment(self, client_profile_id: int, service_type: str, order_id: str, amount: Decimal) -> bool:
+    async def create_payment(self, profile_id: int, service_type: str, order_id: str, amount: Decimal) -> bool:
         status_code, _ = await self._handle_payment_api_request(
             method="post",
             endpoint=urljoin(self.API_BASE_PATH, "create/"),
             data={
-                "client_profile": client_profile_id,
+                "profile": profile_id,
                 "order_id": order_id,
                 "payment_type": service_type,
                 "amount": str(amount.quantize(Decimal("0.01"), ROUND_HALF_UP)),
@@ -114,12 +114,12 @@ class HTTPPaymentRepository(APIClient):
                 logger.error(f"Invalid payment data from API for order_id={order_id}: {e}")
         return None, None
 
-    async def get_latest_payment(self, client_profile_id: int, payment_type: str) -> Payment | None:
+    async def get_latest_payment(self, profile_id: int, payment_type: str) -> Payment | None:
         status_code, response = await self._handle_payment_api_request(
             method="get",
             endpoint=self.API_BASE_PATH,
             data={
-                "client_profile": client_profile_id,
+                "profile": profile_id,
                 "payment_type": payment_type,
                 "ordering": "-created_at",
                 "limit": 1,
@@ -130,5 +130,5 @@ class HTTPPaymentRepository(APIClient):
         try:
             return Payment.model_validate(response["results"][0])
         except ValidationError as e:
-            logger.error(f"Invalid payment data for client_profile_id={client_profile_id}: {e}")
+            logger.error(f"Invalid payment data for profile_id={profile_id}: {e}")
             return None

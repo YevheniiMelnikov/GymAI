@@ -135,7 +135,7 @@ async def test_notify_ai_plan_ready_uses_internal_header(
     monkeypatch.setattr(ai_coach_tasks.httpx, "AsyncClient", lambda **kwargs: DummyClient(recorder, **kwargs))
 
     payload = {
-        "client_id": 1,
+        "profile_id": 1,
         "plan_type": "program",
         "status": "success",
         "action": "create",
@@ -174,7 +174,7 @@ async def test_notify_ai_plan_ready_fallback_authorization(
     monkeypatch.setattr(ai_coach_tasks.httpx, "AsyncClient", lambda **kwargs: DummyClient(recorder, **kwargs))
 
     payload = {
-        "client_id": 2,
+        "profile_id": 2,
         "plan_type": "program",
         "status": "error",
         "action": "update",
@@ -227,7 +227,7 @@ async def test_notify_ai_plan_ready_skips_duplicate_delivery(
     monkeypatch.setattr(ai_coach_tasks.httpx, "AsyncClient", lambda **kwargs: CountingClient(recorder, **kwargs))
 
     payload = {
-        "client_id": 3,
+        "profile_id": 3,
         "plan_type": "program",
         "status": "success",
         "action": "create",

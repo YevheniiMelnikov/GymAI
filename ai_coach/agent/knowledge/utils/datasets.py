@@ -411,30 +411,37 @@ class DatasetService:
         normalized = name.strip()
         if not normalized:
             return name
-        if normalized.startswith("kb_client_"):
-            suffix = normalized[len("kb_client_") :]
+        if normalized.startswith("kb_profile_"):
+            suffix = normalized[len("kb_profile_") :]
             try:
-                client_id = int(suffix)
+                profile_id = int(suffix)
             except ValueError:
                 return normalized
-            return self.dataset_name(client_id)
+            return self.dataset_name(profile_id)
         if normalized.startswith("client_"):
             suffix = normalized[len("client_") :]
             try:
-                client_id = int(suffix)
+                profile_id = int(suffix)
             except ValueError:
                 return normalized
-            return self.dataset_name(client_id)
+            return self.dataset_name(profile_id)
+        if normalized.startswith("profile_"):
+            suffix = normalized[len("profile_") :]
+            try:
+                profile_id = int(suffix)
+            except ValueError:
+                return normalized
+            return self.dataset_name(profile_id)
         return normalized
 
     def add_projected_dataset(self, alias: str) -> None:
         self._PROJECTED_DATASETS.add(alias)
 
-    def dataset_name(self, client_id: int) -> str:
-        return f"kb_client_{client_id}"
+    def dataset_name(self, profile_id: int) -> str:
+        return f"kb_profile_{profile_id}"
 
-    def chat_dataset_name(self, client_id: int) -> str:
-        return f"kb_chat_{client_id}"
+    def chat_dataset_name(self, profile_id: int) -> str:
+        return f"kb_chat_{profile_id}"
 
     def is_chat_dataset(self, dataset: str) -> bool:
         alias = self.alias_for_dataset(dataset)

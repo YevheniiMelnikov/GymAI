@@ -37,20 +37,20 @@ async def internal_send_payment_message(request: web.Request) -> web.Response:
     except Exception:
         return web.json_response({"detail": "Invalid JSON"}, status=400)
 
-    client_profile_id = payload.get("client_id")
+    profile_id = payload.get("profile_id")
     text = payload.get("text")
 
-    if not client_profile_id or not text:
-        return web.json_response({"detail": "Missing client_id or text"}, status=400)
+    if not profile_id or not text:
+        return web.json_response({"detail": "Missing profile_id or text"}, status=400)
 
     bot: Bot = request.app["bot"]
 
     try:
-        client = await Cache.client.get_client(int(client_profile_id))
-        if not client:
-            return web.json_response({"detail": "Client not found"}, status=404)
+        profile = await Cache.profile.get_record(int(profile_id))
+        if not profile:
+            return web.json_response({"detail": "Profile not found"}, status=404)
         await send_message(
-            recipient=client,
+            recipient=profile,
             text=text,
             bot=bot,
             state=None,

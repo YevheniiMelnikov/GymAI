@@ -30,7 +30,7 @@ def test_agent_header(monkeypatch: pytest.MonkeyPatch) -> None:
         async with httpx.AsyncClient() as client:
             service = AiCoachService(client, DummySettings())
             monkeypatch.setattr(AiCoachService, "_api_request", fake_api_request)
-            await service.ask("hi", client_id=1, use_agent_header=True)
+            await service.ask("hi", profile_id=1, use_agent_header=True)
             assert service.sent_headers["X-Agent"] == "pydanticai"
 
     asyncio.run(runner())
@@ -54,7 +54,7 @@ async def test_create_program_invalid_payload(monkeypatch: pytest.MonkeyPatch) -
         with pytest.raises(UserServiceError) as exc_info:
             await service.create_workout_plan(
                 WorkoutPlanType.PROGRAM,
-                client_id=1,
+                profile_id=1,
                 language="ua",
                 request_id="test",
             )

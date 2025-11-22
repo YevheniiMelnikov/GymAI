@@ -76,7 +76,7 @@ feedback_sent:
 new_feedback:
   ru: "Новый отзыв от профиля {profile_id}:\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{feedback}</em>"
 
-client_profile:
+profile_info:
   eng: "<b>Name 🆔</b>\n{name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Gender 🚻</b>\n{gender}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Year of birth 🗓</b>\n{born_in}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Workout goals 🎯</b>\n<em>{goals}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Weight (kg) ⚖️</b>\n{weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Workout experience (years) 💪</b>\n{experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Health notes 🩺</b>\n<em>{notes}</em>"
   ru: "<b>Имя 🆔</b>\n{name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Пол 🚻</b>\n{gender}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Год рождения 🗓</b>\n{born_in}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Тренировочные цели 🎯</b>\n<em>{goals}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Вес (кг) ⚖️</b>\n{weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Опыт тренировок (лет) 💪</b>\n{experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Примечания по здоровью 🩺</b>\n<em>{notes}</em>"
   ua: "<b>Ім'я 🆔</b>\n{name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Стать 🚻</b>\n{gender}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Рік народження 🗓</b>\n{born_in}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Тренувальні цілі 🎯</b>\n<em>{goals}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Вага (кг) ⚖️</b>\n{weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Тренувальний досвід (років) 💪</b>\n{experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Примітки по здоров'ю 🩺\n</b><em>{notes}</em>"
@@ -130,11 +130,6 @@ subscription_created:
   eng: "<b>Your AI subscription plan is ready</b> ✅"
   ru: "<b>Ваш план по подписке готов</b> ✅"
   ua: "<b>Ваш план за підпискою готовий</b> ✅"
-
-program_history_page:
-  eng: "<b>Program from {date}</b>\n<em>{program}</em>"
-  ru: "<b>Программа от {date}</b>\n<em>{program}</em>"
-  ua: "<b>Програма від {date}</b>\n<em>{program}</em>"
 
 program_guide:
   eng: "Start sending exercise titles one at a time in a message. When finished, click Save ✅\nIn case of an error, use Reset 🔄"
@@ -216,7 +211,7 @@ waiting_for_text:
   ru: "Ожидает вашей консультации ⏳"
   ua: "Очікує вашої консультації ⏳"
 
-client_default_status:
+default_status:
   eng: "The program is compiled 👍"
   ru: "Действий не требуется 👍"
   ua: "Програму складено 👍"

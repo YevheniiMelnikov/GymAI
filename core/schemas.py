@@ -3,7 +3,8 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, condecimal, field_validator, model_validator
 
-from core.enums import ClientStatus, Gender, Language, PaymentStatus
+from config.app_settings import settings
+from core.enums import ProfileStatus, Gender, Language, PaymentStatus
 
 Price = condecimal(max_digits=10, decimal_places=2, gt=0)
 NonNegativePrice = condecimal(max_digits=10, decimal_places=2, ge=0)
@@ -12,7 +13,18 @@ NonNegativePrice = condecimal(max_digits=10, decimal_places=2, ge=0)
 class Profile(BaseModel):
     id: int
     tg_id: int
+    name: str | None = None
     language: Annotated[Language, Field()]
+    status: ProfileStatus = ProfileStatus.initial
+    gender: Gender | None = None
+    born_in: str | None = None
+    workout_experience: str | None = None
+    workout_goals: str | None = None
+    profile_photo: str | None = None
+    health_notes: str | None = None
+    weight: int | None = None
+    credits: int = Field(default=settings.DEFAULT_CREDITS, ge=0)
+    profile_data: dict[str, Any] = {}
     model_config = ConfigDict(extra="ignore")
 
     @field_validator("language", mode="before")
@@ -23,22 +35,6 @@ class Profile(BaseModel):
         if hasattr(value, "value"):
             return value.value
         return value
-
-
-class Client(BaseModel):
-    id: int
-    profile: int
-    name: str | None = None
-    gender: Gender | None = None
-    born_in: str | None = None
-    workout_experience: str | None = None
-    workout_goals: str | None = None
-    profile_photo: str | None = None
-    health_notes: str | None = None
-    weight: int | None = None
-    status: ClientStatus = ClientStatus.initial
-    credits: int = Field(default=500, ge=0)
-    profile_data: dict[str, Any] = {}
 
     @field_validator("born_in", mode="before")
     @classmethod
@@ -67,7 +63,7 @@ class DayExercises(BaseModel):
 
 class Program(BaseModel):
     id: int
-    client_profile: int
+    profile: int
     exercises_by_day: list[DayExercises] = Field(default_factory=list)
     created_at: float
     split_number: int | None = None
@@ -75,9 +71,9 @@ class Program(BaseModel):
     wishes: str | None = None
     model_config = ConfigDict(extra="ignore")
 
-    @field_validator("client_profile", mode="before")
+    @field_validator("profile", mode="before")
     @classmethod
-    def _normalize_client_profile(cls, value: Any) -> int:
+    def _normalize_profile(cls, value: Any) -> int:
         if isinstance(value, dict):
             return int(value.get("id", 0))
         return int(value)
@@ -101,7 +97,7 @@ class Program(BaseModel):
 
 class Subscription(BaseModel):
     id: int
-    client_profile: int
+    profile: int
     enabled: bool
     price: int
     workout_type: str
@@ -123,7 +119,7 @@ class Subscription(BaseModel):
 
 class Payment(BaseModel):
     id: int
-    client_profile: int
+    profile: int
     payment_type: str
     order_id: str
     amount: Price

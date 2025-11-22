@@ -15,7 +15,7 @@ def select_language_kb() -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def client_menu_kb(lang: str) -> KbMarkup:
+def main_menu_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
         [builder.add("my_profile", "my_profile")],
@@ -72,7 +72,7 @@ def profile_menu_kb(lang: str, show_balance: bool = False) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def edit_client_profile_kb(lang: str) -> KbMarkup:
+def edit_profile_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
         [builder.add("workout_experience", "workout_experience")],

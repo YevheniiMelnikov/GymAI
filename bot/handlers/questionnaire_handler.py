@@ -17,9 +17,9 @@ from bot.keyboards import (
 from bot.states import States
 from config.app_settings import settings
 from core.cache import Cache
-from core.enums import ClientStatus, Language
-from core.exceptions import ProfileNotFoundError, ClientNotFoundError
-from core.schemas import Profile, Client
+from core.enums import ProfileStatus, Language
+from core.exceptions import ProfileNotFoundError
+from core.schemas import Profile
 from core.services import APIService
 from bot.utils.workout_plans import process_new_subscription, edit_subscription_days
 from bot.utils.menus import (
@@ -122,7 +122,7 @@ async def born_in(message: Message, state: FSMContext, bot: Bot) -> None:
     await state.update_data(
         born_in=message.text,
         chat_id=message.chat.id,
-        status=ClientStatus.initial,
+        status=ProfileStatus.initial,
     )
     await send_policy_confirmation(cast(Message, message), state)
     await state.set_state(States.accept_policy)
@@ -137,7 +137,7 @@ async def workout_goals(message: Message, state: FSMContext, bot: Bot) -> None:
     await state.update_data(workout_goals=message.text)
     data = await state.get_data()
     if data.get("edit_mode"):
-        await update_profile_data(cast(Message, message), state, "client", bot)
+        await update_profile_data(cast(Message, message), state, bot)
         return
 
     lang = data.get("lang", settings.DEFAULT_LANG)
@@ -160,7 +160,7 @@ async def workout_experience(callback_query: CallbackQuery, state: FSMContext, b
     await state.update_data(workout_experience=callback_query.data)
     if data.get("edit_mode"):
         if callback_query.message is not None:
-            await update_profile_data(cast(Message, callback_query.message), state, "client", bot)
+            await update_profile_data(cast(Message, callback_query.message), state, bot)
         return
 
     if callback_query.message is not None:
@@ -183,7 +183,7 @@ async def weight(message: Message, state: FSMContext, bot: Bot) -> None:
 
     await state.update_data(weight=message.text)
     if data.get("edit_mode"):
-        await update_profile_data(cast(Message, message), state, "client", bot)
+        await update_profile_data(cast(Message, message), state, bot)
         return
 
     msg = await answer_msg(message, msg_text("health_notes", lang))
@@ -199,7 +199,7 @@ async def health_notes(message: Message, state: FSMContext, bot: Bot) -> None:
 
     await delete_messages(state)
     data = await state.get_data()
-    await state.update_data(health_notes=message.text, status=ClientStatus.default)
+    await state.update_data(health_notes=message.text, status=ProfileStatus.default)
     if not data.get("edit_mode"):
         await answer_msg(
             message,
@@ -207,7 +207,7 @@ async def health_notes(message: Message, state: FSMContext, bot: Bot) -> None:
         )
         await state.update_data(credits_delta=settings.PACKAGE_START_CREDITS)
 
-    await update_profile_data(cast(Message, message), state, "client", bot)
+    await update_profile_data(cast(Message, message), state, bot)
 
 
 @questionnaire_router.callback_query(States.edit_profile)
@@ -271,12 +271,12 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
 
     # AI coach flow
     if data.get("ai_service"):
-        client = Client.model_validate(data.get("client"))
+        selected_profile = Profile.model_validate(data.get("profile"))
         required = int(data.get("required", 0))
         wishes = message.text
         await state.update_data(wishes=wishes)
 
-        if client.credits < required:
+        if selected_profile.credits < required:
             await answer_msg(message, msg_text("not_enough_credits", profile.language))
             await show_balance_menu(message, profile, state)
             return
@@ -286,7 +286,7 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
         await answer_msg(
             message,
             msg_text("confirm_service", profile.language).format(
-                balance=client.credits,
+                balance=selected_profile.credits,
                 price=required,
             ),
             reply_markup=yes_no_kb(profile.language),
@@ -305,9 +305,9 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
     lang = profile.language or settings.DEFAULT_LANG
 
     try:
-        client = await Cache.client.get_client(profile.id)
-    except ClientNotFoundError:
-        logger.error(f"Client profile not found for profile {profile.id}")
+        profile_record = await Cache.profile.get_record(profile.id)
+    except ProfileNotFoundError:
+        logger.error(f"Profile data not found for profile {profile.id}")
         await callback_query.answer(msg_text("unexpected_error", lang))
         return
 
@@ -336,10 +336,10 @@ async def workout_days(callback_query: CallbackQuery, state: FSMContext):
 
     await state.update_data(workout_days=days)
     if data.get("edit_mode"):
-        subscription = await Cache.workout.get_latest_subscription(client.id)
+        subscription = await Cache.workout.get_latest_subscription(profile_record.id)
 
         if subscription and len(subscription.workout_days) == len(days):
-            await edit_subscription_days(callback_query, days, client.id, state, subscription)
+            await edit_subscription_days(callback_query, days, profile_record.id, state, subscription)
             return
 
         if isinstance(callback_query.message, Message):
@@ -391,7 +391,7 @@ async def process_policy(callback_query: CallbackQuery, state: FSMContext, bot: 
 
     if callback_query.data == "yes":
         if callback_query.message is not None:
-            await update_profile_data(cast(Message, callback_query.message), state, "client", bot)
+            await update_profile_data(cast(Message, callback_query.message), state, bot)
     else:
         await state.clear()
         if callback_query.message is not None:

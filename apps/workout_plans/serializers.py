@@ -3,7 +3,7 @@ from typing import Any
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
-from apps.profiles.serializers import ClientProfileSerializer
+from apps.profiles.serializers import ProfileSerializer
 from apps.workout_plans.models import Subscription, Program
 
 
@@ -22,7 +22,7 @@ class DayExercisesSerializer(serializers.Serializer):
 
 
 class ProgramSerializer(serializers.ModelSerializer):
-    client_profile = ClientProfileSerializer(read_only=True)
+    profile = ProfileSerializer(read_only=True)
     exercises_by_day = DayExercisesSerializer(many=True)
 
     class Meta:  # pyrefly: ignore[bad-override]
@@ -38,7 +38,7 @@ class ProgramSerializer(serializers.ModelSerializer):
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):
-    client_profile = ClientProfileSerializer(read_only=True)
+    profile = ProfileSerializer(read_only=True)
     exercises = DayExercisesSerializer(many=True)
 
     class Meta:  # pyrefly: ignore[bad-override]
@@ -51,13 +51,13 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         if not user.is_authenticated:
             raise ValidationError(["User is not authenticated"])
 
-        if "client_profile" not in attrs:
+        if "profile" not in attrs:
             if not hasattr(user, "profile"):
                 raise ValidationError(["User profile not found"])
-            attrs["client_profile"] = user.profile.client_profile
+            attrs["profile"] = user.profile
 
         if not self.instance:
-            if Subscription.objects.filter(client_profile=attrs["client_profile"], enabled=True).exists():  # type: ignore[attr-defined]
+            if Subscription.objects.filter(profile=attrs["profile"], enabled=True).exists():  # type: ignore[attr-defined]
                 raise ValidationError(["User already has an active subscription"])
 
         return attrs

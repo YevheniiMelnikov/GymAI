@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class ClientStatus(str, Enum):
+class ProfileStatus(str, Enum):
     waiting_for_text = "waiting_for_text"
     default = "default"
     waiting_for_subscription = "waiting_for_subscription"

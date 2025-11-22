@@ -46,15 +46,13 @@ def deactivate_expired_subscriptions(self) -> None:
         subscriptions = await APIService.payment.get_expired_subscriptions(today)
 
         for sub in subscriptions:
-            if not sub.id or not sub.client_profile:
+            if not sub.id or not sub.profile:
                 logger.warning(f"Invalid subscription: {sub}")
                 continue
-            await APIService.workout.update_subscription(
-                sub.id, {"enabled": False, "client_profile": sub.client_profile}
-            )
-            await Cache.workout.update_subscription(sub.client_profile, {"enabled": False})
-            await Cache.payment.reset_status(sub.client_profile, "subscription")
-            logger.info(f"Subscription {sub.id} deactivated for user {sub.client_profile}")
+            await APIService.workout.update_subscription(sub.id, {"enabled": False, "profile": sub.profile})
+            await Cache.workout.update_subscription(sub.profile, {"enabled": False})
+            await Cache.payment.reset_status(sub.profile, "subscription")
+            logger.info(f"Subscription {sub.id} deactivated for user {sub.profile}")
 
     try:
         asyncio.run(_impl())
@@ -78,15 +76,15 @@ def warn_low_credits(self) -> None:
         tomorrow = (datetime.now() + timedelta(days=1)).date().isoformat()
         subs = await APIService.payment.get_expired_subscriptions(tomorrow)
         for sub in subs:
-            if not sub.client_profile:
+            if not sub.profile:
                 continue
-            client = await Cache.client.get_client(sub.client_profile)
-            profile = await APIService.profile.get_profile(client.profile)
+            profile_record = await Cache.profile.get_record(sub.profile)
+            profile = await APIService.profile.get_profile(profile_record.id)
             required = int(sub.price)
-            if client.credits < required:
+            if profile_record.credits < required:
                 lang = profile.language if profile else settings.DEFAULT_LANG
                 send_payment_message.delay(  # pyrefly: ignore[not-callable]
-                    sub.client_profile,
+                    sub.profile,
                     msg_text("not_enough_credits", lang),
                 )
 
@@ -112,25 +110,23 @@ def charge_due_subscriptions(self) -> None:
         today = datetime.now().date().isoformat()
         subs = await APIService.payment.get_expired_subscriptions(today)
         for sub in subs:
-            if not sub.id or not sub.client_profile:
+            if not sub.id or not sub.profile:
                 continue
-            client = await Cache.client.get_client(sub.client_profile)
+            profile_record = await Cache.profile.get_record(sub.profile)
             required = int(sub.price)
-            if client.credits < required:
-                await APIService.workout.update_subscription(
-                    sub.id, {"enabled": False, "client_profile": sub.client_profile}
-                )
-                await Cache.workout.update_subscription(sub.client_profile, {"enabled": False})
-                await Cache.payment.reset_status(sub.client_profile, "subscription")
+            if profile_record.credits < required:
+                await APIService.workout.update_subscription(sub.id, {"enabled": False, "profile": sub.profile})
+                await Cache.workout.update_subscription(sub.profile, {"enabled": False})
+                await Cache.payment.reset_status(sub.profile, "subscription")
                 continue
 
-            await APIService.profile.adjust_client_credits(client.profile, -required)
-            await Cache.client.update_client(client.profile, {"credits": client.credits - required})
+            await APIService.profile.adjust_credits(profile_record.id, -required)
+            await Cache.profile.update_record(profile_record.id, {"credits": profile_record.credits - required})
             period_str = getattr(sub, "period", SubscriptionPeriod.one_month.value)
             period = SubscriptionPeriod(period_str)
             next_date = _next_payment_date(period)
             await APIService.workout.update_subscription(sub.id, {"payment_date": next_date})
-            await Cache.workout.update_subscription(sub.client_profile, {"payment_date": next_date})
+            await Cache.workout.update_subscription(sub.profile, {"payment_date": next_date})
 
     try:
         asyncio.run(_impl())

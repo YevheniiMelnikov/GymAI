@@ -24,7 +24,7 @@ class PaymentGateway(ABC):
         amount: Decimal,
         order_id: str,
         payment_type: str,
-        client_id: int,
+        profile_id: int,
     ) -> str:
         """Return URL to perform the payments."""
         ...
@@ -36,7 +36,7 @@ class PaymentGateway(ABC):
         amount: Decimal,
         order_id: str,
         payment_type: str,
-        client_id: int,
+        profile_id: int,
     ) -> CheckoutPayload:
         """Return structured payload for embedded checkout."""
         ...

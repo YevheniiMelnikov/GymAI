@@ -50,7 +50,7 @@ async def test_fallback_summary_on_empty_completions(monkeypatch: pytest.MonkeyP
         content: str,
         entry_ids: list[str],
         *,
-        client_id: int,
+        profile_id: int,
     ) -> tuple[str, list[str]]:
         return content, entry_ids
 
@@ -60,9 +60,9 @@ async def test_fallback_summary_on_empty_completions(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(helper, "_get_completion_client", classmethod(lambda cls: (object(), settings.AGENT_MODEL)))
     monkeypatch.setattr(helper, "_ensure_llm_logging", classmethod(lambda cls, *a, **k: None))
 
-    deps = AgentDeps(client_id=1, locale="uk")
+    deps = AgentDeps(profile_id=1, locale="uk")
     knowledge = [
-        KnowledgeSnippet(text="План включає силові тренування тричі на тиждень.", dataset="kb_client_1"),
+        KnowledgeSnippet(text="План включає силові тренування тричі на тиждень.", dataset="kb_profile_1"),
         KnowledgeSnippet(text="Додавай розтяжку для відновлення.", dataset="kb_global"),
     ]
 
@@ -102,7 +102,7 @@ async def test_complete_with_retries_returns_second_attempt(monkeypatch: pytest.
         content: str,
         entry_ids: list[str],
         *,
-        client_id: int,
+        profile_id: int,
     ) -> tuple[str, list[str]]:
         return content, entry_ids
 
@@ -115,7 +115,7 @@ async def test_complete_with_retries_returns_second_attempt(monkeypatch: pytest.
         system_prompt="system",
         user_prompt="user prompt",
         entry_ids=["KB-1"],
-        client_id=1,
+        profile_id=1,
         max_tokens=settings.AI_COACH_FIRST_PASS_MAX_TOKENS,
         model=settings.AGENT_MODEL,
     )
@@ -128,7 +128,7 @@ async def test_complete_with_retries_returns_second_attempt(monkeypatch: pytest.
 
 def test_extract_choice_content_handles_text_key() -> None:
     response = _FakeResponse(choices=[{"text": "Прямо зазначений текст", "finish_reason": "stop"}])
-    content = CoachAgent._extract_choice_content(response, client_id=7)
+    content = CoachAgent._extract_choice_content(response, profile_id=7)
     assert content == "Прямо зазначений текст"
 
 
@@ -150,7 +150,7 @@ def test_extract_choice_content_variants() -> None:
             ]
         ),
     ]
-    extracted = [CoachAgent._extract_choice_content(response, client_id=5) for response in responses]
+    extracted = [CoachAgent._extract_choice_content(response, profile_id=5) for response in responses]
     assert extracted[0] == "Повідомлення"
     assert extracted[1] == "Текст у choice"
     assert extracted[2] == "Частина 1\nЧастина 2"
@@ -177,7 +177,7 @@ async def test_complete_with_retries_length_with_content(monkeypatch: pytest.Mon
         content: str,
         entry_ids: list[str],
         *,
-        client_id: int,
+        profile_id: int,
     ) -> tuple[str, list[str]]:
         return content, entry_ids
 
@@ -190,7 +190,7 @@ async def test_complete_with_retries_length_with_content(monkeypatch: pytest.Mon
         system_prompt="system",
         user_prompt="user prompt",
         entry_ids=["KB-1"],
-        client_id=3,
+        profile_id=3,
         max_tokens=settings.AI_COACH_FIRST_PASS_MAX_TOKENS,
         model=settings.AGENT_MODEL,
     )
@@ -221,7 +221,7 @@ async def test_complete_with_retries_stops_after_two_empty(monkeypatch: pytest.M
         content: str,
         entry_ids: list[str],
         *,
-        client_id: int,
+        profile_id: int,
     ) -> tuple[str, list[str]]:
         return "", []
 
@@ -234,7 +234,7 @@ async def test_complete_with_retries_stops_after_two_empty(monkeypatch: pytest.M
         system_prompt="system",
         user_prompt="user prompt",
         entry_ids=["KB-1"],
-        client_id=4,
+        profile_id=4,
         max_tokens=settings.AI_COACH_FIRST_PASS_MAX_TOKENS,
         model=settings.AGENT_MODEL,
     )

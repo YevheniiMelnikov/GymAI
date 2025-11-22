@@ -9,12 +9,12 @@ from aiogram.types import FSInputFile, InputFile, Message
 from bot.texts import msg_text
 from bot.utils.bot import answer_msg
 from config.app_settings import settings
-from core.schemas import Client, Profile
+from core.schemas import Profile
 from core.services import APIService
 
 
 async def send_message(
-    recipient: Client,
+    recipient: Profile,
     text: str,
     bot: Bot,
     state: FSMContext | None = None,
@@ -42,7 +42,7 @@ async def send_message(
         language = ""
         sender_name = ""
 
-    recipient_profile = await APIService.profile.get_profile(recipient.profile)
+    recipient_profile = await APIService.profile.get_profile(recipient.id)
     if recipient_profile is None:
         from loguru import logger
 

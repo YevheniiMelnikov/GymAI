@@ -3,7 +3,6 @@ from typing import Final
 
 from core.services.gstorage_service import GCStorageService, ExerciseGIFStorage
 from core.services.internal import APIService
-from core.services.internal.client_service import ClientService
 from core.services.internal.profile_service import ProfileService
 from core.services.internal.workout_service import WorkoutService
 
@@ -25,7 +24,6 @@ __all__ = [
     "get_avatar_manager",
     "get_gif_manager",
     "APIService",
-    "ClientService",
     "ProfileService",
     "WorkoutService",
 ]

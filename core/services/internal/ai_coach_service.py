@@ -34,14 +34,14 @@ class AiCoachService(APIClient):
         self,
         prompt: str,
         *,
-        client_id: int,
+        profile_id: int,
         language: str | Enum | None = None,
         request_id: str | None = None,
         attachments: list[dict[str, str]] | None = None,
     ) -> QAResponse | None:
         payload = AICoachRequest(
             prompt=prompt,
-            client_id=client_id,
+            profile_id=profile_id,
             language=language.value if isinstance(language, Enum) else language,
             mode=CoachMode.ask_ai,
             request_id=request_id,
@@ -52,7 +52,7 @@ class AiCoachService(APIClient):
             return None
         return self._build_qa_response(
             data,
-            client_id=client_id,
+            profile_id=profile_id,
             request_id=request_id,
         )
 
@@ -60,7 +60,7 @@ class AiCoachService(APIClient):
         self,
         prompt: str,
         *,
-        client_id: int,
+        profile_id: int,
         language: str | Enum | None = None,
         request_id: str | None = None,
         use_agent_header: bool = False,
@@ -68,7 +68,7 @@ class AiCoachService(APIClient):
     ) -> QAResponse | None:
         payload = AICoachRequest(
             prompt=prompt,
-            client_id=client_id,
+            profile_id=profile_id,
             language=language.value if isinstance(language, Enum) else language,
             mode=CoachMode.ask_ai,
             request_id=request_id,
@@ -80,7 +80,7 @@ class AiCoachService(APIClient):
             return None
         return self._build_qa_response(
             data,
-            client_id=client_id,
+            profile_id=profile_id,
             request_id=request_id,
         )
 
@@ -88,7 +88,7 @@ class AiCoachService(APIClient):
         self,
         plan_type: WorkoutPlanType,
         *,
-        client_id: int,
+        profile_id: int,
         language: str | Enum | None = None,
         period: str | None = None,
         workout_days: list[str] | None = None,
@@ -98,7 +98,7 @@ class AiCoachService(APIClient):
     ) -> Program | Subscription | None:
         payload = AICoachRequest(
             prompt=None,
-            client_id=client_id,
+            profile_id=profile_id,
             language=language.value if isinstance(language, Enum) else language,
             mode=(CoachMode.program if plan_type is WorkoutPlanType.PROGRAM else CoachMode.subscription),
             period=period,
@@ -114,7 +114,7 @@ class AiCoachService(APIClient):
         if plan_type is WorkoutPlanType.PROGRAM:
             return self._validate_program_response(
                 data,
-                client_id=client_id,
+                profile_id=profile_id,
                 request_id=request_id,
                 context="create",
             )
@@ -124,7 +124,7 @@ class AiCoachService(APIClient):
         self,
         plan_type: WorkoutPlanType,
         *,
-        client_id: int,
+        profile_id: int,
         language: str | Enum | None = None,
         period: str | None = None,
         workout_days: list[str] | None = None,
@@ -136,7 +136,7 @@ class AiCoachService(APIClient):
     ) -> Program | Subscription | None:
         payload = AICoachRequest(
             prompt=None,
-            client_id=client_id,
+            profile_id=profile_id,
             language=language.value if isinstance(language, Enum) else language,
             mode=CoachMode.update,
             period=period,
@@ -154,7 +154,7 @@ class AiCoachService(APIClient):
         if plan_type is WorkoutPlanType.PROGRAM:
             return self._validate_program_response(
                 data,
-                client_id=client_id,
+                profile_id=profile_id,
                 request_id=request_id,
                 context="update",
             )
@@ -164,7 +164,7 @@ class AiCoachService(APIClient):
         self,
         data: Any,
         *,
-        client_id: int,
+        profile_id: int,
         request_id: str | None,
         context: str,
     ) -> Program:
@@ -174,7 +174,7 @@ class AiCoachService(APIClient):
             return Program.model_validate(data)
         except (ValidationError, TypeError) as exc:
             logger.warning(
-                f"ai_coach_invalid_program_payload client_id={client_id} request_id={request_id} "
+                f"ai_coach_invalid_program_payload profile_id={profile_id} request_id={request_id} "
                 f"context={context} error={exc}"
             )
             raise UserServiceError("AI coach returned an invalid program payload") from exc
@@ -193,10 +193,10 @@ class AiCoachService(APIClient):
             headers.update(extra_headers)
         payload_dict: dict[str, Any] = payload.model_dump(exclude_none=True)
         logger.debug(
-            f"ai_coach.ask POST client_id={payload.client_id} mode={payload.mode.value} "
+            f"ai_coach.ask POST profile_id={payload.profile_id} mode={payload.mode.value} "
             f"language={payload_dict.get('language')}"
         )
-        logger.debug(f"AI coach ask request_id={request_id} client_id={payload.client_id}")
+        logger.debug(f"AI coach ask request_id={request_id} profile_id={payload.profile_id}")
         ping_path = "internal/debug/ping"
         ping_url = urljoin(self.base_url, ping_path)
         # Retry readiness ping with exponential backoff
@@ -243,16 +243,13 @@ class AiCoachService(APIClient):
                 if attempt >= attempts:
                     if isinstance(exc, APIClientHTTPError):
                         logger.error(
-                            "AI coach request failed "
-                            f"request_id={request_id} client_id={payload.client_id} "
+                            f"AI coach request failed request_id={request_id} profile_id={payload.profile_id} "
                             f"status={exc.status} reason={exc.reason}"
                         )
                         raise
                     logger.error(
-                        "AI coach request transport failed request_id=%s client_id=%s error=%s",
-                        request_id,
-                        payload.client_id,
-                        exc,
+                        f"AI coach request transport failed request_id={request_id} "
+                        f"profile_id={payload.profile_id} error={exc}"
                     )
                     raise
                 logger.info(
@@ -282,7 +279,7 @@ class AiCoachService(APIClient):
         self,
         data: Any,
         *,
-        client_id: int,
+        profile_id: int,
         request_id: str | None,
     ) -> QAResponse:
         if isinstance(data, QAResponse):
@@ -292,13 +289,13 @@ class AiCoachService(APIClient):
                 return QAResponse.model_validate(data)
             except (ValidationError, TypeError) as exc:
                 logger.error(
-                    f"AI coach QA payload validation failed client_id={client_id} request_id={request_id} error={exc}"
+                    f"AI coach QA payload validation failed profile_id={profile_id} request_id={request_id} error={exc}"
                 )
                 raise UserServiceError("AI coach returned an invalid QA payload") from exc
         if isinstance(data, str):
             text = data.strip()
             if not text:
-                logger.error(f"AI coach QA payload empty string client_id={client_id} request_id={request_id}")
+                logger.error(f"AI coach QA payload empty string profile_id={profile_id} request_id={request_id}")
                 raise UserServiceError("AI coach returned an empty QA answer")
             return QAResponse(answer=text)
         if isinstance(data, list):
@@ -309,11 +306,11 @@ class AiCoachService(APIClient):
                 elif item:
                     parts.append(str(item))
             if not parts:
-                logger.error(f"AI coach QA payload empty list client_id={client_id} request_id={request_id}")
+                logger.error(f"AI coach QA payload empty list profile_id={profile_id} request_id={request_id}")
                 raise UserServiceError("AI coach returned an empty QA answer")
             return QAResponse(answer="\n\n".join(parts))
         logger.error(
-            f"AI coach QA payload unexpected type client_id={client_id} request_id={request_id} type={type(data)}"
+            f"AI coach QA payload unexpected type profile_id={profile_id} request_id={request_id} type={type(data)}"
         )
         raise UserServiceError("AI coach returned an invalid QA payload")
 

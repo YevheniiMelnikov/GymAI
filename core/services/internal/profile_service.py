@@ -2,7 +2,7 @@ from decimal import Decimal
 from typing import Any
 
 from core.domain.profile_repository import ProfileRepository
-from core.schemas import Client, Profile
+from core.schemas import Profile
 
 
 class ProfileService:
@@ -24,20 +24,5 @@ class ProfileService:
     async def update_profile(self, profile_id: int, data: dict[str, Any]) -> bool:
         return await self._repository.update_profile(profile_id, data)
 
-    async def create_client_profile(self, profile_id: int, data: dict[str, Any] | None = None) -> Client | None:
-        return await self._repository.create_client_profile(profile_id, data)
-
-    async def update_client_profile(self, client_profile_id: int, data: dict[str, Any]) -> bool:
-        return await self._repository.update_client_profile(client_profile_id, data)
-
-    async def adjust_client_credits(self, profile_id: int, delta: int | Decimal) -> bool:
-        return await self._repository.adjust_client_credits(profile_id, delta)
-
-    async def get_client(self, client_id: int) -> Client | None:
-        return await self._repository.get_client(client_id)
-
-    async def get_client_by_profile_id(self, profile_id: int) -> Client | None:
-        return await self._repository.get_client_by_profile_id(profile_id)
-
-    async def get_client_by_tg_id(self, tg_id: int) -> Client | None:
-        return await self._repository.get_client_by_tg_id(tg_id)
+    async def adjust_credits(self, profile_id: int, delta: int | Decimal) -> bool:
+        return await self._repository.adjust_credits(profile_id, delta)

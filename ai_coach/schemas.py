@@ -9,7 +9,7 @@ from core.enums import WorkoutPlanType, WorkoutType
 
 
 class AICoachRequest(BaseModel):
-    client_id: int
+    profile_id: int
     prompt: str | None = None
     language: str | None = None
     mode: CoachMode = CoachMode.program

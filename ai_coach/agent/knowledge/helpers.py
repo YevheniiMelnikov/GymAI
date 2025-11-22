@@ -85,7 +85,7 @@ def unique_sources(datasets: Iterable[str]) -> list[str]:
         unique.append(alias)
 
     def _order(value: str) -> tuple[int, str]:
-        if value.startswith("kb_client_"):
+        if value.startswith("kb_profile_"):
             return (0, value)
         if value.startswith("kb_chat_"):
             return (1, value)

@@ -21,7 +21,7 @@ def test_generate_plan_returns_program(monkeypatch: pytest.MonkeyPatch) -> None:
             assert len(message_history) == 2
             return Program(
                 id=1,
-                client_profile=deps.client_id,
+                profile=deps.profile_id,
                 exercises_by_day=[DayExercises(day="d1", exercises=[Exercise(name="squat", sets="3", reps="10")])],
                 created_at=0.0,
                 split_number=1,
@@ -30,8 +30,8 @@ def test_generate_plan_returns_program(monkeypatch: pytest.MonkeyPatch) -> None:
             )
 
         monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: types.SimpleNamespace(run=fake_run)))
-        monkeypatch.setattr(CoachAgent, "_message_history", staticmethod(lambda client_id: [object(), object()]))
-        deps = AgentDeps(client_id=1)
+        monkeypatch.setattr(CoachAgent, "_message_history", staticmethod(lambda profile_id: [object(), object()]))
+        deps = AgentDeps(profile_id=1)
         result = await CoachAgent.generate_workout_plan("hi", deps, workout_type=WorkoutType.HOME, output_type=Program)
         assert isinstance(result, Program)
 
@@ -53,7 +53,7 @@ def test_update_workout_plan_returns_program(monkeypatch: pytest.MonkeyPatch) ->
             assert "Workout type: home" in prompt
             return Program(
                 id=2,
-                client_profile=deps.client_id,
+                profile=deps.profile_id,
                 exercises_by_day=[DayExercises(day="d1", exercises=[Exercise(name="push", sets="2", reps="5")])],
                 created_at=0.0,
                 split_number=1,
@@ -62,7 +62,7 @@ def test_update_workout_plan_returns_program(monkeypatch: pytest.MonkeyPatch) ->
             )
 
         monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: types.SimpleNamespace(run=fake_run)))
-        deps = AgentDeps(client_id=1)
+        deps = AgentDeps(profile_id=1)
         result = await CoachAgent.update_workout_plan(
             "hi", "exp", "fb", deps, workout_type=WorkoutType.HOME, output_type=Program
         )
@@ -85,7 +85,7 @@ def test_generate_plan_returns_subscription(monkeypatch: pytest.MonkeyPatch) -> 
             assert "Workout type: home" in prompt
             return Subscription(
                 id=1,
-                client_profile=deps.client_id,
+                profile=deps.profile_id,
                 enabled=True,
                 price=0,
                 workout_type="",
@@ -97,7 +97,7 @@ def test_generate_plan_returns_subscription(monkeypatch: pytest.MonkeyPatch) -> 
             )
 
         monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: types.SimpleNamespace(run=fake_run)))
-        deps = AgentDeps(client_id=1)
+        deps = AgentDeps(profile_id=1)
         result = await CoachAgent.generate_workout_plan(
             "hi",
             deps,
@@ -124,7 +124,7 @@ def test_custom_rules_append(monkeypatch: pytest.MonkeyPatch) -> None:
             assert "extra" in prompt
             return Program(
                 id=1,
-                client_profile=deps.client_id,
+                profile=deps.profile_id,
                 exercises_by_day=[],
                 created_at=0.0,
                 split_number=1,
@@ -133,7 +133,7 @@ def test_custom_rules_append(monkeypatch: pytest.MonkeyPatch) -> None:
             )
 
         monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: types.SimpleNamespace(run=fake_run)))
-        deps = AgentDeps(client_id=1)
+        deps = AgentDeps(profile_id=1)
         await CoachAgent.generate_workout_plan(
             "p",
             deps,

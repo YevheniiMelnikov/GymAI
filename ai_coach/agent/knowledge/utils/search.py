@@ -35,7 +35,7 @@ class SearchService:
     async def search(
         self,
         query: str,
-        client_id: int,
+        profile_id: int,
         k: int | None = None,
         *,
         request_id: str | None = None,
@@ -44,11 +44,11 @@ class SearchService:
     ) -> list[KnowledgeSnippet]:
         normalized = query.strip()
         if not normalized:
-            logger.debug(f"Knowledge search skipped client_id={client_id}: empty query")
+            logger.debug(f"Knowledge search skipped profile_id={profile_id}: empty query")
             return []
         rid_value = request_id or "na"
         actor = user if user is not None else await self.dataset_service.get_cognee_user()
-        await self._ensure_profile_indexed(client_id, actor)
+        await self._ensure_profile_indexed(profile_id, actor)
         user_ctx = self.dataset_service.to_user_ctx(actor)
 
         candidate_aliases: list[str] = []
@@ -60,8 +60,8 @@ class SearchService:
         else:
             candidate_aliases.extend(
                 [
-                    self.dataset_service.alias_for_dataset(self.dataset_service.dataset_name(client_id)),
-                    self.dataset_service.alias_for_dataset(self.dataset_service.chat_dataset_name(client_id)),
+                    self.dataset_service.alias_for_dataset(self.dataset_service.dataset_name(profile_id)),
+                    self.dataset_service.alias_for_dataset(self.dataset_service.chat_dataset_name(profile_id)),
                 ]
             )
             global_alias_default = self.dataset_service.alias_for(self.dataset_service.GLOBAL_DATASET)
@@ -89,12 +89,12 @@ class SearchService:
                     logging.INFO,
                     "knowledge_search_global_pending",
                     throttle_key=f"projection:{global_alias}:search_pending",
-                    client_id=client_id,
+                    profile_id=profile_id,
                     rid=rid_value,
                 )
 
         if not candidate_aliases:
-            logger.debug(f"knowledge_search_skipped client_id={client_id} rid={rid_value} reason=no_datasets")
+            logger.debug(f"knowledge_search_skipped profile_id={profile_id} rid={rid_value} reason=no_datasets")
             return []
 
         resolved_datasets: list[str] = []
@@ -104,7 +104,7 @@ class SearchService:
                 await self.dataset_service.ensure_dataset_exists(resolved, user_ctx)
             except Exception as ensure_exc:
                 logger.debug(
-                    f"knowledge_dataset_ensure_failed client_id={client_id} dataset={resolved} detail={ensure_exc}"
+                    f"knowledge_dataset_ensure_failed profile_id={profile_id} dataset={resolved} detail={ensure_exc}"
                 )
             resolved_datasets.append(resolved)
 
@@ -112,14 +112,14 @@ class SearchService:
         datasets_hint = ",".join(resolved_datasets)
         top_k_label = k if k is not None else "default"
         logger.debug(
-            f"knowledge_search_start client_id={client_id} rid={rid_value} query_hash={base_hash} "
+            f"knowledge_search_start profile_id={profile_id} rid={rid_value} query_hash={base_hash} "
             f"datasets={datasets_hint} top_k={top_k_label} global_unavailable={global_unavailable}"
         )
 
         queries = self._expanded_queries(normalized)
         if len(queries) > 1:
             logger.debug(
-                f"knowledge_search_expanded client_id={client_id} rid={rid_value} "
+                f"knowledge_search_expanded profile_id={profile_id} rid={rid_value} "
                 f"variants={len(queries)} base_query_hash={base_hash}"
             )
 
@@ -131,7 +131,7 @@ class SearchService:
                 resolved_datasets,
                 actor,
                 k,
-                client_id,
+                profile_id,
                 request_id=request_id,
             )
             if not snippets:
@@ -156,12 +156,12 @@ class SearchService:
             self.dataset_service.log_once(
                 logging.INFO,
                 "search:empty",
-                client_id=client_id,
+                profile_id=profile_id,
                 rid=rid_value,
                 datasets=datasets_hint,
                 min_interval=60.0,
             )
-            logger.debug(f"knowledge_search_empty client_id={client_id} rid={rid_value} datasets={datasets_hint}")
+            logger.debug(f"knowledge_search_empty profile_id={profile_id} rid={rid_value} datasets={datasets_hint}")
         return aggregated
 
     async def _search_single_query(
@@ -170,12 +170,12 @@ class SearchService:
         datasets: list[str],
         user: Any | None,
         k: int | None,
-        client_id: int,
+        profile_id: int,
         *,
         request_id: str | None = None,
     ) -> list[KnowledgeSnippet]:
         if user is None:
-            logger.warning(f"knowledge_search_skipped client_id={client_id}: user context unavailable")
+            logger.warning(f"knowledge_search_skipped profile_id={profile_id}: user context unavailable")
             return []
         query_hash = sha256(query.encode()).hexdigest()[:12]
         skipped_aliases: list[str] = []
@@ -224,7 +224,7 @@ class SearchService:
                 await self.dataset_service.ensure_dataset_exists(alias, user_ctx)
             except Exception as ensure_exc:
                 logger.debug(
-                    f"knowledge_dataset_ensure_failed client_id={client_id} dataset={alias} detail={ensure_exc}"
+                    f"knowledge_dataset_ensure_failed profile_id={profile_id} dataset={alias} detail={ensure_exc}"
                 )
                 skipped_aliases.append(alias)
                 continue
@@ -247,7 +247,7 @@ class SearchService:
                 self.dataset_service.log_once(
                     logging.DEBUG,
                     "search:skipped",
-                    client_id=client_id,
+                    profile_id=profile_id,
                     rid=rid_value,
                     datasets=",".join(skipped_aliases),
                     min_interval=5.0,
@@ -265,12 +265,14 @@ class SearchService:
             self.dataset_service.log_once(
                 logging.INFO,
                 "search:empty",
-                client_id=client_id,
+                profile_id=profile_id,
                 rid=rid_value,
                 datasets=",".join(datasets),
                 min_interval=60.0,
             )
-            logger.debug(f"knowledge_search_empty client_id={client_id} rid={rid_value} datasets={','.join(datasets)}")
+            logger.debug(
+                f"knowledge_search_empty profile_id={profile_id} rid={rid_value} datasets={','.join(datasets)}"
+            )
             return []
 
         for dataset_name in ready_datasets:
@@ -280,7 +282,7 @@ class SearchService:
         try:
             results = await _search_targets(ready_datasets)
             logger.debug(
-                f"knowledge_search_ok client_id={client_id} rid={rid_value} "
+                f"knowledge_search_ok profile_id={profile_id} rid={rid_value} "
                 f"query_hash={query_hash} results={len(results)}"
             )
             if not results:
@@ -288,7 +290,7 @@ class SearchService:
                 retry = await _search_targets(ready_datasets)
                 if retry:
                     logger.info(
-                        f"knowledge_search_retry_after_empty client_id={client_id} rid={rid_value} "
+                        f"knowledge_search_retry_after_empty profile_id={profile_id} rid={rid_value} "
                         f"query_hash={query_hash} results={len(retry)}"
                     )
                     results = retry
@@ -313,7 +315,7 @@ class SearchService:
                 )
                 return []
             logger.warning(
-                f"knowledge_search_failed client_id={client_id} rid={rid_value} query_hash={query_hash} detail={exc}"
+                f"knowledge_search_failed profile_id={profile_id} rid={rid_value} query_hash={query_hash} detail={exc}"
             )
             logger.debug(f"kb.search.fail detail={exc}")
             return []
@@ -507,11 +509,11 @@ class SearchService:
                     return collected
         return collected
 
-    async def fallback_entries(self, client_id: int, limit: int = 6) -> list[tuple[str, str]]:
+    async def fallback_entries(self, profile_id: int, limit: int = 6) -> list[tuple[str, str]]:
         user = await self.dataset_service.get_cognee_user()
         aliases = [
-            self.dataset_service.dataset_name(client_id),
-            self.dataset_service.chat_dataset_name(client_id),
+            self.dataset_service.dataset_name(profile_id),
+            self.dataset_service.chat_dataset_name(profile_id),
             self.dataset_service.GLOBAL_DATASET,
         ]
         datasets = [self.dataset_service.alias_for_dataset(alias) for alias in aliases]
@@ -546,28 +548,28 @@ class SearchService:
             return "message"
         return "document"
 
-    async def _ensure_profile_indexed(self, client_id: int, user: Any | None) -> None:
+    async def _ensure_profile_indexed(self, profile_id: int, user: Any | None) -> None:
         from core.services import APIService
 
         try:
-            client = await APIService.profile.get_client(client_id)
+            profile = await APIService.profile.get_profile(profile_id)
         except Exception as e:
-            logger.warning(f"Failed to fetch client id={client_id}: {e}")
+            logger.warning(f"Failed to fetch profile id={profile_id}: {e}")
             return
-        if not client:
+        if not profile:
             return
         kb = self._knowledge_base
         if kb is None:
-            logger.debug(f"knowledge_profile_index_skip client_id={client_id} reason=knowledge_base_unavailable")
+            logger.debug(f"knowledge_profile_index_skip profile_id={profile_id} reason=knowledge_base_unavailable")
             return
-        text = kb._client_profile_text(client)
-        dataset = self.dataset_service.dataset_name(client_id)
+        text = kb._profile_text(profile)
+        dataset = self.dataset_service.dataset_name(profile_id)
         dataset, created = await kb.update_dataset(
             text,
             dataset,
             user,
-            node_set=["client_profile"],
-            metadata={"kind": "document", "source": "client_profile"},
+            node_set=["profile"],
+            metadata={"kind": "document", "source": "profile"},
         )
         if created:
             await kb._process_dataset(dataset, user)

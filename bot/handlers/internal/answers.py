@@ -16,11 +16,9 @@ from bot.states import States
 from bot.texts.text_manager import msg_text
 from config.app_settings import settings
 from core.ai_coach.state.ask_ai import AiQuestionState
-from core.exceptions import ClientNotFoundError
-from core.services import APIService
-from core.schemas import Profile
+from core.exceptions import ProfileNotFoundError
 
-from .tasks import _resolve_client_and_profile
+from .tasks import _resolve_profile
 
 
 @require_internal_auth
@@ -38,24 +36,16 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
     state_tracker = AiQuestionState.create()
     request_id = payload.request_id
     if await state_tracker.is_delivered(request_id) or await state_tracker.is_failed(request_id):
-        logger.debug(f"event=ask_ai_answer_duplicate request_id={request_id} client_id={payload.client_id}")
+        logger.debug(f"event=ask_ai_answer_duplicate request_id={request_id} profile_id={payload.profile_id}")
         return web.json_response({"result": "ignored"}, status=202)
 
     try:
-        client, profile_id, client_profile_id = await _resolve_client_and_profile(
-            payload.client_id, payload.client_profile_id
-        )
-    except ClientNotFoundError:
-        await state_tracker.mark_failed(payload.request_id, "client_not_found")
-        logger.error(
-            f"event=ask_ai_answer_client_missing request_id={payload.request_id} client_id={payload.client_id}"
-        )
-        return web.json_response({"detail": "client_not_found"}, status=404)
-
-    profile: Profile | None = await APIService.profile.get_profile(profile_id)
-    if profile is None:
+        profile = await _resolve_profile(payload.profile_id, None)
+    except ProfileNotFoundError:
         await state_tracker.mark_failed(payload.request_id, "profile_not_found")
-        logger.error(f"event=ask_ai_answer_profile_missing request_id={payload.request_id} profile_id={profile_id}")
+        logger.error(
+            f"event=ask_ai_answer_client_missing request_id={payload.request_id} profile_id={payload.profile_id}"
+        )
         return web.json_response({"detail": "profile_not_found"}, status=404)
 
     bot: Bot = request.app["bot"]
@@ -69,7 +59,6 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
         state_data.update(
             {
                 "profile": profile.model_dump(),
-                "client": client.model_dump(),
                 "last_request_id": payload.request_id,
             }
         )
@@ -100,9 +89,9 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
     if not answer_text:
         await state_tracker.mark_failed(request_id, "empty_answer")
         logger.warning(
-            "event=ask_ai_answer_empty request_id={} client_id={} placeholder_blocked={}",
+            "event=ask_ai_answer_empty request_id={} profile_id={} placeholder_blocked={}",
             request_id,
-            payload.client_id,
+            payload.profile_id,
             settings.DISABLE_MANUAL_PLACEHOLDER,
         )
         if not settings.DISABLE_MANUAL_PLACEHOLDER:
@@ -120,9 +109,9 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
 
     if payload.sources:
         logger.info(
-            "event=ask_ai_answer_sources request_id={} client_id={} count={} sources={}",
+            "event=ask_ai_answer_sources request_id={} profile_id={} count={} sources={}",
             request_id,
-            payload.client_id,
+            payload.profile_id,
             len(payload.sources),
             " | ".join(payload.sources),
         )
@@ -158,7 +147,5 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
         return web.json_response({"detail": "send_failed"}, status=500)
 
     await state_tracker.mark_delivered(request_id)
-    logger.info(
-        f"event=ask_ai_answer_delivered request_id={request_id} client_id={payload.client_id} profile_id={profile.id}"
-    )
+    logger.info(f"event=ask_ai_answer_delivered request_id={request_id} profile_id={payload.profile_id}")
     return web.json_response({"result": "ok"})

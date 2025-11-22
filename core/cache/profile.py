@@ -1,5 +1,6 @@
 import json
 from json import JSONDecodeError
+from typing import Any
 from loguru import logger
 from pydantic import ValidationError
 
@@ -60,3 +61,44 @@ class ProfileCacheManager(BaseCacheManager):
         except Exception as e:
             logger.error(f"Error deleting profile for tg_id {tg_id}: {e}")
             return False
+
+    @classmethod
+    async def save_record(cls, profile_id: int, profile_data: dict[str, Any]) -> None:
+        try:
+            data = dict(profile_data)
+            data["profile"] = profile_id
+            data["id"] = profile_id
+            await cls.set_json("clients", str(profile_id), data)
+            logger.debug(f"Profile record saved for profile_id={profile_id}")
+        except Exception as e:
+            logger.error(f"Failed to save profile record for profile_id={profile_id}: {e}")
+
+    @classmethod
+    async def update_record(cls, profile_id: int, updates: dict[str, Any]) -> None:
+        try:
+            await cls.update_json("clients", str(profile_id), updates)
+            logger.debug(f"Profile record updated for profile_id={profile_id} with {updates}")
+        except Exception as e:
+            logger.error(f"Failed to update profile record for profile_id={profile_id}: {e}")
+
+    @classmethod
+    async def get_record(cls, profile_id: int, *, use_fallback: bool = True) -> Profile:
+        raw = await cls.get("clients", str(profile_id))
+        if raw:
+            try:
+                data = json.loads(raw)
+                return Profile.model_validate(data)
+            except (JSONDecodeError, TypeError, ValueError, ValidationError) as exc:
+                logger.debug(f"Corrupt profile record for profile_id={profile_id}: {exc}")
+                await cls.delete("clients", str(profile_id))
+        if not use_fallback:
+            raise ProfileNotFoundError(profile_id)
+        profile = await APIService.profile.get_profile(profile_id)
+        if profile is None:
+            raise ProfileNotFoundError(profile_id)
+        await cls.save_record(profile_id, profile.model_dump())
+        return profile
+
+    @classmethod
+    async def get_all_records(cls) -> dict[str, str]:
+        return await cls.get_all("clients")

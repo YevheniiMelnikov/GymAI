@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 
-from core.schemas import Client
+from core.schemas import Profile
 
 
 @dataclass(slots=True)
 class AskAiPreparationResult:
-    client: Client
+    profile: Profile
     prompt: str
     cost: int
     image_base64: str | None

@@ -40,7 +40,6 @@ class States(StatesGroup):
     show_subscription = State()
     subscription_manage = State()
     program_manage = State()
-    program_history = State()
     subscription_history = State()
     program_action_choice = State()
 

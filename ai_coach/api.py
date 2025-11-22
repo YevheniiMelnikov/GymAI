@@ -24,7 +24,7 @@ from ai_coach.types import AskCtx, CoachMode, MessageRole
 from core.enums import WorkoutPlanType, SubscriptionPeriod
 from config.app_settings import settings
 import config.app_settings as app_settings
-from core.schemas import Client, Profile, Program, Subscription
+from core.schemas import Profile, Program, Subscription
 from core.schemas import QAResponse
 
 CoachAction = Callable[[AskCtx], Awaitable[Program | Subscription | QAResponse | list[str] | None]]
@@ -160,7 +160,7 @@ async def debug_llm_echo(
         "Відповідай одним словом: OK",
         "Ехо-тест",
         [],
-        client_id=0,
+        profile_id=0,
         max_tokens=32,
         model=model_name,
     )
@@ -246,14 +246,14 @@ async def ask(
     dedupe_key: str | None = None
 
     if data.prompt:
-        dedupe_key = sha1(f"{data.client_id}:{data.prompt.strip()}:{mode.value}".encode()).hexdigest()
+        dedupe_key = sha1(f"{data.profile_id}:{data.prompt.strip()}:{mode.value}".encode()).hexdigest()
         if dedupe_key in dedupe_cache:
             logger.info(f"ask.deduped rid={rid} key={dedupe_key}")
             return dedupe_cache[dedupe_key]
 
     with logger.contextualize(rid=rid):
         logger.debug(
-            f"/ask received rid={rid} request_id={data.request_id} client_id={data.client_id} mode={mode.value}"
+            f"/ask received rid={rid} request_id={data.request_id} profile_id={data.profile_id} mode={mode.value}"
         )
 
         if mode == CoachMode.update and data.plan_type is None:
@@ -267,18 +267,11 @@ async def ask(
 
         workout_days: list[str] = data.workout_days or list(DEFAULT_WORKOUT_DAYS)
 
-        client: Client | None
+        profile: Profile | None
         try:
-            client = await APIService.profile.get_client(data.client_id)
+            profile = await APIService.profile.get_profile(data.profile_id)
         except Exception:  # pragma: no cover - missing profile service
-            client = None
-
-        profile: Profile | None = None
-        if client is not None:
-            try:
-                profile = await APIService.profile.get_profile(int(client.profile))
-            except Exception:  # pragma: no cover - missing profile service
-                profile = None
+            profile = None
 
         request_language: str | None = None
         if data.language:
@@ -291,11 +284,11 @@ async def ask(
                 profile_language = _to_language_code(profile_language_raw, settings.DEFAULT_LANG)
 
         language: str = request_language or profile_language or settings.DEFAULT_LANG
-        logger.debug(f"ask.in client_id={data.client_id} mode={mode.value} language={language}")
+        logger.debug(f"ask.in profile_id={data.profile_id} mode={mode.value} language={language}")
 
         ctx: AskCtx = {
             "prompt": data.prompt,
-            "client_id": data.client_id,
+            "profile_id": data.profile_id,
             "period": period.value,
             "workout_days": workout_days,
             "expected_workout": data.expected_workout or "",
@@ -307,10 +300,10 @@ async def ask(
             "instructions": data.instructions,
         }
 
-        client_name = getattr(client, "name", None)
+        client_name = getattr(profile, "name", None)
 
         deps = AgentDeps(
-            client_id=data.client_id,
+            profile_id=data.profile_id,
             locale=language,
             allow_save=mode != CoachMode.ask_ai,
             client_name=client_name,
@@ -325,16 +318,16 @@ async def ask(
         try:
             if mode == CoachMode.ask_ai and data.prompt:
                 kb_for_chat = get_knowledge_base()
-                kb_chat_dataset = kb_for_chat.chat_dataset_name(data.client_id)
+                kb_chat_dataset = kb_for_chat.chat_dataset_name(data.profile_id)
                 await kb_for_chat.add_text(
                     dataset=kb_chat_dataset,
                     text=data.prompt,
                     role=MessageRole.CLIENT,
-                    client_id=data.client_id,
+                    profile_id=data.profile_id,
                 )
                 question_bytes = len(data.prompt.encode())
                 logger.debug(
-                    f"ask.ingest_chat client_id={data.client_id} dataset={kb_chat_dataset} bytes={question_bytes}"
+                    f"ask.ingest_chat profile_id={data.profile_id} dataset={kb_chat_dataset} bytes={question_bytes}"
                 )
                 chat_user = getattr(kb_for_chat, "_user", None)
                 if chat_user is None:
@@ -374,11 +367,11 @@ async def ask(
                             if text:
                                 sources.append(text)
                 logger.debug(
-                    "/ask agent completed rid={} request_id={} client_id={} mode={} "
+                    "/ask agent completed rid={} request_id={} profile_id={} mode={} "
                     "answer_len={} steps_used={} kb_empty={}",
                     rid,
                     data.request_id,
-                    data.client_id,
+                    data.profile_id,
                     "ask_ai",
                     len(answer) if isinstance(answer, str) else 0,
                     deps.tool_calls,
@@ -386,7 +379,7 @@ async def ask(
                 )
                 if sources:
                     logger.debug(
-                        f"/ask agent sources rid={rid} request_id={data.request_id} client_id={data.client_id} "
+                        f"/ask agent sources rid={rid} request_id={data.request_id} profile_id={data.profile_id} "
                         f"count={len(sources)} sources={' | '.join(sources)}"
                     )
                 origin = "llm"
@@ -396,17 +389,17 @@ async def ask(
                 elif not isinstance(result, QAResponse):
                     origin = "structured"
                 logger.info(
-                    "api.answer_out rid={} request_id={} client_id={} len={} from={}",
+                    "api.answer_out rid={} request_id={} profile_id={} len={} from={}",
                     rid,
                     data.request_id,
-                    data.client_id,
+                    data.profile_id,
                     answer_len,
                     origin,
                 )
                 if isinstance(answer, str):
                     kb = kb_for_chat or get_knowledge_base()
-                    await kb.save_client_message(data.prompt or "", client_id=data.client_id)
-                    await kb.save_ai_message(answer, client_id=data.client_id)
+                    await kb.save_client_message(data.prompt or "", profile_id=data.profile_id)
+                    await kb.save_ai_message(answer, profile_id=data.profile_id)
 
                 response_data = {"answer": answer}
                 if sources:
@@ -418,10 +411,10 @@ async def ask(
                 return JSONResponse(content=response_data)
             else:
                 logger.debug(
-                    "/ask agent completed rid={} request_id={} client_id={} mode={} steps_used={} kb_empty={}",
+                    "/ask agent completed rid={} request_id={} profile_id={} mode={} steps_used={} kb_empty={}",
                     rid,
                     data.request_id,
-                    data.client_id,
+                    data.profile_id,
                     mode.value,
                     deps.tool_calls,
                     deps.knowledge_base_empty,
@@ -442,7 +435,7 @@ async def ask(
             }
             detail_reason = reason_map.get(exc.reason, exc.reason)
             logger.info(
-                f"/ask agent aborted rid={rid} request_id={data.request_id} client_id={data.client_id} "
+                f"/ask agent aborted rid={rid} request_id={data.request_id} profile_id={data.profile_id} "
                 f"mode={mode.value} reason={exc.reason} detail={detail_reason} steps_used={deps.tool_calls}"
             )
             if mode in {CoachMode.program, CoachMode.subscription}:
@@ -456,7 +449,7 @@ async def ask(
                 if final_result is not None:
                     logger.info(
                         f"/ask agent returning saved result rid={rid} request_id={data.request_id} "
-                        f"client_id={data.client_id} mode={mode.value} reason={exc.reason}"
+                        f"profile_id={data.profile_id} mode={mode.value} reason={exc.reason}"
                     )
                     result = final_result
                     return final_result
@@ -508,7 +501,7 @@ async def ask(
                 sources_for_log = ["general_knowledge"] if not final_kb_used else ["knowledge_base"]
             sources_label = ",".join(sources_for_log)
             logger.info(
-                f"ask.out rid={rid} client_id={data.client_id} mode={mode.value} model={model_name} "
+                f"ask.out rid={rid} profile_id={data.profile_id} mode={mode.value} model={model_name} "
                 f"from={origin} answer_len={answer_len} kb_used={str(final_kb_used).lower()} "
                 f"sources={sources_label} latency_ms={latency_ms}"
             )

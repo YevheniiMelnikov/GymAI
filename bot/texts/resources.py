@@ -92,9 +92,9 @@ class MessageText(AutoName):
     unexpected_error = auto()
     coach_agent_error = auto()
 
-    client_profile = auto()
+    profile_info = auto()
     client_page = auto()
-    client_default_status = auto()
+    default_status = auto()
     waiting_for_subscription = auto()
     waiting_for_program = auto()
     request_in_progress = auto()
@@ -167,7 +167,6 @@ class MessageText(AutoName):
     payment_link = auto()
     contract_info_message = auto()
 
-    program_history_page = auto()
     subscription_history_page = auto()
 
     select_action = auto()

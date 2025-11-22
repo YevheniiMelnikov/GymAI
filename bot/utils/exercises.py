@@ -21,9 +21,9 @@ async def save_exercise(
     if not input_data.from_user:
         return
 
-    profile_id_str = data.get("client_id")
+    profile_id_str = data.get("profile_id")
     if profile_id_str is None:
-        logger.error("client_id not found in state for save_exercise")
+        logger.error("profile_id not found in state for save_exercise")
         return
 
     profile_id = int(profile_id_str)
@@ -57,7 +57,7 @@ async def save_exercise(
                 split_number = int(program.split_number or 1)
             except ProgramNotFoundError:
                 logger.warning(
-                    f"Program not found for client {profile_id} in save_exercise, defaulting split_number to 1."
+                    f"Program not found for profile {profile_id} in save_exercise, defaulting split_number to 1."
                 )
                 split_number = 1
 
@@ -143,7 +143,7 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
 
         subscription = await Cache.workout.get_latest_subscription(profile_id)
     except SubscriptionNotFoundError:
-        logger.error(f"Subscription not found for client {profile_id} in edit_subscription_exercises.")
+        logger.error(f"Subscription not found for profile {profile_id} in edit_subscription_exercises.")
         await callback_query.answer(msg_text("subscription_not_found_error", profile.language), show_alert=True)
         return
 
@@ -152,7 +152,7 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
 
     await state.update_data(
         exercises=subscription.exercises,
-        client_id=profile_id,
+        profile_id=profile_id,
         day=day,
         subscription=True,
         day_index=day_index,
