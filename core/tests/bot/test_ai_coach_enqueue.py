@@ -50,7 +50,6 @@ async def test_enqueue_generation_uses_chain(monkeypatch: pytest.MonkeyPatch) ->
     profile = _make_profile(5)
     ok = await enqueue_workout_plan_generation(
         profile=profile,
-        language="en",
         plan_type=WorkoutPlanType.PROGRAM,
         workout_type=WorkoutType.STRENGTH,
         wishes="focus",
@@ -90,7 +89,6 @@ async def test_enqueue_generation_requires_profile() -> None:
     profile = _make_profile(1)
     ok = await enqueue_workout_plan_generation(
         profile=profile,
-        language="en",
         plan_type=WorkoutPlanType.PROGRAM,
         workout_type=WorkoutType.STRENGTH,
         wishes="",

@@ -4,6 +4,7 @@ from typing import cast
 from loguru import logger
 from pydantic import ValidationError
 
+from config.app_settings import settings
 from core.cache import Cache
 from core.enums import WorkoutPlanType, WorkoutType
 from core.schemas import DayExercises, Program, Profile, Subscription
@@ -102,7 +103,6 @@ async def process_workout_plan_result(
 async def enqueue_workout_plan_generation(
     *,
     profile: Profile,
-    language: str,
     plan_type: WorkoutPlanType,
     workout_type: WorkoutType,
     wishes: str,
@@ -114,10 +114,11 @@ async def enqueue_workout_plan_generation(
     if profile_id <= 0:
         logger.error(f"ai_plan_generate_missing_profile profile_id={profile_id} request_id={request_id}")
         return False
-
     if not wishes or not wishes.strip():
         logger.warning(f"ai_plan_generate_missing_wishes profile_id={profile_id} request_id={request_id}")
         return False
+
+    language = str(profile.language or settings.DEFAULT_LANG)
 
     try:
         payload_model = AiPlanGenerationPayload(

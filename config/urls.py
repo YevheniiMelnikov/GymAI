@@ -5,6 +5,7 @@ from django.views.generic import RedirectView
 from loguru import logger
 
 from apps.payments.views import PaymentWebhookView
+from apps.webapp import views as webapp_views
 
 
 def healthcheck_view(_):
@@ -18,6 +19,10 @@ urlpatterns = [
     path("api/v1/", include("apps.profiles.urls")),
     path("api/v1/", include("apps.payments.urls")),
     path("api/v1/", include("apps.workout_plans.urls")),
+    path("api/program/", webapp_views.program_data, name="webapp-program-data-direct"),  # type: ignore[arg-type]
+    path("api/programs/", webapp_views.programs_history, name="webapp-programs-history-direct"),  # type: ignore[arg-type]
+    path("api/subscription/", webapp_views.subscription_data, name="webapp-subscription-data-direct"),  # type: ignore[arg-type]
+    path("api/payment/", webapp_views.payment_data, name="webapp-payment-data-direct"),  # type: ignore[arg-type]
     path("webapp", RedirectView.as_view(url="/webapp/", permanent=False)),
     path("webapp/", include("apps.webapp.urls")),
     path("", RedirectView.as_view(url="/webapp/", permanent=False, query_string=True)),

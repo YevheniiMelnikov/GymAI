@@ -185,8 +185,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
 
     if service == "program":
         queued = await enqueue_workout_plan_generation(
-            client=user_profile,
-            language=profile.language,
+            profile=profile,
             plan_type=WorkoutPlanType.PROGRAM,
             workout_type=WorkoutType(data.get("workout_type", "")),
             wishes=wishes,
@@ -250,8 +249,7 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     await answer_msg(callback_query, msg_text(MessageText.request_in_progress, lang))
     await show_main_menu(cast(Message, callback_query.message), profile, state)
     queued = await enqueue_workout_plan_generation(
-        client=selected_profile,
-        language=lang,
+        profile=selected_profile,
         plan_type=WorkoutPlanType.SUBSCRIPTION,
         workout_type=WorkoutType(data.get("workout_type", "")),
         wishes=wishes,

@@ -285,7 +285,7 @@ async def subscription_action_choice(callback_query: CallbackQuery, state: FSMCo
     if message is None or not isinstance(message, Message):
         return
     cb_data = callback_query.data or ""
-    language = cast(str, profile.language or "eng")
+    language = cast(str, profile.language or settings.DEFAULT_LANG)
 
     if cb_data == "new_subscription":
         await callback_query.answer()

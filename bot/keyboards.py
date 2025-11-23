@@ -202,6 +202,12 @@ def workout_type_kb(lang: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
+def feedback_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [[builder.add(ButtonText.prev_menu, "back")]]
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
 def select_days_kb(lang: str, selected_days: list) -> KbMarkup:
     buttons = []
     days_of_week = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]

@@ -173,7 +173,6 @@ async def test_enqueue_workout_plan_generation_dispatch(monkeypatch: pytest.Monk
 
     queued = await enqueue_workout_plan_generation(
         profile=profile_record,
-        language="en",
         plan_type=WorkoutPlanType.PROGRAM,
         workout_type=WorkoutType.GYM,
         wishes="lean",

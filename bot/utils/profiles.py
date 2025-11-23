@@ -40,8 +40,10 @@ async def update_profile_data(
         user_data.pop("profile", None)
 
         credits_delta = data.pop("credits_delta", 0)
-        if credits_delta:
-            user_data["credits"] = (profile.credits or 0) + credits_delta
+        if credits_delta and (profile.credits or 0) < settings.PACKAGE_START_CREDITS:
+            remaining = settings.PACKAGE_START_CREDITS - (profile.credits or 0)
+            credits_delta_to_apply = min(credits_delta, remaining)
+            user_data["credits"] = (profile.credits or 0) + credits_delta_to_apply
         await Cache.profile.update_profile(message.chat.id, user_data)
         await APIService.profile.update_profile(profile.id, user_data)
         await Cache.profile.update_record(profile.id, user_data)

@@ -314,10 +314,9 @@ async def tool_get_chat_history(
     except TimeoutError:
         logger.info(f"chat_history_timeout profile_id={profile_id} tool=tool_get_chat_history timeout={timeout}")
         history = deps.cached_history or []
+        deps.cached_history = history
         limited = list(history[:limit]) if limit is not None else list(history)
-        if limited:
-            return _cache_result(deps, tool_name, limited, cache_key=cache_key)
-        raise
+        return _cache_result(deps, tool_name, limited, cache_key=cache_key)
     except Exception as e:
         logger.error(f"Error getting chat history: {e}")
         raise

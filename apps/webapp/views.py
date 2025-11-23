@@ -9,8 +9,9 @@ from loguru import logger
 from rest_framework.exceptions import NotFound
 
 from apps.payments.repos import PaymentRepository
+from apps.workout_plans.models import Program as ProgramModel
 from apps.workout_plans.repos import ProgramRepository, SubscriptionRepository
-from core.schemas import Program, Subscription
+from core.schemas import Program as ProgramSchema, Subscription
 from .utils import STATIC_VERSION, transform_days
 
 from .utils import (
@@ -47,6 +48,12 @@ async def program_data(request: HttpRequest) -> JsonResponse:
     profile = auth_ctx.profile
     if profile is None:
         return JsonResponse({"error": "not_found"}, status=404)
+    logger.info(f"program_data_request profile_id={profile.id} source={source} program_id={program_id}")
+    try:
+        total_programs = await call_repo(lambda pid: ProgramModel.objects.filter(profile_id=pid).count(), profile.id)
+    except Exception:
+        total_programs = -1
+    logger.info(f"program_db_stats profile_id={profile.id} total_programs={total_programs}")
 
     if source == "subscription":
         subscription_obj: Subscription | None = cast(
@@ -60,25 +67,78 @@ async def program_data(request: HttpRequest) -> JsonResponse:
         days = transform_days(subscription_obj.exercises)
         return JsonResponse({"days": days, "id": str(subscription_obj.id), "language": profile.language})
 
-    program_obj: Program | None = cast(
-        Program | None,
-        await call_repo(ProgramRepository.get_by_id, profile.id, program_id)
-        if program_id is not None
-        else await call_repo(ProgramRepository.get_latest, profile.id),
-    )
+    program_obj: ProgramModel | ProgramSchema | None = None
+    try:
+        program_obj = cast(
+            ProgramSchema | None,
+            await call_repo(ProgramRepository.get_by_id, profile.id, program_id)
+            if program_id is not None
+            else await call_repo(ProgramRepository.get_latest, profile.id),
+        )
+    except Exception:
+        logger.exception(f"Failed to load program from repo profile_id={profile.id} program_id={program_id}")
+
+    if program_obj is None:
+        try:
+            all_programs = cast(list[ProgramSchema], await call_repo(ProgramRepository.get_all, profile.id))
+            program_obj = all_programs[0] if all_programs else None
+        except Exception:
+            logger.exception(f"Fallback load of all programs failed profile_id={profile.id}")
+
+    if program_obj is None:
+        try:
+            program_obj = await call_repo(
+                lambda pid: ProgramModel.objects.filter(profile_id=pid).order_by("-created_at", "-id").first(),
+                profile.id,
+            )
+            if program_obj is None:
+                total = await call_repo(lambda pid: ProgramModel.objects.filter(profile_id=pid).count(), profile.id)
+                logger.warning(f"Program not found for profile_id={profile.id}; total_programs={total}")
+            else:
+                program_pk = getattr(program_obj, "id", None)
+                logger.info(f"Program loaded via direct ORM profile_id={profile.id} program_id={program_pk}")
+        except Exception:
+            logger.exception(f"Direct program lookup failed profile_id={profile.id}")
+
+    if isinstance(program_obj, ProgramModel):
+        try:
+            program_obj = ProgramSchema.model_validate(program_obj)
+        except Exception:
+            logger.exception(f"Failed to normalize ProgramModel for profile_id={profile.id}")
+            program_obj = None
 
     if program_obj is None:
         logger.warning(f"Program not found for profile_id={profile.id} program_id={program_id}")
         return JsonResponse({"error": "not_found"}, status=404)
 
+    created_raw = getattr(program_obj, "created_at", None)
+    created_at = 0
+    if isinstance(created_raw, datetime):
+        created_at = int(created_raw.timestamp())
+    else:
+        try:
+            created_at = int(float(created_raw or 0))
+        except (TypeError, ValueError):
+            try:
+                created_at = int(datetime.fromisoformat(str(created_raw)).timestamp())
+            except Exception:
+                created_at = 0
+
     data: dict[str, object] = {
-        "created_at": int(cast(datetime, program_obj.created_at).timestamp()),
+        "created_at": created_at,
         "language": profile.language,
     }
 
     program_id_value = getattr(program_obj, "id", None)
     if isinstance(program_obj.exercises_by_day, list):
-        days_payload = cast(list[dict[str, Any]], program_obj.exercises_by_day)
+        days_payload: list[dict[str, Any]] = []
+        for item in program_obj.exercises_by_day:
+            if hasattr(item, "model_dump"):
+                days_payload.append(item.model_dump())
+            elif isinstance(item, dict):
+                days_payload.append(item)
+        if not days_payload:
+            days_payload = cast(list[dict[str, Any]], program_obj.exercises_by_day)
         transformed = transform_days(days_payload)
         data["days"] = transformed
         data["program"] = transformed
@@ -111,7 +171,7 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
 
     try:
         programs = cast(
-            list[Program],
+            list[ProgramSchema],
             await call_repo(ProgramRepository.get_all, int(getattr(profile, "id", 0))),
         )
     except Exception:

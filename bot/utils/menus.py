@@ -16,10 +16,7 @@ from bot.states import States
 from bot.texts import MessageText, msg_text
 from core.cache import Cache
 from core.enums import ProfileStatus
-from core.exceptions import (
-    ProfileNotFoundError,
-    ProgramNotFoundError,
-)
+from core.exceptions import ProfileNotFoundError
 from core.schemas import Profile, Subscription
 from bot.utils.text import (
     get_profile_attributes,
@@ -251,18 +248,6 @@ async def show_my_subscription_menu(
 
 
 async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    cached_profile = await Cache.profile.get_record(profile.id)
-    try:
-        await Cache.workout.get_latest_program(cached_profile.id)
-    except ProgramNotFoundError:
-        logger.info(f"No cached program for profile {profile.id} when opening program menu.")
-        if hasattr(callback_query, "answer"):
-            await callback_query.answer(
-                msg_text(MessageText.no_program, profile.language),
-                show_alert=True,
-            )
-        await show_my_workouts_menu(callback_query, profile, state)
-        return
     message = cast(Message, callback_query.message)
     assert message
     await answer_msg(
@@ -282,7 +267,7 @@ async def show_ai_services(
     *,
     auto_select_single: bool = False,
 ) -> None:
-    language = cast(str, profile.language or "eng")
+    language = cast(str, profile.language or settings.DEFAULT_LANG)
     cached_profile = await Cache.profile.get_record(profile.id)
     if cached_profile.status == ProfileStatus.initial:
         await callback_query.answer(msg_text(MessageText.finish_registration_to_get_credits, language), show_alert=True)
@@ -322,7 +307,7 @@ async def process_ai_service_selection(
     *,
     service_name: str,
 ) -> bool:
-    language = cast(str, profile.language or "eng")
+    language = cast(str, profile.language or settings.DEFAULT_LANG)
     data = await state.get_data()
     profile_data = data.get("profile")
     if not profile_data:

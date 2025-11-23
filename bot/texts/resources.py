@@ -152,7 +152,6 @@ class MessageText(AutoName):
     workout_plan_deleted = auto()
     program_not_ready = auto()
     complete_all_days = auto()
-    no_program = auto()
     no_exercises_to_save = auto()
     no_exercises_found = auto()
     program_view = auto()

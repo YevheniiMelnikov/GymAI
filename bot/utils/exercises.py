@@ -176,13 +176,19 @@ def serialize_day_exercises(exercises: list[DayExercises]) -> list[dict[str, Any
     """Serialize a list of ``DayExercises`` to plain dictionaries."""
     result: list[dict[str, Any]] = []
     for day in exercises:
-        if isinstance(day, DayExercises):
-            result.append(
-                {
-                    "day": day.day,
-                    "exercises": [e.model_dump() for e in day.exercises],
-                }
-            )
+        day_obj = day
+        if not isinstance(day_obj, DayExercises):
+            try:
+                day_obj = DayExercises.model_validate(day)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"skip_invalid_day_exercises err={exc}")
+                continue
+        result.append(
+            {
+                "day": day_obj.day,
+                "exercises": [e.model_dump() for e in day_obj.exercises],
+            }
+        )
     return result
 
 
