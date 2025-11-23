@@ -44,6 +44,7 @@ async def update_profile_data(
             user_data["credits"] = (profile.credits or 0) + credits_delta
         await Cache.profile.update_profile(message.chat.id, user_data)
         await APIService.profile.update_profile(profile.id, user_data)
+        await Cache.profile.update_record(profile.id, user_data)
 
         await answer_msg(message, msg_text(MessageText.your_data_updated, data.get("lang", settings.DEFAULT_LANG)))
 

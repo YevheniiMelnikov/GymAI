@@ -1,9 +1,33 @@
+from typing import Any
+
 from aiogram.types import InlineKeyboardButton as KbBtn
-from aiogram.types import InlineKeyboardMarkup as KbMarkup, WebAppInfo
+from aiogram.types import InlineKeyboardMarkup as _RawKbMarkup, WebAppInfo
 
 from bot.buttons_builder import ButtonsBuilder
 from bot.texts import ButtonText, btn_text
 from core.schemas import Exercise
+
+
+class SafeInlineKeyboardMarkup(_RawKbMarkup):  # type: ignore[misc]
+    def __init__(
+        self, *args: Any, inline_keyboard: list[list[KbBtn]] | None = None, row_width: int | None = None, **kwargs: Any
+    ):
+        inline_keyboard_value = inline_keyboard if inline_keyboard is not None else []
+        build_kwargs: dict[str, Any] = {"inline_keyboard": inline_keyboard_value}
+        if row_width is not None:
+            build_kwargs["row_width"] = row_width
+        try:
+            super().__init__(*args, **build_kwargs, **kwargs)
+        except TypeError:
+            if inline_keyboard is not None:
+                setattr(self, "inline_keyboard", inline_keyboard)
+            elif hasattr(self, "inline_keyboard"):
+                setattr(self, "inline_keyboard", inline_keyboard_value)
+            if row_width is not None:
+                setattr(self, "row_width", row_width)
+
+
+KbMarkup = SafeInlineKeyboardMarkup
 
 
 def select_language_kb() -> KbMarkup:

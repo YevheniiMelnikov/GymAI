@@ -105,7 +105,7 @@ class Settings(BaseSettings):
     TIME_ZONE: Annotated[str, Field(default="Europe/Kyiv")]
     DEFAULT_LANG: Annotated[str, Field(default="ua")]
     ADMIN_LANG: Annotated[str, Field(default="ru")]
-    LOG_LEVEL: Annotated[str, Field(default="INFO")]
+    LOG_LEVEL: Annotated[str, Field(default="DEBUG")]
     LOG_VERBOSE_CELERY: Annotated[bool, Field(default=False)]
 
     REDIS_URL: Annotated[str, Field(default="redis://redis:6379")]

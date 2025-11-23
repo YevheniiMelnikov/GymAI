@@ -4,11 +4,9 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('workout_plans', '0006_merge_20251120_0859'),
-        ('workout_plans', '0006_rename_client_profile_field'),
+        ("workout_plans", "0006_merge_20251120_0859"),
+        ("workout_plans", "0006_rename_client_profile_field"),
     ]
 
-    operations = [
-    ]
+    operations = []

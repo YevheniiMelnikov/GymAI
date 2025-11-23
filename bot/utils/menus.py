@@ -255,8 +255,12 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
     try:
         await Cache.workout.get_latest_program(cached_profile.id)
     except ProgramNotFoundError:
+        logger.info(f"No cached program for profile {profile.id} when opening program menu.")
         if hasattr(callback_query, "answer"):
-            await callback_query.answer(msg_text(MessageText.no_program, profile.language), show_alert=True)
+            await callback_query.answer(
+                msg_text(MessageText.no_program, profile.language),
+                show_alert=True,
+            )
         await show_my_workouts_menu(callback_query, profile, state)
         return
     message = cast(Message, callback_query.message)

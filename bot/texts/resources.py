@@ -113,7 +113,7 @@ class MessageText(AutoName):
     edit_profile = auto()
     choose_profile_parameter = auto()
     update_your_data = auto()
-    name = auto()  # pyrefly: ignore[bad-override]
+    name = auto()
     verified = auto()
     finish_registration_to_get_credits = auto()
     initial_credits_granted = auto()
