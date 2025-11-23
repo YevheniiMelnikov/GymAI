@@ -16,6 +16,12 @@ RESOURCES = {
 }
 
 
+def _resolve_resource_key(key: ResourceType) -> str:
+    if isinstance(key, Enum):
+        return key.value
+    return key
+
+
 class TextManager:
     messages: dict[str, dict[str, str]] = {}
     buttons: dict[str, dict[str, str]] = {}
@@ -34,24 +40,18 @@ class TextManager:
                     cls.commands = data  # pyrefly: ignore[bad-assignment]
 
     @staticmethod
-    def _resolve_key(key: ResourceType) -> str:
-        if isinstance(key, Enum):
-            return key.value
-        return key
-
-    @classmethod
-    def get_message(cls, key: ResourceType, lang: str | None) -> str:
+    def get_message(key: ResourceType, lang: str | None) -> str:
         lang = lang or settings.DEFAULT_LANG
         try:
-            return cls.messages[cls._resolve_key(key)][lang]
+            return TextManager.messages[_resolve_resource_key(key)][lang]
         except KeyError as e:
             raise ValueError(f"Message key '{key}' ({lang}) not found") from e
 
-    @classmethod
-    def get_button(cls, key: ResourceType, lang: str | None) -> str:
+    @staticmethod
+    def get_button(key: ResourceType, lang: str | None) -> str:
         lang = lang or settings.DEFAULT_LANG
         try:
-            return cls.buttons[cls._resolve_key(key)][lang]
+            return TextManager.buttons[_resolve_resource_key(key)][lang]
         except KeyError as e:
             raise ValueError(f"Button key '{key}' ({lang}) not found") from e
 

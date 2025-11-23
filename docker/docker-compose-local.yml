@@ -97,6 +97,7 @@ services:
     volumes:
       - rabbitmqdata:/var/lib/rabbitmq
       - ./rabbitmq-entrypoint.sh:/usr/local/bin/rabbitmq-entrypoint.sh:ro
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
     ports:
       - ${HOST_RABBITMQ_PORT:-5672}:5672
       - ${HOST_RABBITMQ_MANAGEMENT_PORT:-15672}:15672

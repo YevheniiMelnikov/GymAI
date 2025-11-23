@@ -16,7 +16,6 @@ class PaymentAdmin(ModelAdmin):
     )
     list_filter = (  # pyrefly: ignore[bad-override]
         "status",
-        "payout_handled",
         "processed",
         "payment_type",
         "created_at",

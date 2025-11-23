@@ -42,14 +42,20 @@ questionnaire_router = Router()
 async def select_language(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
     await callback_query.answer()
     await delete_messages(state)
-    lang = callback_query.data or settings.DEFAULT_LANG
+    selected_lang = callback_query.data or settings.DEFAULT_LANG
+    try:
+        language = Language(selected_lang)
+    except ValueError:
+        logger.warning("Unsupported language code %s in select_language handler", selected_lang)
+        language = Language(settings.DEFAULT_LANG)
+    lang = language.value
     await set_bot_commands(bot, lang)
     try:
         profile = await APIService.profile.get_profile_by_tg_id(callback_query.from_user.id)
         if profile:
             await APIService.profile.update_profile(profile.id, {"language": lang})
             await Cache.profile.update_profile(callback_query.from_user.id, dict(language=lang))
-            profile.language = cast(Language, lang)
+            profile.language = language
             message = callback_query.message
             if message is not None:
                 await show_main_menu(cast(Message, message), profile, state)
