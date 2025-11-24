@@ -86,6 +86,11 @@ feedback_sent:
 new_feedback:
   ru: "Новый отзыв от профиля {profile_id}:\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{feedback}</em>"
 
+profile_info:
+  eng: "<b>Name 🆔</b>\n{name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Gender 🚻</b>\n{gender}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Workout goals 🎯</b>\n<em>{goals}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Weight (kg) ⚖️</b>\n{weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Workout experience (years) 💪</b>\n{experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Health notes 🩺</b>\n<em>{notes}</em>"
+  ru: "<b>Имя 🆔</b>\n{name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Пол 🚻</b>\n{gender}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Тренировочные цели 🎯</b>\n<em>{goals}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Вес (кг) ⚖️</b>\n{weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Опыт тренировок (лет) 💪</b>\n{experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Примечания по здоровью 🩺</b>\n<em>{notes}</em>"
+  ua: "<b>Ім'я 🆔</b>\n{name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Стать 🚻</b>\n{gender}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Тренувальні цілі 🎯</b>\n<em>{goals}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Вага (кг) ⚖️</b>\n{weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Тренувальний досвід (років) 💪</b>\n{experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Примітки по здоров'ю 🩺\n</b><em>{notes}</em>"
+
 client_profile:
   eng: "<b>Name 🆔</b>\n{name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Gender 🚻</b>\n{gender}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Year of birth 🗓</b>\n{born_in}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Workout goals 🎯</b>\n<em>{goals}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Weight (kg) ⚖️</b>\n{weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Workout experience (years) 💪</b>\n{experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Health notes 🩺</b>\n<em>{notes}</em>"
   ru: "<b>Имя 🆔</b>\n{name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Пол 🚻</b>\n{gender}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Год рождения 🗓</b>\n{born_in}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Тренировочные цели 🎯</b>\n<em>{goals}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Вес (кг) ⚖️</b>\n{weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Опыт тренировок (лет) 💪</b>\n{experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Примечания по здоровью 🩺</b>\n<em>{notes}</em>"
@@ -215,11 +220,6 @@ coach_declined:
   eng: "Unfortunately your verification request has not been accepted. We may contact you later ❗"
   ru: "К сожалению ваш запрос на верификацию не был принят. Возможно мы свяжемся с вами позже ❗"
   ua: "На жаль ваш запит на верифікацію не було прийнято. Можливо ми зв'яжемося з вами пізніше ❗"
-
-no_program:
-  eng: "At this time, the training program has not yet been set up 😲"
-  ru: "На данный момент программа тренировок еще не составлена 😲"
-  ua: "На даний момент програма тренувань ще не складена 😲"
 
 no_coaches:
   eng: "There are no active coaches on the platform yet 🚫"

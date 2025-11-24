@@ -30,17 +30,17 @@ def test_lang_returns_original_for_unknown_locale() -> None:
 
 
 def test_agent_lang_returns_locale_code() -> None:
-    deps = AgentDeps(client_id=1, locale="ru")
+    deps = AgentDeps(profile_id=1, locale="ru")
     assert CoachAgent._lang(deps) == "ru"
 
 
 def test_agent_lang_uses_default_when_missing() -> None:
-    deps = AgentDeps(client_id=2, locale=None)
+    deps = AgentDeps(profile_id=2, locale=None)
     assert CoachAgent._lang(deps) == settings.DEFAULT_LANG
 
 
 def test_language_context_returns_descriptor() -> None:
-    deps = AgentDeps(client_id=3, locale="ua")
+    deps = AgentDeps(profile_id=3, locale="ua")
     code, descriptor = CoachAgent._language_context(deps)
     assert code == "uk"
     assert "Ukrainian" in descriptor

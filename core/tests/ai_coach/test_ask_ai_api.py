@@ -30,7 +30,7 @@ def test_ask_ai_agent(monkeypatch: pytest.MonkeyPatch) -> None:
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post(
                 "/ask/",
-                json={"client_id": 2, "prompt": "hello", "mode": "ask_ai"},
+                json={"profile_id": 2, "prompt": "hello", "mode": "ask_ai"},
                 headers={"X-Agent": "pydanticai"},
             )
         assert resp.status_code == 200
@@ -49,7 +49,7 @@ def test_ask_ai_tool_error(monkeypatch: pytest.MonkeyPatch) -> None:
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post(
                 "/ask/",
-                json={"client_id": 3, "prompt": "hello", "mode": "ask_ai"},
+                json={"profile_id": 3, "prompt": "hello", "mode": "ask_ai"},
                 headers={"X-Agent": "pydanticai"},
             )
         assert resp.status_code == 503
@@ -67,7 +67,7 @@ def test_ask_ai_model_empty_response(monkeypatch: pytest.MonkeyPatch) -> None:
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post(
                 "/ask/",
-                json={"client_id": 4, "prompt": "hello", "mode": "ask_ai"},
+                json={"profile_id": 4, "prompt": "hello", "mode": "ask_ai"},
                 headers={"X-Agent": "pydanticai"},
             )
         assert resp.status_code == 408
@@ -87,7 +87,7 @@ def test_ask_ai_knowledge_base_empty(monkeypatch: pytest.MonkeyPatch) -> None:
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post(
                 "/ask/",
-                json={"client_id": 1, "prompt": "hello", "mode": "ask_ai"},
+                json={"profile_id": 1, "prompt": "hello", "mode": "ask_ai"},
                 headers={"X-Agent": "pydanticai"},
             )
         assert resp.status_code == 408

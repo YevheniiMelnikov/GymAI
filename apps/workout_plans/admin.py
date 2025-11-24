@@ -5,8 +5,8 @@ from .models import Program, Subscription
 
 @admin.register(Program)
 class ProgramAdmin(ModelAdmin):
-    list_display = ("id", "client_profile", "split_number", "created_at")  # pyrefly: ignore[bad-override]
-    search_fields = ("client_profile__profile__tg_id",)  # pyrefly: ignore[bad-override]
+    list_display = ("id", "profile", "split_number", "created_at")  # pyrefly: ignore[bad-override]
+    search_fields = ("profile__tg_id",)  # pyrefly: ignore[bad-override]
     list_filter = ("split_number", "created_at")  # pyrefly: ignore[bad-override]
     readonly_fields = ("created_at",)  # pyrefly: ignore[bad-override]
 
@@ -15,13 +15,13 @@ class ProgramAdmin(ModelAdmin):
 class SubscriptionAdmin(ModelAdmin):
     list_display = (  # pyrefly: ignore[bad-override]
         "id",
-        "client_profile",
+        "profile",
         "enabled",
         "price",
         "period",
         "payment_date",
         "updated_at",
     )
-    search_fields = ("client_profile__profile__tg_id",)  # pyrefly: ignore[bad-override]
+    search_fields = ("profile__tg_id",)  # pyrefly: ignore[bad-override]
     list_filter = ("enabled", "updated_at")  # pyrefly: ignore[bad-override]
     readonly_fields = ("updated_at",)  # pyrefly: ignore[bad-override]

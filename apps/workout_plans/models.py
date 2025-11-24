@@ -2,8 +2,7 @@ from django.db import models
 from django.db.models import JSONField
 from django.contrib.postgres.fields import ArrayField
 
-from apps.profiles.models import ClientProfile
-from apps.profiles.choices import CoachType
+from apps.profiles.models import Profile
 
 
 class SubscriptionPeriod(models.TextChoices):
@@ -12,16 +11,11 @@ class SubscriptionPeriod(models.TextChoices):
 
 
 class Program(models.Model):
-    client_profile = models.ForeignKey(ClientProfile, on_delete=models.CASCADE, related_name="programs")
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="programs")
     exercises_by_day = JSONField(default=list, blank=True)
     split_number = models.IntegerField(null=True, blank=True)
     wishes = models.CharField(max_length=500, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    coach_type = models.CharField(
-        max_length=10,
-        choices=CoachType.choices,
-        default=CoachType.HUMAN,
-    )
 
     class Meta:
         verbose_name = "Program"
@@ -29,7 +23,7 @@ class Program(models.Model):
 
 
 class Subscription(models.Model):
-    client_profile = models.ForeignKey(ClientProfile, on_delete=models.CASCADE, related_name="subscriptions")
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="subscriptions")
     updated_at = models.DateTimeField(auto_now=True)
     enabled = models.BooleanField(default=False)
     price = models.DecimalField(max_digits=10, decimal_places=2)

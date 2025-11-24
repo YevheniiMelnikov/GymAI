@@ -21,8 +21,8 @@ class DummyCache:
     def __init__(self) -> None:
         self.payment = types.SimpleNamespace(calls=[])
 
-        async def set_status(client_id: int, service_type: str, status: Any) -> None:
-            self.payment.calls.append((client_id, service_type, status))
+        async def set_status(profile_id: int, service_type: str, status: Any) -> None:
+            self.payment.calls.append((profile_id, service_type, status))
 
         self.payment.set_status = set_status
 
@@ -41,13 +41,13 @@ class DummyNotifier:
         self.success_calls: list[tuple[int, str]] = []
         self.failure_calls: list[tuple[int, str]] = []
 
-    def success(self, client_id: int, language: str) -> None:
+    def success(self, profile_id: int, language: str) -> None:
         self.log.append("notify")
-        self.success_calls.append((client_id, language))
+        self.success_calls.append((profile_id, language))
 
-    def failure(self, client_id: int, language: str) -> None:
+    def failure(self, profile_id: int, language: str) -> None:
         self.log.append("fail")
-        self.failure_calls.append((client_id, language))
+        self.failure_calls.append((profile_id, language))
 
 
 class CreditTopupStub:
@@ -55,9 +55,9 @@ class CreditTopupStub:
         self.log = log
         self.calls: list[tuple[Any, Decimal]] = []
 
-    async def __call__(self, client: Any, amount: Decimal) -> None:
+    async def __call__(self, profile: Any, amount: Decimal) -> None:
         self.log.append("topup")
-        self.calls.append((client, amount))
+        self.calls.append((profile, amount))
 
 
 def test_success_payment_strategy() -> None:
@@ -73,7 +73,7 @@ def test_success_payment_strategy() -> None:
         strategy = SuccessPayment(cache, profile_service, credit_topup, notifier)
         payment = types.SimpleNamespace(
             id=1,
-            client_profile=1,
+            profile=1,
             payment_type="credits",
             order_id="o1",
             amount=Decimal("10"),
@@ -81,8 +81,8 @@ def test_success_payment_strategy() -> None:
             created_at=0.0,
             updated_at=0.0,
         )
-        client = types.SimpleNamespace(id=1, profile=1)
-        await strategy.handle(payment, client)
+        profile = types.SimpleNamespace(id=1, profile=1, language="eng")
+        await strategy.handle(payment, profile)
         assert cache.payment.calls == [(1, "credits", PaymentStatus.SUCCESS)]
         assert credit_topup.calls[0][1] == Decimal("10")
         assert notifier.success_calls == [(1, "eng")]
@@ -103,7 +103,7 @@ def test_failure_payment_strategy() -> None:
         strategy = FailurePayment(cache, profile_service, notifier)
         payment = types.SimpleNamespace(
             id=2,
-            client_profile=1,
+            profile=1,
             payment_type="credits",
             order_id="o2",
             amount=Decimal("5"),
@@ -111,8 +111,8 @@ def test_failure_payment_strategy() -> None:
             created_at=0.0,
             updated_at=0.0,
         )
-        client = types.SimpleNamespace(id=1, profile=1)
-        await strategy.handle(payment, client)
+        profile = types.SimpleNamespace(id=1, profile=1, language="eng")
+        await strategy.handle(payment, profile)
         assert cache.payment.calls == [(1, "credits", PaymentStatus.FAILURE)]
         assert notifier.failure_calls == [(1, "eng")]
 

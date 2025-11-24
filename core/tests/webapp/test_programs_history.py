@@ -8,7 +8,6 @@ from datetime import datetime
 import pytest
 from django.http import HttpRequest, JsonResponse
 
-from core.enums import CoachType
 from apps.webapp import utils
 
 django_http = sys.modules["django.http"]
@@ -20,6 +19,11 @@ views = import_module("apps.webapp.views")
 
 def test_programs_history_success(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
+        async def noop_ready() -> None:
+            return None
+
+        monkeypatch.setattr(utils, "ensure_container_ready", noop_ready)
+        monkeypatch.setattr(views, "ensure_container_ready", noop_ready)
         monkeypatch.setattr("apps.webapp.utils.verify_init_data", lambda _d: {"user": {"id": 1}})
         monkeypatch.setattr(
             utils.ProfileRepository,
@@ -27,14 +31,14 @@ def test_programs_history_success(monkeypatch: pytest.MonkeyPatch) -> None:
             lambda _tg_id: SimpleNamespace(id=1, language="eng"),
         )
         monkeypatch.setattr(
-            utils.ClientProfileRepository,
+            utils.ProfileRepository,
             "get_by_profile_id",
             lambda _id: SimpleNamespace(id=1),
         )
         monkeypatch.setattr(
             views.ProgramRepository,
             "get_all",
-            lambda _id: [SimpleNamespace(id=1, created_at=datetime.fromtimestamp(1), coach_type=CoachType.ai_coach)],
+            lambda _id: [SimpleNamespace(id=1, created_at=datetime.fromtimestamp(1))],
         )
 
         request: HttpRequest = HttpRequest()
@@ -45,7 +49,6 @@ def test_programs_history_success(monkeypatch: pytest.MonkeyPatch) -> None:
         assert response.status_code == 200
         data = json.loads(response.content)
         assert data["programs"][0]["id"] == 1
-        assert data["programs"][0]["coach_type"] == CoachType.ai_coach
         assert data["language"] == "eng"
 
     asyncio.run(runner())

@@ -1,28 +1,20 @@
 import html
-from typing import Any, cast, Iterable
+from typing import Iterable, cast
 
 from aiogram import Bot
 from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message, FSInputFile, InputFile
-from pathlib import Path
+from aiogram.types import FSInputFile, InputFile, Message
 
-from bot.texts import msg_text
-from bot.utils.bot import answer_msg, del_msg
-from bot.keyboards import new_coach_kb, incoming_request_kb, client_msg_bk
-from bot.states import States
+from bot.texts import MessageText, msg_text
+from bot.utils.bot import answer_msg
 from config.app_settings import settings
-from core.cache import Cache
-from core.schemas import Coach, Profile, Client
-from core.enums import CoachType
+from core.schemas import Profile
 from core.services import APIService
-from bot.utils.text import format_new_client_message, get_client_page, get_workout_types
-from bot.utils.profiles import get_assigned_coach
-from core.services import get_avatar_manager
 
 
 async def send_message(
-    recipient: Client | Coach,
+    recipient: Profile,
     text: str,
     bot: Bot,
     state: FSMContext | None = None,
@@ -42,21 +34,15 @@ async def send_message(
     def _escape_html(value: str) -> str:
         return html.escape(value, quote=False)
 
-    if isinstance(recipient, Coach) and recipient.coach_type != CoachType.human:
-        from loguru import logger
-
-        logger.error("send_message received non-human coach id %s", recipient.id)
-        return
-
     if state:
         data = await state.get_data()
-        language = cast(str, data.get("recipient_language", settings.DEFAULT_LANG))
+        language = cast(str, data.get("recipient_language", ""))
         sender_name = cast(str, data.get("sender_name", ""))
     else:
-        language = settings.DEFAULT_LANG
+        language = ""
         sender_name = ""
 
-    recipient_profile = await APIService.profile.get_profile(recipient.profile)
+    recipient_profile = await APIService.profile.get_profile(recipient.id)
     if recipient_profile is None:
         from loguru import logger
 
@@ -65,7 +51,7 @@ async def send_message(
 
     if include_incoming_message:
         try:
-            template = msg_text("incoming_message", language)
+            template = msg_text(MessageText.incoming_message, language or recipient_profile.language or "ua")
         except Exception:
             template = "<b>{name}</b>:\n{message}"
         formatted_text = template.format(
@@ -104,152 +90,8 @@ async def send_message(
         )
 
 
-async def send_coach_request(
-    tg_id: int,
-    profile: Profile,
-    data: dict[str, Any],
-    bot: Bot,
-) -> None:
-    name = data.get("name")
-    surname = data.get("surname")
-    experience = data.get("work_experience")
-    info = data.get("additional_info")
-    card = data.get("payment_details")
-    subscription_price = data.get("subscription_price")
-    program_price = data.get("program_price")
-    user = await bot.get_chat(tg_id)
-    contact = f"@{user.username}" if user.username else tg_id
-
-    file_name = data.get("profile_photo")
-    avatar_manager = get_avatar_manager()
-    photo = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{file_name}"
-
-    await bot.send_photo(
-        chat_id=settings.ADMIN_ID,
-        photo=photo,
-        caption=msg_text("new_coach_request", settings.ADMIN_LANG).format(
-            name=name,
-            surname=surname,
-            experience=experience,
-            info=info,
-            card=card,
-            subscription_price=subscription_price,
-            program_price=program_price,
-            contact=contact,
-            profile_id=profile.id,
-        ),
-        reply_markup=new_coach_kb(profile.id),
-    )
-
-
-async def contact_coach(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    try:
-        client = await Cache.client.get_client(profile.id)
-    except Exception:
-        await callback_query.answer(
-            msg_text("unexpected_error", profile.language),
-            show_alert=True,
-        )
-        return
-
-    coach = await get_assigned_coach(client, coach_type=CoachType.human)
-    if client.assigned_to and coach:
-        await state.update_data(recipient_id=coach.profile, sender_name=client.name)
-        await state.set_state(States.contact_coach)
-
-        msg = callback_query.message
-        if msg is not None and isinstance(msg, Message):
-            await msg.answer(msg_text("enter_your_message", profile.language))
-            await del_msg(msg)
-        else:
-            await del_msg(callback_query)
-        return
-
-    await callback_query.answer(
-        msg_text("client_not_assigned_to_coach", profile.language),
-        show_alert=True,
-    )
-
-
-async def contact_client(callback_query: CallbackQuery, profile: Profile, profile_id: str, state: FSMContext) -> None:
-    message = cast(Message, callback_query.message)
-    await callback_query.answer()
-    await answer_msg(callback_query, msg_text("enter_your_message", profile.language))
-    await message.delete()
-    coach = await Cache.coach.get_coach(profile.id)
-    assert coach is not None
-    await state.clear()
-    await state.update_data(recipient_id=profile_id, sender_name=coach.name)
-    await state.set_state(States.contact_client)
-
-
-async def client_request(coach: Coach, client: Client, data: dict[str, Any], bot: Bot) -> None:
-    coach_profile = await APIService.profile.get_profile(coach.profile)
-    if coach_profile is None:
-        from loguru import logger
-
-        logger.error(f"Coach profile not found for id {coach.id} in client_request")
-        return
-    coach_lang = coach_profile.language
-    data["recipient_language"] = coach_lang
-
-    service = cast(str, data.get("service_type"))
-    preferable_workout_type = cast(str, data.get("workout_type"))
-    wishes = data.get("wishes")
-
-    client_profile = await APIService.profile.get_profile(client.profile)
-    if client_profile is None:
-        from loguru import logger
-
-        logger.error(f"Client profile not found for id {client.id} in client_request")
-        return
-
-    workout_types: dict[str, str] = get_workout_types(coach_lang)
-    preferable_workouts_type = workout_types.get(preferable_workout_type, "unknown")
-    subscription = await Cache.workout.get_latest_subscription(client.id)
-
-    client_page = await get_client_page(client, coach_lang, subscription is not None, data)
-    text = await format_new_client_message(data, coach_lang, client_profile.language, preferable_workouts_type)
-
-    reply_markup = (
-        client_msg_bk(coach_lang, client.profile)
-        if data.get("new_client")
-        else incoming_request_kb(coach_lang, service, client.profile)
-    )
-
-    avatar = None
-    if client.profile_photo:
-        avatar_manager = get_avatar_manager()
-        avatar = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{client.profile_photo}"
-    else:
-        avatar_name = "male.png" if client.gender == "male" else "female.png"
-        file_path = Path(__file__).resolve().parent.parent / "images" / avatar_name
-        if file_path.exists():
-            avatar = FSInputFile(file_path)
-    await send_message(
-        recipient=coach,
-        text=text,
-        bot=bot,
-        state=None,
-        include_incoming_message=False,
-        avatar_url=avatar,
-    )
-
-    if wishes:
-        await send_message(recipient=coach, text=cast(str, wishes), bot=bot, state=None, include_incoming_message=False)
-
-    await send_message(
-        recipient=coach,
-        text=msg_text("client_page", coach_lang).format(**client_page),
-        bot=bot,
-        state=None,
-        reply_markup=reply_markup,
-        include_incoming_message=False,
-    )
-
-
 async def process_feedback_content(message: Message, profile: Profile, bot: Bot) -> bool:
-    text = msg_text("new_feedback", settings.ADMIN_LANG).format(
+    text = msg_text(MessageText.new_feedback, settings.ADMIN_LANG).format(
         profile_id=profile.id,
         feedback=message.text or message.caption or "",
     )
@@ -262,28 +104,26 @@ async def process_feedback_content(message: Message, profile: Profile, bot: Bot)
         )
         return True
 
-    elif message.photo:
+    if message.photo:
         photo_id = message.photo[-1].file_id
         await bot.send_message(chat_id=settings.ADMIN_ID, text=text, parse_mode=ParseMode.HTML)
         await bot.send_photo(chat_id=settings.ADMIN_ID, photo=photo_id)
         return True
 
-    elif message.video:
+    if message.video:
         await bot.send_message(chat_id=settings.ADMIN_ID, text=text, parse_mode=ParseMode.HTML)
         await bot.send_video(chat_id=settings.ADMIN_ID, video=message.video.file_id)
         return True
 
-    await answer_msg(message, msg_text("invalid_content", profile.language))
+    await answer_msg(message, msg_text(MessageText.invalid_content, profile.language))
     return False
 
 
 def chunk_message(text: str, *, template: str, sender_name: str) -> Iterable[str]:
-    """Split text so that template.format(..., message=chunk) stays within Telegram limit."""
     base_render = template.format(name=sender_name, message="")
     overhead = len(base_render)
-    allowance = 3900 - overhead  # telegram message limit
+    allowance = 3900 - overhead
     if allowance <= 0:
-        # Fallback to a safe slice size if template alone is close to the limit
         allowance = max(3900 // 2, 512)
     if len(text) <= allowance:
         yield text

@@ -85,8 +85,8 @@ def test_update_dataset_creates_storage_before_hashstore(monkeypatch, tmp_path):
     monkeypatch.setattr(coach.HashStore, "add", classmethod(fake_hash_add))
 
     async def runner() -> None:
-        dataset, created = await KnowledgeBase.update_dataset("Sample text", "kb_client_1", user=None)
-        assert dataset == "kb_client_1"
+        dataset, created = await KnowledgeBase.update_dataset("Sample text", "kb_profile_1", user=None)
+        assert dataset == "kb_profile_1"
         assert created is True
 
     asyncio.run(runner())
@@ -102,4 +102,4 @@ def test_update_dataset_creates_storage_before_hashstore(monkeypatch, tmp_path):
     assert events.index(("storage", expected_md5)) < events.index(("contains", expected_sha))
     assert created_metadata["digest_sha"] == expected_sha
     assert created_metadata["digest_md5"] == expected_md5
-    assert created_metadata["dataset"] == "kb_client_1"
+    assert created_metadata["dataset"] == "kb_profile_1"

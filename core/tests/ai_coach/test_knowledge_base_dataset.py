@@ -16,7 +16,7 @@ from ai_coach.agent.knowledge.schemas import (
     KnowledgeSnippet,
     ProjectionStatus,
 )
-from core.schemas import Client, QAResponse
+from core.schemas import Profile, QAResponse
 
 
 async def _fake_hash_add(cls, dataset: str, digest: str, metadata: dict[str, Any] | None = None) -> None:
@@ -25,15 +25,15 @@ async def _fake_hash_add(cls, dataset: str, digest: str, metadata: dict[str, Any
 
 def test_dataset_name_is_alias() -> None:
     dataset_id = KnowledgeBase._dataset_name(42)
-    assert dataset_id == "kb_client_42"
+    assert dataset_id == "kb_profile_42"
     assert dataset_id == KnowledgeBase._dataset_name(42)
 
 
 def test_resolve_dataset_alias_supports_legacy_prefix() -> None:
     resolved = KnowledgeBase._resolve_dataset_alias("client_7")
     assert resolved == KnowledgeBase._dataset_name(7)
-    kb_alias = KnowledgeBase._resolve_dataset_alias("kb_client_9")
-    assert kb_alias == "kb_client_9"
+    kb_alias = KnowledgeBase._resolve_dataset_alias("kb_profile_9")
+    assert kb_alias == "kb_profile_9"
 
 
 def test_normalize_output_handles_agent_result() -> None:
@@ -50,12 +50,12 @@ def test_normalize_output_builds_model_from_mapping() -> None:
     assert result.answer == "text"
 
 
-def test_ensure_profile_indexed_fetches_client_by_id(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_ensure_profile_indexed_fetches_profile_by_id(monkeypatch: pytest.MonkeyPatch) -> None:
     recorded: dict[str, Any] = {}
 
-    async def fake_get_client(client_id: int) -> Client:
-        recorded["client_id"] = client_id
-        return Client(id=client_id, profile=42)
+    async def fake_get_profile(profile_id: int) -> Profile:
+        recorded["profile_id"] = profile_id
+        return Profile(id=profile_id, tg_id=profile_id, language="en")
 
     async def fake_update_dataset(
         cls,
@@ -84,22 +84,22 @@ def test_ensure_profile_indexed_fetches_client_by_id(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(
         knowledge_base_module,
         "APIService",
-        SimpleNamespace(profile=SimpleNamespace(get_client=fake_get_client)),
+        SimpleNamespace(profile=SimpleNamespace(get_profile=fake_get_profile)),
     )
     monkeypatch.setattr(KnowledgeBase, "update_dataset", classmethod(fake_update_dataset))
     monkeypatch.setattr(KnowledgeBase, "_process_dataset", classmethod(fake_process_dataset))
 
-    client_id = 7
-    asyncio.run(KnowledgeBase._ensure_profile_indexed(client_id, user=None))
+    profile_id = 7
+    asyncio.run(KnowledgeBase._ensure_profile_indexed(profile_id, user=None))
 
-    assert recorded["client_id"] == client_id
-    assert recorded["dataset"] == KnowledgeBase._dataset_name(client_id)
-    assert recorded["node_set"] == ["client_profile"]
-    assert recorded["processed"] == KnowledgeBase._dataset_name(client_id)
+    assert recorded["profile_id"] == profile_id
+    assert recorded["dataset"] == KnowledgeBase._dataset_name(profile_id)
+    assert recorded["node_set"] == ["profile"]
+    assert recorded["processed"] == KnowledgeBase._dataset_name(profile_id)
     assert recorded["text"].startswith("profile: ")
     assert recorded["metadata"]["kind"] == "document"
-    assert recorded["metadata"]["source"] == "client_profile"
-    assert recorded["metadata"]["dataset"] == KnowledgeBase._dataset_name(client_id)
+    assert recorded["metadata"]["source"] == "profile"
+    assert recorded["metadata"]["dataset"] == KnowledgeBase._dataset_name(profile_id)
 
 
 def test_debug_snapshot_compiles_dataset_information(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -121,12 +121,12 @@ def test_debug_snapshot_compiles_dataset_information(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(KnowledgeBase, "_is_projection_ready", classmethod(fake_projection))
     monkeypatch.setattr(KnowledgeBase, "_get_cognee_user", classmethod(fake_get_user))
 
-    snapshot = asyncio.run(KnowledgeBase.debug_snapshot(client_id=3))
+    snapshot = asyncio.run(KnowledgeBase.debug_snapshot(profile_id=3))
 
     assert "datasets" in snapshot
     assert len(snapshot["datasets"]) == 2
     aliases = {item["alias"] for item in snapshot["datasets"]}
-    assert aliases == {"kb_client_3", KnowledgeBase.GLOBAL_DATASET}
+    assert aliases == {"kb_profile_3", KnowledgeBase.GLOBAL_DATASET}
     for item in snapshot["datasets"]:
         assert item["documents"] == 1
         assert item["id"].startswith("id-")
@@ -222,7 +222,7 @@ async def test_rebuild_from_disk_populates_hashstore_when_graph_empty(
     storage_root = tmp_path / "cognee"
     storage_root.mkdir()
     texts = ["Document One", "Document Two"]
-    aliases = ["kb_client_1"] * len(texts)
+    aliases = ["kb_profile_1"] * len(texts)
     for text in texts:
         normalized = KnowledgeBase._normalize_text(text)
         digest_sha = sha256(normalized.encode("utf-8")).hexdigest()
@@ -274,7 +274,7 @@ async def test_wait_for_projection_timeout_skips_global_during_search(
     async def fake_get_user(cls) -> Any | None:
         return None
 
-    async def fake_profile_indexed(cls, client_id: int, user: Any | None) -> None:
+    async def fake_profile_indexed(cls, profile_id: int, user: Any | None) -> None:
         return None
 
     async def fake_ensure_exists(cls, dataset: str, user: Any | None) -> None:
@@ -286,7 +286,7 @@ async def test_wait_for_projection_timeout_skips_global_during_search(
         datasets: list[str],
         user: Any | None,
         k: int | None,
-        client_id: int,
+        profile_id: int,
         *,
         request_id: str | None = None,
     ) -> list[KnowledgeSnippet]:
@@ -308,9 +308,9 @@ async def test_wait_for_projection_timeout_skips_global_during_search(
         classmethod(lambda cls, dataset, user, timeout=2.0: True),
     )
 
-    await KnowledgeBase.search("routine", client_id=99, request_id="RID-1")
+    await KnowledgeBase.search("routine", profile_id=99, request_id="RID-1")
 
-    assert captured["datasets"] == [KnowledgeBase._resolve_dataset_alias("kb_client_99")]
+    assert captured["datasets"] == [KnowledgeBase._resolve_dataset_alias("kb_profile_99")]
 
 
 @pytest.mark.asyncio
@@ -318,7 +318,7 @@ async def test_md5_files_are_promoted_to_sha_once(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    alias = "kb_client_5"
+    alias = "kb_profile_5"
     storage_root = tmp_path / "cognee"
     storage_root.mkdir()
     original_text = " Legacy text with spacing "
@@ -347,7 +347,7 @@ async def test_md5_files_are_promoted_to_sha_once(
 
 @pytest.mark.asyncio
 async def test_project_dataset_heals_missing_storage(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
-    alias = "kb_client_123"
+    alias = "kb_profile_123"
     text = "Package document\nLine"
     normalized = KnowledgeBase._normalize_text(text)
     digest_md5 = md5(normalized.encode("utf-8")).hexdigest()
@@ -633,14 +633,14 @@ async def test_ensure_global_projected_timeout_ok(monkeypatch: pytest.MonkeyPatc
         datasets: list[str],
         user: Any | None,
         k: int | None,
-        client_id: int,
+        profile_id: int,
         *,
         request_id: str | None = None,
     ) -> list[KnowledgeSnippet]:
         datasets_used.append(list(datasets))
         return []
 
-    async def fake_ensure_profile_indexed(cls, client_id: int, user: Any | None) -> None:
+    async def fake_ensure_profile_indexed(cls, profile_id: int, user: Any | None) -> None:
         return None
 
     async def fake_ensure_dataset_exists(cls, name: str, user: Any | None) -> None:
@@ -659,7 +659,7 @@ async def test_ensure_global_projected_timeout_ok(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr(KnowledgeBase, "_get_cognee_user", classmethod(fake_get_user))
     monkeypatch.setattr(KnowledgeBase, "ensure_global_projected", classmethod(fake_ensure_global_projected))
 
-    results = await KnowledgeBase.search("pending projection", client_id=5, k=3, request_id="req-5")
+    results = await KnowledgeBase.search("pending projection", profile_id=5, k=3, request_id="req-5")
 
     assert results == []
     assert datasets_used == [[KnowledgeBase._dataset_name(5)]]
@@ -791,8 +791,8 @@ def test_build_snippets_accepts_object(monkeypatch: pytest.MonkeyPatch) -> None:
         classmethod(_fake_hash_add),
     )
 
-    item = Result(text="Note entry", metadata={"kind": "note"}, dataset_name="kb_client_5")
-    snippets = asyncio.run(KnowledgeBase._build_snippets([item], ["kb_client_5"], user=None))
+    item = Result(text="Note entry", metadata={"kind": "note"}, dataset_name="kb_profile_5")
+    snippets = asyncio.run(KnowledgeBase._build_snippets([item], ["kb_profile_5"], user=None))
     assert [snippet.text for snippet in snippets] == ["Note entry"]
-    assert snippets[0].dataset == "kb_client_5"
+    assert snippets[0].dataset == "kb_profile_5"
     assert snippets[0].kind == "note"

@@ -6,7 +6,7 @@ from ai_coach.application import app
 from ai_coach.agent import CoachAgent
 import ai_coach.api as coach_api
 from ai_coach.api import DEFAULT_WORKOUT_DAYS
-from core.enums import CoachType, WorkoutType
+from core.enums import WorkoutType
 from core.schemas import DayExercises, Exercise, Program, Subscription
 
 
@@ -14,13 +14,12 @@ def _sample_program() -> Program:
     day = DayExercises(day="d1", exercises=[Exercise(name="e", sets="1", reps="1")])
     return Program(
         id=1,
-        client_profile=1,
+        profile=1,
         exercises_by_day=[day],
         created_at=0.0,
         split_number=1,
         workout_type="",
         wishes="",
-        coach_type=CoachType.human,
     )
 
 
@@ -28,7 +27,7 @@ def _sample_subscription() -> Subscription:
     day = DayExercises(day="d1", exercises=[Exercise(name="e", sets="1", reps="1")])
     return Subscription(
         id=1,
-        client_profile=1,
+        profile=1,
         enabled=True,
         price=0,
         workout_type="",
@@ -66,7 +65,7 @@ def test_program_mode(monkeypatch: pytest.MonkeyPatch) -> None:
             resp = await ac.post(
                 "/ask/",
                 json={
-                    "client_id": 1,
+                    "profile_id": 1,
                     "prompt": "p",
                     "mode": "program",
                     "wishes": "w",
@@ -104,7 +103,7 @@ def test_subscription_mode(monkeypatch: pytest.MonkeyPatch) -> None:
             resp = await ac.post(
                 "/ask/",
                 json={
-                    "client_id": 1,
+                    "profile_id": 1,
                     "prompt": "p",
                     "mode": "subscription",
                     "wishes": "w",
@@ -142,7 +141,7 @@ def test_update_mode(monkeypatch: pytest.MonkeyPatch) -> None:
             resp = await ac.post(
                 "/ask/",
                 json={
-                    "client_id": 1,
+                    "profile_id": 1,
                     "prompt": "p",
                     "mode": "update",
                     "workout_type": "home",
@@ -163,7 +162,7 @@ def test_update_requires_plan_type() -> None:
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post(
                 "/ask/",
-                json={"client_id": 1, "prompt": "p", "mode": "update", "workout_type": "home"},
+                json={"profile_id": 1, "prompt": "p", "mode": "update", "workout_type": "home"},
                 headers={"X-Agent": "pydanticai"},
             )
         assert resp.status_code == 422

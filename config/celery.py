@@ -71,11 +71,6 @@ celery_config = {
             "schedule": crontab(hour=0, minute=30),
             "options": {"queue": "critical"},
         },
-        "export-coach-payouts-monthly": {
-            "task": "core.tasks.bot_calls.export_coach_payouts",
-            "schedule": crontab(day_of_month=1, hour=8, minute=0),
-            "options": {"queue": "maintenance"},
-        },
         "send_daily_survey": {
             "task": "core.tasks.bot_calls.send_daily_survey",
             "schedule": crontab(hour=9, minute=0),

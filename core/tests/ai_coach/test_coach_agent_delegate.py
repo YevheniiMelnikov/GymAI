@@ -25,8 +25,8 @@ class _DummyHelper:
         return "complete"
 
     @staticmethod
-    async def _message_history(client_id: int) -> list[str]:
-        _DummyHelper.calls.append(f"history:{client_id}")
+    async def _message_history(profile_id: int) -> list[str]:
+        _DummyHelper.calls.append(f"history:{profile_id}")
         return ["hi"]
 
     @staticmethod
@@ -56,7 +56,7 @@ def test_coach_agent_delegates_classmethods(monkeypatch: pytest.MonkeyPatch) -> 
 
     assert CoachAgent._get_agent() == "agent"  # type: ignore[comparison-overlap]
     assert CoachAgent._language_context(object())[0] == "en"
-    assert CoachAgent._complete_with_retries(object(), "", "", [], client_id=1, max_tokens=1) == "complete"
+    assert CoachAgent._complete_with_retries(object(), "", "", [], profile_id=1, max_tokens=1) == "complete"
     assert "agent" in _DummyHelper.calls
     assert "language_context" in _DummyHelper.calls
     assert "complete" in _DummyHelper.calls

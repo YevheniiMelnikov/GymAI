@@ -10,9 +10,8 @@ from core.cache import Cache
 from core.infra.payment_repository import HTTPPaymentRepository
 from core.infra.profile_repository import HTTPProfileRepository
 from core.payment import PaymentProcessor, PaymentService
-from core.payment.types import CoachResolver, CreditService, PaymentNotifier
+from core.payment.types import PaymentNotifier
 from core.services.internal.ai_coach_service import AiCoachService
-from core.services.internal.client_service import ClientService
 from core.services.internal.profile_service import ProfileService
 from core.services.internal.workout_service import WorkoutService
 
@@ -39,13 +38,10 @@ class App(containers.DeclarativeContainer):
     profile_repository = providers.Factory(HTTPProfileRepository, client=http_client, settings=settings)
     payment_repository = providers.Factory(HTTPPaymentRepository, client=http_client, settings=settings)
     profile_service = providers.Factory(ProfileService, repository=profile_repository)
-    client_service = providers.Factory(ClientService, repository=profile_repository)
     payment_service = providers.Factory(PaymentService, repository=payment_repository, settings=settings)
     workout_service = providers.Factory(WorkoutService, client=http_client, settings=settings)
     ai_coach_service = providers.Factory(AiCoachService, client=http_client, settings=settings)
 
-    credit_service = providers.Dependency(instance_of=CreditService)
-    coach_resolver = providers.Dependency(instance_of=CoachResolver)
     notifier = providers.Dependency(instance_of=PaymentNotifier)
 
     payment_processor = providers.Singleton(
@@ -55,8 +51,6 @@ class App(containers.DeclarativeContainer):
         profile_service=profile_service,
         workout_service=workout_service,
         notifier=notifier,
-        credit_service=credit_service,
-        coach_resolver=coach_resolver,
     )
 
     bot = providers.Singleton(

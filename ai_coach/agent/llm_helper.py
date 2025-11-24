@@ -44,7 +44,7 @@ class LLMHelperProto(Protocol):
     def _language_context(cls, deps: AgentDeps) -> tuple[str, str]: ...
 
     @staticmethod
-    async def _message_history(client_id: int) -> list[ModelMessage]: ...
+    async def _message_history(profile_id: int) -> list[ModelMessage]: ...
 
     @staticmethod
     def _normalize_output(raw: Any, expected: type[Any]) -> Any: ...
@@ -70,7 +70,7 @@ class LLMHelperProto(Protocol):
         user_prompt: str,
         entry_ids: Sequence[str],
         *,
-        client_id: int,
+        profile_id: int,
         max_tokens: int,
         model: str | None = None,
         continuation_attempt: int = 0,
@@ -214,9 +214,9 @@ class LLMHelper:
         return expected.model_validate(value)
 
     @staticmethod
-    async def _message_history(client_id: int) -> list[ModelMessage]:
+    async def _message_history(profile_id: int) -> list[ModelMessage]:
         kb = get_knowledge_base()
-        raw = await kb.get_message_history(client_id)
+        raw = await kb.get_message_history(profile_id)
         history: list[ModelMessage] = []
         for item in raw:
             if item.startswith(f"{MessageRole.CLIENT.value}:"):
@@ -237,11 +237,12 @@ class LLMHelper:
         prefetched_knowledge: Sequence[KnowledgeSnippet] | None = None,
     ) -> QAResponse | None:
         if deps.fallback_used:
-            logger.debug(f"agent.ask fallback skipped client_id={deps.client_id} reason=already_used")
+            logger.debug(f"agent.ask fallback skipped profile_id={deps.profile_id} reason=already_used")
             return None
         deps.fallback_used = True
         logger.warning(
-            f"agent.ask fallback_invoked client_id={deps.client_id} reason=model_empty_response history={len(history)}"
+            f"agent.ask fallback_invoked profile_id={deps.profile_id} "
+            f"reason=model_empty_response history={len(history)}"
         )
         client, model_name = cls._get_completion_client()
         cls._ensure_llm_logging(client, model_name)
@@ -253,12 +254,12 @@ class LLMHelper:
             try:
                 knowledge = await kb.search(
                     prompt,
-                    deps.client_id,
+                    deps.profile_id,
                     6,
                     request_id=deps.request_rid,
                 )
             except Exception as exc:  # noqa: BLE001 - log and continue with empty knowledge
-                logger.warning(f"agent.ask fallback knowledge_failed client_id={deps.client_id} error={exc}")
+                logger.warning(f"agent.ask fallback knowledge_failed profile_id={deps.profile_id} error={exc}")
                 knowledge = []
         entries = build_knowledge_entries(knowledge)
         entries = filter_entries_for_prompt(prompt, entries)
@@ -283,7 +284,7 @@ class LLMHelper:
             system_prompt,
             user_prompt,
             entry_ids,
-            client_id=deps.client_id,
+            profile_id=deps.profile_id,
             max_tokens=settings.AI_COACH_FIRST_PASS_MAX_TOKENS,
             model=model_name,
         )
@@ -297,7 +298,7 @@ class LLMHelper:
             result.sources = unique_sources(entry_datasets)
             logger.info(
                 (
-                    f"agent.ask fallback_success client_id={deps.client_id} answer_len={len(result.answer)} "
+                    f"agent.ask fallback_success profile_id={deps.profile_id} answer_len={len(result.answer)} "
                     f"sources={','.join(result.sources)} kb_empty={deps.knowledge_base_empty}"
                 )
             )
@@ -319,15 +320,15 @@ class LLMHelper:
             sources = unique_sources(entry_datasets) or list(entry_datasets) or ["knowledge_base"]
             qa = QAResponse(answer=fallback_answer, sources=sources)
             logger.warning(
-                "agent.ask fallback summary client_id={} kb_entries={} answer_len={}".format(
-                    deps.client_id,
+                "agent.ask fallback summary profile_id={} kb_entries={} answer_len={}".format(
+                    deps.profile_id,
                     len(entry_ids),
                     len(fallback_answer),
                 )
             )
             return qa
         deps.knowledge_base_empty = True
-        logger.warning(f"agent.ask fallback missing_answer client_id={deps.client_id} kb_empty=True")
+        logger.warning(f"agent.ask fallback missing_answer profile_id={deps.profile_id} kb_empty=True")
         return None
 
     @classmethod
@@ -338,7 +339,7 @@ class LLMHelper:
         user_prompt: str,
         entry_ids: Sequence[str],
         *,
-        client_id: int,
+        profile_id: int,
         max_tokens: int,
         model: str | None = None,
         continuation_attempt: int = 0,
@@ -352,8 +353,8 @@ class LLMHelper:
         for attempt in range(max_attempts):
             if attempt > 0:
                 logger.info(
-                    ("llm.retry client_id={} model={} max_tokens={} attempt={} json_modes=0").format(
-                        client_id, model_id, attempt, 0
+                    ("llm.retry profile_id={} model={} max_tokens={} attempt={} json_modes=0").format(
+                        profile_id, model_id, attempt, 0
                     )
                 )
             current_user_prompt = user_prompt
@@ -378,20 +379,20 @@ class LLMHelper:
                 )
             except Exception as exc:  # noqa: BLE001
                 logger.warning(
-                    ("agent.ask completion_failed client_id={} model={} attempt={} error={}").format(
-                        client_id, model_id, attempt, exc
+                    ("agent.ask completion_failed profile_id={} model={} attempt={} error={}").format(
+                        profile_id, model_id, attempt, exc
                     )
                 )
                 continue
             meta = cls._llm_response_metadata(response)
-            content = cls._extract_choice_content(response, client_id=client_id)
+            content = cls._extract_choice_content(response, profile_id=profile_id)
             full_content += content
             final_finish_reason = meta.get("finish_reason") or "unknown"
 
             if final_finish_reason == "length" and continuation_attempt == 0 and not full_content.strip():
                 logger.info(
-                    ("llm.continuation_needed client_id={} model={} max_tokens={} current_len={}").format(
-                        client_id, model_id, max_tokens, len(full_content)
+                    ("llm.continuation_needed profile_id={} model={} max_tokens={} current_len={}").format(
+                        profile_id, model_id, max_tokens, len(full_content)
                     )
                 )
                 continuation_response = await cls._complete_with_retries(
@@ -399,7 +400,7 @@ class LLMHelper:
                     system_prompt,
                     user_prompt,
                     entry_ids,
-                    client_id=client_id,
+                    profile_id=profile_id,
                     max_tokens=getattr(settings, "AI_COACH_CONTINUATION_MAX_TOKENS", 600),
                     model=model,
                     continuation_attempt=1,
@@ -419,12 +420,12 @@ class LLMHelper:
             answer, sources = cls._parse_fallback_content(
                 full_content,
                 entry_ids,
-                client_id=client_id,
+                profile_id=profile_id,
             )
             if not answer.strip() and raw_text:
                 logger.debug(
-                    "llm.partial_content_used client_id={} reason={} model={} preserved_len={}".format(
-                        client_id,
+                    "llm.partial_content_used profile_id={} reason={} model={} preserved_len={}".format(
+                        profile_id,
                         final_finish_reason,
                         model_id,
                         len(raw_text),
@@ -435,8 +436,8 @@ class LLMHelper:
             if answer.strip():
                 normalized_sources = list(sources) if sources else list(entry_ids) or ["general_knowledge"]
                 return QAResponse(answer=answer, sources=normalized_sources)
-        log_message = ("llm.response.empty client_id={} reason={} model={} final_content_len={}").format(
-            client_id,
+        log_message = ("llm.response.empty profile_id={} reason={} model={} final_content_len={}").format(
+            profile_id,
             final_finish_reason,
             model_id,
             len(full_content),
@@ -661,7 +662,7 @@ class LLMHelper:
         else:
             finish_reason = getattr(first_choice, "finish_reason", "") if first_choice else ""
         preview = cls._message_preview(message) if message is not None else ""
-        extracted_text = cls._extract_choice_content(response, client_id=None)
+        extracted_text = cls._extract_choice_content(response, profile_id=None)
         return {
             "choices": len(choices),
             "finish_reason": finish_reason or "",
@@ -794,11 +795,11 @@ class LLMHelper:
         return snapshot, raw_keys
 
     @classmethod
-    def _extract_choice_content(cls, response: Any, *, client_id: int | None = None) -> str:
+    def _extract_choice_content(cls, response: Any, *, profile_id: int | None = None) -> str:
         choices = getattr(response, "choices", None)
         if not choices:
-            if client_id is not None:
-                logger.debug(f"llm.parse client_id={client_id} empty=True reason=no_choices")
+            if profile_id is not None:
+                logger.debug(f"llm.parse profile_id={profile_id} empty=True reason=no_choices")
             return ""
         first_choice = choices[0]
         raw_snapshot, raw_keys = cls._raw_choice_snapshot(first_choice)
@@ -817,14 +818,14 @@ class LLMHelper:
         else:
             tool_calls = getattr(message_obj, "tool_calls", None)
         if extracted:
-            if client_id is not None:
-                logger.debug(f"llm.parse client_id={client_id} empty=False reason=message_content")
+            if profile_id is not None:
+                logger.debug(f"llm.parse profile_id={profile_id} empty=False reason=message_content")
             return extracted
         if message_obj is None and isinstance(first_choice, Mapping):
             fallback_text = first_choice.get("content") or first_choice.get("text")
             if isinstance(fallback_text, str) and fallback_text.strip():
-                if client_id is not None:
-                    logger.debug("llm.parse client_id={} empty=False reason=choice_text".format(client_id))
+                if profile_id is not None:
+                    logger.debug("llm.parse profile_id={} empty=False reason=choice_text".format(profile_id))
                 return fallback_text.strip()
         if isinstance(message_obj, Mapping):
             content = message_obj.get("content", "") or ""
@@ -832,8 +833,8 @@ class LLMHelper:
             content = getattr(message_obj, "content", "") or ""
         secondary = cls._extract_message_content(content)
         if secondary:
-            if client_id is not None:
-                logger.debug(f"llm.parse client_id={client_id} empty=False reason=message_content")
+            if profile_id is not None:
+                logger.debug(f"llm.parse profile_id={profile_id} empty=False reason=message_content")
             return secondary
         if tool_calls:
             for call in tool_calls:
@@ -841,13 +842,13 @@ class LLMHelper:
                 arguments = getattr(function, "arguments", None)
                 normalized = LLMHelper._normalize_tool_call_arguments(arguments)
                 if normalized:
-                    if client_id is not None:
-                        logger.debug("llm.parse client_id={} empty=False reason=tool_call".format(client_id))
+                    if profile_id is not None:
+                        logger.debug("llm.parse profile_id={} empty=False reason=tool_call".format(profile_id))
                     return normalized
-        if raw_snapshot.strip() and client_id is not None:
+        if raw_snapshot.strip() and profile_id is not None:
             logger.debug(
-                "llm.parse_mismatch client_id={} raw_first_200={} raw_keys={}".format(
-                    client_id,
+                "llm.parse_mismatch profile_id={} raw_first_200={} raw_keys={}".format(
+                    profile_id,
                     raw_snapshot,
                     raw_keys or "na",
                 )
@@ -855,19 +856,19 @@ class LLMHelper:
         finish_reason = ""
         if choices:
             finish_reason = str(getattr(choices[0], "finish_reason", "") or "")
-        if not extracted and client_id is not None and finish_reason == "length":
+        if not extracted and profile_id is not None and finish_reason == "length":
             logger.warning(
-                "llm.parse empty_content client_id={} finish_reason=length keys={} snapshot={}".format(
-                    client_id,
+                "llm.parse empty_content profile_id={} finish_reason=length keys={} snapshot={}".format(
+                    profile_id,
                     raw_keys or "na",
                     raw_snapshot,
                 )
             )
-        if client_id is not None:
+        if profile_id is not None:
             preview = LLMHelper._message_preview(message_obj)
             logger.debug(
-                "llm.parse client_id={} empty=True reason=no_content finish_reason={} {}".format(
-                    client_id,
+                "llm.parse profile_id={} empty=True reason=no_content finish_reason={} {}".format(
+                    profile_id,
                     finish_reason,
                     preview,
                 )
@@ -947,7 +948,7 @@ class LLMHelper:
         content: str,
         entry_ids: Sequence[str],
         *,
-        client_id: int,
+        profile_id: int,
     ) -> tuple[str, list[str]]:
         normalized_entries = [item for item in entry_ids if item]
         default_sources = list(normalized_entries) if normalized_entries else ["general_knowledge"]
@@ -959,7 +960,7 @@ class LLMHelper:
             try:
                 payload = json.loads(text)
             except json.JSONDecodeError as exc:  # pragma: no cover - defensive guard
-                logger.warning(f"agent.ask fallback invalid_json client_id={client_id} error={exc}")
+                logger.warning(f"agent.ask fallback invalid_json profile_id={profile_id} error={exc}")
                 should_parse_json = False
             else:
                 answer = str(payload.get("answer", "")).strip()
@@ -984,8 +985,8 @@ class LLMHelper:
                     candidate_text = str(candidate).strip() if isinstance(candidate, str) else ""
                     if candidate_text:
                         logger.debug(
-                            "agent.ask fallback_json_field client_id={} field={} len={}".format(
-                                client_id,
+                            "agent.ask fallback_json_field profile_id={} field={} len={}".format(
+                                profile_id,
                                 key,
                                 len(candidate_text),
                             )

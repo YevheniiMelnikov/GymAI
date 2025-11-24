@@ -6,7 +6,7 @@ from loguru import logger
 from bot.utils.bot import del_msg, answer_msg, delete_messages
 from bot.keyboards import program_edit_kb, program_manage_kb
 from bot.states import States
-from bot.texts.text_manager import msg_text
+from bot.texts import MessageText, msg_text
 from config.app_settings import settings
 from core.schemas import Exercise, DayExercises, Subscription, Profile
 from core.exceptions import ProgramNotFoundError, SubscriptionNotFoundError, ProfileNotFoundError
@@ -21,9 +21,9 @@ async def save_exercise(
     if not input_data.from_user:
         return
 
-    profile_id_str = data.get("client_id")
+    profile_id_str = data.get("profile_id")
     if profile_id_str is None:
-        logger.error("client_id not found in state for save_exercise")
+        logger.error("profile_id not found in state for save_exercise")
         return
 
     profile_id = int(profile_id_str)
@@ -57,7 +57,7 @@ async def save_exercise(
                 split_number = int(program.split_number or 1)
             except ProgramNotFoundError:
                 logger.warning(
-                    f"Program not found for client {profile_id} in save_exercise, defaulting split_number to 1."
+                    f"Program not found for profile {profile_id} in save_exercise, defaulting split_number to 1."
                 )
                 split_number = 1
 
@@ -70,10 +70,10 @@ async def save_exercise(
     if msg is None:
         return
 
-    exercise_msg = await answer_msg(msg, msg_text("enter_exercise", profile.language))
+    exercise_msg = await answer_msg(msg, msg_text(MessageText.enter_exercise, profile.language))
     program_msg = await answer_msg(
         msg,
-        msg_text("new_workout_plan", profile.language),
+        msg_text(MessageText.new_workout_plan, profile.language),
         reply_markup=program_manage_kb(profile.language, split_number),
         disable_web_page_preview=True,
     )
@@ -109,12 +109,12 @@ async def update_exercise_data(message: Message, state: FSMContext, lang: str, u
 
     await answer_msg(
         message,
-        msg_text("new_workout_plan", lang),
+        msg_text(MessageText.new_workout_plan, lang),
         disable_web_page_preview=True,
     )
     await answer_msg(
         message,
-        msg_text("continue_editing", lang),
+        msg_text(MessageText.continue_editing, lang),
         reply_markup=program_edit_kb(lang),
     )
     await del_msg(cast(Message | CallbackQuery | None, message))
@@ -129,7 +129,7 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
         profile = await Cache.profile.get_profile(callback_query.from_user.id)
     except ProfileNotFoundError:
         logger.warning(f"Profile not found for user {callback_query.from_user.id} in edit_subscription_exercises")
-        await callback_query.answer(msg_text("error_generic", settings.DEFAULT_LANG), show_alert=True)
+        await callback_query.answer(msg_text(MessageText.error_generic, settings.DEFAULT_LANG), show_alert=True)
         return
 
     data_str: str = callback_query.data or ""
@@ -143,8 +143,10 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
 
         subscription = await Cache.workout.get_latest_subscription(profile_id)
     except SubscriptionNotFoundError:
-        logger.error(f"Subscription not found for client {profile_id} in edit_subscription_exercises.")
-        await callback_query.answer(msg_text("subscription_not_found_error", profile.language), show_alert=True)
+        logger.error(f"Subscription not found for profile {profile_id} in edit_subscription_exercises.")
+        await callback_query.answer(
+            msg_text(MessageText.subscription_not_found_error, profile.language), show_alert=True
+        )
         return
 
     language = cast(str, profile.language or settings.DEFAULT_LANG)
@@ -152,7 +154,7 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
 
     await state.update_data(
         exercises=subscription.exercises,
-        client_id=profile_id,
+        profile_id=profile_id,
         day=day,
         subscription=True,
         day_index=day_index,
@@ -163,7 +165,7 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
     if callback_query.message and isinstance(callback_query.message, Message):
         await answer_msg(
             callback_query.message,
-            msg_text("new_workout_plan", language),
+            msg_text(MessageText.new_workout_plan, language),
             disable_web_page_preview=True,
             reply_markup=program_edit_kb(language),
         )
@@ -174,13 +176,19 @@ def serialize_day_exercises(exercises: list[DayExercises]) -> list[dict[str, Any
     """Serialize a list of ``DayExercises`` to plain dictionaries."""
     result: list[dict[str, Any]] = []
     for day in exercises:
-        if isinstance(day, DayExercises):
-            result.append(
-                {
-                    "day": day.day,
-                    "exercises": [e.model_dump() for e in day.exercises],
-                }
-            )
+        day_obj = day
+        if not isinstance(day_obj, DayExercises):
+            try:
+                day_obj = DayExercises.model_validate(day)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"skip_invalid_day_exercises err={exc}")
+                continue
+        result.append(
+            {
+                "day": day_obj.day,
+                "exercises": [e.model_dump() for e in day_obj.exercises],
+            }
+        )
     return result
 
 

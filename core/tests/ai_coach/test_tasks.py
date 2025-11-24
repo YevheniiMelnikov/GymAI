@@ -43,7 +43,7 @@ def test_ai_plan_tasks_notify_on_success(task_obj: Any, target_name: str, monkey
         return None
 
     monkeypatch.setattr("core.tasks.ai_coach.asyncio.run", fake_run)
-    payload = {"client_id": 1}
+    payload = {"profile_id": 1}
     result = task_obj.run(payload)
 
     assert called["payload"] == payload
@@ -86,7 +86,7 @@ def test_ai_plan_tasks_skip_notify_on_empty_payload(
         return None
 
     monkeypatch.setattr("core.tasks.ai_coach.asyncio.run", fake_run)
-    payload = {"client_id": 1}
+    payload = {"profile_id": 1}
     result = task_obj.run(payload)
 
     assert called["payload"] == payload

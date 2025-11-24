@@ -6,18 +6,6 @@ class _CacheProxy:
         return ProfileCacheManager
 
     @property
-    def client(self):
-        from .client_profile import ClientCacheManager
-
-        return ClientCacheManager
-
-    @property
-    def coach(self):
-        from .coach_profile import CoachCacheManager
-
-        return CoachCacheManager
-
-    @property
     def workout(self):
         from .workout import WorkoutCacheManager
 

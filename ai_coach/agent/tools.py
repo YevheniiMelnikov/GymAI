@@ -78,8 +78,8 @@ def _looks_like_prompt(query: str) -> bool:
 
 def _raise_tool_limit(deps: AgentDeps, tool_name: str) -> None:
     mode_value = deps.mode.value if deps.mode else "unknown"
-    message = ("agent_tool_limit_exceeded client_id={client_id} tool={tool} steps={steps} mode={mode}").format(
-        client_id=deps.client_id,
+    message = ("agent_tool_limit_exceeded profile_id={profile_id} tool={tool} steps={steps} mode={mode}").format(
+        profile_id=deps.profile_id,
         tool=tool_name,
         steps=deps.tool_calls,
         mode=mode_value,
@@ -94,7 +94,7 @@ def _prepare_tool(ctx: RunContext[AgentDeps], tool_name: str) -> AgentDeps:  # p
     if deps.max_run_seconds > 0 and elapsed > deps.max_run_seconds:
         mode_value = deps.mode.value if deps.mode else "unknown"
         logger.info(
-            f"agent_tool_timeout client_id={deps.client_id} tool={tool_name} elapsed={elapsed:.2f} mode={mode_value}"
+            f"agent_tool_timeout profile_id={deps.profile_id} tool={tool_name} elapsed={elapsed:.2f} mode={mode_value}"
         )
         raise AgentExecutionAborted("AI coach request timed out", reason="timeout")
     deps.tool_calls += 1
@@ -164,8 +164,8 @@ async def tool_search_knowledge(
     cache_key = (tool_name, normalized_query, str(k))
     deps, skipped, cached = _start_tool(ctx, tool_name, cache_key=cache_key)
     timeout = _tool_timeout("tool_search_knowledge")
-    client_id = deps.client_id
-    logger.debug(f"tool_search_knowledge client_id={client_id} query='{normalized_query[:80]}' k={k}")
+    profile_id = deps.profile_id
+    logger.debug(f"tool_search_knowledge profile_id={profile_id} query='{normalized_query[:80]}' k={k}")
     if skipped:
         cached_result = cast(list[str], cached if cached is not None else [])
         return cached_result
@@ -177,7 +177,7 @@ async def tool_search_knowledge(
         deps.last_knowledge_empty = True
         deps.kb_used = False
         logger.debug(
-            f"knowledge_search_skipped client_id={client_id} query='{normalized_query[:80]}' reason=prompt_guard"
+            f"knowledge_search_skipped profile_id={profile_id} query='{normalized_query[:80]}' reason=prompt_guard"
         )
         return _cache_result(deps, tool_name, [], cache_key=cache_key)
     if deps.knowledge_base_empty:
@@ -185,14 +185,13 @@ async def tool_search_knowledge(
         deps.last_knowledge_empty = True
         deps.kb_used = False
         logger.info(
-            "knowledge_search_aborted client_id=%s query='%s' reason=knowledge_base_empty",
-            client_id,
-            normalized_query[:80],
+            f"knowledge_search_aborted profile_id={profile_id} "
+            f"query='{normalized_query[:80]}' reason=knowledge_base_empty"
         )
         return _cache_result(deps, tool_name, [], cache_key=cache_key)
     if deps.last_knowledge_query == normalized_query and deps.last_knowledge_empty:
         logger.debug(
-            f"knowledge_search_repeat client_id={client_id} query='{normalized_query[:80]}' reason=empty_previous"
+            f"knowledge_search_repeat profile_id={profile_id} query='{normalized_query[:80]}' reason=empty_previous"
         )
         deps.kb_used = False
         return _cache_result(deps, tool_name, [], cache_key=cache_key)
@@ -203,17 +202,13 @@ async def tool_search_knowledge(
         if fallback_fn is not None:
             try:
                 if _needs_instance_argument(fallback_fn):
-                    fallback_pairs = await fallback_fn(kb, client_id, limit=k)
+                    fallback_pairs = await fallback_fn(kb, profile_id, limit=k)
                 else:
-                    fallback_pairs = await fallback_fn(client_id, limit=k)
+                    fallback_pairs = await fallback_fn(profile_id, limit=k)
             except Exception as fallback_exc:  # noqa: BLE001 - diagnostics only
                 logger.debug(
-                    "knowledge_search_fallback_failed client_id={} query='{}' reason={} detail={}".format(
-                        client_id,
-                        normalized_query[:80],
-                        reason,
-                        fallback_exc,
-                    )
+                    f"knowledge_search_fallback_failed profile_id={profile_id} query='{normalized_query[:80]}' "
+                    f"reason={reason} detail={fallback_exc}"
                 )
                 fallback_pairs = []
         trimmed: list[str] = []
@@ -228,9 +223,9 @@ async def tool_search_knowledge(
             deps.knowledge_base_empty = False
             deps.kb_used = True
             logger.info(
-                "knowledge_search_{}_fallback client_id={} query='{}' entries={}".format(
+                "knowledge_search_{}_fallback profile_id={} query='{}' entries={}".format(
                     reason,
-                    client_id,
+                    profile_id,
                     normalized_query[:80],
                     len(trimmed),
                 )
@@ -240,9 +235,9 @@ async def tool_search_knowledge(
         deps.knowledge_base_empty = True
         deps.kb_used = False
         logger.info(
-            "knowledge_search_{} client_id={} query='{}' detail=no_entries".format(
+            "knowledge_search_{} profile_id={} query='{}' detail=no_entries".format(
                 reason,
-                client_id,
+                profile_id,
                 normalized_query[:80],
             )
         )
@@ -253,7 +248,7 @@ async def tool_search_knowledge(
         snippets = await wait_for(
             kb.search(
                 normalized_query,
-                client_id,
+                profile_id,
                 k,
                 request_id=deps.request_rid,
             ),
@@ -261,8 +256,8 @@ async def tool_search_knowledge(
         )
     except TimeoutError:
         logger.info(
-            "knowledge_search_timeout client_id={} query='{}' timeout={:.1f}".format(
-                client_id,
+            "knowledge_search_timeout profile_id={} query='{}' timeout={:.1f}".format(
+                profile_id,
                 normalized_query[:80],
                 timeout,
             )
@@ -298,8 +293,8 @@ async def tool_get_chat_history(
     cache_key = (tool_name, str(limit))
     deps, skipped, cached = _start_tool(ctx, tool_name, cache_key=cache_key)
     timeout = _tool_timeout("tool_get_chat_history")
-    client_id = deps.client_id
-    logger.debug(f"tool_get_chat_history client_id={client_id} limit={limit}")
+    profile_id = deps.profile_id
+    logger.debug(f"tool_get_chat_history profile_id={profile_id} limit={limit}")
     if skipped:
         cached_history = cast(list[str], cached if cached is not None else [])
         limited = list(cached_history[:limit]) if limit is not None else list(cached_history)
@@ -312,17 +307,16 @@ async def tool_get_chat_history(
     history: list[str] = deps.cached_history or []
     try:
         if deps.cached_history is None:
-            history = await wait_for(kb.get_message_history(client_id, limit), timeout=timeout)
+            history = await wait_for(kb.get_message_history(profile_id, limit), timeout=timeout)
             deps.cached_history = history
         else:
             history = deps.cached_history
     except TimeoutError:
-        logger.info(f"chat_history_timeout client_id={client_id} tool=tool_get_chat_history timeout={timeout}")
+        logger.info(f"chat_history_timeout profile_id={profile_id} tool=tool_get_chat_history timeout={timeout}")
         history = deps.cached_history or []
+        deps.cached_history = history
         limited = list(history[:limit]) if limit is not None else list(history)
-        if limited:
-            return _cache_result(deps, tool_name, limited, cache_key=cache_key)
-        raise
+        return _cache_result(deps, tool_name, limited, cache_key=cache_key)
     except Exception as e:
         logger.error(f"Error getting chat history: {e}")
         raise
@@ -345,25 +339,25 @@ async def tool_save_program(
         return cast(Program, cached)
     if not deps.allow_save:
         raise RuntimeError("saving not allowed in this mode")
-    client_id = deps.client_id
-    logger.debug(f"tool_save_program client_id={client_id}")
+    profile_id = deps.profile_id
+    logger.debug(f"tool_save_program profile_id={profile_id}")
     program = ProgramAdapter.to_domain(plan)
     timeout: float = float(settings.AI_COACH_SAVE_TIMEOUT)
     try:
         saved = await wait_for(
             APIService.workout.save_program(
-                client_profile_id=client_id,
+                profile_id=profile_id,
                 exercises=program.exercises_by_day,
                 split_number=program.split_number or len(program.exercises_by_day),
                 wishes=program.wishes or "",
             ),
             timeout=timeout,
         )
-        logger.debug(f"event=save_program.success program_id={saved.id} client_id={client_id}")
+        logger.debug(f"event=save_program.success program_id={saved.id} profile_id={profile_id}")
         deps.final_result = saved
         return _cache_result(deps, tool_name, saved)
     except TimeoutError:
-        logger.info(f"save_program_timeout client_id={client_id} timeout={timeout}")
+        logger.info(f"save_program_timeout profile_id={profile_id} timeout={timeout}")
         deps.final_result = program
         return _cache_result(deps, tool_name, program)
     except Exception as e:  # pragma: no cover - forward to model
@@ -380,16 +374,16 @@ async def tool_get_program_history(
     tool_name = "tool_get_program_history"
     deps, skipped, cached = _start_tool(ctx, tool_name)
     timeout = _tool_timeout("tool_get_program_history")
-    client_id = deps.client_id
-    logger.debug(f"tool_get_program_history client_id={client_id}")
+    profile_id = deps.profile_id
+    logger.debug(f"tool_get_program_history profile_id={profile_id}")
     if skipped:
         cached_result = cast(list[Program], cached if cached is not None else [])
         return cached_result
     try:
-        history = await wait_for(APIService.workout.get_all_programs(client_id), timeout=timeout)
+        history = await wait_for(APIService.workout.get_all_programs(profile_id), timeout=timeout)
         return _cache_result(deps, tool_name, history)
     except TimeoutError:
-        logger.info(f"program_history_timeout client_id={client_id} tool=tool_get_program_history timeout={timeout}")
+        logger.info(f"program_history_timeout profile_id={profile_id} tool=tool_get_program_history timeout={timeout}")
         return _cache_result(deps, tool_name, [])
     except Exception as e:  # pragma: no cover - forward to model
         raise ModelRetry(f"Program history unavailable: {e}. Try calling the tool again later.") from e
@@ -403,7 +397,7 @@ async def tool_attach_gifs(
     """Attach GIF links to exercises if available."""
     tool_name = "tool_attach_gifs"
     deps, skipped, cached = _start_tool(ctx, tool_name)
-    client_id = deps.client_id
+    profile_id = deps.profile_id
     if skipped:
         cached_days = cast(list[DayExercises], cached if cached is not None else exercises)
         return cached_days
@@ -411,7 +405,7 @@ async def tool_attach_gifs(
         remaining_budget: float = deps.max_run_seconds - (monotonic() - deps.started_at)
         min_budget: float = float(settings.AI_COACH_ATTACH_GIFS_MIN_BUDGET)
         if remaining_budget < min_budget:
-            logger.info(f"skip_attach_gifs client_id={client_id} reason=low_budget remaining={remaining_budget:.2f}")
+            logger.info(f"skip_attach_gifs profile_id={profile_id} reason=low_budget remaining={remaining_budget:.2f}")
             return _cache_result(deps, tool_name, exercises)
     try:
         gif_manager = get_gif_manager()
@@ -444,7 +438,7 @@ async def tool_attach_gifs(
             new_day.exercises.append(ex_copy)
         result.append(new_day)
     first_exercise = result[0].exercises[0].name if result and result[0].exercises else None
-    logger.debug(f"tool_attach_gifs done client_id={client_id} first_name={first_exercise!r}")
+    logger.debug(f"tool_attach_gifs done profile_id={profile_id} first_name={first_exercise!r}")
     return _cache_result(deps, tool_name, result)
 
 
@@ -469,8 +463,8 @@ async def tool_create_subscription(
         return cast(Subscription, cached)
     if not deps.allow_save:
         raise RuntimeError("saving not allowed in this mode")
-    client_id = deps.client_id
-    logger.debug(f"tool_create_subscription client_id={client_id} period={period} days={workout_days}")
+    profile_id = deps.profile_id
+    logger.debug(f"tool_create_subscription profile_id={profile_id} period={period} days={workout_days}")
     exercises_payload = [d.model_dump() for d in exercises]
     price_map = {
         SubscriptionPeriod.one_month: int(settings.REGULAR_AI_SUBSCRIPTION_PRICE),
@@ -479,7 +473,7 @@ async def tool_create_subscription(
     price = price_map.get(period, int(settings.REGULAR_AI_SUBSCRIPTION_PRICE))
     try:
         sub_id = await APIService.workout.create_subscription(
-            client_profile_id=client_id,
+            profile_id=profile_id,
             workout_days=workout_days,
             wishes=wishes or "",
             amount=Decimal(price),
@@ -491,13 +485,13 @@ async def tool_create_subscription(
         payment_date = next_payment_date(period)
         await APIService.workout.update_subscription(sub_id, {"enabled": True, "payment_date": payment_date})
         logger.debug(f"event=create_subscription.success subscription_id={sub_id} payment_date={payment_date}")
-        sub = await APIService.workout.get_latest_subscription(client_id)
+        sub = await APIService.workout.get_latest_subscription(profile_id)
         if sub is not None:
             deps.final_result = sub
             return _cache_result(deps, tool_name, sub)
         data = {
             "id": sub_id,
-            "client_profile": client_id,
+            "profile": profile_id,
             "enabled": True,
             "price": price,
             "workout_type": "",

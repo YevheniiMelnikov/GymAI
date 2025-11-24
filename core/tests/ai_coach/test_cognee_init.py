@@ -64,7 +64,7 @@ def test_empty_context_does_not_crash(monkeypatch):
 
         monkeypatch.setattr(coach.cognee, "search", fake_search)
 
-        res = await KnowledgeBase.search("hello", client_id=42)
+        res = await KnowledgeBase.search("hello", profile_id=42)
         expected_dataset = KnowledgeBase._dataset_name(42)
         fallback_dataset = coach.KnowledgeBase._resolve_dataset_alias(coach.KnowledgeBase.GLOBAL_DATASET)
         assert calls == [

@@ -2,7 +2,7 @@ from typing import Protocol, cast
 from collections import deque
 
 from apps.payments.tasks import send_payment_message
-from bot.texts.text_manager import msg_text
+from bot.texts import MessageText, msg_text
 
 from config.app_settings import settings
 from core.payment.types import PaymentNotifier
@@ -21,18 +21,18 @@ class TaskPaymentNotifier(PaymentNotifier):
         self._task = task_impl
         self._undelivered = deque()
 
-    def success(self, client_id: int, language: str) -> None:
-        message = msg_text("payment_success", language)
-        self._task.delay(client_id, message)
-        self._undelivered.append(client_id)
+    def success(self, profile_id: int, language: str) -> None:
+        message = msg_text(MessageText.payment_success, language)
+        self._task.delay(profile_id, message)
+        self._undelivered.append(profile_id)
 
-    def failure(self, client_id: int, language: str) -> None:
-        message = msg_text("payment_failure", language).format(
+    def failure(self, profile_id: int, language: str) -> None:
+        message = msg_text(MessageText.payment_failure, language).format(
             mail=settings.EMAIL,
             tg=settings.TG_SUPPORT_CONTACT,
         )
-        self._task.delay(client_id, message)
-        self._undelivered.append(client_id)
+        self._task.delay(profile_id, message)
+        self._undelivered.append(profile_id)
 
     def get_stats(self) -> dict[str, int]:
         return {

@@ -32,6 +32,16 @@ AI_PLAN_NOTIFY_SOFT_LIMIT = settings.AI_PLAN_NOTIFY_TIMEOUT
 AI_PLAN_NOTIFY_TIME_LIMIT = AI_PLAN_NOTIFY_SOFT_LIMIT + 30
 
 
+def _resolve_profile_id(payload: dict[str, Any]) -> int | None:
+    raw = payload.get("profile_id")
+    if raw is None:
+        return None
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
+
+
 async def _claim_plan_request(request_id: str, action: str, *, attempt: int) -> bool:
     if not request_id or attempt > 0:
         return True
@@ -93,12 +103,12 @@ async def _notify_ai_plan_ready(payload: dict[str, Any]) -> None:
 async def _handle_notify_failure(payload: dict[str, Any], exc: Exception) -> None:
     request_id = str(payload.get("request_id", ""))
     action = str(payload.get("action", ""))
-    client_id = payload.get("client_id")
+    profile_id = _resolve_profile_id(payload)
     detail = f"{type(exc).__name__}: {exc!s}"
     state = AiPlanState.create()
     await state.mark_failed(request_id, detail)
     logger.error(
-        f"ai_plan_notify_gave_up action={action} client_id={client_id} request_id={request_id} detail={detail}"
+        f"ai_plan_notify_gave_up action={action} profile_id={profile_id} request_id={request_id} detail={detail}"
     )
 
 
@@ -122,27 +132,23 @@ async def _handle_ai_plan_failure_impl(
     action: str,
     detail: str,
 ) -> None:
-    client_id = int(payload.get("client_id", 0))
+    profile_id = _resolve_profile_id(payload)
+    request_id = str(payload.get("request_id", ""))
+    if profile_id is None:
+        logger.error(f"ai_plan_failure_missing_profile action={action} request_id={request_id}")
+        return
     plan_type_raw = payload.get("plan_type", WorkoutPlanType.PROGRAM.value)
     try:
         plan_type = WorkoutPlanType(plan_type_raw)
     except ValueError:
         plan_type = WorkoutPlanType.PROGRAM
-    request_id = str(payload.get("request_id", ""))
-    client_profile_id_raw = payload.get("client_profile_id")
-    client_profile_id: int | None
-    try:
-        client_profile_id = int(client_profile_id_raw) if client_profile_id_raw is not None else None
-    except (TypeError, ValueError):
-        client_profile_id = None
     reason = detail or "task_failed"
     await _notify_error(
-        client_id=client_id,
         plan_type=plan_type,
         request_id=request_id,
         action=action,
         error=reason,
-        client_profile_id=client_profile_id,
+        profile_id=profile_id,
     )
 
 
@@ -173,23 +179,20 @@ def _parse_workout_type(raw: Any) -> WorkoutType | None:
 
 async def _notify_error(
     *,
-    client_id: int,
+    profile_id: int,
     plan_type: WorkoutPlanType,
     request_id: str,
     action: str,
     error: str,
-    client_profile_id: int | None,
 ) -> None:
     payload: dict[str, Any] = {
-        "client_id": client_id,
+        "profile_id": profile_id,
         "plan_type": plan_type.value,
         "status": "error",
         "action": action,
         "request_id": request_id,
         "error": error,
     }
-    if client_profile_id is not None:
-        payload["client_profile_id"] = client_profile_id
     notify_ai_plan_ready_task.apply_async(  # pyrefly: ignore[not-callable]
         args=[payload],
         queue="ai_coach",
@@ -198,17 +201,11 @@ async def _notify_error(
 
 
 async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> dict[str, Any] | None:
-    client_id = int(payload["client_id"])
-    client_profile_id_raw = payload.get("client_profile_id")
-    client_profile_id: int | None
-    try:
-        client_profile_id = int(client_profile_id_raw) if client_profile_id_raw is not None else None
-    except (TypeError, ValueError):
-        logger.warning(
-            f"ai_generate_plan invalid_profile_id client_id={client_id} "
-            f"raw={client_profile_id_raw!r} request_id={payload.get('request_id', '')}"
-        )
-        client_profile_id = None
+    profile_id = _resolve_profile_id(payload)
+    if profile_id is None:
+        request_id = str(payload.get("request_id", ""))
+        logger.error(f"ai_generate_plan_missing_profile request_id={request_id}")
+        return None
     request_id = str(payload.get("request_id", ""))
     wishes = str(payload.get("wishes", ""))
     language = str(payload.get("language", settings.DEFAULT_LANG))
@@ -220,19 +217,19 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
 
     if not await _claim_plan_request(request_id, "create", attempt=attempt):
         logger.info(
-            f"ai_generate_plan_duplicate client_id={client_id} plan_type={plan_type.value} request_id={request_id}"
+            f"ai_generate_plan_duplicate profile_id={profile_id} plan_type={plan_type.value} request_id={request_id}"
         )
         return None
 
     logger.info(
-        f"ai_generate_plan started client_id={client_id} plan_type={plan_type.value} "
+        f"ai_generate_plan started profile_id={profile_id} plan_type={plan_type.value} "
         f"request_id={request_id} attempt={attempt}"
     )
 
     try:
         plan = await APIService.ai_coach.create_workout_plan(
             plan_type,
-            client_id=client_id,
+            profile_id=profile_id,
             language=language,
             period=str(period) if period else None,
             workout_days=list(workout_days),
@@ -242,48 +239,46 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
         )
     except APIClientHTTPError as exc:
         logger.error(
-            f"ai_generate_plan failed client_id={client_id} plan_type={plan_type.value} "
+            f"ai_generate_plan failed profile_id={profile_id} plan_type={plan_type.value} "
             f"request_id={request_id} attempt={attempt} status={exc.status} retryable={exc.retryable} "
             f"reason={exc.reason}"
         )
         if not exc.retryable:
             await _notify_error(
-                client_id=client_id,
                 plan_type=plan_type,
                 request_id=request_id,
                 action="create",
                 error=exc.reason or f"http_{exc.status}",
-                client_profile_id=client_profile_id,
+                profile_id=profile_id,
             )
             return None
         raise
     except Exception as exc:  # noqa: BLE001
         logger.error(
-            f"ai_generate_plan failed client_id={client_id} plan_type={plan_type.value} "
+            f"ai_generate_plan failed profile_id={profile_id} plan_type={plan_type.value} "
             f"request_id={request_id} attempt={attempt} error={exc}"
         )
         if attempt >= getattr(task, "max_retries", 0):
             await _notify_error(
-                client_id=client_id,
                 plan_type=plan_type,
                 request_id=request_id,
                 action="create",
                 error=str(exc),
-                client_profile_id=client_profile_id,
+                profile_id=profile_id,
             )
         raise
 
     if plan is None:
         logger.error(
-            f"ai_generate_plan returned empty client_id={client_id} plan_type={plan_type.value} request_id={request_id}"
+            "ai_generate_plan returned empty "
+            f"profile_id={profile_id} plan_type={plan_type.value} request_id={request_id}"
         )
         await _notify_error(
-            client_id=client_id,
             plan_type=plan_type,
             request_id=request_id,
             action="create",
             error="empty_plan",
-            client_profile_id=client_profile_id,
+            profile_id=profile_id,
         )
         return None
 
@@ -295,32 +290,25 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
         plan_payload = subscription.model_dump(mode="json")
 
     notify_payload = {
-        "client_id": client_id,
+        "profile_id": profile_id,
         "plan_type": plan_type.value,
         "status": "success",
         "action": "create",
         "request_id": request_id,
         "plan": plan_payload,
     }
-    if client_profile_id is not None:
-        notify_payload["client_profile_id"] = client_profile_id
-
-    logger.info(f"ai_generate_plan completed client_id={client_id} plan_type={plan_type.value} request_id={request_id}")
+    logger.info(
+        f"ai_generate_plan completed profile_id={profile_id} plan_type={plan_type.value} request_id={request_id}"
+    )
     return notify_payload
 
 
 async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> dict[str, Any] | None:
-    client_id = int(payload["client_id"])
-    client_profile_id_raw = payload.get("client_profile_id")
-    client_profile_id: int | None
-    try:
-        client_profile_id = int(client_profile_id_raw) if client_profile_id_raw is not None else None
-    except (TypeError, ValueError):
-        logger.warning(
-            f"ai_update_plan invalid_profile_id client_id={client_id} "
-            f"raw={client_profile_id_raw!r} request_id={payload.get('request_id', '')}"
-        )
-        client_profile_id = None
+    profile_id = _resolve_profile_id(payload)
+    if profile_id is None:
+        request_id = str(payload.get("request_id", ""))
+        logger.error(f"ai_update_plan_missing_profile request_id={request_id}")
+        return None
     request_id = str(payload.get("request_id", ""))
     language = str(payload.get("language", settings.DEFAULT_LANG))
     expected_workout = payload.get("expected_workout")
@@ -336,19 +324,19 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> d
 
     if not await _claim_plan_request(request_id, "update", attempt=attempt):
         logger.info(
-            f"ai_update_plan_duplicate client_id={client_id} plan_type={plan_type.value} request_id={request_id}"
+            f"ai_update_plan_duplicate profile_id={profile_id} plan_type={plan_type.value} request_id={request_id}"
         )
         return None
 
     logger.info(
-        f"ai_update_plan started client_id={client_id} plan_type={plan_type.value} "
+        f"ai_update_plan started profile_id={profile_id} plan_type={plan_type.value} "
         f"request_id={request_id} attempt={attempt}"
     )
 
     try:
         plan = await APIService.ai_coach.update_workout_plan(
             plan_type,
-            client_id=client_id,
+            profile_id=profile_id,
             language=language,
             expected_workout=expected_workout,
             feedback=feedback,
@@ -357,48 +345,45 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> d
         )
     except APIClientHTTPError as exc:
         logger.error(
-            f"ai_update_plan failed client_id={client_id} plan_type={plan_type.value} "
+            f"ai_update_plan failed profile_id={profile_id} plan_type={plan_type.value} "
             f"request_id={request_id} attempt={attempt} status={exc.status} retryable={exc.retryable} "
             f"reason={exc.reason}"
         )
         if not exc.retryable:
             await _notify_error(
-                client_id=client_id,
                 plan_type=plan_type,
                 request_id=request_id,
                 action="update",
                 error=exc.reason or f"http_{exc.status}",
-                client_profile_id=client_profile_id,
+                profile_id=profile_id,
             )
             return None
         raise
     except Exception as exc:  # noqa: BLE001
         logger.error(
-            f"ai_update_plan failed client_id={client_id} plan_type={plan_type.value} "
+            f"ai_update_plan failed profile_id={profile_id} plan_type={plan_type.value} "
             f"request_id={request_id} attempt={attempt} error={exc}"
         )
         if attempt >= getattr(task, "max_retries", 0):
             await _notify_error(
-                client_id=client_id,
                 plan_type=plan_type,
                 request_id=request_id,
                 action="update",
                 error=str(exc),
-                client_profile_id=client_profile_id,
+                profile_id=profile_id,
             )
         raise
 
     if plan is None:
         logger.error(
-            f"ai_update_plan returned empty client_id={client_id} plan_type={plan_type.value} request_id={request_id}"
+            f"ai_update_plan returned empty profile_id={profile_id} plan_type={plan_type.value} request_id={request_id}"
         )
         await _notify_error(
-            client_id=client_id,
             plan_type=plan_type,
             request_id=request_id,
             action="update",
             error="empty_plan",
-            client_profile_id=client_profile_id,
+            profile_id=profile_id,
         )
         return None
 
@@ -410,17 +395,14 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> d
         plan_payload = subscription.model_dump(mode="json")
 
     notify_payload = {
-        "client_id": client_id,
+        "profile_id": profile_id,
         "plan_type": plan_type.value,
         "status": "success",
         "action": "update",
         "request_id": request_id,
         "plan": plan_payload,
     }
-    if client_profile_id is not None:
-        notify_payload["client_profile_id"] = client_profile_id
-
-    logger.info(f"ai_update_plan completed client_id={client_id} plan_type={plan_type.value} request_id={request_id}")
+    logger.info(f"ai_update_plan completed profile_id={profile_id} plan_type={plan_type.value} request_id={request_id}")
     return notify_payload
 
 

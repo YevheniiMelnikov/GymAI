@@ -3,8 +3,8 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, ConfigDict, Field, condecimal, field_validator, model_validator
 
-from core.encryptor import Encryptor
-from core.enums import ClientStatus, CoachType, Gender, Language, PaymentStatus, ProfileRole
+from config.app_settings import settings
+from core.enums import ProfileStatus, Gender, Language, PaymentStatus
 
 Price = condecimal(max_digits=10, decimal_places=2, gt=0)
 NonNegativePrice = condecimal(max_digits=10, decimal_places=2, ge=0)
@@ -12,9 +12,19 @@ NonNegativePrice = condecimal(max_digits=10, decimal_places=2, ge=0)
 
 class Profile(BaseModel):
     id: int
-    role: Annotated[ProfileRole, Field()]
     tg_id: int
+    name: str | None = None
     language: Annotated[Language, Field()]
+    status: ProfileStatus = ProfileStatus.initial
+    gender: Gender | None = None
+    born_in: str | None = None
+    workout_experience: str | None = None
+    workout_goals: str | None = None
+    profile_photo: str | None = None
+    health_notes: str | None = None
+    weight: int | None = None
+    credits: int = Field(default=settings.DEFAULT_CREDITS, ge=0)
+    profile_data: dict[str, Any] = {}
     model_config = ConfigDict(extra="ignore")
 
     @field_validator("language", mode="before")
@@ -26,54 +36,12 @@ class Profile(BaseModel):
             return value.value
         return value
 
-
-class Client(BaseModel):
-    id: int
-    profile: int
-    name: str | None = None
-    gender: Gender | None = None
-    born_in: str | None = None
-    workout_experience: str | None = None
-    workout_goals: str | None = None
-    profile_photo: str | None = None
-    health_notes: str | None = None
-    weight: int | None = None
-    status: ClientStatus = ClientStatus.initial
-    assigned_to: list[int] = Field(default_factory=list)
-    credits: int = Field(default=500, ge=0)
-    profile_data: dict[str, Any] = {}
-
     @field_validator("born_in", mode="before")
     @classmethod
     def born_in_to_str(cls, value: Any) -> str | None:
         if value is None:
             return None
         return str(value)
-
-
-class Coach(BaseModel):
-    id: int
-    profile: int
-    name: str | None = None
-    surname: str | None = None
-    work_experience: int | None = None
-    additional_info: str | None = None
-    payment_details: str | None = None
-    profile_photo: str | None = None
-    subscription_price: Price | None = None
-    program_price: Price | None = None
-    assigned_to: list[int] = Field(default_factory=list)
-    verified: bool = False
-    coach_type: CoachType = CoachType.human
-    payout_due: NonNegativePrice | None = None
-    profile_data: dict[str, Any] = {}
-    model_config = ConfigDict(extra="ignore")
-
-    @property
-    def payment_details_plain(self) -> str:
-        if not self.payment_details:
-            return ""
-        return Encryptor.decrypt(self.payment_details) or ""
 
 
 class Exercise(BaseModel):
@@ -95,18 +63,17 @@ class DayExercises(BaseModel):
 
 class Program(BaseModel):
     id: int
-    client_profile: int
+    profile: int
     exercises_by_day: list[DayExercises] = Field(default_factory=list)
     created_at: float
     split_number: int | None = None
     workout_type: str | None = None
     wishes: str | None = None
-    coach_type: CoachType = CoachType.human
     model_config = ConfigDict(extra="ignore")
 
-    @field_validator("client_profile", mode="before")
+    @field_validator("profile", mode="before")
     @classmethod
-    def _normalize_client_profile(cls, value: Any) -> int:
+    def _normalize_profile(cls, value: Any) -> int:
         if isinstance(value, dict):
             return int(value.get("id", 0))
         return int(value)
@@ -127,37 +94,10 @@ class Program(BaseModel):
             self.split_number = len(self.exercises_by_day) or 1
         return self
 
-    @field_validator("coach_type", mode="before")
-    @classmethod
-    def _normalize_coach_type(cls, value: Any) -> CoachType:
-        if isinstance(value, dict):
-            value = value.get("coach_type")
-        if isinstance(value, CoachType):
-            return value
-        if isinstance(value, str):
-            normalized = value.strip().lower()
-            alias_map = {
-                "ai": CoachType.ai_coach,
-                "ai_coach": CoachType.ai_coach,
-                "ai-coach": CoachType.ai_coach,
-                "coach": CoachType.ai_coach,
-                "human": CoachType.human,
-            }
-            if normalized in alias_map:
-                return alias_map[normalized]
-            try:
-                return CoachType(normalized)
-            except ValueError:
-                return CoachType.human
-        try:
-            return CoachType(value)
-        except Exception:
-            return CoachType.human
-
 
 class Subscription(BaseModel):
     id: int
-    client_profile: int
+    profile: int
     enabled: bool
     price: int
     workout_type: str
@@ -179,7 +119,7 @@ class Subscription(BaseModel):
 
 class Payment(BaseModel):
     id: int
-    client_profile: int
+    profile: int
     payment_type: str
     order_id: str
     amount: Price
@@ -187,7 +127,6 @@ class Payment(BaseModel):
     created_at: float
     updated_at: float
     processed: bool = False
-    payout_handled: bool = False
     error: str | None = None
     model_config = ConfigDict(extra="ignore")
 

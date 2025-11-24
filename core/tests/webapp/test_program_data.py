@@ -9,7 +9,6 @@ import pytest
 from django.http import HttpRequest, JsonResponse
 
 from rest_framework.exceptions import NotFound
-from core.enums import CoachType
 from apps.webapp import utils
 
 django_http = sys.modules["django.http"]
@@ -21,6 +20,11 @@ views = import_module("apps.webapp.views")
 
 def test_program_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
+        async def noop_ready() -> None:
+            return None
+
+        monkeypatch.setattr(utils, "ensure_container_ready", noop_ready)
+        monkeypatch.setattr(views, "ensure_container_ready", noop_ready)
         monkeypatch.setattr("apps.webapp.utils.verify_init_data", lambda _d: {"user": {"id": 1}})
         monkeypatch.setattr(
             utils.ProfileRepository,
@@ -28,7 +32,7 @@ def test_program_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
             lambda _tg_id: SimpleNamespace(id=1, language="eng"),
         )
         monkeypatch.setattr(
-            utils.ClientProfileRepository,
+            utils.ProfileRepository,
             "get_by_profile_id",
             lambda _id: SimpleNamespace(id=1),
         )
@@ -38,7 +42,6 @@ def test_program_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
             lambda _id: SimpleNamespace(
                 exercises_by_day=[],
                 created_at=datetime.fromtimestamp(1),
-                coach_type=CoachType.human,
             ),
         )
 
@@ -51,7 +54,6 @@ def test_program_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
         data = json.loads(response.content)
         assert data["program"] == []
         assert data["created_at"] == 1
-        assert data["coach_type"] == CoachType.human
         assert data["language"] == "eng"
 
     asyncio.run(runner())
@@ -72,7 +74,7 @@ def test_program_data_header_init_data(monkeypatch: pytest.MonkeyPatch) -> None:
             lambda _tg_id: SimpleNamespace(id=1, language="eng"),
         )
         monkeypatch.setattr(
-            utils.ClientProfileRepository,
+            utils.ProfileRepository,
             "get_by_profile_id",
             lambda _id: SimpleNamespace(id=1),
         )
@@ -82,7 +84,6 @@ def test_program_data_header_init_data(monkeypatch: pytest.MonkeyPatch) -> None:
             lambda _id: SimpleNamespace(
                 exercises_by_day=[],
                 created_at=datetime.fromtimestamp(1),
-                coach_type=CoachType.human,
             ),
         )
 
@@ -108,7 +109,7 @@ def test_program_data_with_id(monkeypatch: pytest.MonkeyPatch) -> None:
             lambda _tg_id: SimpleNamespace(id=1, language="eng"),
         )
         monkeypatch.setattr(
-            utils.ClientProfileRepository,
+            utils.ProfileRepository,
             "get_by_profile_id",
             lambda _id: SimpleNamespace(id=1),
         )
@@ -118,7 +119,6 @@ def test_program_data_with_id(monkeypatch: pytest.MonkeyPatch) -> None:
             lambda _cid, _pid: SimpleNamespace(
                 exercises_by_day=[],
                 created_at=datetime.fromtimestamp(2),
-                coach_type=CoachType.human,
             ),
         )
 
@@ -130,7 +130,6 @@ def test_program_data_with_id(monkeypatch: pytest.MonkeyPatch) -> None:
         assert response.status_code == 200
         data = json.loads(response.content)
         assert data["created_at"] == 2
-        assert data["coach_type"] == CoachType.human
         assert data["language"] == "eng"
 
     asyncio.run(runner())

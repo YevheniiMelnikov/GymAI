@@ -13,7 +13,7 @@ from config.app_settings import settings
 from core.ai_coach.state.ask_ai import AiQuestionState
 from core.celery_app import app
 from core.internal_http import build_internal_hmac_auth_headers, internal_request_timeout
-from core.schemas import QAResponse, Client
+from core.schemas import Profile, QAResponse
 from core.services import APIService
 from core.services.internal.api_client import APIClientHTTPError, APIClientTransportError
 
@@ -32,6 +32,17 @@ AI_QA_REFUND_SOFT_LIMIT = 120
 AI_QA_REFUND_TIME_LIMIT = 150
 
 
+def _resolve_profile_id(payload: dict[str, Any]) -> int | None:
+    raw = payload.get("profile_id")
+    if raw is None:
+        return None
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
 async def _refund_credits_impl(payload: dict[str, Any]) -> None:
     request_id = str(payload["request_id"])
     state = AiQuestionState.create()
@@ -39,20 +50,24 @@ async def _refund_credits_impl(payload: dict[str, Any]) -> None:
         logger.info(f"event=ask_ai_refund_skip request_id={request_id}")
         return
 
-    client_id = int(payload["client_id"])
+    profile_id = _resolve_profile_id(payload)
+    if profile_id is None:
+        logger.error(f"event=ask_ai_refund_missing_profile request_id={request_id}")
+        return
     cost = int(payload["cost"])
+    profile: Profile | None = None
     try:
-        client: Client = await APIService.client.refund_credits(client_id, cost)
+        await APIService.profile.adjust_credits(profile_id, cost)
+        profile = await APIService.profile.get_profile(profile_id)
     except APIClientHTTPError as exc:
-        logger.error(f"event=ask_ai_refund_failed request_id={request_id} client_id={client_id} error={exc.reason}")
+        logger.error(f"event=ask_ai_refund_failed request_id={request_id} profile_id={profile_id} error={exc.reason}")
         raise
     except Exception as exc:
-        logger.error(f"event=ask_ai_refund_failed request_id={request_id} client_id={client_id} error={exc!s}")
+        logger.error(f"event=ask_ai_refund_failed request_id={request_id} profile_id={profile_id} error={exc!s}")
         raise
 
-    logger.info(
-        f"event=ask_ai_refund_ok request_id={request_id} client_id={client_id} cost={cost} balance={client.credits}"
-    )
+    balance = profile.credits if profile is not None else None
+    logger.info(f"event=ask_ai_refund_ok request_id={request_id} profile_id={profile_id} cost={cost} balance={balance}")
 
 
 @app.task(
@@ -72,9 +87,8 @@ def refund_ai_qa_credits_task(self, payload: dict[str, Any]) -> None:  # pyrefly
     try:
         async_to_sync(_refund_credits_impl)(payload)
     except Exception:
-        logger.error(
-            f"event=ask_ai_refund_gave_up request_id={payload.get('request_id')} client_id={payload.get('client_id')}"
-        )
+        profile_id = _resolve_profile_id(payload)
+        logger.error(f"event=ask_ai_refund_gave_up request_id={payload.get('request_id')} profile_id={profile_id}")
         raise
 
 
@@ -133,15 +147,15 @@ async def _notify_ai_answer_ready(payload: dict[str, Any]) -> None:
 
 async def _handle_notify_answer_failure(payload: dict[str, Any], exc: Exception) -> None:
     request_id = str(payload.get("request_id", ""))
-    client_id = payload.get("client_id")
+    profile_id = _resolve_profile_id(payload)
     detail = f"{type(exc).__name__}: {exc!s}"
     state = AiQuestionState.create()
     if await state.mark_failed(request_id, detail):
-        logger.error(f"event=ask_ai_notify_gave_up request_id={request_id} client_id={client_id} detail={detail}")
-        if await state.is_charged(request_id):
+        logger.error(f"event=ask_ai_notify_gave_up request_id={request_id} profile_id={profile_id} detail={detail}")
+        if profile_id is not None and await state.is_charged(request_id):
             refund_payload = {
                 "request_id": request_id,
-                "client_id": client_id,
+                "profile_id": profile_id,
                 "cost": payload.get("cost", 0),
             }
             refund_ai_qa_credits_task.apply_async(  # pyrefly: ignore[not-callable]
@@ -168,20 +182,18 @@ def _extract_failure_detail(exc_info: tuple[Any, ...]) -> str:
 
 async def _notify_ai_answer_error(
     *,
-    client_id: int,
-    client_profile_id: int | None,
+    profile_id: int | None,
     request_id: str,
     error: str,
     dispatch: bool = False,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
-        "client_id": client_id,
         "status": "error",
         "request_id": request_id,
         "error": error,
     }
-    if client_profile_id is not None and client_profile_id > 0:
-        payload["client_profile_id"] = client_profile_id
+    if profile_id is not None:
+        payload["profile_id"] = profile_id
     if dispatch:
         notify_ai_answer_ready_task.apply_async(  # pyrefly: ignore[not-callable]
             args=[payload],
@@ -192,15 +204,15 @@ async def _notify_ai_answer_error(
 
 
 async def _handle_ai_answer_failure_impl(payload: dict[str, Any], detail: str) -> None:
-    client_id = int(payload.get("client_id", 0))
+    profile_id = _resolve_profile_id(payload)
     request_id = str(payload.get("request_id", ""))
     state = AiQuestionState.create()
     if await state.mark_failed(request_id, detail):
-        logger.error(f"event=ask_ai_gave_up request_id={request_id} client_id={client_id} detail={detail}")
-        if await state.is_charged(request_id):
+        logger.error(f"event=ask_ai_gave_up request_id={request_id} profile_id={profile_id} detail={detail}")
+        if profile_id is not None and await state.is_charged(request_id):
             refund_payload = {
                 "request_id": request_id,
-                "client_id": client_id,
+                "profile_id": profile_id,
                 "cost": payload.get("cost", 0),
             }
             refund_ai_qa_credits_task.apply_async(  # pyrefly: ignore[not-callable]
@@ -209,15 +221,9 @@ async def _handle_ai_answer_failure_impl(payload: dict[str, Any], detail: str) -
                 routing_key="ai_coach",
             )
 
-    client_profile_raw = payload.get("client_profile_id")
-    try:
-        client_profile_id = int(client_profile_raw) if client_profile_raw is not None else None
-    except (TypeError, ValueError):
-        client_profile_id = None
     reason = detail or "task_failed"
     await _notify_ai_answer_error(
-        client_id=client_id,
-        client_profile_id=client_profile_id,
+        profile_id=profile_id,
         request_id=request_id,
         error=reason,
         dispatch=True,
@@ -225,19 +231,15 @@ async def _handle_ai_answer_failure_impl(payload: dict[str, Any], detail: str) -
 
 
 async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str, Any] | None:
-    client_id = int(payload["client_id"])
-    client_profile_id_raw = payload.get("client_profile_id")
-    try:
-        client_profile_id = int(client_profile_id_raw) if client_profile_id_raw is not None else 0
-    except (TypeError, ValueError):
-        request_hint = payload.get("request_id", "")
-        logger.warning(
-            f"event=ask_ai_invalid_profile client_id={client_id} "
-            f"raw={client_profile_id_raw!r} request_id={request_hint}"
-        )
-        client_profile_id = 0
-
+    profile_id = _resolve_profile_id(payload)
     request_id = str(payload.get("request_id", ""))
+    if profile_id is None:
+        logger.error(f"event=ask_ai_missing_profile request_id={request_id}")
+        return await _notify_ai_answer_error(
+            profile_id=None,
+            request_id=request_id,
+            error="missing_profile",
+        )
     language_raw = payload.get("language", settings.DEFAULT_LANG)
     language = str(language_raw or settings.DEFAULT_LANG)
     prompt_raw = payload.get("prompt", "")
@@ -258,77 +260,79 @@ async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str
 
     state = AiQuestionState.create()
     if not await _claim_answer_request(request_id, state, attempt=attempt):
-        logger.info(f"event=ask_ai_duplicate request_id={request_id} client_id={client_id}")
+        logger.info(f"event=ask_ai_duplicate request_id={request_id} profile_id={profile_id}")
         return {
-            "client_id": client_id,
+            "profile_id": profile_id,
             "request_id": request_id,
             "status": "duplicate",
         }
 
     if await state.mark_charged(request_id):
+        profile: Profile | None = None
         try:
-            client: Client = await APIService.client.charge_credits(client_id, cost)
+            await APIService.profile.adjust_credits(profile_id, -cost)
+            profile = await APIService.profile.get_profile(profile_id)
         except APIClientHTTPError as exc:
             logger.error(
-                f"event=ask_ai_charge_failed client_id={client_id} request_id={request_id} "
+                f"event=ask_ai_charge_failed profile_id={profile_id} request_id={request_id} "
                 f"status={exc.status} reason={exc.reason}"
             )
             if not exc.retryable:
                 await state.unmark_charged(request_id)
             raise
         except Exception:
-            logger.error(f"event=ask_ai_charge_failed client_id={client_id} request_id={request_id}")
+            logger.error(f"event=ask_ai_charge_failed profile_id={profile_id} request_id={request_id}")
             raise
+        balance = profile.credits if profile is not None else None
         logger.info(
-            f"event=ask_ai_charged request_id={request_id} client_id={client_id} cost={cost} balance={client.credits}"
+            f"event=ask_ai_charged request_id={request_id} profile_id={profile_id} cost={cost} balance={balance}"
         )
     else:
-        logger.warning(f"event=ask_ai_charge_skipped request_id={request_id} client_id={client_id}")
+        logger.warning(f"event=ask_ai_charge_skipped request_id={request_id} profile_id={profile_id}")
 
-    logger.info(
-        (
-            f"event=ask_ai_started client_id={client_id} request_id={request_id} "
-            f"attempt={attempt} attachments={len(attachments)}"
+        logger.info(
+            (
+                f"event=ask_ai_started profile_id={profile_id} request_id={request_id} "
+                f"attempt={attempt} attachments={len(attachments)}"
+            )
         )
-    )
 
+    response: Any | None = None
     try:
         response = await APIService.ai_coach.ask(
             prompt,
-            client_id=client_id,
+            profile_id=profile_id,
             language=language,
             request_id=request_id or None,
             attachments=attachments or None,
         )
     except APIClientHTTPError as exc:
         logger.error(
-            f"event=ask_ai_failed client_id={client_id} request_id={request_id} attempt={attempt} "
+            f"event=ask_ai_failed profile_id={profile_id} request_id={request_id} attempt={attempt} "
             f"status={exc.status} retryable={exc.retryable} reason={exc.reason}"
         )
         if not exc.retryable:
             return await _notify_ai_answer_error(
-                client_id=client_id,
-                client_profile_id=client_profile_id or None,
+                profile_id=profile_id,
                 request_id=request_id,
                 error=exc.reason or f"http_{exc.status}",
             )
         raise
     except Exception as exc:  # noqa: BLE001
-        logger.error(f"event=ask_ai_failed client_id={client_id} request_id={request_id} attempt={attempt} error={exc}")
+        logger.error(
+            f"event=ask_ai_failed profile_id={profile_id} request_id={request_id} attempt={attempt} error={exc}"
+        )
         if attempt >= getattr(task, "max_retries", 0):
             return await _notify_ai_answer_error(
-                client_id=client_id,
-                client_profile_id=client_profile_id or None,
+                profile_id=profile_id,
                 request_id=request_id,
                 error=str(exc),
             )
-        raise
 
     if response is None:
-        logger.error(f"event=ask_ai_empty_response client_id={client_id} request_id={request_id}")
+        logger.error(f"event=ask_ai_empty_response profile_id={profile_id} request_id={request_id}")
         return await _notify_ai_answer_error(
-            client_id=client_id,
-            client_profile_id=client_profile_id or None,
+            profile_id=profile_id,
             request_id=request_id,
             error="empty_response",
         )
@@ -337,15 +341,14 @@ async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str
     sources = list(qa_response.sources)
     if sources:
         logger.info(
-            "event=ask_ai_sources request_id={} client_id={} count={} sources={}",
+            "event=ask_ai_sources request_id={} profile_id={} count={} sources={}",
             request_id,
-            client_id,
+            profile_id,
             len(sources),
             " | ".join(sources),
         )
     notify_payload: dict[str, Any] = {
-        "client_id": client_id,
-        "client_profile_id": client_profile_id,
+        "profile_id": profile_id,
         "status": "success",
         "request_id": request_id,
         "answer": qa_response.answer,
@@ -354,7 +357,7 @@ async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str
     if sources:
         notify_payload["sources"] = sources
 
-    logger.info(f"event=ask_ai_completed client_id={client_id} request_id={request_id}")
+    logger.info(f"event=ask_ai_completed profile_id={profile_id} request_id={request_id}")
     return notify_payload
 
 

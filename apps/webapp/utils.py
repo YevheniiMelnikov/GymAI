@@ -3,7 +3,11 @@ import hashlib
 import hmac
 import inspect
 import json
-from typing import Any, Awaitable, Callable, Protocol, TypeVar, cast
+import os
+import time
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Awaitable, Callable, TypeVar, cast
 from urllib.parse import parse_qsl
 
 from asgiref.sync import sync_to_async
@@ -11,24 +15,19 @@ from django.http import HttpRequest, JsonResponse
 from loguru import logger
 from rest_framework.exceptions import NotFound
 
+from apps.profiles.models import Profile
 from config.app_settings import settings
 from core.payment.providers.liqpay import LiqPayGateway
 
-from apps.profiles.repos import ClientProfileRepository, ProfileRepository
+from apps.profiles.repos import ProfileRepository
 
 T = TypeVar("T")
 
 
-class _Profile(Protocol):
-    id: int | None
-    language: str | None
-
-
-class _ClientProfile(Protocol):
-    id: int | None
-
-
-AuthResult = tuple[_ClientProfile | None, str, JsonResponse | None, int]
+@dataclass(frozen=True)
+class AuthResult:
+    profile: Profile | None
+    error: JsonResponse | None
 
 
 async def ensure_container_ready() -> None:
@@ -70,44 +69,34 @@ def read_init_data(request: HttpRequest) -> str:
     return ""
 
 
-async def auth_and_get_client(request: HttpRequest) -> AuthResult:
+async def authenticate(request: HttpRequest) -> AuthResult:
     """
-    Verify Telegram init_data, resolve tg_id -> Profile -> ClientProfile.
+    Verify Telegram init_data and resolve tg_id -> Profile.
 
-    Returns (client | None, language, error_response | None, tg_id).
+    Returns (profile | None, error_response | None).
     """
     init_data: str = read_init_data(request)
     logger.debug(f"Webapp request: init_data length={len(init_data)}")
-    lang: str = "eng"
     try:
         data: dict[str, Any] = verify_init_data(init_data)
     except Exception as exc:
         logger.warning(f"Init data verification failed: {exc} | length={len(init_data)}")
-        return None, lang, JsonResponse({"error": "unauthorized"}, status=403), 0
+        return AuthResult(None, JsonResponse({"error": "unauthorized"}, status=403))
 
-    user: dict[str, Any] = data.get("user", {})  # type: ignore[arg-type]
-    tg_id: int = int(str(user.get("id", "0")))
-
-    profile: _Profile | None = None
-    client: _ClientProfile | None = None
+    user_info: dict[str, Any] = data.get("user", {})  # type: ignore[arg-type]
+    tg_id: int = int(str(user_info.get("id", "0")))
+    profile: Profile | None = None
 
     try:
-        profile = cast(_Profile, await call_repo(ProfileRepository.get_by_telegram_id, tg_id))
-        profile_language = getattr(profile, "language", None)
-        if profile_language:
-            lang = profile_language
-        client = cast(
-            _ClientProfile,
-            await call_repo(ClientProfileRepository.get_by_profile_id, int(getattr(profile, "id", 0))),
-        )
+        profile = await call_repo(ProfileRepository.get_by_telegram_id, tg_id)
     except Exception as exc:
         if exc.__class__ is NotFound:
             profile_id = getattr(profile, "id", None)
             logger.warning(f"Client profile not found for profile_id={profile_id}")
-            return None, lang, JsonResponse({"error": "not_found"}, status=404), tg_id
+            return AuthResult(None, JsonResponse({"error": "not_found"}, status=404))
         raise
 
-    return client, lang, None, tg_id
+    return AuthResult(profile, None)
 
 
 def parse_program_id(request: HttpRequest) -> tuple[int | None, JsonResponse | None]:
@@ -184,3 +173,61 @@ def verify_init_data(init_data: str) -> dict[str, object]:
             result[k] = v
 
     return result
+
+
+STATIC_VERSION_FILE: Path = Path(__file__).resolve().parents[2] / "VERSION"
+
+
+def _resolve_static_version() -> str:
+    if settings.DEBUG:
+        return str(int(time.time()))
+
+    env_value: str | None = os.getenv("STATIC_VERSION")
+    if STATIC_VERSION_FILE.exists():
+        version: str = STATIC_VERSION_FILE.read_text(encoding="utf-8").strip()
+        if version:
+            return version
+    if env_value:
+        return env_value
+    return str(int(time.time()))
+
+
+STATIC_VERSION: str = _resolve_static_version()
+
+
+def transform_days(exercises_by_day: list) -> list[dict]:
+    days = []
+    for idx, day_data in enumerate(exercises_by_day, start=1):
+        exercises = []
+        for ex_idx, ex_data in enumerate(day_data.get("exercises", [])):
+            weight_str = ex_data.get("weight")
+            weight = None
+            if weight_str:
+                parts = str(weight_str).split(" ", 1)
+                if len(parts) == 2:
+                    weight = {"value": parts[0], "unit": parts[1]}
+                else:
+                    weight = {"value": weight_str, "unit": ""}
+
+            exercises.append(
+                {
+                    "id": str(ex_data.get("set_id") or f"ex-{idx}-{ex_idx}"),
+                    "name": ex_data.get("name", ""),
+                    "sets": ex_data.get("sets"),
+                    "reps": ex_data.get("reps"),
+                    "weight": weight,
+                    "equipment": None,
+                    "notes": None,
+                }
+            )
+
+        days.append(
+            {
+                "id": f"day-{idx}",
+                "index": idx,
+                "type": "workout",
+                "title": day_data.get("day"),
+                "exercises": exercises,
+            }
+        )
+    return days

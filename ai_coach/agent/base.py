@@ -11,7 +11,7 @@ from config.app_settings import settings
 
 @dataclass
 class AgentDeps:
-    client_id: int
+    profile_id: int
     locale: str | None = None
     allow_save: bool = True
     client_name: str | None = None

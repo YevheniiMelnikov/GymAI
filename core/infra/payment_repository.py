@@ -44,18 +44,17 @@ class HTTPPaymentRepository(APIClient):
             logger.error(f"API {method.upper()} transport failure to {endpoint}: {exc}")
             return 503, {}
 
-    async def create_payment(self, client_profile_id: int, service_type: str, order_id: str, amount: Decimal) -> bool:
+    async def create_payment(self, profile_id: int, service_type: str, order_id: str, amount: Decimal) -> bool:
         status_code, _ = await self._handle_payment_api_request(
             method="post",
             endpoint=urljoin(self.API_BASE_PATH, "create/"),
             data={
-                "client_profile": client_profile_id,
+                "profile": profile_id,
                 "order_id": order_id,
                 "payment_type": service_type,
                 "amount": str(amount.quantize(Decimal("0.01"), ROUND_HALF_UP)),
                 "status": PaymentStatus.PENDING,
                 "processed": False,
-                "payout_handled": False,
             },
         )
         return status_code == 201
@@ -65,20 +64,6 @@ class HTTPPaymentRepository(APIClient):
             method="put", endpoint=f"{self.API_BASE_PATH}{payment_id}/", data=data
         )
         return status_code in {200, 204}
-
-    async def _get_filtered_payments(self, filter_func) -> list[Payment]:
-        status_code, response = await self._handle_payment_api_request(method="get", endpoint=self.API_BASE_PATH)
-        if status_code != 200:
-            return []
-        payments = response.get("results", [])
-        return [Payment.model_validate(p) for p in payments if filter_func(p)]
-
-    async def get_unclosed_payments(self) -> list[Payment]:
-        return await self._get_filtered_payments(
-            lambda p: (
-                p.get("status") == PaymentStatus.SUCCESS and p.get("processed") is True and not p.get("payout_handled")
-            )
-        )
 
     async def get_expired_subscriptions(self, expired_before: str) -> list[Subscription]:
         status_code, response = await self._handle_payment_api_request(
@@ -104,7 +89,6 @@ class HTTPPaymentRepository(APIClient):
                 "status": PaymentStatus(status_),
                 "error": error,
                 "processed": False,
-                "payout_handled": False,
             },
         )
         if not ok:
@@ -115,7 +99,6 @@ class HTTPPaymentRepository(APIClient):
         payment.status = PaymentStatus(status_)
         payment.error = error
         payment.processed = False
-        payment.payout_handled = False
         return payment
 
     async def _get_payment_by_order_id(self, order_id: str) -> tuple[Payment | None, int | None]:
@@ -131,12 +114,12 @@ class HTTPPaymentRepository(APIClient):
                 logger.error(f"Invalid payment data from API for order_id={order_id}: {e}")
         return None, None
 
-    async def get_latest_payment(self, client_profile_id: int, payment_type: str) -> Payment | None:
+    async def get_latest_payment(self, profile_id: int, payment_type: str) -> Payment | None:
         status_code, response = await self._handle_payment_api_request(
             method="get",
             endpoint=self.API_BASE_PATH,
             data={
-                "client_profile": client_profile_id,
+                "profile": profile_id,
                 "payment_type": payment_type,
                 "ordering": "-created_at",
                 "limit": 1,
@@ -147,5 +130,5 @@ class HTTPPaymentRepository(APIClient):
         try:
             return Payment.model_validate(response["results"][0])
         except ValidationError as e:
-            logger.error(f"Invalid payment data for client_profile_id={client_profile_id}: {e}")
+            logger.error(f"Invalid payment data for profile_id={profile_id}: {e}")
             return None

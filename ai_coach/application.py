@@ -19,7 +19,7 @@ from ai_coach.logging_config import configure_logging
 from ai_coach.agent.knowledge.context import set_current_kb
 
 from core.containers import create_container, set_container, get_container
-from core.infra.payment import BotCoachResolver, BotCreditService, TaskPaymentNotifier
+from core.infra.payment import TaskPaymentNotifier
 from core.services.internal import APIService
 from config.app_settings import settings
 
@@ -203,8 +203,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     container = create_container()
     container.notifier.override(providers.Factory(TaskPaymentNotifier))
-    container.credit_service.override(providers.Factory(BotCreditService))
-    container.coach_resolver.override(providers.Factory(BotCoachResolver))
     set_container(container)
     APIService.configure(get_container)
     container.wire(modules=["core.tasks.ai_coach"])

@@ -21,7 +21,7 @@ class PaymentCacheManager(BaseCacheManager):
         try:
             return PaymentStatus(payment.status)
         except (ValueError, KeyError):
-            logger.error(f"Invalid payment status '{payment.status}' for client_id={field}")
+            logger.error(f"Invalid payment status '{payment.status}' for profile_id={field}")
             return PaymentStatus.PENDING
 
     @classmethod
@@ -44,30 +44,28 @@ class PaymentCacheManager(BaseCacheManager):
         return f"{cls._PREFIX}:{service_type}"
 
     @classmethod
-    async def set_status(cls, client_profile_id: int, service_type: str, status: PaymentStatus) -> None:
+    async def set_status(cls, profile_id: int, service_type: str, status: PaymentStatus) -> None:
         try:
-            await cls.set_json(cls._key(service_type), str(client_profile_id), {"status": status.value})
-            logger.debug(
-                f"Payment status cached: client_profile_id={client_profile_id}, type={service_type}, status={status}"
-            )
+            await cls.set_json(cls._key(service_type), str(profile_id), {"status": status.value})
+            logger.debug(f"Payment status cached: profile_id={profile_id}, type={service_type}, status={status}")
         except Exception as e:
-            logger.error(f"Failed to cache payment status for client_profile_id={client_profile_id}: {e}")
+            logger.error(f"Failed to cache payment status for profile_id={profile_id}: {e}")
 
     @classmethod
-    async def reset_status(cls, client_profile_id: int, service_type: str) -> None:
+    async def reset_status(cls, profile_id: int, service_type: str) -> None:
         try:
-            await cls.delete(cls._key(service_type), str(client_profile_id))
-            logger.debug(f"Payment status reset for client_profile_id={client_profile_id}, type={service_type}")
+            await cls.delete(cls._key(service_type), str(profile_id))
+            logger.debug(f"Payment status reset for profile_id={profile_id}, type={service_type}")
         except Exception as e:
-            logger.error(f"Failed to reset payment status for client_profile_id={client_profile_id}: {e}")
+            logger.error(f"Failed to reset payment status for profile_id={profile_id}: {e}")
 
     @classmethod
-    async def get_status(cls, client_profile_id: int, service_type: str, *, use_fallback: bool = True) -> PaymentStatus:
-        return await cls.get_or_fetch(cls._key(service_type), str(client_profile_id), use_fallback=use_fallback)
+    async def get_status(cls, profile_id: int, service_type: str, *, use_fallback: bool = True) -> PaymentStatus:
+        return await cls.get_or_fetch(cls._key(service_type), str(profile_id), use_fallback=use_fallback)
 
     @classmethod
-    async def is_payed(cls, client_profile_id: int, service_type: str) -> bool:
+    async def is_payed(cls, profile_id: int, service_type: str) -> bool:
         try:
-            return (await cls.get_status(client_profile_id, service_type)) == PaymentStatus.SUCCESS
+            return (await cls.get_status(profile_id, service_type)) == PaymentStatus.SUCCESS
         except PaymentNotFoundError:
             return False

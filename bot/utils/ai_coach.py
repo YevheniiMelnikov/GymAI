@@ -4,9 +4,10 @@ from typing import cast
 from loguru import logger
 from pydantic import ValidationError
 
+from config.app_settings import settings
 from core.cache import Cache
 from core.enums import WorkoutPlanType, WorkoutType
-from core.schemas import Client, DayExercises, Program, Subscription, Profile
+from core.schemas import DayExercises, Program, Profile, Subscription
 from core.services.internal import APIService
 from core.ai_coach import (
     AiAttachmentPayload,
@@ -24,7 +25,7 @@ from core.tasks.ai_coach import (
 
 async def generate_workout_plan(
     *,
-    client: Client,
+    profile: Profile,
     language: str,
     plan_type: WorkoutPlanType,
     workout_type: WorkoutType,
@@ -33,11 +34,11 @@ async def generate_workout_plan(
     period: str | None = None,
     workout_days: list[str] | None = None,
 ) -> list[DayExercises]:
-    client_id: int = client.id
-    logger.debug(f"generate_workout_plan request_id={request_id} client_id={client_id} type={plan_type}")
+    profile_id = profile.id
+    logger.debug(f"generate_workout_plan request_id={request_id} profile_id={profile_id} type={plan_type}")
     plan = await APIService.ai_coach.create_workout_plan(
         plan_type,
-        client_id=client_id,
+        profile_id=profile.id,
         language=language,
         period=period,
         workout_days=workout_days,
@@ -46,20 +47,20 @@ async def generate_workout_plan(
         request_id=request_id,
     )
     if not plan:
-        logger.error(f"Workout plan generation failed client_id={client_id}")
+        logger.error(f"Workout plan generation failed profile_id={profile.id}")
         return []
     if plan_type is WorkoutPlanType.PROGRAM:
         assert isinstance(plan, Program)
-        await Cache.workout.save_program(client.id, plan.model_dump())
+        await Cache.workout.save_program(profile.id, plan.model_dump())
         return plan.exercises_by_day
     assert isinstance(plan, Subscription)
-    await Cache.workout.save_subscription(client.id, plan.model_dump())
+    await Cache.workout.save_subscription(profile.id, plan.model_dump())
     return plan.exercises
 
 
 async def process_workout_plan_result(
     *,
-    client_id: int,
+    profile_id: int,
     expected_workout_result: str,
     feedback: str,
     language: str,
@@ -67,18 +68,18 @@ async def process_workout_plan_result(
 ) -> Program | Subscription:
     plan = await APIService.ai_coach.update_workout_plan(
         plan_type,
-        client_id=client_id,
+        profile_id=profile_id,
         language=language,
         expected_workout=expected_workout_result,
         feedback=feedback,
     )
     if plan:
         return plan
-    logger.error(f"Workout update failed client_id={client_id}")
+    logger.error(f"Workout update failed profile_id={profile_id}")
     if plan_type is WorkoutPlanType.PROGRAM:
         return Program(
             id=0,
-            client_profile=client_id,
+            profile=profile_id,
             exercises_by_day=[],
             created_at=0.0,
             split_number=0,
@@ -87,7 +88,7 @@ async def process_workout_plan_result(
         )
     return Subscription(
         id=0,
-        client_profile=client_id,
+        profile=profile_id,
         enabled=False,
         price=0,
         workout_type="",
@@ -101,8 +102,7 @@ async def process_workout_plan_result(
 
 async def enqueue_workout_plan_generation(
     *,
-    client: Client,
-    language: str,
+    profile: Profile,
     plan_type: WorkoutPlanType,
     workout_type: WorkoutType,
     wishes: str,
@@ -110,16 +110,19 @@ async def enqueue_workout_plan_generation(
     period: str | None = None,
     workout_days: list[str] | None = None,
 ) -> bool:
-    client_profile_raw = getattr(client, "profile", None)
-    client_profile_id = int(client_profile_raw) if client_profile_raw is not None else 0
-    if client_profile_id <= 0:
-        logger.error(f"ai_plan_generate_missing_profile client_id={client.id} request_id={request_id}")
+    profile_id = int(getattr(profile, "id", 0) or 0)
+    if profile_id <= 0:
+        logger.error(f"ai_plan_generate_missing_profile profile_id={profile_id} request_id={request_id}")
         return False
+    if not wishes or not wishes.strip():
+        logger.warning(f"ai_plan_generate_missing_wishes profile_id={profile_id} request_id={request_id}")
+        return False
+
+    language = str(profile.language or settings.DEFAULT_LANG)
 
     try:
         payload_model = AiPlanGenerationPayload(
-            client_id=client.id,
-            client_profile_id=client_profile_id,
+            profile_id=profile_id,
             language=language,
             plan_type=plan_type,
             workout_type=workout_type,
@@ -129,20 +132,20 @@ async def enqueue_workout_plan_generation(
             request_id=request_id,
         )
     except ValidationError as exc:
-        logger.error(f"ai_plan_generate_invalid_payload request_id={request_id} client_id={client.id} error={exc!s}")
+        logger.error(f"ai_plan_generate_invalid_payload request_id={request_id} profile_id={profile.id} error={exc!s}")
         return False
 
     payload = payload_model.model_dump(mode="json")
     headers = {
         "request_id": request_id,
-        "client_id": client.id,
+        "profile_id": profile_id,
         "plan_type": plan_type.value,
     }
     options = {"queue": "ai_coach", "routing_key": "ai_coach", "headers": headers}
 
     logger.debug(
         f"dispatch_generate_plan request_id={request_id} "
-        f"client_id={client.id} plan_type={plan_type.value} headers={headers}"
+        f"profile_id={profile.id} plan_type={plan_type.value} headers={headers}"
     )
 
     try:
@@ -170,7 +173,7 @@ async def enqueue_workout_plan_generation(
             )
     except Exception as exc:  # noqa: BLE001
         logger.error(
-            f"Celery dispatch failed client_id={client.id} plan_type={plan_type.value} "
+            f"Celery dispatch failed profile_id={profile.id} plan_type={plan_type.value} "
             f"request_id={request_id} error={exc!s}"
         )
         return False
@@ -179,20 +182,19 @@ async def enqueue_workout_plan_generation(
     if task_id is None:
         logger.error(
             f"ai_plan_generate_missing_task_id request_id={request_id} "
-            f"client_id={client.id} plan_type={plan_type.value}"
+            f"profile_id={profile.id} plan_type={plan_type.value}"
         )
         return False
     logger.info(
         f"ai_plan_generate_enqueued request_id={request_id} task_id={task_id} "
-        f"client_id={client.id} plan_type={plan_type.value}"
+        f"profile_id={profile.id} plan_type={plan_type.value}"
     )
     return True
 
 
 def _build_ai_question_payload(
     *,
-    client_id: int,
-    client_profile_id: int,
+    profile_id: int,
     language: str,
     prompt: str,
     request_id: str,
@@ -206,8 +208,7 @@ def _build_ai_question_payload(
 
     try:
         return AiQuestionPayload(
-            client_id=client_id,
-            client_profile_id=client_profile_id,
+            profile_id=profile_id,
             language=language,
             prompt=prompt,
             attachments=attachments,
@@ -215,7 +216,7 @@ def _build_ai_question_payload(
             cost=cost,
         )
     except ValidationError as exc:
-        logger.error(f"event=ask_ai_invalid_payload request_id={request_id} client_id={client_id} error={exc!s}")
+        logger.error(f"event=ask_ai_invalid_payload request_id={request_id} profile_id={profile_id} error={exc!s}")
         return None
 
 
@@ -223,8 +224,7 @@ def _dispatch_ai_question_task(
     *,
     payload_model: AiQuestionPayload,
     request_id: str,
-    client_id: int,
-    client_profile_id: int,
+    profile_id: int,
 ) -> str | None:
     try:
         from core.tasks.ai_coach import (  # Local import to avoid circular dependency
@@ -239,7 +239,7 @@ def _dispatch_ai_question_task(
     payload = payload_model.model_dump(mode="json")
     headers = {
         "request_id": request_id,
-        "client_id": client_id,
+        "profile_id": profile_id,
         "action": "ask_ai",
     }
     options = {"queue": "ai_coach", "routing_key": "ai_coach", "headers": headers}
@@ -255,25 +255,19 @@ def _dispatch_ai_question_task(
     try:
         async_result = cast(AsyncResult, chain(ask_sig, notify_sig).apply_async(link_error=[failure_sig]))
     except Exception as exc:  # noqa: BLE001
-        logger.error(f"event=ask_ai_dispatch_failed request_id={request_id} client_id={client_id} error={exc!s}")
+        logger.error(f"event=ask_ai_dispatch_failed request_id={request_id} profile_id={profile_id} error={exc!s}")
         return None
 
     task_id = cast(str | None, getattr(async_result, "id", None))
     if task_id is None:
-        logger.error(
-            f"event=ask_ai_missing_task_id request_id={request_id} client_id={client_id} profile_id={client_profile_id}"
-        )
+        logger.error(f"event=ask_ai_missing_task_id request_id={request_id} profile_id={profile_id}")
         return None
-    logger.info(
-        f"event=ask_ai_enqueued request_id={request_id} task_id={task_id} "
-        f"client_id={client_id} profile_id={client_profile_id}"
-    )
+    logger.info(f"event=ask_ai_enqueued request_id={request_id} task_id={task_id} profile_id={profile_id}")
     return task_id
 
 
 async def enqueue_ai_question(
     *,
-    client: Client,
     profile: Profile,
     prompt: str,
     language: str,
@@ -282,17 +276,13 @@ async def enqueue_ai_question(
     image_base64: str | None = None,
     image_mime: str | None = None,
 ) -> bool:
-    client_profile_id = int(getattr(client, "profile", profile.id))
-    if client_profile_id <= 0:
-        profile_hint = getattr(profile, "id", None)
-        logger.error(
-            f"event=ask_ai_invalid_profile request_id={request_id} client_id={client.id} profile_hint={profile_hint}"
-        )
+    profile_id = profile.id
+    if profile_id <= 0:
+        logger.error(f"event=ask_ai_invalid_profile request_id={request_id} profile_id={profile_id}")
         return False
 
     payload_model = _build_ai_question_payload(
-        client_id=client.id,
-        client_profile_id=client_profile_id,
+        profile_id=profile_id,
         language=language,
         prompt=prompt,
         request_id=request_id,
@@ -306,16 +296,14 @@ async def enqueue_ai_question(
     task_id = _dispatch_ai_question_task(
         payload_model=payload_model,
         request_id=request_id,
-        client_id=client.id,
-        client_profile_id=client_profile_id,
+        profile_id=profile_id,
     )
     return task_id is not None
 
 
 async def enqueue_workout_plan_update(
     *,
-    client_id: int,
-    client_profile_id: int,
+    profile_id: int,
     expected_workout_result: str,
     feedback: str,
     language: str,
@@ -325,8 +313,7 @@ async def enqueue_workout_plan_update(
 ) -> bool:
     try:
         payload_model = AiPlanUpdatePayload(
-            client_id=client_id,
-            client_profile_id=client_profile_id,
+            profile_id=profile_id,
             language=language,
             plan_type=plan_type,
             expected_workout_result=expected_workout_result,
@@ -335,19 +322,19 @@ async def enqueue_workout_plan_update(
             request_id=request_id,
         )
     except ValidationError as exc:
-        logger.error(f"ai_plan_update_invalid_payload request_id={request_id} client_id={client_id} error={exc!s}")
+        logger.error(f"ai_plan_update_invalid_payload request_id={request_id} profile_id={profile_id} error={exc!s}")
         return False
 
     payload = payload_model.model_dump(mode="json")
     headers = {
         "request_id": request_id,
-        "client_id": client_id,
+        "profile_id": profile_id,
         "plan_type": plan_type.value,
     }
     options = {"queue": "ai_coach", "routing_key": "ai_coach", "headers": headers}
 
     logger.debug(
-        f"dispatch_update_plan request_id={request_id} client_id={client_id} "
+        f"dispatch_update_plan request_id={request_id} profile_id={profile_id} "
         f"plan_type={plan_type.value} headers={headers}"
     )
 
@@ -376,19 +363,20 @@ async def enqueue_workout_plan_update(
             )
     except Exception as exc:  # noqa: BLE001
         logger.error(
-            f"Celery dispatch failed client_id={client_id} plan_type={plan_type.value} "
-            f"request_id={request_id} error={exc!s}"
+            "Celery dispatch failed "
+            f"profile_id={profile_id} plan_type={plan_type.value} request_id={request_id} error={exc}"
         )
         return False
 
     task_id = cast(str | None, getattr(async_result, "id", None))
     if task_id is None:
         logger.error(
-            f"ai_plan_update_missing_task_id request_id={request_id} client_id={client_id} plan_type={plan_type.value}"
+            "ai_plan_update_missing_task_id "
+            f"request_id={request_id} profile_id={profile_id} plan_type={plan_type.value}"
         )
         return False
     logger.info(
         f"ai_plan_update_enqueued request_id={request_id} task_id={task_id} "
-        f"client_id={client_id} plan_type={plan_type.value}"
+        f"profile_id={profile_id} plan_type={plan_type.value}"
     )
     return True

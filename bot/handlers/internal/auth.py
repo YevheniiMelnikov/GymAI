@@ -85,16 +85,18 @@ def require_internal_auth(handler: Handler) -> Handler:
         if has_signature:
             if not is_allowed:
                 logger.warning(
-                    "internal_auth_denied reason=ip_not_allowed path=%s client_ip=%s",
-                    request.rel_url,
-                    client_ip or "unknown",
+                    (
+                        f"internal_auth_denied reason=ip_not_allowed path={request.rel_url} "
+                        f"client_ip={client_ip or 'unknown'}"
+                    )
                 )
                 return web.json_response({"detail": "IP address not allowed"}, status=403)
             if not all((internal_key_id, ts_header, sig_header)):
                 logger.warning(
-                    "internal_auth_denied reason=missing_headers path=%s client_ip=%s",
-                    request.rel_url,
-                    client_ip or "unknown",
+                    (
+                        f"internal_auth_denied reason=missing_headers path={request.rel_url} "
+                        f"client_ip={client_ip or 'unknown'}"
+                    )
                 )
                 return web.json_response({"detail": "Missing signature headers"}, status=403)
 
@@ -116,9 +118,10 @@ def require_internal_auth(handler: Handler) -> Handler:
 
             if abs(time.time() - ts) > 300:
                 logger.warning(
-                    "internal_auth_denied reason=stale_timestamp path=%s client_ip=%s",
-                    request.rel_url,
-                    client_ip or "unknown",
+                    (
+                        f"internal_auth_denied reason=stale_timestamp path={request.rel_url} "
+                        f"client_ip={client_ip or 'unknown'}"
+                    )
                 )
                 return web.json_response({"detail": "Stale timestamp"}, status=403)
 

@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 
 from config.app_settings import settings
 
@@ -15,32 +15,6 @@ class CreditPackage:
 class AIService:
     name: str
     credits: int
-
-
-def uah_to_credits(
-    price_uah: Decimal,
-    *,
-    credit_rate_max_pack: Decimal | None = None,
-    max_markup_pct_on_cheap: Decimal = Decimal("0.30"),
-    cheap_price_threshold: Decimal = Decimal("1500"),
-    apply_markup: bool = True,
-) -> int:
-    """Convert UAH amount to credits using adaptive markup logic."""
-
-    if credit_rate_max_pack is None:
-        credit_rate_max_pack = settings.CREDIT_RATE_MAX_PACK
-
-    raw_credits = price_uah / credit_rate_max_pack
-
-    if apply_markup:
-        if price_uah <= cheap_price_threshold:
-            credits = raw_credits * (1 + max_markup_pct_on_cheap)
-        else:
-            credits = raw_credits.quantize(Decimal("1."), rounding=ROUND_HALF_UP)
-    else:
-        credits = raw_credits
-
-    return int(credits.to_integral_value(rounding=ROUND_HALF_UP))
 
 
 def available_packages() -> list[CreditPackage]:

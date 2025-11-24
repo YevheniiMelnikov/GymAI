@@ -9,7 +9,7 @@ from core.enums import WorkoutPlanType, WorkoutType
 
 
 class AICoachRequest(BaseModel):
-    client_id: int
+    profile_id: int
     prompt: str | None = None
     language: str | None = None
     mode: CoachMode = CoachMode.program
@@ -55,10 +55,6 @@ class ProgramPayload(Program):
     """Program schema used by the agent (allows schema_version)."""
 
     schema_version: str | None = None
-
-    def __init__(self, **data: Any) -> None:
-        self._coach_type_raw = data.get("coach_type")
-        super().__init__(**data)
 
     @model_validator(mode="after")
     def _validate(self) -> "ProgramPayload":

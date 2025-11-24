@@ -7,17 +7,17 @@ import pytest
 from aiogram.fsm.storage.base import StorageKey
 from aiogram.fsm.storage.memory import MemoryStorage
 
-from bot.handlers.internal.tasks import (
-    _resolve_client_and_profile,
-    internal_ai_coach_plan_ready,
-    internal_export_coach_payouts,
-)
+from bot.handlers.internal.tasks import internal_ai_coach_plan_ready, _resolve_profile
 from core.ai_coach.state.plan import AiPlanState
 from bot.utils.ai_coach import enqueue_workout_plan_generation, enqueue_workout_plan_update
 from config.app_settings import settings
-from core.enums import WorkoutPlanType, WorkoutType, ProfileRole, SubscriptionPeriod
-from core.exceptions import ClientNotFoundError
-from core.schemas import Client, DayExercises, Exercise, Program, Profile, Subscription
+from core.enums import WorkoutPlanType, WorkoutType, SubscriptionPeriod
+from core.exceptions import ProfileNotFoundError
+from core.schemas import DayExercises, Exercise, Program, Profile, Subscription
+
+
+def _make_profile(profile_id: int) -> Profile:
+    return Profile.model_validate({"id": profile_id, "tg_id": profile_id, "language": "en", "credits": 0})
 
 
 class DummyBot:
@@ -63,85 +63,83 @@ class DummyRedis:
 
 
 @pytest.mark.asyncio
-async def test_resolve_client_and_profile_from_cache(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = Client.model_validate({"id": 1, "profile": 2, "credits": 0, "assigned_to": []})
+async def test_resolve_profile_from_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    profile_record = _make_profile(1)
 
     calls: list[int] = []
 
-    async def fake_get_client(profile_id: int, *, use_fallback: bool = True) -> Client:
+    async def fake_get_profile(profile_id: int, *, use_fallback: bool = True) -> Profile:
         calls.append(profile_id)
-        return client
+        return profile_record
 
-    async def fail_get_client_by_profile_id(_: int) -> Client | None:
+    async def fail_get_profile(_: int) -> Profile | None:
         raise AssertionError("should not call profile lookup")
 
-    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.get_client", fake_get_client)
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.profile.get_record", fake_get_profile)
     monkeypatch.setattr(
-        "bot.handlers.internal.tasks.APIService.profile.get_client_by_profile_id",
-        fail_get_client_by_profile_id,
+        "bot.handlers.internal.tasks.APIService.profile.get_profile",
+        fail_get_profile,
     )
-    result_client, profile_id, client_profile_id = await _resolve_client_and_profile(client.id, client.profile)
-    assert result_client == client
-    assert profile_id == client.profile
-    assert client_profile_id == client.id
-    assert calls == [client.profile]
+    resolved = await _resolve_profile(profile_record.id, profile_record.id)
+    assert resolved == profile_record
+    assert calls == [profile_record.id]
 
 
 @pytest.mark.asyncio
-async def test_resolve_client_and_profile_fetches_when_cache_missing(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = Client.model_validate({"id": 3, "profile": 4, "credits": 0, "assigned_to": []})
+async def test_resolve_profile_fetches_when_cache_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    profile_record = _make_profile(3)
 
-    async def missing_cache(_: int, *, use_fallback: bool = True) -> Client:
-        raise ClientNotFoundError(4)
+    async def missing_cache(_: int, *, use_fallback: bool = True) -> Profile:
+        raise ProfileNotFoundError(4)
 
-    async def fetch_by_profile(profile_id: int) -> Client | None:
-        assert profile_id == client.profile
-        return client
+    async def fetch_by_profile(profile_id: int) -> Profile | None:
+        assert profile_id == profile_record.id
+        return profile_record
 
     saved: dict[str, Any] = {}
 
-    async def save_client(profile_id: int, payload: dict[str, Any]) -> None:
+    async def save_profile(profile_id: int, payload: dict[str, Any]) -> None:
         saved.update({"profile_id": profile_id, "payload": payload})
 
-    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.get_client", missing_cache)
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.profile.get_record", missing_cache)
     monkeypatch.setattr(
-        "bot.handlers.internal.tasks.APIService.profile.get_client_by_profile_id",
+        "bot.handlers.internal.tasks.APIService.profile.get_profile",
         fetch_by_profile,
     )
-    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.save_client", save_client)
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.profile.save_record", save_profile)
 
-    result_client, profile_id, client_profile_id = await _resolve_client_and_profile(client.id, client.profile)
-    assert result_client == client
-    assert profile_id == client.profile
-    assert client_profile_id == client.id
-    assert saved["profile_id"] == client.profile
+    resolved = await _resolve_profile(profile_record.id, profile_record.id)
+    assert resolved == profile_record
+    assert saved["profile_id"] == profile_record.id
 
 
 @pytest.mark.asyncio
-async def test_resolve_client_and_profile_without_profile_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    client = Client.model_validate({"id": 6, "profile": 7, "credits": 0, "assigned_to": []})
+async def test_resolve_profile_without_profile_hint(monkeypatch: pytest.MonkeyPatch) -> None:
+    profile_record = _make_profile(6)
 
-    async def fail_cache(_: int, *, use_fallback: bool = True) -> Client:
+    async def fail_cache(_: int, *, use_fallback: bool = True) -> Profile:
         raise AssertionError("cache should not be used without profile id")
 
-    async def fetch_client_by_id(client_id: int) -> Client | None:
-        assert client_id == client.id
-        return client
+    async def fetch_profile_by_id(profile_id: int) -> Profile | None:
+        assert profile_id == profile_record.id
+        return profile_record
 
     saved: dict[str, Any] = {}
 
-    async def save_client(profile_id: int, payload: dict[str, Any]) -> None:
+    async def save_profile(profile_id: int, payload: dict[str, Any]) -> None:
         saved.update({"profile_id": profile_id, "payload": payload})
 
-    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.get_client", fail_cache)
-    monkeypatch.setattr("bot.handlers.internal.tasks.APIService.profile.get_client", fetch_client_by_id)
-    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.save_client", save_client)
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.profile.get_record", fail_cache)
+    monkeypatch.setattr("bot.handlers.internal.tasks.APIService.profile.get_profile", fetch_profile_by_id)
+    monkeypatch.setattr(
+        "bot.handlers.internal.tasks.APIService.profile.get_profile",
+        fetch_profile_by_id,
+    )
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.profile.save_record", save_profile)
 
-    result_client, profile_id, client_profile_id = await _resolve_client_and_profile(client.id, None)
-    assert result_client == client
-    assert profile_id == client.profile
-    assert client_profile_id == client.id
-    assert saved["profile_id"] == client.profile
+    resolved = await _resolve_profile(profile_record.id, None)
+    assert resolved == profile_record
+    assert saved["profile_id"] == profile_record.id
 
 
 @pytest.mark.asyncio
@@ -171,18 +169,10 @@ async def test_enqueue_workout_plan_generation_dispatch(monkeypatch: pytest.Monk
 
     monkeypatch.setattr("bot.utils.ai_coach.generate_ai_workout_plan", DummyTask)
 
-    client = Client.model_validate(
-        {
-            "id": 7,
-            "profile": 12,
-            "credits": 0,
-            "assigned_to": [],
-        }
-    )
+    profile_record = _make_profile(7)
 
     queued = await enqueue_workout_plan_generation(
-        client=client,
-        language="en",
+        profile=profile_record,
         plan_type=WorkoutPlanType.PROGRAM,
         workout_type=WorkoutType.GYM,
         wishes="lean",
@@ -192,7 +182,7 @@ async def test_enqueue_workout_plan_generation_dispatch(monkeypatch: pytest.Monk
     )
 
     assert queued is True
-    assert captured["client_profile_id"] == client.profile
+    assert captured["profile_id"] == profile_record.id
     assert captured["plan_type"] == WorkoutPlanType.PROGRAM.value
     assert captured["workout_days"] == ["mon", "wed"]
 
@@ -225,8 +215,7 @@ async def test_enqueue_workout_plan_update_dispatch(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr("bot.utils.ai_coach.update_ai_workout_plan", DummyTask)
 
     queued = await enqueue_workout_plan_update(
-        client_id=5,
-        client_profile_id=9,
+        profile_id=9,
         expected_workout_result="squats",
         feedback="tough",
         language="en",
@@ -236,7 +225,7 @@ async def test_enqueue_workout_plan_update_dispatch(monkeypatch: pytest.MonkeyPa
     )
 
     assert queued is True
-    assert captured["client_profile_id"] == 9
+    assert captured["profile_id"] == 9
     assert captured["plan_type"] == WorkoutPlanType.SUBSCRIPTION.value
     assert captured["expected_workout_result"] == "squats"
 
@@ -244,25 +233,17 @@ async def test_enqueue_workout_plan_update_dispatch(monkeypatch: pytest.MonkeyPa
 @pytest.mark.asyncio
 async def test_internal_ai_plan_ready_program(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "DEBUG", True)
-    client = Client.model_validate(
-        {
-            "id": 3,
-            "profile": 4,
-            "credits": 0,
-            "assigned_to": [],
-        }
-    )
+    profile_record = _make_profile(3)
     profile = Profile.model_validate(
         {
             "id": 4,
-            "role": ProfileRole.client,
-            "tg_id": 100,
+            "tg_id": profile_record.tg_id,
             "language": "en",
         }
     )
     program = Program(
         id=1,
-        client_profile=client.id,
+        profile=profile_record.id,
         exercises_by_day=[DayExercises(day="1", exercises=[Exercise(name="push-up", sets="3", reps="10")])],
         created_at=0.0,
         split_number=1,
@@ -272,40 +253,40 @@ async def test_internal_ai_plan_ready_program(monkeypatch: pytest.MonkeyPatch) -
 
     cache_calls: list[int] = []
 
-    async def fake_get_client(profile_id: int, *, use_fallback: bool = True) -> Client:
+    async def fake_get_cached_profile(profile_id: int, *, use_fallback: bool = True) -> Profile:
         cache_calls.append(profile_id)
-        return client
+        return profile_record
 
-    async def fake_cache_save_client(*_: Any, **__: Any) -> None:
+    async def fake_cache_save_profile(*_: Any, **__: Any) -> None:
         return None
 
-    async def fake_get_profile(_: int) -> Profile | None:
+    async def fake_get_profile_service(_: int) -> Profile | None:
         return profile
 
     saved_cache: dict[str, Any] = {}
     saved_args: dict[str, Any] = {}
 
     async def fake_save_program(
-        client_profile_id: int,
+        profile_id: int,
         exercises: list[DayExercises],
         split_number: int,
         wishes: str,
     ) -> Program:
         saved_args.update(
             {
-                "client_profile_id": client_profile_id,
+                "profile_id": profile_id,
                 "split_number": split_number,
                 "wishes": wishes,
             }
         )
         return program
 
-    async def fake_cache_save_program(client_profile_id: int, data: dict[str, Any]) -> None:
-        saved_cache.update({"client_profile_id": client_profile_id, "data": data})
+    async def fake_cache_save_program(profile_id: int, data: dict[str, Any]) -> None:
+        saved_cache.update({"profile_id": profile_id, "data": data})
 
-    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.get_client", fake_get_client)
-    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.save_client", fake_cache_save_client)
-    monkeypatch.setattr("bot.handlers.internal.tasks.APIService.profile.get_profile", fake_get_profile)
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.profile.get_record", fake_get_cached_profile)
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.profile.save_record", fake_cache_save_profile)
+    monkeypatch.setattr("bot.handlers.internal.tasks.APIService.profile.get_profile", fake_get_profile_service)
     monkeypatch.setattr("bot.handlers.internal.tasks.APIService.workout.save_program", fake_save_program)
     monkeypatch.setattr("bot.handlers.internal.tasks.Cache.workout.save_program", fake_cache_save_program)
     monkeypatch.setattr(
@@ -336,8 +317,7 @@ async def test_internal_ai_plan_ready_program(monkeypatch: pytest.MonkeyPatch) -
     storage = MemoryStorage()
     request = DummyRequest(
         {
-            "client_id": client.id,
-            "client_profile_id": client.profile,
+            "profile_id": profile_record.id,
             "plan_type": WorkoutPlanType.PROGRAM.value,
             "status": "success",
             "action": "create",
@@ -352,7 +332,7 @@ async def test_internal_ai_plan_ready_program(monkeypatch: pytest.MonkeyPatch) -
     if scheduled:
         await asyncio.gather(*scheduled)
     assert response.status == 202
-    assert cache_calls == [client.profile]
+    assert cache_calls == [profile_record.id]
     key = StorageKey(bot_id=bot.id, chat_id=profile.tg_id, user_id=profile.tg_id)
     data = await storage.get_data(key)
     assert len(data["exercises"]) == 1
@@ -362,25 +342,17 @@ async def test_internal_ai_plan_ready_program(monkeypatch: pytest.MonkeyPatch) -
 @pytest.mark.asyncio
 async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "DEBUG", True)
-    client = Client.model_validate(
-        {
-            "id": 6,
-            "profile": 7,
-            "credits": 0,
-            "assigned_to": [],
-        }
-    )
+    profile_record = _make_profile(6)
     profile = Profile.model_validate(
         {
             "id": 7,
-            "role": ProfileRole.client,
-            "tg_id": 101,
+            "tg_id": profile_record.tg_id,
             "language": "en",
         }
     )
     updated_subscription = Subscription(
         id=9,
-        client_profile=client.id,
+        profile=profile_record.id,
         enabled=True,
         price=0,
         workout_type="gym",
@@ -393,7 +365,7 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
 
     existing_subscription = Subscription(
         id=9,
-        client_profile=client.id,
+        profile=profile_record.id,
         enabled=True,
         price=0,
         workout_type="gym",
@@ -406,11 +378,11 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
 
     cache_calls: list[int] = []
 
-    async def fake_get_client(profile_id: int, *, use_fallback: bool = True) -> Client:
+    async def fake_get_cached_profile(profile_id: int, *, use_fallback: bool = True) -> Profile:
         cache_calls.append(profile_id)
-        return client
+        return profile_record
 
-    async def fake_get_profile(_: int) -> Profile | None:
+    async def fake_get_profile_service(_: int) -> Profile | None:
         return profile
 
     async def fake_get_subscription(_: int) -> Subscription:
@@ -419,7 +391,7 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
     updated_payload: dict[str, Any] = {}
     cache_updates: dict[str, Any] = {}
 
-    async def fake_cache_save_client(*_: Any, **__: Any) -> None:
+    async def fake_cache_save_profile(*_: Any, **__: Any) -> None:
         return None
 
     async def fake_update_subscription(sub_id: int, data: dict[str, Any]) -> None:
@@ -428,9 +400,9 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
     async def fake_cache_update(_: int, data: dict[str, Any]) -> None:
         cache_updates.update(data)
 
-    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.get_client", fake_get_client)
-    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.save_client", fake_cache_save_client)
-    monkeypatch.setattr("bot.handlers.internal.tasks.APIService.profile.get_profile", fake_get_profile)
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.profile.get_record", fake_get_cached_profile)
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.profile.save_record", fake_cache_save_profile)
+    monkeypatch.setattr("bot.handlers.internal.tasks.APIService.profile.get_profile", fake_get_profile_service)
     monkeypatch.setattr("bot.handlers.internal.tasks.Cache.workout.get_latest_subscription", fake_get_subscription)
     monkeypatch.setattr("bot.handlers.internal.tasks.APIService.workout.update_subscription", fake_update_subscription)
     monkeypatch.setattr("bot.handlers.internal.tasks.Cache.workout.update_subscription", fake_cache_update)
@@ -454,8 +426,7 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
     storage = MemoryStorage()
     request = DummyRequest(
         {
-            "client_id": client.id,
-            "client_profile_id": client.profile,
+            "profile_id": profile_record.id,
             "plan_type": WorkoutPlanType.SUBSCRIPTION.value,
             "status": "success",
             "action": "update",
@@ -470,7 +441,7 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
     if scheduled:
         await asyncio.gather(*scheduled)
     assert response.status == 202
-    assert cache_calls == [client.profile]
+    assert cache_calls == [profile_record.id]
     key = StorageKey(bot_id=bot.id, chat_id=profile.tg_id, user_id=profile.tg_id)
     data = await storage.get_data(key)
     assert len(data["exercises"]) == 1
@@ -480,25 +451,17 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
 @pytest.mark.asyncio
 async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "DEBUG", True)
-    client = Client.model_validate(
-        {
-            "id": 10,
-            "profile": 11,
-            "credits": 0,
-            "assigned_to": [],
-        }
-    )
+    profile_record = _make_profile(10)
     profile = Profile.model_validate(
         {
             "id": 11,
-            "role": ProfileRole.client,
-            "tg_id": 103,
+            "tg_id": profile_record.tg_id,
             "language": "en",
         }
     )
     new_subscription = Subscription(
         id=0,
-        client_profile=client.id,
+        profile=profile_record.id,
         enabled=True,
         price=450,
         workout_type="gym",
@@ -511,20 +474,20 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
 
     cache_calls: list[int] = []
 
-    async def fake_get_client(profile_id: int, *, use_fallback: bool = True) -> Client:
+    async def fake_get_cached_profile(profile_id: int, *, use_fallback: bool = True) -> Profile:
         cache_calls.append(profile_id)
-        return client
+        return profile_record
 
-    async def fake_get_profile(_: int) -> Profile | None:
+    async def fake_get_profile_service(_: int) -> Profile | None:
         return profile
 
     created_payload: dict[str, Any] = {}
 
-    async def fake_cache_save_client(*_: Any, **__: Any) -> None:
+    async def fake_cache_save_profile(*_: Any, **__: Any) -> None:
         return None
 
     async def fake_create_subscription(
-        client_profile_id: int,
+        profile_id: int,
         workout_days: list[str],
         wishes: str,
         amount: Decimal,
@@ -533,7 +496,7 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
     ) -> int | None:
         created_payload.update(
             {
-                "client_profile_id": client_profile_id,
+                "profile_id": profile_id,
                 "workout_days": workout_days,
                 "wishes": wishes,
                 "amount": amount,
@@ -545,12 +508,12 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
 
     saved_subscription: dict[str, Any] = {}
 
-    async def fake_cache_save_subscription(client_profile_id: int, data: dict[str, Any]) -> None:
-        saved_subscription.update({"client_profile_id": client_profile_id, "data": data})
+    async def fake_cache_save_subscription(profile_id: int, data: dict[str, Any]) -> None:
+        saved_subscription.update({"profile_id": profile_id, "data": data})
 
-    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.get_client", fake_get_client)
-    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.client.save_client", fake_cache_save_client)
-    monkeypatch.setattr("bot.handlers.internal.tasks.APIService.profile.get_profile", fake_get_profile)
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.profile.get_record", fake_get_cached_profile)
+    monkeypatch.setattr("bot.handlers.internal.tasks.Cache.profile.save_record", fake_cache_save_profile)
+    monkeypatch.setattr("bot.handlers.internal.tasks.APIService.profile.get_profile", fake_get_profile_service)
     monkeypatch.setattr("bot.handlers.internal.tasks.APIService.workout.create_subscription", fake_create_subscription)
     monkeypatch.setattr("bot.handlers.internal.tasks.Cache.workout.save_subscription", fake_cache_save_subscription)
     monkeypatch.setattr(
@@ -581,8 +544,7 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
     storage = MemoryStorage()
     request = DummyRequest(
         {
-            "client_id": client.id,
-            "client_profile_id": client.profile,
+            "profile_id": profile_record.id,
             "plan_type": WorkoutPlanType.SUBSCRIPTION.value,
             "status": "success",
             "action": "create",
@@ -597,52 +559,8 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
     if scheduled:
         await asyncio.gather(*scheduled)
     assert response.status == 202
-    assert cache_calls == [client.profile]
+    assert cache_calls == [profile_record.id]
     key = StorageKey(bot_id=bot.id, chat_id=profile.tg_id, user_id=profile.tg_id)
     data = await storage.get_data(key)
     assert data["subscription"] is True
     assert data["last_request_id"] == "req-sub"
-
-
-class FakeRequest:
-    def __init__(self, headers: dict[str, str]) -> None:
-        self.headers = headers
-        self.rel_url = "/internal/test"
-        self.transport = SimpleNamespace(get_extra_info=lambda name: ("127.0.0.1", 0))
-        self.app: dict[str, Any] = {}
-
-    async def json(self) -> dict[str, Any]:  # pragma: no cover - not used
-        return {}
-
-
-@pytest.mark.asyncio
-async def test_internal_auth_requires_key() -> None:
-    settings.DEBUG = False
-    settings.INTERNAL_API_KEY = "secret"
-    request = FakeRequest({})
-    response = await internal_export_coach_payouts(request)  # type: ignore[arg-type]
-    assert response.status == 401
-
-
-@pytest.mark.asyncio
-async def test_internal_auth_accepts_valid_key(monkeypatch: pytest.MonkeyPatch) -> None:
-    settings.DEBUG = False
-    settings.INTERNAL_API_KEY = "secret"
-
-    class DummyProcessor:
-        def __init__(self) -> None:
-            self.called = False
-
-        async def export_coach_payouts(self) -> None:
-            self.called = True
-
-    processor = DummyProcessor()
-    monkeypatch.setattr(
-        "bot.handlers.internal.tasks.get_container",
-        lambda: SimpleNamespace(payment_processor=lambda: processor),
-    )
-
-    request = FakeRequest({"X-Internal-Api-Key": "secret"})
-    response = await internal_export_coach_payouts(request)  # type: ignore[arg-type]
-    assert response.status == 200
-    assert processor.called is True

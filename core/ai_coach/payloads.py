@@ -4,8 +4,7 @@ from core.enums import WorkoutPlanType, WorkoutType
 
 
 class AiPlanBasePayload(BaseModel):
-    client_id: int
-    client_profile_id: int | None
+    profile_id: int
     language: str
     plan_type: WorkoutPlanType
     wishes: str = ""
@@ -13,18 +12,11 @@ class AiPlanBasePayload(BaseModel):
 
     model_config = {"use_enum_values": True}
 
-    @field_validator("client_id")
+    @field_validator("profile_id")
     @classmethod
-    def _ensure_client_id(cls, value: int) -> int:
+    def _ensure_profile_id(cls, value: int) -> int:
         if value <= 0:
-            raise ValueError("client_id must be positive")
-        return value
-
-    @field_validator("client_profile_id")
-    @classmethod
-    def _ensure_client_profile_id(cls, value: int | None) -> int | None:
-        if value is not None and value <= 0:
-            raise ValueError("client_profile_id must be positive")
+            raise ValueError("profile_id must be positive")
         return value
 
     @field_validator("request_id")
@@ -53,8 +45,7 @@ class AiAttachmentPayload(BaseModel):
 
 
 class AiQuestionPayload(BaseModel):
-    client_id: int
-    client_profile_id: int
+    profile_id: int
     language: str
     prompt: str
     request_id: str
@@ -63,11 +54,11 @@ class AiQuestionPayload(BaseModel):
 
     model_config = {"use_enum_values": True}
 
-    @field_validator("client_id", "client_profile_id")
+    @field_validator("profile_id")
     @classmethod
     def _ensure_positive(cls, value: int) -> int:
         if value <= 0:
-            raise ValueError("identifiers must be positive")
+            raise ValueError("profile_id must be positive")
         return value
 
     @field_validator("prompt")

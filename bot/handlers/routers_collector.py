@@ -5,7 +5,6 @@ if TYPE_CHECKING:
 else:  # pragma: no cover - runtime imports
     Dispatcher = Router = Any
 
-from bot.handlers.admin_handler import admin_router
 from bot.handlers.chat_handler import chat_router
 from bot.handlers.command_handler import cmd_router
 from bot.handlers.invalid_content_handler import invalid_content_router
@@ -17,7 +16,6 @@ from bot.handlers.workout_handler import workout_router
 
 def configure_routers(dp: "Dispatcher") -> None:
     routers: list["Router"] = [
-        admin_router,
         cmd_router,
         chat_router,
         questionnaire_router,

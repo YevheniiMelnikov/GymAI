@@ -27,7 +27,7 @@ class AskCtx(TypedDict):
     """Context passed to dispatch functions."""
 
     prompt: str | None
-    client_id: int
+    profile_id: int
     period: str
     workout_days: list[str]
     expected_workout: str

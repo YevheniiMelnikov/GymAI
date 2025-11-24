@@ -14,10 +14,9 @@ def test_get_latest_program_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
             return [
                 {
                     "id": 1,
-                    "client_profile": int(field),
+                    "profile": int(field),
                     "exercises_by_day": [],
                     "created_at": 5,
-                    "coach_type": "human",
                 }
             ]
 

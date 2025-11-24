@@ -116,8 +116,8 @@ class _DatasetService:
     def log_once(self, *args, **kwargs) -> None:
         return None
 
-    def chat_dataset_name(self, client_id: int) -> str:
-        return f"chat_{client_id}"
+    def chat_dataset_name(self, profile_id: int) -> str:
+        return f"chat_{profile_id}"
 
     def to_user_ctx(self, user):
         return user or types.SimpleNamespace(id=1)
@@ -182,7 +182,7 @@ class _SearchServiceStub:
     async def search(
         self,
         query: str,
-        client_id: int,
+        profile_id: int,
         k: int | None = None,
         *,
         datasets: Sequence[str] | None = None,
@@ -382,13 +382,13 @@ class _KB:
                 if hasattr(result, "__await__"):
                     await result
 
-    async def get_message_history(self, client_id: int, *a, **k):
-        key = (client_id,)
+    async def get_message_history(self, profile_id: int, *a, **k):
+        key = (profile_id,)
         if key in self._seen:
             return []
         self._seen.add(key)
         kb_cls = type(self)
-        rows = kb_cls._DATASETS.get(kb_cls._dataset_name(client_id), [])
+        rows = kb_cls._DATASETS.get(kb_cls._dataset_name(profile_id), [])
         if not rows:
             return ["msg1", "msg2"]
         raw_limit = int(k.get("limit", 2)) if k else 2
@@ -397,11 +397,11 @@ class _KB:
 
     @classmethod
     async def search(
-        cls, query: str, client_id: int, k: int | None = None, *, request_id: str | None = None
+        cls, query: str, profile_id: int, k: int | None = None, *, request_id: str | None = None
     ) -> list[str]:
-        alias = cls._resolve_dataset_alias(cls._dataset_name(client_id))
+        alias = cls._resolve_dataset_alias(cls._dataset_name(profile_id))
         actor = await cls._get_cognee_user()
-        await cls._ensure_profile_indexed(client_id, actor)
+        await cls._ensure_profile_indexed(profile_id, actor)
         await cls._ensure_dataset_exists(alias, actor)
         datasets = [alias]
         try:
@@ -411,7 +411,7 @@ class _KB:
         if global_status == ProjectionStatus.READY:
             datasets.append(cls.GLOBAL_DATASET)
         try:
-            return await cls._search_single_query(query, datasets, actor, k, client_id, request_id=request_id)
+            return await cls._search_single_query(query, datasets, actor, k, profile_id, request_id=request_id)
         except Exception:
             fallback_alias = cls._resolve_dataset_alias(cls.GLOBAL_DATASET)
             return await cls._search_single_query(
@@ -419,7 +419,7 @@ class _KB:
                 [fallback_alias],
                 actor,
                 k,
-                client_id,
+                profile_id,
                 request_id=request_id,
             )
 
@@ -430,12 +430,12 @@ class _KB:
         *,
         dataset: str | None = None,
         node_set: list[str] | None = None,
-        client_id: int | None = None,
+        profile_id: int | None = None,
         role: Any | None = None,
         metadata: Mapping[str, Any] | None = None,
         project: bool = True,
     ) -> tuple[str, bool]:
-        target = dataset or (cls._dataset_name(client_id) if client_id is not None else cls.GLOBAL_DATASET)
+        target = dataset or (cls._dataset_name(profile_id) if profile_id is not None else cls.GLOBAL_DATASET)
         role_value = getattr(role, "value", role)
         text_value = text if role_value is None else f"{role_value}: {text}"
         meta_payload = dict(metadata or {})
@@ -473,9 +473,9 @@ class _KB:
         return None
 
     @classmethod
-    async def fallback_entries(cls, client_id: int, limit: int = 6) -> list[tuple[str, str]]:
+    async def fallback_entries(cls, profile_id: int, limit: int = 6) -> list[tuple[str, str]]:
         instance = cls()
-        datasets = [cls._resolve_dataset_alias(cls._dataset_name(client_id)), cls.GLOBAL_DATASET]
+        datasets = [cls._resolve_dataset_alias(cls._dataset_name(profile_id)), cls.GLOBAL_DATASET]
         return await instance.search_service._fallback_dataset_entries(datasets, user_ctx=cls._user, top_k=limit)
 
     @classmethod
@@ -516,21 +516,21 @@ class _KB:
         return alias, not duplicate
 
     @classmethod
-    async def save_client_message(cls, text: str, client_id: int) -> None:
+    async def save_client_message(cls, text: str, profile_id: int) -> None:
         await cls.add_text(
             text,
-            dataset=cls.chat_dataset_name(client_id),
-            client_id=client_id,
+            dataset=cls.chat_dataset_name(profile_id),
+            profile_id=profile_id,
             role=types.SimpleNamespace(value="client"),
             project=False,
         )
 
     @classmethod
-    async def save_ai_message(cls, text: str, client_id: int) -> None:
+    async def save_ai_message(cls, text: str, profile_id: int) -> None:
         await cls.add_text(
             text,
-            dataset=cls.chat_dataset_name(client_id),
-            client_id=client_id,
+            dataset=cls.chat_dataset_name(profile_id),
+            profile_id=profile_id,
             role=types.SimpleNamespace(value="ai"),
             project=False,
         )
@@ -540,22 +540,25 @@ class _KB:
         return str(text or "").strip()
 
     @classmethod
-    def _dataset_name(cls, client_id: int) -> str:
-        return f"kb_client_{client_id}"
+    def _dataset_name(cls, profile_id: int) -> str:
+        return f"kb_profile_{profile_id}"
 
     @classmethod
-    def chat_dataset_name(cls, client_id: int) -> str:
-        return f"chat_{client_id}"
+    def chat_dataset_name(cls, profile_id: int) -> str:
+        return f"chat_{profile_id}"
 
     @classmethod
     def _resolve_dataset_alias(cls, alias: str) -> str:
         value = str(alias or "")
         if value.startswith("client_"):
-            return f"kb_{value}"
+            suffix = value[len("client_") :]
+            if suffix.isdigit():
+                return f"kb_profile_{suffix}"
+            return value
         if value.startswith("kb_"):
             return value
         if value.isdigit():
-            return f"kb_client_{value}"
+            return f"kb_profile_{value}"
         return value
 
     @classmethod
@@ -590,27 +593,27 @@ class _KB:
         return list(cls._DATASETS.get(alias, []))
 
     @classmethod
-    async def _ensure_profile_indexed(cls, client_id: int, user: Any | None) -> None:
+    async def _ensure_profile_indexed(cls, profile_id: int, user: Any | None) -> None:
         api_service = getattr(kb_module, "APIService", APIService)
         profile_service = getattr(api_service, "profile", None)
-        get_client = getattr(profile_service, "get_client", None) if profile_service else None
-        if not callable(get_client):
+        get_profile = getattr(profile_service, "get_profile", None) if profile_service else None
+        if not callable(get_profile):
             return
         try:
-            client = await get_client(client_id)
+            profile_data = await get_profile(profile_id)
         except Exception:
             return
-        if client is None:
+        if profile_data is None:
             return
-        parts = [f"id: {getattr(client, 'id', client_id)}"]
+        parts = [f"id: {getattr(profile_data, 'id', profile_id)}"]
         for field in ("profile", "gender", "workout_goals", "weight"):
-            value = getattr(client, field, None)
+            value = getattr(profile_data, field, None)
             if value:
                 parts.append(f"{field}: {value}")
         text = "profile: " + "; ".join(parts)
-        metadata = {"kind": "document", "source": "client_profile"}
-        dataset = cls._dataset_name(client_id)
-        alias, created = await cls.update_dataset(text, dataset, user, node_set=["client_profile"], metadata=metadata)
+        metadata = {"kind": "document", "source": "profile"}
+        dataset = cls._dataset_name(profile_id)
+        alias, created = await cls.update_dataset(text, dataset, user, node_set=["profile"], metadata=metadata)
         if created:
             await cls._process_dataset(alias, user)
 
@@ -910,11 +913,11 @@ class _KB:
         cls._record_projection(cls.GLOBAL_DATASET, ProjectionStatus.READY, "refresh")
 
     @classmethod
-    async def debug_snapshot(cls, client_id: int | None = None) -> dict[str, Any]:
+    async def debug_snapshot(cls, profile_id: int | None = None) -> dict[str, Any]:
         user = await cls._get_cognee_user()
         datasets: list[str] = []
-        if client_id is not None:
-            datasets.append(cls._dataset_name(client_id))
+        if profile_id is not None:
+            datasets.append(cls._dataset_name(profile_id))
         datasets.append(cls.GLOBAL_DATASET)
         snapshot: list[dict[str, Any]] = []
         for dataset in datasets:
@@ -945,13 +948,13 @@ class _KB:
         datasets: list[str],
         user: Any | None,
         k: int | None,
-        client_id: int,
+        profile_id: int,
         *,
         request_id: str | None = None,
     ):
         instance = cls()
         return await instance.search_service.search(
-            query, client_id, k, datasets=datasets, user=user, request_id=request_id
+            query, profile_id, k, datasets=datasets, user=user, request_id=request_id
         )
 
 

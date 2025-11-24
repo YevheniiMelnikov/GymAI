@@ -1,6 +1,6 @@
 from django.db import migrations, models
 
-from apps.profiles.choices import CoachType
+COACH_CHOICES = [("human", "Human"), ("ai_coach", "Ai")]
 
 
 class Migration(migrations.Migration):
@@ -12,6 +12,6 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="program",
             name="coach_type",
-            field=models.CharField(max_length=10, choices=CoachType.choices, default=CoachType.HUMAN),
+            field=models.CharField(max_length=10, choices=COACH_CHOICES, default="human"),
         ),
     ]

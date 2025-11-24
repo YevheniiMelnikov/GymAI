@@ -10,22 +10,17 @@ from loguru import logger
 
 from bot.utils.bot import del_msg, answer_msg
 from bot.keyboards import select_service_kb, workout_type_kb
-from bot.utils.menus import has_human_coach_subscription
-from bot.utils.profiles import _get_client_and_coach
 from bot.states import States
 
 from core.cache import Cache
 from core.cache.payment import PaymentCacheManager
-from core.enums import ClientStatus, PaymentStatus, SubscriptionPeriod
+from core.enums import ProfileStatus, PaymentStatus, SubscriptionPeriod
 from core.services import APIService
 from bot.utils.menus import show_main_menu, show_my_workouts_menu, show_balance_menu
-from core.schemas import Coach, Client
-from apps.payments.tasks import send_client_request
-from bot.utils.workout_plans import cache_program_data, process_new_subscription
-from bot.texts import msg_text, btn_text
 from core.schemas import Profile
-from core.exceptions import ClientNotFoundError, CoachNotFoundError, ClientNotAssignedError
-from bot.utils.credits import uah_to_credits
+from bot.utils.workout_plans import cache_program_data, process_new_subscription
+from bot.texts import ButtonText, MessageText, btn_text, msg_text
+from core.exceptions import ProfileNotFoundError
 
 payment_router = Router()
 
@@ -37,15 +32,15 @@ async def get_the_gift(callback_query: CallbackQuery, state: FSMContext) -> None
 
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
-    await callback_query.answer(btn_text("done", profile.language))
-    client = await Cache.client.get_client(profile.id)
-    await Cache.client.update_client(client.profile, dict(status=ClientStatus.waiting_for_text))
+    await callback_query.answer(btn_text(ButtonText.done, profile.language))
+    profile_record = await Cache.profile.get_record(profile.id)
+    await Cache.profile.update_record(profile_record.id, dict(status=ProfileStatus.waiting_for_text))
     await answer_msg(
         msg_obj=callback_query,
-        text=msg_text("workout_type", profile.language),
+        text=msg_text(MessageText.workout_type, profile.language),
         reply_markup=workout_type_kb(profile.language),
     )
-    await state.update_data(new_client=True)
+    await state.update_data(new_profile=True)
     await state.set_state(States.workout_type)
     await del_msg(cast(Message | CallbackQuery | None, callback_query))
 
@@ -56,11 +51,10 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext) -> No
     profile = Profile.model_validate(data["profile"])
     if callback_query.data == "back":
         await state.set_state(States.select_service)
-        has_coach: bool = await has_human_coach_subscription(profile.id)
         await answer_msg(
             msg_obj=callback_query,
-            text=msg_text("select_service", profile.language),
-            reply_markup=select_service_kb(profile.language, has_coach),
+            text=msg_text(MessageText.select_service, profile.language),
+            reply_markup=select_service_kb(profile.language),
         )
         await del_msg(cast(Message | CallbackQuery | None, callback_query))
         return
@@ -76,23 +70,18 @@ async def payment_choice(callback_query: CallbackQuery, state: FSMContext) -> No
     option = parts[1]
 
     try:
-        client, coach = await _get_client_and_coach(profile.id)
-    except ClientNotAssignedError:
-        await callback_query.answer(msg_text("client_not_assigned_to_coach", profile.language), show_alert=True)
-        return
-    except ClientNotFoundError:
-        logger.warning(f"Client not found for profile {profile.id} in payment_choice.")
-        await callback_query.answer(msg_text("client_data_not_found_error", profile.language), show_alert=True)
-        return
-    except CoachNotFoundError:
-        logger.warning(f"Coach not found (ID from client.assigned_to) for profile {profile.id} in payment_choice.")
-        await callback_query.answer(msg_text("coach_data_not_found_error", profile.language), show_alert=True)
+        profile_record = await Cache.profile.get_record(profile.id)
+    except ProfileNotFoundError:
+        logger.warning(f"Profile record not found for profile {profile.id} in payment_choice.")
+        await callback_query.answer(
+            msg_text(MessageText.profile_data_not_found_error, profile.language), show_alert=True
+        )
         return
 
-    await state.update_data(service_type=option, client=client.model_dump(), coach=coach.model_dump())
+    await state.update_data(service_type=option, profile=profile_record.model_dump())
     await answer_msg(
         msg_obj=callback_query,
-        text=msg_text("workout_type", profile.language),
+        text=msg_text(MessageText.workout_type, profile.language),
         reply_markup=workout_type_kb(profile.language),
     )
     await state.set_state(States.workout_type)
@@ -130,35 +119,37 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext) -> No
         await callback_query.answer("Invalid amount format", show_alert=True)
         return
 
-    try:
-        client, coach = await _get_client_and_coach(profile.id)
-    except ClientNotAssignedError:
-        await callback_query.answer(msg_text("client_not_assigned_to_coach", profile.language), show_alert=True)
+    profile_data = data.get("profile")
+    if not profile_data:
+        await callback_query.answer(
+            msg_text(MessageText.profile_data_not_found_error, profile.language), show_alert=True
+        )
         return
-    except ClientNotFoundError:
-        logger.warning(f"Client not found for profile {profile.id}")
-        await callback_query.answer(msg_text("client_data_not_found_error", profile.language), show_alert=True)
-        return
-    except CoachNotFoundError:
-        logger.warning(f"Coach not found for profile {profile.id}")
-        await callback_query.answer(msg_text("coach_data_not_found_error", profile.language), show_alert=True)
-        return
+    selected_profile = Profile.model_validate(profile_data)
 
     if service_type == "program":
-        await cache_program_data(data, client.id)
+        required = int(data.get("required", 0))
+        await APIService.profile.adjust_credits(profile.id, -required)
+        await Cache.profile.update_record(selected_profile.id, {"credits": selected_profile.credits - required})
+        await cache_program_data(data, selected_profile.id)
+        await callback_query.answer(msg_text(MessageText.payment_success, profile.language), show_alert=True)
+        if callback_query.message:
+            await show_main_menu(cast(Message, callback_query.message), profile, state)
+        await del_msg(callback_query)
+        return
     else:
-        price_uah = coach.subscription_price or Decimal("0")
-        price = uah_to_credits(price_uah)
+        required = int(data.get("required", 0))
+        price = Decimal(required)
         period_map = {
             "subscription_1_month": SubscriptionPeriod.one_month,
             "subscription_6_months": SubscriptionPeriod.six_months,
         }
         period = period_map.get(service_type, SubscriptionPeriod.one_month)
         subscription_id = await APIService.workout.create_subscription(
-            client_profile_id=client.id,
+            profile_id=selected_profile.id,
             workout_days=data.get("workout_days", []),
             wishes=wishes,
-            amount=Decimal(price),
+            amount=price,
             period=period,
         )
 
@@ -168,16 +159,16 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext) -> No
             "enabled": False,
             "price": price,
             "period": period.value,
-            "client_profile": client.id,
+            "profile": selected_profile.id,
             "workout_days": data.get("workout_days", []),
             "workout_type": data.get("workout_type"),
             "wishes": wishes,
         }
-        await Cache.workout.update_subscription(client.id, subscription_data)
+        await Cache.workout.update_subscription(selected_profile.id, subscription_data)
 
-    await PaymentCacheManager.set_status(client.id, service_type, PaymentStatus.PENDING)
-    await APIService.payment.create_payment(client.id, service_type, order_id, amount)
-    await callback_query.answer(msg_text("payment_in_progress", profile.language), show_alert=True)
+    await PaymentCacheManager.set_status(selected_profile.id, service_type, PaymentStatus.PENDING)
+    await APIService.payment.create_payment(selected_profile.id, service_type, order_id, amount)
+    await callback_query.answer(msg_text(MessageText.payment_in_progress, profile.language), show_alert=True)
 
     msg = callback_query.message
     if msg and isinstance(msg, Message):
@@ -198,27 +189,3 @@ async def confirm_service(callback_query: CallbackQuery, state: FSMContext) -> N
     if service_type == "subscription":
         await process_new_subscription(callback_query, profile, state, confirmed=True)
         return
-    if service_type == "program":
-        coach = Coach.model_validate(data.get("coach"))
-        client = Client.model_validate(data.get("client"))
-        required = int(data.get("required", 0))
-        wishes = data.get("wishes", "")
-        await APIService.profile.adjust_client_credits(profile.id, -required)
-        await Cache.client.update_client(client.profile, {"credits": client.credits - required})
-        payout = (coach.program_price or Decimal("0")).quantize(Decimal("0.01"), ROUND_HALF_UP)
-        await APIService.profile.adjust_coach_payout_due(coach.profile, payout)
-        new_due = (coach.payout_due or Decimal("0")) + payout
-        await Cache.coach.update_coach(coach.profile, {"payout_due": str(new_due)})
-        send_client_request.delay(  # pyrefly: ignore[not-callable]
-            coach.profile,
-            client.profile,
-            {
-                "service_type": "program",
-                "workout_type": data.get("workout_type"),
-                "wishes": wishes,
-            },
-        )
-        await callback_query.answer(msg_text("payment_success", profile.language), show_alert=True)
-        if callback_query.message:
-            await show_main_menu(cast(Message, callback_query.message), profile, state)
-        await del_msg(callback_query)

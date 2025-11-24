@@ -105,7 +105,7 @@ class Settings(BaseSettings):
     TIME_ZONE: Annotated[str, Field(default="Europe/Kyiv")]
     DEFAULT_LANG: Annotated[str, Field(default="ua")]
     ADMIN_LANG: Annotated[str, Field(default="ru")]
-    LOG_LEVEL: Annotated[str, Field(default="INFO")]
+    LOG_LEVEL: Annotated[str, Field(default="DEBUG")]
     LOG_VERBOSE_CELERY: Annotated[bool, Field(default=False)]
 
     REDIS_URL: Annotated[str, Field(default="redis://redis:6379")]
@@ -165,6 +165,7 @@ class Settings(BaseSettings):
     WEBHOOK_URL: str | None = None
     PAYMENT_CALLBACK_URL: str | None = None
 
+    DEFAULT_CREDITS: int = 500
     PACKAGE_START_CREDITS: int = 500
     PACKAGE_START_PRICE: Decimal = Decimal("250")
     PACKAGE_OPTIMUM_CREDITS: int = 1200
@@ -188,7 +189,7 @@ class Settings(BaseSettings):
     AI_COACH_REQUEST_TIMEOUT: Annotated[int, Field(default=60)]
     AI_COACH_GLOBAL_PROJECTION_TIMEOUT: Annotated[float, Field(default=15.0)]
     AI_COACH_DEFAULT_TOOL_TIMEOUT: Annotated[float, Field(default=3.0)]
-    AI_COACH_SEARCH_TIMEOUT: Annotated[float, Field(default=8.0)]
+    AI_COACH_SEARCH_TIMEOUT: Annotated[float, Field(default=12.0)]
     AI_COACH_HISTORY_TIMEOUT: Annotated[float, Field(default=6.0)]
     AI_COACH_PROGRAM_HISTORY_TIMEOUT: Annotated[float, Field(default=6.0)]
     AI_COACH_SAVE_TIMEOUT: Annotated[float, Field(default=30.0)]

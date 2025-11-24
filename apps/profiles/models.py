@@ -1,26 +1,18 @@
 from django.db import models
 from django.db.models import Model
 
-from django.contrib.postgres.fields import ArrayField
-
-from apps.profiles.choices import Role, ClientStatus, CoachType
-from apps.profiles.fields import EncryptedField
+from apps.profiles.choices import ProfileStatus
 
 
 class Profile(Model):
-    role = models.CharField(max_length=10, choices=Role.choices, default=Role.CLIENT, db_column="role")
     language = models.CharField(max_length=50, null=True, blank=True)
     tg_id = models.BigIntegerField(blank=True, null=True, unique=True)
-
-    class Meta:
-        verbose_name = "profile"
-        verbose_name_plural = "profiles"
-
-
-class ClientProfile(Model):
-    profile = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name="client_profile")
     name = models.CharField(max_length=50, null=True, blank=True)
-    status = models.CharField(max_length=50, choices=ClientStatus.choices, default=ClientStatus.initial)
+    status = models.CharField(
+        max_length=50,
+        choices=ProfileStatus.choices,
+        default=ProfileStatus.initial,
+    )
     gender = models.CharField(max_length=50, null=True, blank=True)
     born_in = models.IntegerField(null=True, blank=True)
     weight = models.IntegerField(null=True, blank=True)
@@ -28,33 +20,11 @@ class ClientProfile(Model):
     workout_experience = models.CharField(max_length=50, null=True, blank=True)
     workout_goals = models.CharField(max_length=250, null=True, blank=True)
     profile_photo = models.CharField(max_length=250, null=True, blank=True)
-    assigned_to = ArrayField(models.IntegerField(), default=list, blank=True)
     credits = models.PositiveIntegerField(default=0)
 
     class Meta:
-        verbose_name = "ClientProfile"
-        verbose_name_plural = "ClientProfiles"
+        verbose_name = "profile"
+        verbose_name_plural = "profiles"
 
-
-class CoachProfile(Model):
-    profile = models.OneToOneField(Profile, on_delete=models.CASCADE, related_name="coach_profile")
-    name = models.CharField(max_length=50, null=True, blank=True)
-    surname = models.CharField(max_length=50, null=True, blank=True)
-    additional_info = models.CharField(max_length=250, null=True, blank=True)
-    profile_photo = models.CharField(max_length=250, null=True, blank=True)
-    payment_details = EncryptedField(max_length=2048, null=True, blank=True)
-    work_experience = models.IntegerField(null=True, blank=True)
-    coach_type = models.CharField(
-        max_length=10,
-        choices=CoachType.choices,
-        default=CoachType.HUMAN,
-    )
-    subscription_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    program_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    verified = models.BooleanField(default=False)
-    assigned_to = ArrayField(models.IntegerField(), default=list, blank=True)
-    payout_due = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-
-    class Meta:
-        verbose_name = "CoachProfile"
-        verbose_name_plural = "CoachProfiles"
+    def __str__(self) -> str:
+        return f"Profile(id={self.id}, tg_id={self.tg_id})"

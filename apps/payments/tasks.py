@@ -71,37 +71,16 @@ def process_payment_webhook(
 
 
 @app.task(bind=True, max_retries=3, retry_backoff=30, retry_backoff_max=300)  # pyrefly: ignore[not-callable]
-def send_payment_message(self, client_profile_id: int, text: str) -> None:
-    payload: dict[str, Any] = {"client_id": client_profile_id, "text": text}
+def send_payment_message(self, profile_id: int, text: str) -> None:
+    payload: dict[str, Any] = {"profile_id": profile_id, "text": text}
 
     def runner() -> Awaitable[None]:
         return _post_internal_json("/internal/payments/send_message/", payload)
 
-    _retryable_call(self, f"payment_message client_profile_id={client_profile_id}", runner)
-
-
-@app.task(bind=True, max_retries=3, retry_backoff=30, retry_backoff_max=300)  # pyrefly: ignore[not-callable]
-def send_client_request(
-    self,
-    coach_profile_id: int,
-    client_profile_id: int,
-    data: dict[str, Any],
-) -> None:
-    payload: dict[str, Any] = {
-        "coach_id": coach_profile_id,
-        "client_id": client_profile_id,
-        "data": data,
-    }
-
-    def runner() -> Awaitable[None]:
-        return _post_internal_json("/internal/payments/client_request/", payload)
-
-    description = f"client_request client_profile_id={client_profile_id} coach_profile_id={coach_profile_id}"
-    _retryable_call(self, description, runner)
+    _retryable_call(self, f"payment_message profile_id={profile_id}", runner)
 
 
 __all__ = [
     "process_payment_webhook",
     "send_payment_message",
-    "send_client_request",
 ]
