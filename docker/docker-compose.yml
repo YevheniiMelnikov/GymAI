@@ -124,6 +124,7 @@ services:
       - staticfiles:/app/staticfiles
       - cognee_storage:/app/cognee_storage
       - ../google_creds.json:/app/google_creds.json:ro
+      - ../apps/webapp/static:/app/apps/webapp/static
     restart: unless-stopped
 
   celery_worker:

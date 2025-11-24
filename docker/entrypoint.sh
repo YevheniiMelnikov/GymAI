@@ -18,8 +18,7 @@ if [ "${RUN_MIGRATIONS}" = "true" ]; then
   echo "▶ Ensuring superuser..."
   python apps/manage.py ensure_admin || echo "▶ ensure_admin failed"
 
-  echo "▶ Ensuring AI coach..."
-  python apps/manage.py ensure_ai_coach || echo "▶ ensure_ai_coach failed"
+
 fi
 
 if [ "${SKIP_COLLECTSTATIC}" = "true" ]; then

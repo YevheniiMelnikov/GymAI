@@ -69,13 +69,15 @@ class Program(BaseModel):
     split_number: int | None = None
     workout_type: str | None = None
     wishes: str | None = None
-    model_config = ConfigDict(extra="ignore")
+    model_config = ConfigDict(extra="ignore", from_attributes=True)
 
     @field_validator("profile", mode="before")
     @classmethod
     def _normalize_profile(cls, value: Any) -> int:
         if isinstance(value, dict):
             return int(value.get("id", 0))
+        if hasattr(value, "id"):
+            return int(value.id)
         return int(value)
 
     @field_validator("created_at", mode="before")

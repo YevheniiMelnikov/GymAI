@@ -17,6 +17,15 @@ type TelegramWebApp = {
   setBackgroundColor?: (color: string) => void;
   setHeaderColor?: (color: string | 'bg_color' | 'secondary_bg_color') => void;
   themeParams?: TelegramThemeParams;
+  BackButton?: TelegramBackButton;
+};
+
+type TelegramBackButton = {
+  isVisible: boolean;
+  onClick: (cb: () => void) => void;
+  offClick: (cb: () => void) => void;
+  show: () => void;
+  hide: () => void;
 };
 
 type TelegramNamespace = { WebApp?: TelegramWebApp };
@@ -37,6 +46,22 @@ export function tmeReady(): void {
 
 export function tmeExpand(): void {
   try { getWebApp()?.expand?.(); } catch {}
+}
+
+export function showBackButton(): void {
+  try { getWebApp()?.BackButton?.show(); } catch {}
+}
+
+export function hideBackButton(): void {
+  try { getWebApp()?.BackButton?.hide(); } catch {}
+}
+
+export function onBackButtonClick(cb: () => void): void {
+  try { getWebApp()?.BackButton?.onClick(cb); } catch {}
+}
+
+export function offBackButtonClick(cb: () => void): void {
+  try { getWebApp()?.BackButton?.offClick(cb); } catch {}
 }
 
 const HEX_COLOR_PATTERN = /^#?(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i;

@@ -131,7 +131,18 @@ const ProgramPage: React.FC = () => {
             <div id="program-date" hidden={!dateText}>{dateText}</div>
 
             {loading && <div aria-busy="true">Loading...</div>}
-            {error && <div className="notice">{error}</div>}
+            {error && (
+                <div className="empty-state" style={{ textAlign: 'center', marginTop: '40px' }}>
+                    <img
+                        src="/static/images/404.png"
+                        alt="No programs"
+                        style={{ maxWidth: '200px', marginBottom: '16px' }}
+                    />
+                    <p style={{ fontSize: '16px', fontWeight: 500, color: 'var(--text)' }}>
+                        {error}
+                    </p>
+                </div>
+            )}
 
             <div className="history-footer">
                 <button
