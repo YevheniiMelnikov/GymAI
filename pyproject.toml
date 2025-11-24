@@ -1,6 +1,6 @@
 [project]
 name = "GymBot"
-version = "1.2.0"
+version = "1.2.3"
 description = ""
 authors = [{ name = "Yevhenii Melnykov", email = "evgeniy@workmail.com" }]
 readme = "README.md"
@@ -154,7 +154,7 @@ annotation-mismatch = true
 filename = "VERSION"
 
 [tool.bumpversion]
-current_version = "1.2.1"
+current_version = "1.2.3"
 parse = "(?P<major>\\d+)\\.(?P<minor>\\d+)\\.(?P<patch>\\d+)"
 serialize = ["{major}.{minor}.{patch}"]
 search = "{current_version}"
