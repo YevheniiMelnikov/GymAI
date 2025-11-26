@@ -21,6 +21,14 @@ if [ "${RUN_MIGRATIONS}" = "true" ]; then
 
 fi
 
+if [ "${WEBAPP_AUTO_BUILD}" = "true" ]; then
+  echo "▶ Building webapp bundle..."
+  if [ ! -d "/app/apps/webapp/node_modules" ]; then
+    (cd /app/apps/webapp && npm ci)
+  fi
+  (cd /app/apps/webapp && npm run build)
+fi
+
 if [ "${SKIP_COLLECTSTATIC}" = "true" ]; then
   echo "▶ Skipping collectstatic (disabled)"
 elif [ "$ROLE" = "web" ] || [ "$ROLE" = "api" ]; then

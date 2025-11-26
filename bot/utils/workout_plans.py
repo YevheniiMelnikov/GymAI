@@ -25,7 +25,7 @@ from bot.utils.menus import show_main_menu, show_subscription_page, show_balance
 from bot.utils.text import get_translated_week_day
 from bot.utils.bot import del_msg, answer_msg, delete_messages, get_webapp_url
 from bot.keyboards import yes_no_kb
-from bot.texts import ButtonText, MessageText, btn_text, msg_text
+from bot.texts import ButtonText, MessageText, translate
 
 
 def _next_payment_date(period: SubscriptionPeriod = SubscriptionPeriod.one_month) -> str:
@@ -51,7 +51,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bo
     profile_id_str = data.get("profile_id")
     if profile_id_str is None:
         logger.error("profile_id not found in state for save_workout_plan")
-        await callback_query.answer(msg_text(MessageText.error_generic, profile.language), show_alert=True)
+        await callback_query.answer(translate(MessageText.error_generic, profile.language), show_alert=True)
         return
 
     profile_id = int(profile_id_str)
@@ -62,20 +62,20 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bo
     ]
 
     if not any(day.exercises for day in exercises):
-        await answer_msg(callback_query, msg_text(MessageText.no_exercises_to_save, profile.language))
+        await answer_msg(callback_query, translate(MessageText.no_exercises_to_save, profile.language))
         return
 
     if completed_days < split_number:
-        await answer_msg(callback_query, msg_text(MessageText.complete_all_days, profile.language), show_alert=True)
+        await answer_msg(callback_query, translate(MessageText.complete_all_days, profile.language), show_alert=True)
         return
 
-    await callback_query.answer(msg_text(MessageText.saved, profile.language))
+    await callback_query.answer(translate(MessageText.saved, profile.language))
 
     try:
         profile_record = await Cache.profile.get_record(profile_id)
     except ProfileNotFoundError:
         logger.error(f"Profile {profile_id} not found in save_workout_plan")
-        await callback_query.answer(msg_text(MessageText.unexpected_error, profile.language), show_alert=True)
+        await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
         return
 
     profile_snapshot = Profile.model_validate(profile_record.profile_data)
@@ -104,7 +104,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bo
 
             await send_message(
                 recipient=profile_record,
-                text=msg_text(MessageText.program_updated, profile_lang),
+                text=translate(MessageText.program_updated, profile_lang),
                 bot=bot,
                 state=state,
                 reply_markup=subscription_view_kb(profile_lang),
@@ -112,7 +112,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bo
             )
         except SubscriptionNotFoundError:
             logger.error(f"Subscription not found for profile {profile_id} during save_workout_plan, cannot update.")
-            await callback_query.answer(msg_text(MessageText.unexpected_error, profile.language), show_alert=True)
+            await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
             return
     else:
         try:
@@ -136,12 +136,12 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bo
             await Cache.payment.reset_status(profile_id, "program")
         else:
             logger.error(f"Failed to save program via API for profile {profile_id}")
-            await callback_query.answer(msg_text(MessageText.unexpected_error, profile.language), show_alert=True)
+            await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
             return
 
             await send_message(
                 recipient=profile_record,
-                text=msg_text(MessageText.new_workout_plan, profile_lang),
+                text=translate(MessageText.new_workout_plan, profile_lang),
                 bot=bot,
                 state=state,
                 reply_markup=(
@@ -181,9 +181,9 @@ async def reset_workout_plan(callback_query: CallbackQuery, state: FSMContext) -
         profile_record = await Cache.profile.get_record(profile_id)
     except ProfileNotFoundError:
         logger.error(f"Profile {profile_id} not found in reset_workout_plan")
-        await callback_query.answer(msg_text(MessageText.unexpected_error, profile.language), show_alert=True)
+        await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
         return
-    await callback_query.answer(btn_text(ButtonText.done, profile.language))
+    await callback_query.answer(translate(ButtonText.done, profile.language))
 
     if data.get("subscription"):
         try:
@@ -209,7 +209,7 @@ async def reset_workout_plan(callback_query: CallbackQuery, state: FSMContext) -
             program = await Cache.workout.get_latest_program(profile_id)
         except ProgramNotFoundError:
             logger.info(f"Program not found for profile {profile_id} to reset")
-            await answer_msg(callback_query, msg_text(MessageText.unexpected_error, profile.language))
+            await answer_msg(callback_query, translate(MessageText.unexpected_error, profile.language))
             return
 
         await APIService.workout.update_program(program.id, {"exercises_by_day": []})
@@ -217,7 +217,7 @@ async def reset_workout_plan(callback_query: CallbackQuery, state: FSMContext) -
         await Cache.profile.update_record(profile_record.id, {"status": ProfileStatus.waiting_for_program})
 
     await state.clear()
-    await answer_msg(callback_query, msg_text(MessageText.enter_daily_program, profile.language).format(day=1))
+    await answer_msg(callback_query, translate(MessageText.enter_daily_program, profile.language).format(day=1))
     await del_msg(callback_query)
     await state.update_data(profile_id=profile_id, exercises=[], day_index=0, split=split_number)
     await state.set_state(States.program_manage)
@@ -235,21 +235,21 @@ async def next_day_workout_plan(callback_query: CallbackQuery, state: FSMContext
     exercises = data.get("exercises", [])
 
     if not any(day.exercises for day in exercises):
-        await callback_query.answer(msg_text(MessageText.no_exercises_to_save, profile.language))
+        await callback_query.answer(translate(MessageText.no_exercises_to_save, profile.language))
         return
 
     if completed_days >= split_number:
-        await callback_query.answer(msg_text(MessageText.out_of_range, profile.language))
+        await callback_query.answer(translate(MessageText.out_of_range, profile.language))
         return
 
-    await callback_query.answer(btn_text(ButtonText.forward, profile.language))
+    await callback_query.answer(translate(ButtonText.forward, profile.language))
     await delete_messages(state)
     completed_days += 1
 
     if data.get("subscription"):
         days = data.get("days", [])
         if completed_days >= len(days):
-            await callback_query.answer(msg_text(MessageText.out_of_range, profile.language))
+            await callback_query.answer(translate(MessageText.out_of_range, profile.language))
             return
         week_day = get_translated_week_day(profile.language, days[completed_days]).lower()
     else:
@@ -259,10 +259,10 @@ async def next_day_workout_plan(callback_query: CallbackQuery, state: FSMContext
     if not message or not isinstance(message, Message):
         return
 
-    exercise_msg = await answer_msg(message, msg_text(MessageText.enter_exercise, profile.language))
+    exercise_msg = await answer_msg(message, translate(MessageText.enter_exercise, profile.language))
     program_msg = await answer_msg(
         message,
-        msg_text(MessageText.enter_daily_program, profile.language).format(day=week_day),
+        translate(MessageText.enter_daily_program, profile.language).format(day=week_day),
         reply_markup=program_manage_kb(profile.language, split_number or 1),
     )
 
@@ -302,12 +302,12 @@ async def process_new_subscription(
     confirmed: bool = False,
 ) -> None:
     language: str = profile.language or settings.DEFAULT_LANG
-    await callback_query.answer(msg_text(MessageText.checkbox_reminding, language), show_alert=True)
+    await callback_query.answer(translate(MessageText.checkbox_reminding, language), show_alert=True)
     data = await state.get_data()
     profile_record = await Cache.profile.get_record(profile.id)
     required = int(data.get("required", 0))
     if profile_record.credits < required:
-        await callback_query.answer(msg_text(MessageText.not_enough_credits, language), show_alert=True)
+        await callback_query.answer(translate(MessageText.not_enough_credits, language), show_alert=True)
         await show_balance_menu(callback_query, profile, state)
         return
 
@@ -323,7 +323,7 @@ async def process_new_subscription(
         await state.set_state(States.confirm_service)
         await answer_msg(
             callback_query,
-            msg_text(MessageText.confirm_service, language).format(balance=profile_record.credits, price=required),
+            translate(MessageText.confirm_service, language).format(balance=profile_record.credits, price=required),
             reply_markup=yes_no_kb(language),
         )
         return
@@ -336,7 +336,7 @@ async def process_new_subscription(
         period=period,
     )
     if sub_id is None:
-        await callback_query.answer(msg_text(MessageText.unexpected_error, language), show_alert=True)
+        await callback_query.answer(translate(MessageText.unexpected_error, language), show_alert=True)
         return
 
     await APIService.profile.adjust_credits(profile.id, -required)
@@ -354,7 +354,7 @@ async def process_new_subscription(
         },
     )
     await Cache.payment.reset_status(profile_record.id, "subscription")
-    await callback_query.answer(msg_text(MessageText.payment_success, language), show_alert=True)
+    await callback_query.answer(translate(MessageText.payment_success, language), show_alert=True)
 
 
 async def edit_subscription_days(

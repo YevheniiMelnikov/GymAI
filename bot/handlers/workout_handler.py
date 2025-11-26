@@ -42,7 +42,7 @@ from bot.utils.workout_plans import reset_workout_plan, save_workout_plan, next_
 from bot.utils.ai_coach import enqueue_ai_question
 from bot.utils.ask_ai import prepare_ask_ai_request, start_ask_ai_prompt
 from core.schemas import DayExercises, Profile
-from bot.texts import ButtonText, MessageText, btn_text, msg_text
+from bot.texts import ButtonText, MessageText, translate
 from core.exceptions import AskAiPreparationError, SubscriptionNotFoundError
 from config.app_settings import settings
 from core.services import get_gif_manager
@@ -95,7 +95,7 @@ async def ask_ai_question_navigation(callback_query: CallbackQuery, state: FSMCo
     await state.set_state(States.select_service)
     await answer_msg(
         callback_query,
-        msg_text(MessageText.select_service, profile.language),
+        translate(MessageText.select_service, profile.language),
         reply_markup=select_service_kb(profile.language),
     )
 
@@ -105,7 +105,7 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
     data = await state.get_data()
     profile_data = data.get("profile")
     if not profile_data:
-        await answer_msg(message, msg_text(MessageText.unexpected_error, settings.DEFAULT_LANG))
+        await answer_msg(message, translate(MessageText.unexpected_error, settings.DEFAULT_LANG))
         await del_msg(message)
         return
 
@@ -132,7 +132,7 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
             message_key = MessageText[error.message_key]
         except KeyError as exc:
             raise ValueError(f"Unknown message key {error.message_key}") from exc
-        response = msg_text(message_key, lang)
+        response = translate(message_key, lang)
         if error.params:
             response = response.format(**error.params)
         await answer_msg(message, response)
@@ -162,11 +162,11 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
         logger.error(f"event=ask_ai_enqueue_failed request_id={request_id} profile_id={profile.id}")
         await answer_msg(
             message,
-            msg_text(MessageText.coach_agent_error, lang).format(tg=settings.TG_SUPPORT_CONTACT),
+            translate(MessageText.coach_agent_error, lang).format(tg=settings.TG_SUPPORT_CONTACT),
         )
         return
 
-    await answer_msg(message, msg_text(MessageText.request_in_progress, lang))
+    await answer_msg(message, translate(MessageText.request_in_progress, lang))
 
     state_payload: dict[str, object] = {
         "profile": user_profile.model_dump(),
@@ -195,15 +195,15 @@ async def workouts_number_choice(message: Message, state: FSMContext):
         if workouts_per_week < 1 or workouts_per_week > 7:
             raise ValueError
     except (ValueError, TypeError):
-        await answer_msg(message, msg_text(MessageText.invalid_content, profile.language))
+        await answer_msg(message, translate(MessageText.invalid_content, profile.language))
         await del_msg(message)
         return
 
     await state.update_data(split=workouts_per_week, day_index=0, exercises={})
-    await answer_msg(message, msg_text(MessageText.program_guide, profile.language))
+    await answer_msg(message, translate(MessageText.program_guide, profile.language))
     day_1_msg = await answer_msg(
         message,
-        msg_text(MessageText.enter_daily_program, profile.language).format(day=1),
+        translate(MessageText.enter_daily_program, profile.language).format(day=1),
         reply_markup=program_manage_kb(profile.language, workouts_per_week),
     )
     if day_1_msg is not None:
@@ -227,11 +227,11 @@ async def program_manage(callback_query: CallbackQuery, state: FSMContext, bot: 
     elif callback_query.data == "toggle_set":
         if data.get("set_mode"):
             await state.update_data(set_mode=False, set_id=None)
-            await callback_query.answer(msg_text(MessageText.set_mode_off, profile.language))
+            await callback_query.answer(translate(MessageText.set_mode_off, profile.language))
         else:
             current_id = int(data.get("current_set_id", 0)) + 1
             await state.update_data(set_mode=True, set_id=current_id, current_set_id=current_id)
-            await callback_query.answer(msg_text(MessageText.set_mode_on, profile.language))
+            await callback_query.answer(translate(MessageText.set_mode_on, profile.language))
     elif callback_query.data == "reset":
         await reset_workout_plan(callback_query, state)
     elif callback_query.data == "save":
@@ -254,7 +254,7 @@ async def program_action_choice(callback_query: CallbackQuery, state: FSMContext
         await callback_query.answer()
         await state.set_state(States.select_service)
         await message.answer(
-            msg_text(MessageText.select_service, profile.language),
+            translate(MessageText.select_service, profile.language),
             reply_markup=select_service_kb(profile.language),
         )
 
@@ -303,7 +303,7 @@ async def subscription_action_choice(callback_query: CallbackQuery, state: FSMCo
         await callback_query.answer()
         await state.set_state(States.select_service)
         await message.answer(
-            msg_text(MessageText.select_service, language),
+            translate(MessageText.select_service, language),
             reply_markup=select_service_kb(language),
         )
         await del_msg(message)
@@ -324,7 +324,7 @@ async def set_exercise_name(message: Message, state: FSMContext) -> None:
         gif_file_name = link_to_gif.split("/")[-1]  # pyrefly: ignore[missing-attribute]
         await Cache.workout.cache_gif_filename(exercise_name, gif_file_name)
 
-    await answer_msg(message, msg_text(MessageText.enter_sets, profile.language), reply_markup=sets_number_kb())
+    await answer_msg(message, translate(MessageText.enter_sets, profile.language), reply_markup=sets_number_kb())
     await del_msg(message)
     await state.update_data(exercise_name=exercise_name, gif_link=shorted_link)
     await state.set_state(States.enter_sets)
@@ -335,7 +335,7 @@ async def set_exercise_sets(callback_query: CallbackQuery, state: FSMContext) ->
     await state.update_data(sets=callback_query.data)
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
-    await callback_query.answer(msg_text(MessageText.saved, profile.language))
+    await callback_query.answer(translate(MessageText.saved, profile.language))
     if data.get("edit_mode"):
         message = cast(Message, callback_query.message)
         assert message is not None
@@ -345,7 +345,7 @@ async def set_exercise_sets(callback_query: CallbackQuery, state: FSMContext) ->
 
     message = cast(Message, callback_query.message)
     assert message is not None
-    await answer_msg(message, msg_text(MessageText.enter_reps, profile.language), reply_markup=reps_number_kb())
+    await answer_msg(message, translate(MessageText.enter_reps, profile.language), reply_markup=reps_number_kb())
     await del_msg(message)
     await state.set_state(States.enter_reps)
 
@@ -354,7 +354,7 @@ async def set_exercise_sets(callback_query: CallbackQuery, state: FSMContext) ->
 async def set_exercise_reps(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
-    await callback_query.answer(msg_text(MessageText.saved, profile.language))
+    await callback_query.answer(translate(MessageText.saved, profile.language))
     if data.get("edit_mode"):
         message = cast(Message, callback_query.message)
         assert message is not None
@@ -363,12 +363,12 @@ async def set_exercise_reps(callback_query: CallbackQuery, state: FSMContext) ->
         return
 
     kb = InlineKeyboardBuilder()
-    kb.button(text=btn_text(ButtonText.quit, profile.language), callback_data="skip_weight")
+    kb.button(text=translate(ButtonText.quit, profile.language), callback_data="skip_weight")
     message = cast(Message, callback_query.message)
     assert message is not None
     weight_message = await answer_msg(
         message,
-        msg_text(MessageText.exercise_weight, profile.language),
+        translate(MessageText.exercise_weight, profile.language),
         reply_markup=kb.as_markup(one_time_keyboard=True),
     )
     if weight_message is not None:
@@ -391,7 +391,7 @@ async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMCon
             return
     else:
         if not input_data.text:
-            await input_data.answer(msg_text(MessageText.invalid_content, profile.language))
+            await input_data.answer(translate(MessageText.invalid_content, profile.language))
             return
 
     weight: int | None = None
@@ -404,7 +404,7 @@ async def set_exercise_weight(input_data: CallbackQuery | Message, state: FSMCon
             weight = int(input_data.text or "0")
             message = input_data
         except (ValueError, TypeError):
-            await input_data.answer(msg_text(MessageText.invalid_content, profile.language))
+            await input_data.answer(translate(MessageText.invalid_content, profile.language))
             await del_msg(input_data)
             return
 
@@ -441,13 +441,13 @@ async def send_workout_results(callback_query: CallbackQuery, state: FSMContext,
     profile = Profile.model_validate(data["profile"])
     if callback_query.data == "completed":
         await callback_query.answer()
-        await callback_query.answer(msg_text(MessageText.keep_going, profile.language), show_alert=True)
+        await callback_query.answer(translate(MessageText.keep_going, profile.language), show_alert=True)
         message = cast(Message, callback_query.message)
         assert message is not None
         await show_main_menu(message, profile, state)
         await del_msg(cast(Message | CallbackQuery | None, callback_query))
     else:
-        await callback_query.answer(msg_text(MessageText.workout_description, profile.language), show_alert=True)
+        await callback_query.answer(translate(MessageText.workout_description, profile.language), show_alert=True)
 
 
 @workout_router.callback_query(States.program_edit)
@@ -463,7 +463,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
     if callback_query.data == "exercise_add":
         await callback_query.answer()
         exercise_msg = await answer_msg(
-            cast(Message, callback_query.message), msg_text(MessageText.enter_exercise, profile.language)
+            cast(Message, callback_query.message), translate(MessageText.enter_exercise, profile.language)
         )
         if not day_data:
             exercises.append(DayExercises(day=day_index, exercises=[]))
@@ -480,11 +480,11 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
     elif callback_query.data == "toggle_set":
         if data.get("set_mode"):
             await state.update_data(set_mode=False, set_id=None)
-            await callback_query.answer(msg_text(MessageText.set_mode_off, profile.language))
+            await callback_query.answer(translate(MessageText.set_mode_off, profile.language))
         else:
             current_id = int(data.get("current_set_id", 0)) + 1
             await state.update_data(set_mode=True, set_id=current_id, current_set_id=current_id)
-            await callback_query.answer(msg_text(MessageText.set_mode_on, profile.language))
+            await callback_query.answer(translate(MessageText.set_mode_on, profile.language))
 
     elif callback_query.data == "quit":
         await callback_query.answer()
@@ -501,12 +501,12 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
         if day_data:
             await answer_msg(
                 cast(Message, callback_query.message),
-                msg_text(MessageText.select_exercise, profile.language),
+                translate(MessageText.select_exercise, profile.language),
                 reply_markup=select_exercise_kb(day_data.exercises),
             )
         else:
             await answer_msg(
-                cast(Message, callback_query.message), msg_text(MessageText.no_exercises_found, profile.language)
+                cast(Message, callback_query.message), translate(MessageText.no_exercises_found, profile.language)
             )
         await state.set_state(States.delete_exercise)
 
@@ -515,12 +515,12 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
         if day_data:
             await answer_msg(
                 cast(Message, callback_query.message),
-                msg_text(MessageText.select_exercise, profile.language),
+                translate(MessageText.select_exercise, profile.language),
                 reply_markup=select_exercise_kb(day_data.exercises),
             )
         else:
             await answer_msg(
-                cast(Message, callback_query.message), msg_text(MessageText.no_exercises_found, profile.language)
+                cast(Message, callback_query.message), translate(MessageText.no_exercises_found, profile.language)
             )
         await state.set_state(States.toggle_drop_set)
 
@@ -529,17 +529,17 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
         if day_data:
             await answer_msg(
                 cast(Message, callback_query.message),
-                msg_text(MessageText.select_exercise, profile.language),
+                translate(MessageText.select_exercise, profile.language),
                 reply_markup=select_exercise_kb(day_data.exercises),
             )
         else:
             await answer_msg(
-                cast(Message, callback_query.message), msg_text(MessageText.no_exercises_found, profile.language)
+                cast(Message, callback_query.message), translate(MessageText.no_exercises_found, profile.language)
             )
         await state.set_state(States.edit_exercise)
 
     elif callback_query.data == "finish_editing":
-        await callback_query.answer(btn_text(ButtonText.done, profile.language))
+        await callback_query.answer(translate(ButtonText.done, profile.language))
         profile_record = await Cache.profile.get_record(profile_id)
         profile_data = await APIService.profile.get_profile(profile_record.id)
         client_lang = cast(str, profile_data.language)
@@ -557,7 +557,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
                 await Cache.payment.reset_status(profile_id, "subscription")
                 await send_message(
                     recipient=profile_record,
-                    text=msg_text(MessageText.program_updated, client_lang),
+                    text=translate(MessageText.program_updated, client_lang),
                     bot=bot,
                     state=state,
                     reply_markup=subscription_view_kb(client_lang),
@@ -575,7 +575,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
                     await Cache.payment.reset_status(profile_id, "program")
             await send_message(
                 recipient=profile_record,
-                text=msg_text(MessageText.program_updated, client_lang),
+                text=translate(MessageText.program_updated, client_lang),
                 bot=bot,
                 state=state,
                 include_incoming_message=False,
@@ -608,18 +608,18 @@ async def toggle_drop_set_callback(callback_query: CallbackQuery, state: FSMCont
     day_index = str(data.get("day_index", 0))
     day_data = next((d for d in exercises if d.day == day_index), None)
     if not day_data:
-        await callback_query.answer(msg_text(MessageText.no_exercises_found, profile.language))
+        await callback_query.answer(translate(MessageText.no_exercises_found, profile.language))
         await state.set_state(States.program_edit)
         return
 
     try:
         ex_index = int(callback_query.data or 0)
     except ValueError:
-        await callback_query.answer(msg_text(MessageText.out_of_range, profile.language))
+        await callback_query.answer(translate(MessageText.out_of_range, profile.language))
         return
 
     if ex_index < 0 or ex_index >= len(day_data.exercises):
-        await callback_query.answer(msg_text(MessageText.out_of_range, profile.language))
+        await callback_query.answer(translate(MessageText.out_of_range, profile.language))
         return
 
     exercise = day_data.exercises[ex_index]
@@ -659,7 +659,7 @@ async def subscription_history_nav(callback_query: CallbackQuery, state: FSMCont
 
     if "_" not in cb_data:
         lang = (await Cache.profile.get_profile(callback_query.from_user.id)).language
-        await callback_query.answer(msg_text(MessageText.out_of_range, lang))
+        await callback_query.answer(translate(MessageText.out_of_range, lang))
         return
 
     _, index_str = cb_data.rsplit("_", 1)
@@ -667,7 +667,7 @@ async def subscription_history_nav(callback_query: CallbackQuery, state: FSMCont
         index = int(index_str)
     except ValueError:
         lang = (await Cache.profile.get_profile(callback_query.from_user.id)).language
-        await callback_query.answer(msg_text(MessageText.out_of_range, lang))
+        await callback_query.answer(translate(MessageText.out_of_range, lang))
         return
 
     data = await state.get_data()

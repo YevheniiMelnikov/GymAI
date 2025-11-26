@@ -6,7 +6,7 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.types import FSInputFile, InputFile, Message
 
-from bot.texts import MessageText, msg_text
+from bot.texts import MessageText, translate
 from bot.utils.bot import answer_msg
 from config.app_settings import settings
 from core.schemas import Profile
@@ -51,7 +51,7 @@ async def send_message(
 
     if include_incoming_message:
         try:
-            template = msg_text(MessageText.incoming_message, language or recipient_profile.language or "ua")
+            template = translate(MessageText.incoming_message, language or recipient_profile.language or "ua")
         except Exception:
             template = "<b>{name}</b>:\n{message}"
         formatted_text = template.format(
@@ -91,7 +91,7 @@ async def send_message(
 
 
 async def process_feedback_content(message: Message, profile: Profile, bot: Bot) -> bool:
-    text = msg_text(MessageText.new_feedback, settings.ADMIN_LANG).format(
+    text = translate(MessageText.new_feedback, settings.ADMIN_LANG).format(
         profile_id=profile.id,
         feedback=message.text or message.caption or "",
     )
@@ -115,7 +115,7 @@ async def process_feedback_content(message: Message, profile: Profile, bot: Bot)
         await bot.send_video(chat_id=settings.ADMIN_ID, video=message.video.file_id)
         return True
 
-    await answer_msg(message, msg_text(MessageText.invalid_content, profile.language))
+    await answer_msg(message, translate(MessageText.invalid_content, profile.language))
     return False
 
 

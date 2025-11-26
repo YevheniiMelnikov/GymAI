@@ -5,7 +5,7 @@ from typing import cast
 
 from aiogram.types import InlineKeyboardButton, WebAppInfo
 
-from bot.texts import ButtonText, btn_text
+from bot.texts import ButtonText, translate
 
 
 class ButtonsBuilder:
@@ -25,7 +25,7 @@ class ButtonsBuilder:
         self, text_key: ButtonText | str, callback: str | None = None, webapp_url: str | None = None, **format_args
     ) -> InlineKeyboardButton:
         key = self._resolve_key(text_key)
-        text = btn_text(key, lang=self.lang).format(**format_args)
+        text = translate(key, lang=self.lang).format(**format_args)
         formatted_text = self._replace_emoji_tags(html.unescape(text))
         try:
             if webapp_url:
@@ -39,7 +39,7 @@ class ButtonsBuilder:
         self, text_key: ButtonText | str, callback: str, condition: bool, true_text: str, false_text: str
     ) -> InlineKeyboardButton:
         key = self._resolve_key(text_key)
-        text = btn_text(key, lang=self.lang).format(true_text if condition else false_text)
+        text = translate(key, lang=self.lang).format(true_text if condition else false_text)
         formatted_text = self._replace_emoji_tags(html.unescape(text))
         return InlineKeyboardButton(text=formatted_text, callback_data=callback)
 

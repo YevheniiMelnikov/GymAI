@@ -6,7 +6,7 @@ from loguru import logger
 from bot.utils.bot import del_msg, answer_msg, delete_messages
 from bot.keyboards import program_edit_kb, program_manage_kb
 from bot.states import States
-from bot.texts import MessageText, msg_text
+from bot.texts import MessageText, translate
 from config.app_settings import settings
 from core.schemas import Exercise, DayExercises, Subscription, Profile
 from core.exceptions import ProgramNotFoundError, SubscriptionNotFoundError, ProfileNotFoundError
@@ -70,10 +70,10 @@ async def save_exercise(
     if msg is None:
         return
 
-    exercise_msg = await answer_msg(msg, msg_text(MessageText.enter_exercise, profile.language))
+    exercise_msg = await answer_msg(msg, translate(MessageText.enter_exercise, profile.language))
     program_msg = await answer_msg(
         msg,
-        msg_text(MessageText.new_workout_plan, profile.language),
+        translate(MessageText.new_workout_plan, profile.language),
         reply_markup=program_manage_kb(profile.language, split_number),
         disable_web_page_preview=True,
     )
@@ -109,12 +109,12 @@ async def update_exercise_data(message: Message, state: FSMContext, lang: str, u
 
     await answer_msg(
         message,
-        msg_text(MessageText.new_workout_plan, lang),
+        translate(MessageText.new_workout_plan, lang),
         disable_web_page_preview=True,
     )
     await answer_msg(
         message,
-        msg_text(MessageText.continue_editing, lang),
+        translate(MessageText.continue_editing, lang),
         reply_markup=program_edit_kb(lang),
     )
     await del_msg(cast(Message | CallbackQuery | None, message))
@@ -129,7 +129,7 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
         profile = await Cache.profile.get_profile(callback_query.from_user.id)
     except ProfileNotFoundError:
         logger.warning(f"Profile not found for user {callback_query.from_user.id} in edit_subscription_exercises")
-        await callback_query.answer(msg_text(MessageText.error_generic, settings.DEFAULT_LANG), show_alert=True)
+        await callback_query.answer(translate(MessageText.error_generic, settings.DEFAULT_LANG), show_alert=True)
         return
 
     data_str: str = callback_query.data or ""
@@ -145,7 +145,7 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
     except SubscriptionNotFoundError:
         logger.error(f"Subscription not found for profile {profile_id} in edit_subscription_exercises.")
         await callback_query.answer(
-            msg_text(MessageText.subscription_not_found_error, profile.language), show_alert=True
+            translate(MessageText.subscription_not_found_error, profile.language), show_alert=True
         )
         return
 
@@ -165,7 +165,7 @@ async def edit_subscription_exercises(callback_query: CallbackQuery, state: FSMC
     if callback_query.message and isinstance(callback_query.message, Message):
         await answer_msg(
             callback_query.message,
-            msg_text(MessageText.new_workout_plan, language),
+            translate(MessageText.new_workout_plan, language),
             disable_web_page_preview=True,
             reply_markup=program_edit_kb(language),
         )

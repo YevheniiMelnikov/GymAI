@@ -8,7 +8,7 @@ from loguru import logger
 from uuid import uuid4
 
 from bot.states import States
-from bot.texts import MessageText, msg_text
+from bot.texts import MessageText, translate
 from config.app_settings import settings
 from core.cache import Cache
 from core.enums import SubscriptionPeriod
@@ -59,7 +59,7 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
     if cb_data == "feedback":
         await callback_query.answer()
         await message.answer(
-            msg_text(MessageText.feedback, profile.language),
+            translate(MessageText.feedback, profile.language),
             reply_markup=feedback_kb(profile.language),
         )
         await state.set_state(States.feedback)
@@ -94,7 +94,7 @@ async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
             user_profile: Profile = await Cache.profile.get_record(profile.id)
         except ProfileNotFoundError:
             await callback_query.answer(
-                msg_text(MessageText.questionnaire_not_completed, profile.language), show_alert=True
+                translate(MessageText.questionnaire_not_completed, profile.language), show_alert=True
             )
             await del_msg(callback_query)
             return
@@ -120,7 +120,7 @@ async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
         await state.set_state(States.handle_payment)
         await answer_msg(
             callback_query,
-            msg_text(MessageText.follow_link, profile.language).format(amount=format(pkg.price, "f")),
+            translate(MessageText.follow_link, profile.language).format(amount=format(pkg.price, "f")),
             reply_markup=payment_kb(profile.language, "credits", webapp_url=webapp_url, link=link),
         )
     await del_msg(callback_query)
@@ -179,7 +179,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
 
     await APIService.profile.adjust_credits(profile.id, -required)
     await Cache.profile.update_record(user_profile.id, {"credits": user_profile.credits - required})
-    await answer_msg(callback_query, msg_text(MessageText.request_in_progress, profile.language))
+    await answer_msg(callback_query, translate(MessageText.request_in_progress, profile.language))
     if isinstance(callback_query.message, Message):
         await show_main_menu(callback_query.message, profile, state)
 
@@ -194,7 +194,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
         if not queued:
             await answer_msg(
                 callback_query,
-                msg_text(MessageText.coach_agent_error, profile.language).format(tg=settings.TG_SUPPORT_CONTACT),
+                translate(MessageText.coach_agent_error, profile.language).format(tg=settings.TG_SUPPORT_CONTACT),
             )
             logger.error(
                 f"ai_plan_dispatch_failed plan_type=program profile_id={user_profile.id} request_id={request_id}"
@@ -209,7 +209,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
     await state.set_state(States.ai_workout_days)
     await answer_msg(
         callback_query,
-        msg_text(MessageText.select_days, profile.language),
+        translate(MessageText.select_days, profile.language),
         reply_markup=select_days_kb(profile.language, []),
     )
     await del_msg(cast(Message | CallbackQuery | None, callback_query))
@@ -246,7 +246,7 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     wishes = data.get("wishes", "")
     period = data.get("period", "1m")
     request_id = uuid4().hex
-    await answer_msg(callback_query, msg_text(MessageText.request_in_progress, lang))
+    await answer_msg(callback_query, translate(MessageText.request_in_progress, lang))
     await show_main_menu(cast(Message, callback_query.message), profile, state)
     queued = await enqueue_workout_plan_generation(
         profile=selected_profile,
@@ -260,7 +260,7 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     if not queued:
         await answer_msg(
             callback_query,
-            msg_text(MessageText.coach_agent_error, lang).format(tg=settings.TG_SUPPORT_CONTACT),
+            translate(MessageText.coach_agent_error, lang).format(tg=settings.TG_SUPPORT_CONTACT),
         )
         logger.error(
             f"ai_plan_dispatch_failed plan_type=subscription profile_id={selected_profile.id} request_id={request_id}"
@@ -293,7 +293,7 @@ async def profile_menu(callback_query: CallbackQuery, state: FSMContext) -> None
         await show_main_menu(message, profile, state)
     else:
         await message.answer(
-            msg_text(MessageText.delete_confirmation, profile.language),
+            translate(MessageText.delete_confirmation, profile.language),
             reply_markup=yes_no_kb(profile.language),
         )
         await del_msg(message)
@@ -330,7 +330,7 @@ async def handle_feedback(message: Message, state: FSMContext, bot: Bot) -> None
 
     if await process_feedback_content(message, profile, bot):
         logger.info(f"Profile_id {profile.id} sent feedback")
-        await message.answer(msg_text(MessageText.feedback_sent, profile.language))
+        await message.answer(translate(MessageText.feedback_sent, profile.language))
         await show_main_menu(message, profile, state)
 
 
@@ -350,14 +350,14 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         profile_record = await Cache.profile.get_record(profile.id)
     except ProfileNotFoundError:
         logger.warning(f"Profile not found for profile_id {profile.id}")
-        await callback_query.answer(msg_text(MessageText.unexpected_error, profile.language), show_alert=True)
+        await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
         return
 
     if cb_data == "back":
         await callback_query.answer()
         await state.set_state(States.select_service)
         await message.answer(
-            msg_text(MessageText.select_service, profile.language),
+            translate(MessageText.select_service, profile.language),
             reply_markup=select_service_kb(profile.language),
         )
 
@@ -366,7 +366,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         await state.update_data(edit_mode=True)
         await state.set_state(States.workout_days)
         await message.answer(
-            msg_text(MessageText.select_days, profile.language),
+            translate(MessageText.select_days, profile.language),
             reply_markup=select_days_kb(profile.language, []),
         )
 
@@ -375,7 +375,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
 
     elif cb_data == "cancel":
         logger.info(f"User {profile.id} requested to stop the subscription")
-        await callback_query.answer(msg_text(MessageText.subscription_canceled, profile.language), show_alert=True)
+        await callback_query.answer(translate(MessageText.subscription_canceled, profile.language), show_alert=True)
 
         if not callback_query.from_user:
             return
@@ -393,7 +393,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
             subscription = await Cache.workout.get_latest_subscription(profile_record.id)
         except SubscriptionNotFoundError:
             logger.warning(f"Subscription not found for profile_id {profile_record.id}")
-            await callback_query.answer(msg_text(MessageText.unexpected_error, profile.language), show_alert=True)
+            await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
             return
 
         workout_days = subscription.workout_days

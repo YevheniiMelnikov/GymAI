@@ -290,7 +290,7 @@ async def test_internal_ai_plan_ready_program(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr("bot.handlers.internal.tasks.APIService.workout.save_program", fake_save_program)
     monkeypatch.setattr("bot.handlers.internal.tasks.Cache.workout.save_program", fake_cache_save_program)
     monkeypatch.setattr(
-        "bot.handlers.internal.tasks.msg_text",
+        "bot.handlers.internal.tasks.translate",
         lambda key, lang: f"{key}:{lang}",
     )
     monkeypatch.setattr(
@@ -407,7 +407,7 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr("bot.handlers.internal.tasks.APIService.workout.update_subscription", fake_update_subscription)
     monkeypatch.setattr("bot.handlers.internal.tasks.Cache.workout.update_subscription", fake_cache_update)
     monkeypatch.setattr(
-        "bot.handlers.internal.tasks.msg_text",
+        "bot.handlers.internal.tasks.translate",
         lambda key, lang: f"{key}:{lang}",
     )
     dummy_redis = DummyRedis()
@@ -517,7 +517,7 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
     monkeypatch.setattr("bot.handlers.internal.tasks.APIService.workout.create_subscription", fake_create_subscription)
     monkeypatch.setattr("bot.handlers.internal.tasks.Cache.workout.save_subscription", fake_cache_save_subscription)
     monkeypatch.setattr(
-        "bot.handlers.internal.tasks.msg_text",
+        "bot.handlers.internal.tasks.translate",
         lambda key, lang: f"{key}:{lang}",
     )
     monkeypatch.setattr(

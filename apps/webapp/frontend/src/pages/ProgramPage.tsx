@@ -6,12 +6,16 @@ import { renderProgramDays, renderLegacyProgram, fmtDate } from '../ui/render_pr
 import { readInitData, tmeReady } from '../telegram';
 import type { Locale, Program } from '../api/types';
 import { renderSegmented, SegmentId } from '../components/Segmented';
+import TopBar from '../components/TopBar';
 
 const ProgramPage: React.FC = () => {
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const searchParamsKey = searchParams.toString();
     const navigate = useNavigate();
     const contentRef = useRef<HTMLDivElement>(null);
     const switcherRef = useRef<HTMLDivElement>(null);
+    const fallbackIllustration =
+        "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='360' height='260' viewBox='0 0 360 260' fill='none'><defs><linearGradient id='g1' x1='50' y1='30' x2='310' y2='210' gradientUnits='userSpaceOnUse'><stop stop-color='%23C7DFFF'/><stop offset='1' stop-color='%23E7EEFF'/></linearGradient><linearGradient id='g2' x1='120' y1='80' x2='240' y2='200' gradientUnits='userSpaceOnUse'><stop stop-color='%237AA7FF'/><stop offset='1' stop-color='%235B8BFF'/></linearGradient></defs><rect x='30' y='24' width='300' height='200' rx='28' fill='url(%23g1)'/><rect x='62' y='56' width='236' height='136' rx='18' fill='white' stroke='%23B8C7E6' stroke-width='3'/><path d='M90 174c18-30 42-30 60 0s42 30 60 0 42-30 60 0' stroke='%23A7B9DB' stroke-width='6' stroke-linecap='round' fill='none'/><circle cx='136' cy='106' r='16' fill='url(%23g2)'/><circle cx='216' cy='118' r='12' fill='%23E6ECFC'/><circle cx='248' cy='94' r='8' fill='%23E6ECFC'/></svg>";
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [dateText, setDateText] = useState('');
@@ -27,12 +31,24 @@ const ProgramPage: React.FC = () => {
     }, [paramLang]);
 
     useEffect(() => {
-        if (switcherRef.current) {
-            return renderSegmented(switcherRef.current, activeSegment, (next) => {
-                setActiveSegment(next);
-            });
-        }
-    }, []);
+        const params = new URLSearchParams(searchParamsKey);
+        const nextSegment: SegmentId = (params.get('source') || '') === 'subscription' ? 'subscriptions' : 'program';
+        setActiveSegment((prev) => (prev === nextSegment ? prev : nextSegment));
+    }, [searchParamsKey]);
+
+    useEffect(() => {
+        if (!switcherRef.current) return;
+        return renderSegmented(switcherRef.current, activeSegment, (next) => {
+            setActiveSegment(next);
+            const nextParams = new URLSearchParams(searchParamsKey);
+            if (next === 'subscriptions') {
+                nextParams.set('source', 'subscription');
+            } else {
+                nextParams.delete('source');
+            }
+            setSearchParams(nextParams, { replace: true });
+        });
+    }, [activeSegment, searchParamsKey, setSearchParams]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -123,36 +139,50 @@ const ProgramPage: React.FC = () => {
 
     return (
         <div className="page-container">
-            <h1 id="page-title">{t('program.title')}</h1>
+            <TopBar title={t('program.title')} />
 
-            <div ref={switcherRef} id="segmented" className="segmented-container" />
+            <div className="page-shell">
+                <div ref={switcherRef} id="segmented" className="segmented-container" />
 
-            <div id="content" ref={contentRef} aria-busy={loading} />
-            <div id="program-date" hidden={!dateText}>{dateText}</div>
+                <div id="content" ref={contentRef} aria-busy={loading} className="week centered" />
+                <div id="program-date" hidden={!dateText}>{dateText}</div>
 
-            {loading && <div aria-busy="true">Loading...</div>}
-            {error && (
-                <div className="empty-state" style={{ textAlign: 'center', marginTop: '40px' }}>
-                    <img
-                        src="/static/images/404.png"
-                        alt="No programs"
-                        style={{ maxWidth: '200px', marginBottom: '16px' }}
-                    />
-                    <p style={{ fontSize: '16px', fontWeight: 500, color: 'var(--text)' }}>
-                        {error}
-                    </p>
+                {loading && <div aria-busy="true">Loading...</div>}
+                {error && (
+                    <div className="empty-state history-empty">
+                        <img
+                            src="/static/images/404.png"
+                            alt={t('no_programs')}
+                            style={{
+                                width: 'clamp(160px, 46vw, 200px)',
+                                height: 'clamp(120px, 36vw, 170px)',
+                                objectFit: 'contain',
+                                margin: '0 auto',
+                                display: 'block',
+                            }}
+                            onError={(ev) => {
+                                const target = ev.currentTarget;
+                                if (target.src !== fallbackIllustration) {
+                                    target.src = fallbackIllustration;
+                                }
+                            }}
+                        />
+                        <p style={{ fontSize: '16px', fontWeight: 500, color: 'var(--text)', margin: 0 }}>
+                            {error}
+                        </p>
+                    </div>
+                )}
+
+                <div className="history-footer">
+                    <button
+                        type="button"
+                        id="history-button"
+                        className="primary-button"
+                        onClick={() => navigate('/history')}
+                    >
+                        {t('program.view_history')}
+                    </button>
                 </div>
-            )}
-
-            <div className="history-footer">
-                <button
-                    type="button"
-                    id="history-button"
-                    className="primary-button"
-                    onClick={() => navigate('/history')}
-                >
-                    {t('program.view_history')}
-                </button>
             </div>
         </div>
     );

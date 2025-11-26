@@ -8,9 +8,24 @@ import asyncio
 
 sys.modules.setdefault("apps.payments.tasks", types.ModuleType("apps.payments.tasks"))
 sys.modules["apps.payments.tasks"].send_payment_message = types.SimpleNamespace(delay=lambda *a, **k: None)
+
+
+class DummyTextManager:
+    messages: dict[str, dict[str, str]] = {}
+    buttons: dict[str, dict[str, str]] = {}
+    commands: dict[str, dict[str, str]] = {}
+
+    @classmethod
+    def load_resources(cls) -> None:
+        return None
+
+
 sys.modules.setdefault(
     "bot.texts.text_manager",
-    types.SimpleNamespace(msg_text=lambda *a, **k: ""),
+    types.SimpleNamespace(
+        TextManager=DummyTextManager,
+        translate=lambda *a, **k: "",
+    ),
 )
 settings_mod = types.ModuleType("config.app_settings")
 settings_mod.settings = types.SimpleNamespace(EMAIL="e", TG_SUPPORT_CONTACT="t")

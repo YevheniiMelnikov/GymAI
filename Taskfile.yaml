@@ -11,6 +11,11 @@ tasks:
     cmds:
       - docker compose -f docker/docker-compose.yml down
 
+  runapi:
+    desc: Rebuild and run API container (for dev needs)
+    cmds:
+      - docker compose -f docker/docker-compose-local.yml up -d --build api --no-deps
+
   localrun:
     desc: Run bot locally
     env:

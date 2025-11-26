@@ -13,7 +13,7 @@ from loguru import logger
 
 from bot.keyboards import program_view_kb, workout_survey_kb
 from bot.states import States
-from bot.texts import MessageText, msg_text
+from bot.texts import MessageText, translate
 from bot.utils.profiles import get_profiles_to_survey
 from config.app_settings import settings
 from core.exceptions import ProfileNotFoundError, SubscriptionNotFoundError
@@ -126,7 +126,7 @@ async def _finalize_program_plan(
     try:
         await bot.send_message(
             chat_id=profile.tg_id,
-            text=msg_text(MessageText.new_workout_plan, profile.language),
+            text=translate(MessageText.new_workout_plan, profile.language),
             reply_markup=program_view_kb(profile.language, get_webapp_url("program", profile.language)),
             disable_notification=True,
         )
@@ -202,7 +202,7 @@ async def _finalize_subscription_plan(
         try:
             await bot.send_message(
                 chat_id=profile.tg_id,
-                text=msg_text(MessageText.program_updated, profile.language),
+                text=translate(MessageText.program_updated, profile.language),
                 parse_mode=ParseMode.HTML,
             )
         except Exception as exc:  # noqa: BLE001
@@ -267,7 +267,7 @@ async def _finalize_subscription_plan(
     try:
         await bot.send_message(
             chat_id=profile.tg_id,
-            text=msg_text(MessageText.subscription_created, profile.language),
+            text=translate(MessageText.subscription_created, profile.language),
             reply_markup=program_view_kb(profile.language, get_webapp_url("subscription", profile.language)),
             disable_notification=True,
         )
@@ -342,7 +342,7 @@ async def _process_ai_plan_ready(
                     f"profile_id={resolved_profile_id} request_id={request_id} detail={detail}"
                 )
                 return
-            message = msg_text(MessageText.coach_agent_error, profile.language).format(tg=settings.TG_SUPPORT_CONTACT)
+            message = translate(MessageText.coach_agent_error, profile.language).format(tg=settings.TG_SUPPORT_CONTACT)
             try:
                 await bot.send_message(chat_id=profile.tg_id, text=message)
             except Exception as exc:  # noqa: BLE001
@@ -431,7 +431,7 @@ async def internal_send_daily_survey(request: web.Request) -> web.Response:
         try:
             await bot.send_message(
                 chat_id=user_profile.tg_id,
-                text=msg_text(MessageText.have_you_trained, user_profile.language),
+                text=translate(MessageText.have_you_trained, user_profile.language),
                 reply_markup=workout_survey_kb(user_profile.language, yesterday),
                 disable_notification=True,
             )

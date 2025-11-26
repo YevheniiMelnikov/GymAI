@@ -62,9 +62,10 @@ export type HistoryItem = {
 };
 
 export type HistoryResp = {
-  programs?: HistoryItem[];
-  error?: string;
-  language?: string;
+    programs?: HistoryItem[];
+    subscriptions?: HistoryItem[];
+    error?: string;
+    language?: string;
 };
 
 export type SubscriptionResp = {

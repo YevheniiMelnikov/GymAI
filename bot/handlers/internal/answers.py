@@ -13,7 +13,7 @@ from bot.handlers.internal.schemas import AiAnswerNotify
 from bot.keyboards import ask_ai_again_kb
 from bot.utils.chat import chunk_message
 from bot.states import States
-from bot.texts import MessageText, msg_text
+from bot.texts import MessageText, translate
 from config.app_settings import settings
 from core.ai_coach.state.ask_ai import AiQuestionState
 from core.exceptions import ProfileNotFoundError
@@ -76,7 +76,7 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
     if payload.status != "success":
         reason = payload.error or "unknown_error"
         await state_tracker.mark_failed(request_id, reason)
-        error_message = msg_text(MessageText.coach_agent_error, language).format(tg=settings.TG_SUPPORT_CONTACT)
+        error_message = translate(MessageText.coach_agent_error, language).format(tg=settings.TG_SUPPORT_CONTACT)
         try:
             await bot.send_message(chat_id=profile.tg_id, text=error_message, reply_to_message_id=reply_to_message_id)
         except Exception as exc:  # noqa: BLE001
@@ -95,7 +95,7 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
             settings.DISABLE_MANUAL_PLACEHOLDER,
         )
         if not settings.DISABLE_MANUAL_PLACEHOLDER:
-            fallback = msg_text(MessageText.coach_agent_error, language).format(tg=settings.TG_SUPPORT_CONTACT)
+            fallback = translate(MessageText.coach_agent_error, language).format(tg=settings.TG_SUPPORT_CONTACT)
             try:
                 await bot.send_message(chat_id=profile.tg_id, text=fallback, reply_to_message_id=reply_to_message_id)
             except Exception as exc:  # noqa: BLE001
@@ -116,7 +116,7 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
             " | ".join(payload.sources),
         )
 
-    incoming_template = msg_text(MessageText.incoming_message, language)
+    incoming_template = translate(MessageText.incoming_message, language)
     escaped_answer = html.escape(answer_text)
     chunks = list(chunk_message(escaped_answer, template=incoming_template, sender_name=settings.BOT_NAME))
     rendered_len = sum(len(incoming_template.format(name=settings.BOT_NAME, message=chunk)) for chunk in chunks)

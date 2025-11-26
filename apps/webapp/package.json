@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit -p frontend/tsconfig.json",
     "dev": "vite",
     "build": "tsc -p frontend/tsconfig.json && vite build",
+    "build:watch": "tsc -p frontend/tsconfig.json --watch --preserveWatchOutput & vite build --watch",
     "preview": "vite preview"
   }
 }

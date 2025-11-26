@@ -4,7 +4,7 @@ from aiogram.types import InlineKeyboardButton as KbBtn
 from aiogram.types import InlineKeyboardMarkup as _RawKbMarkup, WebAppInfo
 
 from bot.buttons_builder import ButtonsBuilder
-from bot.texts import ButtonText, btn_text
+from bot.texts import ButtonText, translate
 from core.schemas import Exercise
 
 
@@ -212,7 +212,7 @@ def select_days_kb(lang: str, selected_days: list) -> KbMarkup:
     buttons = []
     days_of_week = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
     for day_key in days_of_week:
-        raw_text = btn_text(ButtonText[day_key], lang)
+        raw_text = translate(ButtonText[day_key], lang)
         text = f"✔️ {raw_text}" if day_key in selected_days else raw_text
         buttons.append([KbBtn(text=text, callback_data=day_key)])
     builder = ButtonsBuilder(lang)
@@ -224,7 +224,7 @@ def select_days_kb(lang: str, selected_days: list) -> KbMarkup:
 def program_view_kb(lang: str, webapp_url: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
-        [KbBtn(text=btn_text(ButtonText.view, lang), web_app=WebAppInfo(url=webapp_url))],
+        [KbBtn(text=translate(ButtonText.view, lang), web_app=WebAppInfo(url=webapp_url))],
         [builder.add(ButtonText.quit, "quit")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
@@ -298,7 +298,7 @@ def show_subscriptions_kb(lang: str, webapp_url: str | None = None) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons: list[list[KbBtn]] = []
     if webapp_url:
-        buttons.append([KbBtn(text=btn_text(ButtonText.view, lang), web_app=WebAppInfo(url=webapp_url))])
+        buttons.append([KbBtn(text=translate(ButtonText.view, lang), web_app=WebAppInfo(url=webapp_url))])
 
     buttons.extend(
         [
@@ -358,9 +358,9 @@ def yes_no_kb(lang: str) -> KbMarkup:
 def payment_kb(lang: str, service_type: str, *, webapp_url: str | None = None, link: str | None = None) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     if webapp_url:
-        pay_button = KbBtn(text=btn_text(ButtonText.pay, lang), web_app=WebAppInfo(url=webapp_url))
+        pay_button = KbBtn(text=translate(ButtonText.pay, lang), web_app=WebAppInfo(url=webapp_url))
     elif link:
-        pay_button = KbBtn(text=btn_text(ButtonText.pay, lang), url=link)
+        pay_button = KbBtn(text=translate(ButtonText.pay, lang), url=link)
     else:
         raise ValueError("payment_kb requires either webapp_url or link")
     done_button = builder.add(ButtonText.done, "done")

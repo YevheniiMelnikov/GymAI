@@ -5,51 +5,51 @@ from aiogram.fsm.state import State
 
 from bot.states import States
 from core.schemas import Profile
-from bot.texts import ButtonText, MessageText, msg_text, btn_text
+from bot.texts import ButtonText, MessageText, translate
 
 
 @lru_cache(maxsize=None)
 def genders_map(lang: str) -> dict[str, str]:
-    return {"male": btn_text(ButtonText.male, lang), "female": btn_text(ButtonText.female, lang)}
+    return {"male": translate(ButtonText.male, lang), "female": translate(ButtonText.female, lang)}
 
 
 @lru_cache(maxsize=None)
 def verification_status_map(lang: str) -> dict[bool, str]:
-    return {True: msg_text(MessageText.verified, lang), False: msg_text(MessageText.not_verified, lang)}
+    return {True: translate(MessageText.verified, lang), False: translate(MessageText.not_verified, lang)}
 
 
 @lru_cache(maxsize=None)
 def profile_params_map(lang: str) -> dict[str, str]:
     return {
-        "male": btn_text(ButtonText.male, lang),
-        "female": btn_text(ButtonText.female, lang),
-        "enabled": btn_text(ButtonText.enabled, lang),
-        "disabled": btn_text(ButtonText.disabled, lang),
-        "waiting_for_subscription": msg_text(MessageText.waiting_for_subscription, lang),
-        "waiting_for_program": msg_text(MessageText.waiting_for_program, lang),
-        "default": msg_text(MessageText.default_status, lang),
-        "waiting_for_text": msg_text(MessageText.waiting_for_text, lang),
+        "male": translate(ButtonText.male, lang),
+        "female": translate(ButtonText.female, lang),
+        "enabled": translate(ButtonText.enabled, lang),
+        "disabled": translate(ButtonText.disabled, lang),
+        "waiting_for_subscription": translate(MessageText.waiting_for_subscription, lang),
+        "waiting_for_program": translate(MessageText.waiting_for_program, lang),
+        "default": translate(MessageText.default_status, lang),
+        "waiting_for_text": translate(MessageText.waiting_for_text, lang),
     }
 
 
 @lru_cache(maxsize=None)
 def service_types_map(lang: str) -> dict[str, str]:
     return {
-        "subscription": btn_text(ButtonText.subscription, lang),
-        "program": btn_text(ButtonText.program, lang),
+        "subscription": translate(ButtonText.subscription, lang),
+        "program": translate(ButtonText.program, lang),
     }
 
 
 @lru_cache(maxsize=None)
 def days_of_week_map(lang: str) -> dict[str, str]:
     return {
-        "monday": btn_text(ButtonText.monday, lang),
-        "tuesday": btn_text(ButtonText.tuesday, lang),
-        "wednesday": btn_text(ButtonText.wednesday, lang),
-        "thursday": btn_text(ButtonText.thursday, lang),
-        "friday": btn_text(ButtonText.friday, lang),
-        "saturday": btn_text(ButtonText.saturday, lang),
-        "sunday": btn_text(ButtonText.sunday, lang),
+        "monday": translate(ButtonText.monday, lang),
+        "tuesday": translate(ButtonText.tuesday, lang),
+        "wednesday": translate(ButtonText.wednesday, lang),
+        "thursday": translate(ButtonText.thursday, lang),
+        "friday": translate(ButtonText.friday, lang),
+        "saturday": translate(ButtonText.saturday, lang),
+        "sunday": translate(ButtonText.sunday, lang),
     }
 
 
@@ -82,15 +82,15 @@ _STATE_MESSAGE_KEYS: dict[str, StateMessageKey] = {
 
 def get_state_and_message(callback: str, lang: str) -> tuple[State, str]:
     state, msg_key = _STATE_MESSAGE_KEYS.get(callback, (States.name, None))
-    message = msg_text(msg_key, lang) if msg_key else ""
+    message = translate(msg_key, lang) if msg_key else ""
     return state, message
 
 
 @lru_cache(maxsize=None)
 def get_workout_types(lang: str) -> dict[str, str]:
     return {
-        "home": btn_text(ButtonText.home_workout, lang),
-        "gym": btn_text(ButtonText.gym_workout, lang),
+        "home": translate(ButtonText.home_workout, lang),
+        "gym": translate(ButtonText.gym_workout, lang),
     }
 
 

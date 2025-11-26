@@ -15,7 +15,7 @@ from core.cache import Cache
 from core.exceptions import ProfileNotFoundError
 from core.schemas import Profile
 from bot.utils.menus import show_main_menu
-from bot.texts import MessageText, msg_text
+from bot.texts import MessageText, translate
 
 cmd_router = Router()
 
@@ -26,7 +26,7 @@ async def cmd_language(message: Message, state: FSMContext) -> None:
     profile_data = data.get("profile", {})
     profile = Profile.model_validate(profile_data) if profile_data else None
     lang = profile.language if profile else settings.DEFAULT_LANG
-    await message.answer(msg_text(MessageText.select_language, lang), reply_markup=select_language_kb())
+    await message.answer(translate(MessageText.select_language, lang), reply_markup=select_language_kb())
     await state.set_state(States.select_language)
     with suppress(TelegramBadRequest):
         await message.delete()
@@ -42,7 +42,7 @@ async def cmd_menu(message: Message, state: FSMContext) -> None:
     else:
         await state.set_state(States.select_language)
         await message.answer(
-            msg_text(MessageText.select_language, settings.DEFAULT_LANG), reply_markup=select_language_kb()
+            translate(MessageText.select_language, settings.DEFAULT_LANG), reply_markup=select_language_kb()
         )
 
     with suppress(TelegramBadRequest):
@@ -63,9 +63,9 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
             await message.delete()
     except ProfileNotFoundError:
         logger.info(f"Telegram user {message.from_user.id} started bot")
-        start_msg = await message.answer(msg_text(MessageText.start, settings.DEFAULT_LANG))
+        start_msg = await message.answer(translate(MessageText.start, settings.DEFAULT_LANG))
         language_msg = await message.answer(
-            msg_text(MessageText.select_language, settings.DEFAULT_LANG), reply_markup=select_language_kb()
+            translate(MessageText.select_language, settings.DEFAULT_LANG), reply_markup=select_language_kb()
         )
         message_ids = []
         if start_msg:
@@ -84,7 +84,7 @@ async def cmd_help(message: Message, state: FSMContext) -> None:
     profile_data = data.get("profile", {})
     profile = Profile.model_validate(profile_data) if profile_data else None
     language = profile.language if profile else settings.DEFAULT_LANG
-    await message.answer(msg_text(MessageText.help, language))
+    await message.answer(translate(MessageText.help, language))
 
 
 @cmd_router.message(Command(CommandName.feedback))
@@ -93,7 +93,7 @@ async def cmd_feedback(message: Message, state: FSMContext) -> None:
     profile_data = data.get("profile", {})
     profile = Profile.model_validate(profile_data) if profile_data else None
     language = profile.language if profile else settings.DEFAULT_LANG
-    await message.answer(msg_text(MessageText.feedback, language))
+    await message.answer(translate(MessageText.feedback, language))
     await state.set_state(States.feedback)
     with suppress(TelegramBadRequest):
         await message.delete()
@@ -106,7 +106,7 @@ async def cmd_policy(message: Message, state: FSMContext) -> None:
     profile = Profile.model_validate(profile_data) if profile_data else None
     lang = profile.language if profile else settings.DEFAULT_LANG
     await message.answer(
-        msg_text(MessageText.contract_info_message, lang).format(
+        translate(MessageText.contract_info_message, lang).format(
             public_offer=settings.PUBLIC_OFFER,
             privacy_policy=settings.PRIVACY_POLICY,
         ),
@@ -123,7 +123,7 @@ async def cmd_info(message: Message, state: FSMContext) -> None:
     profile = Profile.model_validate(profile_data) if profile_data else None
     lang = profile.language if profile else settings.DEFAULT_LANG
     await message.answer(
-        msg_text(MessageText.info, lang).format(
+        translate(MessageText.info, lang).format(
             offer=settings.PUBLIC_OFFER, email=settings.EMAIL, tg=settings.TG_SUPPORT_CONTACT
         ),
         disable_web_page_preview=True,

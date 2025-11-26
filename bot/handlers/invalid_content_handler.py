@@ -3,14 +3,14 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
 from bot.states import States
-from bot.texts import MessageText, msg_text
+from bot.texts import MessageText, translate
 from config.app_settings import settings
 
 invalid_content_router = Router()
 
 
 async def handle_invalid_content(message: Message, lang: str) -> None:
-    await message.answer(msg_text(MessageText.invalid_content, lang))
+    await message.answer(translate(MessageText.invalid_content, lang))
     await message.delete()
 
 

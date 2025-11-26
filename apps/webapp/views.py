@@ -178,6 +178,15 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
         logger.exception(f"Failed to fetch programs for profile_id={profile.id}")
         return JsonResponse({"error": "server_error"}, status=500)
 
+    try:
+        subscriptions = cast(
+            list[Subscription],
+            await call_repo(SubscriptionRepository.get_all, int(getattr(profile, "id", 0))),
+        )
+    except Exception:
+        logger.exception(f"Failed to fetch subscriptions for profile_id={profile.id}")
+        subscriptions = []
+
     items = [
         {
             "id": int(p.id),
@@ -185,7 +194,35 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
         }
         for p in programs
     ]
-    return JsonResponse({"programs": items, "language": profile.language})
+    subscription_items: list[dict[str, int]] = []
+    for subscription in subscriptions:
+        updated_raw = getattr(subscription, "updated_at", None)
+        updated_at = 0
+        if isinstance(updated_raw, datetime):
+            updated_at = int(updated_raw.timestamp())
+        else:
+            try:
+                updated_at = int(float(updated_raw or 0))
+            except (TypeError, ValueError):
+                try:
+                    updated_at = int(datetime.fromisoformat(str(updated_raw)).timestamp())
+                except Exception:
+                    updated_at = 0
+
+        subscription_items.append(
+            {
+                "id": int(getattr(subscription, "id", 0)),
+                "created_at": updated_at,
+            }
+        )
+
+    return JsonResponse(
+        {
+            "programs": items,
+            "subscriptions": subscription_items,
+            "language": profile.language,
+        }
+    )
 
 
 # type checking of async views with require_GET is not supported by stubs

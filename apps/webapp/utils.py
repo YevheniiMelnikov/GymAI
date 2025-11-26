@@ -176,6 +176,28 @@ def verify_init_data(init_data: str) -> dict[str, object]:
 
 
 STATIC_VERSION_FILE: Path = Path(__file__).resolve().parents[2] / "VERSION"
+WEBAPP_STATIC_DIR: Path = Path(__file__).resolve().parent / "static"
+
+
+def _bundle_signature() -> str | None:
+    """
+    Build a lightweight signature from critical webapp assets.
+
+    This allows us to bust caches even when STATIC_VERSION stays unchanged.
+    """
+    bundle_candidates = [
+        WEBAPP_STATIC_DIR / "js-build-v2/index.js",
+        WEBAPP_STATIC_DIR / "css/common.css",
+    ]
+    hasher = hashlib.sha256()
+    found = False
+    for candidate in bundle_candidates:
+        if candidate.exists():
+            hasher.update(candidate.read_bytes())
+            found = True
+    if not found:
+        return None
+    return hasher.hexdigest()[:10]
 
 
 def _resolve_static_version() -> str:
@@ -183,12 +205,20 @@ def _resolve_static_version() -> str:
         return str(int(time.time()))
 
     env_value: str | None = os.getenv("STATIC_VERSION")
+    version_file_value: str | None = None
     if STATIC_VERSION_FILE.exists():
-        version: str = STATIC_VERSION_FILE.read_text(encoding="utf-8").strip()
-        if version:
-            return version
-    if env_value:
-        return env_value
+        version_candidate = STATIC_VERSION_FILE.read_text(encoding="utf-8").strip()
+        if version_candidate and version_candidate.lower() != "dev":
+            version_file_value = version_candidate
+
+    base_version = env_value or version_file_value
+    signature = _bundle_signature()
+    if base_version and signature:
+        return f"{base_version}-{signature}"
+    if base_version:
+        return base_version
+    if signature:
+        return signature
     return str(int(time.time()))
 
 

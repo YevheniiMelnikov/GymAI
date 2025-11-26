@@ -11,7 +11,7 @@ WORKDIR /app
 
 FROM ghcr.io/astral-sh/uv:0.4.20 AS uvbin
 
-FROM node:20-alpine AS webbuild
+FROM node:20-bookworm AS webbuild
 WORKDIR /app/apps/webapp
 COPY apps/webapp/package*.json ./
 COPY apps/webapp/vite.config.ts ./
@@ -21,8 +21,8 @@ COPY apps/webapp/scripts ./scripts
 COPY apps/webapp/static ./static
 RUN npm run build \
  && echo "== build output in ./static ==" \
- && ls -la ./static ./static/js || true \
- && test -f ./static/js/index.js || (echo 'ERROR: ./static/js/index.js not found' && exit 1)
+ && ls -la ./static ./static/js-build-v2 || true \
+ && test -f ./static/js-build-v2/index.js || (echo 'ERROR: ./static/js-build-v2/index.js not found' && exit 1)
 
 FROM py-base AS deps-app
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -63,7 +63,12 @@ RUN echo "${STATIC_VERSION:-dev}" > /app/VERSION \
  && chmod 0755 /app/docker/entrypoint.sh \
  && sed -i 's/\r$//' /app/docker/entrypoint.sh \
  && apt-get update \
- && apt-get install -y --no-install-recommends curl libpq5 \
+ && apt-get install -y --no-install-recommends curl ca-certificates gnupg libpq5 \
+ && mkdir -p /etc/apt/keyrings \
+ && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+ && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x nodistro main" > /etc/apt/sources.list.d/nodesource.list \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends nodejs \
  && rm -rf /var/lib/apt/lists/*
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
 

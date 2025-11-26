@@ -3,7 +3,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <meta name="color-scheme" content="light dark" />
   <title>GymBot</title>
   <link rel="stylesheet" href="{% static 'css/common.css' %}?v={{ static_version }}" />
@@ -26,6 +26,6 @@
   <script>
     try { window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.ready(); } catch {}
   </script>
-  <script src="{% static 'js/index.js' %}?v={{ static_version }}" defer></script>
+  <script src="{% static 'js-build-v2/index.js' %}?v={{ static_version }}" defer></script>
 </body>
 </html>

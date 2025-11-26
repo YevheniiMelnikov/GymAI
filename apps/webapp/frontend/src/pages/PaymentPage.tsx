@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { getPaymentData, HttpError } from '../api/http';
 import { applyLang, t } from '../i18n/i18n';
 import { readInitData, tmeReady } from '../telegram';
+import TopBar from '../components/TopBar';
 
 const LIQPAY_SCRIPT_ID = 'liqpay-checkout-script';
 const LIQPAY_SCRIPT_SRC = 'https://static.liqpay.ua/libjs/checkout.js';
@@ -124,45 +125,47 @@ const PaymentPage: React.FC = () => {
 
     return (
         <div className="page-container">
-            <h1 id="page-title">{t('payment.title')}</h1>
+            <TopBar title={t('payment.title')} />
 
-            <div id="content" aria-busy={loading}>
-                <section className="payment-card">
-                    <h2 className="payment-heading">{t('payment.title')}</h2>
+            <div className="page-shell">
+                <div id="content" aria-busy={loading}>
+                    <section className="payment-card">
+                        <h2 className="payment-heading">{t('payment.title')}</h2>
 
-                    <p className="payment-amount">
-                        {paymentData
-                            ? t('payment.amount', { amount: paymentData.amount, currency: paymentData.currency })
-                            : t('payment.loading')}
-                    </p>
+                        <p className="payment-amount">
+                            {paymentData
+                                ? t('payment.amount', { amount: paymentData.amount, currency: paymentData.currency })
+                                : t('payment.loading')}
+                        </p>
 
-                    <p className="payment-note">
-                        {error ? error : t('payment.launch')}
-                    </p>
+                        <p className="payment-note">
+                            {error ? error : t('payment.launch')}
+                        </p>
 
-                    {!error && (
-                        <div
-                            id="liqpay-checkout"
-                            className="payment-frame"
-                            ref={checkoutRef}
-                            aria-busy="true"
-                        />
-                    )}
-
-                    <div className="payment-actions">
-                        {paymentData && (
-                            <a
-                                className="primary-button"
-                                target="_blank"
-                                rel="noreferrer noopener"
-                                href={paymentData.checkoutUrl}
-                                style={{ display: 'block' }}
-                            >
-                                {t('payment.open')}
-                            </a>
+                        {!error && (
+                            <div
+                                id="liqpay-checkout"
+                                className="payment-frame"
+                                ref={checkoutRef}
+                                aria-busy="true"
+                            />
                         )}
-                    </div>
-                </section>
+
+                        <div className="payment-actions">
+                            {paymentData && (
+                                <a
+                                    className="primary-button"
+                                    target="_blank"
+                                    rel="noreferrer noopener"
+                                    href={paymentData.checkoutUrl}
+                                    style={{ display: 'block' }}
+                                >
+                                    {t('payment.open')}
+                                </a>
+                            )}
+                        </div>
+                    </section>
+                </div>
             </div>
         </div>
     );
