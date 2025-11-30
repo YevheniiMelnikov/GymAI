@@ -15,6 +15,7 @@ def healthcheck_view(_):
 urlpatterns = [
     path("health/", healthcheck_view, name="healthcheck"),
     path("payments-webhook/", PaymentWebhookView.as_view(), name="payments-webhook"),
+    path("payment-webhook/", PaymentWebhookView.as_view(), name="payments-webhook-legacy"),
     path("admin/", admin.site.urls),
     path("api/v1/", include("apps.profiles.urls")),
     path("api/v1/", include("apps.payments.urls")),

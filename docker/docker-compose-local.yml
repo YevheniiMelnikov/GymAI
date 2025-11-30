@@ -176,8 +176,43 @@ services:
     command: >
       celery -A config.celery:celery_app worker
       -l info
-      -Q default,critical,maintenance,ai_coach
+      -Q default,critical,maintenance
       -P threads
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      ai_coach:
+        condition: service_started
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks: [internal]
+
+  ai_coach_worker:
+    image: *app_image
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: py-runtime
+      args:
+        INSTALL_DEV: true
+        EXTRAS: ""
+    container_name: ai_coach_worker
+    <<: *common_env
+    environment:
+      SERVICE_ROLE: ai_coach_worker
+      COGNEE_STORAGE_PATH: /app/cognee_storage
+    entrypoint: /app/docker/entrypoint.sh
+    command: >
+      celery -A config.celery:celery_app worker
+      -l info
+      -Q ai_coach
+      -P threads
+      --concurrency ${AI_COACH_WORKER_CONCURRENCY:-2}
     depends_on:
       redis:
         condition: service_healthy

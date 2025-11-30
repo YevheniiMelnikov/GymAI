@@ -8,7 +8,7 @@ from loguru import logger
 
 from config.app_settings import settings
 from core.celery_app import app
-from core.internal_http import build_internal_hmac_auth_headers
+from core.internal_http import build_internal_hmac_auth_headers, resolve_hmac_credentials
 from core.services import APIService
 from core.utils.redis_lock import get_redis_client, redis_try_lock
 
@@ -116,13 +116,14 @@ def prune_knowledge_base(self) -> None:  # pyrefly: ignore[valid-type]
     logger.info("prune_knowledge_base started")
     timeout = settings.AI_COACH_TIMEOUT
     payload: dict[str, Any] = {}
-    body = b"{}"
-    use_hmac = bool(settings.INTERNAL_KEY_ID and settings.INTERNAL_API_KEY)
-    if use_hmac:
+    body = b"{}"  # raw body used for HMAC; keep in sync with actual request content
+    creds = resolve_hmac_credentials(settings, prefer_ai_coach=True)
+    if creds:
         url = _ai_coach_path("internal/knowledge/prune/")
+        key_id, secret_key = creds
         headers = build_internal_hmac_auth_headers(
-            key_id=settings.INTERNAL_KEY_ID,
-            secret_key=settings.INTERNAL_API_KEY,
+            key_id=key_id,
+            secret_key=secret_key,
             body=body,
         )
         headers.setdefault("Content-Type", "application/json")

@@ -340,12 +340,15 @@ async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str
     qa_response = response if isinstance(response, QAResponse) else QAResponse.model_validate(response)
     sources = list(qa_response.sources)
     if sources:
+        sources_label = " | ".join(sources)
+        if len(sources_label) > 300:
+            sources_label = sources_label[:297] + "..."
         logger.info(
             "event=ask_ai_sources request_id={} profile_id={} count={} sources={}",
             request_id,
             profile_id,
             len(sources),
-            " | ".join(sources),
+            sources_label,
         )
     notify_payload: dict[str, Any] = {
         "profile_id": profile_id,

@@ -1,7 +1,8 @@
 import asyncio
-import base64
 import sys
 import types
+import hmac
+import time
 import pytest
 from httpx import AsyncClient, ASGITransport
 
@@ -19,14 +20,21 @@ def _reset_settings(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
     base = types.SimpleNamespace(**conftest.settings_stub.__dict__)
     monkeypatch.setattr(settings_mod, "settings", base, raising=False)
     monkeypatch.setattr(sys.modules[__name__], "settings", base, raising=False)
+    import ai_coach.api as coach_api
+
+    monkeypatch.setattr(coach_api, "settings", base, raising=False)
+    coach_api.app.dependency_overrides.pop(coach_api._require_hmac, None)
     return base
 
 
 def test_refresh_knowledge(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
         cfg = _reset_settings(monkeypatch)
-        cfg.AI_COACH_REFRESH_USER = "user"
-        cfg.AI_COACH_REFRESH_PASSWORD = "pass"
+        cfg.ENVIRONMENT = "production"
+        cfg.AI_COACH_INTERNAL_KEY_ID = "key"
+        cfg.AI_COACH_INTERNAL_API_KEY = "secret"
+        cfg.INTERNAL_KEY_ID = ""
+        cfg.INTERNAL_API_KEY = ""
         called: bool = False
 
         async def fake_refresh(cls) -> None:
@@ -34,12 +42,17 @@ def test_refresh_knowledge(monkeypatch: pytest.MonkeyPatch) -> None:
             called = True
 
         monkeypatch.setattr(KnowledgeBase, "refresh", classmethod(fake_refresh))
-        token = base64.b64encode(b"user:pass").decode()
-        headers = {"Authorization": f"Basic {token}"}
+        import ai_coach.api as coach_api
 
+        coach_api.app.dependency_overrides.pop(coach_api._require_hmac, None)
+        ts = int(time.time())
+        body = b""
+        message = f"{ts}".encode() + b"." + body
+        sig = hmac.new(cfg.AI_COACH_INTERNAL_API_KEY.encode(), message, "sha256").hexdigest()
+        headers = {"X-Key-Id": cfg.AI_COACH_INTERNAL_KEY_ID, "X-TS": str(ts), "X-Sig": sig}
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            resp = await ac.post("/knowledge/refresh/", headers=headers)
+            resp = await ac.post("/knowledge/refresh/", headers=headers, content=body)
 
         assert resp.status_code == 200
         assert resp.json() == {"status": "ok"}
@@ -51,15 +64,19 @@ def test_refresh_knowledge(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_refresh_knowledge_unauthorized(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
         cfg = _reset_settings(monkeypatch)
-        cfg.AI_COACH_REFRESH_USER = "user"
-        cfg.AI_COACH_REFRESH_PASSWORD = "pass"
-        token = base64.b64encode(b"user:wrong").decode()
-        headers = {"Authorization": f"Basic {token}"}
+        cfg.ENVIRONMENT = "production"
+        cfg.AI_COACH_INTERNAL_KEY_ID = ""
+        cfg.AI_COACH_INTERNAL_API_KEY = ""
+        cfg.INTERNAL_KEY_ID = ""
+        cfg.INTERNAL_API_KEY = ""
+        import ai_coach.api as coach_api
+
+        coach_api.app.dependency_overrides.pop(coach_api._require_hmac, None)
 
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            resp = await ac.post("/knowledge/refresh/", headers=headers)
+            resp = await ac.post("/knowledge/refresh/")
 
-        assert resp.status_code == 401
+        assert resp.status_code == 503
 
     asyncio.run(runner())

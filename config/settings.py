@@ -117,7 +117,7 @@ REST_FRAMEWORK = {
 DOMAIN = settings.API_URL
 SITE_NAME = settings.SITE_NAME
 ALLOWED_HOSTS = settings.ALLOWED_HOSTS
-CORS_ALLOW_ALL_ORIGINS = True  # TODO: remove in production
+CORS_ALLOW_ALL_ORIGINS = settings.CORS_ALLOW_ALL_ORIGINS
 
 REDIS_URL = settings.REDIS_URL
 
@@ -127,7 +127,8 @@ CACHES = {
         "LOCATION": REDIS_URL,
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            "SERIALIZER": "django_redis.serializers.pickle.PickleSerializer",
+            # Using JSON serializer; clear existing cache if previously using Pickle to avoid decode errors.
+            "SERIALIZER": "django_redis.serializers.json.JSONSerializer",
             "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
         },
         "TIMEOUT": 60 * 60,

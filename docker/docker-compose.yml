@@ -62,17 +62,14 @@ services:
     image: rabbitmq:4.1.4-management
     user: "0:0"
     environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-rabbitmq}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rabbitmq}
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?RABBITMQ_USER not set}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD not set}
       RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
     entrypoint: /usr/local/bin/rabbitmq-entrypoint.sh
     volumes:
       - rabbitmqdata:/var/lib/rabbitmq
       - ./rabbitmq-entrypoint.sh:/usr/local/bin/rabbitmq-entrypoint.sh:ro
       - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
-    ports:
-      - ${HOST_RABBITMQ_PORT:-5672}:5672
-      - ${HOST_RABBITMQ_MANAGEMENT_PORT:-15672}:15672
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "status"]
       interval: 10s
@@ -138,9 +135,37 @@ services:
         EXTRAS: ""
     <<: *common_env
     entrypoint: /app/docker/entrypoint.sh
-    command: celery -A config.celery:celery_app worker -l info -Q default,critical,maintenance,ai_coach -P threads
+    command: celery -A config.celery:celery_app worker -l info -Q default,critical,maintenance -P threads
     environment:
       SERVICE_ROLE: worker
+      COGNEE_STORAGE_PATH: /app/cognee_storage
+    extra_hosts:
+      - "host.docker.internal:172.17.0.1"
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+      ai_coach:
+        condition: service_started
+    restart: unless-stopped
+
+  ai_coach_worker:
+    image: *app_image
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: py-runtime
+      args:
+        INSTALL_DEV: false
+        EXTRAS: ""
+    <<: *common_env
+    entrypoint: /app/docker/entrypoint.sh
+    command: celery -A config.celery:celery_app worker -l info -Q ai_coach -P threads --concurrency ${AI_COACH_WORKER_CONCURRENCY:-2}
+    environment:
+      SERVICE_ROLE: ai_coach_worker
       COGNEE_STORAGE_PATH: /app/cognee_storage
     extra_hosts:
       - "host.docker.internal:172.17.0.1"
@@ -209,8 +234,6 @@ services:
     entrypoint: /app/docker/entrypoint.sh
     command: >
       bash -lc "uvicorn ai_coach.api:app --host 0.0.0.0 --port ${COACH_PORT:-9000}"
-    ports:
-      - ${HOST_COACH_PORT:-9000}:${COACH_PORT:-9000}
     depends_on:
       redis:
         condition: service_healthy

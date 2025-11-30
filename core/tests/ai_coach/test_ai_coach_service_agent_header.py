@@ -10,6 +10,10 @@ from core.services.internal.ai_coach_service import AiCoachService
 class DummySettings:
     AI_COACH_URL = "http://test/"
     AI_COACH_TIMEOUT = 1
+    AI_COACH_INTERNAL_KEY_ID = "test-key"
+    AI_COACH_INTERNAL_API_KEY = "test-secret"
+    INTERNAL_KEY_ID = "test-key"
+    INTERNAL_API_KEY = "test-secret"
 
 
 def test_agent_header(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -19,6 +23,7 @@ def test_agent_header(monkeypatch: pytest.MonkeyPatch) -> None:
             method: str,
             url: str,
             payload: dict[str, object] | None = None,
+            body_bytes: bytes | None = None,
             headers: dict[str, str] | None = None,
             timeout: float | None = None,
             *,

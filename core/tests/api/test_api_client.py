@@ -97,3 +97,23 @@ def test_api_request_transport_error(mocker):
     api = APIClient(None, _settings())
     with pytest.raises(APIClientTransportError):
         asyncio.run(api._api_request("get", "http://x"))
+
+
+def test_api_request_uses_body_bytes(mocker):
+    import asyncio
+
+    called = {}
+
+    async def fake_request(*a, **kw):
+        called.update(kw)
+        return make_response(200, {"ok": True})
+
+    mocker.patch("httpx.AsyncClient.request", fake_request)
+
+    api = APIClient(None, _settings())
+    body = b"raw-body"
+    code, data = asyncio.run(api._api_request("post", "http://x", body_bytes=body, data={"ignored": 1}))
+    assert code == 200
+    assert data == {"ok": True}
+    assert called.get("content") == body
+    assert "json" not in called

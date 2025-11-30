@@ -17,11 +17,12 @@ from ai_coach.agent.knowledge.cognee_config import CogneeConfig, ensure_cognee_r
 from dependency_injector import providers
 from ai_coach.logging_config import configure_logging
 from ai_coach.agent.knowledge.context import set_current_kb
+from config.app_settings import settings
+from core.internal_http import resolve_hmac_credentials
 
 from core.containers import create_container, set_container, get_container
 from core.infra.payment import TaskPaymentNotifier
 from core.services.internal import APIService
-from config.app_settings import settings
 
 configure_logging()
 
@@ -198,6 +199,13 @@ async def init_knowledge_base(kb: KnowledgeBase, knowledge_loader: KnowledgeLoad
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     from ai_coach.agent.knowledge.gdrive_knowledge_loader import GDriveDocumentLoader
+
+    env_mode = str(getattr(settings, "ENVIRONMENT", "development")).lower()
+    creds = resolve_hmac_credentials(settings, prefer_ai_coach=True)
+    if creds is None:
+        if env_mode == "production":
+            raise RuntimeError("AI coach HMAC credentials are not configured")
+        logger.warning("AI coach HMAC credentials are not configured; running without HMAC in non-production mode")
 
     _ensure_storage_path()
 

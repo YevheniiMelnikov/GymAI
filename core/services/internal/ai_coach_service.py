@@ -1,6 +1,5 @@
 # ai_coach_service.py
 import asyncio
-import base64
 import json
 from enum import Enum
 from typing import Any
@@ -15,6 +14,7 @@ from ai_coach.types import CoachMode
 from core.exceptions import UserServiceError
 from core.schemas import Program, Subscription
 from core.schemas import QAResponse
+from core.internal_http import build_internal_hmac_auth_headers, resolve_hmac_credentials
 from .api_client import APIClient, APIClientHTTPError, APIClientTransportError
 from ...enums import WorkoutPlanType, WorkoutType
 
@@ -160,6 +160,16 @@ class AiCoachService(APIClient):
             )
         return Subscription.model_validate(data)
 
+    def _hmac_headers(self, body: bytes) -> dict[str, str]:
+        env_mode = str(getattr(self.settings, "ENVIRONMENT", "development")).lower()
+        creds = resolve_hmac_credentials(self.settings, prefer_ai_coach=True)
+        if creds is None:
+            if env_mode != "production":
+                return {}
+            raise UserServiceError("AI coach HMAC credentials are not configured")
+        key_id, secret_key = creds
+        return build_internal_hmac_auth_headers(key_id=key_id, secret_key=secret_key, body=body)
+
     def _validate_program_response(
         self,
         data: Any,
@@ -192,6 +202,10 @@ class AiCoachService(APIClient):
         if extra_headers:
             headers.update(extra_headers)
         payload_dict: dict[str, Any] = payload.model_dump(exclude_none=True)
+        # Serialize deterministically for HMAC; these bytes are sent as-is
+        body_bytes: bytes = json.dumps(payload_dict, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        headers.setdefault("Content-Type", "application/json")
+        headers.update(self._hmac_headers(body_bytes))
         logger.debug(
             f"ai_coach.ask POST profile_id={payload.profile_id} mode={payload.mode.value} "
             f"language={payload_dict.get('language')}"
@@ -199,6 +213,7 @@ class AiCoachService(APIClient):
         logger.debug(f"AI coach ask request_id={request_id} profile_id={payload.profile_id}")
         ping_path = "internal/debug/ping"
         ping_url = urljoin(self.base_url, ping_path)
+        ping_headers = self._hmac_headers(b"")
         # Retry readiness ping with exponential backoff
         attempts = 5
         delay = 0.5
@@ -209,6 +224,7 @@ class AiCoachService(APIClient):
                         "get",
                         ping_path,
                         timeout=5,
+                        headers=ping_headers,
                         client=client,
                     )
                 logger.debug(f"AI coach ping request_id={request_id} status={ping_status} url={ping_url}")
@@ -234,6 +250,7 @@ class AiCoachService(APIClient):
                         "post",
                         "ask/",
                         payload_dict,
+                        body_bytes=body_bytes,
                         headers=headers or None,
                         timeout=self.settings.AI_COACH_TIMEOUT,
                         client=client,
@@ -315,16 +332,25 @@ class AiCoachService(APIClient):
         raise UserServiceError("AI coach returned an invalid QA payload")
 
     async def refresh_knowledge(self) -> None:
-        token = base64.b64encode(
-            f"{self.settings.AI_COACH_REFRESH_USER}:{self.settings.AI_COACH_REFRESH_PASSWORD}".encode()
-        ).decode()
-        headers = {"Authorization": f"Basic {token}"}
+        creds = resolve_hmac_credentials(self.settings, prefer_ai_coach=True)
+        env_mode = str(getattr(self.settings, "ENVIRONMENT", "development")).lower()
+        body = b"{}"
+        if creds is None:
+            if env_mode != "production":
+                headers = {}
+            else:
+                raise UserServiceError("AI coach HMAC credentials are not configured")
+        else:
+            key_id, secret_key = creds
+            headers = build_internal_hmac_auth_headers(key_id=key_id, secret_key=secret_key, body=body)
+            headers["Content-Type"] = "application/json"
         try:
             async with httpx.AsyncClient(base_url=self.base_url, timeout=self.settings.AI_COACH_TIMEOUT) as client:
                 status, _ = await self._api_request(
                     "post",
                     "knowledge/refresh/",
                     headers=headers,
+                    body_bytes=body,
                     timeout=self.settings.AI_COACH_TIMEOUT,
                     client=client,
                 )

@@ -20,6 +20,13 @@ class _SupportsInternalTimeout(Protocol):
     INTERNAL_HTTP_READ_TIMEOUT: float
 
 
+class _SupportsHMAC(Protocol):
+    AI_COACH_INTERNAL_KEY_ID: str
+    AI_COACH_INTERNAL_API_KEY: str
+    INTERNAL_KEY_ID: str
+    INTERNAL_API_KEY: str
+
+
 def build_internal_hmac_auth_headers(*, key_id: str, secret_key: str, body: bytes) -> dict[str, str]:
     """Return HMAC-signed headers for an internal request."""
     now = str(int(time.time()))
@@ -48,7 +55,33 @@ def internal_request_timeout(settings: _SupportsInternalTimeout) -> TimeoutValue
     return read_timeout
 
 
+def resolve_hmac_credentials(
+    settings: _SupportsHMAC,
+    *,
+    prefer_ai_coach: bool = False,
+) -> tuple[str, str] | None:
+    """Resolve HMAC credentials from settings.
+
+    prefer_ai_coach=True tries AI_COACH_* first, then falls back to INTERNAL_* for
+    compatibility. Callers should enforce production requirements separately.
+    """
+
+    key_id: str = ""
+    secret_key: str = ""
+    if prefer_ai_coach:
+        key_id = str(getattr(settings, "AI_COACH_INTERNAL_KEY_ID", "") or "")
+        secret_key = str(getattr(settings, "AI_COACH_INTERNAL_API_KEY", "") or "")
+    if not key_id:
+        key_id = str(getattr(settings, "INTERNAL_KEY_ID", "") or "")
+    if not secret_key:
+        secret_key = str(getattr(settings, "INTERNAL_API_KEY", "") or "")
+    if key_id and secret_key:
+        return key_id, secret_key
+    return None
+
+
 __all__ = [
     "build_internal_hmac_auth_headers",
+    "resolve_hmac_credentials",
     "internal_request_timeout",
 ]

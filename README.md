@@ -22,7 +22,7 @@ GymBot is a Dockerized platform that includes a Telegram bot (aiogram), API (Dja
 * **API** (Django ASGI, Uvicorn) – business logic, admin, webapp, REST endpoints under `/api/v1/`.
 * **Bot** (aiogram + aiohttp) – webhook server, communicates with API and Redis.
 * **AI Coach** (FastAPI) – Cognee-powered retrieval + generation.
-* **Celery + Beat** – background jobs and schedules.
+* **Celery + Beat** – background jobs and schedules (AI Coach tasks run on dedicated `ai_coach_worker`).
 * **Redis** – cache, queues, idempotency.
 * **PostgreSQL (+pgvector)** – relational storage and vector embeddings.
 * **Nginx** – reverse proxy and TLS termination.
@@ -121,8 +121,13 @@ Redis keeps acting as the cache layer and Celery result backend. The production 
 ## RabbitMQ
 
 RabbitMQ is the Celery broker. Credentials and the vhost are configurable through `RABBITMQ_USER`, `RABBITMQ_PASSWORD`, and `RABBITMQ_VHOST`. `RABBITMQ_URL` can be set directly; otherwise it is constructed from the individual parts. The management UI is exposed on port `15672` by default in Docker Compose and authenticates with the same `RABBITMQ_USER`/`RABBITMQ_PASSWORD` values (defaults `rabbitmq`/`rabbitmq`).
+In the production compose file the RabbitMQ ports are not published to the host; to reach the management UI use `docker compose port rabbitmq 15672` or a local override file that maps ports for debugging only.
 
 ---
+
+## Frontend (webapp) live-reload
+
+For local development, `docker-compose-local.yml` includes a `webapp_watch` service (`npm run build:watch`) that rebuilds the webapp assets into `staticfiles/js-build`. It is not used in production; for simple backend work you can skip running it.
 
 ## Celery
 

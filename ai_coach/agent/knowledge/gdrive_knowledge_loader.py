@@ -65,8 +65,17 @@ class GDriveDocumentLoader(KnowledgeLoader):
         fh = io.BytesIO()
         downloader = MediaIoBaseDownload(fh, request)
         done = False
+        attempts = 0
         while not done:
-            status, done = downloader.next_chunk()
+            try:
+                status, done = downloader.next_chunk()
+            except TimeoutError:
+                attempts += 1
+                if attempts >= 3:
+                    raise
+                logger.warning(f"kb_gdrive.download_timeout file_id={file_id} attempt={attempts}")
+                await asyncio.sleep(1)
+                continue
             if status:
                 await asyncio.sleep(0)
         return fh.getvalue()

@@ -46,6 +46,10 @@ class APISettings(Protocol):
     AI_COACH_TIMEOUT: int
     AI_COACH_REFRESH_USER: str
     AI_COACH_REFRESH_PASSWORD: str
+    AI_COACH_INTERNAL_KEY_ID: str
+    AI_COACH_INTERNAL_API_KEY: str
+    INTERNAL_KEY_ID: str
+    INTERNAL_API_KEY: str
 
 
 class APIClient:
@@ -97,9 +101,10 @@ class APIClient:
         method: str,
         url: str,
         data: Optional[dict] = None,
+        *,
+        body_bytes: bytes | None = None,
         headers: Optional[dict] = None,
         timeout: int | None = None,
-        *,
         allow_statuses: set[int] | None = None,
         client: httpx.AsyncClient | None = None,
         retry_server_errors: bool = True,
@@ -108,7 +113,8 @@ class APIClient:
         if self.use_default_auth and self.api_key:
             headers.setdefault("Authorization", f"Bearer {self.api_key}")
 
-        data = self._json_safe(data)
+        # body_bytes is raw content (e.g. pre-serialized JSON used for HMAC); when present we skip json serialization
+        json_payload = None if body_bytes is not None else self._json_safe(data)
         timeout_value = timeout or self.default_timeout or None
         allowed = allow_statuses or set()
         attempts = max(1, self.max_retries + 1)
@@ -116,13 +122,20 @@ class APIClient:
 
         for attempt in range(1, attempts + 1):
             try:
+                request_kwargs: dict[str, Any] = {
+                    "headers": headers,
+                    "timeout": timeout_value,
+                }
+                if body_bytes is not None:
+                    request_kwargs["content"] = body_bytes
+                else:
+                    request_kwargs["json"] = json_payload
+
                 if client is not None:
                     response = await client.request(
                         method,
                         url,
-                        json=data,
-                        headers=headers,
-                        timeout=timeout_value,
+                        **request_kwargs,
                     )
                 else:
                     limits = httpx.Limits(max_connections=50, max_keepalive_connections=10)
@@ -134,9 +147,7 @@ class APIClient:
                         response = await _client.request(
                             method,
                             url,
-                            json=data,
-                            headers=headers,
-                            timeout=timeout_value,
+                            **request_kwargs,
                         )
 
                 if response.status_code in allowed:

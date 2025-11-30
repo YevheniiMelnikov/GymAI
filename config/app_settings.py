@@ -1,5 +1,6 @@
 import json
 import os
+import logging
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Annotated, Any
@@ -76,7 +77,9 @@ def normalize_service_url(
 
 
 class Settings(BaseSettings):
+    ENVIRONMENT: str = "development"
     DEBUG: bool = False
+    CORS_ALLOW_ALL_ORIGINS: bool = False
     PAYMENT_CHECK_INTERVAL: int = 60
     MIN_BIRTH_YEAR: int = 1940
     MAX_BIRTH_YEAR: int = 2020
@@ -137,6 +140,8 @@ class Settings(BaseSettings):
     INTERNAL_KEY_ID: Annotated[str, Field(default="gymbot-internal-v1")]
     INTERNAL_API_KEY: Annotated[str, Field(default="")]
     INTERNAL_IP_ALLOWLIST: Annotated[list[str], Field(default_factory=list)]
+    AI_COACH_INTERNAL_KEY_ID: Annotated[str, Field(default="")]
+    AI_COACH_INTERNAL_API_KEY: Annotated[str, Field(default="")]
     SECRET_KEY: Annotated[str, Field(default="")]
     API_HOST: Annotated[str, Field(default="http://127.0.0.1")]
     HOST_API_PORT: Annotated[str, Field(default="8000")]
@@ -202,6 +207,8 @@ class Settings(BaseSettings):
     AI_COACH_PRIMARY_CONTEXT_LIMIT: Annotated[int, Field(default=2200)]
     AI_COACH_RETRY_CONTEXT_LIMIT: Annotated[int, Field(default=1400)]
     DISABLE_MANUAL_PLACEHOLDER: Annotated[bool, Field(default=True)]
+    AI_COACH_RATE_LIMIT: Annotated[int, Field(default=120)]
+    AI_COACH_RATE_PERIOD: Annotated[int, Field(default=60)]
     AI_PLAN_DEDUP_TTL: Annotated[int, Field(default=3600)]
     AI_PLAN_NOTIFY_TIMEOUT: Annotated[int, Field(default=900)]
     AI_PLAN_NOTIFY_POLL_INTERVAL: Annotated[int, Field(default=30)]
@@ -263,6 +270,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _compute_derived_fields(self) -> "Settings":
+        environment = str(getattr(self, "ENVIRONMENT", "development")).lower()
         in_docker: bool = os.path.exists("/.dockerenv") or os.getenv("KUBERNETES_SERVICE_HOST") is not None
         self.AI_COACH_URL = normalize_service_url(self.AI_COACH_URL)
 
@@ -276,7 +284,7 @@ class Settings(BaseSettings):
 
         # PAYMENT_CALLBACK_URL
         if not self.PAYMENT_CALLBACK_URL:
-            self.PAYMENT_CALLBACK_URL = f"{self.WEBHOOK_HOST}/payment-webhook/"
+            self.PAYMENT_CALLBACK_URL = f"{self.WEBHOOK_HOST}/payments-webhook/"
 
         # API_URL
         if not self.API_URL:
@@ -303,6 +311,16 @@ class Settings(BaseSettings):
             if not normalized or normalized.startswith("redis://redis"):
                 self.REDIS_URL = "redis://127.0.0.1:6379"
 
+        if not self.RABBITMQ_USER or not self.RABBITMQ_PASSWORD:
+            if environment == "production":
+                raise ValueError("RABBITMQ_USER and RABBITMQ_PASSWORD must be set")
+            fallback_user = self.RABBITMQ_USER or "rabbitmq"
+            fallback_pass = self.RABBITMQ_PASSWORD or "rabbitmq"
+            logging.getLogger(__name__).warning(
+                "RabbitMQ credentials not set; using fallback values for non-production environment"
+            )
+            self.RABBITMQ_USER = fallback_user
+            self.RABBITMQ_PASSWORD = fallback_pass
         if not self.RABBITMQ_URL:
             encoded_user: str = quote_plus(self.RABBITMQ_USER)
             encoded_password: str = quote_plus(self.RABBITMQ_PASSWORD)
@@ -333,7 +351,31 @@ class Settings(BaseSettings):
 
         self.AI_COACH_URL = normalize_service_url(self.AI_COACH_URL)
 
+        if environment == "production":
+            self._require_secret("SECRET_KEY", self.SECRET_KEY)
+            self._require_secret("API_KEY", self.API_KEY)
+            self._require_secret("INTERNAL_API_KEY", self.INTERNAL_API_KEY)
+            self._require_secret("INTERNAL_KEY_ID", self.INTERNAL_KEY_ID)
+            self._require_secret("AI_COACH_INTERNAL_KEY_ID", self.AI_COACH_INTERNAL_KEY_ID)
+            self._require_secret("AI_COACH_INTERNAL_API_KEY", self.AI_COACH_INTERNAL_API_KEY)
+            self._require_secret("RABBITMQ_USER", self.RABBITMQ_USER)
+            self._require_secret("RABBITMQ_PASSWORD", self.RABBITMQ_PASSWORD)
+
         return self
+
+    @staticmethod
+    def _require_secret(name: str, value: str) -> None:
+        bad_values = {
+            "",
+            "changeme",
+            "admin",
+            "password",
+            "secure_rabbitmq_password",
+            "change_me_ai_coach_hmac",
+            "placeholder",
+        }
+        if str(value or "").strip() in bad_values:
+            raise ValueError(f"{name} must be set in production")
 
     def _derive_api_url(self, in_docker: bool) -> str:
         """Build API URL taking container networking into account."""

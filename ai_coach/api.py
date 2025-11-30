@@ -1,4 +1,6 @@
+import hmac
 import sys
+import time
 from fastapi import Depends, HTTPException, Request  # pyrefly: ignore[import-error]
 from fastapi.responses import JSONResponse  # pyrefly: ignore[import-error]
 from fastapi.security import HTTPBasicCredentials  # pyrefly: ignore[import-error]
@@ -17,6 +19,8 @@ from ai_coach.agent import AgentDeps, CoachAgent  # pyrefly: ignore[missing-modu
 from ai_coach.agent.utils import get_knowledge_base
 from ai_coach.exceptions import AgentExecutionAborted
 from core.exceptions import UserServiceError
+from core.internal_http import resolve_hmac_credentials
+from core.utils.redis_lock import get_redis_client
 from core.services import APIService
 from ai_coach.application import app, security
 from ai_coach.schemas import AICoachRequest
@@ -49,6 +53,61 @@ def _validate_refresh_credentials(credentials: HTTPBasicCredentials) -> None:
     expected_pass = str(getattr(cfg, "AI_COACH_REFRESH_PASSWORD", "") or "")
     if username != expected_user or password != expected_pass:
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+async def _require_hmac(request: Request) -> None:
+    env_mode = str(getattr(settings, "ENVIRONMENT", "development")).lower()
+    creds = resolve_hmac_credentials(settings, prefer_ai_coach=True)
+    if creds is None:
+        if env_mode != "production":
+            if not getattr(_require_hmac, "_warned_missing", False):
+                logger.warning("HMAC credentials missing; skipping validation in non-production mode")
+                setattr(_require_hmac, "_warned_missing", True)
+            return
+        raise HTTPException(status_code=503, detail="AI coach HMAC is not configured")
+    expected_key_id, secret_key = creds
+    key_id = request.headers.get("X-Key-Id")
+    ts_header = request.headers.get("X-TS")
+    sig_header = request.headers.get("X-Sig")
+    if not all((key_id, ts_header, sig_header)):
+        raise HTTPException(status_code=403, detail="Missing signature headers")
+    if key_id != expected_key_id:
+        raise HTTPException(status_code=403, detail="Unknown key ID")
+    try:
+        ts = int(ts_header) if ts_header is not None else 0
+    except ValueError:
+        raise HTTPException(status_code=403, detail="Invalid timestamp format")
+    if abs(time.time() - ts) > 300:
+        raise HTTPException(status_code=403, detail="Stale signature")
+    body = await request.body()
+    message = str(ts).encode() + b"." + body
+    expected_sig = hmac.new(secret_key.encode(), message, "sha256").hexdigest()
+    if not hmac.compare_digest(expected_sig, sig_header or ""):
+        raise HTTPException(status_code=403, detail="Signature mismatch")
+
+    # Rate limit per key
+    rate_limit = int(getattr(settings, "AI_COACH_RATE_LIMIT", 0) or 0)
+    period = int(getattr(settings, "AI_COACH_RATE_PERIOD", 0) or 0)
+    if rate_limit > 0 and period > 0:
+        window = int(time.time() // period)
+        key = f"rl:ai:{expected_key_id}:{window}"
+        try:
+            client = get_redis_client()
+            count = await client.incr(key)
+            if count == 1:
+                await client.expire(key, period)
+            if count > rate_limit:
+                raise HTTPException(status_code=429, detail="Rate limit exceeded")
+        except HTTPException:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "ai_coach_rate_limit_error key_id={} window={} limit={} detail={}",
+                expected_key_id,
+                window,
+                rate_limit,
+                exc,
+            )
 
 
 def _to_language_code(raw: object, default: str) -> str:
@@ -132,13 +191,14 @@ async def health_kb() -> dict[str, Any]:
 
 
 @app.get("/internal/debug/ping")
-async def internal_ping() -> dict[str, bool]:
+async def internal_ping(_: None = Depends(_require_hmac)) -> dict[str, bool]:
     return {"ok": True}
 
 
 @app.get("/internal/debug/llm_probe")
 async def debug_llm_probe(
     credentials: HTTPBasicCredentials = Depends(security),
+    _: None = Depends(_require_hmac),
 ) -> dict[str, Any]:
     _validate_refresh_credentials(credentials)
     try:
@@ -151,6 +211,7 @@ async def debug_llm_probe(
 @app.get("/internal/debug/llm_echo")
 async def debug_llm_echo(
     credentials: HTTPBasicCredentials = Depends(security),
+    _: None = Depends(_require_hmac),
 ) -> dict[str, str]:
     _validate_refresh_credentials(credentials)
     client, model_name = CoachAgent._get_completion_client()
@@ -170,7 +231,10 @@ async def debug_llm_echo(
 
 
 @app.get("/internal/kb/dump")
-async def kb_dump(credentials: HTTPBasicCredentials = Depends(security)) -> dict[str, Any]:
+async def kb_dump(
+    credentials: HTTPBasicCredentials = Depends(security),
+    _: None = Depends(_require_hmac),
+) -> dict[str, Any]:
     _validate_refresh_credentials(credentials)
     kb = get_knowledge_base()
     ds = kb.dataset_service
@@ -210,7 +274,11 @@ async def kb_dump(credentials: HTTPBasicCredentials = Depends(security)) -> dict
 
 
 @app.get("/internal/kb/audit")
-async def kb_audit(datasets: str, credentials: HTTPBasicCredentials = Depends(security)) -> dict[str, Any]:
+async def kb_audit(
+    datasets: str,
+    credentials: HTTPBasicCredentials = Depends(security),
+    _: None = Depends(_require_hmac),
+) -> dict[str, Any]:
     _validate_refresh_credentials(credentials)
     kb = get_knowledge_base()
     ds = kb.dataset_service
@@ -236,7 +304,9 @@ async def kb_audit(datasets: str, credentials: HTTPBasicCredentials = Depends(se
 
 @app.post("/ask/", response_model=Program | Subscription | QAResponse | list[str] | None)
 async def ask(
-    data: AICoachRequest, request: Request
+    data: AICoachRequest,
+    request: Request,
+    _: None = Depends(_require_hmac),
 ) -> Program | Subscription | QAResponse | list[str] | None | JSONResponse:
     mode = data.mode if isinstance(data.mode, CoachMode) else CoachMode(data.mode)
     rid = str(uuid4())
@@ -378,9 +448,12 @@ async def ask(
                     deps.knowledge_base_empty,
                 )
                 if sources:
+                    joined = " | ".join(sources)
+                    if len(joined) > 300:
+                        joined = joined[:297] + "..."
                     logger.debug(
                         f"/ask agent sources rid={rid} request_id={data.request_id} profile_id={data.profile_id} "
-                        f"count={len(sources)} sources={' | '.join(sources)}"
+                        f"count={len(sources)} sources={joined}"
                     )
                 origin = "llm"
                 answer_len = len(answer) if isinstance(answer, str) else 0
@@ -500,6 +573,8 @@ async def ask(
             if not sources_for_log:
                 sources_for_log = ["general_knowledge"] if not final_kb_used else ["knowledge_base"]
             sources_label = ",".join(sources_for_log)
+            if len(sources_label) > 300:
+                sources_label = sources_label[:297] + "..."
             logger.info(
                 f"ask.out rid={rid} profile_id={data.profile_id} mode={mode.value} model={model_name} "
                 f"from={origin} answer_len={answer_len} kb_used={str(final_kb_used).lower()} "
@@ -508,9 +583,9 @@ async def ask(
 
 
 @app.post("/knowledge/refresh/")
-async def refresh_knowledge(credentials: HTTPBasicCredentials = Depends(security)) -> dict[str, str]:
-    _validate_refresh_credentials(credentials)
-
+async def refresh_knowledge(
+    _: None = Depends(_require_hmac),
+) -> dict[str, str]:
     try:
         kb = get_knowledge_base()
         await kb.refresh()
@@ -535,24 +610,10 @@ async def _execute_prune() -> dict[str, str]:
 
 
 @app.post("/internal/knowledge/prune/")
-async def prune_knowledge_base_internal() -> dict[str, str]:
+async def prune_knowledge_base_internal(_: None = Depends(_require_hmac)) -> dict[str, str]:
     return await _execute_prune()
 
 
 @app.post("/knowledge/prune/")
-async def prune_knowledge_base(credentials: HTTPBasicCredentials = Depends(security)):
-    _validate_refresh_credentials(credentials)
-    return await _execute_prune()
-
-
-@app.post("/knowledge/prune/")
-async def prune_knowledge_base_legacy(
-    request: Request,
-    credentials: HTTPBasicCredentials = Depends(security),
-) -> dict[str, str]:
-    _validate_refresh_credentials(credentials)
-    ip = request.client.host if request.client else "unknown"
-    auth_header = request.headers.get("authorization", "")
-    scheme = auth_header.split(" ", 1)[0] if auth_header else "unknown"
-    logger.info(f"prune_legacy_bridge_called ip={ip} auth_scheme={scheme}")
+async def prune_knowledge_base(_: None = Depends(_require_hmac)):
     return await _execute_prune()
