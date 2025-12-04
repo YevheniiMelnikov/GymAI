@@ -16,7 +16,7 @@ from core.schemas import Program, Subscription
 from core.schemas import QAResponse
 from core.internal_http import build_internal_hmac_auth_headers, resolve_hmac_credentials
 from .api_client import APIClient, APIClientHTTPError, APIClientTransportError
-from ...enums import WorkoutPlanType, WorkoutType
+from ...enums import WorkoutPlanType, WorkoutLocation
 
 
 class AiCoachService(APIClient):
@@ -93,7 +93,7 @@ class AiCoachService(APIClient):
         period: str | None = None,
         workout_days: list[str] | None = None,
         wishes: str | None = None,
-        workout_type: WorkoutType | None = None,
+        workout_location: WorkoutLocation | None = None,
         request_id: str | None = None,
     ) -> Program | Subscription | None:
         payload = AICoachRequest(
@@ -104,7 +104,7 @@ class AiCoachService(APIClient):
             period=period,
             workout_days=workout_days,
             wishes=wishes,
-            workout_type=workout_type,
+            workout_location=workout_location,
             plan_type=plan_type,
             request_id=request_id,
         )
@@ -131,7 +131,7 @@ class AiCoachService(APIClient):
         expected_workout: str | None = None,
         feedback: str | None = None,
         wishes: str | None = None,
-        workout_type: WorkoutType | None = None,
+        workout_location: WorkoutLocation | None = None,
         request_id: str | None = None,
     ) -> Program | Subscription | None:
         payload = AICoachRequest(
@@ -144,7 +144,7 @@ class AiCoachService(APIClient):
             expected_workout=expected_workout,
             feedback=feedback,
             wishes=wishes,
-            workout_type=workout_type,
+            workout_location=workout_location,
             plan_type=plan_type,
             request_id=request_id,
         )

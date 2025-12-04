@@ -11,7 +11,7 @@ from loguru import logger
 from config.app_settings import settings
 from core.ai_coach.state.plan import AiPlanState
 from core.celery_app import app
-from core.enums import WorkoutPlanType, WorkoutType
+from core.enums import WorkoutPlanType, WorkoutLocation
 from core.internal_http import build_internal_hmac_auth_headers, internal_request_timeout
 from core.schemas import Program, Subscription
 from core.services import APIService
@@ -168,11 +168,11 @@ def handle_ai_plan_failure(
     asyncio.run(_handle_ai_plan_failure_impl(payload, action, detail))
 
 
-def _parse_workout_type(raw: Any) -> WorkoutType | None:
+def _parse_workout_location(raw: Any) -> WorkoutLocation | None:
     if not raw:
         return None
     try:
-        return WorkoutType(str(raw))
+        return WorkoutLocation(str(raw))
     except ValueError:
         return None
 
@@ -212,7 +212,7 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
     period = payload.get("period")
     workout_days = payload.get("workout_days") or []
     plan_type = WorkoutPlanType(payload.get("plan_type", WorkoutPlanType.PROGRAM.value))
-    workout_type = _parse_workout_type(payload.get("workout_type"))
+    workout_location = _parse_workout_location(payload.get("workout_location"))
     attempt = getattr(task.request, "retries", 0)
 
     if not await _claim_plan_request(request_id, "create", attempt=attempt):
@@ -234,7 +234,7 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
             period=str(period) if period else None,
             workout_days=list(workout_days),
             wishes=wishes,
-            workout_type=workout_type,
+            workout_location=workout_location,
             request_id=request_id or None,
         )
     except APIClientHTTPError as exc:
@@ -319,7 +319,7 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> d
     feedback_val = payload.get("feedback")
     feedback = str(feedback_val) if feedback_val is not None else None
     plan_type = WorkoutPlanType(payload.get("plan_type", WorkoutPlanType.SUBSCRIPTION.value))
-    workout_type = _parse_workout_type(payload.get("workout_type"))
+    workout_location = _parse_workout_location(payload.get("workout_location"))
     attempt = getattr(task.request, "retries", 0)
 
     if not await _claim_plan_request(request_id, "update", attempt=attempt):
@@ -340,7 +340,7 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> d
             language=language,
             expected_workout=expected_workout,
             feedback=feedback,
-            workout_type=workout_type,
+            workout_location=workout_location,
             request_id=request_id or None,
         )
     except APIClientHTTPError as exc:

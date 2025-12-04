@@ -116,6 +116,129 @@ function sanitizeNote(value: string | null | undefined): string | null {
   return trimmed;
 }
 
+const REFRESH_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <path d="M4.2 5.8a4 4 0 0 1 6.6-1.6L12 5.4V2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M11.8 10.2a4 4 0 0 1-6.6 1.6L4 10.6v2.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>`;
+
+type ExerciseDialogController = {
+  open: () => void;
+  close: () => void;
+};
+
+const REPLACE_DIALOG_ID = 'exercise-replace-dialog';
+let exerciseDialog: ExerciseDialogController | null = null;
+
+function getExerciseDialog(): ExerciseDialogController {
+  if (exerciseDialog) return exerciseDialog;
+
+  const root = document.createElement('div');
+  root.id = REPLACE_DIALOG_ID;
+  root.className = 'exercise-dialog';
+  root.setAttribute('aria-hidden', 'true');
+
+  const panel = document.createElement('div');
+  panel.className = 'exercise-dialog__panel';
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-modal', 'true');
+  panel.setAttribute('aria-labelledby', `${REPLACE_DIALOG_ID}-title`);
+  panel.tabIndex = -1;
+
+  const title = document.createElement('h3');
+  title.id = `${REPLACE_DIALOG_ID}-title`;
+  title.className = 'exercise-dialog__title';
+
+  const body = document.createElement('p');
+  body.className = 'exercise-dialog__body';
+
+  const actions = document.createElement('div');
+  actions.className = 'exercise-dialog__actions';
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.type = 'button';
+  cancelBtn.className = 'button-ghost';
+
+  const confirmBtn = document.createElement('button');
+  confirmBtn.type = 'button';
+  confirmBtn.className = 'primary-button';
+
+  actions.append(cancelBtn, confirmBtn);
+  panel.append(title, body, actions);
+  root.appendChild(panel);
+  document.body.appendChild(root);
+
+  const close = () => {
+    root.dataset.state = 'closed';
+    root.setAttribute('aria-hidden', 'true');
+    document.removeEventListener('keydown', handleKeydown);
+  };
+
+  const handleKeydown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      close();
+    }
+  };
+
+  const open = () => {
+    title.textContent = t('program.exercise.replace_dialog.title');
+    body.textContent = t('program.exercise.replace_dialog.body');
+    confirmBtn.textContent = t('program.exercise.replace_dialog.confirm');
+    cancelBtn.textContent = t('program.exercise.replace_dialog.cancel');
+    root.dataset.state = 'open';
+    root.setAttribute('aria-hidden', 'false');
+    document.addEventListener('keydown', handleKeydown);
+    window.requestAnimationFrame(() => {
+      panel.focus();
+    });
+  };
+
+  const onBackdropClick = (event: MouseEvent) => {
+    if (event.target === root) {
+      event.preventDefault();
+      close();
+    }
+  };
+
+  cancelBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    close();
+  });
+  confirmBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    close();
+  });
+  root.addEventListener('click', onBackdropClick);
+
+  exerciseDialog = { open, close };
+  return exerciseDialog;
+}
+
+function createExerciseActions(details: HTMLDetailsElement): HTMLDivElement {
+  const actions = document.createElement('div');
+  actions.className = 'program-exercise-actions';
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'exercise-refresh-btn';
+  button.setAttribute('aria-label', t('program.exercise.replace'));
+  button.title = t('program.exercise.replace');
+  button.innerHTML = REFRESH_ICON;
+
+  const dialog = getExerciseDialog();
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!details.open) {
+      details.open = true;
+    }
+    dialog.open();
+  });
+
+  actions.appendChild(button);
+  return actions;
+}
+
 function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
   const li = document.createElement('li');
   li.className = 'program-exercise';
@@ -171,14 +294,12 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
     content.appendChild(notes);
   }
 
-  if (content.childElementCount > 0) {
-    details.appendChild(content);
-    li.appendChild(details);
-    return li;
+  if (content.childElementCount === 0) {
+    content.classList.add('program-exercise-content--minimal');
   }
 
-  details.classList.add('program-exercise-details-static');
-  summary.classList.add('program-exercise-summary-static');
+  content.appendChild(createExerciseActions(details));
+  details.appendChild(content);
   li.appendChild(details);
   return li;
 }

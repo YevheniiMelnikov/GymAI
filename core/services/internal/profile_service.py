@@ -18,8 +18,8 @@ class ProfileService:
     async def create_profile(self, tg_id: int, language: str) -> Profile | None:
         return await self._repository.create_profile(tg_id, language)
 
-    async def delete_profile(self, profile_id: int, token: str | None = None) -> bool:
-        return await self._repository.delete_profile(profile_id, token)
+    async def delete_profile(self, profile_id: int) -> bool:
+        return await self._repository.delete_profile(profile_id)
 
     async def update_profile(self, profile_id: int, data: dict[str, Any]) -> bool:
         return await self._repository.update_profile(profile_id, data)

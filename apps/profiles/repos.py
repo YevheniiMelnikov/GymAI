@@ -65,3 +65,9 @@ class ProfileRepository:
             return profile
 
         return cast(Profile, cached)
+
+    @staticmethod
+    def invalidate_cache(profile_id: int, tg_id: int | None) -> None:
+        cache.delete(f"profile:{profile_id}")
+        if tg_id is not None:
+            cache.delete(f"profile:tg:{tg_id}")

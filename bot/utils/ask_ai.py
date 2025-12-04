@@ -18,9 +18,10 @@ from bot.utils.credits import available_ai_services
 from bot.utils.media import download_limited_file, get_ai_qa_image_limit
 from bot.utils.menus import show_balance_menu
 from config.app_settings import settings
+from bot.utils.profiles import fetch_user
+from core.ai_coach.models import AskAiPreparationResult
 from core.cache import Cache
 from core.enums import ProfileStatus
-from core.ai_coach.models import AskAiPreparationResult
 from core.exceptions import AskAiPreparationError, ProfileNotFoundError
 from core.schemas import Profile
 
@@ -108,13 +109,17 @@ async def start_ask_ai_prompt(
     """Display Ask AI prompt if user has enough credits."""
     lang = profile.language or settings.DEFAULT_LANG
     try:
-        user_profile = await Cache.profile.get_record(profile.id)
-    except ProfileNotFoundError:
+        user_profile = await fetch_user(profile, refresh_if_incomplete=True)
+    except (ProfileNotFoundError, ValueError):
         await _notify_user(origin, translate(MessageText.unexpected_error, lang), show_alert=True)
         return False
 
-    if user_profile.status == ProfileStatus.initial:
-        await _notify_user(origin, translate(MessageText.finish_registration_to_get_credits, lang), show_alert=True)
+    if user_profile.status != ProfileStatus.completed:
+        await _notify_user(
+            origin,
+            translate(MessageText.finish_registration_to_get_credits, lang).format(credits=settings.DEFAULT_CREDITS),
+            show_alert=True,
+        )
         if delete_origin:
             await del_msg(origin)
         return False

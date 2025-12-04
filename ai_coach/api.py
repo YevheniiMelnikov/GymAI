@@ -131,7 +131,7 @@ DISPATCH: dict[CoachMode, CoachAction] = {
     CoachMode.program: lambda ctx: CoachAgent.generate_workout_plan(
         ctx.get("prompt"),
         deps=ctx["deps"],
-        workout_type=ctx.get("workout_type"),
+        workout_location=ctx.get("workout_location"),
         wishes=ctx["wishes"],
         instructions=ctx.get("instructions"),
         output_type=Program,
@@ -139,7 +139,7 @@ DISPATCH: dict[CoachMode, CoachAction] = {
     CoachMode.subscription: lambda ctx: CoachAgent.generate_workout_plan(
         ctx.get("prompt"),
         deps=ctx["deps"],
-        workout_type=ctx.get("workout_type"),
+        workout_location=ctx.get("workout_location"),
         period=ctx["period"],
         workout_days=ctx["workout_days"],
         wishes=ctx["wishes"],
@@ -150,7 +150,7 @@ DISPATCH: dict[CoachMode, CoachAction] = {
         ctx.get("prompt"),
         expected_workout=ctx["expected_workout"],
         feedback=ctx["feedback"],
-        workout_type=ctx.get("workout_type"),
+        workout_location=ctx.get("workout_location"),
         deps=ctx["deps"],
         output_type=Program if ctx["plan_type"] == WorkoutPlanType.PROGRAM else Subscription,
         instructions=ctx.get("instructions"),
@@ -365,7 +365,7 @@ async def ask(
             "feedback": data.feedback or "",
             "wishes": data.wishes or "",
             "language": language,
-            "workout_type": data.workout_type,
+            "workout_location": data.workout_location,
             "plan_type": data.plan_type,
             "instructions": data.instructions,
         }

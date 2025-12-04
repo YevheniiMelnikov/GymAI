@@ -5,7 +5,7 @@ import pytest  # pyrefly: ignore[import-error]
 
 from ai_coach.agent import AgentDeps, CoachAgent
 from core.schemas import DayExercises, Exercise, Program, Subscription
-from core.enums import WorkoutType
+from core.enums import WorkoutLocation
 
 
 def test_generate_plan_returns_program(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -25,14 +25,16 @@ def test_generate_plan_returns_program(monkeypatch: pytest.MonkeyPatch) -> None:
                 exercises_by_day=[DayExercises(day="d1", exercises=[Exercise(name="squat", sets="3", reps="10")])],
                 created_at=0.0,
                 split_number=1,
-                workout_type="",
+                workout_location="",
                 wishes="",
             )
 
         monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: types.SimpleNamespace(run=fake_run)))
         monkeypatch.setattr(CoachAgent, "_message_history", staticmethod(lambda profile_id: [object(), object()]))
         deps = AgentDeps(profile_id=1)
-        result = await CoachAgent.generate_workout_plan("hi", deps, workout_type=WorkoutType.HOME, output_type=Program)
+        result = await CoachAgent.generate_workout_plan(
+            "hi", deps, workout_location=WorkoutLocation.HOME, output_type=Program
+        )
         assert isinstance(result, Program)
 
     asyncio.run(runner())
@@ -50,21 +52,21 @@ def test_update_workout_plan_returns_program(monkeypatch: pytest.MonkeyPatch) ->
             assert "MODE: update" in prompt
             assert "Client Feedback" in prompt
             assert "WORKOUT PROGRAM RULES" in prompt
-            assert "Workout type: home" in prompt
+            assert "Workout location: home" in prompt
             return Program(
                 id=2,
                 profile=deps.profile_id,
                 exercises_by_day=[DayExercises(day="d1", exercises=[Exercise(name="push", sets="2", reps="5")])],
                 created_at=0.0,
                 split_number=1,
-                workout_type="",
+                workout_location="",
                 wishes="",
             )
 
         monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: types.SimpleNamespace(run=fake_run)))
         deps = AgentDeps(profile_id=1)
         result = await CoachAgent.update_workout_plan(
-            "hi", "exp", "fb", deps, workout_type=WorkoutType.HOME, output_type=Program
+            "hi", "exp", "fb", deps, workout_location=WorkoutLocation.HOME, output_type=Program
         )
         assert isinstance(result, Program)
 
@@ -82,13 +84,13 @@ def test_generate_plan_returns_subscription(monkeypatch: pytest.MonkeyPatch) -> 
         ) -> Subscription:
             assert "MODE: subscription" in prompt
             assert "WORKOUT PROGRAM RULES" in prompt
-            assert "Workout type: home" in prompt
+            assert "Workout location: home" in prompt
             return Subscription(
                 id=1,
                 profile=deps.profile_id,
                 enabled=True,
                 price=0,
-                workout_type="",
+                workout_location="",
                 wishes="",
                 period="1m",
                 workout_days=["mon"],
@@ -101,7 +103,7 @@ def test_generate_plan_returns_subscription(monkeypatch: pytest.MonkeyPatch) -> 
         result = await CoachAgent.generate_workout_plan(
             "hi",
             deps,
-            workout_type=WorkoutType.HOME,
+            workout_location=WorkoutLocation.HOME,
             period="1m",
             workout_days=["mon"],
             output_type=Subscription,
@@ -128,7 +130,7 @@ def test_custom_rules_append(monkeypatch: pytest.MonkeyPatch) -> None:
                 exercises_by_day=[],
                 created_at=0.0,
                 split_number=1,
-                workout_type="",
+                workout_location="",
                 wishes="",
             )
 
@@ -137,7 +139,7 @@ def test_custom_rules_append(monkeypatch: pytest.MonkeyPatch) -> None:
         await CoachAgent.generate_workout_plan(
             "p",
             deps,
-            workout_type=WorkoutType.HOME,
+            workout_location=WorkoutLocation.HOME,
             output_type=Program,
             instructions="extra",
         )

@@ -6,7 +6,7 @@ from pydantic import ValidationError
 
 from config.app_settings import settings
 from core.cache import Cache
-from core.enums import WorkoutPlanType, WorkoutType
+from core.enums import WorkoutPlanType, WorkoutLocation
 from core.schemas import DayExercises, Program, Profile, Subscription
 from core.services.internal import APIService
 from core.ai_coach import (
@@ -28,7 +28,7 @@ async def generate_workout_plan(
     profile: Profile,
     language: str,
     plan_type: WorkoutPlanType,
-    workout_type: WorkoutType,
+    workout_location: WorkoutLocation,
     wishes: str,
     request_id: str,
     period: str | None = None,
@@ -43,7 +43,7 @@ async def generate_workout_plan(
         period=period,
         workout_days=workout_days,
         wishes=wishes,
-        workout_type=workout_type,
+        workout_location=workout_location,
         request_id=request_id,
     )
     if not plan:
@@ -83,7 +83,7 @@ async def process_workout_plan_result(
             exercises_by_day=[],
             created_at=0.0,
             split_number=0,
-            workout_type="",
+            workout_location="",
             wishes="",
         )
     return Subscription(
@@ -91,7 +91,7 @@ async def process_workout_plan_result(
         profile=profile_id,
         enabled=False,
         price=0,
-        workout_type="",
+        workout_location="",
         wishes="",
         period="",
         workout_days=[],
@@ -104,7 +104,7 @@ async def enqueue_workout_plan_generation(
     *,
     profile: Profile,
     plan_type: WorkoutPlanType,
-    workout_type: WorkoutType,
+    workout_location: WorkoutLocation,
     wishes: str,
     request_id: str,
     period: str | None = None,
@@ -125,7 +125,7 @@ async def enqueue_workout_plan_generation(
             profile_id=profile_id,
             language=language,
             plan_type=plan_type,
-            workout_type=workout_type,
+            workout_location=workout_location,
             wishes=wishes,
             period=period,
             workout_days=workout_days or [],
@@ -308,7 +308,7 @@ async def enqueue_workout_plan_update(
     feedback: str,
     language: str,
     plan_type: WorkoutPlanType,
-    workout_type: WorkoutType | None,
+    workout_location: WorkoutLocation | None,
     request_id: str,
 ) -> bool:
     try:
@@ -318,7 +318,7 @@ async def enqueue_workout_plan_update(
             plan_type=plan_type,
             expected_workout_result=expected_workout_result,
             feedback=feedback,
-            workout_type=workout_type,
+            workout_location=workout_location,
             request_id=request_id,
         )
     except ValidationError as exc:

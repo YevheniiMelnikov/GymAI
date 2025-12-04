@@ -494,7 +494,7 @@ async def tool_create_subscription(
             "profile": profile_id,
             "enabled": True,
             "price": price,
-            "workout_type": "",
+            "workout_location": "",
             "wishes": wishes or "",
             "period": period.value,
             "workout_days": workout_days,

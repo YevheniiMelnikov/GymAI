@@ -133,6 +133,11 @@ workout_goals:
   ru: "Тренировочные цели 🎯"
   ua: "Тренувальні цілі 🎯"
 
+workout_location:
+  eng: "Workout location 🏋️‍♂️"
+  ru: "Формат тренировок 🏋️‍♂️"
+  ua: "Формат тренувань 🏋️‍♂️"
+
 work_experience:
   eng: "Work experience 💼"
   ru: "Опыт работы 💼"
@@ -142,16 +147,6 @@ payment_details:
   eng: "Payment details 💳"
   ru: "Реквизиты оплаты 💳"
   ua: "Реквізити оплати 💳"
-
-additional_info:
-  eng: "Additional info 📄"
-  ru: "Дополнительная информация 📄"
-  ua: "Додаткова інформація 📄"
-
-photo:
-  eng: "Profile photo 📸"
-  ru: "Фото профиля 📸"
-  ua: "Фото профілю 📸"
 
 select:
   eng: "Select ✅️"
@@ -197,11 +192,6 @@ done:
   eng: "Done 👌"
   ru: "Готово 👌"
   ua: "Готово 👌"
-
-get:
-  eng: "Get 🎁"
-  ru: "Получить 🎁"
-  ua: "Отримати 🎁"
 
 gym_workout:
   eng: "At the gym 🏋️‍♂️"

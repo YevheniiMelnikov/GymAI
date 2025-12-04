@@ -26,6 +26,7 @@ from bot.utils.text import get_translated_week_day
 from bot.utils.bot import del_msg, answer_msg, delete_messages, get_webapp_url
 from bot.keyboards import yes_no_kb
 from bot.texts import ButtonText, MessageText, translate
+from bot.utils.profiles import resolve_workout_location
 
 
 def _next_payment_date(period: SubscriptionPeriod = SubscriptionPeriod.one_month) -> str:
@@ -43,6 +44,8 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bo
 
     profile = await Cache.profile.get_profile(callback_query.from_user.id)
     assert profile is not None
+    profile_workout_location = resolve_workout_location(profile)
+    workout_location_value = profile_workout_location.value if profile_workout_location else None
 
     data = await state.get_data()
     completed_days = data.get("completed_days") or data.get("day_index", 0) + 1
@@ -115,21 +118,21 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bo
             await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
             return
     else:
+        program_workout_location = workout_location_value
         try:
             current_program = await Cache.workout.get_latest_program(profile_id)
             wishes = current_program.wishes
-            workout_type = getattr(current_program, "workout_type", data.get("workout_type"))
+            program_workout_location = getattr(current_program, "workout_location", program_workout_location)
         except ProgramNotFoundError:
             logger.info(f"Original program not found for profile {profile_id} when saving new one. Will create new.")
             wishes = ""
-            workout_type = data.get("workout_type")
 
         saved_program = await APIService.workout.save_program(profile_id, exercises, split_number, wishes)
 
         if saved_program:
             program_data = saved_program.model_dump()
             program_data.update(
-                workout_type=workout_type,
+                workout_location=program_workout_location,
                 split_number=split_number,
             )
             await Cache.workout.save_program(profile_id, program_data)
@@ -152,7 +155,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bo
                 include_incoming_message=False,
             )
 
-            await Cache.profile.update_record(profile_record.id, {"status": ProfileStatus.default})
+            await Cache.profile.update_record(profile_record.id, {"status": ProfileStatus.completed})
 
     message = callback_query.message
     if message and isinstance(message, Message):
@@ -199,7 +202,7 @@ async def reset_workout_plan(callback_query: CallbackQuery, state: FSMContext) -
                     "profile": profile_id,
                 },
             )
-            await Cache.profile.update_record(profile_record.id, {"status": ProfileStatus.waiting_for_subscription})
+            await Cache.profile.update_record(profile_record.id, {"status": ProfileStatus.completed})
             await Cache.payment.set_status(profile_id, "subscription", PaymentStatus.PENDING)
         except SubscriptionNotFoundError:
             logger.error(f"Subscription not found for profile {profile_id}, cannot reset")
@@ -214,7 +217,7 @@ async def reset_workout_plan(callback_query: CallbackQuery, state: FSMContext) -
 
         await APIService.workout.update_program(program.id, {"exercises_by_day": []})
         await Cache.workout.update_program(profile_id, {"exercises_by_day": []})
-        await Cache.profile.update_record(profile_record.id, {"status": ProfileStatus.waiting_for_program})
+        await Cache.profile.update_record(profile_record.id, {"status": ProfileStatus.completed})
 
     await state.clear()
     await answer_msg(callback_query, translate(MessageText.enter_daily_program, profile.language).format(day=1))
@@ -275,10 +278,10 @@ async def next_day_workout_plan(callback_query: CallbackQuery, state: FSMContext
     )
 
 
-async def cache_program_data(data: dict, profile_id: int) -> None:
+async def cache_program_data(data: dict, profile_id: int, workout_location: str | None = None) -> None:
     program_data = {
         "id": 1,
-        "workout_type": data.get("workout_type"),
+        "workout_location": workout_location,
         "exercises_by_day": [],
         "created_at": datetime.now().timestamp(),
         "profile": profile_id,

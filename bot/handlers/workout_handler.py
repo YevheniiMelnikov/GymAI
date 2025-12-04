@@ -570,7 +570,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
                     profile_id, exercises, current_program.split_number, current_program.wishes
                 ):
                     program_data = program.model_dump()
-                    program_data.update(workout_type=current_program.workout_type)
+                    program_data.update(workout_location=current_program.workout_location)
                     await Cache.workout.save_program(profile_id, program_data)
                     await Cache.payment.reset_status(profile_id, "program")
             await send_message(
@@ -581,7 +581,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
                 include_incoming_message=False,
             )
 
-        await Cache.profile.update_record(profile_record.id, dict(status=ProfileStatus.default))
+        await Cache.profile.update_record(profile_record.id, dict(status=ProfileStatus.completed))
         message = cast(Message, callback_query.message)
         assert message is not None
         await show_main_menu(message, profile, state)

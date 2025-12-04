@@ -61,7 +61,6 @@ async def program_data(request: HttpRequest) -> JsonResponse:
             await call_repo(SubscriptionRepository.get_latest, profile.id),
         )
         if subscription_obj is None:
-            logger.warning(f"Subscription not found for profile_id={profile.id}")
             return JsonResponse({"error": "not_found"}, status=404)
 
         days = transform_days(subscription_obj.exercises)
@@ -92,8 +91,7 @@ async def program_data(request: HttpRequest) -> JsonResponse:
                 profile.id,
             )
             if program_obj is None:
-                total = await call_repo(lambda pid: ProgramModel.objects.filter(profile_id=pid).count(), profile.id)
-                logger.warning(f"Program not found for profile_id={profile.id}; total_programs={total}")
+                await call_repo(lambda pid: ProgramModel.objects.filter(profile_id=pid).count(), profile.id)
             else:
                 program_pk = getattr(program_obj, "id", None)
                 logger.info(f"Program loaded via direct ORM profile_id={profile.id} program_id={program_pk}")
@@ -108,7 +106,6 @@ async def program_data(request: HttpRequest) -> JsonResponse:
             program_obj = None
 
     if program_obj is None:
-        logger.warning(f"Program not found for profile_id={profile.id} program_id={program_id}")
         return JsonResponse({"error": "not_found"}, status=404)
 
     created_raw = getattr(program_obj, "created_at", None)
@@ -246,7 +243,6 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
         await call_repo(SubscriptionRepository.get_latest, int(getattr(profile, "id", 0))),
     )
     if subscription is None:
-        logger.warning(f"Subscription not found for profile_id={profile.id}")
         return JsonResponse({"error": "not_found"}, status=404)
 
     subscription_id = getattr(subscription, "id", None)

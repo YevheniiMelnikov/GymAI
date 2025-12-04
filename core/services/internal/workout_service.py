@@ -45,7 +45,7 @@ class WorkoutService(APIClient):
                 created_at=response.get("created_at", 0),
                 profile=profile_id,
                 wishes=wishes,
-                workout_type=str(response.get("workout_type", "")),
+                workout_location=str(response.get("workout_location", "")),
             )
 
         except UserServiceError as e:

@@ -7,11 +7,10 @@ from apps.profiles.choices import ProfileStatus
 class Profile(Model):
     language = models.CharField(max_length=50, null=True, blank=True)
     tg_id = models.BigIntegerField(blank=True, null=True, unique=True)
-    name = models.CharField(max_length=50, null=True, blank=True)
     status = models.CharField(
         max_length=50,
         choices=ProfileStatus.choices,
-        default=ProfileStatus.initial,
+        default=ProfileStatus.created,
     )
     gender = models.CharField(max_length=50, null=True, blank=True)
     born_in = models.IntegerField(null=True, blank=True)
@@ -19,7 +18,12 @@ class Profile(Model):
     health_notes = models.CharField(max_length=250, null=True, blank=True)
     workout_experience = models.CharField(max_length=50, null=True, blank=True)
     workout_goals = models.CharField(max_length=250, null=True, blank=True)
-    profile_photo = models.CharField(max_length=250, null=True, blank=True)
+    workout_location = models.CharField(
+        max_length=32,
+        choices=[("gym", "gym"), ("home", "home")],
+        null=True,
+        blank=True,
+    )
     credits = models.PositiveIntegerField(default=0)
 
     class Meta:

@@ -10,8 +10,10 @@ from aiohttp import ClientTimeout, ClientSession
 from loguru import logger
 from pydantic import ValidationError
 
-from bot.texts import TextManager
+from bot.texts import MessageText, TextManager, translate
 from config.app_settings import settings
+from bot.keyboards import select_language_kb
+from bot.states import States
 
 
 class _WebAppTarget(NamedTuple):
@@ -156,7 +158,25 @@ async def check_webhook_alive(ping_url: str, timeout_seconds: float = 5.0) -> bo
                 ok = bool(data.get("ok")) if isinstance(data, dict) else False
                 if not ok:
                     logger.error(f"Webhook healthcheck returned invalid payload from {ping_url}: {data}")
-                return ok
+            return ok
     except Exception as e:
         logger.error(f"Webhook healthcheck failed to reach {ping_url}: {e}")
         return False
+
+
+async def prompt_language_selection(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    start_msg = await message.answer(translate(MessageText.start, settings.DEFAULT_LANG))
+    language_msg = await message.answer(
+        translate(MessageText.select_language, settings.DEFAULT_LANG),
+        reply_markup=select_language_kb(),
+    )
+    message_ids: list[int] = []
+    if start_msg:
+        message_ids.append(start_msg.message_id)
+    if language_msg:
+        message_ids.append(language_msg.message_id)
+    await state.update_data(message_ids=message_ids, chat_id=message.chat.id)
+    await state.set_state(States.select_language)
+    with suppress(TelegramBadRequest):
+        await message.delete()

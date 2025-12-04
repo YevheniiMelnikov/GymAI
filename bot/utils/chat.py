@@ -22,7 +22,6 @@ async def send_message(
     include_incoming_message: bool = True,
     photo: str | InputFile | FSInputFile | None = None,
     video: str | InputFile | FSInputFile | None = None,
-    avatar_url: str | FSInputFile | None = None,
 ) -> None:
     def _resolve_media(
         media: str | InputFile | FSInputFile | None,
@@ -62,7 +61,7 @@ async def send_message(
         formatted_text = _escape_html(text)
 
     media_video = _resolve_media(video)
-    media_photo = _resolve_media(photo) or _resolve_media(avatar_url)
+    media_photo = _resolve_media(photo)
 
     if media_video is not None:
         await bot.send_video(

@@ -101,9 +101,9 @@ def edit_profile_kb(lang: str) -> KbMarkup:
     buttons = [
         [builder.add(ButtonText.workout_experience, "workout_experience")],
         [builder.add(ButtonText.workout_goals, "workout_goals")],
+        [builder.add(ButtonText.workout_location, "workout_location")],
         [builder.add(ButtonText.health_notes, "health_notes")],
         [builder.add(ButtonText.weight, "weight")],
-        [builder.add(ButtonText.photo, "photo")],
         [builder.add(ButtonText.prev_menu, "back")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
@@ -186,18 +186,11 @@ def client_msg_bk(lang: str, profile_id: int) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons)
 
 
-def gift_kb(lang: str) -> KbMarkup:
-    builder = ButtonsBuilder(lang)
-    buttons = [[builder.add(ButtonText.get, "get")]]
-    return KbMarkup(inline_keyboard=buttons)
-
-
-def workout_type_kb(lang: str) -> KbMarkup:
+def workout_location_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
         [builder.add(ButtonText.gym_workout, "gym")],
         [builder.add(ButtonText.home_workout, "home")],
-        [builder.add(ButtonText.prev_menu, "workouts_back")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 

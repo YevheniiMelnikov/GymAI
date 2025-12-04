@@ -8,7 +8,7 @@ from loguru import logger  # pyrefly: ignore[import-error]
 from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
 
 from config.app_settings import settings
-from core.enums import WorkoutType
+from core.enums import WorkoutLocation
 from core.schemas import Program, QAResponse, Subscription
 from ai_coach.exceptions import AgentExecutionAborted
 from ai_coach.agent.knowledge.schemas import KnowledgeSnippet
@@ -46,7 +46,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
         prompt: str | None,
         deps: AgentDeps,
         *,
-        workout_type: WorkoutType | None = None,
+        workout_location: WorkoutLocation | None = None,
         period: str | None = None,
         workout_days: list[str] | None = None,
         wishes: str | None = None,
@@ -60,8 +60,8 @@ class CoachAgent(metaclass=CoachAgentMeta):
         agent = cls._get_agent()
         today = datetime.now(ZoneInfo(settings.TIME_ZONE)).date().isoformat()
         context_lines: list[str] = []
-        if workout_type:
-            context_lines.append(f"Workout type: {workout_type.value}")
+        if workout_location:
+            context_lines.append(f"Workout location: {workout_location.value}")
         if prompt:
             context_lines.append(prompt)
         if period:
@@ -111,15 +111,15 @@ class CoachAgent(metaclass=CoachAgentMeta):
         feedback: str,
         deps: AgentDeps,
         *,
-        workout_type: WorkoutType | None = None,
+        workout_location: WorkoutLocation | None = None,
         output_type: type[Program] | type[Subscription] = Subscription,
         instructions: str | None = None,
     ) -> Program | Subscription:
         agent = cls._get_agent()
         deps.mode = CoachMode.update
         context_lines: list[str] = []
-        if workout_type:
-            context_lines.append(f"Workout type: {workout_type.value}")
+        if workout_location:
+            context_lines.append(f"Workout location: {workout_location.value}")
         if prompt:
             context_lines.append(prompt)
         formatted = UPDATE_WORKOUT.format(

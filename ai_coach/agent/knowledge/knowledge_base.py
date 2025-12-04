@@ -792,10 +792,19 @@ class KnowledgeBase:
         return status == 404
 
     @staticmethod
-    def _profile_text(profile: "Profile") -> str:
+    def _health_notes_context(raw: str | None) -> tuple[str | None, bool]:
+        if raw is None:
+            return None, False
+        cleaned = str(raw).strip()
+        if not cleaned:
+            return None, False
+        if cleaned in {"-", "—"}:
+            return None, True
+        return cleaned, False
+
+    @classmethod
+    def _profile_text(cls, profile: "Profile") -> str:
         parts = []
-        if profile.name:
-            parts.append(f"name: {profile.name}")
         if profile.gender:
             parts.append(f"gender: {profile.gender}")
         if profile.born_in:
@@ -806,6 +815,9 @@ class KnowledgeBase:
             parts.append(f"workout_experience: {profile.workout_experience}")
         if profile.workout_goals:
             parts.append(f"workout_goals: {profile.workout_goals}")
-        if profile.health_notes:
-            parts.append(f"health_notes: {profile.health_notes}")
+        health_notes, is_placeholder = cls._health_notes_context(profile.health_notes)
+        if health_notes:
+            parts.append(f"health_notes: {health_notes}")
+        elif is_placeholder:
+            parts.append("health_notes: no known injuries or contraindications reported")
         return "profile: " + "; ".join(parts)

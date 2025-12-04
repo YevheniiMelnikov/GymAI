@@ -142,36 +142,34 @@ const ProgramPage: React.FC = () => {
             <TopBar title={t('program.title')} />
 
             <div className="page-shell">
-                <div ref={switcherRef} id="segmented" className="segmented-container" />
+                <div id="content" aria-busy={loading}>
+                    <div className="history-panel program-panel">
+                        <div ref={switcherRef} id="segmented" className="segmented-container" />
 
-                <div id="content" ref={contentRef} aria-busy={loading} className="week centered" />
-                <div id="program-date" hidden={!dateText}>{dateText}</div>
+                        <div ref={contentRef} className="week centered" />
+                        <div id="program-date" hidden={!dateText}>
+                            {dateText}
+                        </div>
 
-                {loading && <div aria-busy="true">Loading...</div>}
-                {error && (
-                    <div className="empty-state history-empty">
-                        <img
-                            src="/static/images/404.png"
-                            alt={t('no_programs')}
-                            style={{
-                                width: 'clamp(160px, 46vw, 200px)',
-                                height: 'clamp(120px, 36vw, 170px)',
-                                objectFit: 'contain',
-                                margin: '0 auto',
-                                display: 'block',
-                            }}
-                            onError={(ev) => {
-                                const target = ev.currentTarget;
-                                if (target.src !== fallbackIllustration) {
-                                    target.src = fallbackIllustration;
-                                }
-                            }}
-                        />
-                        <p style={{ fontSize: '16px', fontWeight: 500, color: 'var(--text)', margin: 0 }}>
-                            {error}
-                        </p>
+                        {loading && <div aria-busy="true">Loading...</div>}
+                        {error && (
+                            <div className="empty-state history-empty">
+                                <img
+                                    src="/static/images/404.png"
+                                    alt={t('no_programs')}
+                                    className="history-empty__image"
+                                    onError={(ev) => {
+                                        const target = ev.currentTarget;
+                                        if (target.src !== fallbackIllustration) {
+                                            target.src = fallbackIllustration;
+                                        }
+                                    }}
+                                />
+                                <p className="history-empty__caption">{error}</p>
+                            </div>
+                        )}
                     </div>
-                )}
+                </div>
 
                 <div className="history-footer">
                     <button

@@ -11,7 +11,7 @@ from bot.handlers.internal.tasks import internal_ai_coach_plan_ready, _resolve_p
 from core.ai_coach.state.plan import AiPlanState
 from bot.utils.ai_coach import enqueue_workout_plan_generation, enqueue_workout_plan_update
 from config.app_settings import settings
-from core.enums import WorkoutPlanType, WorkoutType, SubscriptionPeriod
+from core.enums import WorkoutPlanType, WorkoutLocation, SubscriptionPeriod
 from core.exceptions import ProfileNotFoundError
 from core.schemas import DayExercises, Exercise, Program, Profile, Subscription
 
@@ -174,7 +174,7 @@ async def test_enqueue_workout_plan_generation_dispatch(monkeypatch: pytest.Monk
     queued = await enqueue_workout_plan_generation(
         profile=profile_record,
         plan_type=WorkoutPlanType.PROGRAM,
-        workout_type=WorkoutType.GYM,
+        workout_location=WorkoutLocation.GYM,
         wishes="lean",
         request_id="req-1",
         period="4w",
@@ -220,7 +220,7 @@ async def test_enqueue_workout_plan_update_dispatch(monkeypatch: pytest.MonkeyPa
         feedback="tough",
         language="en",
         plan_type=WorkoutPlanType.SUBSCRIPTION,
-        workout_type=WorkoutType.HOME,
+        workout_location=WorkoutLocation.HOME,
         request_id="req-2",
     )
 
@@ -247,7 +247,7 @@ async def test_internal_ai_plan_ready_program(monkeypatch: pytest.MonkeyPatch) -
         exercises_by_day=[DayExercises(day="1", exercises=[Exercise(name="push-up", sets="3", reps="10")])],
         created_at=0.0,
         split_number=1,
-        workout_type="gym",
+        workout_location="gym",
         wishes="",
     )
 
@@ -355,7 +355,7 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
         profile=profile_record.id,
         enabled=True,
         price=0,
-        workout_type="gym",
+        workout_location="gym",
         wishes="",
         period="1m",
         workout_days=["mon"],
@@ -368,7 +368,7 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
         profile=profile_record.id,
         enabled=True,
         price=0,
-        workout_type="gym",
+        workout_location="gym",
         wishes="",
         period="1m",
         workout_days=["mon"],
@@ -464,7 +464,7 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
         profile=profile_record.id,
         enabled=True,
         price=450,
-        workout_type="gym",
+        workout_location="gym",
         wishes="lean",
         period=SubscriptionPeriod.one_month.value,
         workout_days=["mon", "wed"],

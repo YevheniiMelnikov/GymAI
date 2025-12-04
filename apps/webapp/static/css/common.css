@@ -386,8 +386,8 @@ h1.page-title,
 }
 
 .history-footer{
-  margin-top: auto;
-  padding-top: clamp(30px, 4vw, 40px);
+  margin-top: clamp(16px, 2.4vw, 28px);
+  padding-top: clamp(16px, 2.4vw, 26px);
   display: flex;
   justify-content: center;
   border: none;
@@ -643,8 +643,46 @@ h1.page-title,
   animation: accordion-in .24s ease;
   background: transparent;
 }
+.program-exercise-content--minimal{
+  padding-top: clamp(4px, 1vw, 8px);
+}
 .program-exercise-meta{ font-weight: 500; }
 .program-exercise-notes{ margin: 0; line-height: 1.4; }
+.program-exercise-actions{
+  margin-top: 4px;
+  display: flex;
+  justify-content: flex-end;
+}
+.program-exercise-details:not([open]) .program-exercise-actions{
+  display: none;
+}
+.exercise-refresh-btn{
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--border) 90%, transparent);
+  background: color-mix(in oklab, var(--surface) 92%, var(--bg));
+  color: color-mix(in oklab, var(--muted) 80%, var(--text));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color .18s ease, border-color .18s ease, background .18s ease, transform .12s ease;
+  padding: 0;
+}
+.exercise-refresh-btn:hover{
+  color: color-mix(in oklab, var(--text) 82%, var(--link));
+  border-color: color-mix(in oklab, var(--link) 34%, var(--border));
+  background: color-mix(in oklab, var(--surface) 88%, var(--bg));
+}
+.exercise-refresh-btn:active{
+  transform: scale(.96);
+}
+.exercise-refresh-btn svg{
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+}
 
 @keyframes accordion-in{
   from{ opacity: 0; transform: translateY(-6px); }
@@ -671,6 +709,18 @@ h1.page-title,
   align-items: center;
   gap: clamp(14px, 2.6vw, 24px);
   padding: 0;
+}
+.program-panel{
+  width: 100%;
+  align-items: stretch;
+}
+.program-panel > *{
+  width: 100%;
+}
+.program-panel #program-date{
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
 }
 .history-controls{
   display: flex;
@@ -758,6 +808,74 @@ h1.page-title,
   background: color-mix(in oklab, var(--accent) 12%, transparent);
 }
 
+.exercise-dialog{
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 11, 24, 0.55);
+  z-index: 120;
+  padding: 16px;
+}
+.exercise-dialog[data-state="open"]{
+  display: flex;
+}
+.exercise-dialog__panel{
+  width: min(360px, 92vw);
+  border-radius: 18px;
+  padding: 24px clamp(20px, 4vw, 28px) clamp(20px, 3.6vw, 26px);
+  background: color-mix(in oklab, var(--surface) 96%, var(--bg));
+  color: var(--text);
+  box-shadow: 0 20px 48px rgba(9, 14, 24, 0.25);
+  border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  outline: none;
+}
+.exercise-dialog__title{
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: color-mix(in oklab, var(--text) 94%, var(--accent));
+}
+.exercise-dialog__body{
+  margin: 0 0 20px;
+  line-height: 1.5;
+  color: var(--muted);
+  font-size: 14px;
+}
+.exercise-dialog__actions{
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.exercise-dialog__actions .primary-button{
+  width: auto;
+  max-width: none;
+  min-width: 120px;
+  padding: 12px 18px;
+  font-size: 14px;
+}
+.button-ghost{
+  border: 1px solid color-mix(in oklab, var(--border) 86%, transparent);
+  background: transparent;
+  color: var(--text);
+  border-radius: 12px;
+  padding: 11px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color .18s ease, border-color .18s ease, background .18s ease;
+}
+.button-ghost:hover{
+  color: color-mix(in oklab, var(--text) 82%, var(--link));
+  border-color: color-mix(in oklab, var(--link) 30%, var(--border));
+  background: color-mix(in oklab, var(--surface) 80%, transparent);
+}
+.button-ghost:focus-visible{
+  outline: 2px solid color-mix(in oklab, var(--accent) 60%, transparent);
+  outline-offset: 2px;
+}
+
 .history-list li{
   padding: 0;
   display: flex;
@@ -776,15 +894,15 @@ h1.page-title,
   width: 100%;
   display: flex;
   justify-content: center;
-  margin-top: clamp(18px, 3.6vw, 32px);
-  margin-bottom: clamp(30px, 4.6vw, 46px);
+  margin-top: clamp(12px, 2.6vw, 24px);
+  margin-bottom: clamp(14px, 2.6vw, 26px);
 }
 
 #segmented{
   display:flex;
   justify-content:center;
-  margin-top: clamp(18px, 3.6vw, 32px);
-  margin-bottom: clamp(30px, 4.6vw, 46px);
+  margin-top: clamp(12px, 2.6vw, 24px);
+  margin-bottom: clamp(12px, 2.4vw, 22px);
   padding: 0;
   width: 100%;
 }
@@ -793,9 +911,9 @@ h1.page-title,
   display:flex;
   align-items: center;
   width: 100%;
-  max-width: 300px;
-  padding: 1px;
-  gap: 2px;
+  max-width: clamp(320px, 92vw, 640px);
+  padding: 2px;
+  gap: 4px;
   border: 1px solid color-mix(in oklab, var(--text) 18%, transparent);
   border-radius: 999px;
   background: color-mix(in oklab, var(--surface) 58%, transparent);
@@ -840,7 +958,6 @@ h1.page-title,
 }
 
 @media (max-width: 380px){
-  .segmented{ max-width: 260px; padding: 1px; gap: 2px; }
   .segmented__tab{ font-size: 11.5px; padding: 4px 9px; }
 }
 
@@ -865,17 +982,28 @@ a:hover{ opacity: .9; }
   .history-footer{ padding-bottom: env(safe-area-inset-bottom); }
 }
 .history-empty{
-  margin-top: clamp(10px, 2vw, 16px);
+  margin-top: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  min-height: 50vh;
+  text-align: center;
+  gap: clamp(10px, 1vh, 14px);
+  min-height: clamp(120px, 22vh, 220px);
+  padding-block: clamp(4px, 1.4vh, 12px);
 }
-.history-empty img{
+.history-empty__image{
   display: block;
-  margin: 0 auto 8px;
+  width: clamp(160px, 46vw, 220px);
+  height: clamp(120px, 36vw, 180px);
+  object-fit: contain;
+  margin: 0 auto clamp(2px, .6vh, 8px);
+}
+.history-empty__caption{
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text);
+  margin: 0;
 }
 
 .week.centered{
@@ -936,12 +1064,12 @@ a:hover{ opacity: .9; }
   background: color-mix(in oklab, var(--surface) 72%, transparent);
 }
 
-#segmented { display:flex; justify-content:center; margin-top: clamp(40px, 6vw, 60px); margin-bottom: clamp(40px, 6vw, 60px); padding: 0; width:100%; }
+#segmented { display:flex; justify-content:center; margin-top: clamp(40px, 6vw, 60px); margin-bottom: clamp(24px, 4vw, 36px); padding: 0; width:100%; }
 
 #segmented .segmented {
   display:flex; align-items:center;
-  width:100%; max-width:300px;
-  padding:1px; gap:2px;
+  width:100%; max-width:clamp(320px, 92vw, 640px);
+  padding:2px; gap:4px;
   border:1px solid color-mix(in oklab, var(--text) 18%, transparent);
   border-radius:999px;
   background: color-mix(in oklab, var(--surface) 58%, transparent);
@@ -984,6 +1112,5 @@ a:hover{ opacity: .9; }
 }
 
 @media (max-width: 380px){
-  #segmented .segmented { max-width:260px; padding:1px; gap:2px; }
   #segmented button.segmented__tab { font-size:11.5px; padding:4px 9px; }
 }

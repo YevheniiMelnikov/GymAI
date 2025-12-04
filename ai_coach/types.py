@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import TYPE_CHECKING, NotRequired, TypedDict
 
-from core.enums import WorkoutPlanType, WorkoutType
+from core.enums import WorkoutPlanType, WorkoutLocation
 
 if TYPE_CHECKING:  # pragma: no cover - runtime import avoidance
     from ai_coach.agent import AgentDeps
@@ -34,7 +34,7 @@ class AskCtx(TypedDict):
     feedback: str
     wishes: str
     language: str
-    workout_type: WorkoutType | None
+    workout_location: WorkoutLocation | None
     plan_type: WorkoutPlanType | None
     instructions: NotRequired[str | None]
     deps: NotRequired["AgentDeps"]

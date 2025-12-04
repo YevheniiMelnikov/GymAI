@@ -5,7 +5,7 @@ from pydantic import BaseModel, field_validator, model_validator
 
 from ai_coach.types import CoachMode
 from core.schemas import Program, DayExercises, Exercise
-from core.enums import WorkoutPlanType, WorkoutType
+from core.enums import WorkoutPlanType, WorkoutLocation
 
 
 class AICoachRequest(BaseModel):
@@ -18,7 +18,7 @@ class AICoachRequest(BaseModel):
     expected_workout: str | None = None
     feedback: str | None = None
     wishes: str | None = None
-    workout_type: WorkoutType | None = None
+    workout_location: WorkoutLocation | None = None
     plan_type: WorkoutPlanType | None = None
     request_id: str | None = None
     instructions: str | None = None  # User-provided custom instructions
@@ -30,12 +30,12 @@ class AICoachRequest(BaseModel):
             data["mode"] = CoachMode(mode)
         super().__init__(**data)
 
-    @field_validator("workout_type", mode="before")
+    @field_validator("workout_location", mode="before")
     @staticmethod
-    def _normalize_workout_type(value: str | WorkoutType | None) -> WorkoutType | None:
-        if value is None or isinstance(value, WorkoutType):
+    def _normalize_workout_location(value: str | WorkoutLocation | None) -> WorkoutLocation | None:
+        if value is None or isinstance(value, WorkoutLocation):
             return value
-        return WorkoutType(value.lower())
+        return WorkoutLocation(value.lower())
 
     @model_validator(mode="after")
     def _validate_update_plan_type(self) -> "AICoachRequest":

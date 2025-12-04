@@ -70,14 +70,15 @@ class HTTPProfileRepository(APIClient):
             logger.error(f"Failed to create profile tg_id={tg_id}: {exc}")
             return None
         if status_code == 201 and data:
-            logger.info(f"Profile created tg_id={tg_id}")
-            return self._parse_profile(data)
+            profile = self._parse_profile(data)
+            logger.success(f"New profile successfully registered! tg_id={tg_id} profile={profile.id}")
+            return profile
         logger.error(f"Failed to create profile tg_id={tg_id} url={url}. HTTP={status_code}")
         return None
 
-    async def delete_profile(self, profile_id: int, token: str | None = None) -> bool:
+    async def delete_profile(self, profile_id: int) -> bool:
         url = self._build_url(f"api/v1/profiles/{profile_id}/delete/")
-        headers = {"Authorization": f"Token {token}"} if token else {}
+        headers = {"Authorization": f"Api-Key {self.api_key}"}
         try:
             status_code, _ = await self._api_request("delete", url, headers=headers, allow_statuses={404})
         except (APIClientHTTPError, APIClientTransportError) as exc:
@@ -88,7 +89,7 @@ class HTTPProfileRepository(APIClient):
             return True
         if status_code == 404:
             logger.info(f"Profile {profile_id} not found for deletion")
-            return False
+            return True
         logger.error(f"Failed to delete profile {profile_id}. HTTP status: {status_code}")
         return False
 

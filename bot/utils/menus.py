@@ -9,7 +9,7 @@ from aiogram.types import CallbackQuery, Message, FSInputFile
 from pathlib import Path
 
 from bot import keyboards as kb
-from bot.keyboards import subscription_manage_kb, program_edit_kb, program_view_kb, workout_type_kb
+from bot.keyboards import subscription_manage_kb, program_edit_kb, program_view_kb, select_gender_kb
 from bot.utils.profiles import fetch_user, answer_profile
 from bot.utils.credits import available_packages, available_ai_services
 from bot.states import States
@@ -66,7 +66,7 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
     except ProfileNotFoundError:
         logger.info(f"Profile data not found for profile {profile.id} during profile editing setup.")
 
-    state_to_set = States.edit_profile if user_profile else States.name
+    state_to_set = States.edit_profile if user_profile else States.gender
     response_text = MessageText.choose_profile_parameter if user_profile else MessageText.edit_profile
 
     profile_msg = await answer_msg(
@@ -81,13 +81,18 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
     with suppress(TelegramBadRequest):
         await del_msg(cast(Message | CallbackQuery | None, message))
 
-    await state.update_data(message_ids=[profile_msg.message_id], chat_id=message.chat.id)
-    await state.set_state(state_to_set)
-
+    message_ids = [profile_msg.message_id]
     if not user_profile:
-        name_msg = await answer_msg(message, translate(MessageText.name, profile.language))
-        if name_msg is not None:
-            await state.update_data(message_ids=[profile_msg.message_id, name_msg.message_id])
+        gender_msg = await answer_msg(
+            message,
+            translate(MessageText.choose_gender, profile.language),
+            reply_markup=select_gender_kb(profile.language),
+        )
+        if gender_msg is not None:
+            message_ids.append(gender_msg.message_id)
+
+    await state.update_data(message_ids=message_ids, chat_id=message.chat.id)
+    await state.set_state(state_to_set)
 
 
 async def show_main_menu(message: Message, profile: Profile, state: FSMContext, *, delete_source: bool = True) -> None:
@@ -165,15 +170,22 @@ async def send_policy_confirmation(message: Message, state: FSMContext) -> None:
 
 
 async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    user = await fetch_user(profile)
+    user = await fetch_user(profile, refresh_if_incomplete=True)
     lang = cast(str, profile.language)
 
-    if isinstance(user, Profile) and user.status == ProfileStatus.initial:
-        await callback_query.answer(translate(MessageText.finish_registration_to_get_credits, lang), show_alert=True)
+    if isinstance(user, Profile) and user.status != ProfileStatus.completed:
+        credits_text = translate(MessageText.finish_registration_to_get_credits, lang).format(
+            credits=settings.DEFAULT_CREDITS
+        )
+        await callback_query.answer(credits_text, show_alert=True)
         await state.set_state(States.workout_goals)
         msg = await answer_msg(callback_query, translate(MessageText.workout_goals, lang))
         if msg is not None:
-            await state.update_data(chat_id=callback_query.from_user.id, message_ids=[msg.message_id])
+            await state.update_data(
+                chat_id=callback_query.from_user.id,
+                message_ids=[msg.message_id],
+                lang=lang,
+            )
         await del_msg(cast(Message | CallbackQuery | None, callback_query))
         return
 
@@ -194,7 +206,7 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
     lang = cast(str, profile.language)
 
     try:
-        cached_profile = await Cache.profile.get_record(profile.id)
+        cached_profile = await fetch_user(profile, refresh_if_incomplete=True)
     except ProfileNotFoundError:
         logger.error(f"Profile data not found for profile {profile.id} in show_my_workouts_menu.")
         await callback_query.answer(translate(MessageText.questionnaire_not_completed, lang), show_alert=True)
@@ -206,12 +218,19 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
     message = cast(Message, callback_query.message)
     assert message
 
-    if cached_profile.status == ProfileStatus.initial:
-        await callback_query.answer(translate(MessageText.finish_registration_to_get_credits, lang), show_alert=True)
+    if cached_profile.status != ProfileStatus.completed:
+        credits_text = translate(MessageText.finish_registration_to_get_credits, lang).format(
+            credits=settings.DEFAULT_CREDITS
+        )
+        await callback_query.answer(credits_text, show_alert=True)
         await state.set_state(States.workout_goals)
         msg = await answer_msg(callback_query, translate(MessageText.workout_goals, lang))
         if msg is not None:
-            await state.update_data(chat_id=callback_query.from_user.id, message_ids=[msg.message_id])
+            await state.update_data(
+                chat_id=callback_query.from_user.id,
+                message_ids=[msg.message_id],
+                lang=lang,
+            )
         return
 
     await state.set_state(States.select_service)
@@ -268,11 +287,12 @@ async def show_ai_services(
     auto_select_single: bool = False,
 ) -> None:
     language = cast(str, profile.language or settings.DEFAULT_LANG)
-    cached_profile = await Cache.profile.get_record(profile.id)
-    if cached_profile.status == ProfileStatus.initial:
-        await callback_query.answer(
-            translate(MessageText.finish_registration_to_get_credits, language), show_alert=True
+    cached_profile = await fetch_user(profile, refresh_if_incomplete=True)
+    if cached_profile.status != ProfileStatus.completed:
+        credits_text = translate(MessageText.finish_registration_to_get_credits, language).format(
+            credits=settings.DEFAULT_CREDITS
         )
+        await callback_query.answer(credits_text, show_alert=True)
     else:
         await callback_query.answer()
     file_path = Path(__file__).resolve().parent.parent / "images" / "ai_coach.png"
@@ -328,22 +348,12 @@ async def process_ai_service_selection(
         await show_balance_menu(callback_query, profile, state)
         return False
 
-    workout_type = data.get("workout_type")
     await state.update_data(
         ai_service=service_name,
         required=required,
     )
-    if workout_type is None:
-        await state.set_state(States.workout_type)
-        await answer_msg(
-            callback_query,
-            translate(MessageText.workout_type, language),
-            reply_markup=workout_type_kb(language),
-        )
-    else:
-        await state.update_data(workout_type=workout_type)
-        await state.set_state(States.enter_wishes)
-        await answer_msg(callback_query, translate(MessageText.enter_wishes, language))
+    await state.set_state(States.enter_wishes)
+    await answer_msg(callback_query, translate(MessageText.enter_wishes, language))
     return True
 
 

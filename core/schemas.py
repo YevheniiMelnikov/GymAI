@@ -13,16 +13,15 @@ NonNegativePrice = condecimal(max_digits=10, decimal_places=2, ge=0)
 class Profile(BaseModel):
     id: int
     tg_id: int
-    name: str | None = None
     language: Annotated[Language, Field()]
-    status: ProfileStatus = ProfileStatus.initial
+    status: ProfileStatus = ProfileStatus.created
     gender: Gender | None = None
     born_in: str | None = None
     workout_experience: str | None = None
     workout_goals: str | None = None
-    profile_photo: str | None = None
     health_notes: str | None = None
     weight: int | None = None
+    workout_location: str | None = None
     credits: int = Field(default=settings.DEFAULT_CREDITS, ge=0)
     profile_data: dict[str, Any] = {}
     model_config = ConfigDict(extra="ignore")
@@ -67,7 +66,7 @@ class Program(BaseModel):
     exercises_by_day: list[DayExercises] = Field(default_factory=list)
     created_at: float
     split_number: int | None = None
-    workout_type: str | None = None
+    workout_location: str | None = None
     wishes: str | None = None
     model_config = ConfigDict(extra="ignore", from_attributes=True)
 
@@ -102,7 +101,7 @@ class Subscription(BaseModel):
     profile: int
     enabled: bool
     price: int
-    workout_type: str
+    workout_location: str
     wishes: str
     period: str
     workout_days: list[str] = Field(default_factory=list)

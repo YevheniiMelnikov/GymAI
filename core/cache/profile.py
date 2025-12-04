@@ -99,6 +99,11 @@ class ProfileCacheManager(BaseCacheManager):
             return False
 
     @classmethod
+    async def delete_record(cls, profile_id: int) -> None:
+        await cls.delete(cls.PROFILE_DATA_KEY, str(profile_id))
+        logger.info(f"Profile cache cleared for profile_id={profile_id}")
+
+    @classmethod
     async def update_record(cls, profile_id: int, updates: dict[str, Any]) -> None:
         try:
             await cls.update_json(cls.PROFILE_DATA_KEY, str(profile_id), updates)

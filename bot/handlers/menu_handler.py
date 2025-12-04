@@ -38,7 +38,8 @@ from bot.keyboards import (
 )
 from bot.utils.credits import available_packages
 from bot.utils.ai_coach import enqueue_workout_plan_generation
-from core.enums import WorkoutPlanType, WorkoutType
+from bot.utils.profiles import resolve_workout_location
+from core.enums import WorkoutPlanType
 from core.utils.idempotency import acquire_once
 
 menu_router = Router()
@@ -165,6 +166,11 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
     request_id = str(uuid4())
 
     if service == "program":
+        workout_location = resolve_workout_location(user_profile)
+        if workout_location is None:
+            logger.error(f"Workout location missing for completed profile_id={user_profile.id}")
+            await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
+            return
         if not await acquire_once(f"gen_program:{user_profile.id}", settings.LLM_COOLDOWN):
             logger.warning(
                 f"Duplicate program generation suppressed for profile_id={user_profile.id} request_id={request_id}"
@@ -187,7 +193,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
         queued = await enqueue_workout_plan_generation(
             profile=profile,
             plan_type=WorkoutPlanType.PROGRAM,
-            workout_type=WorkoutType(data.get("workout_type", "")),
+            workout_location=workout_location,
             wishes=wishes,
             request_id=request_id,
         )
@@ -245,13 +251,18 @@ async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> N
     selected_profile = Profile.model_validate(data.get("profile"))
     wishes = data.get("wishes", "")
     period = data.get("period", "1m")
+    workout_location = resolve_workout_location(selected_profile)
+    if workout_location is None:
+        logger.error(f"Workout location missing for subscription flow profile_id={selected_profile.id}")
+        await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
+        return
     request_id = uuid4().hex
     await answer_msg(callback_query, translate(MessageText.request_in_progress, lang))
     await show_main_menu(cast(Message, callback_query.message), profile, state)
     queued = await enqueue_workout_plan_generation(
         profile=selected_profile,
         plan_type=WorkoutPlanType.SUBSCRIPTION,
-        workout_type=WorkoutType(data.get("workout_type", "")),
+        workout_location=workout_location,
         wishes=wishes,
         request_id=request_id,
         period=period,

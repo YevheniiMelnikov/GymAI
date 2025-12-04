@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 
 from bot.utils.ai_coach import enqueue_workout_plan_generation, enqueue_workout_plan_update
-from core.enums import WorkoutPlanType, WorkoutType
+from core.enums import WorkoutPlanType, WorkoutLocation
 from core.schemas import Profile
 
 
@@ -51,7 +51,7 @@ async def test_enqueue_generation_uses_chain(monkeypatch: pytest.MonkeyPatch) ->
     ok = await enqueue_workout_plan_generation(
         profile=profile,
         plan_type=WorkoutPlanType.PROGRAM,
-        workout_type=WorkoutType.STRENGTH,
+        workout_location=WorkoutLocation.STRENGTH,
         wishes="focus",
         request_id="req-1",
     )
@@ -75,7 +75,7 @@ async def test_enqueue_update_uses_chain(monkeypatch: pytest.MonkeyPatch) -> Non
         feedback="good",
         language="en",
         plan_type=WorkoutPlanType.SUBSCRIPTION,
-        workout_type=None,
+        workout_location=None,
         request_id="req-2",
     )
 
@@ -90,7 +90,7 @@ async def test_enqueue_generation_requires_profile() -> None:
     ok = await enqueue_workout_plan_generation(
         profile=profile,
         plan_type=WorkoutPlanType.PROGRAM,
-        workout_type=WorkoutType.STRENGTH,
+        workout_location=WorkoutLocation.STRENGTH,
         wishes="",
         request_id="req-3",
     )

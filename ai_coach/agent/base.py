@@ -4,7 +4,7 @@ from time import monotonic
 
 from core.schemas import Program, Subscription
 from core.schemas import QAResponse
-from core.enums import WorkoutType
+from core.enums import WorkoutLocation
 from ai_coach.types import CoachMode
 from config.app_settings import settings
 
@@ -41,7 +41,7 @@ class CoachAgentProtocol(Protocol):
         prompt: str | None,
         deps: AgentDeps,
         *,
-        workout_type: WorkoutType | None = None,
+        workout_location: WorkoutLocation | None = None,
         period: str | None = None,
         workout_days: list[str] | None = None,
         wishes: str | None = None,
@@ -57,7 +57,7 @@ class CoachAgentProtocol(Protocol):
         feedback: str,
         deps: AgentDeps,
         *,
-        workout_type: WorkoutType | None = None,
+        workout_location: WorkoutLocation | None = None,
         output_type: type[Program] | type[Subscription] = Subscription,
         instructions: str | None = None,
     ) -> Program | Subscription: ...

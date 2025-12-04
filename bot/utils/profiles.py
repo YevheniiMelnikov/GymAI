@@ -1,6 +1,5 @@
 from datetime import datetime, timedelta
-from pathlib import Path
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from loguru import logger
 
@@ -9,19 +8,39 @@ from bot.utils.bot import answer_msg, del_msg, delete_messages
 from config.app_settings import settings
 from core.cache import Cache
 from core.exceptions import ProfileNotFoundError
+from core.enums import ProfileStatus, WorkoutLocation
 from core.schemas import Profile
-from core.services import get_avatar_manager
 from core.services.internal import APIService
 
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import FSInputFile
+
+PROFILE_UPDATE_FIELDS: tuple[str, ...] = (
+    "gender",
+    "born_in",
+    "workout_experience",
+    "workout_goals",
+    "workout_location",
+    "health_notes",
+    "weight",
+    "status",
+    "credits",
+)
+
+
+def resolve_workout_location(profile: Profile) -> WorkoutLocation | None:
+    location = (profile.workout_location or "").strip().lower()
+    if not location:
+        return None
+    try:
+        return WorkoutLocation(location)
+    except ValueError:
+        return None
+
 
 if TYPE_CHECKING:
     from aiogram import Bot
     from aiogram.fsm.context import FSMContext
     from aiogram.types import Message as TgMessage, CallbackQuery as TgCallbackQuery
-
-_IMAGES_DIR = Path(__file__).resolve().parent.parent / "images"
 
 
 async def update_profile_data(
@@ -30,25 +49,85 @@ async def update_profile_data(
     bot: "Bot",
 ) -> None:
     data = await state.get_data()
+    lang = data.get("lang", settings.DEFAULT_LANG)
     await delete_messages(state)
 
     try:
-        profile = await Cache.profile.get_profile(message.chat.id)
-        assert profile is not None
 
-        user_data = {**data}
-        user_data.pop("profile", None)
+        async def create_remote_profile() -> Profile:
+            profile_obj = await APIService.profile.create_profile(message.chat.id, lang)
+            if profile_obj is None:
+                raise ProfileNotFoundError(message.chat.id)
+            payload = profile_obj.model_dump(mode="json")
+            await Cache.profile.save_profile(message.chat.id, payload)
+            await Cache.profile.save_record(profile_obj.id, payload)
+            await state.update_data(profile=payload)
+            return profile_obj
 
-        credits_delta = data.pop("credits_delta", 0)
+        try:
+            profile = await Cache.profile.get_profile(message.chat.id)
+            refreshed = await APIService.profile.get_profile(profile.id)
+            if refreshed is None:
+                profile = await create_remote_profile()
+            else:
+                profile = refreshed
+        except ProfileNotFoundError:
+            profile = await create_remote_profile()
+
+        normalized_updates: dict[str, Any] = {}
+        api_payload: dict[str, Any] = {}
+        for field in PROFILE_UPDATE_FIELDS:
+            if field not in data:
+                continue
+            value = data[field]
+            if value is None:
+                continue
+            if field == "status":
+                status_value = value if isinstance(value, ProfileStatus) else ProfileStatus(str(value))
+                normalized_updates[field] = status_value
+                api_payload[field] = status_value.value
+            elif field in {"weight", "credits"}:
+                try:
+                    numeric_value = int(value)
+                except (TypeError, ValueError):
+                    continue
+                normalized_updates[field] = numeric_value
+                api_payload[field] = numeric_value
+            else:
+                normalized_updates[field] = value
+                api_payload[field] = value
+
+        lang_override = data.get("lang")
+        if lang_override:
+            normalized_updates["language"] = lang_override
+            api_payload["language"] = lang_override
+
+        credits_delta = int(data.get("credits_delta") or 0)
         if credits_delta and (profile.credits or 0) < settings.PACKAGE_START_CREDITS:
             remaining = settings.PACKAGE_START_CREDITS - (profile.credits or 0)
             credits_delta_to_apply = min(credits_delta, remaining)
-            user_data["credits"] = (profile.credits or 0) + credits_delta_to_apply
-        await Cache.profile.update_profile(message.chat.id, user_data)
-        await APIService.profile.update_profile(profile.id, user_data)
-        await Cache.profile.update_record(profile.id, user_data)
+            if credits_delta_to_apply:
+                new_credits = (profile.credits or 0) + credits_delta_to_apply
+                normalized_updates["credits"] = new_credits
+                api_payload["credits"] = new_credits
 
-        await answer_msg(message, translate(MessageText.your_data_updated, data.get("lang", settings.DEFAULT_LANG)))
+        if api_payload:
+            update_success = await APIService.profile.update_profile(profile.id, api_payload)
+            if not update_success:
+                profile = await create_remote_profile()
+                update_success = await APIService.profile.update_profile(profile.id, api_payload)
+            if not update_success:
+                raise RuntimeError(f"Failed to update profile id={profile.id}")
+
+        updated_profile = await APIService.profile.get_profile(profile.id)
+        if updated_profile is not None:
+            profile = updated_profile
+        elif normalized_updates:
+            profile = profile.model_copy(update=normalized_updates)
+
+        await Cache.profile.save_record(profile.id, profile.model_dump(mode="json"))
+
+        await answer_msg(message, translate(MessageText.your_data_updated, lang))
 
         from bot.utils.menus import show_main_menu
 
@@ -56,20 +135,28 @@ async def update_profile_data(
 
     except Exception as e:
         logger.error(f"Unexpected error updating profile: {e}")
-        await answer_msg(message, translate(MessageText.unexpected_error, data.get("lang", settings.DEFAULT_LANG)))
+        await answer_msg(message, translate(MessageText.unexpected_error, lang))
 
     finally:
         await del_msg(cast("TgMessage | TgCallbackQuery | None", message))
 
 
-async def fetch_user(profile: Profile) -> Profile:
+async def fetch_user(profile: Profile, *, refresh_if_incomplete: bool = False) -> Profile:
     try:
-        return await Cache.profile.get_record(profile.id)
+        user = await Cache.profile.get_record(profile.id)
     except ProfileNotFoundError:
         logger.error(
             f"ProfileNotFoundError for an existing profile {profile.id}. This might indicate data inconsistency."
         )
         raise ValueError(f"Profile data not found for existing profile id {profile.id}")
+
+    if refresh_if_incomplete and user.status != ProfileStatus.completed:
+        fresh = await APIService.profile.get_profile(profile.id)
+        if fresh is not None:
+            await Cache.profile.save_record(fresh.id, fresh.model_dump(mode="json"))
+            return fresh
+        logger.warning(f"profile_status_refresh_failed profile_id={profile.id}")
+    return user
 
 
 async def answer_profile(
@@ -86,36 +173,13 @@ async def answer_profile(
     if message is None:
         return
 
-    avatar_manager = get_avatar_manager()
-    avatar_name = "female.png" if getattr(user, "gender", None) == "female" else "male.png"
-    file_path = _IMAGES_DIR / avatar_name
-    if user.profile_photo:
-        photo_url = f"https://storage.googleapis.com/{avatar_manager.bucket_name}/{user.profile_photo}"
-        try:
-            await message.answer_photo(
-                photo_url,
-                caption=text,
-                reply_markup=profile_menu_kb(profile.language, show_balance=show_balance),
-            )
-            return
-        except TelegramBadRequest:
-            logger.warning(f"Photo not found for profile {profile.id}")
-
-    if file_path.exists():
-        avatar_file = FSInputFile(file_path)
-        try:
-            await message.answer_photo(
-                avatar_file,
-                caption=text,
-                reply_markup=profile_menu_kb(profile.language, show_balance=show_balance),
-            )
-            return
-        except TelegramBadRequest as e:
-            logger.warning(f"Failed to send default avatar for profile {profile.id}: {e}")
-    else:
-        logger.error(f"Default avatar file not found: {file_path}")
-
-    await message.answer(text, reply_markup=profile_menu_kb(profile.language, show_balance=show_balance))
+    try:
+        await message.answer(
+            text,
+            reply_markup=profile_menu_kb(profile.language, show_balance=show_balance),
+        )
+    except TelegramBadRequest as exc:
+        logger.warning(f"Failed to send profile info for profile {profile.id}: {exc}")
 
 
 async def get_profiles_to_survey() -> list[Profile]:

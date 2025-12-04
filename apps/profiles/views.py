@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_api_key.permissions import HasAPIKey
 
+from apps.profiles.models import Profile
 from apps.profiles.serializers import ProfileSerializer
 from apps.profiles.repos import ProfileRepository
 
@@ -31,7 +32,11 @@ class ProfileAPIUpdate(APIView):
         profile = ProfileRepository.get_model_by_id(profile_id)
         serializer = self.serializer_class(profile, data=request.data, partial=True)
         if serializer.is_valid():
-            serializer.save()
+            saved_profile = serializer.save()
+            ProfileRepository.invalidate_cache(
+                profile_id=saved_profile.id,
+                tg_id=getattr(saved_profile, "tg_id", None),
+            )
             logger.info(f"Profile id={profile_id} updated")
             return Response(serializer.data)
         logger.error(f"Validation error for Profile id={profile_id}: {serializer.errors}")
@@ -42,6 +47,16 @@ class ProfileAPIDestroy(generics.RetrieveDestroyAPIView):
     serializer_class = ProfileSerializer  # pyrefly: ignore[bad-override]
     queryset = ProfileRepository.get_by_id  # type: ignore[assignment]
     permission_classes = [HasAPIKey]  # pyrefly: ignore[bad-override]
+
+    def get_object(self):
+        profile_id = self.kwargs.get("pk")
+        return ProfileRepository.get_model_by_id(profile_id)
+
+    def perform_destroy(self, instance: Profile) -> None:
+        tg_id = getattr(instance, "tg_id", None)
+        profile_id = getattr(instance, "pk", None)
+        instance.delete()
+        ProfileRepository.invalidate_cache(profile_id=profile_id or 0, tg_id=tg_id)
 
 
 class ProfileAPIList(generics.ListCreateAPIView):

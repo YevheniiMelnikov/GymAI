@@ -23,7 +23,7 @@ def test_update_profile_uses_profile_key(monkeypatch):
         monkeypatch.setattr(BaseCacheManager, "set", fake_set)
 
         profile_id = 5
-        await Cache.profile.update_record(profile_id, {"status": ProfileStatus.default})
+        await Cache.profile.update_record(profile_id, {"status": ProfileStatus.completed})
         assert called.get("field") == str(profile_id)
 
     asyncio.run(runner())

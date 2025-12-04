@@ -240,17 +240,11 @@ const HistoryPage: React.FC = () => {
                         )}
 
                         {!loading && !error && sortedItems.length === 0 && (
-                            <div className="empty-state history-empty" style={{ textAlign: 'center' }}>
+                            <div className="empty-state history-empty">
                                 <img
                                     src="/static/images/404.png"
                                     alt={activeSegment === 'subscriptions' ? t('subscriptions.title') : t('no_programs')}
-                                    style={{
-                                        width: 'clamp(160px, 46vw, 200px)',
-                                        height: 'clamp(120px, 36vw, 170px)',
-                                        objectFit: 'contain',
-                                        margin: '0 auto',
-                                        display: 'block',
-                                    }}
+                                    className="history-empty__image"
                                     onError={(ev) => {
                                         const target = ev.currentTarget;
                                         if (target.src !== fallbackIllustration) {
@@ -258,7 +252,7 @@ const HistoryPage: React.FC = () => {
                                         }
                                     }}
                                 />
-                                <p style={{ fontSize: '16px', fontWeight: 500, color: 'var(--text)', margin: 0 }}>
+                                <p className="history-empty__caption">
                                     {activeSegment === 'subscriptions' ? t('subscriptions.empty') : t('no_programs')}
                                 </p>
                             </div>

@@ -15,7 +15,9 @@ from core.cache import Cache
 from core.exceptions import ProfileNotFoundError
 from core.schemas import Profile
 from bot.utils.menus import show_main_menu
+from bot.utils.bot import prompt_language_selection
 from bot.texts import MessageText, translate
+from core.services import APIService
 
 cmd_router = Router()
 
@@ -34,19 +36,20 @@ async def cmd_language(message: Message, state: FSMContext) -> None:
 
 @cmd_router.message(Command(CommandName.menu))
 async def cmd_menu(message: Message, state: FSMContext) -> None:
-    data = await state.get_data()
-    profile_data = data.get("profile", {})
-    profile = Profile.model_validate(profile_data) if profile_data else None
-    if profile:
-        await show_main_menu(message, profile, state)
-    else:
-        await state.set_state(States.select_language)
-        await message.answer(
-            translate(MessageText.select_language, settings.DEFAULT_LANG), reply_markup=select_language_kb()
-        )
+    if not message.from_user:
+        return
 
-    with suppress(TelegramBadRequest):
-        await message.delete()
+    try:
+        profile = await APIService.profile.get_profile_by_tg_id(message.from_user.id)
+        if profile is None:
+            raise ProfileNotFoundError(message.from_user.id)
+        await Cache.profile.save_record(profile.id, profile.model_dump(mode="json"))
+        await state.update_data(lang=profile.language, profile=profile.model_dump())
+        await show_main_menu(message, profile, state)
+        with suppress(TelegramBadRequest):
+            await message.delete()
+    except ProfileNotFoundError:
+        await prompt_language_selection(message, state)
 
 
 @cmd_router.message(Command(CommandName.start))
@@ -56,26 +59,17 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         return
 
     try:
-        profile = await Cache.profile.get_profile(message.from_user.id)
+        profile = await APIService.profile.get_profile_by_tg_id(message.from_user.id)
+        if profile is None:
+            raise ProfileNotFoundError(message.from_user.id)
+        await Cache.profile.save_record(profile.id, profile.model_dump(mode="json"))
         await state.update_data(lang=profile.language, profile=profile.model_dump())
         await show_main_menu(message, profile, state)
         with suppress(TelegramBadRequest):
             await message.delete()
     except ProfileNotFoundError:
         logger.info(f"Telegram user {message.from_user.id} started bot")
-        start_msg = await message.answer(translate(MessageText.start, settings.DEFAULT_LANG))
-        language_msg = await message.answer(
-            translate(MessageText.select_language, settings.DEFAULT_LANG), reply_markup=select_language_kb()
-        )
-        message_ids = []
-        if start_msg:
-            message_ids.append(start_msg.message_id)
-        if language_msg:
-            message_ids.append(language_msg.message_id)
-        await state.update_data(message_ids=message_ids, chat_id=message.from_user.id)
-        await state.set_state(States.select_language)
-        with suppress(TelegramBadRequest):
-            await message.delete()
+        await prompt_language_selection(message, state)
 
 
 @cmd_router.message(Command(CommandName.help))

@@ -6,7 +6,7 @@ from ai_coach.application import app
 from ai_coach.agent import CoachAgent
 import ai_coach.api as coach_api
 from ai_coach.api import DEFAULT_WORKOUT_DAYS
-from core.enums import WorkoutType
+from core.enums import WorkoutLocation
 from core.schemas import DayExercises, Exercise, Program, Subscription
 
 
@@ -18,7 +18,7 @@ def _sample_program() -> Program:
         exercises_by_day=[day],
         created_at=0.0,
         split_number=1,
-        workout_type="",
+        workout_location="",
         wishes="",
     )
 
@@ -30,7 +30,7 @@ def _sample_subscription() -> Subscription:
         profile=1,
         enabled=True,
         price=0,
-        workout_type="",
+        workout_location="",
         wishes="",
         period="1m",
         workout_days=["mon"],
@@ -50,10 +50,10 @@ def test_program_mode(monkeypatch: pytest.MonkeyPatch) -> None:
             prompt: str,
             deps: object,
             *,
-            workout_type: WorkoutType | None = None,
+            workout_location: WorkoutLocation | None = None,
             **kwargs: object,
         ) -> Program:
-            assert workout_type is WorkoutType.HOME
+            assert workout_location is WorkoutLocation.HOME
             assert kwargs.get("wishes") == "w"
             assert kwargs.get("instructions") == "i"
             assert kwargs.get("output_type") is Program
@@ -69,7 +69,7 @@ def test_program_mode(monkeypatch: pytest.MonkeyPatch) -> None:
                     "prompt": "p",
                     "mode": "program",
                     "wishes": "w",
-                    "workout_type": "home",
+                    "workout_location": "home",
                     "instructions": "i",
                 },
                 headers={"X-Agent": "pydanticai"},
@@ -86,10 +86,10 @@ def test_subscription_mode(monkeypatch: pytest.MonkeyPatch) -> None:
             prompt: str,
             deps: object,
             *,
-            workout_type: WorkoutType | None = None,
+            workout_location: WorkoutLocation | None = None,
             **kwargs: object,
         ) -> Subscription:
-            assert workout_type is WorkoutType.HOME
+            assert workout_location is WorkoutLocation.HOME
             assert kwargs.get("period") == "1m"
             assert kwargs.get("workout_days") == list(DEFAULT_WORKOUT_DAYS)
             assert kwargs.get("wishes") == "w"
@@ -107,7 +107,7 @@ def test_subscription_mode(monkeypatch: pytest.MonkeyPatch) -> None:
                     "prompt": "p",
                     "mode": "subscription",
                     "wishes": "w",
-                    "workout_type": "home",
+                    "workout_location": "home",
                     "instructions": "i",
                 },
                 headers={"X-Agent": "pydanticai"},
@@ -125,12 +125,12 @@ def test_update_mode(monkeypatch: pytest.MonkeyPatch) -> None:
             expected_workout: object,
             feedback: object,
             *,
-            workout_type: WorkoutType | None = None,
+            workout_location: WorkoutLocation | None = None,
             deps: object | None = None,
             output_type: type[Program] | None = None,
             instructions: str | None = None,
         ) -> Program:
-            assert workout_type is WorkoutType.HOME
+            assert workout_location is WorkoutLocation.HOME
             assert output_type is Program
             assert instructions == "i"
             return _sample_program()
@@ -144,7 +144,7 @@ def test_update_mode(monkeypatch: pytest.MonkeyPatch) -> None:
                     "profile_id": 1,
                     "prompt": "p",
                     "mode": "update",
-                    "workout_type": "home",
+                    "workout_location": "home",
                     "plan_type": "program",
                     "instructions": "i",
                 },
@@ -162,7 +162,7 @@ def test_update_requires_plan_type() -> None:
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post(
                 "/ask/",
-                json={"profile_id": 1, "prompt": "p", "mode": "update", "workout_type": "home"},
+                json={"profile_id": 1, "prompt": "p", "mode": "update", "workout_location": "home"},
                 headers={"X-Agent": "pydanticai"},
             )
         assert resp.status_code == 422

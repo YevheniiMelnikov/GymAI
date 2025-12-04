@@ -22,7 +22,7 @@ def _sample_program() -> Program:
         exercises_by_day=[day],
         created_at=0.0,
         split_number=1,
-        workout_type="",
+        workout_location="",
         wishes="",
     )
 
@@ -46,7 +46,7 @@ def test_request_language_overrides_profile(monkeypatch: pytest.MonkeyPatch) -> 
         prompt: str | None,
         deps: Any,
         *,
-        workout_type: Any = None,
+        workout_location: Any = None,
         **_: Any,
     ) -> Program:
         recorded["locale"] = getattr(deps, "locale")
@@ -65,7 +65,7 @@ def test_request_language_overrides_profile(monkeypatch: pytest.MonkeyPatch) -> 
                 "prompt": "p-request-language",
                 "mode": "program",
                 "language": "ua",
-                "workout_type": "home",
+                "workout_location": "home",
             }
         )
         assert status == 200
@@ -81,7 +81,7 @@ def test_profile_language_used_when_request_missing(monkeypatch: pytest.MonkeyPa
         prompt: str | None,
         deps: Any,
         *,
-        workout_type: Any = None,
+        workout_location: Any = None,
         **_: Any,
     ) -> Program:
         recorded["locale"] = getattr(deps, "locale")
@@ -99,7 +99,7 @@ def test_profile_language_used_when_request_missing(monkeypatch: pytest.MonkeyPa
                 "profile_id": 2,
                 "prompt": "p-profile-language",
                 "mode": "program",
-                "workout_type": "home",
+                "workout_location": "home",
             }
         )
         assert status == 200
@@ -115,7 +115,7 @@ def test_default_language_used_when_profile_missing(monkeypatch: pytest.MonkeyPa
         prompt: str | None,
         deps: Any,
         *,
-        workout_type: Any = None,
+        workout_location: Any = None,
         **_: Any,
     ) -> Program:
         recorded["locale"] = getattr(deps, "locale")
@@ -133,7 +133,7 @@ def test_default_language_used_when_profile_missing(monkeypatch: pytest.MonkeyPa
                 "profile_id": 3,
                 "prompt": "p-default-language",
                 "mode": "program",
-                "workout_type": "home",
+                "workout_location": "home",
             }
         )
         assert status == 200
@@ -152,7 +152,7 @@ def test_profile_language_enum_without_str(monkeypatch: pytest.MonkeyPatch) -> N
         prompt: str | None,
         deps: Any,
         *,
-        workout_type: Any = None,
+        workout_location: Any = None,
         **_: Any,
     ) -> Program:
         recorded["locale"] = getattr(deps, "locale")
@@ -170,7 +170,7 @@ def test_profile_language_enum_without_str(monkeypatch: pytest.MonkeyPatch) -> N
                 "profile_id": 4,
                 "prompt": "p-enum-language",
                 "mode": "program",
-                "workout_type": "home",
+                "workout_location": "home",
             }
         )
         assert status == 200

@@ -32,6 +32,12 @@ export const fallbackEn = {
   'program.week': 'Week {n}',
   'program.day': 'Day {n}',
   'program.day.rest': 'Rest Day',
+  'program.exercise.replace': 'Request alternative exercise',
+  'program.exercise.replace_dialog.title': 'Need an alternative?',
+  'program.exercise.replace_dialog.body':
+    'We can generate another exercise for this slot at no extra cost. Use it when you lack equipment or want a different variation. Daily replacements are limited.',
+  'program.exercise.replace_dialog.confirm': 'Generate',
+  'program.exercise.replace_dialog.cancel': 'Cancel',
   retry: 'Retry',
   'tabs.switch_label': 'Section switcher',
   'tabs.program': 'Programs',

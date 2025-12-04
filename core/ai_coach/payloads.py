@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, field_validator
 
-from core.enums import WorkoutPlanType, WorkoutType
+from core.enums import WorkoutPlanType, WorkoutLocation
 
 
 class AiPlanBasePayload(BaseModel):
@@ -28,7 +28,7 @@ class AiPlanBasePayload(BaseModel):
 
 
 class AiPlanGenerationPayload(AiPlanBasePayload):
-    workout_type: WorkoutType
+    workout_location: WorkoutLocation
     period: str | None = None
     workout_days: list[str] = Field(default_factory=list)
 
@@ -36,7 +36,7 @@ class AiPlanGenerationPayload(AiPlanBasePayload):
 class AiPlanUpdatePayload(AiPlanBasePayload):
     expected_workout_result: str
     feedback: str
-    workout_type: WorkoutType | None = None
+    workout_location: WorkoutLocation | None = None
 
 
 class AiAttachmentPayload(BaseModel):
