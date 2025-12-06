@@ -95,7 +95,7 @@ async def ask_ai_question_navigation(callback_query: CallbackQuery, state: FSMCo
     await state.set_state(States.select_service)
     await answer_msg(
         callback_query,
-        translate(MessageText.select_service, profile.language),
+        translate(MessageText.select_service, profile.language).format(bot_name=settings.BOT_NAME),
         reply_markup=select_service_kb(profile.language),
     )
 
@@ -254,7 +254,7 @@ async def program_action_choice(callback_query: CallbackQuery, state: FSMContext
         await callback_query.answer()
         await state.set_state(States.select_service)
         await message.answer(
-            translate(MessageText.select_service, profile.language),
+            translate(MessageText.select_service, profile.language).format(bot_name=settings.BOT_NAME),
             reply_markup=select_service_kb(profile.language),
         )
 
@@ -303,7 +303,7 @@ async def subscription_action_choice(callback_query: CallbackQuery, state: FSMCo
         await callback_query.answer()
         await state.set_state(States.select_service)
         await message.answer(
-            translate(MessageText.select_service, language),
+            translate(MessageText.select_service, language).format(bot_name=settings.BOT_NAME),
             reply_markup=select_service_kb(language),
         )
         await del_msg(message)

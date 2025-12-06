@@ -204,7 +204,7 @@ The project includes a [Taskfile](https://taskfile.dev/) for convenience.
 | Command      | Description                        |
 | ------------ | ---------------------------------- |
 | `run`        | Start all services with Docker     |
-| `localrun`   | Local development environment      |
+| `runapi`     | Rebuild and start only the API container from `docker-compose-local.yml` (no deps) for quick backend changes |
 | `test`       | Run tests                          |
 | `lint`       | Lint the codebase (ruff + pyrefly) |
 | `format`     | Format the codebase                |

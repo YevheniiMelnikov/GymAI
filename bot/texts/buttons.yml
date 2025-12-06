@@ -84,9 +84,9 @@ subscription_6_months:
   ua: "Підписка на 6 місяців 📅"
 
 ask_ai:
-  eng: "Ask AI 💬"
-  ru: "Спросить ИИ 💬"
-  ua: "Спитати ШІ 💬"
+  eng: "Ask {bot_name} 💬"
+  ru: "Спросить {bot_name} 💬"
+  ua: "Запитати {bot_name} 💬"
 
 ask_ai_again:
   eng: "Ask again 🔁"

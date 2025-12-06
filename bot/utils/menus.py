@@ -242,7 +242,7 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
     await state.set_state(States.select_service)
     await answer_msg(
         message,
-        translate(MessageText.select_service, lang),
+        translate(MessageText.select_service, lang).format(bot_name=settings.BOT_NAME),
         reply_markup=kb.select_service_kb(lang),
     )
 

@@ -6,34 +6,10 @@ tasks:
     cmds:
       - docker compose -f docker/docker-compose.yml up --build
 
-  stop:
-    desc: Stop and remove docker containers
-    cmds:
-      - docker compose -f docker/docker-compose.yml down
-
   runapi:
     desc: Rebuild and run API container (for dev needs)
     cmds:
       - docker compose -f docker/docker-compose-local.yml up -d --build api --no-deps
-
-  localrun:
-    desc: Run bot locally
-    env:
-      COMPOSE_BAKE: 1
-    cmds:
-      - |
-        set -euo pipefail
-        if [ -f .env ]; then
-          set -a
-          . .env
-          set +a
-        fi
-        compose_file="docker/docker-compose-local.yml"
-        if [ -n "${CF_TUNNEL_TOKEN:-}" ]; then
-          docker compose -f "$compose_file" --profile cloudflare up --build
-        else
-          docker compose -f "$compose_file" up --build
-        fi
 
   lint:
     desc: Run linters (ruff + pyrefly)
@@ -67,30 +43,3 @@ tasks:
     desc: Run pre-commit hooks
     cmds:
       - uv run pre-commit run --all-files
-
-  migrate:
-    desc: Make and apply Django migrations
-    cmds:
-      - docker compose exec api python apps/manage.py makemigrations
-      - docker compose exec api python apps/manage.py migrate
-      - echo "✅ Migrations applied"
-
-  clean:
-    desc: "Clean Redis and PostgreSQL. DO NOT USE IN PRODUCTION!"
-    dotenv: ['.env']
-    cmds:
-      - |
-        set -euo pipefail
-        compose_file="docker/docker-compose.yml"
-        echo "Flushing Redis..."
-        for i in $(seq 0 15); do
-          docker compose -f "$compose_file" exec -T redis redis-cli -n "$i" FLUSHDB >/dev/null
-        done
-        echo "Redis ✅"
-        echo "Truncating PostgreSQL tables..."
-        DB_USER_RESOLVED="${DB_USER:-${POSTGRES_USER:-postgres}}"
-        DB_NAME_RESOLVED="${DB_NAME:-${POSTGRES_DB:-$DB_USER_RESOLVED}}"
-        # Escape dollar signs so Bash preserves the DO block delimiters
-        docker compose -f "$compose_file" exec -T db psql -U "$DB_USER_RESOLVED" -d "$DB_NAME_RESOLVED" -t -q -v ON_ERROR_STOP=1 \
-          -c "DO \$\$ DECLARE r RECORD; BEGIN FOR r IN (SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename NOT ILIKE 'django_%' AND tablename NOT ILIKE 'auth_%' AND tablename NOT ILIKE 'rest_framework_api_key_%') LOOP EXECUTE 'TRUNCATE TABLE ' || quote_ident(r.tablename) || ' CASCADE'; END LOOP; END \$\$;" >/dev/null
-        echo "PostgreSQL ✅"

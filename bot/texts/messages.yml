@@ -162,9 +162,9 @@ client_page:
   ua: "<b>Ім'я 🆔️</b>\n{name}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Стать 🚻</b>\n{gender}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Рік народження 🗓</b>\n{born_in}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Досвід тренувань (років) 💪</b>\n{workout_experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Цілі тренувань 🎯</b>\n{workout_goals}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Примітки по здоров'ю 🩺</b>\n{health_notes}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Вага (кг) ⚖️</b>\n{weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Мова 💬️</b>\n{language}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Підписка</b>\n{subscription}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Статус</b>\n{status}"
 
 incoming_message:
-  eng: "Incoming message from {name} 📩\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{message}</em>"
-  ru: "Входящее сообщение от {name} 📩\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{message}</em>"
-  ua: "Повідомлення від {name} 📩\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{message}</em>"
+  eng: "Incoming message from {name} 📩\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<pre>{message}</pre>"
+  ru: "Входящее сообщение от {name} 📩\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<pre>{message}</pre>"
+  ua: "Повідомлення від {name} 📩\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<pre>{message}</pre>"
 
 new_workout_plan:
   eng: "<b>A new training program has been put together for you</b> 🥳"
@@ -257,9 +257,9 @@ workout_description:
   ua: "Опишіть з якими труднощами ви зіткнулися і що вам вдалося зробити 👇"
 
 select_service:
-  eng: "Choose what you want to do next: manage subscriptions, explore programs, or use Ask AI for quick advice.\nAll services are paid with gymcoins."
-  ru: "Выберите нужный раздел: подписки, программы или Ask AI для быстрого совета.\nВсе сервисы оплачиваются внутренними gymcoin-ами."
-  ua: "Оберіть потрібний розділ: підписки, програми або Ask AI для швидкої поради.\nУсі сервіси оплачуються внутрішніми gymcoin-ами."
+  eng: "Choose what you want to do next: manage subscriptions, explore programs, or ask {bot_name} for quick advice.\nAll services are paid with gymcoins."
+  ru: "Выберите нужный раздел: подписки, программы или спросить {bot_name} для быстрого совета.\nВсе сервисы оплачиваются внутренними gymcoin-ами."
+  ua: "Оберіть потрібний розділ: підписки, програми або запитати {bot_name} для швидкої поради.\nУсі сервіси оплачуються внутрішніми gymcoin-ами."
 
 ask_ai_prompt:
   eng: "Send your question in text and optionally attach a photo — {bot_name} will analyse the image together with your profile and shared knowledge.\nEach question costs {cost} gymcoins. Your balance: {balance}."

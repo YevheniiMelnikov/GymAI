@@ -113,6 +113,9 @@ ignore = ["F405", "F403"]
 [tool.ruff.lint.isort]
 combine-as-imports = true
 
+[tool.ruff.format]
+exclude = ["config/app_settings.py"]
+
 [tool.pyrefly]
 project_includes = [
     "ai_coach",

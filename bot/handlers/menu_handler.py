@@ -368,7 +368,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         await callback_query.answer()
         await state.set_state(States.select_service)
         await message.answer(
-            translate(MessageText.select_service, profile.language),
+            translate(MessageText.select_service, profile.language).format(bot_name=settings.BOT_NAME),
             reply_markup=select_service_kb(profile.language),
         )
 

@@ -5,6 +5,7 @@ from aiogram.types import InlineKeyboardMarkup as _RawKbMarkup, WebAppInfo
 
 from bot.buttons_builder import ButtonsBuilder
 from bot.texts import ButtonText, translate
+from config.app_settings import settings
 from core.schemas import Exercise
 
 
@@ -125,7 +126,7 @@ def select_service_kb(lang: str) -> KbMarkup:
     buttons = [
         [builder.add(ButtonText.subscription, "subscription")],
         [builder.add(ButtonText.program, "program")],
-        [builder.add(ButtonText.ask_ai, "ask_ai")],
+        [builder.add(ButtonText.ask_ai, "ask_ai", bot_name=settings.BOT_NAME)],
         [builder.add(ButtonText.prev_menu, "back")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
