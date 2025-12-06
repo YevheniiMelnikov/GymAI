@@ -557,7 +557,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
                 await Cache.payment.reset_status(profile_id, "subscription")
                 await send_message(
                     recipient=profile_record,
-                    text=translate(MessageText.program_updated, client_lang),
+                    text=translate(MessageText.program_updated, client_lang).format(bot_name=settings.BOT_NAME),
                     bot=bot,
                     state=state,
                     reply_markup=subscription_view_kb(client_lang),
@@ -575,7 +575,7 @@ async def manage_exercises(callback_query: CallbackQuery, state: FSMContext, bot
                     await Cache.payment.reset_status(profile_id, "program")
             await send_message(
                 recipient=profile_record,
-                text=translate(MessageText.program_updated, client_lang),
+                text=translate(MessageText.program_updated, client_lang).format(bot_name=settings.BOT_NAME),
                 bot=bot,
                 state=state,
                 include_incoming_message=False,

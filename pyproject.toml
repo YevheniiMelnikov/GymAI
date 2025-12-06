@@ -43,7 +43,7 @@ dependencies = [
 
 [project.optional-dependencies]
 coach = [
-  "cognee>=0.2.4",
+  "cognee[neo4j]>=0.2.4",
   "PyMuPDF==1.23.22",
   "pgvector==0.3.5",
   "dlt[postgres]>=1.15,<2.0",

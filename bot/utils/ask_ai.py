@@ -129,13 +129,17 @@ async def start_ask_ai_prompt(
     if user_profile.credits < cost:
         await _notify_user(origin, translate(MessageText.not_enough_credits, lang), show_alert=True)
         if show_balance_menu_on_insufficient:
-            await show_balance_menu(origin, profile, state)
+            await show_balance_menu(origin, profile, state, already_answered=True)
         return False
 
     file_path = Path(__file__).resolve().parent.parent / "images" / "ai_coach.png"
     keyboard = ask_ai_prompt_kb(lang)
     await state.set_state(States.ask_ai_question)
-    prompt_text = translate(MessageText.ask_ai_prompt, lang).format(cost=cost, balance=user_profile.credits)
+    prompt_text = translate(MessageText.ask_ai_prompt, lang).format(
+        cost=cost,
+        balance=user_profile.credits,
+        bot_name=settings.BOT_NAME,
+    )
     update_payload: dict[str, object] = {
         "profile": user_profile.model_dump(),
         "ask_ai_cost": cost,

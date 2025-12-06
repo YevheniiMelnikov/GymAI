@@ -20,18 +20,20 @@ def test_require_hmac_missing_and_valid():
 
         client = TestClient(app)
 
-        resp = client.get("/internal/debug/ping")
+        resp = client.post("/coach/chat/", json={"profile_id": 1, "prompt": "hi", "mode": "ask_ai"})
         assert resp.status_code == 403
 
+        body = b'{"profile_id":1,"prompt":"hi","mode":"ask_ai"}'
         headers = build_internal_hmac_auth_headers(
             key_id=settings.AI_COACH_INTERNAL_KEY_ID,
             secret_key=settings.AI_COACH_INTERNAL_API_KEY,
-            body=b"",
+            body=body,
         )
+        headers["Content-Type"] = "application/json"
         headers["X-TS"] = str(int(time.time()))
-        resp_ok = client.get("/internal/debug/ping", headers=headers)
-        assert resp_ok.status_code == 200
-        assert resp_ok.json() == {"ok": True}
+
+        resp_ok = client.post("/coach/chat/", content=body, headers=headers)
+        assert resp_ok.status_code in {200, 408, 422, 503}  # downstream agent may abort but HMAC passes
     finally:
         settings.ENVIRONMENT = prev_env
         settings.AI_COACH_INTERNAL_KEY_ID = prev_key_id

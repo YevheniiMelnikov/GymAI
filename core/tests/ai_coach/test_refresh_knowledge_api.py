@@ -21,7 +21,10 @@ def _reset_settings(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
     monkeypatch.setattr(settings_mod, "settings", base, raising=False)
     monkeypatch.setattr(sys.modules[__name__], "settings", base, raising=False)
     import ai_coach.api as coach_api
+    import ai_coach.api_security as api_security
 
+    monkeypatch.setattr(api_security, "app_settings", settings_mod, raising=False)
+    monkeypatch.setattr(api_security, "settings", base, raising=False)
     monkeypatch.setattr(coach_api, "settings", base, raising=False)
     coach_api.app.dependency_overrides.pop(coach_api._require_hmac, None)
     return base

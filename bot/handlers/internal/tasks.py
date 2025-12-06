@@ -267,7 +267,7 @@ async def _finalize_subscription_plan(
     try:
         await bot.send_message(
             chat_id=profile.tg_id,
-            text=translate(MessageText.subscription_created, profile.language),
+            text=translate(MessageText.subscription_created, profile.language).format(bot_name=settings.BOT_NAME),
             reply_markup=program_view_kb(profile.language, get_webapp_url("subscription", profile.language)),
             disable_notification=True,
         )

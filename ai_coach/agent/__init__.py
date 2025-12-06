@@ -1,16 +1,18 @@
-from importlib import import_module
 from typing import Any
 
+from core.schemas import QAResponse
+
 from .base import AgentDeps, CoachAgentProtocol
+from .coach import CoachAgent
+from .utils import ProgramAdapter
 
 __all__ = ["AgentDeps", "CoachAgentProtocol", "CoachAgent", "ProgramAdapter", "QAResponse"]
 
 
 def __getattr__(name: str) -> Any:  # pragma: no cover - simple lazy import
+    # Retained for backward compatibility with older import patterns.
     if name in {"CoachAgent", "QAResponse"}:
-        module = import_module(".coach", __name__)
-        return getattr(module, name)
+        return globals()[name]
     if name == "ProgramAdapter":
-        module = import_module(".utils", __name__)
-        return getattr(module, name)
+        return globals()[name]
     raise AttributeError(name)

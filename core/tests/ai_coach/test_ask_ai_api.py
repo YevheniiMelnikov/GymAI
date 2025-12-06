@@ -29,7 +29,7 @@ def test_ask_ai_agent(monkeypatch: pytest.MonkeyPatch) -> None:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post(
-                "/ask/",
+                "/coach/chat/",
                 json={"profile_id": 2, "prompt": "hello", "mode": "ask_ai"},
                 headers={"X-Agent": "pydanticai"},
             )
@@ -48,7 +48,7 @@ def test_ask_ai_tool_error(monkeypatch: pytest.MonkeyPatch) -> None:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post(
-                "/ask/",
+                "/coach/chat/",
                 json={"profile_id": 3, "prompt": "hello", "mode": "ask_ai"},
                 headers={"X-Agent": "pydanticai"},
             )
@@ -66,7 +66,7 @@ def test_ask_ai_model_empty_response(monkeypatch: pytest.MonkeyPatch) -> None:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post(
-                "/ask/",
+                "/coach/chat/",
                 json={"profile_id": 4, "prompt": "hello", "mode": "ask_ai"},
                 headers={"X-Agent": "pydanticai"},
             )
@@ -86,7 +86,7 @@ def test_ask_ai_knowledge_base_empty(monkeypatch: pytest.MonkeyPatch) -> None:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post(
-                "/ask/",
+                "/coach/chat/",
                 json={"profile_id": 1, "prompt": "hello", "mode": "ask_ai"},
                 headers={"X-Agent": "pydanticai"},
             )

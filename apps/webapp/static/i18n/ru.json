@@ -23,7 +23,7 @@
   "program.day.rest": "День отдыха",
   "program.exercise.replace": "Запросить альтернативу",
   "program.exercise.replace_dialog.title": "Нужна замена?",
-  "program.exercise.replace_dialog.body": "Мы бесплатно предложим другое упражнение для этого блока. Используйте, если нет нужного оборудования или хочется вариативности. Количество таких генераций в день ограничено.",
+  "program.exercise.replace_dialog.body": "Мы бесплатно предложим другое упражнение для этого блока. Используйте, если нет нужного оборудования или хочется вариативности. Количество таких генераций в рамках одной программы ограничено.",
   "program.exercise.replace_dialog.confirm": "Сгенерировать",
   "program.exercise.replace_dialog.cancel": "Отмена",
   "retry": "Повторить",

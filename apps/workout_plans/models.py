@@ -1,5 +1,5 @@
 from django.db import models
-from django.db.models import JSONField
+from django.db.models import JSONField, Q
 from django.contrib.postgres.fields import ArrayField
 
 from apps.profiles.models import Profile
@@ -20,6 +20,9 @@ class Program(models.Model):
     class Meta:
         verbose_name = "Program"
         verbose_name_plural = "Programs"
+        indexes = [
+            models.Index(fields=["profile", "-created_at"], name="program_profile_created_idx"),
+        ]
 
 
 class Subscription(models.Model):
@@ -40,3 +43,16 @@ class Subscription(models.Model):
     class Meta:
         verbose_name = "Subscription"
         verbose_name_plural = "Subscriptions"
+        indexes = [
+            models.Index(fields=["profile", "-updated_at"], name="sub_profile_updated_idx"),
+            models.Index(
+                fields=["profile"],
+                name="sub_active_profile_idx",
+                condition=Q(enabled=True),
+            ),
+            models.Index(
+                fields=["payment_date"],
+                name="sub_paydate_enabled_idx",
+                condition=Q(enabled=True),
+            ),
+        ]

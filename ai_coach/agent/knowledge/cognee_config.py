@@ -250,6 +250,7 @@ class CogneeConfig:
         _patch_local_file_storage(storage_root)
         cls._configure_llm()
         cls._configure_vector_db()
+        cls._configure_graph_db()
         cls._configure_relational_db()
         cls._patch_cognee()
         cls._patch_dataset_creation()
@@ -279,6 +280,23 @@ class CogneeConfig:
     def _configure_vector_db() -> None:
         cognee.config.set_vector_db_provider(settings.VECTORDATABASE_PROVIDER)
         cognee.config.set_vector_db_url(settings.VECTORDATABASE_URL)
+
+    @staticmethod
+    def _configure_graph_db() -> None:
+        graph_host = settings.GRAPH_DATABASE_HOST or "neo4j"
+        if graph_host in {"localhost", "127.0.0.1", ""}:
+            graph_host = "neo4j"
+        graph_port = settings.GRAPH_DATABASE_PORT or "7687"
+        graph_url = settings.GRAPH_DATABASE_URL or f"bolt://{graph_host}:{graph_port}"
+        graph_db_config = {
+            "graph_database_provider": settings.GRAPH_DATABASE_PROVIDER,
+            "graph_database_url": graph_url,
+            "graph_database_name": settings.GRAPH_DATABASE_NAME,
+            "graph_database_username": settings.GRAPH_DATABASE_USERNAME,
+            "graph_database_password": settings.GRAPH_DATABASE_PASSWORD,
+            "graph_database_port": graph_port,
+        }
+        cognee.config.set_graph_db_config(graph_db_config)
 
     @staticmethod
     def _configure_relational_db() -> None:

@@ -43,10 +43,10 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.postgres",
     "unfold",
     "apps.profiles.apps.ProfilesConfig",
     "apps.payments.apps.PaymentsConfig",
-    "apps.home.apps.HomeConfig",
     "apps.webapp.apps.WebappConfig",
     "apps.workout_plans.apps.WorkoutPlansConfig",
     "rest_framework",
@@ -127,8 +127,7 @@ CACHES = {
         "LOCATION": REDIS_URL,
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            # Using JSON serializer; clear existing cache if previously using Pickle to avoid decode errors.
-            "SERIALIZER": "django_redis.serializers.json.JSONSerializer",
+            "SERIALIZER": "django_redis.serializers.pickle.PickleSerializer",
             "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
         },
         "TIMEOUT": 60 * 60,

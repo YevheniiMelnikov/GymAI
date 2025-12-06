@@ -35,7 +35,7 @@ export const fallbackEn = {
   'program.exercise.replace': 'Request alternative exercise',
   'program.exercise.replace_dialog.title': 'Need an alternative?',
   'program.exercise.replace_dialog.body':
-    'We can generate another exercise for this slot at no extra cost. Use it when you lack equipment or want a different variation. Daily replacements are limited.',
+    'We can generate another exercise for this slot at no extra cost. Use it when you lack equipment or want a different variation. The number of such generations within a single program is limited.',
   'program.exercise.replace_dialog.confirm': 'Generate',
   'program.exercise.replace_dialog.cancel': 'Cancel',
   retry: 'Retry',

@@ -206,12 +206,13 @@ class AiCoachService(APIClient):
         body_bytes: bytes = json.dumps(payload_dict, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
         headers.setdefault("Content-Type", "application/json")
         headers.update(self._hmac_headers(body_bytes))
+        endpoint = "coach/chat/" if payload.mode is CoachMode.ask_ai else "coach/plan/"
         logger.debug(
-            f"ai_coach.ask POST profile_id={payload.profile_id} mode={payload.mode.value} "
+            f"ai_coach.request POST endpoint={endpoint} profile_id={payload.profile_id} mode={payload.mode.value} "
             f"language={payload_dict.get('language')}"
         )
-        logger.debug(f"AI coach ask request_id={request_id} profile_id={payload.profile_id}")
-        ping_path = "internal/debug/ping"
+        logger.debug(f"AI coach request request_id={request_id} profile_id={payload.profile_id}")
+        ping_path = "health/"
         ping_url = urljoin(self.base_url, ping_path)
         ping_headers = self._hmac_headers(b"")
         # Retry readiness ping with exponential backoff
@@ -238,7 +239,7 @@ class AiCoachService(APIClient):
                 await asyncio.sleep(delay)
                 delay = min(delay * 2.0, 4.5)
 
-        # Main POST /ask with retries and per-call client
+        # Main POST with retries and per-call client
         attempts = 5
         delay = 0.5
         status: int = 0
@@ -248,7 +249,7 @@ class AiCoachService(APIClient):
                 async with httpx.AsyncClient(base_url=self.base_url, timeout=self.settings.AI_COACH_TIMEOUT) as client:
                     status, data = await self._api_request(
                         "post",
-                        "ask/",
+                        endpoint,
                         payload_dict,
                         body_bytes=body_bytes,
                         headers=headers or None,
@@ -270,12 +271,12 @@ class AiCoachService(APIClient):
                     )
                     raise
                 logger.info(
-                    f"ai_coach.ask.retry attempt={attempt} delay={delay:.2f}s request_id={request_id} error={exc}"
+                    f"ai_coach.request.retry attempt={attempt} delay={delay:.2f}s request_id={request_id} error={exc}"
                 )
                 await asyncio.sleep(delay)
                 delay = min(delay * 2.0, 4.5)
 
-        logger.debug(f"AI coach ask response request_id={request_id} HTTP={status}: {data}")
+        logger.debug(f"AI coach response request_id={request_id} endpoint={endpoint} HTTP={status}: {data}")
         if status == 200:
             return data
 
@@ -287,7 +288,7 @@ class AiCoachService(APIClient):
             status,
             text,
             method="post",
-            url="ask/",
+            url=endpoint,
             retryable=False,
             reason=reason if isinstance(reason, str) else None,
         )

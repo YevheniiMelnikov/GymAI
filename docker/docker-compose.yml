@@ -7,14 +7,19 @@ x-common-env: &common_env
     DJANGO_SETTINGS_MODULE: config.settings
     PYTHONUNBUFFERED: 1
     PYTHONDONTWRITEBYTECODE: 1
-    REDIS_URL: ${REDIS_URL}
-    RABBITMQ_URL: ${RABBITMQ_URL}
+    REDIS_HOST: ${REDIS_HOST:-redis}
+    REDIS_PORT: ${REDIS_PORT:-6379}
+    RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+    RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
     POSTGRES_DB: ${DB_NAME}
     POSTGRES_USER: ${DB_USER}
     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:- password}
     POSTGRES_HOST: ${DB_HOST}
     POSTGRES_PORT: ${DB_PORT}
-    AI_COACH_URL: ${AI_COACH_URL}
+    AI_COACH_HOST: ${AI_COACH_HOST:-ai_coach}
+    AI_COACH_PORT: ${COACH_PORT:-9000}
+    BOT_INTERNAL_HOST: ${BOT_UPSTREAM_HOST:-host.docker.internal}
+    BOT_INTERNAL_PORT: ${BOT_UPSTREAM_PORT:-8088}
   env_file:
     - .env
   volumes:
@@ -70,6 +75,9 @@ services:
       - rabbitmqdata:/var/lib/rabbitmq
       - ./rabbitmq-entrypoint.sh:/usr/local/bin/rabbitmq-entrypoint.sh:ro
       - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+    ports:
+      - "${HOST_RABBITMQ_PORT:-5672}:5672"
+      - "${HOST_RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "status"]
       interval: 10s
@@ -221,7 +229,6 @@ services:
       SKIP_COLLECTSTATIC: "true"
       COGNEE_STORAGE_PATH: /app/cognee_storage
       COGNEE_DATA_ROOT: /app/cognee_storage
-      REDIS_URL: ${REDIS_URL}
       GRAPH_DATABASE_PROVIDER: ${GRAPH_DATABASE_PROVIDER}
       PGHOST: ${DB_HOST}
       PGPORT: ${DB_PORT}
@@ -239,8 +246,10 @@ services:
         condition: service_healthy
       db:
         condition: service_healthy
+      neo4j:
+        condition: service_started
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://localhost:${COACH_PORT:-9000}/internal/debug/ping"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:${COACH_PORT:-9000}/health/"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -275,6 +284,22 @@ services:
         condition: service_started
     restart: unless-stopped
 
+  neo4j:
+    image: neo4j:5.26
+    container_name: neo4j
+    volumes:
+      - neo4j_logs:/logs
+      - neo4j_config:/config
+      - neo4j_data:/data
+      - neo4j_plugins:/plugins
+    environment:
+      - NEO4J_AUTH=${GRAPH_DATABASE_USERNAME:-neo4j}/${GRAPH_DATABASE_PASSWORD:-pleaseletmein}
+    ports:
+      - "${HOST_NEO4J_HTTP:-7474}:${NEO4J_HTTP_CONTAINER:-7474}"
+      - "${HOST_NEO4J_BOLT:-7687}:${NEO4J_BOLT_CONTAINER:-7687}"
+    restart: unless-stopped
+    networks: [internal]
+
   nginx:
     image: nginx:alpine
     environment:
@@ -304,6 +329,10 @@ volumes:
   data_storage:
   redisdata:
   rabbitmqdata:
+  neo4j_logs:
+  neo4j_config:
+  neo4j_data:
+  neo4j_plugins:
 
 networks:
   internal:

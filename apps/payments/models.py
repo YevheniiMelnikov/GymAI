@@ -17,3 +17,10 @@ class Payment(models.Model):
     class Meta:
         verbose_name = "Payment"
         verbose_name_plural = "Payments"
+        indexes = [
+            models.Index(
+                fields=["profile", "payment_type", "-created_at"],
+                name="pay_prof_type_created_idx",
+            ),
+            models.Index(fields=["status"], name="payment_status_idx"),
+        ]

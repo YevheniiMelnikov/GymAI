@@ -4,7 +4,9 @@ from typing import Any, ClassVar, Sequence
 
 from zoneinfo import ZoneInfo
 
+
 from loguru import logger  # pyrefly: ignore[import-error]
+from pydantic_ai.messages import ModelRequest  # pyrefly: ignore[import-error]
 from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
 
 from config.app_settings import settings
@@ -30,9 +32,12 @@ class CoachAgentMeta(type):
         if helper is None:
             raise AttributeError(f"{cls.__name__} has no attribute {name!r} (llm_helper is not configured)")
         try:
-            return getattr(helper, name)
+            descriptor = inspect.getattr_static(helper, name)
         except AttributeError as exc:
             raise AttributeError(f"{cls.__name__} has no attribute {name!r}") from exc
+        if hasattr(descriptor, "__get__"):
+            return descriptor.__get__(None, cls)
+        return getattr(helper, name)
 
 
 class CoachAgent(metaclass=CoachAgentMeta):
@@ -152,6 +157,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
         cls,
         prompt: str,
         deps: AgentDeps,
+        attachments: Sequence[dict[str, str]] | None = None,
     ) -> QAResponse:
         deps.mode = CoachMode.ask_ai
         agent = cls._get_agent()
@@ -161,9 +167,12 @@ class CoachAgent(metaclass=CoachAgentMeta):
             language=language_label,
             question=prompt,
         )
-        try:
-            raw_result = await agent.run(
-                user_prompt,
+
+        multimodal_input = cls._build_user_message(user_prompt, attachments)
+
+        async def _run_agent(user_input: Any) -> Any:
+            return await agent.run(
+                user_input,
                 deps=deps,
                 output_type=QAResponse,
                 message_history=history,
@@ -172,7 +181,8 @@ class CoachAgent(metaclass=CoachAgentMeta):
                     temperature=0.2,
                 ),
             )
-        except AgentExecutionAborted as exc:
+
+        async def _handle_abort(exc: AgentExecutionAborted) -> QAResponse:
             logger.info(f"agent.ask completion_aborted profile_id={deps.profile_id} reason={exc.reason}")
             if exc.reason == "knowledge_base_empty":
                 deps.knowledge_base_empty = True
@@ -185,6 +195,26 @@ class CoachAgent(metaclass=CoachAgentMeta):
             if fallback is not None:
                 return fallback
             raise AgentExecutionAborted("ask_ai_unavailable", reason="ask_ai_unavailable")
+
+        try:
+            raw_result = await _run_agent(multimodal_input)
+        except AgentExecutionAborted as exc:
+            return await _handle_abort(exc)
+        except Exception as exc:  # noqa: BLE001
+            if attachments:
+                logger.warning(
+                    "agent.ask.vision_fallback profile_id={} attachments={} error={}",
+                    deps.profile_id,
+                    len(attachments),
+                    exc,
+                )
+                try:
+                    raw_result = await _run_agent(user_prompt)
+                except AgentExecutionAborted as inner:
+                    return await _handle_abort(inner)
+            else:
+                raise
+
         normalized = cls._normalize_output(raw_result, QAResponse)
         normalized.answer = normalized.answer.strip()
         if not normalized.answer:
@@ -204,6 +234,36 @@ class CoachAgent(metaclass=CoachAgentMeta):
             f"sources={','.join(normalized.sources)} kb_used={deps.kb_used}"
         )
         return normalized
+
+    @staticmethod
+    def _build_user_message(
+        prompt: str,
+        attachments: Sequence[dict[str, str]] | None = None,
+    ) -> Any:
+        if not attachments:
+            return prompt
+        content_parts: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+        for attachment in attachments:
+            mime = str(attachment.get("mime") or "").strip()
+            data_base64 = str(attachment.get("data_base64") or "").strip()
+            if not mime or not data_base64:
+                continue
+            uri = f"data:{mime};base64,{data_base64}"
+            content_parts.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": uri},
+                }
+            )
+        if len(content_parts) == 1:
+            return prompt
+        builder = getattr(ModelRequest, "user_content", None)
+        if callable(builder):  # pragma: no cover - optional API
+            try:
+                return builder(content_parts)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug(f"agent.ask.user_content_builder_failed error={exc}")
+        return {"role": "user", "content": content_parts}
 
     @staticmethod
     def _build_knowledge_entries(

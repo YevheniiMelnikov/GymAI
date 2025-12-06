@@ -63,7 +63,7 @@ def test_program_mode(monkeypatch: pytest.MonkeyPatch) -> None:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post(
-                "/ask/",
+                "/coach/plan/",
                 json={
                     "profile_id": 1,
                     "prompt": "p",
@@ -101,7 +101,7 @@ def test_subscription_mode(monkeypatch: pytest.MonkeyPatch) -> None:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post(
-                "/ask/",
+                "/coach/plan/",
                 json={
                     "profile_id": 1,
                     "prompt": "p",
@@ -139,7 +139,7 @@ def test_update_mode(monkeypatch: pytest.MonkeyPatch) -> None:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post(
-                "/ask/",
+                "/coach/plan/",
                 json={
                     "profile_id": 1,
                     "prompt": "p",
@@ -161,7 +161,7 @@ def test_update_requires_plan_type() -> None:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
             resp = await ac.post(
-                "/ask/",
+                "/coach/plan/",
                 json={"profile_id": 1, "prompt": "p", "mode": "update", "workout_location": "home"},
                 headers={"X-Agent": "pydanticai"},
             )

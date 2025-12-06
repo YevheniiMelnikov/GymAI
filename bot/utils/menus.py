@@ -105,13 +105,19 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext, 
         await del_msg(cast(Message | CallbackQuery | None, message))
 
 
-async def show_balance_menu(callback_obj: CallbackQuery | Message, profile: Profile, state: FSMContext) -> None:
+async def show_balance_menu(
+    callback_obj: CallbackQuery | Message,
+    profile: Profile,
+    state: FSMContext,
+    *,
+    already_answered: bool = False,
+) -> None:
     lang = cast(str, profile.language)
     cached_profile = await Cache.profile.get_record(profile.id)
     plans = [p.name for p in available_packages()]
     file_path = Path(settings.BOT_PAYMENT_OPTIONS) / f"credit_packages_{lang}.png"
     packages_img = FSInputFile(file_path)
-    if isinstance(callback_obj, CallbackQuery):
+    if isinstance(callback_obj, CallbackQuery) and not already_answered:
         await callback_obj.answer()
     await state.set_state(States.choose_plan)
     await answer_msg(
@@ -315,7 +321,10 @@ async def show_ai_services(
     await state.set_state(States.choose_ai_service)
     await answer_msg(
         callback_query,
-        caption=translate(MessageText.ai_services, language).format(balance=cached_profile.credits),
+        caption=translate(MessageText.ai_services, language).format(
+            balance=cached_profile.credits,
+            bot_name=settings.BOT_NAME,
+        ),
         photo=FSInputFile(file_path),
         reply_markup=kb.ai_services_kb(language, [p.name for p in services]),
     )
@@ -345,7 +354,7 @@ async def process_ai_service_selection(
 
     if selected_profile.credits < required:
         await callback_query.answer(translate(MessageText.not_enough_credits, language), show_alert=True)
-        await show_balance_menu(callback_query, profile, state)
+        await show_balance_menu(callback_query, profile, state, already_answered=True)
         return False
 
     await state.update_data(

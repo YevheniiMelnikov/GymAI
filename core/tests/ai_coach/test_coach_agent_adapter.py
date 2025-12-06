@@ -212,7 +212,7 @@ def test_api_passthrough_returns_llm_answer(monkeypatch: pytest.MonkeyPatch) -> 
     from fastapi.testclient import TestClient
 
     with TestClient(app) as client:
-        resp = client.post("/ask/", json={"profile_id": 1, "prompt": "hi", "mode": "ask_ai"})
+        resp = client.post("/coach/chat/", json={"profile_id": 1, "prompt": "hi", "mode": "ask_ai"})
 
     assert resp.status_code == 200
     payload = resp.json()
@@ -230,6 +230,6 @@ def test_ask_ai_runtime_error(monkeypatch) -> None:
     from fastapi.testclient import TestClient
 
     with TestClient(app) as client:
-        resp = client.post("/ask/", json={"profile_id": 1, "prompt": "hi", "mode": "ask_ai"})
+        resp = client.post("/coach/chat/", json={"profile_id": 1, "prompt": "hi", "mode": "ask_ai"})
     assert resp.status_code == 503
     assert resp.json()["detail"] == "Service unavailable"

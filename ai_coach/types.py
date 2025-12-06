@@ -8,7 +8,7 @@ if TYPE_CHECKING:  # pragma: no cover - runtime import avoidance
 
 
 class CoachMode(str, Enum):
-    """Supported modes for /ask endpoint."""
+    """Supported modes for coach endpoints."""
 
     program = "program"
     subscription = "subscription"
@@ -28,6 +28,7 @@ class AskCtx(TypedDict):
 
     prompt: str | None
     profile_id: int
+    attachments: NotRequired[list[dict[str, str]] | None]
     period: str
     workout_days: list[str]
     expected_workout: str

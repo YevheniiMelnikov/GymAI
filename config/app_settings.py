@@ -77,7 +77,7 @@ def normalize_service_url(
 
 
 class Settings(BaseSettings):
-    ENVIRONMENT: str = "development"
+    ENVIRONMENT: Annotated[str, Field(default="development")]
     DEBUG: bool = False
     CORS_ALLOW_ALL_ORIGINS: bool = False
     PAYMENT_CHECK_INTERVAL: int = 60
@@ -112,6 +112,8 @@ class Settings(BaseSettings):
     LOG_VERBOSE_CELERY: Annotated[bool, Field(default=False)]
 
     REDIS_URL: Annotated[str, Field(default="redis://redis:6379")]
+    REDIS_HOST: Annotated[str, Field(default="redis")]
+    REDIS_PORT: Annotated[int, Field(default=6379)]
     RABBITMQ_URL: Annotated[str | None, Field(default=None)]
     RABBITMQ_HOST: Annotated[str, Field(default="rabbitmq")]
     RABBITMQ_PORT: Annotated[str, Field(default="5672")]
@@ -122,6 +124,8 @@ class Settings(BaseSettings):
     DOCKER_BOT_START: Annotated[bool, Field(default=False)]
 
     BOT_INTERNAL_URL: Annotated[str, Field(default="http://bot:8000/")]
+    BOT_INTERNAL_HOST: Annotated[str, Field(default="bot")]
+    BOT_INTERNAL_PORT: Annotated[int, Field(default=8000)]
     INTERNAL_HTTP_CONNECT_TIMEOUT: Annotated[float, Field(default=10.0)]
     INTERNAL_HTTP_READ_TIMEOUT: Annotated[float, Field(default=30.0)]
 
@@ -133,7 +137,14 @@ class Settings(BaseSettings):
     DB_PROVIDER: Annotated[str, Field(default="postgres")]
     VECTORDATABASE_PROVIDER: Annotated[str, Field(default="pgvector")]
     GRAPH_DATABASE_PROVIDER: Annotated[str, Field(default="networkx")]
+    GRAPH_DATABASE_HOST: Annotated[str, Field(default="neo4j")]
+    GRAPH_DATABASE_PORT: Annotated[str, Field(default="7687")]
+    GRAPH_DATABASE_NAME: Annotated[str, Field(default="neo4j")]
+    GRAPH_DATABASE_USERNAME: Annotated[str, Field(default="neo4j")]
+    GRAPH_DATABASE_PASSWORD: Annotated[str, Field(default="neo4j")]
     AI_COACH_URL: Annotated[str, Field(default="http://ai_coach:9000/")]
+    AI_COACH_HOST: Annotated[str, Field(default="ai_coach")]
+    AI_COACH_PORT: Annotated[int, Field(default=9000)]
     COGNEE_CLIENT_DATASET_NAMESPACE: Annotated[str | None, Field(default=None)]
 
     API_KEY: Annotated[str, Field(default="")]
@@ -305,11 +316,24 @@ class Settings(BaseSettings):
             base_namespace = uuid5(NAMESPACE_DNS, "gymbot.cognee")
             self.COGNEE_CLIENT_DATASET_NAMESPACE = str(uuid5(base_namespace, namespace_seed))
 
+        # Compose URLs from host/port hints when provided
+        if os.getenv("REDIS_HOST") or os.getenv("REDIS_PORT") or not self.REDIS_URL:
+            redis_host = os.getenv("REDIS_HOST", self.REDIS_HOST or "redis")
+            redis_port = os.getenv("REDIS_PORT", str(self.REDIS_PORT or self.HOST_REDIS_PORT or 6379))
+            self.REDIS_URL = f"redis://{redis_host}:{redis_port}"
+
+        rebuild_rabbitmq_url = not self.RABBITMQ_URL and bool(
+            os.getenv("RABBITMQ_HOST") or os.getenv("RABBITMQ_PORT") or self.RABBITMQ_HOST or self.RABBITMQ_PORT
+        )
+
         # --- Redis URL selection ---
         if not in_docker:
             normalized = (self.REDIS_URL or "").strip().lower()
             if not normalized or normalized.startswith("redis://redis"):
                 self.REDIS_URL = "redis://127.0.0.1:6379"
+            # Help host processes reach broker when using Docker service names.
+            if (self.RABBITMQ_HOST or "").lower() == "rabbitmq":
+                self.RABBITMQ_HOST = os.getenv("RABBITMQ_HOST_LOCAL", "localhost")
 
         if not self.RABBITMQ_USER or not self.RABBITMQ_PASSWORD:
             if environment == "production":
@@ -321,20 +345,43 @@ class Settings(BaseSettings):
             )
             self.RABBITMQ_USER = fallback_user
             self.RABBITMQ_PASSWORD = fallback_pass
-        if not self.RABBITMQ_URL:
+        if not self.RABBITMQ_URL and rebuild_rabbitmq_url:
             encoded_user: str = quote_plus(self.RABBITMQ_USER)
             encoded_password: str = quote_plus(self.RABBITMQ_PASSWORD)
             encoded_vhost: str = quote(self.RABBITMQ_VHOST, safe="")
-            self.RABBITMQ_URL = (
-                f"amqp://{encoded_user}:{encoded_password}@{self.RABBITMQ_HOST}:{self.RABBITMQ_PORT}/{encoded_vhost}"
+            rabbit_host_env = os.getenv("RABBITMQ_HOST")
+            if in_docker:
+                rabbit_host = rabbit_host_env or self.RABBITMQ_HOST or "rabbitmq"
+                if rabbit_host in {"", "localhost", "127.0.0.1"}:
+                    rabbit_host = os.getenv("RABBITMQ_SERVICE_HOST", "rabbitmq")
+            else:
+                rabbit_host = self.RABBITMQ_HOST or rabbit_host_env or "localhost"
+            rabbit_port = os.getenv("RABBITMQ_PORT", self.RABBITMQ_PORT or "5672")
+            self.RABBITMQ_URL = f"amqp://{encoded_user}:{encoded_password}@{rabbit_host}:{rabbit_port}/{encoded_vhost}"
+            logging.getLogger(__name__).info(
+                "rabbitmq_url_configured broker=%s host=%s port=%s env_docker=%s",
+                self.RABBITMQ_URL,
+                rabbit_host,
+                rabbit_port,
+                in_docker,
             )
 
+        if os.getenv("AI_COACH_HOST") or os.getenv("AI_COACH_PORT") or not self.AI_COACH_URL:
+            coach_host = os.getenv("AI_COACH_HOST", self.AI_COACH_HOST or "ai_coach")
+            coach_port = os.getenv("AI_COACH_PORT", str(self.AI_COACH_PORT or 9000))
+            self.AI_COACH_URL = f"http://{coach_host}:{coach_port}"
+
+        if os.getenv("BOT_INTERNAL_HOST") or os.getenv("BOT_INTERNAL_PORT") or not self.BOT_INTERNAL_URL:
+            bot_host = os.getenv("BOT_INTERNAL_HOST", self.BOT_INTERNAL_HOST or "bot")
+            bot_port = os.getenv("BOT_INTERNAL_PORT", str(self.BOT_INTERNAL_PORT or 8000))
+            self.BOT_INTERNAL_URL = f"http://{bot_host}:{bot_port}"
+
         if in_docker:
-            rabbitmq_host_override: str = os.getenv("RABBITMQ_SERVICE_HOST", self.RABBITMQ_HOST or "rabbitmq")
-            if self.RABBITMQ_URL:
+            rabbitmq_service_host: str | None = os.getenv("RABBITMQ_SERVICE_HOST")
+            if self.RABBITMQ_URL and rabbitmq_service_host:
                 self.RABBITMQ_URL = normalize_service_host(
                     self.RABBITMQ_URL,
-                    rabbitmq_host_override,
+                    rabbitmq_service_host,
                     default_scheme="amqp",
                 )
             if self.AI_COACH_URL:
@@ -415,6 +462,15 @@ class Settings(BaseSettings):
     @property
     def VECTORDATABASE_URL(self) -> str:
         return f"postgresql+psycopg2://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+
+    @property
+    def GRAPH_DATABASE_URL(self) -> str:
+        host = (self.GRAPH_DATABASE_HOST or "").strip() or "neo4j"
+        port = (str(self.GRAPH_DATABASE_PORT) or "").strip()
+        endpoint = f"{host}:{port}" if port else host
+        db_name = (self.GRAPH_DATABASE_NAME or "").strip()
+        path = f"/{db_name}" if db_name else ""
+        return f"bolt://{endpoint}{path}"
 
     @field_validator("ALLOWED_HOSTS", mode="before")
     @classmethod

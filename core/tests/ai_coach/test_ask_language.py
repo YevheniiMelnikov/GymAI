@@ -30,7 +30,7 @@ def _sample_program() -> Program:
 async def _run_ask(json_payload: dict[str, Any]) -> tuple[int, dict[str, Any]]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        response = await ac.post("/ask/", json=json_payload)
+        response = await ac.post("/coach/plan/", json=json_payload)
     return response.status_code, response.json()
 
 

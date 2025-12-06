@@ -8,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from loguru import logger
 
-from bot.keyboards import program_manage_kb, subscription_view_kb, program_view_kb
+from bot.keyboards import program_manage_kb, subscription_view_kb
 from bot.states import States
 from config.app_settings import settings
 from core.cache import Cache
@@ -23,7 +23,7 @@ from core.services import APIService
 from bot.utils.chat import send_message
 from bot.utils.menus import show_main_menu, show_subscription_page, show_balance_menu
 from bot.utils.text import get_translated_week_day
-from bot.utils.bot import del_msg, answer_msg, delete_messages, get_webapp_url
+from bot.utils.bot import del_msg, answer_msg, delete_messages
 from bot.keyboards import yes_no_kb
 from bot.texts import ButtonText, MessageText, translate
 from bot.utils.profiles import resolve_workout_location
@@ -107,7 +107,7 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bo
 
             await send_message(
                 recipient=profile_record,
-                text=translate(MessageText.program_updated, profile_lang),
+                text=translate(MessageText.program_updated, profile_lang).format(bot_name=settings.BOT_NAME),
                 bot=bot,
                 state=state,
                 reply_markup=subscription_view_kb(profile_lang),
@@ -142,20 +142,13 @@ async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bo
             await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
             return
 
-            await send_message(
-                recipient=profile_record,
-                text=translate(MessageText.new_workout_plan, profile_lang),
-                bot=bot,
-                state=state,
-                reply_markup=(
-                    program_view_kb(profile_lang, webapp_url)
-                    if (webapp_url := get_webapp_url("program", profile_lang)) is not None
-                    else None
-                ),
-                include_incoming_message=False,
-            )
-
-            await Cache.profile.update_record(profile_record.id, {"status": ProfileStatus.completed})
+        await send_message(
+            recipient=profile_record,
+            text=translate(MessageText.program_updated, profile_lang).format(bot_name=settings.BOT_NAME),
+            bot=bot,
+            state=state,
+            include_incoming_message=False,
+        )
 
     message = callback_query.message
     if message and isinstance(message, Message):
@@ -311,7 +304,7 @@ async def process_new_subscription(
     required = int(data.get("required", 0))
     if profile_record.credits < required:
         await callback_query.answer(translate(MessageText.not_enough_credits, language), show_alert=True)
-        await show_balance_menu(callback_query, profile, state)
+        await show_balance_menu(callback_query, profile, state, already_answered=True)
         return
 
     service_type = data.get("service_type", "subscription")

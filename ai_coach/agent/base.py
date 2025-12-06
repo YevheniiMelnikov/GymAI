@@ -63,4 +63,9 @@ class CoachAgentProtocol(Protocol):
     ) -> Program | Subscription: ...
 
     @classmethod
-    async def answer_question(cls, prompt: str, deps: AgentDeps) -> QAResponse: ...
+    async def answer_question(
+        cls,
+        prompt: str,
+        deps: AgentDeps,
+        attachments: list[dict[str, str]] | None = None,
+    ) -> QAResponse: ...
