@@ -26,6 +26,8 @@
   "program.exercise.replace_dialog.body": "Ми безкоштовно запропонуємо іншу вправу для цього блоку. Скористайтеся, якщо немає потрібного обладнання або хочеться варіативності. Кількість таких генерацій в рамках однієї програми обмежена.",
   "program.exercise.replace_dialog.confirm": "Згенерувати",
   "program.exercise.replace_dialog.cancel": "Скасувати",
+  "program.create_new": "Створити нову",
+  "program.action_error": "Не вдалося запустити процес. Спробуйте пізніше.",
   "retry": "Спробувати ще раз",
 
   "tabs.switch_label": "Перемикач розділів",

@@ -295,5 +295,8 @@ Create `docker/.env` from `docker/.env.example` and set the following minimum va
 * `AI_COACH_URL` (default: `http://ai_coach:9000/`)
 * `KNOWLEDGE_REFRESH_INTERVAL`, `BACKUP_RETENTION_DAYS`
 * `PAYMENT_*` (provider keys and callback URL)
+* `EXERCISE_GIF_BUCKET` – name of the Google Cloud Storage bucket that holds exercise GIFs (default `exercises_guide`).
+* `EXERCISE_GIF_BASE_URL` – base URL for those assets (default `https://storage.googleapis.com`).
+* `LLM_API_KEY` – API key for both the Pydantic AI agent and Cognee embedding calls. OpenRouter provides a single token that covers both LLM generations and embedding generation, so no separate key is needed.
 
 `WEBHOOK_URL` is auto-derived as `${WEBHOOK_HOST}${WEBHOOK_PATH}` unless explicitly set. See `config/app_settings.py` for all available options.

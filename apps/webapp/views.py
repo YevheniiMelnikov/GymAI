@@ -1,16 +1,21 @@
+import json
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, cast
 
+import httpx
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.csrf import csrf_exempt
 from loguru import logger
 from rest_framework.exceptions import NotFound
 
 from apps.payments.repos import PaymentRepository
 from apps.workout_plans.models import Program as ProgramModel
 from apps.workout_plans.repos import ProgramRepository, SubscriptionRepository
+from config.app_settings import settings
+from core.internal_http import build_internal_hmac_auth_headers, internal_request_timeout
 from core.schemas import Program as ProgramSchema, Subscription
 from .utils import STATIC_VERSION, transform_days
 
@@ -312,6 +317,104 @@ async def payment_data(request: HttpRequest) -> JsonResponse:
             "language": profile.language,
         }
     )
+
+
+@csrf_exempt  # type: ignore[bad-specialization]
+@require_POST  # type: ignore[misc]
+async def workouts_action(request: HttpRequest) -> JsonResponse:
+    await ensure_container_ready()
+
+    try:
+        auth_ctx = await authenticate(request)
+    except Exception:
+        logger.exception("Auth resolution failed")
+        return JsonResponse({"error": "server_error"}, status=500)
+    if auth_ctx.error:
+        return auth_ctx.error
+
+    profile = auth_ctx.profile
+    if profile is None:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    try:
+        payload = json.loads(request.body or "{}")
+    except Exception:
+        logger.warning("workouts_action_invalid_payload")
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    action = str(payload.get("action") or "")
+    if action not in {"create_program", "create_subscription"}:
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    profile_dump = {
+        "id": profile.id,
+        "tg_id": profile.tg_id,
+        "language": profile.language or settings.DEFAULT_LANG,
+    }
+    logger.info(f"workouts_action_request profile_id={profile.id} action={action}")
+
+    raw_base_url = (settings.BOT_INTERNAL_URL or "").rstrip("/")
+    fallback_base = f"http://{settings.BOT_INTERNAL_HOST}:{settings.BOT_INTERNAL_PORT}"
+    base_url = raw_base_url or fallback_base
+    logger.debug(f"workouts_action_internal_base profile_id={profile.id} base_url={base_url}")
+
+    proxy_payload = {
+        "action": action,
+        "profile_id": profile.id,
+        "telegram_id": profile.tg_id,
+        "profile": profile_dump,
+    }
+    body = json.dumps(proxy_payload).encode("utf-8")
+    try:
+        headers = build_internal_hmac_auth_headers(
+            key_id=settings.INTERNAL_KEY_ID,
+            secret_key=settings.INTERNAL_API_KEY,
+            body=body,
+        )
+    except Exception:
+        logger.exception("Failed to build internal auth headers for workouts_action")
+        return JsonResponse({"error": "server_error"}, status=500)
+    headers["Content-Type"] = "application/json"
+
+    timeout = internal_request_timeout(settings)
+
+    async def _post(target_url: str) -> httpx.Response:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            return await client.post(target_url, content=body, headers=headers)
+
+    primary_url = f"{base_url}/internal/webapp/workouts/action/"
+    try:
+        resp = await _post(primary_url)
+    except httpx.HTTPError as exc:
+        logger.error(f"workouts_action_call_failed profile_id={profile.id} base_url={base_url} err={exc}")
+        if base_url != fallback_base:
+            fallback_url = f"{fallback_base}/internal/webapp/workouts/action/"
+            logger.info(f"workouts_action_retrying_fallback profile_id={profile.id} fallback={fallback_base}")
+            try:
+                resp = await _post(fallback_url)
+            except httpx.HTTPError as exc2:
+                logger.error(f"workouts_action_call_failed profile_id={profile.id} fallback={fallback_base} err={exc2}")
+                return JsonResponse({"error": "server_error"}, status=502)
+        else:
+            return JsonResponse({"error": "server_error"}, status=502)
+
+    if resp.status_code >= 400:
+        logger.warning(
+            (
+                f"workouts_action_rejected profile_id={profile.id} action={action} "
+                f"status={resp.status_code} body={resp.text[:200]}"
+            )
+        )
+        if resp.status_code == 400:
+            return JsonResponse({"error": "bad_request"}, status=400)
+        if resp.status_code == 404:
+            return JsonResponse({"error": "not_found"}, status=404)
+        if resp.status_code == 503:
+            return JsonResponse({"error": "service_unavailable"}, status=503)
+        return JsonResponse({"error": "server_error"}, status=502)
+
+    logger.info(f"workouts_action_dispatched profile_id={profile.id} action={action}")
+    return JsonResponse({"status": "ok"})
 
 
 def index(request: HttpRequest) -> HttpResponse:

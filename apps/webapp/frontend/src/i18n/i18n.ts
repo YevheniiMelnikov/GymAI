@@ -38,6 +38,8 @@ export const fallbackEn = {
     'We can generate another exercise for this slot at no extra cost. Use it when you lack equipment or want a different variation. The number of such generations within a single program is limited.',
   'program.exercise.replace_dialog.confirm': 'Generate',
   'program.exercise.replace_dialog.cancel': 'Cancel',
+  'program.create_new': 'Create new',
+  'program.action_error': 'Unable to start the flow. Try again later.',
   retry: 'Retry',
   'tabs.switch_label': 'Section switcher',
   'tabs.program': 'Programs',

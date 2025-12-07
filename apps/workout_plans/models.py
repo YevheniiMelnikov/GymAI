@@ -8,6 +8,7 @@ from apps.profiles.models import Profile
 class SubscriptionPeriod(models.TextChoices):
     ONE_MONTH = "1m", "1 month"
     SIX_MONTHS = "6m", "6 months"
+    TWELVE_MONTHS = "12m", "12 months"
 
 
 class Program(models.Model):

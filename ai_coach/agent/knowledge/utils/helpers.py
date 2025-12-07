@@ -16,7 +16,7 @@ def normalize_text(value: str | None) -> str:
     return normalized
 
 
-def _needs_cognee_setup(exc: Exception) -> bool:
+def needs_cognee_setup(exc: Exception) -> bool:
     from sqlite3 import OperationalError as SQLiteOperationalError
 
     try:

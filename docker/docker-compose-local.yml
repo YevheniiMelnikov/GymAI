@@ -161,6 +161,8 @@ services:
       - ../google_creds.json:/app/google_creds.json:ro
     ports:
       - ${HOST_API_PORT:-8000}:${API_PORT:-8000}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks: [internal]
 
   celery_worker:

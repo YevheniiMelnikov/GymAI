@@ -24,15 +24,7 @@ from core.enums import SubscriptionPeriod
 from core.schemas import Program, Profile, QAResponse, Subscription
 from core.services import APIService
 
-_DEFAULT_DAYS_MAP: dict[str, tuple[str, ...]] = {
-    "ua": ("Пн", "Ср", "Пт", "Сб"),
-    "ru": ("Пн", "Ср", "Пт", "Сб"),
-    "en": ("Mon", "Wed", "Fri", "Sat"),
-}
-DEFAULT_WORKOUT_DAYS: tuple[str, ...] = _DEFAULT_DAYS_MAP.get(
-    str(getattr(settings, "DEFAULT_LANG", "")).lower(),
-    ("Mon", "Wed", "Fri", "Sat"),
-)
+DEFAULT_WORKOUT_DAYS: tuple[str, ...] = ("Day 1", "Day 2", "Day 3", "Day 4")
 dedupe_cache = TTLCache(maxsize=2048, ttl=15)
 _ALLOWED_ATTACHMENT_MIME = {"image/jpeg", "image/png", "image/webp"}
 
@@ -86,10 +78,6 @@ def _resolve_language(request_lang: object | None, profile: Profile | None) -> s
             profile_language = _to_language_code(profile_language_raw, settings.DEFAULT_LANG)
 
     return request_language or profile_language or settings.DEFAULT_LANG
-
-
-def _default_workout_days(language: str) -> tuple[str, ...]:
-    return _DEFAULT_DAYS_MAP.get(language.lower(), DEFAULT_WORKOUT_DAYS)
 
 
 async def _ingest_chat_prompt(
@@ -339,7 +327,7 @@ async def handle_coach_request(
 
         profile = await _fetch_profile(data.profile_id)
         language = _resolve_language(data.language, profile)
-        workout_days: list[str] = data.workout_days or list(_default_workout_days(language))
+        workout_days: list[str] = data.workout_days or list(DEFAULT_WORKOUT_DAYS)
 
         if attachments:
             kb = round(attachments_bytes / 1024, 1)

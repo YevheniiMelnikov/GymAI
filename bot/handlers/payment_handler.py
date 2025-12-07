@@ -80,6 +80,7 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext) -> No
         period_map = {
             "subscription_1_month": SubscriptionPeriod.one_month,
             "subscription_6_months": SubscriptionPeriod.six_months,
+            "subscription_12_months": SubscriptionPeriod.twelve_months,
         }
         period = period_map.get(service_type, SubscriptionPeriod.one_month)
         subscription_id = await APIService.workout.create_subscription(

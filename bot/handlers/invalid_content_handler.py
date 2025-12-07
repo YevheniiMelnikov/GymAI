@@ -22,7 +22,6 @@ HANDLED_STATES = [
     States.weight,
     States.workout_experience,
     States.health_notes,
-    States.select_service,
     States.main_menu,
     States.profile_delete,
     States.program_edit,

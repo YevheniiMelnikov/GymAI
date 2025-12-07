@@ -68,7 +68,7 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
 
         current_state = await fsm.get_state()
         if current_state == States.ask_ai_question.state:
-            await fsm.set_state(States.select_service)
+            await fsm.set_state(States.main_menu)
 
     language = profile.language
     request_id = payload.request_id

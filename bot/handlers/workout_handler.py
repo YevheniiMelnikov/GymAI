@@ -16,7 +16,6 @@ from bot.keyboards import (
     reps_number_kb,
     sets_number_kb,
     program_manage_kb,
-    select_service_kb,
 )
 from bot.states import States
 from bot.texts.exercises import exercise_dict
@@ -27,12 +26,11 @@ from bot.utils.chat import send_message
 from bot.utils.exercises import update_exercise_data, save_exercise, create_exercise
 from bot.utils.menus import (
     show_main_menu,
-    show_my_subscription_menu,
-    show_my_program_menu,
     program_menu_pagination,
     subscription_history_pagination,
     show_subscription_page,
-    show_ai_services,
+    start_program_flow,
+    start_subscription_flow,
 )
 from bot.utils.other import (
     short_url,
@@ -40,7 +38,7 @@ from bot.utils.other import (
 from bot.utils.bot import del_msg, answer_msg, delete_messages
 from bot.utils.workout_plans import reset_workout_plan, save_workout_plan, next_day_workout_plan
 from bot.utils.ai_coach import enqueue_ai_question
-from bot.utils.ask_ai import prepare_ask_ai_request, start_ask_ai_prompt
+from bot.utils.ask_ai import prepare_ask_ai_request
 from core.schemas import DayExercises, Profile
 from bot.texts import ButtonText, MessageText, translate
 from core.exceptions import AskAiPreparationError, SubscriptionNotFoundError
@@ -48,32 +46,6 @@ from config.app_settings import settings
 from core.services import get_gif_manager
 
 workout_router = Router()
-
-
-@workout_router.callback_query(States.select_service)
-async def select_service(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
-    data = await state.get_data()
-    profile = Profile.model_validate(data["profile"])
-    if callback_query.data == "subscription":
-        await show_my_subscription_menu(callback_query, profile, state)
-        return
-    if callback_query.data == "program":
-        await show_my_program_menu(callback_query, profile, state)
-        return
-    if callback_query.data == "ask_ai":
-        await start_ask_ai_prompt(
-            callback_query,
-            profile,
-            state,
-            delete_origin=True,
-            show_balance_menu_on_insufficient=True,
-        )
-        return
-
-    message = cast(Message, callback_query.message)
-    assert message is not None
-    await show_main_menu(message, profile, state)
-    await del_msg(cast(Message | CallbackQuery | None, callback_query))
 
 
 @workout_router.callback_query(States.ask_ai_question)
@@ -92,12 +64,10 @@ async def ask_ai_question_navigation(callback_query: CallbackQuery, state: FSMCo
     await callback_query.answer()
     await state.update_data(ask_ai_prompt_id=None, ask_ai_prompt_chat_id=None, ask_ai_cost=None)
     await del_msg(callback_query)
-    await state.set_state(States.select_service)
-    await answer_msg(
-        callback_query,
-        translate(MessageText.select_service, profile.language).format(bot_name=settings.BOT_NAME),
-        reply_markup=select_service_kb(profile.language),
-    )
+    if callback_query.message and isinstance(callback_query.message, Message):
+        await show_main_menu(callback_query.message, profile, state)
+    else:
+        await state.set_state(States.main_menu)
 
 
 @workout_router.message(States.ask_ai_question)
@@ -252,22 +222,11 @@ async def program_action_choice(callback_query: CallbackQuery, state: FSMContext
 
     if cb_data == "back":
         await callback_query.answer()
-        await state.set_state(States.select_service)
-        await message.answer(
-            translate(MessageText.select_service, profile.language).format(bot_name=settings.BOT_NAME),
-            reply_markup=select_service_kb(profile.language),
-        )
+        await show_main_menu(message, profile, state)
 
     elif cb_data == "new_program":
         await callback_query.answer()
-        await state.update_data(service_type="program")
-        await show_ai_services(
-            callback_query,
-            profile,
-            state,
-            allowed_services=("program",),
-            auto_select_single=True,
-        )
+        await start_program_flow(callback_query, profile, state)
         await del_msg(message)
         return
 
@@ -285,28 +244,17 @@ async def subscription_action_choice(callback_query: CallbackQuery, state: FSMCo
     if message is None or not isinstance(message, Message):
         return
     cb_data = callback_query.data or ""
-    language = cast(str, profile.language or settings.DEFAULT_LANG)
 
     if cb_data == "new_subscription":
         await callback_query.answer()
-        await state.update_data(service_type="subscription")
-        await show_ai_services(
-            callback_query,
-            profile,
-            state,
-            allowed_services=("subscription_1_month", "subscription_6_months"),
-        )
+        await start_subscription_flow(callback_query, profile, state)
         await del_msg(message)
         return
 
     if cb_data == "back":
         await callback_query.answer()
-        await state.set_state(States.select_service)
-        await message.answer(
-            translate(MessageText.select_service, language).format(bot_name=settings.BOT_NAME),
-            reply_markup=select_service_kb(language),
-        )
-        await del_msg(message)
+        await show_main_menu(message, profile, state)
+        return
 
 
 @workout_router.message(States.program_manage)

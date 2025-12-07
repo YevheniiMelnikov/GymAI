@@ -26,6 +26,8 @@
   "program.exercise.replace_dialog.body": "Мы бесплатно предложим другое упражнение для этого блока. Используйте, если нет нужного оборудования или хочется вариативности. Количество таких генераций в рамках одной программы ограничено.",
   "program.exercise.replace_dialog.confirm": "Сгенерировать",
   "program.exercise.replace_dialog.cancel": "Отмена",
+  "program.create_new": "Создать новую",
+  "program.action_error": "Не удалось запустить процесс. Попробуйте позже.",
   "retry": "Повторить",
 
   "tabs.switch_label": "Переключатель разделов",

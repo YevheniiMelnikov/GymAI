@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getProgram, getSubscription, HttpError } from '../api/http';
+import { getProgram, getSubscription, HttpError, triggerWorkoutAction, WorkoutAction } from '../api/http';
 import { applyLang, t } from '../i18n/i18n';
 import { renderProgramDays, renderLegacyProgram, fmtDate } from '../ui/render_program';
 import { readInitData, tmeReady } from '../telegram';
@@ -8,20 +8,54 @@ import type { Locale, Program } from '../api/types';
 import { renderSegmented, SegmentId } from '../components/Segmented';
 import TopBar from '../components/TopBar';
 
+const LAST_WORKOUT_SEGMENT_KEY = 'gymbot.workouts.lastSegment';
+
+const readLastWorkoutSegment = (): SegmentId => {
+    if (typeof window === 'undefined') {
+        return 'program';
+    }
+    try {
+        const stored = window.localStorage.getItem(LAST_WORKOUT_SEGMENT_KEY);
+        if (stored === 'subscriptions') {
+            return 'subscriptions';
+        }
+    } catch {
+        // ignore
+    }
+    return 'program';
+};
+
+const storeLastWorkoutSegment = (segment: SegmentId): void => {
+    if (typeof window === 'undefined') {
+        return;
+    }
+    try {
+        window.localStorage.setItem(LAST_WORKOUT_SEGMENT_KEY, segment);
+    } catch {
+        // ignore
+    }
+};
+
 const ProgramPage: React.FC = () => {
     const [searchParams, setSearchParams] = useSearchParams();
-    const searchParamsKey = searchParams.toString();
     const navigate = useNavigate();
+    const searchParamsKey = searchParams.toString();
     const contentRef = useRef<HTMLDivElement>(null);
     const switcherRef = useRef<HTMLDivElement>(null);
     const fallbackIllustration =
         "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='360' height='260' viewBox='0 0 360 260' fill='none'><defs><linearGradient id='g1' x1='50' y1='30' x2='310' y2='210' gradientUnits='userSpaceOnUse'><stop stop-color='%23C7DFFF'/><stop offset='1' stop-color='%23E7EEFF'/></linearGradient><linearGradient id='g2' x1='120' y1='80' x2='240' y2='200' gradientUnits='userSpaceOnUse'><stop stop-color='%237AA7FF'/><stop offset='1' stop-color='%235B8BFF'/></linearGradient></defs><rect x='30' y='24' width='300' height='200' rx='28' fill='url(%23g1)'/><rect x='62' y='56' width='236' height='136' rx='18' fill='white' stroke='%23B8C7E6' stroke-width='3'/><path d='M90 174c18-30 42-30 60 0s42 30 60 0 42-30 60 0' stroke='%23A7B9DB' stroke-width='6' stroke-linecap='round' fill='none'/><circle cx='136' cy='106' r='16' fill='url(%23g2)'/><circle cx='216' cy='118' r='12' fill='%23E6ECFC'/><circle cx='248' cy='94' r='8' fill='%23E6ECFC'/></svg>";
+    const initialLocationKeyRef = useRef(`${window.location.pathname}${window.location.search}`);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [actionLoading, setActionLoading] = useState(false);
     const [dateText, setDateText] = useState('');
-    const initialSegment: SegmentId =
-        (searchParams.get('source') || '') === 'subscription' ? 'subscriptions' : 'program';
-    const [activeSegment, setActiveSegment] = useState<SegmentId>(initialSegment);
+    const [activeSegment, setActiveSegment] = useState<SegmentId>(() => {
+        const source = searchParams.get('source');
+        if (source === 'subscription') {
+            return 'subscriptions';
+        }
+        return readLastWorkoutSegment();
+    });
 
     const programId = searchParams.get('id') || '';
     const paramLang = searchParams.get('lang') || undefined;
@@ -30,11 +64,26 @@ const ProgramPage: React.FC = () => {
         void applyLang(paramLang);
     }, [paramLang]);
 
+    const prevSourceRef = useRef(searchParams.get('source'));
+
     useEffect(() => {
         const params = new URLSearchParams(searchParamsKey);
-        const nextSegment: SegmentId = (params.get('source') || '') === 'subscription' ? 'subscriptions' : 'program';
-        setActiveSegment((prev) => (prev === nextSegment ? prev : nextSegment));
-    }, [searchParamsKey]);
+        const sourceParam = params.get('source');
+        if (sourceParam === 'subscription') {
+            if (activeSegment !== 'subscriptions') {
+                setActiveSegment('subscriptions');
+            }
+        } else if (prevSourceRef.current === 'subscription' && sourceParam !== 'subscription') {
+            if (activeSegment !== 'program') {
+                setActiveSegment('program');
+            }
+        }
+        prevSourceRef.current = sourceParam;
+    }, [searchParamsKey, activeSegment]);
+
+    useEffect(() => {
+        storeLastWorkoutSegment(activeSegment);
+    }, [activeSegment]);
 
     useEffect(() => {
         if (!switcherRef.current) return;
@@ -137,9 +186,146 @@ const ProgramPage: React.FC = () => {
         };
     }, [programId, activeSegment, paramLang]);
 
+    const handleWorkoutAction = useCallback(
+        async (nextAction: WorkoutAction | null) => {
+            if (!nextAction) {
+                return;
+            }
+            const initData = readInitData();
+            const tg = (window as any).Telegram?.WebApp;
+            if (!initData) {
+                window.alert(t('open_from_telegram'));
+                return;
+            }
+            setActionLoading(true);
+            try {
+                await triggerWorkoutAction(nextAction, initData);
+                tg?.close();
+            } catch (err) {
+                const messageKey = err instanceof HttpError ? (err.message as any) : ('program.action_error' as any);
+                const translated = t(messageKey);
+                console.error('workouts_action_failed', err);
+                window.alert(translated || t('program.action_error'));
+            } finally {
+                setActionLoading(false);
+            }
+        },
+        []
+    );
+
+    const creationAction: WorkoutAction | null =
+        activeSegment === 'program'
+            ? 'create_program'
+            : activeSegment === 'subscriptions'
+            ? 'create_subscription'
+            : null;
+
+    const handleFabClick = useCallback(async () => {
+        if (!creationAction) {
+            return;
+        }
+        const tg = (window as any).Telegram?.WebApp;
+        const payload =
+            creationAction === 'create_program' ? 'create_new_program' : 'create_new_subscription';
+        try {
+            tg?.HapticFeedback?.impactOccurred('medium');
+        } catch {
+        }
+        try {
+            tg?.sendData(payload);
+        } catch {
+        }
+        await handleWorkoutAction(creationAction);
+    }, [creationAction, handleWorkoutAction]);
+
+    const fabStyle: React.CSSProperties = {
+        position: 'fixed',
+        bottom: 30,
+        right: 20,
+        width: 56,
+        height: 56,
+        borderRadius: '50%',
+        backgroundColor: '#2563eb',
+        color: '#fff',
+        border: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: 32,
+        boxShadow: '0 8px 16px rgba(0, 0, 0, 0.25)',
+        zIndex: 1000,
+        cursor: 'pointer',
+    };
+
+    const handleBack = useCallback(() => {
+        const tg = (window as any).Telegram?.WebApp;
+        const currentKey = `${window.location.pathname}${window.location.search}`;
+        if (currentKey !== initialLocationKeyRef.current) {
+            window.history.back();
+        } else {
+            tg?.close();
+        }
+    }, []);
+
+    const handleHistoryIconClick = useCallback(() => {
+        navigate('/history');
+        const tg = (window as any).Telegram?.WebApp;
+        try {
+            tg?.HapticFeedback?.impactOccurred('medium');
+        } catch {
+        }
+        try {
+            tg?.sendData?.('view_history');
+        } catch {
+        }
+    }, [navigate]);
+
+    const historyIconStyle: React.CSSProperties = {
+        background: 'none',
+        border: 'none',
+        color: 'currentColor',
+        cursor: 'pointer',
+        padding: 0,
+        outline: 'none',
+    };
+
     return (
         <div className="page-container">
-            <TopBar title={t('program.title')} />
+            <TopBar title={t('program.title')} onBack={handleBack}>
+                <button
+                    type="button"
+                    onClick={handleHistoryIconClick}
+                    aria-label={t('program.view_history')}
+                    style={historyIconStyle}
+                >
+                    <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path
+                            d="M3 3v5h5"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            fill="none"
+                        />
+                        <path
+                            d="M3 12a9 9 0 1 0 9-9"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            fill="none"
+                        />
+                        <path
+                            d="M12 7v5l3 3"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            fill="none"
+                        />
+                    </svg>
+                </button>
+            </TopBar>
 
             <div className="page-shell">
                 <div id="content" aria-busy={loading}>
@@ -171,17 +357,19 @@ const ProgramPage: React.FC = () => {
                     </div>
                 </div>
 
-                <div className="history-footer">
-                    <button
-                        type="button"
-                        id="history-button"
-                        className="primary-button"
-                        onClick={() => navigate('/history')}
-                    >
-                        {t('program.view_history')}
-                    </button>
-                </div>
+                <div className="history-footer" />
             </div>
+            {creationAction && (
+                <button
+                    type="button"
+                    style={fabStyle}
+                    aria-label={t('program.create_new')}
+                    onClick={handleFabClick}
+                    disabled={actionLoading}
+                >
+                    +
+                </button>
+            )}
         </div>
     );
 };

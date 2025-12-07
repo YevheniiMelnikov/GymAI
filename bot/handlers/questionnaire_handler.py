@@ -1,15 +1,12 @@
-from contextlib import suppress
 from typing import cast
 
 from aiogram import Router, Bot
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from loguru import logger
 
 from bot.keyboards import (
     select_gender_kb,
-    select_days_kb,
     workout_experience_kb,
     workout_location_kb,
     yes_no_kb,
@@ -22,7 +19,6 @@ from core.enums import ProfileStatus, Language
 from core.exceptions import ProfileNotFoundError
 from core.schemas import Profile
 from core.services import APIService
-from bot.utils.workout_plans import process_new_subscription, edit_subscription_days
 from bot.utils.menus import (
     show_main_menu,
     show_my_profile_menu,
@@ -328,64 +324,6 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
         return
 
     return
-
-
-@questionnaire_router.callback_query(States.workout_days)
-async def workout_days(callback_query: CallbackQuery, state: FSMContext):
-    data = await state.get_data()
-    profile = Profile.model_validate(data["profile"])
-    lang = profile.language or settings.DEFAULT_LANG
-
-    try:
-        profile_record = await Cache.profile.get_record(profile.id)
-    except ProfileNotFoundError:
-        logger.error(f"Profile data not found for profile {profile.id}")
-        await callback_query.answer(translate(MessageText.unexpected_error, lang))
-        return
-
-    days: list[str] = data.get("workout_days", [])
-
-    if callback_query.data != "complete":
-        data_val = callback_query.data
-        if data_val is not None:
-            if data_val in days:
-                days.remove(data_val)
-            else:
-                days.append(data_val)
-
-        await state.update_data(workout_days=days)
-
-        if isinstance(callback_query.message, Message):
-            with suppress(TelegramBadRequest):
-                await callback_query.message.edit_reply_markup(reply_markup=select_days_kb(lang, days))
-
-        await state.set_state(States.workout_days)
-        return
-
-    if not days:
-        await callback_query.answer("❌")
-        return
-
-    await state.update_data(workout_days=days)
-    if data.get("edit_mode"):
-        subscription = await Cache.workout.get_latest_subscription(profile_record.id)
-
-        if subscription and len(subscription.workout_days) == len(days):
-            await edit_subscription_days(callback_query, days, profile_record.id, state, subscription)
-            return
-
-        if isinstance(callback_query.message, Message):
-            await answer_msg(
-                callback_query.message,
-                translate(MessageText.workout_plan_delete_warning, lang),
-                reply_markup=yes_no_kb(lang),
-            )
-
-        await state.set_state(States.confirm_subscription_reset)
-        return
-
-    await callback_query.answer(translate(MessageText.saved, lang))
-    await process_new_subscription(callback_query, profile, state)
 
 
 @questionnaire_router.callback_query(States.profile_delete)

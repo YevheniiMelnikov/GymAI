@@ -18,13 +18,10 @@ from core.cache import Cache
 from core.enums import ProfileStatus
 from core.exceptions import ProfileNotFoundError
 from core.schemas import Profile, Subscription
-from bot.utils.text import (
-    get_profile_attributes,
-    get_translated_week_day,
-)
+from bot.utils.text import get_profile_attributes
 from bot.utils.exercises import format_full_program
 from config.app_settings import settings
-from bot.utils.bot import del_msg, answer_msg, get_webapp_url
+from bot.utils.bot import BotMessageProxy, del_msg, answer_msg, get_webapp_url
 
 
 async def show_subscription_page(callback_query: CallbackQuery, state: FSMContext, subscription: Subscription) -> None:
@@ -35,8 +32,6 @@ async def show_subscription_page(callback_query: CallbackQuery, state: FSMContex
 
     next_payment_date_str = subscription.payment_date
     enabled_status = "✅" if subscription.enabled else "❌"
-    translated_week_days = ", ".join(get_translated_week_day(lang, x) for x in subscription.workout_days)
-
     await state.set_state(States.show_subscription)
     message = callback_query.message
 
@@ -47,7 +42,7 @@ async def show_subscription_page(callback_query: CallbackQuery, state: FSMContex
                 next_payment_date=next_payment_date_str,
                 enabled=enabled_status,
                 price=subscription.price,
-                days=translated_week_days,
+                period=subscription.period,
             ),
             reply_markup=kb.show_subscriptions_kb(lang, get_webapp_url("subscription", lang)),
         )
@@ -96,17 +91,22 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
 
 
 async def show_main_menu(message: Message, profile: Profile, state: FSMContext, *, delete_source: bool = True) -> None:
-    menu = kb.main_menu_kb
+    language = cast(str, profile.language or settings.DEFAULT_LANG)
+    webapp_url = get_webapp_url("program", language)
+    menu = kb.main_menu_kb(language, webapp_url=webapp_url)
     await state.clear()
     await state.update_data(profile=profile.model_dump())
     await state.set_state(States.main_menu)
-    await answer_msg(message, translate(MessageText.main_menu, profile.language), reply_markup=menu(profile.language))
+    await answer_msg(message, translate(MessageText.main_menu, profile.language), reply_markup=menu)
     if delete_source:
         await del_msg(cast(Message | CallbackQuery | None, message))
 
 
+InteractionTarget = CallbackQuery | Message | BotMessageProxy
+
+
 async def show_balance_menu(
-    callback_obj: CallbackQuery | Message,
+    callback_obj: InteractionTarget,
     profile: Profile,
     state: FSMContext,
     *,
@@ -130,7 +130,8 @@ async def show_balance_menu(
         photo=packages_img,
         reply_markup=kb.tariff_plans_kb(lang, plans),
     )
-    await del_msg(callback_obj)
+    callback_target = callback_obj if not isinstance(callback_obj, BotMessageProxy) else None
+    await del_msg(callback_target)
 
 
 async def show_tariff_plans(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
@@ -239,14 +240,8 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
             )
         return
 
-    await state.set_state(States.select_service)
-    await answer_msg(
-        message,
-        translate(MessageText.select_service, lang).format(bot_name=settings.BOT_NAME),
-        reply_markup=kb.select_service_kb(lang),
-    )
-
-    await del_msg(cast(Message | CallbackQuery | None, message))
+    await callback_query.answer()
+    await show_main_menu(message, profile, state)
 
 
 async def show_my_subscription_menu(
@@ -284,23 +279,17 @@ async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, 
     await del_msg(cast(Message | CallbackQuery | None, message))
 
 
-async def show_ai_services(
-    callback_query: CallbackQuery,
+async def _prompt_ai_services(
+    target: InteractionTarget,
     profile: Profile,
     state: FSMContext,
-    allowed_services: Collection[str] | None = None,
     *,
+    allowed_services: Collection[str] | None = None,
     auto_select_single: bool = False,
-) -> None:
+    current_profile: Profile | None = None,
+) -> bool:
     language = cast(str, profile.language or settings.DEFAULT_LANG)
-    cached_profile = await fetch_user(profile, refresh_if_incomplete=True)
-    if cached_profile.status != ProfileStatus.completed:
-        credits_text = translate(MessageText.finish_registration_to_get_credits, language).format(
-            credits=settings.DEFAULT_CREDITS
-        )
-        await callback_query.answer(credits_text, show_alert=True)
-    else:
-        await callback_query.answer()
+    cached_profile = current_profile or await fetch_user(profile, refresh_if_incomplete=True)
     file_path = Path(__file__).resolve().parent.parent / "images" / "ai_coach.png"
     services = available_ai_services()
     if allowed_services is not None:
@@ -309,18 +298,16 @@ async def show_ai_services(
         if filtered_services:
             services = filtered_services
     if auto_select_single and len(services) == 1:
-        handled = await process_ai_service_selection(
-            callback_query,
+        await process_ai_service_selection(
+            target,
             profile,
             state,
             service_name=services[0].name,
         )
-        if handled:
-            await del_msg(callback_query)
-        return
+        return False
     await state.set_state(States.choose_ai_service)
     await answer_msg(
-        callback_query,
+        target,
         caption=translate(MessageText.ai_services, language).format(
             balance=cached_profile.credits,
             bot_name=settings.BOT_NAME,
@@ -328,11 +315,51 @@ async def show_ai_services(
         photo=FSInputFile(file_path),
         reply_markup=kb.ai_services_kb(language, [p.name for p in services]),
     )
-    await del_msg(callback_query)
+    return True
+
+
+async def _ensure_profile_completed(
+    target: InteractionTarget,
+    profile: Profile,
+) -> Profile | None:
+    cached_profile = await fetch_user(profile, refresh_if_incomplete=True)
+    if cached_profile.status == ProfileStatus.completed:
+        return cached_profile
+    language = cast(str, profile.language or settings.DEFAULT_LANG)
+    text = translate(MessageText.finish_registration_to_get_credits, language).format(credits=settings.DEFAULT_CREDITS)
+    if isinstance(target, CallbackQuery):
+        await target.answer(text, show_alert=True)
+    else:
+        await answer_msg(target, text)
+    return None
+
+
+async def show_ai_services(
+    callback_query: CallbackQuery,
+    profile: Profile,
+    state: FSMContext,
+    allowed_services: Collection[str] | None = None,
+    *,
+    auto_select_single: bool = False,
+) -> None:
+    cached_profile = await _ensure_profile_completed(callback_query, profile)
+    if cached_profile is None:
+        return
+    await callback_query.answer()
+    menu_sent = await _prompt_ai_services(
+        callback_query,
+        profile,
+        state,
+        allowed_services=allowed_services,
+        auto_select_single=auto_select_single,
+        current_profile=cached_profile,
+    )
+    if menu_sent:
+        await del_msg(callback_query)
 
 
 async def process_ai_service_selection(
-    callback_query: CallbackQuery,
+    interaction: InteractionTarget,
     profile: Profile,
     state: FSMContext,
     *,
@@ -342,19 +369,23 @@ async def process_ai_service_selection(
     data = await state.get_data()
     profile_data = data.get("profile")
     if not profile_data:
-        await callback_query.answer(translate(MessageText.unexpected_error, language), show_alert=True)
+        await answer_msg(interaction, translate(MessageText.unexpected_error, language))
         return False
 
     selected_profile = Profile.model_validate(profile_data)
     services = {service.name: service.credits for service in available_ai_services()}
     required = services.get(service_name)
     if required is None:
-        await callback_query.answer(translate(MessageText.unexpected_error, language), show_alert=True)
+        await answer_msg(interaction, translate(MessageText.unexpected_error, language))
         return False
 
     if selected_profile.credits < required:
-        await callback_query.answer(translate(MessageText.not_enough_credits, language), show_alert=True)
-        await show_balance_menu(callback_query, profile, state, already_answered=True)
+        if isinstance(interaction, CallbackQuery):
+            await interaction.answer(translate(MessageText.not_enough_credits, language), show_alert=True)
+            await show_balance_menu(interaction, profile, state, already_answered=True)
+        else:
+            await answer_msg(interaction, translate(MessageText.not_enough_credits, language))
+            await show_balance_menu(interaction, profile, state, already_answered=True)
         return False
 
     await state.update_data(
@@ -362,8 +393,37 @@ async def process_ai_service_selection(
         required=required,
     )
     await state.set_state(States.enter_wishes)
-    await answer_msg(callback_query, translate(MessageText.enter_wishes, language))
+    await answer_msg(interaction, translate(MessageText.enter_wishes, language))
     return True
+
+
+async def start_program_flow(target: InteractionTarget, profile: Profile, state: FSMContext) -> None:
+    cached_profile = await _ensure_profile_completed(target, profile)
+    if cached_profile is None:
+        return
+    await state.update_data(service_type="program")
+    await _prompt_ai_services(
+        target,
+        profile,
+        state,
+        allowed_services=("program",),
+        auto_select_single=True,
+        current_profile=cached_profile,
+    )
+
+
+async def start_subscription_flow(target: InteractionTarget, profile: Profile, state: FSMContext) -> None:
+    cached_profile = await _ensure_profile_completed(target, profile)
+    if cached_profile is None:
+        return
+    await state.update_data(service_type="subscription")
+    await _prompt_ai_services(
+        target,
+        profile,
+        state,
+        allowed_services=("subscription_1_month", "subscription_6_months", "subscription_12_months"),
+        current_profile=cached_profile,
+    )
 
 
 async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, profile: Profile) -> None:

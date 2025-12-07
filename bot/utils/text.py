@@ -33,19 +33,6 @@ def service_types_map(lang: str) -> dict[str, str]:
     }
 
 
-@lru_cache(maxsize=None)
-def days_of_week_map(lang: str) -> dict[str, str]:
-    return {
-        "monday": translate(ButtonText.monday, lang),
-        "tuesday": translate(ButtonText.tuesday, lang),
-        "wednesday": translate(ButtonText.wednesday, lang),
-        "thursday": translate(ButtonText.thursday, lang),
-        "friday": translate(ButtonText.friday, lang),
-        "saturday": translate(ButtonText.saturday, lang),
-        "sunday": translate(ButtonText.sunday, lang),
-    }
-
-
 def get_profile_attributes(user: Optional[Profile], lang: str) -> dict[str, str]:
     def attr(name: str) -> str:
         val = getattr(user, name, "") if user else ""
@@ -86,9 +73,3 @@ def get_workout_locations(lang: str) -> dict[str, str]:
         "home": translate(ButtonText.home_workout, lang),
         "gym": translate(ButtonText.gym_workout, lang),
     }
-
-
-def get_translated_week_day(lang_code: str, day: str | None) -> str:
-    if day is None:
-        return ""
-    return days_of_week_map(lang_code).get(day, "")

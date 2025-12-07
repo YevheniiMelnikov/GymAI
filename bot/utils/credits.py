@@ -28,7 +28,8 @@ def available_packages() -> list[CreditPackage]:
 def available_ai_services() -> list[AIService]:
     return [
         AIService("program", int(settings.AI_PROGRAM_PRICE)),
-        AIService("subscription_1_month", int(settings.REGULAR_AI_SUBSCRIPTION_PRICE)),
-        AIService("subscription_6_months", int(settings.LARGE_AI_SUBSCRIPTION_PRICE)),
+        AIService("subscription_1_month", int(settings.SMALL_SUBSCRIPTION_PRICE)),
+        AIService("subscription_6_months", int(settings.MEDIUM_SUBSCRIPTION_PRICE)),
+        AIService("subscription_12_months", int(settings.LARGE_SUBSCRIPTION_PRICE)),
         AIService("ask_ai", int(settings.ASK_AI_PRICE)),
     ]

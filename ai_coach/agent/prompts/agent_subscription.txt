@@ -1,6 +1,6 @@
 MODE: subscription
 1) Call tool_search_knowledge(query).
-2) Generate SubscriptionPayload including workout_days and exercises.
+2) Generate SubscriptionPayload including sequential workout_days (e.g., "Day 1", "Day 2", ...) and exercises, avoiding calendar weekday names.
 3) Call tool_attach_gifs(payload.exercises) and replace payload.exercises with the returned list.
 4) Call tool_create_subscription(workout_days, payload.exercises, period, wishes) and return Subscription.
 
