@@ -32,7 +32,8 @@ from bot.utils.menus import (
     program_menu_pagination,
     subscription_history_pagination,
     show_subscription_page,
-    show_ai_services,
+    start_program_flow,
+    start_subscription_flow,
 )
 from bot.utils.other import (
     short_url,
@@ -260,14 +261,7 @@ async def program_action_choice(callback_query: CallbackQuery, state: FSMContext
 
     elif cb_data == "new_program":
         await callback_query.answer()
-        await state.update_data(service_type="program")
-        await show_ai_services(
-            callback_query,
-            profile,
-            state,
-            allowed_services=("program",),
-            auto_select_single=True,
-        )
+        await start_program_flow(callback_query, profile, state)
         await del_msg(message)
         return
 
@@ -289,13 +283,7 @@ async def subscription_action_choice(callback_query: CallbackQuery, state: FSMCo
 
     if cb_data == "new_subscription":
         await callback_query.answer()
-        await state.update_data(service_type="subscription")
-        await show_ai_services(
-            callback_query,
-            profile,
-            state,
-            allowed_services=("subscription_1_month", "subscription_6_months", "subscription_12_months"),
-        )
+        await start_subscription_flow(callback_query, profile, state)
         await del_msg(message)
         return
 

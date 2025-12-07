@@ -8,6 +8,7 @@ from typing import Annotated, Any
 from urllib.parse import quote, quote_plus, urlsplit, urlunsplit
 from uuid import NAMESPACE_DNS, uuid5
 
+from loguru import logger
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
@@ -139,7 +140,7 @@ class Settings(BaseSettings):
     # --- Embedding Settings ---
     EMBEDDING_MODEL: Annotated[str, Field(default="openai/text-embedding-3-large", description="Identifier for the text embedding model.")]
     EMBEDDING_PROVIDER: Annotated[str, Field(default="openai", description="Provider for the text embedding model.")]
-    EMBEDDING_ENDPOINT: Annotated[str, Field(default="https://api.openai.com/v1", description="API endpoint for the embedding service.")]
+    EMBEDDING_ENDPOINT: Annotated[str, Field(default="https://openrouter.ai/api/v1", description="API endpoint for the embedding service.")]
 
     # --- Cognee & Knowledge Base ---
     COGNEE_STORAGE_PATH: Annotated[str, Field(default="cognee_storage", description="Path to the directory for Cognee's persistent storage.")]
@@ -198,6 +199,27 @@ class Settings(BaseSettings):
 
     # --- Payments ---
     PAYMENT_PRIVATE_KEY: Annotated[str, Field(default="", description="Private key for the payment provider API.")]
+
+    @field_validator("LLM_API_KEY", mode="before")
+    @classmethod
+    def _populate_llm_api_key(cls, value: str | None) -> str:
+        if value:
+            return value
+        for env_name in ("EMBEDDING_API_KEY", "OPENAI_API_KEY"):
+            fallback = os.environ.get(env_name)
+            if fallback:
+                return fallback
+        return ""
+
+    def model_post_init(self, __context: Any) -> None:
+        super().model_post_init(__context)
+        if not self.LLM_API_KEY:
+            logger.warning("LLM_API_KEY is not configured; AI coach operations may fail.")
+        else:
+            os.environ.setdefault("OPENAI_API_KEY", self.LLM_API_KEY)
+            os.environ.setdefault("EMBEDDING_API_KEY", self.LLM_API_KEY)
+        os.environ.setdefault("OPENAI_API_BASE", self.EMBEDDING_ENDPOINT)
+        os.environ.setdefault("OPENAI_API_URL", self.EMBEDDING_ENDPOINT)
     PAYMENT_PUB_KEY: Annotated[str, Field(default="", description="Public key for the payment provider API.")]
     CHECKOUT_URL: Annotated[str, Field(default="", description="Base URL for the payment provider's checkout page.")]
     BOT_PAYMENT_OPTIONS: Annotated[str, Field(default="bot/images", description="Path to image assets for payment options in the bot.")]

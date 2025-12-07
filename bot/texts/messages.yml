@@ -44,9 +44,9 @@ select_action:
   ua: "Оберіть дію 👇"
 
 start:
-  eng: "Greetings! 👋"
-  ru: "Приветствую! 👋"
-  ua: "Вітаю! 👋"
+  eng: "Let's get started 🚀"
+  ru: "Стартуем 👋"
+  ua: "Let's get started 👋"
 
 help:
   eng: "/start - start bot\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n/language - change language\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n/menu - main menu\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n/offer - offer\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n/info - info"

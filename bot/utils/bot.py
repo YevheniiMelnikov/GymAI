@@ -41,35 +41,59 @@ async def del_msg(msg_obj: Message | CallbackQuery | None) -> None:
         await message.delete()
 
 
-async def answer_msg(msg_obj: Message | CallbackQuery | None, *args, **kwargs) -> Message | None:
+class BotMessageProxy:
+    def __init__(self, *, bot: Bot, chat_id: int):
+        self._bot = bot
+        self._chat_id = chat_id
+
+    async def answer(self, text: str, *args, **kwargs) -> Message:
+        return await self._bot.send_message(self._chat_id, text, *args, **kwargs)
+
+    async def answer_photo(self, photo, *args, **kwargs) -> Message:  # type: ignore[override]
+        return await self._bot.send_photo(self._chat_id, photo, *args, **kwargs)
+
+    async def answer_document(self, document, *args, **kwargs) -> Message:  # type: ignore[override]
+        return await self._bot.send_document(self._chat_id, document, *args, **kwargs)
+
+    async def answer_video(self, video, *args, **kwargs) -> Message:  # type: ignore[override]
+        return await self._bot.send_video(self._chat_id, video, *args, **kwargs)
+
+
+async def answer_msg(msg_obj: Message | CallbackQuery | BotMessageProxy | None, *args, **kwargs) -> Message | None:
     if msg_obj is None:
         return None
 
-    message = msg_obj.message if isinstance(msg_obj, CallbackQuery) else msg_obj
-    if not isinstance(message, Message):
+    if isinstance(msg_obj, CallbackQuery):
+        message = msg_obj.message
+        if not isinstance(message, Message):
+            return None
+        target = message
+    elif isinstance(msg_obj, (Message, BotMessageProxy)):
+        target = msg_obj
+    else:
         return None
 
     try:
         if "photo" in kwargs:
             photo = kwargs.pop("photo")
-            return await message.answer_photo(photo, *args, **kwargs)
+            return await target.answer_photo(photo, *args, **kwargs)
 
         if "document" in kwargs:
             doc = kwargs.pop("document")
-            return await message.answer_document(doc, *args, **kwargs)
+            return await target.answer_document(doc, *args, **kwargs)
 
         if "video" in kwargs:
             video = kwargs.pop("video")
-            return await message.answer_video(video, *args, **kwargs)
+            return await target.answer_video(video, *args, **kwargs)
 
         # plain text
         if args:
             text, *rest = args
-            return await message.answer(text, *rest, **kwargs)
+            return await target.answer(text, *rest, **kwargs)
 
         if "text" in kwargs:
             text = kwargs.pop("text")
-            return await message.answer(text, **kwargs)
+            return await target.answer(text, **kwargs)
 
         raise ValueError("answer_msg: nothing to send")
 

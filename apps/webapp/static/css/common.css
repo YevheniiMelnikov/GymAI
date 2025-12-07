@@ -160,13 +160,14 @@ main#app{
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid color-mix(in oklab, var(--accent) 28%, var(--border));
+  border: none;
   border-radius: 14px;
-  background: color-mix(in oklab, var(--surface) 88%, var(--bg));
+  background: transparent;
   color: color-mix(in oklab, var(--text) 90%, var(--accent));
   cursor: pointer;
   box-shadow: none;
-  transition: transform .08s ease, background .2s ease, color .2s ease, border-color .2s ease;
+  outline: none;
+  transition: transform .08s ease, background .2s ease, color .2s ease;
 }
 .topbar__back:hover{
   transform: translateY(-1px);

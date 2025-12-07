@@ -136,6 +136,12 @@ class CogneeConfig:
     def _patch_litellm_embedding_engine(engine_cls: type) -> None:
         """Replace embedding method with LiteLLM-powered async function."""
 
+        logger.debug(
+            "Configuring LiteLLM embedding",
+            model=settings.EMBEDDING_MODEL,
+            endpoint=settings.EMBEDDING_ENDPOINT,
+        )
+
         async def patched_embedding(texts: list[str], model: str | None = None, **kwargs: Any) -> Any:
             from litellm import embedding
 

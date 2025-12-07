@@ -186,3 +186,24 @@ export async function getPaymentData(
     locale: resolvedLocale,
   };
 }
+
+export type WorkoutAction = 'create_program' | 'create_subscription';
+
+export async function triggerWorkoutAction(action: WorkoutAction, initData: string): Promise<void> {
+  const url = new URL('api/workouts/action/', window.location.href);
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (initData) headers['X-Telegram-InitData'] = initData;
+
+  const resp = await fetch(url.toString(), {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ action })
+  });
+  if (!resp.ok) {
+    throw new HttpError(resp.status, statusToMessage(resp.status));
+  }
+  try {
+    await resp.json();
+  } catch {
+  }
+}
