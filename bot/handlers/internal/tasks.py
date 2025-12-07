@@ -226,7 +226,7 @@ async def _finalize_subscription_plan(
 
     price = Decimal(subscription.price)
     if price <= 0:
-        price = Decimal(settings.REGULAR_AI_SUBSCRIPTION_PRICE)
+        price = Decimal(settings.SMALL_SUBSCRIPTION_PRICE)
 
     subscription_id = await APIService.workout.create_subscription(
         profile_id=resolved_profile_id,

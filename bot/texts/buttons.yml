@@ -83,6 +83,11 @@ subscription_6_months:
   ru: "Подписка на 6 месяцев 📅"
   ua: "Підписка на 6 місяців 📅"
 
+subscription_12_months:
+  eng: "1 year subscription 📅"
+  ru: "Подписка на 12 месяцев 📅"
+  ua: "Підписка на 12 місяців 📅"
+
 ask_ai:
   eng: "Ask {bot_name} 💬"
   ru: "Спросить {bot_name} 💬"
@@ -217,11 +222,6 @@ pay:
   eng: "Pay 💳"
   ru: "Оплатить 💳"
   ua: "Сплатити 💳"
-
-edit_days:
-  eng: "Edit days 📅"
-  ru: "Изменить дни 📅"
-  ua: "Змінити дні 📅"
 
 cancel_subscription:
   eng: "Cancel subscription 🚫"

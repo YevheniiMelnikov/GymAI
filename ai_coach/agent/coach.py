@@ -71,9 +71,6 @@ class CoachAgent(metaclass=CoachAgentMeta):
             context_lines.append(prompt)
         if period:
             context_lines.append(f"Period: {period}")
-        effective_days = workout_days or ["Пн", "Ср", "Пт", "Сб"]
-        if effective_days:
-            context_lines.append(f"Workout days: {', '.join(effective_days)}")
         if wishes:
             context_lines.append(f"Wishes: {wishes}")
         mode = "program" if output_type is Program else "subscription"
@@ -95,7 +92,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
             message_history=history,
             model_settings=ModelSettings(  # pyrefly: ignore[unexpected-keyword]
                 response_format={"type": "json_object"},  # pyrefly: ignore[unexpected-keyword]
-                temperature=0.2,
+                temperature=settings.COACH_AGENT_TEMPERATURE,
             ),
         )
         if output_type is Program:
@@ -145,7 +142,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
             message_history=history,
             model_settings=ModelSettings(  # pyrefly: ignore[unexpected-keyword]
                 response_format={"type": "json_object"},  # pyrefly: ignore[unexpected-keyword]
-                temperature=0.2,
+                temperature=settings.COACH_AGENT_TEMPERATURE,
             ),
         )
         if output_type is Program:
@@ -178,7 +175,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
                 message_history=history,
                 model_settings=ModelSettings(  # pyrefly: ignore[unexpected-keyword]
                     response_format={"type": "json_object"},  # pyrefly: ignore[unexpected-keyword]
-                    temperature=0.2,
+                    temperature=settings.COACH_AGENT_TEMPERATURE,
                 ),
             )
 

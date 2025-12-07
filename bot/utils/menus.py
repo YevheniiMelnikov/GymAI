@@ -18,10 +18,7 @@ from core.cache import Cache
 from core.enums import ProfileStatus
 from core.exceptions import ProfileNotFoundError
 from core.schemas import Profile, Subscription
-from bot.utils.text import (
-    get_profile_attributes,
-    get_translated_week_day,
-)
+from bot.utils.text import get_profile_attributes
 from bot.utils.exercises import format_full_program
 from config.app_settings import settings
 from bot.utils.bot import del_msg, answer_msg, get_webapp_url
@@ -35,8 +32,6 @@ async def show_subscription_page(callback_query: CallbackQuery, state: FSMContex
 
     next_payment_date_str = subscription.payment_date
     enabled_status = "✅" if subscription.enabled else "❌"
-    translated_week_days = ", ".join(get_translated_week_day(lang, x) for x in subscription.workout_days)
-
     await state.set_state(States.show_subscription)
     message = callback_query.message
 
@@ -47,7 +42,7 @@ async def show_subscription_page(callback_query: CallbackQuery, state: FSMContex
                 next_payment_date=next_payment_date_str,
                 enabled=enabled_status,
                 price=subscription.price,
-                days=translated_week_days,
+                period=subscription.period,
             ),
             reply_markup=kb.show_subscriptions_kb(lang, get_webapp_url("subscription", lang)),
         )

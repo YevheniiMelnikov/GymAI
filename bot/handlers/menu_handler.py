@@ -1,8 +1,6 @@
 from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
-from aiogram.exceptions import TelegramBadRequest
-from contextlib import suppress
 from typing import cast
 from loguru import logger
 from uuid import uuid4
@@ -24,7 +22,7 @@ from bot.utils.menus import (
     show_balance_menu,
     process_ai_service_selection,
 )
-from bot.utils.workout_plans import cancel_subscription
+from bot.utils.workout_plans import cancel_subscription, enqueue_subscription_plan
 from bot.utils.other import generate_order_id
 from bot.utils.bot import del_msg, answer_msg, get_webapp_url
 from core.exceptions import ProfileNotFoundError, SubscriptionNotFoundError
@@ -33,14 +31,23 @@ from bot.keyboards import (
     feedback_kb,
     payment_kb,
     select_service_kb,
-    select_days_kb,
     yes_no_kb,
 )
 from bot.utils.credits import available_packages
 from bot.utils.ai_coach import enqueue_workout_plan_generation
 from bot.utils.profiles import resolve_workout_location
-from core.enums import WorkoutPlanType
+from core.enums import WorkoutLocation, WorkoutPlanType
 from core.utils.idempotency import acquire_once
+from bot.utils.workout_days import (
+    WORKOUT_DAYS_BACK,
+    WORKOUT_DAYS_CONTINUE,
+    WORKOUT_DAYS_MINUS,
+    WORKOUT_DAYS_PLUS,
+    DEFAULT_WORKOUT_DAYS_COUNT,
+    day_labels,
+    start_workout_days_selection,
+    update_workout_days_message,
+)
 
 menu_router = Router()
 
@@ -155,15 +162,13 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
     profile = Profile.model_validate(data.get("profile"))
     user_profile = Profile.model_validate(data.get("profile"))
     service = data.get("ai_service", "program")
-    required = int(data.get("required", 0))
-    wishes = data.get("wishes", "")
 
     if callback_query.data == "no":
         await show_main_menu(cast(Message, callback_query.message), profile, state)
         await del_msg(callback_query)
         return
 
-    request_id = str(uuid4())
+    lang = profile.language or settings.DEFAULT_LANG
 
     if service == "program":
         workout_location = resolve_workout_location(user_profile)
@@ -172,115 +177,127 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
             await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
             return
         if not await acquire_once(f"gen_program:{user_profile.id}", settings.LLM_COOLDOWN):
-            logger.warning(
-                f"Duplicate program generation suppressed for profile_id={user_profile.id} request_id={request_id}"
-            )
+            logger.warning(f"Duplicate program generation suppressed for profile_id={user_profile.id}")
             await del_msg(callback_query)
             return
-
-        logger.debug(
-            "AI coach plan generation started plan_type=program "
-            f"profile_id={user_profile.id} request_id={request_id} ttl={settings.LLM_COOLDOWN}"
+        await start_workout_days_selection(
+            callback_query,
+            state,
+            lang=lang,
+            service=service,
+            workout_location=workout_location.value,
         )
-
-    await APIService.profile.adjust_credits(profile.id, -required)
-    await Cache.profile.update_record(user_profile.id, {"credits": user_profile.credits - required})
-    await answer_msg(callback_query, translate(MessageText.request_in_progress, profile.language))
-    if isinstance(callback_query.message, Message):
-        await show_main_menu(callback_query.message, profile, state)
-
-    if service == "program":
-        queued = await enqueue_workout_plan_generation(
-            profile=profile,
-            plan_type=WorkoutPlanType.PROGRAM,
-            workout_location=workout_location,
-            wishes=wishes,
-            request_id=request_id,
-        )
-        if not queued:
-            await answer_msg(
-                callback_query,
-                translate(MessageText.coach_agent_error, profile.language).format(tg=settings.TG_SUPPORT_CONTACT),
-            )
-            logger.error(
-                f"ai_plan_dispatch_failed plan_type=program profile_id={user_profile.id} request_id={request_id}"
-            )
         return
 
     period_map = {
         "subscription_1_month": SubscriptionPeriod.one_month,
         "subscription_6_months": SubscriptionPeriod.six_months,
+        "subscription_12_months": SubscriptionPeriod.twelve_months,
     }
-    await state.update_data(period=period_map.get(service, SubscriptionPeriod.one_month).value)
-    await state.set_state(States.ai_workout_days)
-    await answer_msg(
+    period = period_map.get(service, SubscriptionPeriod.one_month)
+    await start_workout_days_selection(
         callback_query,
-        translate(MessageText.select_days, profile.language),
-        reply_markup=select_days_kb(profile.language, []),
+        state,
+        lang=lang,
+        service=service,
+        period_value=period.value,
     )
-    await del_msg(cast(Message | CallbackQuery | None, callback_query))
     return
 
 
-@menu_router.callback_query(States.ai_workout_days)
-async def ai_workout_days(callback_query: CallbackQuery, state: FSMContext) -> None:
+@menu_router.callback_query(States.workout_days_selection)
+async def workout_days_selection(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
-    profile = Profile.model_validate(data.get("profile"))
+    profile_data = data.get("profile")
+    if not profile_data:
+        return
+    profile = Profile.model_validate(profile_data)
     lang = profile.language or settings.DEFAULT_LANG
-    days: list[str] = data.get("workout_days", [])
-    if callback_query.data != "complete":
-        data_val = callback_query.data
-        if data_val is not None:
-            if data_val in days:
-                days.remove(data_val)
-            else:
-                days.append(data_val)
-        await state.update_data(workout_days=days)
+    count = int(data.get("workout_days_count", DEFAULT_WORKOUT_DAYS_COUNT))
+    action = callback_query.data
+    if action == WORKOUT_DAYS_PLUS:
+        if count >= 7:
+            await callback_query.answer(translate(MessageText.out_of_range, lang), show_alert=True)
+            return
+        count += 1
+        await state.update_data(workout_days_count=count)
+        await update_workout_days_message(callback_query, lang, count)
+        await callback_query.answer()
+        return
+    if action == WORKOUT_DAYS_MINUS:
+        if count <= 1:
+            await callback_query.answer(translate(MessageText.out_of_range, lang), show_alert=True)
+            return
+        count -= 1
+        await state.update_data(workout_days_count=count)
+        await update_workout_days_message(callback_query, lang, count)
+        await callback_query.answer()
+        return
+    if action == WORKOUT_DAYS_BACK:
+        await callback_query.answer()
         message = callback_query.message
         if message and isinstance(message, Message):
-            with suppress(TelegramBadRequest):
-                await message.edit_reply_markup(reply_markup=select_days_kb(lang, days))
-        await state.set_state(States.ai_workout_days)
+            await show_main_menu(message, profile, state)
         return
-
-    if not days:
-        await callback_query.answer("❌")
+    if action != WORKOUT_DAYS_CONTINUE:
+        await callback_query.answer()
         return
-
-    await state.update_data(workout_days=days)
-    selected_profile = Profile.model_validate(data.get("profile"))
+    await callback_query.answer()
+    service = data.get("workout_days_service", "program")
+    selected_days = day_labels(count)
+    required = int(data.get("required", 0))
     wishes = data.get("wishes", "")
-    period = data.get("period", "1m")
-    workout_location = resolve_workout_location(selected_profile)
-    if workout_location is None:
-        logger.error(f"Workout location missing for subscription flow profile_id={selected_profile.id}")
-        await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
+    if service == "program":
+        workout_location_value = data.get("workout_days_location")
+        if not workout_location_value:
+            logger.error(f"Workout location missing during program flow for profile_id={profile.id}")
+            await callback_query.answer(translate(MessageText.unexpected_error, lang), show_alert=True)
+            return
+        await APIService.profile.adjust_credits(profile.id, -required)
+        await Cache.profile.update_record(profile.id, {"credits": profile.credits - required})
+        request_id = str(uuid4())
+        await answer_msg(callback_query, translate(MessageText.request_in_progress, lang))
+        message = callback_query.message
+        if message and isinstance(message, Message):
+            await show_main_menu(message, profile, state)
+        queued = await enqueue_workout_plan_generation(
+            profile=profile,
+            plan_type=WorkoutPlanType.PROGRAM,
+            workout_location=WorkoutLocation(workout_location_value),
+            wishes=wishes,
+            request_id=request_id,
+            workout_days=selected_days,
+        )
+        if not queued:
+            await answer_msg(
+                callback_query,
+                translate(MessageText.coach_agent_error, lang).format(tg=settings.TG_SUPPORT_CONTACT),
+            )
+            logger.error(f"ai_plan_dispatch_failed plan_type=program profile_id={profile.id} request_id={request_id}")
+            return
+        logger.debug(
+            "AI coach plan generation started plan_type=program "
+            f"profile_id={profile.id} request_id={request_id} ttl={settings.LLM_COOLDOWN}"
+        )
+        logger.info(
+            f"ai_plan_generation_requested request_id={request_id} profile_id={profile.id} "
+            f"plan_type={WorkoutPlanType.PROGRAM.value}"
+        )
         return
-    request_id = uuid4().hex
-    await answer_msg(callback_query, translate(MessageText.request_in_progress, lang))
-    await show_main_menu(cast(Message, callback_query.message), profile, state)
-    queued = await enqueue_workout_plan_generation(
-        profile=selected_profile,
-        plan_type=WorkoutPlanType.SUBSCRIPTION,
-        workout_location=workout_location,
-        wishes=wishes,
-        request_id=request_id,
+    period_value = data.get("workout_days_period")
+    try:
+        period = SubscriptionPeriod(period_value) if period_value else SubscriptionPeriod.one_month
+    except ValueError:
+        period = SubscriptionPeriod.one_month
+    await APIService.profile.adjust_credits(profile.id, -required)
+    await Cache.profile.update_record(profile.id, {"credits": profile.credits - required})
+    await enqueue_subscription_plan(
+        callback_query,
+        state,
         period=period,
-        workout_days=days,
+        workout_days=selected_days,
     )
-    if not queued:
-        await answer_msg(
-            callback_query,
-            translate(MessageText.coach_agent_error, lang).format(tg=settings.TG_SUPPORT_CONTACT),
-        )
-        logger.error(
-            f"ai_plan_dispatch_failed plan_type=subscription profile_id={selected_profile.id} request_id={request_id}"
-        )
-        return
-    logger.info(
-        f"ai_plan_generation_requested request_id={request_id} profile_id={selected_profile.id} "
-        f"plan_type={WorkoutPlanType.SUBSCRIPTION.value}"
-    )
+    return
 
 
 @menu_router.callback_query(States.profile)
@@ -370,15 +387,6 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
         await message.answer(
             translate(MessageText.select_service, profile.language).format(bot_name=settings.BOT_NAME),
             reply_markup=select_service_kb(profile.language),
-        )
-
-    elif cb_data == "change_days":
-        await callback_query.answer()
-        await state.update_data(edit_mode=True)
-        await state.set_state(States.workout_days)
-        await message.answer(
-            translate(MessageText.select_days, profile.language),
-            reply_markup=select_days_kb(profile.language, []),
         )
 
     elif cb_data == "history":

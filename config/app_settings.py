@@ -2,7 +2,7 @@
 import json
 import logging
 import os
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import quote, quote_plus, urlsplit, urlunsplit
@@ -117,7 +117,7 @@ class Settings(BaseSettings):
     # --- LLM & Agent Settings ---
     OPENAI_BASE_URL: Annotated[str, Field(default="https://api.openai.com/v1", description="Base URL for OpenAI-compatible API.")]
     LLM_API_URL: Annotated[str, Field(default="https://openrouter.ai/api/v1", description="API URL for the primary LLM provider.")]
-    LLM_API_KEY: Annotated[str, Field(default="", description="API key for the LLM provider.")]
+    LLM_API_KEY: Annotated[str, Field(default="", description="API key for the LLM provider (used for both Cognee embeddings and agent generations).")]
     LLM_MODEL: Annotated[str, Field(default="gpt-5-mini", description="Default LLM model identifier for Cognee.")]
     LLM_PROVIDER: Annotated[str, Field(default="custom", description="LLM provider identifier for Cognee (e.g., 'openai', 'custom').")]
     AGENT_MODEL: Annotated[str, Field(default="openai/gpt-5-mini", description="Model identifier for the AI Coach agent.")]
@@ -134,9 +134,9 @@ class Settings(BaseSettings):
     AI_COACH_PRIMARY_CONTEXT_LIMIT: Annotated[int, Field(default=2200, description="Context token limit for primary AI coach prompts.")]
     AI_COACH_RETRY_CONTEXT_LIMIT: Annotated[int, Field(default=1400, description="Context token limit for retry AI coach prompts.")]
     DISABLE_MANUAL_PLACEHOLDER: Annotated[bool, Field(default=True, description="Disable manual placeholder replacement in AI responses.")]
+    COACH_AGENT_TEMPERATURE: Annotated[float, Field(default=0.2, description="Temperature used by the AI coach agent when sampling responses from the LLM.")]
 
     # --- Embedding Settings ---
-    EMBEDDING_API_KEY: Annotated[str, Field(default="", description="API key for the embedding model provider.")]
     EMBEDDING_MODEL: Annotated[str, Field(default="openai/text-embedding-3-large", description="Identifier for the text embedding model.")]
     EMBEDDING_PROVIDER: Annotated[str, Field(default="openai", description="Provider for the text embedding model.")]
     EMBEDDING_ENDPOINT: Annotated[str, Field(default="https://api.openai.com/v1", description="API endpoint for the embedding service.")]
@@ -152,6 +152,9 @@ class Settings(BaseSettings):
     KNOWLEDGE_BASE_FOLDER_ID: Annotated[str, Field(default="", description="Google Drive folder ID for knowledge base documents.")]
     KNOWLEDGE_REFRESH_INTERVAL: int = Field(default=60 * 60, description="Interval in seconds to refresh the knowledge base from the source.")
     KNOWLEDGE_REFRESH_START_DELAY: int = Field(default=180, description="Delay in seconds before starting the first knowledge base refresh.")
+
+    EXERCISE_GIF_BUCKET: Annotated[str, Field(default="exercises_guide", description="Google Cloud Storage bucket name used for exercise GIF assets.")]
+    EXERCISE_GIF_BASE_URL: Annotated[str, Field(default="https://storage.googleapis.com", description="Base URL for the exercise GIF storage.")]
 
     # --- AI-Generated Workout Plans ---
     AI_PLAN_DEDUP_TTL: Annotated[int, Field(default=3600, description="TTL in seconds for workout plan request deduplication.")]
@@ -185,11 +188,12 @@ class Settings(BaseSettings):
     PACKAGE_START_PRICE: Decimal = Field(default=Decimal("250"), description="Price of the 'Start' credit package.")
     PACKAGE_OPTIMUM_CREDITS: int = Field(default=1200, description="Number of credits in the 'Optimum' package.")
     PACKAGE_OPTIMUM_PRICE: Decimal = Field(default=Decimal("500"), description="Price of the 'Optimum' credit package.")
-    PACKAGE_MAX_CREDITS: int = Field(default=6200, description="Number of credits in the 'Max' package.")
-    PACKAGE_MAX_PRICE: Decimal = Field(default=Decimal("2300"), description="Price of the 'Max' credit package.")
-    AI_PROGRAM_PRICE: Decimal = Field(default=Decimal("350"), description="Price in credits for generating an AI workout program.")
-    REGULAR_AI_SUBSCRIPTION_PRICE: Decimal = Field(default=Decimal("450"), description="Price in credits for a regular AI subscription.")
-    LARGE_AI_SUBSCRIPTION_PRICE: Decimal = Field(default=Decimal("2000"), description="Price in credits for a large AI subscription.")
+    PACKAGE_MAX_CREDITS: int = Field(default=5000, description="Number of credits in the 'Max' package.")
+    PACKAGE_MAX_PRICE: Decimal = Field(default=Decimal("1500"), description="Price of the 'Max' credit package.")
+    AI_PROGRAM_PRICE: Decimal = Field(default=Decimal("400"), description="Price in credits for generating an AI workout program.")
+    SMALL_SUBSCRIPTION_PRICE: Decimal = Field(default=Decimal("500"), description="Price in credits for a 1 month AI coach subscription.")
+    MEDIUM_SUBSCRIPTION_PRICE: Decimal = Field(default=Decimal("2400"), description="Price in credits for a 6 months AI coach subscription.")
+    LARGE_SUBSCRIPTION_PRICE: Decimal = Field(default=Decimal("4750"), description="Price in credits for a 1 year AI coach subscription.")
     ASK_AI_PRICE: Annotated[int, Field(default=10, description="Price in credits for a single 'Ask AI' question.")]
 
     # --- Payments ---
@@ -376,14 +380,6 @@ class Settings(BaseSettings):
 
             rabbit_port = os.getenv("RABBITMQ_PORT", self.RABBITMQ_PORT or "5672")
             self.RABBITMQ_URL = f"amqp://{encoded_user}:{encoded_password}@{rabbit_host}:{rabbit_port}/{encoded_vhost}"
-            logging.getLogger(__name__).info(
-                "rabbitmq_url_configured broker=%s host=%s port=%s env_docker=%s",
-                self.RABBITMQ_URL,
-                rabbit_host,
-                rabbit_port,
-                in_docker,
-            )
-
         # In Docker, normalize service host if an override is present
         if in_docker and self.RABBITMQ_URL:
             rabbitmq_service_host = os.getenv("RABBITMQ_SERVICE_HOST")
@@ -492,13 +488,6 @@ class Settings(BaseSettings):
 
         netloc = f"{normalized_hostname}:{resolved_port}" if resolved_port else normalized_hostname
         return urlunsplit((scheme, netloc, "/", "", ""))
-
-    @property
-    def CREDIT_RATE_MAX_PACK(self) -> Decimal:
-        """Calculate the cost of one credit for the most profitable package."""
-        if not self.PACKAGE_MAX_CREDITS:
-            return Decimal("0")
-        return (self.PACKAGE_MAX_PRICE / Decimal(self.PACKAGE_MAX_CREDITS)).quantize(Decimal("0.0001"), ROUND_HALF_UP)
 
     @property
     def VECTORDATABASE_URL(self) -> str:

@@ -13,7 +13,7 @@ import cognee
 from ai_coach.agent.knowledge.schemas import DatasetRow
 from ai_coach.exceptions import ProjectionProbeError
 from ai_coach.schemas import CogneeUser
-from ai_coach.agent.knowledge.utils.helpers import _needs_cognee_setup
+from ai_coach.agent.knowledge.utils.helpers import needs_cognee_setup
 from config.app_settings import settings
 from ai_coach.logging_config import log_once as global_log_once
 
@@ -200,13 +200,13 @@ class DatasetService:
                     self.register_dataset_identifier(canonical, identifier)
                 return
             except Exception as exc:
-                if _needs_cognee_setup(exc) and not retried_setup:
+                if needs_cognee_setup(exc) and not retried_setup:
                     from ai_coach.agent.knowledge.cognee_config import ensure_cognee_ready
 
                     retried_setup = True
                     await ensure_cognee_ready()
                     continue
-                if _needs_cognee_setup(exc):
+                if needs_cognee_setup(exc):
                     logger.warning(f"knowledge_dataset_ensure_failed dataset={canonical} detail={exc}")
                     return
                 raise
@@ -368,13 +368,13 @@ class DatasetService:
                     self._user = self._bootstrap_user_ctx()
                 return self._user
             except Exception as exc:
-                if _needs_cognee_setup(exc) and not retried_setup:
+                if needs_cognee_setup(exc) and not retried_setup:
                     from ai_coach.agent.knowledge.cognee_config import ensure_cognee_ready
 
                     retried_setup = True
                     await ensure_cognee_ready()
                     continue
-                if _needs_cognee_setup(exc):
+                if needs_cognee_setup(exc):
                     self.log_once(
                         logging.WARNING,
                         "cognee:bootstrap_user",

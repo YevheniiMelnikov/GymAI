@@ -2,6 +2,7 @@ from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 from typing import cast
+from uuid import uuid4
 
 from aiogram import Bot
 from aiogram.fsm.context import FSMContext
@@ -12,7 +13,7 @@ from bot.keyboards import program_manage_kb, subscription_view_kb
 from bot.states import States
 from config.app_settings import settings
 from core.cache import Cache
-from core.enums import ProfileStatus, PaymentStatus, SubscriptionPeriod
+from core.enums import ProfileStatus, PaymentStatus, SubscriptionPeriod, WorkoutPlanType
 from core.schemas import Profile, DayExercises, Subscription
 from core.exceptions import (
     ProfileNotFoundError,
@@ -20,9 +21,9 @@ from core.exceptions import (
     ProgramNotFoundError,
 )
 from core.services import APIService
+from bot.utils.ai_coach import enqueue_workout_plan_generation
 from bot.utils.chat import send_message
 from bot.utils.menus import show_main_menu, show_subscription_page, show_balance_menu
-from bot.utils.text import get_translated_week_day
 from bot.utils.bot import del_msg, answer_msg, delete_messages
 from bot.keyboards import yes_no_kb
 from bot.texts import ButtonText, MessageText, translate
@@ -36,6 +37,56 @@ def _next_payment_date(period: SubscriptionPeriod = SubscriptionPeriod.one_month
     else:
         next_date = cast(date, today + relativedelta(months=+1))  # pyrefly: ignore[redundant-cast]
     return next_date.strftime("%Y-%m-%d")
+
+
+async def enqueue_subscription_plan(
+    callback_query: CallbackQuery,
+    state: FSMContext,
+    *,
+    period: SubscriptionPeriod,
+    workout_days: list[str] | None = None,
+) -> None:
+    data = await state.get_data()
+    profile_data = data.get("profile")
+    if not profile_data:
+        return
+    profile = Profile.model_validate(profile_data)
+    selected_profile = Profile.model_validate(profile_data)
+    lang = profile.language or settings.DEFAULT_LANG
+    wishes = data.get("wishes", "")
+    workout_location = resolve_workout_location(selected_profile)
+    if workout_location is None:
+        logger.error(f"Workout location missing for subscription flow profile_id={selected_profile.id}")
+        await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
+        return
+
+    request_id = uuid4().hex
+    await answer_msg(callback_query, translate(MessageText.request_in_progress, lang))
+    message = callback_query.message
+    if message and isinstance(message, Message):
+        await show_main_menu(message, profile, state)
+    queued = await enqueue_workout_plan_generation(
+        profile=selected_profile,
+        plan_type=WorkoutPlanType.SUBSCRIPTION,
+        workout_location=workout_location,
+        wishes=wishes,
+        request_id=request_id,
+        period=period,
+        workout_days=workout_days or [],
+    )
+    if not queued:
+        await answer_msg(
+            callback_query,
+            translate(MessageText.coach_agent_error, lang).format(tg=settings.TG_SUPPORT_CONTACT),
+        )
+        logger.error(
+            f"ai_plan_dispatch_failed plan_type=subscription profile_id={selected_profile.id} request_id={request_id}"
+        )
+        return
+    logger.info(
+        f"ai_plan_generation_requested request_id={request_id} profile_id={selected_profile.id} "
+        f"plan_type={WorkoutPlanType.SUBSCRIPTION.value}"
+    )
 
 
 async def save_workout_plan(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
@@ -242,14 +293,7 @@ async def next_day_workout_plan(callback_query: CallbackQuery, state: FSMContext
     await delete_messages(state)
     completed_days += 1
 
-    if data.get("subscription"):
-        days = data.get("days", [])
-        if completed_days >= len(days):
-            await callback_query.answer(translate(MessageText.out_of_range, profile.language))
-            return
-        week_day = get_translated_week_day(profile.language, days[completed_days]).lower()
-    else:
-        week_day = completed_days + 1
+    week_day = completed_days + 1
 
     message = callback_query.message
     if not message or not isinstance(message, Message):
@@ -311,6 +355,7 @@ async def process_new_subscription(
     period_map = {
         "subscription_1_month": SubscriptionPeriod.one_month,
         "subscription_6_months": SubscriptionPeriod.six_months,
+        "subscription_12_months": SubscriptionPeriod.twelve_months,
     }
     period = period_map.get(service_type, SubscriptionPeriod.one_month)
 

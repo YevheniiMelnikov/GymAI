@@ -9,7 +9,7 @@ from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 import ai_coach.agent.knowledge.knowledge_base as coach
 import ai_coach.application as coach_application
 from ai_coach.application import init_knowledge_base
-from ai_coach.agent.knowledge.cognee_config import _patch_local_file_storage
+from ai_coach.agent.knowledge.utils import storage_helpers
 
 
 def test_reinit_on_failure(monkeypatch):
@@ -85,12 +85,12 @@ def test_local_file_storage_patch(monkeypatch, tmp_path):
         def open(self, file_path: str, mode: str = "r", **kwargs: Any) -> Any:
             raise FileNotFoundError(file_path)
 
-    monkeypatch.setattr("ai_coach.agent.knowledge.cognee_config._resolve_localfilestorage_class", lambda: DummyStorage)
+    monkeypatch.setattr(storage_helpers, "_resolve_localfilestorage_class", lambda: DummyStorage)
 
     sample = tmp_path / "text_abc.txt"
     sample.write_text("hello", encoding="utf-8")
 
-    _patch_local_file_storage(tmp_path)
+    storage_helpers.patch_local_file_storage(tmp_path)
 
     storage = DummyStorage()
     with storage.open(sample.name, encoding="utf-8") as handle:

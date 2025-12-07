@@ -9,6 +9,7 @@ Deliver production-grade improvements to GymBot's multi-service stack (Django AP
 - `ai_coach/` — FastAPI service for Cognee-backed retrieval and generation. Keep prompt templates and retrieval pipelines cohesive and settings-driven.
 - `core/` — Shared services, cache helpers, enums, and Celery tasks. Do not leak bot- or Django-specific types into generic utilities.
 - `config/` and `docker/` — Settings, environment wiring, and deployment assets. Never hardcode secrets; rely on `pydantic-settings`.
+- Prefer grouping helper utilities into dedicated modules or utility packages instead of scattering ad-hoc functions across handlers; keep the handler modules focused on routing and glue logic.
 
 ## Engineering Principles
 - Target Python 3.12 with full type annotations. Define `TypedDict`/`Protocol` interfaces instead of passing `dict` or `Any`.
@@ -33,6 +34,9 @@ Deliver production-grade improvements to GymBot's multi-service stack (Django AP
 - Always use f-strings instead of "%s" or .format()
 - Run `task format` after every task.
 - Document any required env vars, migrations, or background services in the review summary when they affect the change.
+
+## Task Command Handling
+- When invoking `task` or `uv` commands locally, always set `UV_CACHE_DIR` (or `XDG_CACHE_HOME`) to a directory you own, e.g. `UV_CACHE_DIR=/tmp/uv-cache-<your-username> task format`, so the cache stays outside the repo/host `~/.cache` and avoids permission issues. Do not modify the Taskfile for this; wrap commands with the environment variable instead.
 
 ## Code Review Checklist
 - Full type hints, no `Any` leaks in public APIs, and cohesive module boundaries.

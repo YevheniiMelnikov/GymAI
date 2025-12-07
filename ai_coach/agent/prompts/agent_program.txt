@@ -15,5 +15,5 @@ Example calls:
 
 PROGRAM PAYLOAD REQUIREMENTS:
 - Do not return empty or partially filled fields.
-- Workout days must be non-empty; each exercise needs name, sets, and reps.
+- Label each block as "Day 1", "Day 2", etc. Do not refer to calendar weekday names, and ensure each exercise includes a name, sets, and reps.
 - If split_number is missing, set it to the number of workout days.

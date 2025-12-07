@@ -75,7 +75,9 @@ class GCStorageService:
 
 
 class ExerciseGIFStorage(GCStorageService):
-    BASE_URL = "https://storage.googleapis.com"
+    def __init__(self, bucket_name: str):
+        super().__init__(bucket_name)
+        self.base_url = settings.EXERCISE_GIF_BASE_URL
 
     async def find_gif(
         self,
@@ -90,7 +92,7 @@ class ExerciseGIFStorage(GCStorageService):
 
         cached = await Cache.workout.get_exercise_gif(exercise_lc)
         if cached:
-            return f"{self.BASE_URL}/{self.bucket_name}/{cached}"
+            return f"{self.base_url}/{self.bucket_name}/{cached}"
 
         try:
             for filename, synonyms in exercise_dict.items():
@@ -102,7 +104,7 @@ class ExerciseGIFStorage(GCStorageService):
                     continue
 
                 blob = blobs[0]
-                file_url = f"{self.BASE_URL}/{self.bucket_name}/{blob.name}"
+                file_url = f"{self.base_url}/{self.bucket_name}/{blob.name}"
 
                 for syn in synonyms:
                     await Cache.workout.cache_gif_filename(syn.lower(), blob.name)

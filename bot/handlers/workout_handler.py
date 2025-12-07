@@ -294,7 +294,7 @@ async def subscription_action_choice(callback_query: CallbackQuery, state: FSMCo
             callback_query,
             profile,
             state,
-            allowed_services=("subscription_1_month", "subscription_6_months"),
+            allowed_services=("subscription_1_month", "subscription_6_months", "subscription_12_months"),
         )
         await del_msg(message)
         return

@@ -144,6 +144,19 @@ def ask_ai_again_kb(lang: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
+def workout_days_selection_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [
+        [
+            KbBtn(text="➕", callback_data="workout_days_plus"),
+            KbBtn(text="➖", callback_data="workout_days_minus"),
+        ],
+        [builder.add(ButtonText.done, "workout_days_continue")],
+        [builder.add(ButtonText.prev_menu, "workout_days_back")],
+    ]
+    return KbMarkup(inline_keyboard=buttons, row_width=2)
+
+
 def subscription_action_kb(lang: str, webapp_url: str | None = None) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons: list[list[KbBtn]] = []
@@ -200,19 +213,6 @@ def feedback_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [[builder.add(ButtonText.prev_menu, "back")]]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
-
-
-def select_days_kb(lang: str, selected_days: list) -> KbMarkup:
-    buttons = []
-    days_of_week = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
-    for day_key in days_of_week:
-        raw_text = translate(ButtonText[day_key], lang)
-        text = f"✔️ {raw_text}" if day_key in selected_days else raw_text
-        buttons.append([KbBtn(text=text, callback_data=day_key)])
-    builder = ButtonsBuilder(lang)
-    complete_button = [builder.add(ButtonText.save, "complete")]
-    buttons.append(complete_button)
-    return KbMarkup(inline_keyboard=buttons)
 
 
 def program_view_kb(lang: str, webapp_url: str) -> KbMarkup:
@@ -297,7 +297,6 @@ def show_subscriptions_kb(lang: str, webapp_url: str | None = None) -> KbMarkup:
     buttons.extend(
         [
             [builder.add(ButtonText.history, "history")],
-            [builder.add(ButtonText.edit_days, "change_days")],
             [builder.add(ButtonText.cancel_subscription, "cancel")],
             [builder.add(ButtonText.prev_menu, "back")],
         ]
