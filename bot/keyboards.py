@@ -40,13 +40,15 @@ def select_language_kb() -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def main_menu_kb(lang: str) -> KbMarkup:
+def main_menu_kb(lang: str, *, webapp_url: str | None = None) -> KbMarkup:
     builder = ButtonsBuilder(lang)
-    buttons = [
-        [builder.add(ButtonText.my_profile, "my_profile")],
-        [builder.add(ButtonText.my_program, "my_workouts")],
-        [builder.add(ButtonText.feedback, "feedback")],
-    ]
+    buttons = [[builder.add(ButtonText.my_profile, "my_profile")]]
+    if webapp_url:
+        buttons.append([builder.add(ButtonText.my_program, webapp_url=webapp_url)])
+    else:
+        buttons.append([builder.add(ButtonText.my_program, "my_workouts")])
+    buttons.append([builder.add(ButtonText.ask_ai, "ask_ai", bot_name=settings.BOT_NAME)])
+    buttons.append([builder.add(ButtonText.feedback, "feedback")])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
@@ -117,17 +119,6 @@ def workout_experience_kb(lang: str) -> KbMarkup:
         [builder.add(ButtonText.intermediate, "1-3")],
         [builder.add(ButtonText.advanced, "3-5")],
         [builder.add(ButtonText.experienced, "5+")],
-    ]
-    return KbMarkup(inline_keyboard=buttons, row_width=1)
-
-
-def select_service_kb(lang: str) -> KbMarkup:
-    builder = ButtonsBuilder(lang)
-    buttons = [
-        [builder.add(ButtonText.subscription, "subscription")],
-        [builder.add(ButtonText.program, "program")],
-        [builder.add(ButtonText.ask_ai, "ask_ai", bot_name=settings.BOT_NAME)],
-        [builder.add(ButtonText.prev_menu, "back")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 

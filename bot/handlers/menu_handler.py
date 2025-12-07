@@ -11,6 +11,7 @@ from config.app_settings import settings
 from core.cache import Cache
 from core.enums import SubscriptionPeriod
 from core.schemas import Profile
+from bot.utils.ask_ai import start_ask_ai_prompt
 from bot.utils.chat import process_feedback_content
 from bot.utils.menus import (
     show_main_menu,
@@ -30,7 +31,6 @@ from core.services import APIService
 from bot.keyboards import (
     feedback_kb,
     payment_kb,
-    select_service_kb,
     yes_no_kb,
 )
 from bot.utils.credits import available_packages
@@ -72,6 +72,16 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
         )
         await state.set_state(States.feedback)
         await del_msg(message)
+
+    elif cb_data == "ask_ai":
+        await start_ask_ai_prompt(
+            callback_query,
+            profile,
+            state,
+            delete_origin=True,
+            show_balance_menu_on_insufficient=True,
+        )
+        return
 
     elif cb_data == "my_profile":
         await show_my_profile_menu(callback_query, profile, state)
@@ -383,11 +393,7 @@ async def show_subscription_actions(callback_query: CallbackQuery, state: FSMCon
 
     if cb_data == "back":
         await callback_query.answer()
-        await state.set_state(States.select_service)
-        await message.answer(
-            translate(MessageText.select_service, profile.language).format(bot_name=settings.BOT_NAME),
-            reply_markup=select_service_kb(profile.language),
-        )
+        await show_main_menu(message, profile, state)
 
     elif cb_data == "history":
         await show_subscription_history(callback_query, profile, state)

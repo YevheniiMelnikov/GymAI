@@ -43,7 +43,6 @@ class States(StatesGroup):
     program_action_choice = State()
 
     handle_payment = State()
-    select_service = State()
     choose_plan = State()
     ask_ai_question = State()
     choose_ai_service = State()

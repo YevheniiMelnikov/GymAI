@@ -8,6 +8,34 @@ import type { Locale, Program } from '../api/types';
 import { renderSegmented, SegmentId } from '../components/Segmented';
 import TopBar from '../components/TopBar';
 
+const LAST_WORKOUT_SEGMENT_KEY = 'gymbot.workouts.lastSegment';
+
+const readLastWorkoutSegment = (): SegmentId => {
+    if (typeof window === 'undefined') {
+        return 'program';
+    }
+    try {
+        const stored = window.localStorage.getItem(LAST_WORKOUT_SEGMENT_KEY);
+        if (stored === 'subscriptions') {
+            return 'subscriptions';
+        }
+    } catch {
+        // ignore
+    }
+    return 'program';
+};
+
+const storeLastWorkoutSegment = (segment: SegmentId): void => {
+    if (typeof window === 'undefined') {
+        return;
+    }
+    try {
+        window.localStorage.setItem(LAST_WORKOUT_SEGMENT_KEY, segment);
+    } catch {
+        // ignore
+    }
+};
+
 const ProgramPage: React.FC = () => {
     const [searchParams, setSearchParams] = useSearchParams();
     const navigate = useNavigate();
@@ -21,9 +49,13 @@ const ProgramPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [actionLoading, setActionLoading] = useState(false);
     const [dateText, setDateText] = useState('');
-    const initialSegment: SegmentId =
-        (searchParams.get('source') || '') === 'subscription' ? 'subscriptions' : 'program';
-    const [activeSegment, setActiveSegment] = useState<SegmentId>(initialSegment);
+    const [activeSegment, setActiveSegment] = useState<SegmentId>(() => {
+        const source = searchParams.get('source');
+        if (source === 'subscription') {
+            return 'subscriptions';
+        }
+        return readLastWorkoutSegment();
+    });
 
     const programId = searchParams.get('id') || '';
     const paramLang = searchParams.get('lang') || undefined;
@@ -32,11 +64,26 @@ const ProgramPage: React.FC = () => {
         void applyLang(paramLang);
     }, [paramLang]);
 
+    const prevSourceRef = useRef(searchParams.get('source'));
+
     useEffect(() => {
         const params = new URLSearchParams(searchParamsKey);
-        const nextSegment: SegmentId = (params.get('source') || '') === 'subscription' ? 'subscriptions' : 'program';
-        setActiveSegment((prev) => (prev === nextSegment ? prev : nextSegment));
-    }, [searchParamsKey]);
+        const sourceParam = params.get('source');
+        if (sourceParam === 'subscription') {
+            if (activeSegment !== 'subscriptions') {
+                setActiveSegment('subscriptions');
+            }
+        } else if (prevSourceRef.current === 'subscription' && sourceParam !== 'subscription') {
+            if (activeSegment !== 'program') {
+                setActiveSegment('program');
+            }
+        }
+        prevSourceRef.current = sourceParam;
+    }, [searchParamsKey, activeSegment]);
+
+    useEffect(() => {
+        storeLastWorkoutSegment(activeSegment);
+    }, [activeSegment]);
 
     useEffect(() => {
         if (!switcherRef.current) return;

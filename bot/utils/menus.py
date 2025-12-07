@@ -91,11 +91,13 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
 
 
 async def show_main_menu(message: Message, profile: Profile, state: FSMContext, *, delete_source: bool = True) -> None:
-    menu = kb.main_menu_kb
+    language = cast(str, profile.language or settings.DEFAULT_LANG)
+    webapp_url = get_webapp_url("program", language)
+    menu = kb.main_menu_kb(language, webapp_url=webapp_url)
     await state.clear()
     await state.update_data(profile=profile.model_dump())
     await state.set_state(States.main_menu)
-    await answer_msg(message, translate(MessageText.main_menu, profile.language), reply_markup=menu(profile.language))
+    await answer_msg(message, translate(MessageText.main_menu, profile.language), reply_markup=menu)
     if delete_source:
         await del_msg(cast(Message | CallbackQuery | None, message))
 
@@ -128,7 +130,8 @@ async def show_balance_menu(
         photo=packages_img,
         reply_markup=kb.tariff_plans_kb(lang, plans),
     )
-    await del_msg(callback_obj)
+    callback_target = callback_obj if not isinstance(callback_obj, BotMessageProxy) else None
+    await del_msg(callback_target)
 
 
 async def show_tariff_plans(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
@@ -237,14 +240,8 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
             )
         return
 
-    await state.set_state(States.select_service)
-    await answer_msg(
-        message,
-        translate(MessageText.select_service, lang).format(bot_name=settings.BOT_NAME),
-        reply_markup=kb.select_service_kb(lang),
-    )
-
-    await del_msg(cast(Message | CallbackQuery | None, message))
+    await callback_query.answer()
+    await show_main_menu(message, profile, state)
 
 
 async def show_my_subscription_menu(
@@ -345,7 +342,6 @@ async def show_ai_services(
     *,
     auto_select_single: bool = False,
 ) -> None:
-    language = cast(str, profile.language or settings.DEFAULT_LANG)
     cached_profile = await _ensure_profile_completed(callback_query, profile)
     if cached_profile is None:
         return

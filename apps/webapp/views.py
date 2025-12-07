@@ -319,7 +319,7 @@ async def payment_data(request: HttpRequest) -> JsonResponse:
     )
 
 
-@csrf_exempt
+@csrf_exempt  # type: ignore[bad-specialization]
 @require_POST  # type: ignore[misc]
 async def workouts_action(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
