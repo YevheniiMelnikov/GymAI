@@ -8,6 +8,7 @@ class AiAnswerNotify(BaseModel):
     answer: str | None = None
     sources: list[str] = Field(default_factory=list)
     error: str | None = None
+    force: bool = False
 
     @field_validator("status", mode="before")
     @classmethod

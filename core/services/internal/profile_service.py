@@ -3,6 +3,7 @@ from typing import Any
 
 from core.domain.profile_repository import ProfileRepository
 from core.schemas import Profile
+from core.tasks.ai_coach.maintenance import cleanup_profile_knowledge
 
 
 class ProfileService:
@@ -19,7 +20,10 @@ class ProfileService:
         return await self._repository.create_profile(tg_id, language)
 
     async def delete_profile(self, profile_id: int) -> bool:
-        return await self._repository.delete_profile(profile_id)
+        deleted = await self._repository.delete_profile(profile_id)
+        if deleted:
+            getattr(cleanup_profile_knowledge, "delay")(profile_id)
+        return deleted
 
     async def update_profile(self, profile_id: int, data: dict[str, Any]) -> bool:
         return await self._repository.update_profile(profile_id, data)

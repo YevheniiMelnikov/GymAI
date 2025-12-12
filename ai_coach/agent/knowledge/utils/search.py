@@ -1,18 +1,55 @@
 import asyncio
 import logging
+from enum import Enum
 from hashlib import sha256
 from typing import Any, Awaitable, Iterable, Mapping, Sequence, cast, Literal, Optional, TYPE_CHECKING
 
-from loguru import logger
+try:
+    from cognee.modules.search.types import SearchType
+    import cognee
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    cognee = None  # type: ignore[assignment]
 
-import cognee
+    class SearchType(str, Enum):
+        NATURAL_LANGUAGE = "NATURAL_LANGUAGE"
+
+        @classmethod
+        def _missing_(cls, value: object) -> "SearchType":
+            return cls.NATURAL_LANGUAGE
+
+        def __str__(self) -> str:
+            return self.value
+
+        def __repr__(self) -> str:
+            return f"{type(self).__name__}.{self.name}"
+
+
+from loguru import logger
 
 from ai_coach.agent.knowledge.schemas import KnowledgeSnippet, ProjectionStatus
 from ai_coach.agent.knowledge.utils.datasets import DatasetService
 from ai_coach.agent.knowledge.utils.projection import ProjectionService
+from config.app_settings import settings
+
 
 if TYPE_CHECKING:
     from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+
+
+def _resolve_search_type(mode: str | SearchType | None) -> SearchType:
+    if isinstance(mode, SearchType):
+        return mode
+    candidate = (mode or "").strip()
+    if not candidate:
+        return SearchType.NATURAL_LANGUAGE
+    try:
+        return SearchType(candidate)
+    except ValueError:
+        upper = candidate.upper()
+        try:
+            return SearchType[upper]
+        except KeyError:
+            return SearchType.NATURAL_LANGUAGE
 
 
 class SearchService:
@@ -26,6 +63,7 @@ class SearchService:
         self.dataset_service = dataset_service
         self.projection_service = projection_service
         self._knowledge_base: Optional["KnowledgeBase"] = knowledge_base
+        self._search_type_default = _resolve_search_type(getattr(settings, "COGNEE_SEARCH_MODE", None))
 
     def _require_kb(self) -> "KnowledgeBase":
         if self._knowledge_base is None:
@@ -42,6 +80,10 @@ class SearchService:
         datasets: Sequence[str] | None = None,
         user: Any | None = None,
     ) -> list[KnowledgeSnippet]:
+        if cognee is None:
+            logger.warning("knowledge_search_skipped profile_id=%s reason=cognee_missing", profile_id)
+            return []
+
         normalized = query.strip()
         if not normalized:
             logger.debug(f"Knowledge search skipped profile_id={profile_id}: empty query")
@@ -132,6 +174,7 @@ class SearchService:
                 actor,
                 k,
                 profile_id,
+                query_type=self._search_type_default,
                 request_id=request_id,
             )
             if not snippets:
@@ -172,6 +215,7 @@ class SearchService:
         k: int | None,
         profile_id: int,
         *,
+        query_type: SearchType = SearchType.NATURAL_LANGUAGE,
         request_id: str | None = None,
     ) -> list[KnowledgeSnippet]:
         if user is None:
@@ -186,6 +230,7 @@ class SearchService:
             params: dict[str, Any] = {
                 "datasets": targets,
                 "user": user_ctx,
+                "query_type": query_type,
             }
             if k is not None:
                 params["top_k"] = k
@@ -548,28 +593,29 @@ class SearchService:
             return "message"
         return "document"
 
-    async def _ensure_profile_indexed(self, profile_id: int, user: Any | None) -> None:
+    async def _ensure_profile_indexed(self, profile_id: int, user: Any | None) -> bool:
         from core.services import APIService
 
         try:
             profile = await APIService.profile.get_profile(profile_id)
         except Exception as e:
             logger.warning(f"Failed to fetch profile id={profile_id}: {e}")
-            return
+            return False
         if not profile:
-            return
+            return False
         kb = self._knowledge_base
         if kb is None:
             logger.debug(f"knowledge_profile_index_skip profile_id={profile_id} reason=knowledge_base_unavailable")
-            return
+            return False
         text = kb._profile_text(profile)
         dataset = self.dataset_service.dataset_name(profile_id)
         dataset, created = await kb.update_dataset(
             text,
             dataset,
             user,
-            node_set=["profile"],
+            node_set=["profile", f"profile:{profile_id}"],
             metadata={"kind": "document", "source": "profile"},
         )
         if created:
             await kb._process_dataset(dataset, user)
+        return bool(created)

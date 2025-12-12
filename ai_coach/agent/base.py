@@ -20,7 +20,7 @@ class AgentDeps:
     last_knowledge_query: str | None = None
     last_knowledge_empty: bool = False
     max_tool_calls: int = settings.AI_COACH_MAX_TOOL_CALLS
-    max_run_seconds: float = float(settings.AI_COACH_REQUEST_TIMEOUT)
+    max_run_seconds: float = float(settings.AI_COACH_MAX_RUN_SECONDS)
     tool_calls: int = 0
     knowledge_base_empty: bool = False
     kb_used: bool = False

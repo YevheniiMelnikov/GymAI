@@ -181,3 +181,4 @@ apps/webapp/static/unfold/
 diff*
 /GEMINI.md
 /.uv-cache/
+.cognee_test_storage/

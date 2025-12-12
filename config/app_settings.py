@@ -105,6 +105,7 @@ class Settings(BaseSettings):
     AI_COACH_REFRESH_PASSWORD: Annotated[str, Field(default="password", description="Password for AI Coach knowledge base refresh endpoint.")]
     AI_COACH_MAX_TOOL_CALLS: Annotated[int, Field(default=5, description="Maximum number of tool calls an AI agent can make in one turn.")]
     AI_COACH_REQUEST_TIMEOUT: Annotated[int, Field(default=60, description="Default timeout for requests to the AI Coach in seconds.")]
+    AI_COACH_MAX_RUN_SECONDS: Annotated[float, Field(default=90.0, description="Time budget in seconds for a single AI coach agent run before aborting.")]
     AI_COACH_GLOBAL_PROJECTION_TIMEOUT: Annotated[float, Field(default=15.0, description="Timeout for global projection operations in seconds.")]
     AI_COACH_DEFAULT_TOOL_TIMEOUT: Annotated[float, Field(default=3.0, description="Default timeout for AI agent tool calls in seconds.")]
     AI_COACH_SEARCH_TIMEOUT: Annotated[float, Field(default=12.0, description="Timeout for search tool calls in seconds.")]
@@ -153,6 +154,7 @@ class Settings(BaseSettings):
     KNOWLEDGE_BASE_FOLDER_ID: Annotated[str, Field(default="", description="Google Drive folder ID for knowledge base documents.")]
     KNOWLEDGE_REFRESH_INTERVAL: int = Field(default=60 * 60, description="Interval in seconds to refresh the knowledge base from the source.")
     KNOWLEDGE_REFRESH_START_DELAY: int = Field(default=180, description="Delay in seconds before starting the first knowledge base refresh.")
+    COGNEE_SEARCH_MODE: Annotated[str, Field(default="graph_completion_cot", description="Search type for Cognee queries (e.g., 'natural_language').")]
 
     EXERCISE_GIF_BUCKET: Annotated[str, Field(default="exercises_guide", description="Google Cloud Storage bucket name used for exercise GIF assets.")]
     EXERCISE_GIF_BASE_URL: Annotated[str, Field(default="https://storage.googleapis.com", description="Base URL for the exercise GIF storage.")]

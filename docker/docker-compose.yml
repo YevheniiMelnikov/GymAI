@@ -235,6 +235,10 @@ services:
       PGDATABASE: ${DB_NAME}
       PGUSER: ${DB_USER}
       PGPASSWORD: ${POSTGRES_PASSWORD:- password}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_API_URL: https://openrouter.ai/api/v1
+      OPENAI_API_KEY: ${LLM_API_KEY}
+      OPENAI_BASE_URL: https://openrouter.ai/api/v1
       COACH_PORT: ${COACH_PORT:-9000}
     env_file:
       - .env

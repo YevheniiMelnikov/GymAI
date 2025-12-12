@@ -173,7 +173,10 @@ class ProjectionService:
             )
             return False, "fatal_error"
 
+        logger.debug(f"projection.rows dataset={alias} rows={len(rows)}")
+
         if not rows:
+            logger.debug(f"projection.no_rows dataset={alias} reason=dataset_entries_empty")
             self.dataset_service.log_once(
                 logging.INFO,
                 "projection:skip_no_rows",
@@ -217,6 +220,9 @@ class ProjectionService:
             return
         dataset_id = await self.dataset_service.get_dataset_id(alias, user_ctx)
         target = dataset_id or alias
+
+        logger.debug(f"projection.start dataset={alias} reason=requested force={allow_rebuild}")
+
         self.dataset_service.log_once(
             logging.DEBUG,
             "projection:cognify_start",
@@ -225,6 +231,7 @@ class ProjectionService:
             min_interval=5.0,
         )
         try:
+            logger.debug(f"projection.cognee_call dataset={alias} pipeline=cognify")
             await cognee.cognify(datasets=[target], user=user_ctx)
         except FileNotFoundError as exc:
             if not settings.COGNEE_ENABLE_AGGRESSIVE_REBUILD:
@@ -253,7 +260,7 @@ class ProjectionService:
                 kb = self._knowledge_base
                 if kb is not None:
                     await kb.rebuild_dataset(alias, user)
-                    logger.info(f"knowledge_dataset_rebuilt dataset={alias}")
+                    logger.debug(f"knowledge_dataset_rebuilt dataset={alias}")
                     await self.project_dataset(alias, user, allow_rebuild=True)
                 else:
                     self.dataset_service.log_once(

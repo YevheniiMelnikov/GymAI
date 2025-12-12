@@ -105,6 +105,10 @@ AI_COACH_TASK_ROUTES: dict[str, dict[str, str]] = {
         "queue": "ai_coach",
         "routing_key": "ai_coach",
     },
+    "core.tasks.ai_coach.maintenance.cleanup_profile_knowledge": {
+        "queue": "ai_coach",
+        "routing_key": "ai_coach",
+    },
 }
 
 CELERY_TASK_ROUTES: dict[str, dict[str, str]] = {

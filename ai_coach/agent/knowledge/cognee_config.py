@@ -34,6 +34,8 @@ class CogneeConfig:
             _COGNEE_MODULE = importlib.import_module("cognee")
         globals()["cognee"] = _COGNEE_MODULE
 
+        cls._ensure_openai_env()
+
         patch_local_file_storage(storage_root)
         cls._configure_llm()
         cls._configure_vector_db()
@@ -57,6 +59,39 @@ class CogneeConfig:
         return collect_storage_info(root)
 
     @staticmethod
+    def _ensure_openai_env() -> None:
+        openai_key = os.environ.get("OPENAI_API_KEY")
+        if not openai_key and settings.LLM_API_KEY:
+            os.environ["OPENAI_API_KEY"] = settings.LLM_API_KEY
+            openai_key = settings.LLM_API_KEY
+
+        openai_base = os.environ.get("OPENAI_BASE_URL")
+        if not openai_base:
+            candidate_url = settings.LLM_API_URL or settings.OPENAI_BASE_URL
+            if candidate_url:
+                os.environ["OPENAI_BASE_URL"] = candidate_url
+                openai_base = candidate_url
+
+        def _mask(value: str | None) -> str:
+            if not value:
+                return "unset"
+            if len(value) <= 8:
+                return value
+            return f"{value[:4]}...{value[-4:]}"
+
+        logger.debug(
+            (
+                "cognee_embedding_env OPENAI_BASE_URL={} LLM_PROVIDER={} "
+                "AGENT_PROVIDER={} EMBEDDING_MODEL={} OPENAI_API_KEY={}"
+            ),
+            openai_base or "unset",
+            settings.LLM_PROVIDER,
+            settings.AGENT_PROVIDER,
+            settings.EMBEDDING_MODEL,
+            _mask(openai_key),
+        )
+
+    @staticmethod
     def _configure_llm() -> None:
         cognee.config.set_llm_provider(settings.LLM_PROVIDER)
         cognee.config.set_llm_model(settings.LLM_MODEL)
@@ -75,6 +110,14 @@ class CogneeConfig:
             graph_host = "neo4j"
         graph_port = settings.GRAPH_DATABASE_PORT or "7687"
         graph_url = settings.GRAPH_DATABASE_URL or f"bolt://{graph_host}:{graph_port}"
+
+        os.environ.setdefault("GRAPH_DATABASE_PROVIDER", settings.GRAPH_DATABASE_PROVIDER)
+        os.environ.setdefault("GRAPH_DATABASE_URL", graph_url)
+        os.environ.setdefault("GRAPH_DATABASE_NAME", settings.GRAPH_DATABASE_NAME)
+        os.environ.setdefault("GRAPH_DATABASE_USERNAME", settings.GRAPH_DATABASE_USERNAME)
+        os.environ.setdefault("GRAPH_DATABASE_PASSWORD", settings.GRAPH_DATABASE_PASSWORD)
+        os.environ.setdefault("GRAPH_DATABASE_PORT", str(graph_port))
+
         graph_db_config = {
             "graph_database_provider": settings.GRAPH_DATABASE_PROVIDER,
             "graph_database_url": graph_url,
@@ -84,6 +127,7 @@ class CogneeConfig:
             "graph_database_port": graph_port,
         }
         cognee.config.set_graph_db_config(graph_db_config)
+        logger.debug(f"cognee_graph_config_applied provider={settings.GRAPH_DATABASE_PROVIDER} url={graph_url}")
 
     @staticmethod
     def _configure_relational_db() -> None:
@@ -136,7 +180,7 @@ class CogneeConfig:
     def _patch_litellm_embedding_engine(engine_cls: type) -> None:
         """Replace embedding method with LiteLLM-powered async function."""
 
-        logger.debug(
+        logger.trace(
             "Configuring LiteLLM embedding",
             model=settings.EMBEDDING_MODEL,
             endpoint=settings.EMBEDDING_ENDPOINT,

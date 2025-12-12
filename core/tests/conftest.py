@@ -593,18 +593,18 @@ class _KB:
         return list(cls._DATASETS.get(alias, []))
 
     @classmethod
-    async def _ensure_profile_indexed(cls, profile_id: int, user: Any | None) -> None:
+    async def _ensure_profile_indexed(cls, profile_id: int, user: Any | None) -> bool:
         api_service = getattr(kb_module, "APIService", APIService)
         profile_service = getattr(api_service, "profile", None)
         get_profile = getattr(profile_service, "get_profile", None) if profile_service else None
         if not callable(get_profile):
-            return
+            return False
         try:
             profile_data = await get_profile(profile_id)
         except Exception:
-            return
+            return False
         if profile_data is None:
-            return
+            return False
         parts = [f"id: {getattr(profile_data, 'id', profile_id)}"]
         for field in ("profile", "gender", "workout_goals", "weight"):
             value = getattr(profile_data, field, None)
@@ -613,9 +613,11 @@ class _KB:
         text = "profile: " + "; ".join(parts)
         metadata = {"kind": "document", "source": "profile"}
         dataset = cls._dataset_name(profile_id)
-        alias, created = await cls.update_dataset(text, dataset, user, node_set=["profile"], metadata=metadata)
+        node_set = ["profile", f"profile:{profile_id}"]
+        alias, created = await cls.update_dataset(text, dataset, user, node_set=node_set, metadata=metadata)
         if created:
             await cls._process_dataset(alias, user)
+        return bool(created)
 
     @classmethod
     async def _collect_metadata(cls, digest: str, datasets: Sequence[str]):

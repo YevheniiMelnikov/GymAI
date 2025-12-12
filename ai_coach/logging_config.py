@@ -64,6 +64,17 @@ class SamplingFilter(logging.Filter):
         return allowed
 
 
+class HealthAccessFilter(logging.Filter):
+    """Filter out noisy access logs for periodic health checks."""
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: D401
+        try:
+            message = record.getMessage()
+        except Exception:  # noqa: BLE001 - fallback best-effort
+            message = ""
+        return "GET /health" not in message
+
+
 _CONFIGURED = False
 _LOG_ONCE_STATE: dict[str, dict[str, float | int]] = {}
 
@@ -110,6 +121,7 @@ def configure_logging() -> None:
     access_logger = logging.getLogger("uvicorn.access")
     access_logger.handlers = []
     access_logger.setLevel(logging.INFO)
+    access_logger.addFilter(HealthAccessFilter())
     access_logger.propagate = True
 
     noisy_loggers = (
@@ -122,6 +134,7 @@ def configure_logging() -> None:
         "OntologyAdapter",
         "CogneeGraph",
         "GraphCompletionRetriever",
+        "Neo4jAdapter",
     )
     for name in noisy_loggers:
         target = logging.getLogger(name)
@@ -129,6 +142,21 @@ def configure_logging() -> None:
         level = logging.ERROR if name == "GraphCompletionRetriever" else logging.WARNING
         target.setLevel(level)
         target.propagate = True
+
+    if not verbose:
+        kb_noisy = (
+            "ai_coach.agent.knowledge.utils.datasets",
+            "ai_coach.agent.knowledge.utils.projection",
+            "ai_coach.agent.knowledge.utils.storage",
+            "ai_coach.agent.knowledge.utils.storage_helpers",
+            "ai_coach.agent.knowledge.gdrive_knowledge_loader",
+            "ai_coach.agent.knowledge.knowledge_base",
+        )
+        for name in kb_noisy:
+            target = logging.getLogger(name)
+            target.handlers = []
+            target.setLevel(logging.WARNING)
+            target.propagate = True
 
     _CONFIGURED = True
 

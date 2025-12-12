@@ -44,6 +44,9 @@ class LLMHelperProto(Protocol):
     def _language_context(cls, deps: AgentDeps) -> tuple[str, str]: ...
 
     @staticmethod
+    def _build_history_messages(raw: Sequence[str]) -> list[ModelMessage]: ...
+
+    @staticmethod
     async def _message_history(profile_id: int) -> list[ModelMessage]: ...
 
     @staticmethod
@@ -214,9 +217,7 @@ class LLMHelper:
         return expected.model_validate(value)
 
     @staticmethod
-    async def _message_history(profile_id: int) -> list[ModelMessage]:
-        kb = get_knowledge_base()
-        raw = await kb.get_message_history(profile_id)
+    def _build_history_messages(raw: Sequence[str]) -> list[ModelMessage]:
         history: list[ModelMessage] = []
         for item in raw:
             if item.startswith(f"{MessageRole.CLIENT.value}:"):
@@ -226,6 +227,12 @@ class LLMHelper:
                 text = item.split(":", 1)[1]
                 history.append(ModelResponse(parts=[TextPart(content=text.strip())]))
         return history
+
+    @classmethod
+    async def _message_history(cls, profile_id: int) -> list[ModelMessage]:
+        kb = get_knowledge_base()
+        raw = await kb.get_message_history(profile_id)
+        return cls._build_history_messages(raw)
 
     @classmethod
     async def _fallback_answer_question(

@@ -1,5 +1,5 @@
 import os
-from fastapi import Depends, HTTPException  # pyrefly: ignore[import-error]
+from fastapi import Body, Depends, HTTPException  # pyrefly: ignore[import-error]
 from fastapi.responses import JSONResponse  # pyrefly: ignore[import-error]
 from fastapi.security import HTTPBasicCredentials  # pyrefly: ignore[import-error]
 from loguru import logger  # pyrefly: ignore[import-error]
@@ -17,6 +17,7 @@ from ai_coach.types import CoachMode
 from config.app_settings import settings
 from core.exceptions import UserServiceError
 from core.schemas import Program, QAResponse, Subscription
+from pydantic import BaseModel
 
 # Re-export compatibility symbols expected by tests/old clients
 DEFAULT_WORKOUT_DAYS = _ask_handler.DEFAULT_WORKOUT_DAYS
@@ -185,15 +186,18 @@ async def coach_chat(
 
 @app.post("/knowledge/refresh/")
 async def refresh_knowledge(
-    _: None = Depends(_require_hmac),
+    force: bool = False,
+    credentials: HTTPBasicCredentials = Depends(_validate_refresh_credentials),
 ) -> dict[str, str]:
+    """Refresh the knowledge base."""
+    kb = get_knowledge_base()
     try:
-        kb = get_knowledge_base()
-        await kb.refresh()
-    except Exception as e:  # pragma: no cover - log unexpected errors
-        logger.exception(f"Knowledge refresh failed: {e}")
-        raise HTTPException(status_code=503, detail="Refresh failed")
-    return {"status": "ok"}
+        await kb.refresh(force=force)
+        logger.info("knowledge_refresh_triggered")
+        return {"status": "ok"}
+    except Exception as exc:
+        logger.exception(f"knowledge_refresh_failed detail={exc}")
+        raise HTTPException(status_code=503, detail="Refresh failed") from exc
 
 
 async def _execute_prune() -> dict[str, str]:
@@ -218,3 +222,62 @@ async def prune_knowledge_base_internal(_: None = Depends(_require_hmac)) -> dic
 @app.post("/knowledge/prune/")
 async def prune_knowledge_base(_: None = Depends(_require_hmac)):
     return await _execute_prune()
+
+
+class ProfileSyncRequest(BaseModel):
+    reason: str | None = None
+
+
+async def _cleanup_profile(profile_id: int) -> dict[str, Any]:
+    kb = get_knowledge_base()
+    result = await kb.cleanup_profile_datasets(profile_id)
+    logger.debug("profile_cleanup_request profile_id=%s datasets=%s", profile_id, ",".join(result.keys()))
+    return {"profile_id": profile_id, "result": result}
+
+
+@app.post("/internal/knowledge/profiles/{profile_id}/cleanup/")
+async def cleanup_profile_knowledge_internal(
+    profile_id: int,
+    _: None = Depends(_require_hmac),
+) -> dict[str, Any]:
+    return await _cleanup_profile(profile_id)
+
+
+@app.post("/knowledge/profiles/{profile_id}/cleanup/")
+async def cleanup_profile_knowledge_public(
+    profile_id: int,
+    credentials: HTTPBasicCredentials = Depends(_validate_refresh_credentials),
+) -> dict[str, Any]:
+    _validate_refresh_credentials(credentials)
+    return await _cleanup_profile(profile_id)
+
+
+async def _sync_profile(profile_id: int, payload: ProfileSyncRequest | None = None) -> dict[str, Any]:
+    kb = get_knowledge_base()
+    indexed = await kb.sync_profile_dataset(profile_id)
+    logger.info(
+        "profile_sync_request profile_id={} indexed={} reason={}",
+        profile_id,
+        indexed,
+        payload.reason if payload else None,
+    )
+    return {"profile_id": profile_id, "indexed": bool(indexed)}
+
+
+@app.post("/internal/knowledge/profiles/{profile_id}/sync/")
+async def sync_profile_knowledge_internal(
+    profile_id: int,
+    payload: ProfileSyncRequest = Body(default_factory=ProfileSyncRequest),
+    _: None = Depends(_require_hmac),
+) -> dict[str, Any]:
+    return await _sync_profile(profile_id, payload)
+
+
+@app.post("/knowledge/profiles/{profile_id}/sync/")
+async def sync_profile_knowledge_public(
+    profile_id: int,
+    payload: ProfileSyncRequest = Body(default_factory=ProfileSyncRequest),
+    credentials: HTTPBasicCredentials = Depends(_validate_refresh_credentials),
+) -> dict[str, Any]:
+    _validate_refresh_credentials(credentials)
+    return await _sync_profile(profile_id, payload)

@@ -24,6 +24,7 @@ from .prompts import (
     UPDATE_WORKOUT,
 )
 from ai_coach.types import CoachMode
+from ai_coach.agent.utils import get_knowledge_base
 
 
 class CoachAgentMeta(type):
@@ -159,7 +160,10 @@ class CoachAgent(metaclass=CoachAgentMeta):
         deps.mode = CoachMode.ask_ai
         agent = cls._get_agent()
         _, language_label = cls._language_context(deps)
-        history = await cls._message_history(deps.profile_id)
+        kb = get_knowledge_base()
+        raw_history = await kb.get_message_history(deps.profile_id)
+        deps.cached_history = list(raw_history)
+        history = cls.llm_helper._build_history_messages(raw_history)
         user_prompt = ASK_AI_USER_PROMPT.format(
             language=language_label,
             question=prompt,
@@ -179,10 +183,12 @@ class CoachAgent(metaclass=CoachAgentMeta):
                 ),
             )
 
-        async def _handle_abort(exc: AgentExecutionAborted) -> QAResponse:
+        async def _handle_abort(exc: AgentExecutionAborted) -> QAResponse | None:
             logger.info(f"agent.ask completion_aborted profile_id={deps.profile_id} reason={exc.reason}")
             if exc.reason == "knowledge_base_empty":
                 deps.knowledge_base_empty = True
+            if exc.reason in {"timeout", "max_tool_calls_exceeded"}:
+                return None
             fallback = await cls._fallback_answer_question(
                 prompt,
                 deps,
@@ -193,10 +199,14 @@ class CoachAgent(metaclass=CoachAgentMeta):
                 return fallback
             raise AgentExecutionAborted("ask_ai_unavailable", reason="ask_ai_unavailable")
 
+        raw_result: Any | None = None
         try:
             raw_result = await _run_agent(multimodal_input)
         except AgentExecutionAborted as exc:
-            return await _handle_abort(exc)
+            fallback_result = await _handle_abort(exc)
+            if fallback_result is None:
+                raise
+            return fallback_result
         except Exception as exc:  # noqa: BLE001
             if attachments:
                 logger.warning(
@@ -208,10 +218,15 @@ class CoachAgent(metaclass=CoachAgentMeta):
                 try:
                     raw_result = await _run_agent(user_prompt)
                 except AgentExecutionAborted as inner:
-                    return await _handle_abort(inner)
-            else:
-                raise
+                    fallback_result = await _handle_abort(inner)
+                    if fallback_result is None:
+                        raise inner
+                    return fallback_result
+                else:
+                    raise
 
+        if raw_result is None:
+            raise RuntimeError("agent.ask_result_missing")
         normalized = cls._normalize_output(raw_result, QAResponse)
         normalized.answer = normalized.answer.strip()
         if not normalized.answer:
