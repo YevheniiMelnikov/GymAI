@@ -24,7 +24,7 @@ GymBot is a Dockerized platform that includes a Telegram bot (aiogram), API (Dja
 * **AI Coach** (FastAPI) – Cognee-powered retrieval + generation.
 * **Celery + Beat** – background jobs and schedules (AI Coach tasks run on dedicated `ai_coach_worker`).
 * **Redis** – cache, queues, idempotency.
-* **PostgreSQL (+pgvector)** – relational storage and vector embeddings.
+* **PostgreSQL / Qdrant** – relational storage via PostgreSQL while Qdrant (default) handles vector embeddings; `pgvector` can still be selected via `VECTORDATABASE_PROVIDER`.
 * **Nginx** – reverse proxy and TLS termination.
 
 **Key directories**
@@ -298,5 +298,9 @@ Create `docker/.env` from `docker/.env.example` and set the following minimum va
 * `EXERCISE_GIF_BUCKET` – name of the Google Cloud Storage bucket that holds exercise GIFs (default `exercises_guide`).
 * `EXERCISE_GIF_BASE_URL` – base URL for those assets (default `https://storage.googleapis.com`).
 * `LLM_API_KEY` – API key for both the Pydantic AI agent and Cognee embedding calls. OpenRouter provides a single token that covers both LLM generations and embedding generation, so no separate key is needed.
+
+* `VECTORDATABASE_PROVIDER` – defaults to `qdrant`, switch to `pgvector` if you prefer storing embeddings inside PostgreSQL. `VECTORDATABASE_URL` overrides the auto-derived connection string (Qdrant's default is `http://qdrant:6333`).
+* `QDRANT_HTTP_PORT` / `QDRANT_GRPC_PORT` – ports that Qdrant advertises inside the Docker network.
+* `HOST_QDRANT_HTTP_PORT` / `HOST_QDRANT_GRPC_PORT` – host-facing port mappings for Qdrant when you need to expose it externally.
 
 `WEBHOOK_URL` is auto-derived as `${WEBHOOK_HOST}${WEBHOOK_PATH}` unless explicitly set. See `config/app_settings.py` for all available options.

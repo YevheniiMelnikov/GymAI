@@ -20,6 +20,10 @@ x-common-env: &common_env
     AI_COACH_PORT: ${COACH_PORT:-9000}
     BOT_INTERNAL_HOST: ${BOT_UPSTREAM_HOST:-host.docker.internal}
     BOT_INTERNAL_PORT: ${BOT_UPSTREAM_PORT:-8088}
+    VECTORDATABASE_PROVIDER: ${VECTORDATABASE_PROVIDER:-qdrant}
+    QDRANT_HTTP_PORT: ${QDRANT_HTTP_PORT:-6333}
+    QDRANT_GRPC_PORT: ${QDRANT_GRPC_PORT:-6334}
+    VECTORDATABASE_URL: ${VECTORDATABASE_URL:-http://qdrant:${QDRANT_HTTP_PORT:-6333}}
   env_file:
     - .env
   volumes:
@@ -35,14 +39,13 @@ x-common-env: &common_env
 
 services:
   db:
-    image: pgvector/pgvector:pg17
+    image: postgres:17
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:- password}
       POSTGRES_HOST: ${DB_HOST}
       POSTGRES_PORT: ${DB_PORT}
-    command: [ "postgres", "-c", "shared_preload_libraries=vector" ]
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -65,7 +68,6 @@ services:
 
   rabbitmq:
     image: rabbitmq:4.1.4-management
-    user: "0:0"
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?RABBITMQ_USER not set}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD not set}
@@ -83,6 +85,25 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:v1.16
+    restart: unless-stopped
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: ${QDRANT_HTTP_PORT:-6333}
+      QDRANT__SERVICE__GRPC_PORT: ${QDRANT_GRPC_PORT:-6334}
+    ports:
+      - "${HOST_QDRANT_HTTP_PORT:-6333}:6333"
+      - "${HOST_QDRANT_GRPC_PORT:-6334}:6334"
+    expose:
+      - 6333
+      - 6334
+      - 6335
+    configs:
+      - source: qdrant_config
+        target: /qdrant/config/production.yaml
+    volumes:
+      - qdrant_data:/qdrant/storage
 
   api:
     image: *app_image
@@ -118,6 +139,8 @@ services:
       db:
         condition: service_healthy
       ai_coach:
+        condition: service_started
+      qdrant:
         condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:${API_PORT:-8000}/health/"]
@@ -158,6 +181,8 @@ services:
         condition: service_healthy
       ai_coach:
         condition: service_started
+      qdrant:
+        condition: service_started
     restart: unless-stopped
 
   ai_coach_worker:
@@ -186,6 +211,8 @@ services:
         condition: service_healthy
       ai_coach:
         condition: service_started
+      qdrant:
+        condition: service_started
     restart: unless-stopped
 
   beat:
@@ -211,6 +238,8 @@ services:
       db:
         condition: service_healthy
       ai_coach:
+        condition: service_started
+      qdrant:
         condition: service_started
     restart: unless-stopped
 
@@ -251,6 +280,8 @@ services:
       db:
         condition: service_healthy
       neo4j:
+        condition: service_started
+      qdrant:
         condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:${COACH_PORT:-9000}/health/"]
@@ -326,6 +357,11 @@ services:
         condition: service_started
     restart: unless-stopped
 
+configs:
+  qdrant_config:
+    content: |
+      log_level: INFO
+
 volumes:
   pgdata:
   cognee_storage:
@@ -337,6 +373,7 @@ volumes:
   neo4j_config:
   neo4j_data:
   neo4j_plugins:
+  qdrant_data:
 
 networks:
   internal:

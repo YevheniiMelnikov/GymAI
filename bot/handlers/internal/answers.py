@@ -227,7 +227,7 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
 
     incoming_template = translate(MessageText.ask_ai_response_template, language)
     escaped_answer = html.escape(answer_text).replace("\r\n", "\n")
-    formatted_answer = escaped_answer.replace("\n", "<br/>")
+    formatted_answer = escaped_answer.replace("\n", "<br>")
     chunks = list(chunk_message(formatted_answer, template=incoming_template, sender_name=settings.BOT_NAME))
     rendered_len = sum(len(incoming_template.format(name=settings.BOT_NAME, message=chunk)) for chunk in chunks)
     truncated = "yes" if len(chunks) > 1 else "no"

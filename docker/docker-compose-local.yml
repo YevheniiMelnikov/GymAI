@@ -2,6 +2,7 @@ x-app-image: &app_image gymbot-app:local
 x-coach-image: &coach_image gymbot-coach:local
 
 x-common-env: &common_env
+#  userns_mode: "host"
   environment:
     PYTHONPATH: /app
     DJANGO_SETTINGS_MODULE: config.settings
@@ -19,6 +20,8 @@ x-common-env: &common_env
     POSTGRES_PORT: ${DB_PORT}
     AI_COACH_HOST: ${AI_COACH_HOST:-ai_coach}
     AI_COACH_PORT: ${COACH_PORT:-9000}
+    VECTORDATABASE_PROVIDER: ${VECTORDATABASE_PROVIDER:-qdrant}
+    VECTORDATABASE_URL: ${VECTORDATABASE_URL:-http://qdrant:${QDRANT_HTTP_PORT:-6333}}
     BOT_INTERNAL_HOST: ${BOT_UPSTREAM_HOST:-host.docker.internal}
     BOT_INTERNAL_PORT: ${BOT_UPSTREAM_PORT:-8088}
   env_file:
@@ -57,7 +60,7 @@ services:
     networks: [internal]
 
   db:
-    image: pgvector/pgvector:pg17
+    image: postgres:17
     container_name: db
     environment:
       POSTGRES_DB: ${DB_NAME}
@@ -65,7 +68,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:- password}
       POSTGRES_HOST: ${DB_HOST}
       POSTGRES_PORT: ${DB_PORT}
-    command: [ "postgres", "-c", "shared_preload_libraries=vector" ]
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -94,7 +96,6 @@ services:
   rabbitmq:
     image: rabbitmq:4.1.4-management
     container_name: rabbitmq
-    user: "0:0"
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-rabbitmq}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rabbitmq}
@@ -265,6 +266,8 @@ services:
       OPENAI_API_KEY: ${LLM_API_KEY}
       OPENAI_BASE_URL: https://openrouter.ai/api/v1
       COACH_PORT: ${COACH_PORT:-9000}
+      VECTORDATABASE_PROVIDER: ${VECTORDATABASE_PROVIDER:-qdrant}
+      VECTORDATABASE_URL: ${VECTORDATABASE_URL:-http://qdrant:${QDRANT_HTTP_PORT:-6333}}
     env_file:
       - .env
     volumes:
@@ -276,6 +279,8 @@ services:
       db:
         condition: service_healthy
       neo4j:
+        condition: service_started
+      qdrant:
         condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:${COACH_PORT:-9000}/health/"]
@@ -339,6 +344,22 @@ services:
     restart: unless-stopped
     networks: [internal]
 
+  qdrant:
+    image: qdrant/qdrant:v1.16
+    container_name: qdrant
+    restart: unless-stopped
+    user: "0"
+    environment:
+      QDRANT__LOG_LEVEL: INFO
+      QDRANT__SERVICE__HTTP_PORT: ${QDRANT_HTTP_PORT:-6333}
+      QDRANT__SERVICE__GRPC_PORT: ${QDRANT_GRPC_PORT:-6334}
+    ports:
+      - "${HOST_QDRANT_HTTP_PORT:-6333}:${QDRANT_HTTP_PORT:-6333}"
+      - "${HOST_QDRANT_GRPC_PORT:-6334}:${QDRANT_GRPC_PORT:-6334}"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks: [internal]
+
   cloudflare:
     image: cloudflare/cloudflared:latest
     container_name: cloudflare
@@ -360,6 +381,7 @@ networks:
 volumes:
   cognee_storage:
   pgdata:
+  qdrant_data:
   data_storage:
   rabbitmqdata:
 

@@ -233,7 +233,7 @@ async def health_notes_choice(callback_query: CallbackQuery, state: FSMContext, 
     if not data.get("edit_mode"):
         credits_text = translate(MessageText.initial_credits_granted, lang).format(credits=settings.DEFAULT_CREDITS)
         await answer_msg(callback_query, credits_text)
-        await state.update_data(credits_delta=settings.PACKAGE_START_CREDITS)
+        await state.update_data(credits_delta=settings.DEFAULT_CREDITS)
 
     if callback_query.message is not None:
         await update_profile_data(cast(Message, callback_query.message), state, bot)
@@ -254,7 +254,7 @@ async def health_notes(message: Message, state: FSMContext, bot: Bot) -> None:
             data.get("lang", settings.DEFAULT_LANG),
         ).format(credits=settings.DEFAULT_CREDITS)
         await answer_msg(message, credits_text)
-        await state.update_data(credits_delta=settings.PACKAGE_START_CREDITS)
+        await state.update_data(credits_delta=settings.DEFAULT_CREDITS)
 
     await update_profile_data(cast(Message, message), state, bot)
 

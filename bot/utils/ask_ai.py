@@ -16,7 +16,7 @@ from bot.states import States
 from bot.utils.bot import answer_msg, del_msg
 from bot.utils.credits import available_ai_services
 from bot.utils.media import download_limited_file, get_ai_qa_image_limit
-from bot.utils.menus import show_balance_menu
+from bot.utils.menus import prompt_profile_completion_questionnaire, show_balance_menu
 from config.app_settings import settings
 from bot.utils.profiles import fetch_user
 from core.ai_coach.models import AskAiPreparationResult
@@ -115,10 +115,12 @@ async def start_ask_ai_prompt(
         return False
 
     if user_profile.status != ProfileStatus.completed:
-        await _notify_user(
+        await prompt_profile_completion_questionnaire(
             origin,
-            translate(MessageText.finish_registration_to_get_credits, lang).format(credits=settings.DEFAULT_CREDITS),
-            show_alert=True,
+            profile,
+            state,
+            language=lang,
+            pending_flow={"name": "ask_ai_prompt"},
         )
         if delete_origin:
             await del_msg(origin)

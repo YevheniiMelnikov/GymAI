@@ -61,7 +61,11 @@ class Settings(BaseSettings):
     DB_PROVIDER: Annotated[str, Field(default="postgres", description="Database provider type (for internal use).")]
 
     # --- Vector Database ---
-    VECTORDATABASE_PROVIDER: Annotated[str, Field(default="pgvector", description="Vector database provider (e.g., 'pgvector').")]
+    VECTORDATABASE_PROVIDER: Annotated[str, Field(default="qdrant", description="Vector database provider (e.g., 'qdrant').")]
+    VECTORDATABASE_URL_OVERRIDE: Annotated[str | None, Field(alias="VECTORDATABASE_URL", default=None, description="Explicit connection URL for the vector database. Overrides provider-derived defaults.")]
+    QDRANT_HOST: Annotated[str, Field(default="qdrant", description="Hostname for the Qdrant service within Docker networks.")]
+    QDRANT_HTTP_PORT: Annotated[int, Field(default=6333, description="HTTP port of the Qdrant service.")]
+    QDRANT_GRPC_PORT: Annotated[int, Field(default=6334, description="gRPC port of the Qdrant service.")]
 
     # --- Graph Database ---
     GRAPH_DATABASE_PROVIDER: Annotated[str, Field(default="networkx", description="Graph database provider (e.g., 'networkx', 'neo4j').")]
@@ -516,7 +520,14 @@ class Settings(BaseSettings):
     @property
     def VECTORDATABASE_URL(self) -> str:
         """Construct the full connection URL for the vector database."""
-        return f"postgresql+psycopg2://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        if self.VECTORDATABASE_URL_OVERRIDE:
+            return self.VECTORDATABASE_URL_OVERRIDE
+        provider = (self.VECTORDATABASE_PROVIDER or "").lower()
+        if provider == "pgvector":
+            return f"postgresql+psycopg2://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        if provider == "qdrant":
+            return f"http://{self.QDRANT_HOST}:{self.QDRANT_HTTP_PORT}"
+        raise RuntimeError(f"Unsupported vector database provider: {self.VECTORDATABASE_PROVIDER!r}")
 
     @property
     def GRAPH_DATABASE_URL(self) -> str:
