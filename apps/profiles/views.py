@@ -8,7 +8,6 @@ from rest_framework_api_key.permissions import HasAPIKey
 from apps.profiles.models import Profile
 from apps.profiles.serializers import ProfileSerializer
 from apps.profiles.repos import ProfileRepository
-from core.tasks.ai_coach.maintenance import sync_profile_knowledge
 
 
 class ProfileByTelegramIDView(APIView):
@@ -40,6 +39,8 @@ class ProfileAPIUpdate(APIView):
             )
             logger.info(f"Profile id={profile_id} updated")
             try:
+                from core.tasks.ai_coach.maintenance import sync_profile_knowledge
+
                 getattr(sync_profile_knowledge, "delay")(saved_profile.id, reason="profile_updated")
             except Exception as exc:  # noqa: BLE001
                 logger.warning(f"Failed to enqueue profile sync profile_id={profile_id}: {exc}")
@@ -73,6 +74,14 @@ class ProfileAPIList(generics.ListCreateAPIView):
         profile = serializer.save()
         ProfileRepository.invalidate_cache(profile_id=profile.id, tg_id=getattr(profile, "tg_id", None))
         try:
+            from core.tasks.ai_coach.maintenance import sync_profile_knowledge
+
             getattr(sync_profile_knowledge, "delay")(profile.id, reason="profile_created")
         except Exception as exc:  # noqa: BLE001
             logger.warning(f"Failed to enqueue profile sync profile_id={profile.id}: {exc}")
+        try:
+            from ai_coach.agent.knowledge.utils.memify_scheduler import schedule_profile_memify_sync
+
+            schedule_profile_memify_sync(profile.id, reason="profile_created")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"Failed to schedule memify profile_id={profile.id}: {exc}")

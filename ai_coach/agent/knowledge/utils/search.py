@@ -29,6 +29,7 @@ from loguru import logger
 from ai_coach.agent.knowledge.schemas import KnowledgeSnippet, ProjectionStatus
 from ai_coach.agent.knowledge.utils.datasets import DatasetService
 from ai_coach.agent.knowledge.utils.projection import ProjectionService
+from ai_coach.agent.knowledge.utils.memify_scheduler import schedule_profile_memify
 from config.app_settings import settings
 
 
@@ -64,6 +65,7 @@ class SearchService:
         self.projection_service = projection_service
         self._knowledge_base: Optional["KnowledgeBase"] = knowledge_base
         self._search_type_default = _resolve_search_type(getattr(settings, "COGNEE_SEARCH_MODE", None))
+        self._memify_delay = max(float(getattr(settings, "AI_COACH_MEMIFY_DELAY_SECONDS", 3600.0)), 0.0)
 
     def _require_kb(self) -> "KnowledgeBase":
         if self._knowledge_base is None:
@@ -81,7 +83,7 @@ class SearchService:
         user: Any | None = None,
     ) -> list[KnowledgeSnippet]:
         if cognee is None:
-            logger.warning("knowledge_search_skipped profile_id=%s reason=cognee_missing", profile_id)
+            logger.warning("knowledge_search_skipped profile_id={} reason=cognee_missing", profile_id)
             return []
 
         normalized = query.strip()
@@ -193,6 +195,7 @@ class SearchService:
             if k is not None and len(aggregated) >= k:
                 break
 
+        await self._maybe_schedule_memify(profile_id)
         if k is not None:
             return aggregated[:k]
         if not aggregated:
@@ -575,6 +578,11 @@ class SearchService:
                 await kb._process_dataset(dataset, user)
             except Exception as exc:
                 logger.warning(f"knowledge_dataset_warmup_failed dataset={dataset} detail={exc}")
+
+    async def _maybe_schedule_memify(self, profile_id: int) -> None:
+        if cognee is None or not hasattr(cognee, "memify"):
+            return
+        await schedule_profile_memify(profile_id, reason="paid_flow", delay_s=self._memify_delay)
 
     def _expanded_queries(self, query: str) -> list[str]:
         return [query]

@@ -243,6 +243,8 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
         current_reply_id = reply_to_message_id
         for index, chunk in enumerate(chunks):
             message_text = incoming_template.format(name=settings.BOT_NAME, message=chunk)
+            if "<br/" in message_text:
+                message_text = message_text.replace("<br/>", "<br>").replace("<br />", "<br>")
             reply_markup = ask_again_keyboard if index == len(chunks) - 1 else None
             current_reply_id = await _send_chunk_with_reply_fallback(
                 bot=bot,

@@ -3,6 +3,8 @@ from typing import TYPE_CHECKING, Any, Optional, cast
 
 from loguru import logger
 
+from aiogram.types import CallbackQuery as TgCallbackQuery, Message as TgMessage
+
 from bot.states import States
 from bot.texts import MessageText, translate
 from bot.utils.bot import answer_msg, del_msg, delete_messages
@@ -42,11 +44,10 @@ def resolve_workout_location(profile: Profile) -> WorkoutLocation | None:
 if TYPE_CHECKING:
     from aiogram import Bot
     from aiogram.fsm.context import FSMContext
-    from aiogram.types import Message as TgMessage, CallbackQuery as TgCallbackQuery
 
 
 async def update_profile_data(
-    message: "TgMessage",
+    message: TgMessage,
     state: "FSMContext",
     bot: "Bot",
 ) -> None:
@@ -146,11 +147,11 @@ async def update_profile_data(
         await answer_msg(message, translate(MessageText.unexpected_error, lang))
 
     finally:
-        await del_msg(cast("TgMessage | TgCallbackQuery | None", message))
+        await del_msg(cast(TgMessage | TgCallbackQuery | None, message))
 
 
 async def _handle_pending_flow(
-    message: Optional["TgMessage"],
+    message: Optional[TgMessage],
     profile: Profile,
     state: "FSMContext",
     bot: "Bot",
@@ -187,7 +188,7 @@ async def _handle_pending_flow(
 
 
 async def _send_profile_info_after_questionnaire(
-    message: "TgMessage",
+    message: TgMessage,
     profile: Profile,
     state: "FSMContext",
 ) -> None:

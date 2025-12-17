@@ -13,17 +13,20 @@ x-common-env: &common_env
     RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
     POSTGRES_DB: ${DB_NAME}
     POSTGRES_USER: ${DB_USER}
-    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:- password}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
     POSTGRES_HOST: ${DB_HOST}
     POSTGRES_PORT: ${DB_PORT}
     AI_COACH_HOST: ${AI_COACH_HOST:-ai_coach}
     AI_COACH_PORT: ${COACH_PORT:-9000}
     BOT_INTERNAL_HOST: ${BOT_UPSTREAM_HOST:-host.docker.internal}
     BOT_INTERNAL_PORT: ${BOT_UPSTREAM_PORT:-8088}
-    VECTORDATABASE_PROVIDER: ${VECTORDATABASE_PROVIDER:-qdrant}
-    QDRANT_HTTP_PORT: ${QDRANT_HTTP_PORT:-6333}
-    QDRANT_GRPC_PORT: ${QDRANT_GRPC_PORT:-6334}
-    VECTORDATABASE_URL: ${VECTORDATABASE_URL:-http://qdrant:${QDRANT_HTTP_PORT:-6333}}
+    VECTOR_DB_PROVIDER: ${VECTOR_DB_PROVIDER:-pgvector}
+    PGVECTOR_HOST: ${PGVECTOR_HOST:-pgvector}
+    PGVECTOR_PORT: ${PGVECTOR_PORT:-5432}
+    PGVECTOR_DB: ${PGVECTOR_DB:-pgvector}
+    PGVECTOR_USER: ${PGVECTOR_USER:-pgvector}
+    PGVECTOR_PASSWORD: ${PGVECTOR_PASSWORD:-pgvector}
+    VECTOR_DB_URL: ${VECTOR_DB_URL:-postgresql+asyncpg://${PGVECTOR_USER:-pgvector}:${PGVECTOR_PASSWORD:-pgvector}@${PGVECTOR_HOST:-pgvector}:${PGVECTOR_PORT:-5432}/${PGVECTOR_DB:-pgvector}}
   env_file:
     - .env
   volumes:
@@ -39,15 +42,15 @@ x-common-env: &common_env
 
 services:
   db:
-    image: postgres:17
+    image: postgres:18
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:- password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
       POSTGRES_HOST: ${DB_HOST}
       POSTGRES_PORT: ${DB_PORT}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
@@ -86,24 +89,18 @@ services:
       timeout: 5s
       retries: 5
 
-  qdrant:
-    image: qdrant/qdrant:v1.16
+  pgvector:
+    image: pgvector/pgvector:pg17-trixie
     restart: unless-stopped
     environment:
-      QDRANT__SERVICE__HTTP_PORT: ${QDRANT_HTTP_PORT:-6333}
-      QDRANT__SERVICE__GRPC_PORT: ${QDRANT_GRPC_PORT:-6334}
+      POSTGRES_DB: ${PGVECTOR_DB:-pgvector}
+      POSTGRES_USER: ${PGVECTOR_USER:-pgvector}
+      POSTGRES_PASSWORD: ${PGVECTOR_PASSWORD:-pgvector}
     ports:
-      - "${HOST_QDRANT_HTTP_PORT:-6333}:6333"
-      - "${HOST_QDRANT_GRPC_PORT:-6334}:6334"
-    expose:
-      - 6333
-      - 6334
-      - 6335
-    configs:
-      - source: qdrant_config
-        target: /qdrant/config/production.yaml
+      - "${HOST_PGVECTOR_PORT:-15433}:5432"
     volumes:
-      - qdrant_data:/qdrant/storage
+      - pgvector_data:/var/lib/postgresql/data
+      - ./pgvector-init.sql:/docker-entrypoint-initdb.d/pgvector-init.sql:ro
 
   api:
     image: *app_image
@@ -140,7 +137,7 @@ services:
         condition: service_healthy
       ai_coach:
         condition: service_started
-      qdrant:
+      pgvector:
         condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:${API_PORT:-8000}/health/"]
@@ -181,7 +178,7 @@ services:
         condition: service_healthy
       ai_coach:
         condition: service_started
-      qdrant:
+      pgvector:
         condition: service_started
     restart: unless-stopped
 
@@ -211,7 +208,7 @@ services:
         condition: service_healthy
       ai_coach:
         condition: service_started
-      qdrant:
+      pgvector:
         condition: service_started
     restart: unless-stopped
 
@@ -239,7 +236,7 @@ services:
         condition: service_healthy
       ai_coach:
         condition: service_started
-      qdrant:
+      pgvector:
         condition: service_started
     restart: unless-stopped
 
@@ -259,11 +256,6 @@ services:
       COGNEE_STORAGE_PATH: /app/cognee_storage
       COGNEE_DATA_ROOT: /app/cognee_storage
       GRAPH_DATABASE_PROVIDER: ${GRAPH_DATABASE_PROVIDER}
-      PGHOST: ${DB_HOST}
-      PGPORT: ${DB_PORT}
-      PGDATABASE: ${DB_NAME}
-      PGUSER: ${DB_USER}
-      PGPASSWORD: ${POSTGRES_PASSWORD:- password}
       LLM_API_KEY: ${LLM_API_KEY}
       LLM_API_URL: https://openrouter.ai/api/v1
       OPENAI_API_KEY: ${LLM_API_KEY}
@@ -281,7 +273,7 @@ services:
         condition: service_healthy
       neo4j:
         condition: service_started
-      qdrant:
+      pgvector:
         condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:${COACH_PORT:-9000}/health/"]
@@ -357,11 +349,6 @@ services:
         condition: service_started
     restart: unless-stopped
 
-configs:
-  qdrant_config:
-    content: |
-      log_level: INFO
-
 volumes:
   pgdata:
   cognee_storage:
@@ -373,7 +360,7 @@ volumes:
   neo4j_config:
   neo4j_data:
   neo4j_plugins:
-  qdrant_data:
+  pgvector_data:
 
 networks:
   internal:

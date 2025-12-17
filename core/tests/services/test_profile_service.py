@@ -35,7 +35,7 @@ async def test_delete_profile_enqueues_cleanup(monkeypatch):
     task_calls: list[int] = []
 
     monkeypatch.setattr(
-        "core.services.internal.profile_service.cleanup_profile_knowledge",
+        "core.tasks.ai_coach.maintenance.cleanup_profile_knowledge",
         SimpleNamespace(delay=lambda profile_id: task_calls.append(profile_id)),
     )
 
@@ -49,7 +49,7 @@ async def test_delete_profile_skip_cleanup_when_failed(monkeypatch):
     task_calls: list[int] = []
 
     monkeypatch.setattr(
-        "core.services.internal.profile_service.cleanup_profile_knowledge",
+        "core.tasks.ai_coach.maintenance.cleanup_profile_knowledge",
         SimpleNamespace(delay=lambda profile_id: task_calls.append(profile_id)),
     )
 

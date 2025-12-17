@@ -1,0 +1,60 @@
+import asyncio
+
+from loguru import logger
+
+from config.app_settings import settings
+from core.utils.redis_lock import get_redis_client
+
+
+async def schedule_profile_memify(
+    profile_id: int,
+    *,
+    reason: str = "paid_flow",
+    delay_s: float | int | None = None,
+) -> bool:
+    """
+    Schedule a delayed memify for profile datasets with cross-process dedup.
+    Returns True if a task was enqueued.
+    """
+    delay_value = float(delay_s if delay_s is not None else settings.AI_COACH_MEMIFY_DELAY_SECONDS)
+    countdown = max(delay_value, 0.0)
+    dedupe_ttl = int(countdown) + 300
+    key = f"ai_coach:memify:profile:{profile_id}"
+    try:
+        client = get_redis_client()
+        already_scheduled = not await client.set(key, "1", nx=True, ex=dedupe_ttl)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("memify_schedule_dedupe_failed profile_id={} detail={}", profile_id, exc)
+        return False
+    if already_scheduled:
+        logger.debug("memify_schedule_skipped profile_id={} reason=dedupe_hit", profile_id)
+        return False
+
+    try:
+        from core.tasks.ai_coach.maintenance import memify_profile_datasets
+
+        memify_profile_datasets.apply_async(
+            kwargs={"profile_id": profile_id, "reason": reason},
+            countdown=countdown,
+        )
+        logger.debug("memify_schedule_enqueued profile_id={} reason={} delay_s={}", profile_id, reason, countdown)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("memify_schedule_failed profile_id={} detail={}", profile_id, exc)
+        return False
+
+
+def schedule_profile_memify_sync(
+    profile_id: int,
+    *,
+    reason: str = "paid_flow",
+    delay_s: float | int | None = None,
+) -> bool:
+    """Sync wrapper for scheduling memify from synchronous contexts."""
+    try:
+        return asyncio.run(schedule_profile_memify(profile_id, reason=reason, delay_s=delay_s))
+    except RuntimeError:
+        # Already in an event loop (unlikely in sync contexts); best-effort schedule via task.
+        loop = asyncio.get_event_loop()
+        loop.create_task(schedule_profile_memify(profile_id, reason=reason, delay_s=delay_s))
+        return True

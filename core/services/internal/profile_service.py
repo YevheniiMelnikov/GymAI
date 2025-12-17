@@ -3,7 +3,6 @@ from typing import Any
 
 from core.domain.profile_repository import ProfileRepository
 from core.schemas import Profile
-from core.tasks.ai_coach.maintenance import cleanup_profile_knowledge
 
 
 class ProfileService:
@@ -22,6 +21,8 @@ class ProfileService:
     async def delete_profile(self, profile_id: int) -> bool:
         deleted = await self._repository.delete_profile(profile_id)
         if deleted:
+            from core.tasks.ai_coach.maintenance import cleanup_profile_knowledge
+
             getattr(cleanup_profile_knowledge, "delay")(profile_id)
         return deleted
 

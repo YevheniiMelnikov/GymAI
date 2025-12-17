@@ -61,11 +61,14 @@ class Settings(BaseSettings):
     DB_PROVIDER: Annotated[str, Field(default="postgres", description="Database provider type (for internal use).")]
 
     # --- Vector Database ---
-    VECTORDATABASE_PROVIDER: Annotated[str, Field(default="qdrant", description="Vector database provider (e.g., 'qdrant').")]
+    VECTORDATABASE_PROVIDER: Annotated[str, Field(default="pgvector", description="Vector database provider (e.g., 'pgvector').")]
     VECTORDATABASE_URL_OVERRIDE: Annotated[str | None, Field(alias="VECTORDATABASE_URL", default=None, description="Explicit connection URL for the vector database. Overrides provider-derived defaults.")]
-    QDRANT_HOST: Annotated[str, Field(default="qdrant", description="Hostname for the Qdrant service within Docker networks.")]
-    QDRANT_HTTP_PORT: Annotated[int, Field(default=6333, description="HTTP port of the Qdrant service.")]
-    QDRANT_GRPC_PORT: Annotated[int, Field(default=6334, description="gRPC port of the Qdrant service.")]
+    PGVECTOR_HOST: Annotated[str, Field(default="pgvector", description="Hostname of the pgvector service within Docker networks.")]
+    PGVECTOR_PORT: Annotated[int, Field(default=5432, description="Port of the pgvector service.")]
+    PGVECTOR_DB: Annotated[str, Field(default="pgvector", description="Database name used by pgvector.")]
+    PGVECTOR_USER: Annotated[str, Field(default="pgvector", description="Username for the pgvector database.")]
+    PGVECTOR_PASSWORD: Annotated[str, Field(default="pgvector", description="Password for the pgvector database.")]
+    HOST_PGVECTOR_PORT: Annotated[str, Field(default="15433", description="Port exposed on the host for the pgvector service.")]
 
     # --- Graph Database ---
     GRAPH_DATABASE_PROVIDER: Annotated[str, Field(default="networkx", description="Graph database provider (e.g., 'networkx', 'neo4j').")]
@@ -113,6 +116,9 @@ class Settings(BaseSettings):
     AI_COACH_GLOBAL_PROJECTION_TIMEOUT: Annotated[float, Field(default=15.0, description="Timeout for global projection operations in seconds.")]
     AI_COACH_DEFAULT_TOOL_TIMEOUT: Annotated[float, Field(default=3.0, description="Default timeout for AI agent tool calls in seconds.")]
     AI_COACH_SEARCH_TIMEOUT: Annotated[float, Field(default=12.0, description="Timeout for search tool calls in seconds.")]
+    AI_COACH_MEMIFY_DELAY_SECONDS: Annotated[
+        float, Field(default=3600.0, description="Delay in seconds before scheduling Cognee memify for profile datasets.")
+    ]
     AI_COACH_HISTORY_TIMEOUT: Annotated[float, Field(default=6.0, description="Timeout for retrieving user history in seconds.")]
     AI_COACH_PROGRAM_HISTORY_TIMEOUT: Annotated[float, Field(default=6.0, description="Timeout for retrieving workout program history in seconds.")]
     AI_COACH_SAVE_TIMEOUT: Annotated[float, Field(default=30.0, description="Timeout for saving data from the AI coach in seconds.")]
@@ -158,7 +164,7 @@ class Settings(BaseSettings):
     KNOWLEDGE_BASE_FOLDER_ID: Annotated[str, Field(default="", description="Google Drive folder ID for knowledge base documents.")]
     KNOWLEDGE_REFRESH_INTERVAL: int = Field(default=60 * 60, description="Interval in seconds to refresh the knowledge base from the source.")
     KNOWLEDGE_REFRESH_START_DELAY: int = Field(default=180, description="Delay in seconds before starting the first knowledge base refresh.")
-    COGNEE_SEARCH_MODE: Annotated[str, Field(default="graph_completion_cot", description="Search type for Cognee queries (e.g., 'natural_language').")]
+    COGNEE_SEARCH_MODE: Annotated[str, Field(default="graph_summary_completion", description="Search type for Cognee queries (e.g., 'graph_summary_completion').")]
 
     EXERCISE_GIF_BUCKET: Annotated[str, Field(default="exercises_guide", description="Google Cloud Storage bucket name used for exercise GIF assets.")]
     EXERCISE_GIF_BASE_URL: Annotated[str, Field(default="https://storage.googleapis.com", description="Base URL for the exercise GIF storage.")]
@@ -201,7 +207,7 @@ class Settings(BaseSettings):
     SMALL_SUBSCRIPTION_PRICE: Decimal = Field(default=Decimal("500"), description="Price in credits for a 1 month AI coach subscription.")
     MEDIUM_SUBSCRIPTION_PRICE: Decimal = Field(default=Decimal("2400"), description="Price in credits for a 6 months AI coach subscription.")
     LARGE_SUBSCRIPTION_PRICE: Decimal = Field(default=Decimal("4750"), description="Price in credits for a 1 year AI coach subscription.")
-    ASK_AI_PRICE: Annotated[int, Field(default=10, description="Price in credits for a single 'Ask AI' question.")]
+    ASK_AI_PRICE: Annotated[int, Field(default=25, description="Price in credits for a single 'Ask AI' question.")]
 
     # --- Payments ---
     PAYMENT_PRIVATE_KEY: Annotated[str, Field(default="", description="Private key for the payment provider API.")]
@@ -524,9 +530,12 @@ class Settings(BaseSettings):
             return self.VECTORDATABASE_URL_OVERRIDE
         provider = (self.VECTORDATABASE_PROVIDER or "").lower()
         if provider == "pgvector":
-            return f"postgresql+psycopg2://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
-        if provider == "qdrant":
-            return f"http://{self.QDRANT_HOST}:{self.QDRANT_HTTP_PORT}"
+            host = self.PGVECTOR_HOST or "pgvector"
+            port = self.PGVECTOR_PORT or 5432
+            user = self.PGVECTOR_USER or "pgvector"
+            password = self.PGVECTOR_PASSWORD or "pgvector"
+            db_name = self.PGVECTOR_DB or "pgvector"
+            return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db_name}"
         raise RuntimeError(f"Unsupported vector database provider: {self.VECTORDATABASE_PROVIDER!r}")
 
     @property

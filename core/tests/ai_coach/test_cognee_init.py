@@ -10,6 +10,9 @@ import ai_coach.agent.knowledge.knowledge_base as coach
 import ai_coach.application as coach_application
 from ai_coach.application import init_knowledge_base
 from ai_coach.agent.knowledge.utils import storage_helpers
+from core.tests.conftest import _KB
+
+coach.KnowledgeBase = _KB
 
 
 def test_reinit_on_failure(monkeypatch):

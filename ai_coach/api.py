@@ -228,10 +228,18 @@ class ProfileSyncRequest(BaseModel):
     reason: str | None = None
 
 
+class ProfileMemifyRequest(BaseModel):
+    reason: str | None = None
+
+
 async def _cleanup_profile(profile_id: int) -> dict[str, Any]:
     kb = get_knowledge_base()
     result = await kb.cleanup_profile_datasets(profile_id)
-    logger.debug("profile_cleanup_request profile_id=%s datasets=%s", profile_id, ",".join(result.keys()))
+    logger.debug(
+        "profile_cleanup_request profile_id={} datasets={}",
+        profile_id,
+        ",".join(result.keys()),
+    )
     return {"profile_id": profile_id, "result": result}
 
 
@@ -248,7 +256,6 @@ async def cleanup_profile_knowledge_public(
     profile_id: int,
     credentials: HTTPBasicCredentials = Depends(_validate_refresh_credentials),
 ) -> dict[str, Any]:
-    _validate_refresh_credentials(credentials)
     return await _cleanup_profile(profile_id)
 
 
@@ -279,5 +286,34 @@ async def sync_profile_knowledge_public(
     payload: ProfileSyncRequest = Body(default_factory=ProfileSyncRequest),
     credentials: HTTPBasicCredentials = Depends(_validate_refresh_credentials),
 ) -> dict[str, Any]:
-    _validate_refresh_credentials(credentials)
     return await _sync_profile(profile_id, payload)
+
+
+async def _memify_profile(profile_id: int, payload: ProfileMemifyRequest | None = None) -> dict[str, Any]:
+    kb = get_knowledge_base()
+    result = await kb.memify_profile_datasets(profile_id)
+    logger.info(
+        "profile_memify_request profile_id={} datasets={} reason={}",
+        profile_id,
+        ",".join(result.get("datasets", []) or []),
+        payload.reason if payload else None,
+    )
+    return {"profile_id": profile_id, "result": result}
+
+
+@app.post("/internal/knowledge/profiles/{profile_id}/memify/")
+async def memify_profile_datasets_internal(
+    profile_id: int,
+    payload: ProfileMemifyRequest = Body(default_factory=ProfileMemifyRequest),
+    _: None = Depends(_require_hmac),
+) -> dict[str, Any]:
+    return await _memify_profile(profile_id, payload)
+
+
+@app.post("/knowledge/profiles/{profile_id}/memify/")
+async def memify_profile_datasets_public(
+    profile_id: int,
+    payload: ProfileMemifyRequest = Body(default_factory=ProfileMemifyRequest),
+    credentials: HTTPBasicCredentials = Depends(_validate_refresh_credentials),
+) -> dict[str, Any]:
+    return await _memify_profile(profile_id, payload)

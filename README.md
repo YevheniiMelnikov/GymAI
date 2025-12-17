@@ -299,8 +299,7 @@ Create `docker/.env` from `docker/.env.example` and set the following minimum va
 * `EXERCISE_GIF_BASE_URL` – base URL for those assets (default `https://storage.googleapis.com`).
 * `LLM_API_KEY` – API key for both the Pydantic AI agent and Cognee embedding calls. OpenRouter provides a single token that covers both LLM generations and embedding generation, so no separate key is needed.
 
-* `VECTORDATABASE_PROVIDER` – defaults to `qdrant`, switch to `pgvector` if you prefer storing embeddings inside PostgreSQL. `VECTORDATABASE_URL` overrides the auto-derived connection string (Qdrant's default is `http://qdrant:6333`).
-* `QDRANT_HTTP_PORT` / `QDRANT_GRPC_PORT` – ports that Qdrant advertises inside the Docker network.
-* `HOST_QDRANT_HTTP_PORT` / `HOST_QDRANT_GRPC_PORT` – host-facing port mappings for Qdrant when you need to expose it externally.
+* `VECTORDATABASE_PROVIDER` – defaults to `pgvector`. The service is available at `${PGVECTOR_HOST}:${PGVECTOR_PORT}` inside Docker and respects `${PGVECTOR_DB}`, `${PGVECTOR_USER}`, `${PGVECTOR_PASSWORD}` for authentication; override `VECTORDATABASE_URL` if you need a bespoke connection string.
+* `HOST_PGVECTOR_PORT` – host-facing port mapping for the pgvector service.
 
 `WEBHOOK_URL` is auto-derived as `${WEBHOOK_HOST}${WEBHOOK_PATH}` unless explicitly set. See `config/app_settings.py` for all available options.

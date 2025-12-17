@@ -1,4 +1,4 @@
-import hashlib
+from hashlib import sha256
 import inspect
 import logging
 from dataclasses import is_dataclass
@@ -145,20 +145,7 @@ class DatasetService:
             return identifier
 
         if user_ctx is not None:
-            # Use robust context if available, but for get_dataset_id we act passively
-            # unless we want to enforce it. The prompt says "ensure public methods ... accept aliases".
-            # For get_dataset_id, if we are going to ensure_dataset_exists, we need a valid user.
-            # But get_dataset_id might be called speculatively.
-            # Let's keep it safe but try to use robust context if reasonable.
-            # Actually, the user prompts "ensure_dataset_exists", "list_dataset_entries",
-            # "_fetch_dataset_rows" are the targets. get_dataset_id wasn't strictly mandated
-            # to throw, but "ensure_dataset_exists" is called inside.
             try:
-                # If we have a user context (even partial), try to resolve fully or default?
-                # The existing code only calls ensure_dataset_exists if user_ctx is NOT None.
-                # If we force to_user_ctx_or_default, we might unknowingly trigger creation for "None" user.
-                # But that seems to be the intent: "prevent silent None".
-                # Let's leave get_dataset_id as is for now regarding the check, but update the call inside.
                 effective_ctx = self.to_user_ctx(user_ctx)
                 if effective_ctx:
                     await self.ensure_dataset_exists(alias, effective_ctx)
@@ -215,15 +202,10 @@ class DatasetService:
         user_id = getattr(ctx, "id", None)
         alias = self.alias_for_dataset(name)
 
-        # Removed "if user_id is None: return" because to_user_ctx_or_default ensures ctx is valid
-        # or raises error.
-
         canonical = self._resolve_dataset_alias(name)
         try:
             from cognee.modules.data.methods import get_authorized_dataset_by_name, create_authorized_dataset
         except Exception:
-            # If cognee imports fail, we can't do anything.
-            # Should we raise? The prompt says "raise meaningful exception".
             raise RuntimeError("cognee_modules_unavailable")
 
         retried_setup = False
@@ -712,9 +694,9 @@ class DatasetService:
             return 0, 0
 
         if nodes == 0 and edges == 0:
-            logger.debug(f"cognee_graph_counts_empty dataset={alias} nodes={nodes} edges={edges}")
+            logger.debug(f"cognee_graph_counts_empty_global dataset={alias} nodes_total={nodes} edges_total={edges}")
         else:
-            logger.debug(f"cognee_graph_counts.success dataset={alias} nodes={nodes} edges={edges}")
+            logger.debug(f"cognee_graph_counts_global dataset={alias} nodes_total={nodes} edges_total={edges}")
         return nodes, edges
 
     async def _execute_graph_count(self, driver: Any, query: str) -> int:
@@ -841,7 +823,7 @@ class DatasetService:
         if normalized_text:
             if self._storage_service is None:
                 logger.error("StorageService not available in DatasetService for compute_digests, using fallback.")
-                digest_sha = hashlib.sha256(self._normalize_text(normalized_text).encode("utf-8")).hexdigest()
+                digest_sha = sha256(self._normalize_text(normalized_text).encode("utf-8")).hexdigest()
             else:
                 digest_sha = self._storage_service.compute_digests(normalized_text, dataset_alias=alias)
             metadata_dict.setdefault("digest_sha", digest_sha)
@@ -891,7 +873,7 @@ class DatasetService:
 
         encoded = normalized.encode("utf-8")
         payload["bytes"] = len(encoded)
-        payload["digest_sha"] = hashlib.sha256(encoded).hexdigest()
+        payload["digest_sha"] = sha256(encoded).hexdigest()
         payload["preview"] = normalized[:120]
 
         if "kind" not in payload:

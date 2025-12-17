@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from loguru import logger
 from sqlalchemy import schema as sa_schema
+from sqlalchemy.engine.url import URL, make_url
 
 from ai_coach.agent.knowledge.utils.storage_helpers import (
     collect_storage_info,
@@ -100,8 +101,43 @@ class CogneeConfig:
 
     @staticmethod
     def _configure_vector_db() -> None:
-        cognee.config.set_vector_db_provider(settings.VECTORDATABASE_PROVIDER)
-        cognee.config.set_vector_db_url(settings.VECTORDATABASE_URL)
+        provider = settings.VECTORDATABASE_PROVIDER
+        env_provider = os.environ.get("VECTORDATABASE_PROVIDER")
+        env_url = os.environ.get("VECTORDATABASE_URL")
+        vector_url = env_url or settings.VECTORDATABASE_URL
+
+        if env_provider and env_provider != provider:
+            logger.warning(
+                "cognee_vector_provider_mismatch env_provider={} config_provider={}",
+                env_provider,
+                provider,
+            )
+
+        vector_url = CogneeConfig._ensure_vector_url(provider, vector_url)
+        vector_url_safe = CogneeConfig._render_safe_url(vector_url)
+        vector_meta = CogneeConfig._extract_url_meta(vector_url)
+        vector_host = vector_meta.get("host") or ""
+
+        CogneeConfig._warn_if_vector_matches_relational_host(vector_host)
+
+        cognee.config.set_vector_db_provider(provider)
+        cognee.config.set_vector_db_url(vector_url)
+        os.environ["VECTORDATABASE_PROVIDER"] = provider
+        os.environ["VECTORDATABASE_URL"] = vector_url
+
+        if provider == "pgvector":
+            CogneeConfig._export_pgvector_env(vector_meta)
+
+        logger.info(
+            "cognee_vector_config provider={} env_provider={} effective_url={} host={} port={} db={} user={}",
+            provider,
+            env_provider or "unset",
+            vector_url_safe,
+            vector_host or "unset",
+            vector_meta.get("port") or "unset",
+            vector_meta.get("database") or "unset",
+            vector_meta.get("username") or "unset",
+        )
 
     @staticmethod
     def _configure_graph_db() -> None:
@@ -111,7 +147,14 @@ class CogneeConfig:
         graph_port = settings.GRAPH_DATABASE_PORT or "7687"
         graph_url = settings.GRAPH_DATABASE_URL or f"bolt://{graph_host}:{graph_port}"
 
-        os.environ.setdefault("GRAPH_DATABASE_PROVIDER", settings.GRAPH_DATABASE_PROVIDER)
+        env_graph_provider = os.environ.get("GRAPH_DATABASE_PROVIDER")
+        if env_graph_provider and env_graph_provider != settings.GRAPH_DATABASE_PROVIDER:
+            logger.warning(
+                "cognee_graph_provider_mismatch env={} config={}",
+                env_graph_provider,
+                settings.GRAPH_DATABASE_PROVIDER,
+            )
+        os.environ["GRAPH_DATABASE_PROVIDER"] = settings.GRAPH_DATABASE_PROVIDER
         os.environ.setdefault("GRAPH_DATABASE_URL", graph_url)
         os.environ.setdefault("GRAPH_DATABASE_NAME", settings.GRAPH_DATABASE_NAME)
         os.environ.setdefault("GRAPH_DATABASE_USERNAME", settings.GRAPH_DATABASE_USERNAME)
@@ -127,7 +170,18 @@ class CogneeConfig:
             "graph_database_port": graph_port,
         }
         cognee.config.set_graph_db_config(graph_db_config)
-        logger.debug(f"cognee_graph_config_applied provider={settings.GRAPH_DATABASE_PROVIDER} url={graph_url}")
+        env_vector_provider = os.environ.get("VECTORDATABASE_PROVIDER", "unset")
+        logger.info(
+            "cognee_graph_config_applied env_graph_provider={} config_graph_provider={} env_vector_provider={} url={} host={} port={} name={} user={}",
+            env_graph_provider or "unset",
+            settings.GRAPH_DATABASE_PROVIDER,
+            env_vector_provider,
+            CogneeConfig._render_safe_url(graph_url),
+            graph_host,
+            graph_port,
+            settings.GRAPH_DATABASE_NAME or "unset",
+            settings.GRAPH_DATABASE_USERNAME or "unset",
+        )
 
     @staticmethod
     def _configure_relational_db() -> None:
@@ -284,6 +338,77 @@ class CogneeConfig:
                     mod.__dict__["get_authorized_existing_datasets"] = m_auth.get_authorized_existing_datasets
         except Exception as exc:  # noqa: BLE001
             logger.debug(f"Patch RBAC resolvers failed: {exc}")
+
+    @staticmethod
+    def _render_safe_url(raw_url: str | None) -> str:
+        if not raw_url:
+            return "unset"
+        try:
+            parsed = make_url(raw_url)
+            return parsed.render_as_string(hide_password=True)
+        except Exception:
+            return raw_url
+
+    @staticmethod
+    def _extract_url_meta(raw_url: str) -> dict[str, str | int | None]:
+        try:
+            parsed: URL = make_url(raw_url)
+        except Exception:
+            return {}
+        return {
+            "host": parsed.host,
+            "port": parsed.port,
+            "database": parsed.database,
+            "username": parsed.username,
+            "password": parsed.password,
+        }
+
+    @staticmethod
+    def _warn_if_vector_matches_relational_host(vector_host: str) -> None:
+        if not vector_host:
+            return
+        db_hosts = {settings.DB_HOST, os.environ.get("DB_HOST"), os.environ.get("POSTGRES_HOST")}
+        db_hosts = {host for host in db_hosts if host}
+        if vector_host in db_hosts:
+            logger.warning(
+                "vector_db_host_matches_relational host={} expected_pgvector_host={}",
+                vector_host,
+                settings.PGVECTOR_HOST or "pgvector",
+            )
+
+    @staticmethod
+    def _export_pgvector_env(meta: dict[str, str | int | None]) -> None:
+        host = meta.get("host") or settings.PGVECTOR_HOST
+        port = meta.get("port") or settings.PGVECTOR_PORT
+        database = meta.get("database") or settings.PGVECTOR_DB
+        user = meta.get("username") or settings.PGVECTOR_USER
+        password = meta.get("password") or settings.PGVECTOR_PASSWORD
+
+        if host:
+            os.environ["PGVECTOR_HOST"] = str(host)
+        if port:
+            os.environ["PGVECTOR_PORT"] = str(port)
+        if database:
+            os.environ["PGVECTOR_DB"] = str(database)
+        if user:
+            os.environ["PGVECTOR_USER"] = str(user)
+        if password:
+            os.environ["PGVECTOR_PASSWORD"] = str(password)
+
+    @staticmethod
+    def _ensure_vector_url(provider: str, vector_url: str | None) -> str:
+        if provider.lower() != "pgvector":
+            return vector_url or ""
+
+        if vector_url:
+            return vector_url
+
+        host = settings.PGVECTOR_HOST or "pgvector"
+        port = settings.PGVECTOR_PORT or 5432
+        user = settings.PGVECTOR_USER or "pgvector"
+        password = settings.PGVECTOR_PASSWORD or "pgvector"
+        db_name = settings.PGVECTOR_DB or "pgvector"
+        return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db_name}"
 
 
 async def ensure_cognee_ready() -> None:

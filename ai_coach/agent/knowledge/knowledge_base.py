@@ -19,8 +19,9 @@ from ai_coach.agent.knowledge.utils.search import SearchService
 from ai_coach.agent.knowledge.utils.storage import StorageService
 from ai_coach.agent.knowledge.utils.lock_cache import LockCache
 from ai_coach.types import MessageRole
-
 from config.app_settings import settings
+from sqlalchemy import schema as sa_schema, text as sa_text
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 if TYPE_CHECKING:
     from core.schemas import Profile
@@ -49,6 +50,8 @@ class KnowledgeBase:
         self.search_service = SearchService(self.dataset_service, self.projection_service, knowledge_base=self)
         self.chat_queue_service = ChatProjectionScheduler(self.dataset_service, self)
         self._graph_engine: Any | None = None
+        self._vector_check_done: bool = False
+        self._vector_unavailable_reason: str | None = None
 
     async def _ensure_graph_engine(self) -> None:
         if self._graph_engine is not None:
@@ -90,8 +93,96 @@ class KnowledgeBase:
             len(attrs),
         )
 
+    async def _ensure_vector_ready(self) -> bool:
+        if self._vector_check_done:
+            return self._vector_unavailable_reason is None
+        await self._check_vector_db()
+        return self._vector_unavailable_reason is None
+
+    async def _ensure_vector_ready_for_dataset(self, dataset: str) -> bool:
+        ready = await self._ensure_vector_ready()
+        if ready:
+            return True
+        reason = self._vector_unavailable_reason or "unknown"
+        self.dataset_service.log_once(
+            logging.ERROR,
+            "vector_db_unavailable",
+            dataset=dataset,
+            reason=reason,
+            min_interval=60.0,
+        )
+        return False
+
+    async def _check_vector_db(self) -> None:
+        provider = (settings.VECTORDATABASE_PROVIDER or "").lower()
+        self._vector_check_done = True
+        if provider != "pgvector":
+            self._vector_unavailable_reason = None
+            return
+
+        raw_url = settings.VECTORDATABASE_URL
+        safe_url = CogneeConfig._render_safe_url(raw_url)
+        meta = CogneeConfig._extract_url_meta(raw_url) if raw_url else {}
+        if not raw_url:
+            self._mark_vector_unavailable("vector_url_missing", safe_url, meta)
+            return
+
+        engine: AsyncEngine | None = None
+        available = False
+        try:
+            engine = create_async_engine(raw_url)
+            async with engine.connect() as connection:
+                await connection.execute(sa_text("SELECT 1"))
+                result = await connection.execute(sa_text("SELECT 1 FROM pg_available_extensions WHERE name='vector'"))
+                available = bool(result.scalar())
+        except Exception as exc:  # noqa: BLE001
+            self._mark_vector_unavailable(
+                "vector_connection_failed",
+                safe_url,
+                meta,
+                detail=str(exc),
+            )
+            return
+        finally:
+            if engine is not None:
+                await engine.dispose()
+
+        if available:
+            self._vector_unavailable_reason = None
+            logger.info(
+                "vector_db_ready url={} host={} port={} db={}",
+                safe_url,
+                meta.get("host") or "unset",
+                meta.get("port") or "unset",
+                meta.get("database") or "unset",
+            )
+            return
+
+        self._mark_vector_unavailable("pgvector_extension_missing", safe_url, meta)
+
+    def _mark_vector_unavailable(
+        self,
+        reason: str,
+        safe_url: str,
+        meta: Mapping[str, Any] | None = None,
+        *,
+        detail: str | None = None,
+    ) -> None:
+        self._vector_unavailable_reason = reason
+        meta = meta or {}
+        logger.error(
+            "vector_db_unavailable reason={} url={} host={} port={} db={} detail={}",
+            reason,
+            safe_url or "unset",
+            meta.get("host") or "unset",
+            meta.get("port") or "unset",
+            meta.get("database") or "unset",
+            detail or "unset",
+        )
+
     async def initialize(self, knowledge_loader: KnowledgeLoader | None = None) -> None:
         CogneeConfig.apply()
+        await self._ensure_vector_ready()
         try:
             from cognee.modules.engine.operations.setup import setup as cognee_setup
 
@@ -164,6 +255,65 @@ class KnowledgeBase:
             f"text_rows={counts.get('text_rows')} chunk_rows={counts.get('chunk_rows')} "
             f"graph_nodes={counts.get('graph_nodes')} graph_edges={counts.get('graph_edges')}"
         )
+        await self._memify_global_dataset(user_ctx)
+
+    async def _memify_global_dataset(self, user_ctx: Any | None) -> None:
+        env = str(getattr(settings, "ENVIRONMENT", "development")).lower()
+        if env != "production":
+            logger.info("knowledge_memify_global_skipped environment={}", env)
+            return
+        memify_fn = getattr(cognee, "memify", None)
+        if not callable(memify_fn):
+            logger.debug("knowledge_memify_skipped dataset={} reason=memify_missing", self.GLOBAL_DATASET)
+            return
+        ctx = self.dataset_service.to_user_ctx(user_ctx)
+        if ctx is None:
+            fallback_user = await self.dataset_service.get_cognee_user()
+            ctx = self.dataset_service.to_user_ctx(fallback_user)
+        if ctx is None:
+            logger.debug("knowledge_memify_skipped dataset={} reason=user_ctx_unavailable", self.GLOBAL_DATASET)
+            return
+        alias = self.dataset_service.alias_for_dataset(self.GLOBAL_DATASET)
+        try:
+            await self.dataset_service.ensure_dataset_exists(alias, ctx)
+            dataset_id = await self.dataset_service.get_dataset_id(alias, ctx)
+            target = dataset_id or alias
+            result = memify_fn(datasets=[target], user=ctx)
+            if inspect.isawaitable(result):
+                await result
+            logger.info("knowledge_memify_done dataset={}", alias)
+        except Exception as exc:
+            logger.warning(f"knowledge_memify_failed dataset={alias} detail={exc}")
+
+    async def memify_profile_datasets(self, profile_id: int) -> dict[str, Any]:
+        memify_fn = getattr(cognee, "memify", None)
+        if not callable(memify_fn):
+            logger.debug("knowledge_memify_skipped profile_id={} reason=memify_missing", profile_id)
+            return {"status": "skipped", "reason": "memify_missing"}
+        user = await self.dataset_service.get_cognee_user()
+        user_ctx = self.dataset_service.to_user_ctx(user)
+        if user_ctx is None:
+            logger.debug("knowledge_memify_skipped profile_id={} reason=user_ctx_unavailable", profile_id)
+            return {"status": "skipped", "reason": "user_ctx_unavailable"}
+
+        aliases = [
+            self.dataset_service.alias_for_dataset(self.dataset_service.dataset_name(profile_id)),
+            self.dataset_service.alias_for_dataset(self.dataset_service.chat_dataset_name(profile_id)),
+        ]
+        processed: list[str] = []
+        for alias in aliases:
+            try:
+                await self.dataset_service.ensure_dataset_exists(alias, user_ctx)
+                dataset_id = await self.dataset_service.get_dataset_id(alias, user_ctx)
+                target = dataset_id or alias
+                result = memify_fn(datasets=[target], user=user_ctx)
+                if inspect.isawaitable(result):
+                    await result
+                logger.info("knowledge_memify_done dataset={}", alias)
+                processed.append(alias)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"knowledge_memify_failed dataset={alias} detail={exc}")
+        return {"profile_id": profile_id, "datasets": processed}
 
     async def search(
         self, query: str, profile_id: int, k: int | None = None, *, request_id: str | None = None
@@ -423,6 +573,9 @@ class KnowledgeBase:
         if user_ctx is None:
             user_ctx = self.dataset_service._bootstrap_user_ctx()
 
+        if not await self._ensure_vector_ready_for_dataset(alias):
+            return alias, False
+
         await self.dataset_service.ensure_dataset_exists(alias, user_ctx)
         rows_before = await self.dataset_service.get_row_count(alias, user=actor)
         metadata_payload = self.dataset_service._infer_metadata_from_text(normalized_text, metadata)
@@ -656,7 +809,7 @@ class KnowledgeBase:
 
                     if reingest_result.reinserted > 0:
                         logger.info(
-                            "Reingest successful for dataset=%s, reinserted=%s. Retrying projection probe.",
+                            "Reingest successful for dataset={}, reinserted={}. Retrying projection probe.",
                             alias,
                             reingest_result.reinserted,
                         )
@@ -1066,6 +1219,8 @@ class KnowledgeBase:
         search_service = getattr(self, "search_service", None)
         if search_service is None:
             logger.warning(f"profile_sync_skipped profile_id={profile_id} reason=missing_search_service")
+            return False
+        if not await self._ensure_vector_ready_for_dataset(self.dataset_service.dataset_name(profile_id)):
             return False
         try:
             indexed = await search_service._ensure_profile_indexed(profile_id, actor)

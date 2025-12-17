@@ -13,6 +13,7 @@ from bot.utils.menus import (
     start_program_flow,
     start_subscription_flow,
 )
+from bot.texts import MessageText, translate
 from config.app_settings import settings
 from core.cache import Cache
 from core.enums import ProfileStatus
@@ -97,7 +98,10 @@ async def internal_webapp_workout_action(request: web.Request) -> web.Response:
             language=language,
             pending_flow={"name": pending_name},
         )
-        return web.json_response({"status": "ok"})
+        alert_text = translate(MessageText.finish_registration_to_get_credits, language).format(
+            credits=settings.DEFAULT_CREDITS
+        )
+        return web.json_response({"status": "ok", "profile_incomplete": True, "message": alert_text})
 
     if action == "create_program":
         await start_program_flow(target, profile, state)

@@ -15,6 +15,13 @@ from core.schemas import Program, QAResponse, Subscription
 from ai_coach.exceptions import AgentExecutionAborted
 from ai_coach.agent.knowledge.schemas import KnowledgeSnippet
 
+try:  # pragma: no cover - compatibility guard
+    import pydantic_ai.exceptions as _pa_exceptions  # type: ignore
+except Exception:  # noqa: BLE001
+    BadRequestError = RuntimeError
+else:
+    BadRequestError = getattr(_pa_exceptions, "BadRequestError", RuntimeError)
+
 from .base import AgentDeps
 from .llm_helper import LLMHelper, LLMHelperProto
 from .prompts import (
@@ -207,23 +214,24 @@ class CoachAgent(metaclass=CoachAgentMeta):
             if fallback_result is None:
                 raise
             return fallback_result
-        except Exception as exc:  # noqa: BLE001
-            if attachments:
-                logger.warning(
-                    "agent.ask.vision_fallback profile_id={} attachments={} error={}",
-                    deps.profile_id,
-                    len(attachments),
-                    exc,
-                )
-                try:
-                    raw_result = await _run_agent(user_prompt)
-                except AgentExecutionAborted as inner:
-                    fallback_result = await _handle_abort(inner)
-                    if fallback_result is None:
-                        raise inner
-                    return fallback_result
-                else:
+        except BadRequestError as exc:
+            if not attachments:
+                raise
+            logger.warning(
+                "agent.ask.vision_fallback profile_id={} attachments={} error={}",
+                deps.profile_id,
+                len(attachments),
+                exc,
+            )
+            try:
+                raw_result = await _run_agent(user_prompt)
+            except AgentExecutionAborted as inner:
+                fallback_result = await _handle_abort(inner)
+                if fallback_result is None:
                     raise
+                return fallback_result
+            except BadRequestError:
+                raise
 
         if raw_result is None:
             raise RuntimeError("agent.ask_result_missing")

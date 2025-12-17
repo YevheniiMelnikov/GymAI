@@ -28,8 +28,15 @@ def validate_refresh_credentials(
     cfg = _get_refresh_settings()
     expected_user = str(getattr(cfg, "AI_COACH_REFRESH_USER", "") or "")
     expected_pass = str(getattr(cfg, "AI_COACH_REFRESH_PASSWORD", "") or "")
+    env_mode = str(getattr(cfg, "ENVIRONMENT", "development") or "").lower()
+    allow_insecure = env_mode != "production"
     if not expected_user and not expected_pass:
-        return credentials
+        if allow_insecure:
+            if not getattr(validate_refresh_credentials, "_warned_missing", False):
+                logger.warning("AI coach refresh credentials missing; allowing refresh in {} mode", env_mode)
+                setattr(validate_refresh_credentials, "_warned_missing", True)
+            return credentials
+        raise HTTPException(status_code=503, detail="Refresh auth is not configured")
     if credentials is None:
         raise HTTPException(status_code=401, detail="Unauthorized")
     username = str(credentials.username or "")
