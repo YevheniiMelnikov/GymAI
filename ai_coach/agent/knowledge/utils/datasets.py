@@ -1,3 +1,4 @@
+import asyncio
 from hashlib import sha256
 import inspect
 import logging
@@ -6,6 +7,7 @@ from types import SimpleNamespace
 from typing import Any, Awaitable, Callable, ClassVar, Iterable, Mapping, Optional, cast
 from uuid import NAMESPACE_DNS, UUID, uuid5
 
+from sqlalchemy.exc import MultipleResultsFound
 from loguru import logger
 
 import cognee
@@ -23,11 +25,11 @@ class DatasetService:
     _DATASET_ALIASES: ClassVar[dict[str, str]] = {}
     _PROJECTED_DATASETS: ClassVar[set[str]] = set()
     _DATASET_IDENTIFIER_FIELDS: ClassVar[tuple[str, ...]] = (
+        "id",
         "dataset_id",
         "datasetId",
         "dataset_name",
         "datasetName",
-        "id",
     )
     _BOOTSTRAP_USER_UUID: ClassVar[UUID] = uuid5(NAMESPACE_DNS, "gymbot_cognee_bootstrap_user")
     GLOBAL_DATASET: ClassVar[str] = settings.COGNEE_GLOBAL_DATASET
@@ -115,8 +117,18 @@ class DatasetService:
         canonical = self._resolve_dataset_alias(alias)
         if not canonical:
             return
-        self._DATASET_IDS[canonical] = identifier
         self._DATASET_ALIASES[identifier] = canonical
+        if self._looks_like_uuid(identifier):
+            self._DATASET_IDS[canonical] = identifier
+
+    @staticmethod
+    def _is_duplicate_dataset_error(exc: Exception) -> bool:
+        text = str(exc).lower()
+        if "duplicate key value violates unique constraint" in text and "datasets" in text:
+            return True
+        if exc.__class__.__name__.lower().startswith("uniqueviolation"):
+            return True
+        return False
 
     def get_registered_identifier(self, dataset_or_alias: str) -> str | None:
         name = (dataset_or_alias or "").strip()
@@ -174,6 +186,79 @@ class DatasetService:
                     return identifier
         return None
 
+    async def get_dataset_uuid(self, dataset: str, user_ctx: Any | None) -> UUID | None:
+        alias = self.alias_for_dataset(dataset)
+        meta = await self._get_dataset_metadata(alias, self.to_user_ctx_or_default(user_ctx))
+        candidate: Any = None
+        if isinstance(meta, Mapping):
+            candidate = meta.get("id") or meta.get("dataset_id") or meta.get("datasetId")
+        else:
+            candidate = getattr(meta, "id", None) or getattr(meta, "dataset_id", None)
+        resolved_uuid: UUID | None = None
+        if candidate:
+            try:
+                resolved_uuid = candidate if isinstance(candidate, UUID) else UUID(str(candidate))
+            except Exception:
+                logger.debug(f"dataset_uuid_invalid dataset={alias} value={candidate}")
+        if resolved_uuid is None:
+            resolved_uuid = await self._fetch_dataset_uuid_from_db(alias)
+        if resolved_uuid is not None:
+            self.register_dataset_identifier(alias, str(resolved_uuid))
+            return resolved_uuid
+        logger.debug(f"dataset_uuid_unavailable dataset={alias}")
+        return None
+
+    async def reset_pipeline_status(self, dataset_id: str | UUID | None, pipeline_name: str) -> None:
+        if not dataset_id:
+            return
+        try:
+            from sqlalchemy import delete, select
+            from cognee.infrastructure.databases.relational import get_relational_engine
+            from cognee.modules.data.models import Data, DatasetData
+            from cognee.modules.pipelines.models import PipelineRun
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"pipeline_status_reset_skipped dataset_id={dataset_id} detail={exc}")
+            return
+
+        try:
+            dataset_uuid = dataset_id if isinstance(dataset_id, UUID) else UUID(str(dataset_id))
+        except Exception:
+            logger.debug(f"pipeline_status_reset_invalid_id dataset_id={dataset_id}")
+            return
+
+        db_engine = get_relational_engine()
+        cleared_items = 0
+        async with db_engine.get_async_session() as session:
+            await session.execute(
+                delete(PipelineRun).where(
+                    PipelineRun.dataset_id == dataset_uuid,
+                    PipelineRun.pipeline_name == pipeline_name,
+                )
+            )
+            result = await session.execute(
+                select(Data)
+                .join(DatasetData, Data.id == DatasetData.data_id)
+                .where(DatasetData.dataset_id == dataset_uuid)
+            )
+            records = result.scalars().all()
+            for item in records:
+                status_map = item.pipeline_status or {}
+                entry = status_map.get(pipeline_name)
+                if not isinstance(entry, dict):
+                    continue
+                if entry.pop(str(dataset_uuid), None) is None:
+                    continue
+                if entry:
+                    status_map[pipeline_name] = entry
+                else:
+                    status_map.pop(pipeline_name, None)
+                item.pipeline_status = status_map
+                cleared_items += 1
+            await session.commit()
+        logger.debug(
+            f"pipeline_status_reset_done dataset_id={dataset_uuid} pipeline={pipeline_name} items={cleared_items}"
+        )
+
     def _extract_dataset_identifier(self, info: Any | None) -> str | None:
         if info is None:
             return None
@@ -208,8 +293,9 @@ class DatasetService:
         except Exception:
             raise RuntimeError("cognee_modules_unavailable")
 
-        retried_setup = False
+        attempts = 0
         while True:
+            attempts += 1
             try:
                 exists = await get_authorized_dataset_by_name(canonical, ctx, "write")
                 if exists is not None:
@@ -217,6 +303,7 @@ class DatasetService:
                     logger.debug(f"dataset.ensure_exists.found alias={alias} user_id={user_id} ident={identifier}")
                     if identifier:
                         self.register_dataset_identifier(canonical, identifier)
+                    await self._sync_dataset_uuid_from_db(canonical)
                     return
                 logger.debug(f"knowledge_dataset_creating dataset={alias} user_id={user_id}")
                 created = await create_authorized_dataset(canonical, ctx)
@@ -224,17 +311,34 @@ class DatasetService:
                 logger.debug(f"knowledge_dataset_created dataset={alias} user_id={user_id} ident={identifier}")
                 if identifier:
                     self.register_dataset_identifier(canonical, identifier)
+                await self._sync_dataset_uuid_from_db(canonical)
                 return
-            except Exception as exc:
-                if needs_cognee_setup(exc) and not retried_setup:
-                    from ai_coach.agent.knowledge.cognee_config import ensure_cognee_ready
-
-                    retried_setup = True
-                    await ensure_cognee_ready()
+            except MultipleResultsFound as exc:
+                healed = await self._heal_duplicate_datasets(canonical)
+                if healed:
+                    logger.warning(
+                        "knowledge_dataset_duplicate_healed alias={} user_id={} attempts={} detail={}",
+                        alias,
+                        user_id,
+                        attempts,
+                        exc,
+                    )
                     continue
+                raise
+            except Exception as exc:
                 if needs_cognee_setup(exc):
                     logger.warning(f"knowledge_dataset_ensure_failed dataset={canonical} detail={exc}")
                     raise RuntimeError(f"cognee_setup_failed: {exc}") from exc
+                if self._is_duplicate_dataset_error(exc):
+                    logger.info(
+                        "knowledge_dataset_create_duplicate alias={} user_id={} attempt={} detail={}",
+                        alias,
+                        user_id,
+                        attempts,
+                        exc,
+                    )
+                    await asyncio.sleep(0.2)
+                    continue
                 raise
 
     async def list_dataset_entries(self, dataset: str, user_ctx: Any | None) -> list[DatasetRow]:
@@ -340,15 +444,41 @@ class DatasetService:
             f"requires_user={self._list_data_requires_user}"
         )
 
+        rows = await self._call_list_data(list_data, dataset_id, user_ctx)
+        if not rows and dataset_id != alias and not self._looks_like_uuid(str(dataset_id)):
+            logger.debug(
+                "dataset.fetch_rows.retry alias={} dataset_id={} reason=empty_rows",
+                alias,
+                dataset_id,
+            )
+            try:
+                rows = await self._call_list_data(list_data, alias, user_ctx)
+            except Exception as exc:
+                self.log_once(
+                    logging.WARNING,
+                    "dataset.fetch_rows_retry_failed",
+                    dataset=alias,
+                    reason="alias_not_supported",
+                    detail=str(exc),
+                    min_interval=30.0,
+                )
+        return list(rows)
+
+    async def _call_list_data(
+        self,
+        list_data: Callable[..., Awaitable[Iterable[Any]]],
+        target: str,
+        user_ctx: Any,
+    ) -> list[Any]:
         if self._list_data_supports_user is not False:
             try:
-                rows = await list_data(dataset_id, user=user_ctx)
+                rows = await list_data(target, user=user_ctx)
             except TypeError:
                 logger.debug("cognee.datasets.list_data rejected keyword 'user', retrying without keyword")
                 self._list_data_supports_user = False
                 if self._list_data_requires_user:
                     logger.debug("cognee.datasets.list_data requires user context, retrying positional call")
-                    rows = await list_data(dataset_id, user_ctx)
+                    rows = await list_data(target, user_ctx)
                     self._list_data_supports_user = True
                     return list(rows)
             else:
@@ -356,15 +486,15 @@ class DatasetService:
                 return list(rows)
 
         if self._list_data_requires_user:
-            rows = await list_data(dataset_id, user_ctx)
+            rows = await list_data(target, user_ctx)
             self._list_data_supports_user = True
             return list(rows)
 
         try:
-            rows = await list_data(dataset_id)
+            rows = await list_data(target)
         except TypeError as exc:
             logger.debug(f"cognee.datasets.list_data raised {exc.__class__.__name__}: retrying with positional user")
-            rows = await list_data(dataset_id, user_ctx)
+            rows = await list_data(target, user_ctx)
             self._list_data_supports_user = True
             self._list_data_requires_user = True
             return list(rows)
@@ -441,7 +571,6 @@ class DatasetService:
     async def get_cognee_user(self) -> Any | None:
         if self._user is not None:
             return self._user
-        retried_setup = False
         while True:
             try:
                 from cognee.modules.users.methods.get_default_user import get_default_user
@@ -451,12 +580,6 @@ class DatasetService:
                     self._user = self._bootstrap_user_ctx()
                 return self._user
             except Exception as exc:
-                if needs_cognee_setup(exc) and not retried_setup:
-                    from ai_coach.agent.knowledge.cognee_config import ensure_cognee_ready
-
-                    retried_setup = True
-                    await ensure_cognee_ready()
-                    continue
                 if needs_cognee_setup(exc):
                     self.log_once(
                         logging.WARNING,
@@ -616,6 +739,196 @@ class DatasetService:
         except Exception as exc:
             logger.debug(f"knowledge_dataset_metadata_failed dataset={dataset} detail={exc}")
             return None
+
+    async def _fetch_dataset_uuid_from_db(self, alias: str, *, allow_heal: bool = True) -> UUID | None:
+        try:
+            from sqlalchemy import select
+            from cognee.modules.data.models import Dataset
+            from cognee.infrastructure.databases.relational import get_relational_engine
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"dataset_uuid_fallback_unavailable dataset={alias} detail={exc}")
+            return None
+
+        engine = get_relational_engine()
+        candidate_names: list[str] = []
+        identifier = self._DATASET_IDS.get(alias)
+        if identifier and identifier not in candidate_names:
+            candidate_names.append(identifier)
+        if alias not in candidate_names:
+            candidate_names.append(alias)
+        if not candidate_names:
+            return None
+
+        async with engine.get_async_session() as session:
+            result = await session.execute(
+                select(Dataset).where(Dataset.name.in_(candidate_names)).order_by(Dataset.created_at)
+            )
+            rows = result.scalars().all()
+
+        if not rows:
+            return None
+
+        if len(rows) > 1:
+            self.log_once(
+                logging.WARNING,
+                "dataset_uuid_multiple_rows",
+                dataset=alias,
+                candidates=",".join(candidate_names),
+                rows=len(rows),
+                min_interval=30.0,
+            )
+            if allow_heal:
+                healed = await self._heal_duplicate_dataset_rows(rows, alias, candidate_names=candidate_names)
+                if healed:
+                    return await self._fetch_dataset_uuid_from_db(alias, allow_heal=False)
+
+        raw_id = rows[0].id
+        try:
+            return raw_id if isinstance(raw_id, UUID) else UUID(str(raw_id))
+        except Exception:
+            logger.debug(f"dataset_uuid_db_invalid dataset={alias} value={raw_id}")
+            return None
+
+    async def _heal_duplicate_dataset_rows(
+        self,
+        rows: list[Any],
+        alias: str,
+        *,
+        candidate_names: Iterable[str],
+    ) -> bool:
+        if len(rows) <= 1:
+            return False
+        try:
+            from sqlalchemy import delete
+            from cognee.infrastructure.databases.relational import get_relational_engine
+            from cognee.modules.data.models import Dataset, DatasetData
+            from cognee.modules.pipelines.models import PipelineRun
+            from cognee.modules.users.models import ACL
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("knowledge_dataset_duplicate_cleanup_unavailable alias={} detail={}", alias, exc)
+            return False
+
+        survivor = rows[0]
+        duplicate_ids = [row.id for row in rows[1:] if row.id is not None]
+        if not duplicate_ids:
+            logger.warning(
+                "knowledge_dataset_duplicate_cleanup_failed alias={} reason=missing_duplicate_ids",
+                alias,
+            )
+            return False
+
+        engine = get_relational_engine()
+        async with engine.get_async_session() as session:
+            await session.execute(delete(DatasetData).where(DatasetData.dataset_id.in_(duplicate_ids)))
+            await session.execute(delete(PipelineRun).where(PipelineRun.dataset_id.in_(duplicate_ids)))
+            await session.execute(delete(ACL).where(ACL.dataset_id.in_(duplicate_ids)))
+            await session.execute(delete(Dataset).where(Dataset.id.in_(duplicate_ids)))
+            await session.commit()
+
+        logger.warning(
+            "knowledge_dataset_duplicate_cleanup alias={} kept_id={} removed={} candidates={}",
+            alias,
+            survivor.id,
+            ", ".join(str(value) for value in duplicate_ids),
+            ",".join(candidate_names),
+        )
+        await self._sync_dataset_uuid_from_db(alias)
+        return True
+
+    async def _sync_dataset_uuid_from_db(self, alias: str) -> str | None:
+        canonical = self._resolve_dataset_alias(alias)
+        if not canonical:
+            return None
+        actual_uuid = await self._fetch_dataset_uuid_from_db(canonical)
+        if actual_uuid is None:
+            return None
+        identifier = str(actual_uuid)
+        self._DATASET_IDS[canonical] = identifier
+        self._DATASET_ALIASES[identifier] = canonical
+        return identifier
+
+    async def _heal_duplicate_datasets(self, alias: str) -> bool:
+        canonical = self._resolve_dataset_alias(alias)
+        if not canonical:
+            return False
+        try:
+            from sqlalchemy import select
+            from cognee.infrastructure.databases.relational import get_relational_engine
+            from cognee.modules.data.models import Dataset
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("knowledge_dataset_duplicate_cleanup_unavailable alias={} detail={}", canonical, exc)
+            return False
+
+        engine = get_relational_engine()
+        async with engine.get_async_session() as session:
+            result = await session.execute(
+                select(Dataset).where(Dataset.name == canonical).order_by(Dataset.created_at)
+            )
+            rows = result.scalars().all()
+        return await self._heal_duplicate_dataset_rows(rows, canonical, candidate_names=[canonical])
+
+    async def purge_dataset(self, alias: str, drop_all: bool = False) -> bool:
+        canonical = self._resolve_dataset_alias(alias)
+        if not canonical:
+            return False
+        try:
+            from sqlalchemy import delete, select
+            from cognee.infrastructure.databases.relational import get_relational_engine
+            from cognee.modules.data.models import Dataset, DatasetData
+            from cognee.modules.pipelines.models import PipelineRun
+            from cognee.modules.users.models import ACL
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("knowledge_dataset_purge_unavailable alias={} detail={}", canonical, exc)
+            return False
+
+        engine = get_relational_engine()
+        async with engine.get_async_session() as session:
+            result = await session.execute(
+                select(Dataset).where(Dataset.name == canonical).order_by(Dataset.created_at)
+            )
+            primary_rows = result.scalars().all()
+            if not primary_rows:
+                return False
+
+            candidate_names = {canonical}
+            candidate_names.update(str(row.id) for row in primary_rows if row.id is not None)
+
+            result = await session.execute(
+                select(Dataset).where(Dataset.name.in_(candidate_names)).order_by(Dataset.created_at)
+            )
+            rows = result.scalars().all()
+            if not rows:
+                return False
+
+            if drop_all:
+                target_ids = [row.id for row in rows if row.id is not None]
+            else:
+                target_ids = [row.id for row in rows[1:] if row.id is not None]
+
+            if not target_ids:
+                return False
+
+            await session.execute(delete(DatasetData).where(DatasetData.dataset_id.in_(target_ids)))
+            await session.execute(delete(PipelineRun).where(PipelineRun.dataset_id.in_(target_ids)))
+            await session.execute(delete(ACL).where(ACL.dataset_id.in_(target_ids)))
+            await session.execute(delete(Dataset).where(Dataset.id.in_(target_ids)))
+            await session.commit()
+
+        action = "purged" if drop_all else "healed"
+        logger.warning(
+            "knowledge_dataset_purge alias={} action={} removed={}",
+            canonical,
+            action,
+            ", ".join(str(value) for value in target_ids),
+        )
+
+        if drop_all:
+            self._DATASET_IDS.pop(canonical, None)
+            for identifier, value in list(self._DATASET_ALIASES.items()):
+                if value == canonical:
+                    self._DATASET_ALIASES.pop(identifier, None)
+        await self._sync_dataset_uuid_from_db(canonical)
+        return True
 
     def _normalize_uuid(self, value: Any | None) -> UUID | None:
         if value in (None, ""):

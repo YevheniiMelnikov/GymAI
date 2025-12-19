@@ -1,8 +1,8 @@
 import importlib
-import inspect
 import os
 import cognee
 from pathlib import Path
+from textwrap import dedent
 from types import ModuleType
 from typing import Any, Awaitable, Callable, ClassVar, cast
 from uuid import uuid4
@@ -19,7 +19,6 @@ from ai_coach.agent.knowledge.utils.storage_helpers import (
 from config.app_settings import settings
 
 _COGNEE_MODULE: ModuleType | None = None
-_COGNEE_SETUP_DONE = False
 
 
 class CogneeConfig:
@@ -101,37 +100,20 @@ class CogneeConfig:
 
     @staticmethod
     def _configure_vector_db() -> None:
-        provider = settings.VECTORDATABASE_PROVIDER
-        env_provider = os.environ.get("VECTORDATABASE_PROVIDER")
-        env_url = os.environ.get("VECTORDATABASE_URL")
-        vector_url = env_url or settings.VECTORDATABASE_URL
-
-        if env_provider and env_provider != provider:
-            logger.warning(
-                "cognee_vector_provider_mismatch env_provider={} config_provider={}",
-                env_provider,
-                provider,
-            )
-
-        vector_url = CogneeConfig._ensure_vector_url(provider, vector_url)
+        provider = settings.VECTOR_DB_PROVIDER
+        vector_url = settings.VECTOR_DB_URL
         vector_url_safe = CogneeConfig._render_safe_url(vector_url)
         vector_meta = CogneeConfig._extract_url_meta(vector_url)
         vector_host = vector_meta.get("host") or ""
 
-        CogneeConfig._warn_if_vector_matches_relational_host(vector_host)
-
         cognee.config.set_vector_db_provider(provider)
         cognee.config.set_vector_db_url(vector_url)
-        os.environ["VECTORDATABASE_PROVIDER"] = provider
-        os.environ["VECTORDATABASE_URL"] = vector_url
-
-        if provider == "pgvector":
-            CogneeConfig._export_pgvector_env(vector_meta)
+        os.environ["VECTOR_DB_PROVIDER"] = provider
+        os.environ["VECTOR_DB_URL"] = vector_url
 
         logger.info(
-            "cognee_vector_config provider={} env_provider={} effective_url={} host={} port={} db={} user={}",
+            "cognee_vector_config provider={} url={} host={} port={} db={} user={}",
             provider,
-            env_provider or "unset",
             vector_url_safe,
             vector_host or "unset",
             vector_meta.get("port") or "unset",
@@ -170,9 +152,12 @@ class CogneeConfig:
             "graph_database_port": graph_port,
         }
         cognee.config.set_graph_db_config(graph_db_config)
-        env_vector_provider = os.environ.get("VECTORDATABASE_PROVIDER", "unset")
+        env_vector_provider = os.environ.get("VECTOR_DB_PROVIDER", "unset")
         logger.info(
-            "cognee_graph_config_applied env_graph_provider={} config_graph_provider={} env_vector_provider={} url={} host={} port={} name={} user={}",
+            (
+                "cognee_graph_config_applied env_graph_provider={} config_graph_provider={} "
+                "env_vector_provider={} url={} host={} port={} name={} user={}"
+            ),
             env_graph_provider or "unset",
             settings.GRAPH_DATABASE_PROVIDER,
             env_vector_provider,
@@ -187,18 +172,18 @@ class CogneeConfig:
     def _configure_relational_db() -> None:
         cognee.config.set_relational_db_config(
             {
-                "db_host": settings.DB_HOST,
-                "db_port": settings.DB_PORT,
-                "db_username": settings.DB_USER,
-                "db_password": settings.DB_PASSWORD,
-                "db_name": settings.DB_NAME,
+                "db_host": settings.PGVECTOR_HOST,
+                "db_port": settings.PGVECTOR_PORT,
+                "db_username": settings.PGVECTOR_USER,
+                "db_password": settings.PGVECTOR_PASSWORD,
+                "db_name": settings.PGVECTOR_DB,
                 "db_path": "",
                 "db_provider": settings.DB_PROVIDER,
             }
         )
 
-    @staticmethod
-    def _patch_cognee() -> None:
+    @classmethod
+    def _patch_cognee(cls) -> None:
         """Apply runtime patches to Cognee (ledger, embeddings, API adapter)."""
         try:
             from cognee.infrastructure.databases.vector.embeddings import LiteLLMEmbeddingEngine
@@ -217,13 +202,25 @@ class CogneeConfig:
                 except Exception:
                     continue
 
+            try:
+                from cognee.infrastructure.databases.graph.neo4j_driver.adapter import Neo4jAdapter
+            except Exception:  # noqa: BLE001
+                Neo4jAdapter = None
+
             CogneeConfig._patch_graph_relationship_ledger(GraphRelationshipLedger)
             CogneeConfig._patch_litellm_embedding_engine(LiteLLMEmbeddingEngine)  # pyrefly: ignore[bad-argument-type]
+            if Neo4jAdapter is not None:
+                CogneeConfig._patch_neo4j_adapter(Neo4jAdapter)
             if GenericAPIAdapter:
-                CogneeConfig._patch_generic_api_adapter(GenericAPIAdapter)
+                cls._patch_generic_api_adapter(GenericAPIAdapter)
 
         except Exception as exc:  # noqa: BLE001
             logger.debug(f"Cognee patch failed: {exc}")
+
+        cls._patch_graph_logging()
+        cls._patch_add_data_points_logging()
+        cls._patch_extract_graph_task()
+        cls._patch_cognify_tasks()
 
     @staticmethod
     def _patch_graph_relationship_ledger(ledger_cls: type) -> None:
@@ -258,6 +255,97 @@ class CogneeConfig:
         engine_cls.embedding = staticmethod(patched_embedding)  # pyrefly: ignore[missing-attribute]
 
     @staticmethod
+    def _patch_neo4j_adapter(adapter_cls: type) -> None:
+        """Wrap Neo4j adapter methods to fallback when APOC procedures are unavailable."""
+        import re
+        from collections import defaultdict
+        from typing import Any
+
+        from neo4j.exceptions import Neo4jError
+
+        try:
+            from cognee.infrastructure.databases.graph.neo4j_driver.adapter import BASE_LABEL
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"neo4j_adapter_patch_skipped detail={exc}")
+            return
+
+        label_pattern = re.compile(r"[^0-9A-Za-z_]")
+
+        def _sanitize_label(label: str) -> str:
+            sanitized = label_pattern.sub("_", label or "Node")
+            if sanitized and sanitized[0].isdigit():
+                sanitized = f"_{sanitized}"
+            return sanitized or "Node"
+
+        async def _add_node_without_apoc(self, node):
+            label = _sanitize_label(type(node).__name__)
+            serialized_properties = self.serialize_properties(node.model_dump())
+            query = dedent(
+                f"""MERGE (n:`{BASE_LABEL}` {{id: $node_id}})
+                ON CREATE SET n += $properties, n.updated_at = timestamp()
+                ON MATCH SET n += $properties, n.updated_at = timestamp()
+                SET n:`{label}`
+                RETURN ID(n) AS internal_id, n.id AS nodeId"""
+            )
+            params = {
+                "node_id": str(node.id),
+                "properties": serialized_properties,
+            }
+            return await self.query(query, params)
+
+        async def _add_nodes_without_apoc(self, nodes):
+            grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+            for data_point in nodes:
+                label = _sanitize_label(type(data_point).__name__)
+                grouped[label].append(
+                    {
+                        "node_id": str(data_point.id),
+                        "properties": self.serialize_properties(dict(data_point)),
+                    }
+                )
+            results: list[Any] = []
+            for label, payload in grouped.items():
+                logger.info(f"neo4j_add_nodes_fallback label={label} count={len(payload)}")
+                query = dedent(
+                    f"""
+                    UNWIND $nodes AS node
+                    MERGE (n:`{BASE_LABEL}` {{id: node.node_id}})
+                    ON CREATE SET n += node.properties, n.updated_at = timestamp()
+                    ON MATCH SET n += node.properties, n.updated_at = timestamp()
+                    SET n:`{label}`
+                    RETURN ID(n) AS internal_id, n.id AS nodeId
+                    """
+                )
+                results.extend(await self.query(query, {"nodes": payload}))
+            return results
+
+        original_add_node = adapter_cls.add_node
+        original_add_nodes = adapter_cls.add_nodes
+
+        async def patched_add_node(self, node):  # type: ignore[override]
+            logger.info(f"neo4j_add_node label={type(node).__name__}")
+            try:
+                return await original_add_node(self, node)
+            except Neo4jError as exc:  # pragma: no cover
+                if "apoc.create.addLabels" not in str(exc):
+                    raise
+                logger.warning("neo4j_apoc_missing falling back to manual label assignment")
+                return await _add_node_without_apoc(self, node)
+
+        async def patched_add_nodes(self, nodes):  # type: ignore[override]
+            logger.info(f"neo4j_add_nodes total={len(nodes)}")
+            try:
+                return await original_add_nodes(self, nodes)
+            except Neo4jError as exc:  # pragma: no cover
+                if "apoc.create.addLabels" not in str(exc):
+                    raise
+                logger.warning("neo4j_apoc_missing falling back to manual label assignment")
+                return await _add_nodes_without_apoc(self, nodes)
+
+        adapter_cls.add_node = patched_add_node  # type: ignore[attr-defined]
+        adapter_cls.add_nodes = patched_add_nodes  # type: ignore[attr-defined]
+
+    @staticmethod
     def _patch_generic_api_adapter(adapter_cls: type) -> None:
         """Force GenericAPIAdapter to use OpenAI client."""
         original_create = getattr(adapter_cls, "create_client", None)
@@ -276,6 +364,87 @@ class CogneeConfig:
                 raise
 
         setattr(adapter_cls, "create_client", staticmethod(_create_client))
+
+    @staticmethod
+    def _patch_graph_logging() -> None:
+        return
+
+    @staticmethod
+    def _patch_add_data_points_logging() -> None:
+        return
+
+    @staticmethod
+    def _patch_extract_graph_task() -> None:
+        return
+
+    @staticmethod
+    def _patch_cognify_tasks() -> None:
+        """Ensure graph tasks are present in cognify pipelines."""
+        try:
+            import cognee.api.v1.cognify.cognify as cognify_module
+            from cognee.api.v1.cognify.cognify import get_default_tasks as original_get_tasks
+            from cognee.api.v1.cognify.cognify import get_temporal_tasks as original_temporal_tasks
+            from cognee.modules.pipelines.tasks.task import Task as CogneeTask
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"cognify task patch skipped detail={exc}")
+            return
+
+        def _task_name(task: Any) -> str:
+            callable_obj = getattr(task, "callable", None) or getattr(task, "executable", None)
+            if callable_obj is not None:
+                return getattr(callable_obj, "__name__", str(callable_obj))
+            return getattr(task, "__name__", str(task))
+
+        def _build_task(executable: Any) -> Any:
+            if executable is None:
+                return None
+            if isinstance(executable, CogneeTask):
+                return executable
+            try:
+                return CogneeTask(executable=executable)
+            except Exception:
+                pass
+            try:
+                return CogneeTask(callable=executable)
+            except Exception:
+                return executable
+
+        def _resolve_graph_task() -> Any | None:
+            try:
+                from cognee.tasks.graph import extract_graph_from_data
+            except Exception:
+                extract_graph_from_data = None
+            if extract_graph_from_data is not None:
+                return _build_task(extract_graph_from_data)
+            return None
+
+        def _ensure_graph_tasks(tasks: list[Any]) -> list[Any]:
+            names = [_task_name(task) for task in tasks]
+            if any("extract_graph" in name for name in names):
+                return tasks
+            graph_task = _resolve_graph_task()
+            if graph_task is None:
+                return tasks
+            tasks.append(graph_task)
+            return tasks
+
+        if callable(original_get_tasks):
+
+            async def logged_get_default_tasks(*args: Any, **kwargs: Any):
+                tasks = list(await original_get_tasks(*args, **kwargs))
+                tasks = _ensure_graph_tasks(tasks)
+                return tasks
+
+            cognify_module.get_default_tasks = logged_get_default_tasks
+
+        if callable(original_temporal_tasks):
+
+            async def logged_temporal_tasks(*args: Any, **kwargs: Any):
+                tasks = list(await original_temporal_tasks(*args, **kwargs))
+                tasks = _ensure_graph_tasks(tasks)
+                return tasks
+
+            cognify_module.get_temporal_tasks = logged_temporal_tasks
 
     @classmethod
     def _patch_dataset_creation(cls) -> None:
@@ -362,93 +531,3 @@ class CogneeConfig:
             "username": parsed.username,
             "password": parsed.password,
         }
-
-    @staticmethod
-    def _warn_if_vector_matches_relational_host(vector_host: str) -> None:
-        if not vector_host:
-            return
-        db_hosts = {settings.DB_HOST, os.environ.get("DB_HOST"), os.environ.get("POSTGRES_HOST")}
-        db_hosts = {host for host in db_hosts if host}
-        if vector_host in db_hosts:
-            logger.warning(
-                "vector_db_host_matches_relational host={} expected_pgvector_host={}",
-                vector_host,
-                settings.PGVECTOR_HOST or "pgvector",
-            )
-
-    @staticmethod
-    def _export_pgvector_env(meta: dict[str, str | int | None]) -> None:
-        host = meta.get("host") or settings.PGVECTOR_HOST
-        port = meta.get("port") or settings.PGVECTOR_PORT
-        database = meta.get("database") or settings.PGVECTOR_DB
-        user = meta.get("username") or settings.PGVECTOR_USER
-        password = meta.get("password") or settings.PGVECTOR_PASSWORD
-
-        if host:
-            os.environ["PGVECTOR_HOST"] = str(host)
-        if port:
-            os.environ["PGVECTOR_PORT"] = str(port)
-        if database:
-            os.environ["PGVECTOR_DB"] = str(database)
-        if user:
-            os.environ["PGVECTOR_USER"] = str(user)
-        if password:
-            os.environ["PGVECTOR_PASSWORD"] = str(password)
-
-    @staticmethod
-    def _ensure_vector_url(provider: str, vector_url: str | None) -> str:
-        if provider.lower() != "pgvector":
-            return vector_url or ""
-
-        if vector_url:
-            return vector_url
-
-        host = settings.PGVECTOR_HOST or "pgvector"
-        port = settings.PGVECTOR_PORT or 5432
-        user = settings.PGVECTOR_USER or "pgvector"
-        password = settings.PGVECTOR_PASSWORD or "pgvector"
-        db_name = settings.PGVECTOR_DB or "pgvector"
-        return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db_name}"
-
-
-async def ensure_cognee_ready() -> None:
-    """Ensure Cognee setup is executed only once."""
-    global _COGNEE_SETUP_DONE
-    if _COGNEE_SETUP_DONE:
-        return
-
-    try:
-        cognee_module = importlib.import_module("cognee")
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(f"Cognee setup skipped: {exc}")
-        return
-    global _COGNEE_MODULE
-    _COGNEE_MODULE = cognee_module
-
-    setup_callable = getattr(cognee_module, "setup", None)
-    if callable(setup_callable):
-        try:
-            result = setup_callable()
-            if inspect.isawaitable(result):
-                await result
-            _COGNEE_SETUP_DONE = True
-            return
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(f"Cognee setup() failed: {exc}")
-
-    try:
-        from cognee.modules.engine.operations.setup import setup as legacy_setup  # type: ignore
-    except Exception as exc:  # noqa: BLE001
-        logger.debug(f"Cognee legacy setup unavailable: {exc}")
-        return
-
-    if _COGNEE_SETUP_DONE:
-        return
-
-    try:
-        legacy_result = legacy_setup()
-        if inspect.isawaitable(legacy_result):
-            await legacy_result
-        _COGNEE_SETUP_DONE = True
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(f"Cognee legacy setup failed: {exc}")

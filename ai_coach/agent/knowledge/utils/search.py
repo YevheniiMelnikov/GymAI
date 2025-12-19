@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from time import monotonic
 from enum import Enum
 from hashlib import sha256
 from typing import Any, Awaitable, Iterable, Mapping, Sequence, cast, Literal, Optional, TYPE_CHECKING
@@ -11,11 +12,11 @@ except ModuleNotFoundError:  # pragma: no cover - optional dependency
     cognee = None  # type: ignore[assignment]
 
     class SearchType(str, Enum):
-        NATURAL_LANGUAGE = "NATURAL_LANGUAGE"
+        GRAPH_COMPLETION_CONTEXT_EXTENSION = "GRAPH_COMPLETION_CONTEXT_EXTENSION"
 
         @classmethod
         def _missing_(cls, value: object) -> "SearchType":
-            return cls.NATURAL_LANGUAGE
+            return cls.GRAPH_COMPLETION_CONTEXT_EXTENSION
 
         def __str__(self) -> str:
             return self.value
@@ -42,7 +43,7 @@ def _resolve_search_type(mode: str | SearchType | None) -> SearchType:
         return mode
     candidate = (mode or "").strip()
     if not candidate:
-        return SearchType.NATURAL_LANGUAGE
+        return SearchType.GRAPH_COMPLETION_CONTEXT_EXTENSION
     try:
         return SearchType(candidate)
     except ValueError:
@@ -50,7 +51,7 @@ def _resolve_search_type(mode: str | SearchType | None) -> SearchType:
         try:
             return SearchType[upper]
         except KeyError:
-            return SearchType.NATURAL_LANGUAGE
+            return SearchType.GRAPH_COMPLETION_CONTEXT_EXTENSION
 
 
 class SearchService:
@@ -82,13 +83,16 @@ class SearchService:
         datasets: Sequence[str] | None = None,
         user: Any | None = None,
     ) -> list[KnowledgeSnippet]:
+        started_at = monotonic()
         if cognee is None:
             logger.warning("knowledge_search_skipped profile_id={} reason=cognee_missing", profile_id)
+            self._log_search_completion(profile_id, request_id or "na", "none", 0, started_at)
             return []
 
         normalized = query.strip()
         if not normalized:
             logger.debug(f"Knowledge search skipped profile_id={profile_id}: empty query")
+            self._log_search_completion(profile_id, request_id or "na", "none", 0, started_at)
             return []
         rid_value = request_id or "na"
         actor = user if user is not None else await self.dataset_service.get_cognee_user()
@@ -139,6 +143,7 @@ class SearchService:
 
         if not candidate_aliases:
             logger.debug(f"knowledge_search_skipped profile_id={profile_id} rid={rid_value} reason=no_datasets")
+            self._log_search_completion(profile_id, rid_value, "none", 0, started_at)
             return []
 
         resolved_datasets: list[str] = []
@@ -152,63 +157,69 @@ class SearchService:
                 )
             resolved_datasets.append(resolved)
 
-        base_hash = sha256(normalized.encode()).hexdigest()[:12]
-        datasets_hint = ",".join(resolved_datasets)
-        top_k_label = k if k is not None else "default"
-        logger.debug(
-            f"knowledge_search_start profile_id={profile_id} rid={rid_value} query_hash={base_hash} "
-            f"datasets={datasets_hint} top_k={top_k_label} global_unavailable={global_unavailable}"
-        )
-
-        queries = self._expanded_queries(normalized)
-        if len(queries) > 1:
+        try:
+            base_hash = sha256(normalized.encode()).hexdigest()[:12]
+            datasets_hint = ",".join(resolved_datasets)
+            top_k_label = k if k is not None else "default"
             logger.debug(
-                f"knowledge_search_expanded profile_id={profile_id} rid={rid_value} "
-                f"variants={len(queries)} base_query_hash={base_hash}"
+                f"knowledge_search_start profile_id={profile_id} rid={rid_value} query_hash={base_hash} "
+                f"datasets={datasets_hint} top_k={top_k_label} global_unavailable={global_unavailable}"
             )
 
-        aggregated: list[KnowledgeSnippet] = []
-        seen: set[str] = set()
-        for variant in queries:
-            snippets = await self._search_single_query(
-                variant,
-                resolved_datasets,
-                actor,
-                k,
-                profile_id,
-                query_type=self._search_type_default,
-                request_id=request_id,
-            )
-            if not snippets:
-                continue
-            for snippet in snippets:
-                cleaned = snippet.text.strip()
-                if not cleaned:
+            queries = self._expanded_queries(normalized)
+            if len(queries) > 1:
+                logger.debug(
+                    f"knowledge_search_expanded profile_id={profile_id} rid={rid_value} "
+                    f"variants={len(queries)} base_query_hash={base_hash}"
+                )
+
+            aggregated: list[KnowledgeSnippet] = []
+            seen: set[str] = set()
+            for variant in queries:
+                snippets = await self._search_single_query(
+                    variant,
+                    resolved_datasets,
+                    actor,
+                    k,
+                    profile_id,
+                    query_type=self._search_type_default,
+                    request_id=request_id,
+                )
+                if not snippets:
                     continue
-                key = cleaned.casefold()
-                if key in seen:
-                    continue
-                aggregated.append(snippet)
-                seen.add(key)
+                for snippet in snippets:
+                    cleaned = snippet.text.strip()
+                    if not cleaned:
+                        continue
+                    key = cleaned.casefold()
+                    if key in seen:
+                        continue
+                    aggregated.append(snippet)
+                    seen.add(key)
+                    if k is not None and len(aggregated) >= k:
+                        break
                 if k is not None and len(aggregated) >= k:
                     break
-            if k is not None and len(aggregated) >= k:
-                break
 
-        await self._maybe_schedule_memify(profile_id)
-        if k is not None:
-            return aggregated[:k]
-        if not aggregated:
-            self.dataset_service.log_once(
-                logging.INFO,
-                "search:empty",
-                profile_id=profile_id,
-                rid=rid_value,
-                datasets=datasets_hint,
-                min_interval=60.0,
-            )
-            logger.debug(f"knowledge_search_empty profile_id={profile_id} rid={rid_value} datasets={datasets_hint}")
-        return aggregated
+            await self._maybe_schedule_memify(profile_id)
+            if k is not None:
+                aggregated = aggregated[:k]
+            if not aggregated:
+                self.dataset_service.log_once(
+                    logging.INFO,
+                    "search:empty",
+                    profile_id=profile_id,
+                    rid=rid_value,
+                    datasets=datasets_hint,
+                    min_interval=60.0,
+                )
+                logger.debug(f"knowledge_search_empty profile_id={profile_id} rid={rid_value} datasets={datasets_hint}")
+            self._log_search_completion(profile_id, rid_value, datasets_hint, len(aggregated), started_at)
+            return aggregated
+        except asyncio.CancelledError:
+            cancel_hint = ",".join(resolved_datasets) if resolved_datasets else ",".join(candidate_aliases)
+            self._log_search_completion(profile_id, rid_value, cancel_hint or "none", 0, started_at)
+            raise
 
     async def _search_single_query(
         self,
@@ -218,7 +229,7 @@ class SearchService:
         k: int | None,
         profile_id: int,
         *,
-        query_type: SearchType = SearchType.NATURAL_LANGUAGE,
+        query_type: SearchType = SearchType.GRAPH_COMPLETION_CONTEXT_EXTENSION,
         request_id: str | None = None,
     ) -> list[KnowledgeSnippet]:
         if user is None:
@@ -581,8 +592,45 @@ class SearchService:
 
     async def _maybe_schedule_memify(self, profile_id: int) -> None:
         if cognee is None or not hasattr(cognee, "memify"):
+            logger.debug("knowledge_memify_schedule_skipped profile_id={} reason=memify_missing", profile_id)
             return
-        await schedule_profile_memify(profile_id, reason="paid_flow", delay_s=self._memify_delay)
+        datasets = [
+            self.dataset_service.alias_for_dataset(self.dataset_service.dataset_name(profile_id)),
+            self.dataset_service.alias_for_dataset(self.dataset_service.chat_dataset_name(profile_id)),
+        ]
+        dataset_label = ",".join(datasets)
+        scheduled = await schedule_profile_memify(profile_id, reason="paid_flow", delay_s=self._memify_delay)
+        if scheduled:
+            logger.info(
+                "knowledge_memify_scheduled profile_id={} datasets={} delay_s={}",
+                profile_id,
+                dataset_label,
+                self._memify_delay,
+            )
+        else:
+            logger.debug(
+                "knowledge_memify_schedule_declined profile_id={} datasets={} reason=dedupe_or_error",
+                profile_id,
+                dataset_label,
+            )
+
+    def _log_search_completion(
+        self,
+        profile_id: int,
+        rid_value: str,
+        datasets_hint: str,
+        hits: int,
+        started_at: float,
+    ) -> None:
+        elapsed = monotonic() - started_at
+        logger.debug(
+            "knowledge_search_finish profile_id={} rid={} datasets={} hits={} elapsed_s={:.2f}",
+            profile_id,
+            rid_value,
+            datasets_hint or "none",
+            hits,
+            elapsed,
+        )
 
     def _expanded_queries(self, query: str) -> list[str]:
         return [query]

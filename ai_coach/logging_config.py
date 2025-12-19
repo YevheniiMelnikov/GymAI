@@ -3,6 +3,7 @@ import os
 import sys
 import time
 from dataclasses import asdict, is_dataclass
+from types import FrameType
 from typing import Any, Dict, MutableMapping
 
 from loguru import logger
@@ -14,9 +15,9 @@ class InterceptHandler(logging.Handler):
             level = logger.level(record.levelname).name
         except Exception:
             level = record.levelno
-        frame = logging.currentframe()
+        frame: FrameType | None = logging.currentframe()
         depth = 2
-        while frame and frame.f_code.co_filename == logging.__file__:
+        while frame is not None and frame.f_code.co_filename == logging.__file__:
             frame = frame.f_back
             depth += 1
         logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())

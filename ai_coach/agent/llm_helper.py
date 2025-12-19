@@ -172,13 +172,13 @@ class LLMHelper:
         if client_override is not None:
             model.client = client_override
 
-        cls._agent = Agent(
+        cls._agent = Agent(  # pyrefly: ignore[no-matching-overload]
             model=model,
             deps_type=AgentDeps,
             toolsets=[toolset],
             retries=settings.COACH_AGENT_RETRIES,
             system_prompt=COACH_SYSTEM_PROMPT,
-        )  # pyrefly: ignore[no-matching-overload]
+        )
         cls._ensure_llm_logging(cls._agent)
 
         @cls._agent.system_prompt  # pyrefly: ignore[no-matching-overload]

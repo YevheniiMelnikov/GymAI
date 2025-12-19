@@ -35,15 +35,11 @@ def _patch_lifespan_helpers(monkeypatch: Any) -> None:
     async def _noop_init(_kb: KnowledgeBase, _loader: Any | None = None) -> None:
         return None
 
-    async def _noop_ensure() -> None:
-        return None
-
     class _DummyLoader:
         def __init__(self, kb: KnowledgeBase) -> None:
             self.kb = kb
 
     monkeypatch.setattr(application_module, "init_knowledge_base", _noop_init, raising=False)
-    monkeypatch.setattr(application_module, "ensure_cognee_ready", _noop_ensure, raising=False)
     monkeypatch.setattr(application_module, "GDriveDocumentLoader", _DummyLoader, raising=False)
 
 

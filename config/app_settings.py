@@ -61,14 +61,14 @@ class Settings(BaseSettings):
     DB_PROVIDER: Annotated[str, Field(default="postgres", description="Database provider type (for internal use).")]
 
     # --- Vector Database ---
-    VECTORDATABASE_PROVIDER: Annotated[str, Field(default="pgvector", description="Vector database provider (e.g., 'pgvector').")]
-    VECTORDATABASE_URL_OVERRIDE: Annotated[str | None, Field(alias="VECTORDATABASE_URL", default=None, description="Explicit connection URL for the vector database. Overrides provider-derived defaults.")]
+    VECTOR_DB_PROVIDER: Annotated[str, Field(default="pgvector", description="Vector database provider (e.g., 'pgvector').")]
+    VECTOR_DB_URL_OVERRIDE: Annotated[str | None, Field(alias="VECTOR_DB_URL", default=None, description="Explicit connection URL for the vector database. Overrides provider-derived defaults.")]
     PGVECTOR_HOST: Annotated[str, Field(default="pgvector", description="Hostname of the pgvector service within Docker networks.")]
     PGVECTOR_PORT: Annotated[int, Field(default=5432, description="Port of the pgvector service.")]
     PGVECTOR_DB: Annotated[str, Field(default="pgvector", description="Database name used by pgvector.")]
     PGVECTOR_USER: Annotated[str, Field(default="pgvector", description="Username for the pgvector database.")]
     PGVECTOR_PASSWORD: Annotated[str, Field(default="pgvector", description="Password for the pgvector database.")]
-    HOST_PGVECTOR_PORT: Annotated[str, Field(default="15433", description="Port exposed on the host for the pgvector service.")]
+    HOST_PGVECTOR_PORT: Annotated[str, Field(default="15433", description="Port exposed on the host for the pgvector service (non-Docker).")]
 
     # --- Graph Database ---
     GRAPH_DATABASE_PROVIDER: Annotated[str, Field(default="networkx", description="Graph database provider (e.g., 'networkx', 'neo4j').")]
@@ -114,6 +114,10 @@ class Settings(BaseSettings):
     AI_COACH_REQUEST_TIMEOUT: Annotated[int, Field(default=60, description="Default timeout for requests to the AI Coach in seconds.")]
     AI_COACH_MAX_RUN_SECONDS: Annotated[float, Field(default=90.0, description="Time budget in seconds for a single AI coach agent run before aborting.")]
     AI_COACH_GLOBAL_PROJECTION_TIMEOUT: Annotated[float, Field(default=15.0, description="Timeout for global projection operations in seconds.")]
+    AI_COACH_GRAPH_ATTACH_TIMEOUT: Annotated[
+        float,
+        Field(default=45.0, description="Maximum time to wait for the graph engine to become reachable during startup."),
+    ]
     AI_COACH_DEFAULT_TOOL_TIMEOUT: Annotated[float, Field(default=3.0, description="Default timeout for AI agent tool calls in seconds.")]
     AI_COACH_SEARCH_TIMEOUT: Annotated[float, Field(default=12.0, description="Timeout for search tool calls in seconds.")]
     AI_COACH_MEMIFY_DELAY_SECONDS: Annotated[
@@ -164,7 +168,7 @@ class Settings(BaseSettings):
     KNOWLEDGE_BASE_FOLDER_ID: Annotated[str, Field(default="", description="Google Drive folder ID for knowledge base documents.")]
     KNOWLEDGE_REFRESH_INTERVAL: int = Field(default=60 * 60, description="Interval in seconds to refresh the knowledge base from the source.")
     KNOWLEDGE_REFRESH_START_DELAY: int = Field(default=180, description="Delay in seconds before starting the first knowledge base refresh.")
-    COGNEE_SEARCH_MODE: Annotated[str, Field(default="graph_summary_completion", description="Search type for Cognee queries (e.g., 'graph_summary_completion').")]
+    COGNEE_SEARCH_MODE: Annotated[str, Field(default="GRAPH_COMPLETION_CONTEXT_EXTENSION", description="Search type for Cognee queries (e.g., 'GRAPH_COMPLETION_CONTEXT_EXTENSION').")]
 
     EXERCISE_GIF_BUCKET: Annotated[str, Field(default="exercises_guide", description="Google Cloud Storage bucket name used for exercise GIF assets.")]
     EXERCISE_GIF_BASE_URL: Annotated[str, Field(default="https://storage.googleapis.com", description="Base URL for the exercise GIF storage.")]
@@ -524,11 +528,11 @@ class Settings(BaseSettings):
         return urlunsplit((scheme, netloc, "/", "", ""))
 
     @property
-    def VECTORDATABASE_URL(self) -> str:
+    def VECTOR_DB_URL(self) -> str:
         """Construct the full connection URL for the vector database."""
-        if self.VECTORDATABASE_URL_OVERRIDE:
-            return self.VECTORDATABASE_URL_OVERRIDE
-        provider = (self.VECTORDATABASE_PROVIDER or "").lower()
+        if self.VECTOR_DB_URL_OVERRIDE:
+            return self.VECTOR_DB_URL_OVERRIDE
+        provider = (self.VECTOR_DB_PROVIDER or "").lower()
         if provider == "pgvector":
             host = self.PGVECTOR_HOST or "pgvector"
             port = self.PGVECTOR_PORT or 5432
@@ -536,7 +540,7 @@ class Settings(BaseSettings):
             password = self.PGVECTOR_PASSWORD or "pgvector"
             db_name = self.PGVECTOR_DB or "pgvector"
             return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db_name}"
-        raise RuntimeError(f"Unsupported vector database provider: {self.VECTORDATABASE_PROVIDER!r}")
+        raise RuntimeError(f"Unsupported vector database provider: {self.VECTOR_DB_PROVIDER!r}")
 
     @property
     def GRAPH_DATABASE_URL(self) -> str:

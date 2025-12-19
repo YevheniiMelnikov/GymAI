@@ -4,10 +4,13 @@ import time
 import logging
 from hashlib import sha256
 from time import monotonic
+from types import SimpleNamespace
 from typing import Any, ClassVar, Mapping, Callable, Awaitable, TYPE_CHECKING
 
 import cognee
 from loguru import logger
+from sqlalchemy import text as sa_text
+from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from ai_coach.agent.knowledge.base_knowledge_loader import KnowledgeLoader
 from ai_coach.agent.knowledge.schemas import KnowledgeSnippet, ProjectionStatus, RebuildResult
@@ -20,11 +23,33 @@ from ai_coach.agent.knowledge.utils.storage import StorageService
 from ai_coach.agent.knowledge.utils.lock_cache import LockCache
 from ai_coach.types import MessageRole
 from config.app_settings import settings
-from sqlalchemy import schema as sa_schema, text as sa_text
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 if TYPE_CHECKING:
     from core.schemas import Profile
+
+_COGNEE_SETUP_LOCK: asyncio.Lock = asyncio.Lock()
+_COGNEE_SETUP_DONE: bool = False
+
+
+async def ensure_cognee_setup() -> None:
+    global _COGNEE_SETUP_DONE
+    if _COGNEE_SETUP_DONE:
+        return
+    async with _COGNEE_SETUP_LOCK:
+        if _COGNEE_SETUP_DONE:
+            return
+        try:
+            from cognee.modules.engine.operations.setup import setup as cognee_setup
+        except Exception as exc:  # noqa: BLE001
+            logger.error(f"cognee_setup_import_failed detail={exc}")
+            raise
+        try:
+            await cognee_setup()
+        except Exception as exc:  # noqa: BLE001
+            logger.error(f"cognee_setup_failed detail={exc}")
+            raise
+        _COGNEE_SETUP_DONE = True
+        logger.info("cognee_setup_ready")
 
 
 class KnowledgeBase:
@@ -67,14 +92,57 @@ class KnowledgeBase:
                 logger.debug("knowledge_graph_engine_unavailable reason=modules_missing")
                 return
 
-        try:
-            candidate = graph_engine_getter()
-            engine = await candidate if inspect.isawaitable(candidate) else candidate
-            if engine is not None:
-                self.attach_graph_engine(engine)
-                logger.debug("knowledge_graph_engine_ready type={}", type(engine))
-        except Exception as exc:
-            logger.warning(f"knowledge_graph_engine_attach_failed detail={exc}")
+        timeout_s = max(float(getattr(settings, "AI_COACH_GRAPH_ATTACH_TIMEOUT", 45.0)), 0.0)
+        attempt = 0
+        start_ts = monotonic()
+        last_error: Exception | None = None
+
+        while self._graph_engine is None:
+            attempt += 1
+            try:
+                candidate = graph_engine_getter()
+                engine = await candidate if inspect.isawaitable(candidate) else candidate
+                if engine is None:
+                    logger.warning("knowledge_graph_engine_attach_failed attempt={} reason=returned_none", attempt)
+                else:
+                    self.attach_graph_engine(engine)
+                    elapsed = monotonic() - start_ts
+                    logger.info(
+                        "knowledge_graph_engine_ready type={} attempt={} elapsed_s={:.1f}",
+                        type(engine),
+                        attempt,
+                        elapsed,
+                    )
+                    break
+            except Exception as exc:
+                last_error = exc
+                logger.warning("knowledge_graph_engine_attach_failed attempt={} detail={}", attempt, exc)
+
+            if timeout_s == 0.0:
+                break
+            remaining = timeout_s - (monotonic() - start_ts)
+            if remaining <= 0:
+                break
+            backoff = min(1.5**attempt, 5.0)
+            sleep_for = min(backoff, remaining)
+            logger.debug(
+                "knowledge_graph_engine_retry attempt={} sleep_for={:.2f}s remaining_s={:.2f}",
+                attempt,
+                sleep_for,
+                remaining,
+            )
+            await asyncio.sleep(max(sleep_for, 0.1))
+
+        if self._graph_engine is None:
+            elapsed = monotonic() - start_ts
+            detail = last_error or "graph_engine_unavailable"
+            logger.error(
+                "knowledge_graph_engine_unavailable reason=attach_timeout attempts={} elapsed_s={:.1f} detail={}",
+                attempt,
+                elapsed,
+                detail,
+            )
+            raise RuntimeError(f"graph_engine_unavailable:{detail}")
 
     def attach_graph_engine(self, engine: Any | None) -> None:
         self._graph_engine = engine
@@ -93,34 +161,25 @@ class KnowledgeBase:
             len(attrs),
         )
 
-    async def _ensure_vector_ready(self) -> bool:
-        if self._vector_check_done:
-            return self._vector_unavailable_reason is None
+    async def _ensure_vector_ready(self) -> None:
+        if self._vector_check_done and self._vector_unavailable_reason is None:
+            return
         await self._check_vector_db()
-        return self._vector_unavailable_reason is None
-
-    async def _ensure_vector_ready_for_dataset(self, dataset: str) -> bool:
-        ready = await self._ensure_vector_ready()
-        if ready:
-            return True
-        reason = self._vector_unavailable_reason or "unknown"
-        self.dataset_service.log_once(
-            logging.ERROR,
-            "vector_db_unavailable",
-            dataset=dataset,
-            reason=reason,
-            min_interval=60.0,
-        )
-        return False
+        if self._vector_unavailable_reason:
+            raise RuntimeError(f"vector_db_unavailable:{self._vector_unavailable_reason}")
 
     async def _check_vector_db(self) -> None:
-        provider = (settings.VECTORDATABASE_PROVIDER or "").lower()
+        provider = (settings.VECTOR_DB_PROVIDER or "").lower()
         self._vector_check_done = True
+        if not provider:
+            self._vector_unavailable_reason = "vector_provider_missing"
+            logger.error("vector_db_unavailable reason=vector_provider_missing")
+            return
         if provider != "pgvector":
             self._vector_unavailable_reason = None
             return
 
-        raw_url = settings.VECTORDATABASE_URL
+        raw_url = getattr(settings, "VECTOR_DB_URL", None)
         safe_url = CogneeConfig._render_safe_url(raw_url)
         meta = CogneeConfig._extract_url_meta(raw_url) if raw_url else {}
         if not raw_url:
@@ -183,12 +242,7 @@ class KnowledgeBase:
     async def initialize(self, knowledge_loader: KnowledgeLoader | None = None) -> None:
         CogneeConfig.apply()
         await self._ensure_vector_ready()
-        try:
-            from cognee.modules.engine.operations.setup import setup as cognee_setup
-
-            await cognee_setup()
-        except Exception:
-            pass
+        await ensure_cognee_setup()
         self._loader = knowledge_loader
         self._user = await self.dataset_service.get_cognee_user()
         await self._ensure_graph_engine()
@@ -202,6 +256,10 @@ class KnowledgeBase:
         except Exception as exc:
             logger.warning(f"kb_hashstore_sanitation_failed detail={exc}")
 
+        if await self._should_skip_startup_projection():
+            logger.info("knowledge_startup_skip_projection dataset={} reason=graph_ready", self.GLOBAL_DATASET)
+            return
+
         try:
             await self.rebuild_dataset(self.GLOBAL_DATASET, self._user, sha_only=True)
         except Exception as exc:
@@ -210,6 +268,27 @@ class KnowledgeBase:
             await self.refresh()
         except Exception as e:
             logger.warning(f"Knowledge refresh skipped: {e}")
+
+    async def _should_skip_startup_projection(self) -> bool:
+        if settings.KB_BOOTSTRAP_ALWAYS or settings.COGNEE_ENABLE_AGGRESSIVE_REBUILD:
+            return False
+
+        alias = self.dataset_service.alias_for_dataset(self.GLOBAL_DATASET)
+        try:
+            from ai_coach.agent.knowledge.utils.hash_store import HashStore  # noqa: PLC0415
+        except Exception:
+            return False
+
+        try:
+            hash_count = await HashStore.count(alias)
+        except Exception:
+            hash_count = 0
+
+        if hash_count <= 0:
+            return False
+
+        nodes, edges = await self.dataset_service.get_graph_counts(alias, self._user)
+        return (nodes + edges) > 0
 
     async def refresh(self, force: bool = False) -> None:
         from cognee.modules.data.exceptions import DatasetNotFoundError
@@ -225,15 +304,8 @@ class KnowledgeBase:
         self.dataset_service._PROJECTED_DATASETS.discard(ds)
         if self._loader:
             await self._loader.refresh(force=force)
-        target = ds
         try:
-            dataset_id = await self.dataset_service.get_dataset_id(ds, user_ctx)
-        except Exception:
-            dataset_id = None
-        if dataset_id:
-            target = dataset_id
-        try:
-            await cognee.cognify(datasets=[target], user=user_ctx)
+            await cognee.cognify(datasets=[ds], user=user_ctx)
         except (PermissionDeniedError, DatasetNotFoundError) as e:
             logger.error(f"Knowledge base update skipped: {e}")
 
@@ -260,7 +332,7 @@ class KnowledgeBase:
     async def _memify_global_dataset(self, user_ctx: Any | None) -> None:
         env = str(getattr(settings, "ENVIRONMENT", "development")).lower()
         if env != "production":
-            logger.info("knowledge_memify_global_skipped environment={}", env)
+            logger.info("knowledge_memify_global_skipped environment={} reason=non_production", env)
             return
         memify_fn = getattr(cognee, "memify", None)
         if not callable(memify_fn):
@@ -276,11 +348,7 @@ class KnowledgeBase:
         alias = self.dataset_service.alias_for_dataset(self.GLOBAL_DATASET)
         try:
             await self.dataset_service.ensure_dataset_exists(alias, ctx)
-            dataset_id = await self.dataset_service.get_dataset_id(alias, ctx)
-            target = dataset_id or alias
-            result = memify_fn(datasets=[target], user=ctx)
-            if inspect.isawaitable(result):
-                await result
+            await self._invoke_memify(memify_fn, datasets=[alias], user=ctx)
             logger.info("knowledge_memify_done dataset={}", alias)
         except Exception as exc:
             logger.warning(f"knowledge_memify_failed dataset={alias} detail={exc}")
@@ -304,16 +372,43 @@ class KnowledgeBase:
         for alias in aliases:
             try:
                 await self.dataset_service.ensure_dataset_exists(alias, user_ctx)
-                dataset_id = await self.dataset_service.get_dataset_id(alias, user_ctx)
-                target = dataset_id or alias
-                result = memify_fn(datasets=[target], user=user_ctx)
-                if inspect.isawaitable(result):
-                    await result
+                await self._invoke_memify(memify_fn, datasets=[alias], user=user_ctx)
                 logger.info("knowledge_memify_done dataset={}", alias)
                 processed.append(alias)
             except Exception as exc:  # noqa: BLE001
                 logger.warning(f"knowledge_memify_failed dataset={alias} detail={exc}")
         return {"profile_id": profile_id, "datasets": processed}
+
+    async def _invoke_memify(self, memify_fn: Any, *, datasets: list[str], user: Any | None) -> None:
+        params = {}
+        try:
+            signature = inspect.signature(memify_fn)
+            params = signature.parameters
+        except (TypeError, ValueError):
+            params = {}
+
+        kwargs: dict[str, Any] = {}
+        positional: list[Any] = []
+        dataset_arg_name = None
+        for name in ("datasets", "dataset_names", "dataset_ids", "dataset", "dataset_name", "dataset_id"):
+            if name in params:
+                dataset_arg_name = name
+                break
+        payload: Any = datasets
+        if dataset_arg_name and not dataset_arg_name.endswith("s"):
+            payload = datasets[0] if datasets else None
+
+        if dataset_arg_name:
+            kwargs[dataset_arg_name] = payload
+        else:
+            positional.append(datasets)
+
+        if "user" in params:
+            kwargs["user"] = user
+
+        result = memify_fn(*positional, **kwargs)
+        if inspect.isawaitable(result):
+            await result
 
     async def search(
         self, query: str, profile_id: int, k: int | None = None, *, request_id: str | None = None
@@ -552,6 +647,7 @@ class KnowledgeBase:
         node_set: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
         force_ingest: bool = False,
+        trigger_projection: bool = True,
     ) -> tuple[str, bool]:
         from ai_coach.agent.knowledge.utils.hash_store import HashStore
 
@@ -573,9 +669,7 @@ class KnowledgeBase:
         if user_ctx is None:
             user_ctx = self.dataset_service._bootstrap_user_ctx()
 
-        if not await self._ensure_vector_ready_for_dataset(alias):
-            return alias, False
-
+        await self._ensure_vector_ready()
         await self.dataset_service.ensure_dataset_exists(alias, user_ctx)
         rows_before = await self.dataset_service.get_row_count(alias, user=actor)
         metadata_payload = self.dataset_service._infer_metadata_from_text(normalized_text, metadata)
@@ -600,13 +694,14 @@ class KnowledgeBase:
             return alias, False
 
         info: Any | None = None
+        add_user = actor if actor is not None and not isinstance(actor, SimpleNamespace) else user_ctx
         try:
             import cognee
 
             info = await cognee.add(
                 normalized_text,
                 dataset_name=alias,
-                user=user_ctx,
+                user=add_user,
                 node_set=list(node_set or []),
             )
         except Exception as exc:
@@ -631,25 +726,29 @@ class KnowledgeBase:
                 force_ingest,
             )
         )
-        try:
-            self.dataset_service.log_once(logging.INFO, "projection:requested", dataset=resolved_alias, reason="ingest")
-            await self.projection_service.project_dataset(resolved_alias, actor, allow_rebuild=False)
-            await self._wait_for_projection(resolved_alias, actor, timeout_s=15.0)
-            counts = await self.dataset_service.get_counts(resolved_alias, actor)
-            logger.info(
-                (
-                    f"projection:ready dataset={resolved_alias} text_rows={counts.get('text_rows')} "
-                    f"chunk_rows={counts.get('chunk_rows')} graph_nodes={counts.get('graph_nodes')} "
-                    f"graph_edges={counts.get('graph_edges')}"
+        if trigger_projection:
+            try:
+                self.dataset_service.log_once(
+                    logging.INFO, "projection:requested", dataset=resolved_alias, reason="ingest"
                 )
-            )
-            if (counts.get("text_rows", 0) or 0) > 0 and (counts.get("chunk_rows", 0) or 0) == 0:
-                preview = (normalized_text or "")[:400]
-                logger.error(
-                    f"projection:empty_after_text dataset={resolved_alias} digest={digest_sha[:12]} preview={preview}"
+                await self.projection_service.project_dataset(resolved_alias, actor, allow_rebuild=False)
+                await self._wait_for_projection(resolved_alias, actor, timeout_s=15.0)
+                counts = await self.dataset_service.get_counts(resolved_alias, actor)
+                logger.info(
+                    (
+                        f"projection:ready dataset={resolved_alias} text_rows={counts.get('text_rows')} "
+                        f"chunk_rows={counts.get('chunk_rows')} graph_nodes={counts.get('graph_nodes')} "
+                        f"graph_edges={counts.get('graph_edges')}"
+                    )
                 )
-        except Exception as exc:
-            logger.debug(f"projection:post_ingest_diag_skipped dataset={resolved_alias} detail={exc}")
+                if (counts.get("text_rows", 0) or 0) > 0 and (counts.get("chunk_rows", 0) or 0) == 0:
+                    preview = (normalized_text or "")[:400]
+                    logger.error(
+                        f"projection:empty_after_text dataset={resolved_alias} "
+                        f"digest={digest_sha[:12]} preview={preview}"
+                    )
+            except Exception as exc:
+                logger.debug(f"projection:post_ingest_diag_skipped dataset={resolved_alias} detail={exc}")
         return resolved, True
 
     async def _process_dataset(self, dataset: str, user: Any | None = None) -> None:
@@ -813,6 +912,10 @@ class KnowledgeBase:
                             alias,
                             reingest_result.reinserted,
                         )
+                        try:
+                            await self.projection_service.project_dataset(alias, actor, allow_rebuild=True)
+                        except Exception as exc:
+                            logger.warning(f"projection:reingest_project_failed dataset={alias} detail={exc}")
                         ready, reason = await self.projection_service.probe(alias, actor)
                         if ready:
                             status = ProjectionStatus.READY
@@ -1220,8 +1323,8 @@ class KnowledgeBase:
         if search_service is None:
             logger.warning(f"profile_sync_skipped profile_id={profile_id} reason=missing_search_service")
             return False
-        if not await self._ensure_vector_ready_for_dataset(self.dataset_service.dataset_name(profile_id)):
-            return False
+
+        await self._ensure_vector_ready()
         try:
             indexed = await search_service._ensure_profile_indexed(profile_id, actor)
         except Exception as exc:  # noqa: BLE001

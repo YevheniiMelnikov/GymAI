@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import os
+import importlib.util
+from pathlib import Path
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 from typing import Any, Awaitable, Callable
@@ -14,7 +16,6 @@ from loguru import logger
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from ai_coach.agent.knowledge.schemas import ProjectionStatus
 from ai_coach.agent.knowledge.base_knowledge_loader import KnowledgeLoader
-from ai_coach.agent.knowledge.cognee_config import ensure_cognee_ready
 from dependency_injector import providers
 from ai_coach.logging_config import configure_logging
 from ai_coach.agent.knowledge.context import set_current_kb
@@ -49,6 +50,43 @@ def _ensure_storage_path() -> None:
     except Exception as exc:  # noqa: BLE001
         logger.error(f"Cognee storage path is not writable: {storage_path} ({exc})")
         raise RuntimeError(f"Cognee storage path is not writable: {storage_path} ({exc})") from exc
+
+    try:
+        spec = importlib.util.find_spec("cognee")
+    except Exception as exc:  # noqa: BLE001
+        logger.debug(f"Unable to locate Cognee package for system dir preparation: {exc}")
+        return
+
+    if spec is None or not spec.origin:
+        logger.debug("Cognee package spec missing origin; skipping system dir preparation.")
+        return
+
+    module_dir = Path(spec.origin).resolve().parent
+    system_root = module_dir / ".cognee_system"
+    target_root = Path(storage_path).resolve() / ".cognee_system"
+    target_root.mkdir(parents=True, exist_ok=True)
+    target_databases = target_root / "databases"
+    target_databases.mkdir(parents=True, exist_ok=True)
+
+    try:
+        if system_root.exists():
+            if system_root.is_symlink():
+                current = system_root.resolve()
+                if current != target_root:
+                    system_root.unlink()
+                    system_root.symlink_to(target_root, target_is_directory=True)
+            elif system_root.is_dir() and system_root != target_root:
+                logger.debug(
+                    "Cognee system dir already exists at {} (not symlink); ensuring databases subdir.",
+                    system_root,
+                )
+                (system_root / "databases").mkdir(parents=True, exist_ok=True)
+            else:
+                pass
+        else:
+            system_root.symlink_to(target_root, target_is_directory=True)
+    except OSError as exc:
+        logger.warning(f"cognee_system_dir_prepare_failed detail={exc}")
 
 
 async def _bootstrap_global_dataset(kb: KnowledgeBase) -> tuple[bool, str]:
@@ -98,7 +136,7 @@ async def init_knowledge_base(kb: KnowledgeBase, knowledge_loader: KnowledgeLoad
     summary: dict[str, str] = {
         "llm": settings.LLM_PROVIDER,
         "agent": settings.AGENT_PROVIDER,
-        "vector": settings.VECTORDATABASE_PROVIDER,
+        "vector": settings.VECTOR_DB_PROVIDER,
         "graph": settings.GRAPH_DATABASE_PROVIDER,
     }
     global_dataset_alias = kb.dataset_service.alias_for_dataset(kb.GLOBAL_DATASET)
@@ -111,22 +149,23 @@ async def init_knowledge_base(kb: KnowledgeBase, knowledge_loader: KnowledgeLoad
         raise
 
     graph_engine_getter: Callable[[], Awaitable[Any]] | None = None
-    graph_engine_label = "unattached"
+    graph_engine = getattr(kb, "_graph_engine", None)
+    graph_engine_label = type(graph_engine).__name__ if graph_engine is not None else "unattached"
     try:
         from cognee.infrastructure.databases.graph import get_graph_engine as cognee_graph_engine
 
         graph_engine_getter = cognee_graph_engine
     except ModuleNotFoundError:
         try:
-            from cognee.modules.graph.methods.get_graph import (
+            from cognee.modules.graph.methods.get_graph import (  # pyrefly: ignore[missing-import]
                 get_graph_engine as fallback_graph_engine,
-            )  # pyrefly: ignore[missing-import]
+            )
 
             graph_engine_getter = fallback_graph_engine
         except ModuleNotFoundError:
             logger.warning("Cognee graph engine modules not found; skipping graph initialization.")
 
-    if graph_engine_getter is not None and kb._graph_engine is None:
+    if graph_engine_getter is not None and graph_engine is None:
         try:
             graph = await graph_engine_getter()
             kb.attach_graph_engine(graph)
@@ -264,8 +303,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     init_resources = container.init_resources()
     if init_resources is not None:
         await init_resources
-
-    await ensure_cognee_ready()
 
     kb = KnowledgeBase()
     set_current_kb(kb)

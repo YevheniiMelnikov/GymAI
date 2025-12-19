@@ -227,8 +227,7 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
 
     incoming_template = translate(MessageText.ask_ai_response_template, language)
     escaped_answer = html.escape(answer_text).replace("\r\n", "\n")
-    formatted_answer = escaped_answer.replace("\n", "<br>")
-    chunks = list(chunk_message(formatted_answer, template=incoming_template, sender_name=settings.BOT_NAME))
+    chunks = list(chunk_message(escaped_answer, template=incoming_template, sender_name=settings.BOT_NAME))
     rendered_len = sum(len(incoming_template.format(name=settings.BOT_NAME, message=chunk)) for chunk in chunks)
     truncated = "yes" if len(chunks) > 1 else "no"
     logger.info(
@@ -243,8 +242,6 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
         current_reply_id = reply_to_message_id
         for index, chunk in enumerate(chunks):
             message_text = incoming_template.format(name=settings.BOT_NAME, message=chunk)
-            if "<br/" in message_text:
-                message_text = message_text.replace("<br/>", "<br>").replace("<br />", "<br>")
             reply_markup = ask_again_keyboard if index == len(chunks) - 1 else None
             current_reply_id = await _send_chunk_with_reply_fallback(
                 bot=bot,

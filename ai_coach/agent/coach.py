@@ -98,9 +98,9 @@ class CoachAgent(metaclass=CoachAgentMeta):
             deps=deps,
             output_type=output_type,
             message_history=history,
-            model_settings=ModelSettings(  # pyrefly: ignore[unexpected-keyword]
-                response_format={"type": "json_object"},  # pyrefly: ignore[unexpected-keyword]
+            model_settings=ModelSettings(
                 temperature=settings.COACH_AGENT_TEMPERATURE,
+                extra_body={"response_format": {"type": "json_object"}},
             ),
         )
         if output_type is Program:
@@ -148,9 +148,9 @@ class CoachAgent(metaclass=CoachAgentMeta):
             deps=deps,
             output_type=output_type,
             message_history=history,
-            model_settings=ModelSettings(  # pyrefly: ignore[unexpected-keyword]
-                response_format={"type": "json_object"},  # pyrefly: ignore[unexpected-keyword]
+            model_settings=ModelSettings(
                 temperature=settings.COACH_AGENT_TEMPERATURE,
+                extra_body={"response_format": {"type": "json_object"}},
             ),
         )
         if output_type is Program:
@@ -184,9 +184,9 @@ class CoachAgent(metaclass=CoachAgentMeta):
                 deps=deps,
                 output_type=QAResponse,
                 message_history=history,
-                model_settings=ModelSettings(  # pyrefly: ignore[unexpected-keyword]
-                    response_format={"type": "json_object"},  # pyrefly: ignore[unexpected-keyword]
+                model_settings=ModelSettings(
                     temperature=settings.COACH_AGENT_TEMPERATURE,
+                    extra_body={"response_format": {"type": "json_object"}},
                 ),
             )
 

@@ -360,6 +360,7 @@ class StorageService:
             if kind == "message":
                 continue
             meta_payload = dict(metadata) if isinstance(metadata, Mapping) else None
+            reingest_user = raw_user if raw_user is not None else actor
             try:
                 # CRITICAL: We pass force_ingest=True to bypass HashStore check inside update_dataset.
                 # Since we are re-ingesting from HashStore, the hash is inherently already there.
@@ -367,10 +368,11 @@ class StorageService:
                 dataset_name, created = await kb.update_dataset(
                     normalized,
                     alias,
-                    user=actor,
+                    user=reingest_user,
                     node_set=None,
                     metadata=meta_payload,
                     force_ingest=True,
+                    trigger_projection=False,
                 )
             except Exception as exc:
                 result.healed = False

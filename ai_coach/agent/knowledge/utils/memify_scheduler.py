@@ -6,6 +6,10 @@ from config.app_settings import settings
 from core.utils.redis_lock import get_redis_client
 
 
+def _dataset_labels(profile_id: int) -> str:
+    return f"kb_profile_{profile_id},kb_chat_{profile_id}"
+
+
 async def schedule_profile_memify(
     profile_id: int,
     *,
@@ -20,6 +24,7 @@ async def schedule_profile_memify(
     countdown = max(delay_value, 0.0)
     dedupe_ttl = int(countdown) + 300
     key = f"ai_coach:memify:profile:{profile_id}"
+    datasets = _dataset_labels(profile_id)
     try:
         client = get_redis_client()
         already_scheduled = not await client.set(key, "1", nx=True, ex=dedupe_ttl)
@@ -27,17 +32,29 @@ async def schedule_profile_memify(
         logger.warning("memify_schedule_dedupe_failed profile_id={} detail={}", profile_id, exc)
         return False
     if already_scheduled:
-        logger.debug("memify_schedule_skipped profile_id={} reason=dedupe_hit", profile_id)
+        logger.info(
+            "memify_schedule_skipped profile_id={} datasets={} reason=dedupe_hit delay_s={}",
+            profile_id,
+            datasets,
+            countdown,
+        )
         return False
 
     try:
         from core.tasks.ai_coach.maintenance import memify_profile_datasets
 
-        memify_profile_datasets.apply_async(
+        task = memify_profile_datasets.apply_async(
             kwargs={"profile_id": profile_id, "reason": reason},
             countdown=countdown,
         )
-        logger.debug("memify_schedule_enqueued profile_id={} reason={} delay_s={}", profile_id, reason, countdown)
+        logger.info(
+            "memify_schedule_enqueued profile_id={} datasets={} reason={} delay_s={} task_id={}",
+            profile_id,
+            datasets,
+            reason,
+            countdown,
+            getattr(task, "id", "unknown"),
+        )
         return True
     except Exception as exc:  # noqa: BLE001
         logger.warning("memify_schedule_failed profile_id={} detail={}", profile_id, exc)
