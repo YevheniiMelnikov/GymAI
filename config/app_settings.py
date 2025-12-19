@@ -61,14 +61,12 @@ class Settings(BaseSettings):
     DB_PROVIDER: Annotated[str, Field(default="postgres", description="Database provider type (for internal use).")]
 
     # --- Vector Database ---
-    VECTOR_DB_PROVIDER: Annotated[str, Field(default="pgvector", description="Vector database provider (e.g., 'pgvector').")]
+    VECTOR_DB_PROVIDER: Annotated[str, Field(default="qdrant", description="Vector database provider (e.g., 'qdrant').")]
     VECTOR_DB_URL_OVERRIDE: Annotated[str | None, Field(alias="VECTOR_DB_URL", default=None, description="Explicit connection URL for the vector database. Overrides provider-derived defaults.")]
-    PGVECTOR_HOST: Annotated[str, Field(default="pgvector", description="Hostname of the pgvector service within Docker networks.")]
-    PGVECTOR_PORT: Annotated[int, Field(default=5432, description="Port of the pgvector service.")]
-    PGVECTOR_DB: Annotated[str, Field(default="pgvector", description="Database name used by pgvector.")]
-    PGVECTOR_USER: Annotated[str, Field(default="pgvector", description="Username for the pgvector database.")]
-    PGVECTOR_PASSWORD: Annotated[str, Field(default="pgvector", description="Password for the pgvector database.")]
-    HOST_PGVECTOR_PORT: Annotated[str, Field(default="15433", description="Port exposed on the host for the pgvector service (non-Docker).")]
+    VECTOR_DB_KEY: Annotated[str, Field(default="", description="API key for vector database access (e.g., Qdrant Cloud).")]
+    QDRANT_HOST: Annotated[str, Field(default="qdrant", description="Hostname of the Qdrant service within Docker networks.")]
+    QDRANT_HTTP_PORT: Annotated[int, Field(default=6333, description="HTTP port of the Qdrant service.")]
+    QDRANT_GRPC_PORT: Annotated[int, Field(default=6334, description="gRPC port of the Qdrant service.")]
 
     # --- Graph Database ---
     GRAPH_DATABASE_PROVIDER: Annotated[str, Field(default="networkx", description="Graph database provider (e.g., 'networkx', 'neo4j').")]
@@ -533,13 +531,10 @@ class Settings(BaseSettings):
         if self.VECTOR_DB_URL_OVERRIDE:
             return self.VECTOR_DB_URL_OVERRIDE
         provider = (self.VECTOR_DB_PROVIDER or "").lower()
-        if provider == "pgvector":
-            host = self.PGVECTOR_HOST or "pgvector"
-            port = self.PGVECTOR_PORT or 5432
-            user = self.PGVECTOR_USER or "pgvector"
-            password = self.PGVECTOR_PASSWORD or "pgvector"
-            db_name = self.PGVECTOR_DB or "pgvector"
-            return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{db_name}"
+        if provider == "qdrant":
+            host = self.QDRANT_HOST or "qdrant"
+            port = self.QDRANT_HTTP_PORT or 6333
+            return f"http://{host}:{port}"
         raise RuntimeError(f"Unsupported vector database provider: {self.VECTOR_DB_PROVIDER!r}")
 
     @property

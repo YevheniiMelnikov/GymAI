@@ -9,8 +9,6 @@ from typing import Any, ClassVar, Mapping, Callable, Awaitable, TYPE_CHECKING
 
 import cognee
 from loguru import logger
-from sqlalchemy import text as sa_text
-from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from ai_coach.agent.knowledge.base_knowledge_loader import KnowledgeLoader
 from ai_coach.agent.knowledge.schemas import KnowledgeSnippet, ProjectionStatus, RebuildResult
@@ -175,49 +173,19 @@ class KnowledgeBase:
             self._vector_unavailable_reason = "vector_provider_missing"
             logger.error("vector_db_unavailable reason=vector_provider_missing")
             return
-        if provider != "pgvector":
-            self._vector_unavailable_reason = None
+        if provider != "qdrant":
+            self._vector_unavailable_reason = "vector_provider_unsupported"
+            logger.error("vector_db_unavailable reason=vector_provider_unsupported provider={}", provider)
             return
 
         raw_url = getattr(settings, "VECTOR_DB_URL", None)
         safe_url = CogneeConfig._render_safe_url(raw_url)
-        meta = CogneeConfig._extract_url_meta(raw_url) if raw_url else {}
         if not raw_url:
-            self._mark_vector_unavailable("vector_url_missing", safe_url, meta)
+            self._mark_vector_unavailable("vector_url_missing", safe_url, {})
             return
 
-        engine: AsyncEngine | None = None
-        available = False
-        try:
-            engine = create_async_engine(raw_url)
-            async with engine.connect() as connection:
-                await connection.execute(sa_text("SELECT 1"))
-                result = await connection.execute(sa_text("SELECT 1 FROM pg_available_extensions WHERE name='vector'"))
-                available = bool(result.scalar())
-        except Exception as exc:  # noqa: BLE001
-            self._mark_vector_unavailable(
-                "vector_connection_failed",
-                safe_url,
-                meta,
-                detail=str(exc),
-            )
-            return
-        finally:
-            if engine is not None:
-                await engine.dispose()
-
-        if available:
-            self._vector_unavailable_reason = None
-            logger.info(
-                "vector_db_ready url={} host={} port={} db={}",
-                safe_url,
-                meta.get("host") or "unset",
-                meta.get("port") or "unset",
-                meta.get("database") or "unset",
-            )
-            return
-
-        self._mark_vector_unavailable("pgvector_extension_missing", safe_url, meta)
+        self._vector_unavailable_reason = None
+        logger.info("vector_db_ready url={}", safe_url)
 
     def _mark_vector_unavailable(
         self,
@@ -314,7 +282,7 @@ class KnowledgeBase:
         if force:
             try:
                 self.dataset_service.log_once(
-                    logging.INFO, "projection:requested_refresh", dataset=ds, reason="force_refresh"
+                    logging.DEBUG, "projection:requested_refresh", dataset=ds, reason="force_refresh"
                 )
                 await self.projection_service.project_dataset(ds, user_ctx, allow_rebuild=True)
                 await self._wait_for_projection(ds, user_ctx, timeout_s=30.0)
@@ -729,12 +697,12 @@ class KnowledgeBase:
         if trigger_projection:
             try:
                 self.dataset_service.log_once(
-                    logging.INFO, "projection:requested", dataset=resolved_alias, reason="ingest"
+                    logging.DEBUG, "projection:requested", dataset=resolved_alias, reason="ingest"
                 )
                 await self.projection_service.project_dataset(resolved_alias, actor, allow_rebuild=False)
                 await self._wait_for_projection(resolved_alias, actor, timeout_s=15.0)
                 counts = await self.dataset_service.get_counts(resolved_alias, actor)
-                logger.info(
+                logger.debug(
                     (
                         f"projection:ready dataset={resolved_alias} text_rows={counts.get('text_rows')} "
                         f"chunk_rows={counts.get('chunk_rows')} graph_nodes={counts.get('graph_nodes')} "

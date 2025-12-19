@@ -178,7 +178,7 @@ class ProjectionService:
         if not rows:
             logger.debug(f"projection.no_rows dataset={alias} reason=dataset_entries_empty")
             self.dataset_service.log_once(
-                logging.INFO,
+                logging.DEBUG,
                 "projection:skip_no_rows",
                 dataset=alias,
                 min_interval=10.0,
@@ -221,7 +221,7 @@ class ProjectionService:
         dataset_id = await self.dataset_service.get_dataset_id(alias, user_ctx)
         target = alias
 
-        logger.debug(f"projection.start dataset={alias} reason=requested force={allow_rebuild}")
+        logger.info(f"projection.start dataset={alias} reason=requested allow_rebuild={allow_rebuild}")
 
         dataset_uuid = None
         if dataset_id:
@@ -248,11 +248,11 @@ class ProjectionService:
 
         try:
             start_ts = monotonic()
-            logger.info(f"projection.cognee_call dataset={alias} target={target}")
+            logger.debug(f"projection.cognee_call dataset={alias} target={target}")
             result = await cognee.cognify(datasets=[target], user=user_ctx, incremental_loading=True)
             self._register_dataset_uuids(alias, result)
             duration = monotonic() - start_ts
-            logger.info(
+            logger.debug(
                 f"projection.cognee_done dataset={alias} duration={duration:.2f}s result_type={type(result).__name__}"
             )
             summary = self._summarize_cognify_result(result)
@@ -299,6 +299,21 @@ class ProjectionService:
         except Exception as exc:
             logger.warning(f"knowledge_dataset_cognify_failed dataset={dataset} detail={exc}")
             raise
+        try:
+            counts = await self.dataset_service.get_counts(alias, user)
+        except Exception as exc:  # noqa: BLE001 - logging-only diagnostics
+            logger.debug(f"projection.counts_failed dataset={alias} detail={exc}")
+            counts = {}
+        duration = monotonic() - start_ts
+        logger.info(
+            (
+                f"projection.done dataset={alias} duration={duration:.2f}s "
+                f"text_rows={counts.get('text_rows', 0)} "
+                f"chunk_rows={counts.get('chunk_rows', 0)} "
+                f"graph_nodes={counts.get('graph_nodes', 0)} "
+                f"graph_edges={counts.get('graph_edges', 0)}"
+            )
+        )
         self.dataset_service.log_once(
             logging.DEBUG,
             "projection:cognify_done",

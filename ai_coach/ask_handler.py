@@ -1,6 +1,7 @@
 from base64 import b64decode
 from binascii import Error as BinasciiError
 from hashlib import sha1
+import os
 from time import monotonic
 from typing import Any, cast, Iterable
 from uuid import uuid4
@@ -27,6 +28,7 @@ from core.services import APIService
 DEFAULT_WORKOUT_DAYS: tuple[str, ...] = ("Day 1", "Day 2", "Day 3", "Day 4")
 dedupe_cache = TTLCache(maxsize=2048, ttl=15)
 _ALLOWED_ATTACHMENT_MIME = {"image/jpeg", "image/png", "image/webp"}
+_LOG_PAYLOADS = os.getenv("AI_COACH_LOG_PAYLOADS", "").strip() == "1"
 
 
 def _to_language_code(raw: object, default: str) -> str:
@@ -182,7 +184,7 @@ def _log_sources(
     result: QAResponse,
     sources: list[str],
 ) -> None:
-    if sources:
+    if sources and _LOG_PAYLOADS:
         joined = " | ".join(sources)
         if len(joined) > 300:
             joined = joined[:297] + "..."
@@ -196,7 +198,7 @@ def _log_sources(
         origin = "kb_fallback"
     elif not isinstance(result, QAResponse):
         origin = "structured"
-    logger.info(
+    logger.debug(
         "api.answer_out rid={} request_id={} profile_id={} len={} from={}",
         rid,
         request_id,
@@ -244,6 +246,7 @@ def _final_log(
     deps: AgentDeps,
     started: float,
     profile_id: int,
+    request_id: str | None,
 ) -> None:
     latency_ms = int((monotonic() - started) * 1000)
     model_name = CoachAgent._completion_model_name or settings.AGENT_MODEL
@@ -276,13 +279,20 @@ def _final_log(
             origin = "structured"
     if not sources_for_log:
         sources_for_log = ["general_knowledge"] if not final_kb_used else ["knowledge_base"]
-    sources_label = ",".join(sources_for_log)
-    if len(sources_label) > 300:
-        sources_label = sources_label[:297] + "..."
+    if mode != CoachMode.ask_ai:
+        sources_for_log = []
+    sources_count = len(sources_for_log)
+    if _LOG_PAYLOADS and sources_for_log:
+        sources_label = ",".join(sources_for_log)
+        if len(sources_label) > 300:
+            sources_label = sources_label[:297] + "..."
+        logger.debug(
+            f"ask.out.sources request_id={request_id} profile_id={profile_id} mode={mode.value} sources={sources_label}"
+        )
     logger.info(
-        f"ask.out profile_id={profile_id} mode={mode.value} model={model_name} "
+        f"ask.out request_id={request_id} profile_id={profile_id} mode={mode.value} model={model_name} "
         f"from={origin} answer_len={answer_len} kb_used={str(final_kb_used).lower()} "
-        f"sources={sources_label} latency_ms={latency_ms}"
+        f"sources_count={sources_count} latency_ms={latency_ms}"
     )
 
 
@@ -308,7 +318,7 @@ async def handle_coach_request(
     dedupe_key = _compute_dedupe_key(data.prompt, data.profile_id, mode, attachments=attachments)
 
     if dedupe_key and dedupe_key in dedupe_cache:
-        logger.info(f"ask.deduped rid={rid} key={dedupe_key}")
+        logger.debug(f"ask.deduped rid={rid} key={dedupe_key}")
         return dedupe_cache[dedupe_key]
 
     with logger.contextualize(rid=rid):
@@ -332,7 +342,7 @@ async def handle_coach_request(
         if attachments:
             kb = round(attachments_bytes / 1024, 1)
             mime_summary = ",".join(sorted({item["mime"] for item in attachments}))
-            logger.info(
+            logger.debug(
                 "ask.attachments_received profile_id={} request_id={} count={} total_kb={} mimes={}",
                 data.profile_id,
                 data.request_id,
@@ -341,7 +351,12 @@ async def handle_coach_request(
                 mime_summary or "-",
             )
 
-        logger.debug(f"ask.in profile_id={data.profile_id} mode={mode.value} language={language}")
+        model_name = CoachAgent._completion_model_name or settings.AGENT_MODEL
+        kb_enabled = mode == CoachMode.ask_ai
+        logger.info(
+            f"ask.in request_id={data.request_id} profile_id={data.profile_id} mode={mode.value} "
+            f"model={model_name} kb_enabled={str(kb_enabled).lower()}"
+        )
 
         deps = AgentDeps(
             profile_id=data.profile_id,
@@ -394,7 +409,7 @@ async def handle_coach_request(
             return result
 
         except AgentExecutionAborted as exc:
-            logger.info(
+            logger.warning(
                 f"/ask agent aborted rid={rid} request_id={data.request_id} profile_id={data.profile_id} "
                 f"mode={mode.value} reason={exc.reason} detail={exc.reason} steps_used={deps.tool_calls}"
             )
@@ -407,4 +422,4 @@ async def handle_coach_request(
             logger.exception(f"/ask agent failed rid={rid}: {exc}")
             raise HTTPException(status_code=503, detail="Service unavailable") from exc
         finally:
-            _final_log(mode, result, deps, started, data.profile_id)
+            _final_log(mode, result, deps, started, data.profile_id, data.request_id)

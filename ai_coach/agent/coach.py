@@ -1,4 +1,5 @@
 import inspect
+import os
 from datetime import datetime
 from typing import Any, ClassVar, Sequence
 
@@ -32,6 +33,8 @@ from .prompts import (
 )
 from ai_coach.types import CoachMode
 from ai_coach.agent.utils import get_knowledge_base
+
+_LOG_PAYLOADS = os.getenv("AI_COACH_LOG_PAYLOADS", "").strip() == "1"
 
 
 class CoachAgentMeta(type):
@@ -249,9 +252,16 @@ class CoachAgent(metaclass=CoachAgentMeta):
             raise AgentExecutionAborted("ask_ai_unavailable", reason="model_empty_response")
         if not normalized.sources:
             normalized.sources = ["knowledge_base"] if deps.kb_used else ["general_knowledge"]
-        logger.info(
+        if _LOG_PAYLOADS:
+            logger.debug(
+                "agent.ask.sources profile_id={} count={} sources={}",
+                deps.profile_id,
+                len(normalized.sources),
+                ",".join(normalized.sources),
+            )
+        logger.debug(
             f"agent.ask.done profile_id={deps.profile_id} answer_len={len(normalized.answer)} "
-            f"sources={','.join(normalized.sources)} kb_used={deps.kb_used}"
+            f"sources_count={len(normalized.sources)} kb_used={deps.kb_used}"
         )
         return normalized
 

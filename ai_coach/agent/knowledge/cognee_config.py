@@ -102,14 +102,26 @@ class CogneeConfig:
     def _configure_vector_db() -> None:
         provider = settings.VECTOR_DB_PROVIDER
         vector_url = settings.VECTOR_DB_URL
+        vector_key = settings.VECTOR_DB_KEY
         vector_url_safe = CogneeConfig._render_safe_url(vector_url)
         vector_meta = CogneeConfig._extract_url_meta(vector_url)
         vector_host = vector_meta.get("host") or ""
 
-        cognee.config.set_vector_db_provider(provider)
-        cognee.config.set_vector_db_url(vector_url)
+        if provider == "qdrant":
+            importlib.import_module("cognee_community_vector_adapter_qdrant.register")
+            cognee.config.set_vector_db_config(
+                {
+                    "vector_db_provider": provider,
+                    "vector_db_url": vector_url,
+                    "vector_db_key": vector_key,
+                }
+            )
+        else:
+            cognee.config.set_vector_db_provider(provider)
+            cognee.config.set_vector_db_url(vector_url)
         os.environ["VECTOR_DB_PROVIDER"] = provider
         os.environ["VECTOR_DB_URL"] = vector_url
+        os.environ["VECTOR_DB_KEY"] = vector_key
 
         logger.info(
             "cognee_vector_config provider={} url={} host={} port={} db={} user={}",
@@ -172,11 +184,11 @@ class CogneeConfig:
     def _configure_relational_db() -> None:
         cognee.config.set_relational_db_config(
             {
-                "db_host": settings.PGVECTOR_HOST,
-                "db_port": settings.PGVECTOR_PORT,
-                "db_username": settings.PGVECTOR_USER,
-                "db_password": settings.PGVECTOR_PASSWORD,
-                "db_name": settings.PGVECTOR_DB,
+                "db_host": settings.DB_HOST,
+                "db_port": settings.DB_PORT,
+                "db_username": settings.DB_USER,
+                "db_password": settings.DB_PASSWORD,
+                "db_name": settings.DB_NAME,
                 "db_path": "",
                 "db_provider": settings.DB_PROVIDER,
             }

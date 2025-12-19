@@ -76,6 +76,40 @@ class HealthAccessFilter(logging.Filter):
         return "GET /health" not in message
 
 
+class CogneeTelemetryFilter(logging.Filter):
+    """Filter noisy Cognee telemetry logs when disabled."""
+
+    def __init__(self, enabled: bool) -> None:
+        super().__init__()
+        self.enabled = enabled
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: D401
+        if self.enabled:
+            return True
+        try:
+            message = record.getMessage()
+        except Exception:  # noqa: BLE001 - fallback best-effort
+            return True
+        lowered = message.lower()
+        if record.name != "logging" and "run_tasks" not in lowered and "pipeline run" not in lowered:
+            return True
+        if any(
+            token in lowered
+            for token in (
+                "pipeline run started",
+                "pipeline run completed",
+                "coroutine task started",
+                "coroutine task completed",
+                "run_tasks_base",
+                "run_tasks_with_telemetry",
+            )
+        ):
+            return record.levelno < logging.INFO
+        if message.startswith("{'event':") and "pipeline run" in lowered:
+            return record.levelno < logging.INFO
+        return True
+
+
 _CONFIGURED = False
 _LOG_ONCE_STATE: dict[str, dict[str, float | int]] = {}
 
@@ -89,6 +123,9 @@ def configure_logging() -> None:
     sampling_filter = SamplingFilter(ttl=30.0)
 
     verbose = os.getenv("AI_COACH_VERBOSE_KB", "").strip() == "1"
+    telemetry_enabled = (
+        os.getenv("AI_COACH_COGNEE_TELEMETRY", "").strip() == "1" or os.getenv("AI_COACH_NOISY_LOGS", "").strip() == "1"
+    )
     level_name = "DEBUG" if verbose else "INFO"
     log_format = (
         "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
@@ -105,6 +142,7 @@ def configure_logging() -> None:
 
     intercept_handler = InterceptHandler()
     intercept_handler.addFilter(sampling_filter)
+    intercept_handler.addFilter(CogneeTelemetryFilter(telemetry_enabled))
     logging.basicConfig(handlers=[intercept_handler], level=logging.INFO, force=True)
 
     kb_logger_names = (
@@ -147,7 +185,6 @@ def configure_logging() -> None:
     if not verbose:
         kb_noisy = (
             "ai_coach.agent.knowledge.utils.datasets",
-            "ai_coach.agent.knowledge.utils.projection",
             "ai_coach.agent.knowledge.utils.storage",
             "ai_coach.agent.knowledge.utils.storage_helpers",
             "ai_coach.agent.knowledge.gdrive_knowledge_loader",
