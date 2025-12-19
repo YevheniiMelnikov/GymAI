@@ -20,13 +20,9 @@ x-common-env: &common_env
     POSTGRES_PORT: ${DB_PORT}
     AI_COACH_HOST: ${AI_COACH_HOST:-ai_coach}
     AI_COACH_PORT: ${COACH_PORT:-9000}
-    VECTOR_DB_PROVIDER: ${VECTOR_DB_PROVIDER:-pgvector}
-    PGVECTOR_HOST: ${PGVECTOR_HOST:-pgvector}
-    PGVECTOR_PORT: ${PGVECTOR_PORT:-5432}
-    PGVECTOR_DB: ${PGVECTOR_DB:-pgvector}
-    PGVECTOR_USER: ${PGVECTOR_USER:-pgvector}
-    PGVECTOR_PASSWORD: ${PGVECTOR_PASSWORD:-pgvector}
-    VECTOR_DB_URL: ${VECTOR_DB_URL:-postgresql+asyncpg://${PGVECTOR_USER:-pgvector}:${PGVECTOR_PASSWORD:-pgvector}@${PGVECTOR_HOST:-pgvector}:${PGVECTOR_PORT:-5432}/${PGVECTOR_DB:-pgvector}}
+    VECTOR_DB_PROVIDER: ${VECTOR_DB_PROVIDER:-qdrant}
+    VECTOR_DB_URL: ${VECTOR_DB_URL:-http://qdrant:6333}
+    VECTOR_DB_KEY: ${VECTOR_DB_KEY:-}
     BOT_INTERNAL_HOST: ${BOT_UPSTREAM_HOST:-host.docker.internal}
     BOT_INTERNAL_PORT: ${BOT_UPSTREAM_PORT:-8088}
   env_file:
@@ -85,32 +81,19 @@ services:
       - ${HOST_PG_PORT:-5432}:5432
     networks: [internal]
 
-  pgvector:
-    image: pgvector/pgvector:pg17-trixie
+  qdrant:
+    image: qdrant/qdrant:v1.16
+    container_name: qdrant
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: ${PGVECTOR_DB:-pgvector}
-      POSTGRES_USER: ${PGVECTOR_USER:-pgvector}
-      POSTGRES_PASSWORD: ${PGVECTOR_PASSWORD:-pgvector}
-    volumes:
-      - pgvector_data:/var/lib/postgresql/data
-      - ./pgvector-init.sql:/docker-entrypoint-initdb.d/pgvector-init.sql:ro
+      QDRANT__SERVICE__HTTP_PORT: ${QDRANT_HTTP_PORT:-6333}
+      QDRANT__SERVICE__GRPC_PORT: ${QDRANT_GRPC_PORT:-6334}
     ports:
-      - ${HOST_PGVECTOR_PORT:-15433}:5432
+      - ${HOST_QDRANT_HTTP_PORT:-6333}:6333
+      - ${HOST_QDRANT_GRPC_PORT:-6334}:6334
+    volumes:
+      - qdrant_data:/qdrant/storage
     networks: [internal]
-
-#  qdrant:
-#    image: qdrant/qdrant:v1.16
-#    container_name: qdrant
-#    restart: unless-stopped
-#    environment:
-#      QDRANT__SERVICE__HTTP_PORT: ${QDRANT_HTTP_PORT:-6333}
-#      QDRANT__SERVICE__GRPC_PORT: ${QDRANT_GRPC_PORT:-6334}
-#    ports:
-#      - ${HOST_QDRANT_HTTP_PORT:-6333}:6333
-#      - ${HOST_QDRANT_GRPC_PORT:-6334}:6334
-#    volumes:
-#      - qdrant_data:/qdrant/storage
-#    networks: [ internal ]
 
   redis:
     image: redis:7-alpine
@@ -182,7 +165,7 @@ services:
         condition: service_healthy
       ai_coach:
         condition: service_started
-      pgvector:
+      qdrant:
         condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:${API_PORT:-8000}/health/"]
@@ -229,7 +212,7 @@ services:
         condition: service_healthy
       ai_coach:
         condition: service_started
-      pgvector:
+      qdrant:
         condition: service_started
     restart: unless-stopped
     extra_hosts:
@@ -268,7 +251,7 @@ services:
         condition: service_started
       neo4j:
         condition: service_started
-      pgvector:
+      qdrant:
         condition: service_started
     restart: unless-stopped
     extra_hosts:
@@ -311,7 +294,7 @@ services:
         condition: service_healthy
       neo4j:
         condition: service_healthy
-      pgvector:
+      qdrant:
         condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:${COACH_PORT:-9000}/health/"]
@@ -406,7 +389,7 @@ networks:
 volumes:
   cognee_storage:
   pgdata:
-  pgvector_data:
+  qdrant_data:
   data_storage:
   rabbitmqdata:
 

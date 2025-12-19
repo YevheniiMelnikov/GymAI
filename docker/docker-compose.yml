@@ -20,13 +20,9 @@ x-common-env: &common_env
     AI_COACH_PORT: ${COACH_PORT:-9000}
     BOT_INTERNAL_HOST: ${BOT_UPSTREAM_HOST:-host.docker.internal}
     BOT_INTERNAL_PORT: ${BOT_UPSTREAM_PORT:-8088}
-    VECTOR_DB_PROVIDER: ${VECTOR_DB_PROVIDER:-pgvector}
-    PGVECTOR_HOST: ${PGVECTOR_HOST:-pgvector}
-    PGVECTOR_PORT: ${PGVECTOR_PORT:-5432}
-    PGVECTOR_DB: ${PGVECTOR_DB:-pgvector}
-    PGVECTOR_USER: ${PGVECTOR_USER:-pgvector}
-    PGVECTOR_PASSWORD: ${PGVECTOR_PASSWORD:-pgvector}
-    VECTOR_DB_URL: ${VECTOR_DB_URL:-postgresql+asyncpg://${PGVECTOR_USER:-pgvector}:${PGVECTOR_PASSWORD:-pgvector}@${PGVECTOR_HOST:-pgvector}:${PGVECTOR_PORT:-5432}/${PGVECTOR_DB:-pgvector}}
+    VECTOR_DB_PROVIDER: ${VECTOR_DB_PROVIDER:-qdrant}
+    VECTOR_DB_URL: ${VECTOR_DB_URL:-http://qdrant:6333}
+    VECTOR_DB_KEY: ${VECTOR_DB_KEY:-}
   env_file:
     - .env
   volumes:
@@ -89,18 +85,17 @@ services:
       timeout: 5s
       retries: 5
 
-  pgvector:
-    image: pgvector/pgvector:pg17-trixie
+  qdrant:
+    image: qdrant/qdrant:v1.16
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${PGVECTOR_DB:-pgvector}
-      POSTGRES_USER: ${PGVECTOR_USER:-pgvector}
-      POSTGRES_PASSWORD: ${PGVECTOR_PASSWORD:-pgvector}
+      QDRANT__SERVICE__HTTP_PORT: ${QDRANT_HTTP_PORT:-6333}
+      QDRANT__SERVICE__GRPC_PORT: ${QDRANT_GRPC_PORT:-6334}
     ports:
-      - "${HOST_PGVECTOR_PORT:-15433}:5432"
+      - "${HOST_QDRANT_HTTP_PORT:-6333}:6333"
+      - "${HOST_QDRANT_GRPC_PORT:-6334}:6334"
     volumes:
-      - pgvector_data:/var/lib/postgresql/data
-      - ./pgvector-init.sql:/docker-entrypoint-initdb.d/pgvector-init.sql:ro
+      - qdrant_data:/qdrant/storage
 
   api:
     image: *app_image
@@ -137,7 +132,7 @@ services:
         condition: service_healthy
       ai_coach:
         condition: service_started
-      pgvector:
+      qdrant:
         condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:${API_PORT:-8000}/health/"]
@@ -178,7 +173,7 @@ services:
         condition: service_healthy
       ai_coach:
         condition: service_started
-      pgvector:
+      qdrant:
         condition: service_started
     restart: unless-stopped
 
@@ -208,7 +203,7 @@ services:
         condition: service_healthy
       ai_coach:
         condition: service_started
-      pgvector:
+      qdrant:
         condition: service_started
     restart: unless-stopped
 
@@ -236,7 +231,7 @@ services:
         condition: service_healthy
       ai_coach:
         condition: service_started
-      pgvector:
+      qdrant:
         condition: service_started
     restart: unless-stopped
 
@@ -273,7 +268,7 @@ services:
         condition: service_healthy
       neo4j:
         condition: service_healthy
-      pgvector:
+      qdrant:
         condition: service_started
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:${COACH_PORT:-9000}/health/"]
@@ -373,7 +368,7 @@ volumes:
   neo4j_config:
   neo4j_data:
   neo4j_plugins:
-  pgvector_data:
+  qdrant_data:
 
 networks:
   internal:
