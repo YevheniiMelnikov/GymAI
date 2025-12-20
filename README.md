@@ -147,8 +147,8 @@ If Celery prints connection errors, verify that `RABBITMQ_URL` and `REDIS_URL` p
 | `pg_backup`                        | daily 02:00                        | dump Postgres database                            |
 | `redis_backup`                     | daily 02:01                        | export Redis data                                 |
 | `cleanup_backups`                  | daily 02:02                        | remove backups older than `BACKUP_RETENTION_DAYS` |
-| `neo4j_backup`                     | daily 02:03                        | export Neo4j graph snapshot (APOC JSON)           |
-| `qdrant_backup`                    | daily 02:04                        | export Qdrant collection snapshots                |
+| `neo4j_backup`                     | daily 02:03                        | export Neo4j graph snapshot (APOC JSON, when enabled) |
+| `qdrant_backup`                    | daily 02:04                        | export Qdrant collection snapshots (when enabled) |
 | `deactivate_expired_subscriptions` | daily 01:00                        | disable subscriptions past end date               |
 | `warn_low_credits`                 | daily 00:00                        | notify clients with insufficient credits          |
 | `charge_due_subscriptions`         | daily 00:30                        | deduct credits for active plans                   |
@@ -175,10 +175,12 @@ To refresh external knowledge (e.g., documents from Google Drive), Celery calls 
 * `AI_COACH_REDIS_CHAT_DB` – Redis DB index for Cognee session cache (default: `2`)
 * `AI_COACH_REDIS_STATE_DB` – Redis DB index for AI coach idempotency state (default: `3`)
 * `AI_COACH_COGNEE_SESSION_TTL` – session TTL in seconds for Cognee cache (default: `0` disables expiry)
+* `ENABLE_KB_BACKUPS` – enable scheduled Neo4j/Qdrant backups (default: `false`)
 
 **Other maintenance**
 
 * `BACKUP_RETENTION_DAYS` – retention period for Postgres and Redis backups
+* `ENABLE_KB_BACKUPS` – schedule Neo4j/Qdrant backups when true
 
 **Redis DB usage**
 

@@ -93,6 +93,11 @@ services:
       - ${HOST_QDRANT_GRPC_PORT:-6334}:6334
     volumes:
       - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks: [internal]
 
   redis:
@@ -166,7 +171,7 @@ services:
       ai_coach:
         condition: service_started
       qdrant:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:${API_PORT:-8000}/health/"]
       interval: 60s
@@ -213,7 +218,7 @@ services:
       ai_coach:
         condition: service_started
       qdrant:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -252,7 +257,7 @@ services:
       neo4j:
         condition: service_started
       qdrant:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -295,7 +300,7 @@ services:
       neo4j:
         condition: service_healthy
       qdrant:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:${COACH_PORT:-9000}/health/"]
       interval: 30s

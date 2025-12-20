@@ -254,6 +254,7 @@ class Settings(BaseSettings):
     EMAIL: Annotated[str, Field(default="", description="Contact email address.")]
     ADMIN_ID: Annotated[str, Field(default="", description="Telegram user ID of the primary administrator.")]
     BACKUP_RETENTION_DAYS: int = Field(default=30, description="Number of days to retain database and storage backups.")
+    ENABLE_KB_BACKUPS: bool = Field(default=False, description="Enable scheduled backups for Neo4j and Qdrant.")
 
     # --- Admin Credentials ---
     DJANGO_ADMIN: Annotated[str, Field(default="admin", description="Username for the Django admin panel superuser.")]

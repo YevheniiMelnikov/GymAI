@@ -1,7 +1,9 @@
 """Database and cache backup tasks."""
 
+import re
 import shutil
 import subprocess
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -30,6 +32,15 @@ _PG_DIR.mkdir(parents=True, exist_ok=True)
 _REDIS_DIR.mkdir(parents=True, exist_ok=True)
 _NEO4J_DIR.mkdir(parents=True, exist_ok=True)
 _QDRANT_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _kb_backups_enabled() -> bool:
+    return bool(getattr(settings, "ENABLE_KB_BACKUPS", False))
+
+
+def _sanitize_component(value: str) -> str:
+    cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "_", value.strip())
+    return cleaned.strip("._") or "unknown"
 
 
 @app.task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyrefly: ignore[not-callable]
@@ -78,6 +89,9 @@ def redis_backup(self) -> None:
 
 @app.task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyrefly: ignore[not-callable]
 def neo4j_backup(self) -> None:
+    if not _kb_backups_enabled():
+        logger.info("Neo4j backup skipped: disabled")
+        return
     ts: str = datetime.now().strftime("%Y%m%d%H%M%S")
     path: Path = _NEO4J_DIR / f"neo4j_backup_{ts}.json"
     host = (settings.GRAPH_DATABASE_HOST or "neo4j").strip() or "neo4j"
@@ -96,13 +110,16 @@ def neo4j_backup(self) -> None:
     try:
         with driver.session(database=database) as session:
             result = session.run("CALL apoc.export.json.all(null, {stream: true, useTypes: true})")
-            record = result.single()
-            if record is None:
-                raise RuntimeError("Neo4j export returned no data")
-            payload = record.get("data") or ""
-            if not payload:
+            wrote_any = False
+            with path.open("w", encoding="utf-8") as handle:
+                for record in result:
+                    payload = record.get("data") or ""
+                    if not payload:
+                        continue
+                    handle.write(str(payload))
+                    wrote_any = True
+            if not wrote_any:
                 raise RuntimeError("Neo4j export payload is empty")
-            path.write_text(str(payload), encoding="utf-8")
         logger.info(f"Neo4j backup saved {path}")
     finally:
         driver.close()
@@ -110,6 +127,9 @@ def neo4j_backup(self) -> None:
 
 @app.task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyrefly: ignore[not-callable]
 def qdrant_backup(self) -> None:
+    if not _kb_backups_enabled():
+        logger.info("Qdrant backup skipped: disabled")
+        return
     ts: str = datetime.now().strftime("%Y%m%d%H%M%S")
     base_url = settings.VECTOR_DB_URL.rstrip("/")
     headers: dict[str, str] = {}
@@ -132,14 +152,36 @@ def qdrant_backup(self) -> None:
             snap_name = snap_resp.json().get("result", {}).get("name")
             if not snap_name:
                 raise RuntimeError(f"Qdrant snapshot name missing for collection {name}")
-            download = client.get(
-                f"{base_url}/collections/{name}/snapshots/{snap_name}",
-                headers=headers,
-            )
-            download.raise_for_status()
-            path = _QDRANT_DIR / f"qdrant_{name}_{ts}.snapshot"
-            path.write_bytes(download.content)
-            logger.info(f"Qdrant snapshot saved {path}")
+            safe_name = _sanitize_component(str(name))
+            safe_snap = _sanitize_component(str(snap_name))
+            target = _QDRANT_DIR / f"qdrant_{safe_name}_{safe_snap}_{ts}.snapshot"
+            tmp_target = target.with_suffix(f"{target.suffix}.tmp")
+            download_url = f"{base_url}/collections/{name}/snapshots/{snap_name}"
+            retries = [0.5, 1.0, 2.0, 4.0, 8.0]
+            last_error: Exception | None = None
+            for wait_s in retries:
+                with client.stream("GET", download_url, headers=headers) as response:
+                    if response.status_code in {404, 409, 423, 425, 503}:
+                        last_error = httpx.HTTPStatusError(
+                            f"Snapshot not ready: {response.status_code}",
+                            request=response.request,
+                            response=response,
+                        )
+                    else:
+                        response.raise_for_status()
+                        with tmp_target.open("wb") as handle:
+                            for chunk in response.iter_bytes():
+                                if chunk:
+                                    handle.write(chunk)
+                        tmp_target.replace(target)
+                        logger.info(f"Qdrant snapshot saved {target}")
+                        last_error = None
+                        break
+                time.sleep(wait_s)
+            if last_error is not None:
+                if tmp_target.exists():
+                    tmp_target.unlink()
+                raise last_error
 
 
 @app.task(bind=True, autoretry_for=(Exception,), max_retries=3)  # pyrefly: ignore[not-callable]
