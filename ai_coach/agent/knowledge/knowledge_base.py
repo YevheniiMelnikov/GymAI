@@ -5,22 +5,26 @@ import logging
 from hashlib import sha256
 from time import monotonic
 from types import SimpleNamespace
-from typing import Any, ClassVar, Mapping, Callable, Awaitable, TYPE_CHECKING
+from typing import Any, ClassVar, Mapping, Callable, Awaitable, Sequence, TYPE_CHECKING
 
 import cognee
 from loguru import logger
 
 from ai_coach.agent.knowledge.base_knowledge_loader import KnowledgeLoader
 from ai_coach.agent.knowledge.schemas import KnowledgeSnippet, ProjectionStatus, RebuildResult
+from ai_coach.agent.knowledge.utils import chat_cache
 from ai_coach.agent.knowledge.utils.chat_queue import ChatProjectionScheduler
+from ai_coach.agent.knowledge.utils.memify_scheduler import try_lock_chat_summary
 from ai_coach.agent.knowledge.cognee_config import CogneeConfig
 from ai_coach.agent.knowledge.utils.datasets import DatasetService
 from ai_coach.agent.knowledge.utils.projection import ProjectionService
 from ai_coach.agent.knowledge.utils.search import SearchService
 from ai_coach.agent.knowledge.utils.storage import StorageService
 from ai_coach.agent.knowledge.utils.lock_cache import LockCache
+from ai_coach.agent.prompts import CHAT_SUMMARY_PROMPT, COACH_SYSTEM_PROMPT
 from ai_coach.types import MessageRole
 from config.app_settings import settings
+from core.utils.redis_lock import redis_try_lock
 
 if TYPE_CHECKING:
     from core.schemas import Profile
@@ -261,6 +265,11 @@ class KnowledgeBase:
     async def refresh(self, force: bool = False) -> None:
         from cognee.modules.data.exceptions import DatasetNotFoundError
         from cognee.modules.users.exceptions.exceptions import PermissionDeniedError
+
+        async with redis_try_lock("locks:knowledge_refresh", ttl_ms=300_000, wait=False) as got_lock:
+            if not got_lock:
+                logger.info("knowledge_refresh_skipped reason=lock_held")
+                return
 
         user = await self.dataset_service.get_cognee_user()
         ds = self.dataset_service.alias_for_dataset(self.GLOBAL_DATASET)
@@ -557,30 +566,141 @@ class KnowledgeBase:
                 logger.debug(f"kb_append.retry dataset={target_alias} attempt={attempts} sleep_for={sleep_for}")
                 await asyncio.sleep(sleep_for)
 
-    async def save_client_message(self, text: str, profile_id: int) -> None:
-        await self.add_text(
-            text,
-            dataset=self.dataset_service.chat_dataset_name(profile_id),
-            profile_id=profile_id,
-            role=MessageRole.CLIENT,
-            node_set=[f"profile:{profile_id}", "chat_message"],
-            metadata={"channel": "chat"},
-            project=False,
-        )
+    async def save_client_message(self, text: str, profile_id: int, *, language: str | None = None) -> None:
+        await self.cache_chat_message(text, profile_id, role=MessageRole.CLIENT, language=language)
 
-    async def save_ai_message(self, text: str, profile_id: int) -> None:
-        await self.add_text(
-            text,
-            dataset=self.dataset_service.chat_dataset_name(profile_id),
-            profile_id=profile_id,
-            role=MessageRole.AI_COACH,
-            node_set=[f"profile:{profile_id}", "chat_message"],
-            metadata={"channel": "chat"},
-            project=False,
+    async def save_ai_message(self, text: str, profile_id: int, *, language: str | None = None) -> None:
+        await self.cache_chat_message(text, profile_id, role=MessageRole.AI_COACH, language=language)
+
+    async def cache_chat_message(
+        self,
+        text: str,
+        profile_id: int,
+        *,
+        role: MessageRole,
+        language: str | None = None,
+    ) -> None:
+        normalized = self.dataset_service._normalize_text(text)
+        if not normalized:
+            return
+        lang = language or settings.DEFAULT_LANG
+        try:
+            total = await chat_cache.append_message(profile_id, role, normalized, lang)
+        except Exception as exc:  # noqa: BLE001 - cache best effort
+            logger.warning("chat_cache.append_failed profile_id={} detail={}", profile_id, exc)
+            return
+        pair_limit = int(settings.AI_COACH_CHAT_SUMMARY_PAIR_LIMIT)
+        if pair_limit <= 0 or total < pair_limit * 2:
+            return
+        try:
+            messages = await chat_cache.get_messages(profile_id)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("chat_cache.read_failed profile_id={} detail={}", profile_id, exc)
+            return
+        counts = chat_cache.count_roles(messages)
+        if min(counts.values() or [0]) < pair_limit:
+            return
+        pair_limit = int(settings.AI_COACH_CHAT_SUMMARY_PAIR_LIMIT)
+        dedupe_ttl = max(pair_limit * 5, 60)
+        if await try_lock_chat_summary(profile_id, dedupe_ttl):
+            logger.info("chat_summary_start profile_id={} reason=chat_cache", profile_id)
+            task = asyncio.create_task(self.summarize_cached_chat(profile_id, reason="chat_cache"))
+            task.add_done_callback(self._log_task_exception)
+
+    async def summarize_cached_chat(self, profile_id: int, reason: str | None = None) -> dict[str, Any]:
+        lock_key = f"locks:chat_summary:{profile_id}"
+        async with redis_try_lock(lock_key, ttl_ms=180_000, wait=False) as got_lock:
+            if not got_lock:
+                return {"status": "skipped", "reason": "lock_held"}
+            try:
+                messages = await chat_cache.get_messages(profile_id)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("chat_cache.read_failed profile_id={} detail={}", profile_id, exc)
+                return {"status": "failed", "reason": "cache_unavailable"}
+            processed_len = len(messages)
+            if processed_len == 0:
+                return {"status": "skipped", "reason": "empty"}
+            counts = chat_cache.count_roles(messages)
+            pair_limit = int(settings.AI_COACH_CHAT_SUMMARY_PAIR_LIMIT)
+            if pair_limit <= 0 or min(counts.values() or [0]) < pair_limit:
+                return {"status": "skipped", "reason": "below_threshold", "messages": processed_len}
+
+            language = await chat_cache.get_language(profile_id) or settings.DEFAULT_LANG
+            summary = await self._summarize_chat_messages(messages, language=language, profile_id=profile_id)
+            if not summary:
+                return {"status": "skipped", "reason": "summary_empty", "messages": processed_len}
+
+            user = await self.dataset_service.get_cognee_user()
+            if user is None:
+                return {"status": "skipped", "reason": "user_context_unavailable"}
+            summary_text = summary.strip()
+            if not summary_text:
+                return {"status": "skipped", "reason": "summary_empty", "messages": processed_len}
+            summary_payload = f"{MessageRole.AI_COACH.value}: {summary_text}"
+            node_set = [f"profile:{profile_id}", "chat_summary"]
+            metadata = {"channel": "chat", "kind": "summary", "language": language}
+            dataset = self.dataset_service.chat_dataset_name(profile_id)
+            resolved_name, created = await self.update_dataset(
+                summary_payload,
+                dataset,
+                user,
+                node_set=node_set,
+                metadata=metadata,
+                force_ingest=False,
+                trigger_projection=True,
+            )
+            if created:
+                alias = self.dataset_service.alias_for_dataset(resolved_name)
+                memify_fn = getattr(cognee, "memify", None)
+                user_ctx = self.dataset_service.to_user_ctx(user)
+                if callable(memify_fn) and user_ctx is not None:
+                    await self._invoke_memify(memify_fn, datasets=[alias], user=user_ctx)
+            await chat_cache.trim_messages(profile_id, processed_len)
+            return {
+                "status": "ok",
+                "reason": reason or "chat_cache",
+                "messages": processed_len,
+                "summary_len": len(summary_text),
+            }
+
+    @staticmethod
+    async def _summarize_chat_messages(
+        messages: Sequence[str],
+        *,
+        language: str,
+        profile_id: int,
+    ) -> str:
+        if not messages:
+            return ""
+        user_prompt = CHAT_SUMMARY_PROMPT.format(language=language, messages="\n".join(messages))
+        from ai_coach.agent.llm_helper import LLMHelper  # local import to avoid circular dependency
+
+        client, model_name = LLMHelper._get_completion_client()
+        LLMHelper._ensure_llm_logging(client, model_name)
+        response = await LLMHelper._run_completion(
+            client,
+            COACH_SYSTEM_PROMPT,
+            user_prompt,
+            model=model_name,
+            max_tokens=settings.AI_COACH_CHAT_SUMMARY_MAX_TOKENS,
         )
+        content = LLMHelper._extract_choice_content(response, profile_id=profile_id)
+        summary = content.strip()
+        if not summary:
+            logger.debug("chat_summary.empty profile_id={}", profile_id)
+        return summary
 
     async def get_message_history(self, profile_id: int, limit: int | None = None) -> list[str]:
         dataset: str = self.dataset_service.alias_for_dataset(self.dataset_service.chat_dataset_name(profile_id))
+        cached_history: list[str] = []
+        try:
+            cached_history = await chat_cache.get_messages(profile_id)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("chat_cache.read_failed profile_id={} detail={}", profile_id, exc)
+        pair_limit = int(settings.AI_COACH_CHAT_SUMMARY_PAIR_LIMIT)
+        if cached_history and (pair_limit <= 0 or len(cached_history) <= pair_limit * 2):
+            limit_value = limit or settings.CHAT_HISTORY_LIMIT
+            return cached_history[-limit_value:] if limit_value else list(cached_history)
         user: Any | None = await self.dataset_service.get_cognee_user()
         if user is None:
             if not self._warned_missing_user:
@@ -588,7 +708,8 @@ class KnowledgeBase:
                 self._warned_missing_user = True
             else:
                 logger.debug(f"History fetch skipped profile_id={profile_id}: default user unavailable")
-            return []
+            limit_value = limit or settings.CHAT_HISTORY_LIMIT
+            return cached_history[-limit_value:] if limit_value else list(cached_history)
         user_ctx: Any | None = self.dataset_service.to_user_ctx(user)
         try:
             await self.dataset_service.ensure_dataset_exists(dataset, user_ctx)
@@ -598,14 +719,16 @@ class KnowledgeBase:
             data = await self.dataset_service.list_dataset_entries(dataset, user_ctx)
         except Exception:
             logger.info(f"No message history found for profile_id={profile_id}")
-            return []
+            limit_value = limit or settings.CHAT_HISTORY_LIMIT
+            return cached_history[-limit_value:] if limit_value else list(cached_history)
         messages: list[str] = []
         for item in data:
             text = getattr(item, "text", None)
             if text:
                 messages.append(str(text))
-        limit = limit or settings.CHAT_HISTORY_LIMIT
-        return messages[-limit:]
+        combined = messages + cached_history
+        limit_value = limit or settings.CHAT_HISTORY_LIMIT
+        return combined[-limit_value:] if limit_value else combined
 
     async def update_dataset(
         self,

@@ -56,6 +56,16 @@ celery_config = {
             "schedule": crontab(hour=2, minute=2),
             "options": {"queue": "maintenance"},
         },
+        "neo4j_backup": {
+            "task": "core.tasks.backups.neo4j_backup",
+            "schedule": crontab(hour=2, minute=3),
+            "options": {"queue": "maintenance"},
+        },
+        "qdrant_backup": {
+            "task": "core.tasks.backups.qdrant_backup",
+            "schedule": crontab(hour=2, minute=4),
+            "options": {"queue": "maintenance"},
+        },
         "deactivate_subs": {
             "task": "core.tasks.billing.deactivate_expired_subscriptions",
             "schedule": crontab(hour=1, minute=0),

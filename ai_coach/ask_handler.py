@@ -296,12 +296,15 @@ def _final_log(
     )
 
 
-async def _prepare_chat_kb(mode: CoachMode, prompt: str | None, profile_id: int) -> KnowledgeBase | None:
+async def _prepare_chat_kb(
+    mode: CoachMode,
+    prompt: str | None,
+    profile_id: int,
+    language: str,
+) -> KnowledgeBase | None:
     if mode != CoachMode.ask_ai or not prompt:
         return None
-    kb_for_chat = get_knowledge_base()
-    await _ingest_chat_prompt(kb_for_chat, profile_id, prompt)
-    return kb_for_chat
+    return get_knowledge_base()
 
 
 async def handle_coach_request(
@@ -368,7 +371,7 @@ async def handle_coach_request(
         ctx: AskCtx = _build_context(data, language, period, workout_days, deps, attachments)
         logger.debug(f"/ask ctx.language={language} deps.locale={deps.locale} mode={mode.value}")
 
-        kb_for_chat = await _prepare_chat_kb(mode, data.prompt, data.profile_id)
+        kb_for_chat = await _prepare_chat_kb(mode, data.prompt, data.profile_id, language)
 
         try:
             coach_agent_action: CoachAction = DISPATCH[mode]
@@ -391,8 +394,8 @@ async def handle_coach_request(
                 _log_sources(rid, data.request_id, data.profile_id, deps, cast(QAResponse, result), sources)
                 if isinstance(answer, str):
                     kb = kb_for_chat or get_knowledge_base()
-                    await kb.save_client_message(data.prompt or "", profile_id=data.profile_id)
-                    await kb.save_ai_message(answer, profile_id=data.profile_id)
+                    await kb.save_client_message(data.prompt or "", profile_id=data.profile_id, language=language)
+                    await kb.save_ai_message(answer, profile_id=data.profile_id, language=language)
 
                 response_data: dict[str, Any] = {"answer": answer}
                 if sources:

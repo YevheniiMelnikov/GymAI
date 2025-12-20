@@ -75,3 +75,13 @@ def schedule_profile_memify_sync(
         loop = asyncio.get_event_loop()
         loop.create_task(schedule_profile_memify(profile_id, reason=reason, delay_s=delay_s))
         return True
+
+
+async def try_lock_chat_summary(profile_id: int, ttl_seconds: int) -> bool:
+    key = f"ai_coach:chat_summary:profile:{profile_id}"
+    try:
+        client = get_redis_client()
+        return bool(await client.set(key, "1", nx=True, ex=ttl_seconds))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("chat_summary_lock_failed profile_id={} detail={}", profile_id, exc)
+        return False

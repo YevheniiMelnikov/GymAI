@@ -14,7 +14,7 @@ from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
 
 from config.app_settings import settings
 from ai_coach.agent.base import AgentDeps
-from ai_coach.agent.knowledge.knowledge_base import KnowledgeSnippet
+from ai_coach.agent.knowledge.schemas import KnowledgeSnippet
 from ai_coach.agent.prompts import COACH_SYSTEM_PROMPT, ASK_AI_USER_PROMPT, agent_instructions
 from ai_coach.agent.tools import toolset
 from ai_coach.agent.utils import get_knowledge_base, resolve_language_name

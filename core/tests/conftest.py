@@ -516,7 +516,7 @@ class _KB:
         return alias, not duplicate
 
     @classmethod
-    async def save_client_message(cls, text: str, profile_id: int) -> None:
+    async def save_client_message(cls, text: str, profile_id: int, *, language: str | None = None) -> None:
         await cls.add_text(
             text,
             dataset=cls.chat_dataset_name(profile_id),
@@ -526,7 +526,7 @@ class _KB:
         )
 
     @classmethod
-    async def save_ai_message(cls, text: str, profile_id: int) -> None:
+    async def save_ai_message(cls, text: str, profile_id: int, *, language: str | None = None) -> None:
         await cls.add_text(
             text,
             dataset=cls.chat_dataset_name(profile_id),

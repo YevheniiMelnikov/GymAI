@@ -121,6 +121,9 @@ class Settings(BaseSettings):
     AI_COACH_MEMIFY_DELAY_SECONDS: Annotated[
         float, Field(default=3600.0, description="Delay in seconds before scheduling Cognee memify for profile datasets.")
     ]
+    AI_COACH_CHAT_SUMMARY_PAIR_LIMIT: Annotated[int, Field(default=10, description="Number of client/coach message pairs required before summarizing chat history.")]
+    AI_COACH_CHAT_SUMMARY_MAX_TOKENS: Annotated[int, Field(default=400, description="Max tokens for the chat summary LLM request.")]
+    AI_COACH_REDIS_CHAT_DB: Annotated[int, Field(default=2, description="Redis database index used for cached chat history summaries.")]
     AI_COACH_HISTORY_TIMEOUT: Annotated[float, Field(default=6.0, description="Timeout for retrieving user history in seconds.")]
     AI_COACH_PROGRAM_HISTORY_TIMEOUT: Annotated[float, Field(default=6.0, description="Timeout for retrieving workout program history in seconds.")]
     AI_COACH_SAVE_TIMEOUT: Annotated[float, Field(default=30.0, description="Timeout for saving data from the AI coach in seconds.")]

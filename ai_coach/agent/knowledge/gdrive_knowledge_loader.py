@@ -13,8 +13,10 @@ from docx import Document  # pyrefly: ignore[import-error]
 import fitz  # PyMuPDF  # pyrefly: ignore[import-error]
 
 from config.app_settings import settings
+from core.utils.redis_lock import get_redis_client, redis_try_lock
 from .base_knowledge_loader import KnowledgeLoader
 from .knowledge_base import KnowledgeBase
+from .utils.helpers import sanitize_text
 
 SCOPES: Final = ["https://www.googleapis.com/auth/drive.readonly"]
 
@@ -91,9 +93,14 @@ class GDriveDocumentLoader(KnowledgeLoader):
             logger.info("No GDRIVE_FOLDER_ID set; skip load")
             return
 
+        async with redis_try_lock("locks:kb_gdrive_load", ttl_ms=300_000, wait=False) as got_lock:
+            if not got_lock:
+                logger.info("kb_gdrive.skip reason=lock_held")
+                return
+
         service = self._get_drive_files_service()
         q = f"'{self.folder_id}' in parents and trashed = false"
-        resp = service.list(q=q, fields="files(id, name, size, mimeType)").execute()
+        resp = service.list(q=q, fields="files(id, name, size, mimeType, modifiedTime)").execute()
         files = cast(list[dict[str, Any]], resp.get("files", []))
         logger.debug(f"kb_gdrive.scan start folder_id={self.folder_id} dataset={self._dataset_name} files={len(files)}")
         processed = 0
@@ -106,6 +113,20 @@ class GDriveDocumentLoader(KnowledgeLoader):
             logger.warning("kb_gdrive.skip reason=missing_user")
             return
         dataset_alias = self._kb.dataset_service.alias_for_dataset(self._dataset_name)
+        fingerprint_items = [
+            f"{item.get('id', '')}:{item.get('modifiedTime', '')}:{item.get('size', '')}" for item in files
+        ]
+        fingerprint = hashlib.sha256("|".join(sorted(fingerprint_items)).encode("utf-8")).hexdigest()
+        if not force_ingest:
+            cache_key = f"ai_coach:gdrive:folder:{self.folder_id}:fingerprint"
+            try:
+                client = get_redis_client()
+                cached = await client.get(cache_key)
+                if cached == fingerprint:
+                    logger.info("kb_gdrive.skip reason=fingerprint_match dataset={}", dataset_alias)
+                    return
+            except Exception as exc:  # noqa: BLE001
+                logger.debug(f"kb_gdrive.fingerprint_check_failed detail={exc}")
 
         for f in files:
             name = f.get("name") or ""
@@ -143,6 +164,7 @@ class GDriveDocumentLoader(KnowledgeLoader):
                 data = await self._download_file(file_id)
                 parser = self._PARSERS[ext]
                 text = await asyncio.to_thread(parser, data) if ext != ".txt" else parser(data)
+                text = sanitize_text(text)
 
                 normalized = self._kb.dataset_service._normalize_text(text)
                 if not normalized.strip():
@@ -256,6 +278,12 @@ class GDriveDocumentLoader(KnowledgeLoader):
             skipped,
             errors,
         )
+        try:
+            cache_key = f"ai_coach:gdrive:folder:{self.folder_id}:fingerprint"
+            client = get_redis_client()
+            await client.set(cache_key, fingerprint)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug(f"kb_gdrive.fingerprint_set_failed detail={exc}")
 
     async def refresh(self, force: bool = False) -> None:
         await self.load(force_ingest=force)

@@ -32,6 +32,7 @@ from ai_coach.agent.knowledge.utils.datasets import DatasetService
 from ai_coach.agent.knowledge.utils.projection import ProjectionService
 from ai_coach.agent.knowledge.utils.memify_scheduler import schedule_profile_memify
 from config.app_settings import settings
+from core.utils.redis_lock import get_redis_client
 
 
 if TYPE_CHECKING:
@@ -96,7 +97,7 @@ class SearchService:
             return []
         rid_value = request_id or "na"
         actor = user if user is not None else await self.dataset_service.get_cognee_user()
-        await self._ensure_profile_indexed(profile_id, actor)
+        await self._schedule_profile_sync(profile_id)
         user_ctx = self.dataset_service.to_user_ctx(actor)
 
         candidate_aliases: list[str] = []
@@ -634,6 +635,23 @@ class SearchService:
 
     def _expanded_queries(self, query: str) -> list[str]:
         return [query]
+
+    async def _schedule_profile_sync(self, profile_id: int) -> None:
+        key = f"ai_coach:profile_sync:{profile_id}"
+        try:
+            client = get_redis_client()
+            if not await client.set(key, "1", nx=True, ex=600):
+                return
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("profile_sync_dedupe_failed profile_id={} detail={}", profile_id, exc)
+            return
+        try:
+            from core.tasks.ai_coach.maintenance import sync_profile_knowledge
+
+            getattr(sync_profile_knowledge, "delay")(profile_id, reason="search")
+            logger.info("profile_sync_enqueued profile_id={} reason=search", profile_id)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("profile_sync_enqueue_failed profile_id={} detail={}", profile_id, exc)
 
     def _resolve_snippet_kind(self, metadata: Mapping[str, Any] | None, text: str) -> str:
         if metadata:

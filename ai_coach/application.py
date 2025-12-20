@@ -272,14 +272,16 @@ async def init_knowledge_base(kb: KnowledgeBase, knowledge_loader: KnowledgeLoad
             if ready_status == ProjectionStatus.READY and knowledge_ready_event is not None:
                 logger.debug("knowledge_dataset_cognify_ok dataset=kb_global")
                 logger.debug("AI coach global dataset projection ready after delay")
+                knowledge_ready_event.set()
             elif ready_status == ProjectionStatus.READY_EMPTY and knowledge_ready_event is not None:
                 logger.debug("projection:skip_no_rows dataset=kb_global stage=startup")
+                knowledge_ready_event.set()
 
         if probe_reason != "no_rows_in_dataset":
             asyncio.create_task(_await_projection())
 
-    if not knowledge_ready_event.is_set():
-        knowledge_ready_event.set()
+    if knowledge_ready_event.is_set():
+        return
 
 
 @asynccontextmanager

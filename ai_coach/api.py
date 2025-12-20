@@ -7,6 +7,7 @@ from typing import Any, cast
 
 from ai_coach.api_security import require_hmac as _require_hmac
 from ai_coach.api_security import validate_refresh_credentials as _validate_refresh_credentials
+from ai_coach import application as coach_application
 from ai_coach.application import app, security
 from ai_coach import ask_handler as _ask_handler
 from ai_coach.agent import CoachAgent  # noqa: F401 - re-exported for tests
@@ -28,6 +29,11 @@ handle_coach_request = _ask_handler.handle_coach_request
 
 @app.get("/health/")
 async def health() -> dict[str, str]:
+    knowledge_ready_event = coach_application.knowledge_ready_event
+    if knowledge_ready_event is None or not knowledge_ready_event.is_set():
+        raise HTTPException(status_code=503, detail="Knowledge base is not ready")
+    if getattr(app.state, "kb", None) is None:
+        raise HTTPException(status_code=503, detail="Knowledge base is not available")
     return {"status": "ok"}
 
 
