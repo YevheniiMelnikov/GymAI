@@ -94,7 +94,7 @@ def test_ensure_profile_indexed_fetches_profile_by_id(monkeypatch: pytest.Monkey
 
     assert recorded["profile_id"] == profile_id
     assert recorded["dataset"] == KnowledgeBase._dataset_name(profile_id)
-    assert recorded["node_set"] == ["profile"]
+    assert recorded["node_set"] == ["profile", f"profile:{profile_id}"]
     assert recorded["processed"] == KnowledgeBase._dataset_name(profile_id)
     assert recorded["text"].startswith("profile: ")
     assert recorded["metadata"]["kind"] == "document"

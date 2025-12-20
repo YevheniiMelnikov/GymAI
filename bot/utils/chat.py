@@ -50,7 +50,7 @@ async def send_message(
 
     if include_incoming_message:
         try:
-            template = translate(MessageText.incoming_message, language or recipient_profile.language or "ua")
+            template = translate(MessageText.ask_ai_response_template, language or recipient_profile.language or "ua")
         except Exception:
             template = "<b>{name}</b>:\n{message}"
         formatted_text = template.format(

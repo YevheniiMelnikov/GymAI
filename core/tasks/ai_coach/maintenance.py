@@ -1,6 +1,7 @@
 """Maintenance and diagnostic Celery tasks for the AI coach service."""
 
 import asyncio
+import json
 from typing import Any
 
 import httpx
@@ -17,6 +18,9 @@ __all__ = [
     "ai_coach_worker_report",
     "refresh_external_knowledge",
     "prune_knowledge_base",
+    "cleanup_profile_knowledge",
+    "sync_profile_knowledge",
+    "memify_profile_datasets",
 ]
 
 
@@ -140,3 +144,136 @@ def prune_knowledge_base(self) -> None:  # pyrefly: ignore[valid-type]
         logger.warning(f"AI coach call failed for prune_knowledge_base: {exc}")
         raise self.retry(exc=exc)
     logger.info("prune_knowledge_base completed")
+
+
+@app.task(
+    bind=True,
+    autoretry_for=(httpx.HTTPError,),
+    retry_backoff=90,
+    retry_jitter=True,
+    max_retries=4,
+    queue="ai_coach",
+    routing_key="ai_coach",
+)
+def cleanup_profile_knowledge(
+    self, profile_id: int, reason: str = "profile_deleted"
+) -> None:  # pyrefly: ignore[valid-type]
+    """Remove Cognee datasets linked to the specified profile."""
+    logger.info("cleanup_profile_knowledge start profile_id=%s reason=%s", profile_id, reason)
+    payload: dict[str, Any] = {"reason": reason}
+    timeout = settings.AI_COACH_TIMEOUT
+    creds = resolve_hmac_credentials(settings, prefer_ai_coach=True)
+    if creds:
+        path = f"internal/knowledge/profiles/{profile_id}/cleanup/"
+        key_id, secret_key = creds
+        body = json.dumps(payload).encode("utf-8")
+        headers = build_internal_hmac_auth_headers(key_id=key_id, secret_key=secret_key, body=body)
+        headers.setdefault("Content-Type", "application/json")
+        request_kwargs: dict[str, Any] = {"headers": headers, "content": body}
+    else:
+        path = f"knowledge/profiles/{profile_id}/cleanup/"
+        request_kwargs = {
+            "json": payload,
+            "auth": (settings.AI_COACH_REFRESH_USER, settings.AI_COACH_REFRESH_PASSWORD),
+        }
+    url = _ai_coach_path(path)
+    try:
+        resp = httpx.post(url, timeout=timeout, **request_kwargs)
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        logger.warning("cleanup_profile_knowledge failed profile_id=%s detail=%s", profile_id, exc)
+        raise self.retry(exc=exc)
+    logger.info("cleanup_profile_knowledge done profile_id=%s", profile_id)
+
+
+@app.task(
+    bind=True,
+    autoretry_for=(httpx.HTTPError,),
+    retry_backoff=60,
+    retry_jitter=True,
+    max_retries=4,
+    queue="ai_coach",
+    routing_key="ai_coach",
+)
+def sync_profile_knowledge(
+    self, profile_id: int, reason: str = "profile_updated"
+) -> None:  # pyrefly: ignore[valid-type]
+    """Ensure Cognee profile dataset is synchronized with latest data."""
+    logger.info(f"sync_profile_knowledge.start profile_id={profile_id} reason={reason}")
+    payload: dict[str, Any] = {"reason": reason}
+    timeout = settings.AI_COACH_TIMEOUT
+    creds = resolve_hmac_credentials(settings, prefer_ai_coach=True)
+    if creds:
+        path = f"internal/knowledge/profiles/{profile_id}/sync/"
+        key_id, secret_key = creds
+        body = json.dumps(payload).encode("utf-8")
+        headers = build_internal_hmac_auth_headers(key_id=key_id, secret_key=secret_key, body=body)
+        headers.setdefault("Content-Type", "application/json")
+        request_kwargs: dict[str, Any] = {"headers": headers, "content": body}
+    else:
+        path = f"knowledge/profiles/{profile_id}/sync/"
+        request_kwargs = {
+            "json": payload,
+            "auth": (settings.AI_COACH_REFRESH_USER, settings.AI_COACH_REFRESH_PASSWORD),
+        }
+    url = _ai_coach_path(path)
+    try:
+        resp = httpx.post(url, timeout=timeout, **request_kwargs)
+        resp.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        status_code = exc.response.status_code if exc.response is not None else None
+        response_text = exc.response.text if exc.response is not None else ""
+        if status_code and status_code >= 500:
+            logger.warning(f"sync_profile_knowledge.retry profile_id={profile_id} status={status_code} url={url}")
+            raise self.retry(exc=exc)
+        logger.error(
+            "sync_profile_knowledge.failed profile_id=%s status=%s url=%s detail=%s body=%s",
+            profile_id,
+            status_code,
+            url,
+            exc,
+            response_text,
+        )
+        return
+    except httpx.HTTPError as exc:
+        logger.warning(f"sync_profile_knowledge.retry profile_id={profile_id} detail={exc}")
+        raise self.retry(exc=exc)
+    logger.info(f"sync_profile_knowledge.done profile_id={profile_id} status=success")
+
+
+@app.task(
+    bind=True,
+    autoretry_for=(httpx.HTTPError,),
+    retry_backoff=60,
+    retry_jitter=True,
+    max_retries=3,
+    queue="ai_coach",
+    routing_key="ai_coach",
+)
+def memify_profile_datasets(self, profile_id: int, reason: str = "paid_flow") -> None:  # pyrefly: ignore[valid-type]
+    """Trigger Cognee memify for profile datasets."""
+    logger.info("memify_profile_datasets.start profile_id=%s reason=%s", profile_id, reason)
+    payload: dict[str, Any] = {"reason": reason}
+    timeout = settings.AI_COACH_TIMEOUT
+    creds = resolve_hmac_credentials(settings, prefer_ai_coach=True)
+    if creds:
+        path = f"internal/knowledge/profiles/{profile_id}/memify/"
+        key_id, secret_key = creds
+        body = json.dumps(payload).encode("utf-8")
+        headers = build_internal_hmac_auth_headers(key_id=key_id, secret_key=secret_key, body=body)
+        headers.setdefault("Content-Type", "application/json")
+        request_kwargs: dict[str, Any] = {"headers": headers, "content": body}
+    else:
+        path = f"knowledge/profiles/{profile_id}/memify/"
+        request_kwargs = {
+            "json": payload,
+            "auth": (settings.AI_COACH_REFRESH_USER, settings.AI_COACH_REFRESH_PASSWORD),
+        }
+    url = _ai_coach_path(path)
+    try:
+        resp = httpx.post(url, timeout=timeout, **request_kwargs)
+        resp.raise_for_status()
+    except httpx.HTTPError as exc:
+        logger.warning("memify_profile_datasets.retry profile_id=%s detail=%s", profile_id, exc)
+        raise self.retry(exc=exc)
+    logger.info("memify_profile_datasets.done profile_id=%s", profile_id)

@@ -1,10 +1,14 @@
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 from loguru import logger
 
+from aiogram.types import CallbackQuery as TgCallbackQuery, Message as TgMessage
+
+from bot.states import States
 from bot.texts import MessageText, translate
 from bot.utils.bot import answer_msg, del_msg, delete_messages
+from bot.utils.text import get_profile_attributes
 from config.app_settings import settings
 from core.cache import Cache
 from core.exceptions import ProfileNotFoundError
@@ -40,11 +44,10 @@ def resolve_workout_location(profile: Profile) -> WorkoutLocation | None:
 if TYPE_CHECKING:
     from aiogram import Bot
     from aiogram.fsm.context import FSMContext
-    from aiogram.types import Message as TgMessage, CallbackQuery as TgCallbackQuery
 
 
 async def update_profile_data(
-    message: "TgMessage",
+    message: TgMessage,
     state: "FSMContext",
     bot: "Bot",
 ) -> None:
@@ -103,8 +106,8 @@ async def update_profile_data(
             api_payload["language"] = lang_override
 
         credits_delta = int(data.get("credits_delta") or 0)
-        if credits_delta and (profile.credits or 0) < settings.PACKAGE_START_CREDITS:
-            remaining = settings.PACKAGE_START_CREDITS - (profile.credits or 0)
+        if credits_delta and (profile.credits or 0) < settings.DEFAULT_CREDITS:
+            remaining = settings.DEFAULT_CREDITS - (profile.credits or 0)
             credits_delta_to_apply = min(credits_delta, remaining)
             if credits_delta_to_apply:
                 new_credits = (profile.credits or 0) + credits_delta_to_apply
@@ -126,9 +129,15 @@ async def update_profile_data(
             profile = profile.model_copy(update=normalized_updates)
 
         await Cache.profile.save_record(profile.id, profile.model_dump(mode="json"))
-
         await answer_msg(message, translate(MessageText.your_data_updated, lang))
-
+        await state.update_data(profile=profile.model_dump(mode="json"))
+        pending_data = await state.get_data()
+        pending_flow = pending_data.get("pending_flow")
+        if pending_flow:
+            await state.update_data(pending_flow=None)
+            resumed = await _handle_pending_flow(message, profile, state, bot, pending_flow)
+            if resumed:
+                return
         from bot.utils.menus import show_main_menu
 
         await show_main_menu(message, profile, state)
@@ -138,7 +147,63 @@ async def update_profile_data(
         await answer_msg(message, translate(MessageText.unexpected_error, lang))
 
     finally:
-        await del_msg(cast("TgMessage | TgCallbackQuery | None", message))
+        await del_msg(cast(TgMessage | TgCallbackQuery | None, message))
+
+
+async def _handle_pending_flow(
+    message: Optional[TgMessage],
+    profile: Profile,
+    state: "FSMContext",
+    bot: "Bot",
+    pending_flow: dict[str, Any],
+) -> bool:
+    if message is None:
+        return False
+    flow_name = str(pending_flow.get("name") or "")
+    if flow_name == "start_program_flow":
+        from bot.utils.menus import start_program_flow
+
+        await start_program_flow(message, profile, state)
+        return True
+    if flow_name == "start_subscription_flow":
+        from bot.utils.menus import start_subscription_flow
+
+        await start_subscription_flow(message, profile, state)
+        return True
+    if flow_name == "ask_ai_prompt":
+        from bot.utils.ask_ai import start_ask_ai_prompt
+
+        await start_ask_ai_prompt(
+            message,
+            profile,
+            state,
+            delete_origin=False,
+            show_balance_menu_on_insufficient=False,
+        )
+        return True
+    if flow_name == "show_profile":
+        await _send_profile_info_after_questionnaire(message, profile, state)
+        return True
+    return False
+
+
+async def _send_profile_info_after_questionnaire(
+    message: TgMessage,
+    profile: Profile,
+    state: "FSMContext",
+) -> None:
+    lang = profile.language or settings.DEFAULT_LANG
+    text = translate(MessageText.profile_info, lang).format(**get_profile_attributes(profile, lang))
+    from bot.keyboards import profile_menu_kb
+
+    profile_msg = await answer_msg(
+        message,
+        text,
+        reply_markup=profile_menu_kb(lang, show_balance=True),
+    )
+    if profile_msg is not None:
+        await state.update_data(chat_id=profile_msg.chat.id, message_ids=[profile_msg.message_id])
+    await state.set_state(States.profile)
 
 
 async def fetch_user(profile: Profile, *, refresh_if_incomplete: bool = False) -> Profile:

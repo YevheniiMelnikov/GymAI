@@ -1,6 +1,9 @@
+import re
 from typing import Final
 
 _LINE_BREAKS: Final[tuple[str, ...]] = ("\r\n", "\r")
+_DATA_IMAGE_TAG_RE: Final = re.compile(r"<data:image/[^>]+>", re.IGNORECASE)
+_DATA_IMAGE_RE: Final = re.compile(r"data:image/[^\s)<>\"']+", re.IGNORECASE)
 
 
 def normalize_text(value: str | None) -> str:
@@ -14,6 +17,12 @@ def normalize_text(value: str | None) -> str:
     for mark in _LINE_BREAKS:
         normalized = normalized.replace(mark, "\n")
     return normalized
+
+
+def sanitize_text(value: str) -> str:
+    sanitized = _DATA_IMAGE_TAG_RE.sub("<image data removed>", value)
+    sanitized = _DATA_IMAGE_RE.sub("[image data removed]", sanitized)
+    return sanitized
 
 
 def needs_cognee_setup(exc: Exception) -> bool:

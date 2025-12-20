@@ -14,7 +14,7 @@ from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
 
 from config.app_settings import settings
 from ai_coach.agent.base import AgentDeps
-from ai_coach.agent.knowledge.knowledge_base import KnowledgeSnippet
+from ai_coach.agent.knowledge.schemas import KnowledgeSnippet
 from ai_coach.agent.prompts import COACH_SYSTEM_PROMPT, ASK_AI_USER_PROMPT, agent_instructions
 from ai_coach.agent.tools import toolset
 from ai_coach.agent.utils import get_knowledge_base, resolve_language_name
@@ -44,7 +44,7 @@ class LLMHelperProto(Protocol):
     def _language_context(cls, deps: AgentDeps) -> tuple[str, str]: ...
 
     @staticmethod
-    async def _message_history(profile_id: int) -> list[ModelMessage]: ...
+    def _build_history_messages(raw: Sequence[str]) -> list[ModelMessage]: ...
 
     @staticmethod
     def _normalize_output(raw: Any, expected: type[Any]) -> Any: ...
@@ -95,6 +95,28 @@ class LLMHelper:
         "rus": "ru",
         "russian": "ru",
     }
+
+    @staticmethod
+    async def call_llm(
+        client: AsyncOpenAI,
+        system_prompt: str,
+        user_prompt: str,
+        *,
+        model: str,
+        max_tokens: int,
+    ) -> Any:
+        kwargs: dict[str, Any] = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": settings.COACH_AGENT_TEMPERATURE,
+            "max_tokens": max_tokens,
+            "tool_choice": "none",
+            "stream": False,
+        }
+        return await client.chat.completions.create(**kwargs)  # pyrefly: ignore[no-untyped-call]
 
     @classmethod
     def _language_context(cls, deps: AgentDeps) -> tuple[str, str]:
@@ -169,13 +191,13 @@ class LLMHelper:
         if client_override is not None:
             model.client = client_override
 
-        cls._agent = Agent(
+        cls._agent = Agent(  # pyrefly: ignore[no-matching-overload]
             model=model,
             deps_type=AgentDeps,
             toolsets=[toolset],
             retries=settings.COACH_AGENT_RETRIES,
             system_prompt=COACH_SYSTEM_PROMPT,
-        )  # pyrefly: ignore[no-matching-overload]
+        )
         cls._ensure_llm_logging(cls._agent)
 
         @cls._agent.system_prompt  # pyrefly: ignore[no-matching-overload]
@@ -214,9 +236,7 @@ class LLMHelper:
         return expected.model_validate(value)
 
     @staticmethod
-    async def _message_history(profile_id: int) -> list[ModelMessage]:
-        kb = get_knowledge_base()
-        raw = await kb.get_message_history(profile_id)
+    def _build_history_messages(raw: Sequence[str]) -> list[ModelMessage]:
         history: list[ModelMessage] = []
         for item in raw:
             if item.startswith(f"{MessageRole.CLIENT.value}:"):
@@ -244,7 +264,7 @@ class LLMHelper:
             f"agent.ask fallback_invoked profile_id={deps.profile_id} "
             f"reason=model_empty_response history={len(history)}"
         )
-        client, model_name = cls._get_completion_client()
+        client, model_name = cls.get_completion_client()
         cls._ensure_llm_logging(client, model_name)
         knowledge: Sequence[KnowledgeSnippet]
         kb = get_knowledge_base()
@@ -332,6 +352,26 @@ class LLMHelper:
         return None
 
     @classmethod
+    def get_completion_client(cls) -> tuple[AsyncOpenAI, str]:
+        if cls._completion_client is not None and cls._completion_model_name is not None:
+            return cls._completion_client, cls._completion_model_name
+
+        agent = cls._get_agent()
+        model = getattr(agent, "model", None)
+        client = getattr(model, "client", None)
+        if isinstance(client, AsyncOpenAI):
+            cls._completion_client = client
+            cls._completion_model_name = cls._model_identifier(model)
+            return client, cls._completion_model_name
+
+        cls._completion_client = AsyncOpenAI(
+            api_key=settings.LLM_API_KEY or None,
+            base_url=settings.LLM_API_URL or None,
+        )
+        cls._completion_model_name = settings.AGENT_MODEL
+        return cls._completion_client, cls._completion_model_name
+
+    @classmethod
     async def _complete_with_retries(
         cls,
         client: AsyncOpenAI,
@@ -370,7 +410,7 @@ class LLMHelper:
                     )
 
             try:
-                response = await cls._run_completion(
+                response = await cls.call_llm(
                     client,
                     system_prompt,
                     current_user_prompt,
@@ -504,26 +544,6 @@ class LLMHelper:
         if not model_name:
             return settings.AGENT_MODEL
         return str(model_name)
-
-    @classmethod
-    def _get_completion_client(cls) -> tuple[AsyncOpenAI, str]:
-        if cls._completion_client is not None and cls._completion_model_name is not None:
-            return cls._completion_client, cls._completion_model_name
-
-        agent = cls._get_agent()
-        model = getattr(agent, "model", None)
-        client = getattr(model, "client", None)
-        if isinstance(client, AsyncOpenAI):
-            cls._completion_client = client
-            cls._completion_model_name = cls._model_identifier(model)
-            return client, cls._completion_model_name
-
-        cls._completion_client = AsyncOpenAI(
-            api_key=settings.LLM_API_KEY or None,
-            base_url=settings.LLM_API_URL or None,
-        )
-        cls._completion_model_name = settings.AGENT_MODEL
-        return cls._completion_client, cls._completion_model_name
 
     @classmethod
     def _ensure_llm_logging(cls, target: Any, model_id: str | None = None) -> None:
@@ -673,28 +693,6 @@ class LLMHelper:
             "total_tokens": total_tokens if total_tokens is not None else "na",
             "preview": preview,
         }
-
-    @staticmethod
-    async def _run_completion(
-        client: AsyncOpenAI,
-        system_prompt: str,
-        user_prompt: str,
-        *,
-        model: str,
-        max_tokens: int,
-    ) -> Any:
-        kwargs: dict[str, Any] = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            "temperature": 0.25,
-            "max_tokens": max_tokens,
-            "tool_choice": "none",
-            "stream": False,
-        }
-        return await client.chat.completions.create(**kwargs)  # pyrefly: ignore[no-untyped-call]
 
     @staticmethod
     def _choice_payload(choice: Any) -> dict[str, Any]:

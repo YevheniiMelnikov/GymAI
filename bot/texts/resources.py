@@ -176,7 +176,7 @@ class MessageText(AutoName):
     feedback_sent = auto()
     new_feedback = auto()
     message_sent = auto()
-    incoming_message = auto()
+    ask_ai_response_template = auto()
     incoming_request = auto()
 
     ask_ai_prompt = auto()

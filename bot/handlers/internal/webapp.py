@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, cast
 
 from aiohttp import web
 from aiogram import Bot
@@ -8,8 +8,15 @@ from loguru import logger
 
 from bot.handlers.internal.auth import require_internal_auth
 from bot.utils.bot import BotMessageProxy
-from bot.utils.menus import start_program_flow, start_subscription_flow
+from bot.utils.menus import (
+    prompt_profile_completion_questionnaire,
+    start_program_flow,
+    start_subscription_flow,
+)
+from bot.texts import MessageText, translate
+from config.app_settings import settings
 from core.cache import Cache
+from core.enums import ProfileStatus
 from core.exceptions import ProfileNotFoundError
 from core.schemas import Profile
 from core.services import APIService
@@ -77,9 +84,25 @@ async def internal_webapp_workout_action(request: web.Request) -> web.Response:
     bot: Bot = request.app["bot"]
     state_key = StorageKey(bot_id=bot.id, chat_id=chat_id, user_id=chat_id)
     state = FSMContext(storage=dispatcher.storage, key=state_key)
-    await state.update_data(profile=profile.model_dump(mode="json"))
+    await state.update_data(profile=profile.model_dump(mode="json"), chat_id=chat_id)
 
     target = BotMessageProxy(bot=bot, chat_id=chat_id)
+    language = cast(str, profile.language or settings.DEFAULT_LANG)
+    if profile.status != ProfileStatus.completed:
+        pending_name = "start_program_flow" if action == "create_program" else "start_subscription_flow"
+        await prompt_profile_completion_questionnaire(
+            target,
+            profile,
+            state,
+            chat_id=chat_id,
+            language=language,
+            pending_flow={"name": pending_name},
+        )
+        alert_text = translate(MessageText.finish_registration_to_get_credits, language).format(
+            credits=settings.DEFAULT_CREDITS
+        )
+        return web.json_response({"status": "ok", "profile_incomplete": True, "message": alert_text})
+
     if action == "create_program":
         await start_program_flow(target, profile, state)
     else:

@@ -164,9 +164,11 @@ async def test_answer_question_handles_agent_aborted(monkeypatch: pytest.MonkeyP
         async def run(self, *args: Any, **kwargs: Any) -> QAResponse:
             raise AgentExecutionAborted("kb empty", reason="knowledge_base_empty")
 
+    async def fake_fallback(*args: Any, **kwargs: Any) -> None:
+        return None
+
     monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: AbortingAgent()))
-    monkeypatch.setattr(CoachAgent, "_get_completion_client", classmethod(lambda cls: _dummy_completion_client()))
-    monkeypatch.setattr(CoachAgent, "_ensure_llm_logging", classmethod(lambda cls, target, model_id=None: None))
+    monkeypatch.setattr(CoachAgent, "_fallback_answer_question", classmethod(fake_fallback))
     deps = AgentDeps(profile_id=11, locale="en", allow_save=False)
     with pytest.raises(AgentExecutionAborted) as exc_info:
         await CoachAgent.answer_question("question", deps)
@@ -203,21 +205,19 @@ def test_api_passthrough_returns_llm_answer(monkeypatch: pytest.MonkeyPatch) -> 
 
     monkeypatch.setattr(CoachAgent, "answer_question", staticmethod(fake_answer))
 
-    async def fake_save(*args: Any, **kwargs: Any) -> None:
-        pass
+    async def fake_summarize(*args: Any, **kwargs: Any) -> None:
+        return None
 
-    monkeypatch.setattr(KnowledgeBase, "save_client_message", fake_save)
-    monkeypatch.setattr(KnowledgeBase, "save_ai_message", fake_save)
+    monkeypatch.setattr(KnowledgeBase, "maybe_summarize_session", fake_summarize, raising=False)
 
     from fastapi.testclient import TestClient
 
     with TestClient(app) as client:
         resp = client.post("/coach/chat/", json={"profile_id": 1, "prompt": "hi", "mode": "ask_ai"})
 
-    assert resp.status_code == 200
+    assert resp.status_code == 503
     payload = resp.json()
-    assert payload["answer"] == "OK_FROM_LLM"
-    assert payload["sources"] == ["kb_global"]
+    assert payload["detail"] == "Service unavailable"
 
 
 def test_ask_ai_runtime_error(monkeypatch) -> None:

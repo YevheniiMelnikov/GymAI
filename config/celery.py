@@ -19,6 +19,73 @@ def knowledge_refresh_now() -> datetime:
     return beat_nowfun()
 
 
+beat_schedule = {
+    "pg_backup": {
+        "task": "core.tasks.backups.pg_backup",
+        "schedule": crontab(hour=2, minute=0),
+        "options": {"queue": "maintenance"},
+    },
+    "redis_backup": {
+        "task": "core.tasks.backups.redis_backup",
+        "schedule": crontab(hour=2, minute=1),
+        "options": {"queue": "maintenance"},
+    },
+    "cleanup_backups": {
+        "task": "core.tasks.backups.cleanup_backups",
+        "schedule": crontab(hour=2, minute=2),
+        "options": {"queue": "maintenance"},
+    },
+    "deactivate_subs": {
+        "task": "core.tasks.billing.deactivate_expired_subscriptions",
+        "schedule": crontab(hour=1, minute=0),
+        "options": {"queue": "critical"},
+    },
+    "warn_low_credits": {
+        "task": "core.tasks.billing.warn_low_credits",
+        "schedule": crontab(hour=0, minute=0),
+        "options": {"queue": "critical"},
+    },
+    "charge_due_subscriptions": {
+        "task": "core.tasks.billing.charge_due_subscriptions",
+        "schedule": crontab(hour=0, minute=30),
+        "options": {"queue": "critical"},
+    },
+    "send_daily_survey": {
+        "task": "core.tasks.bot_calls.send_daily_survey",
+        "schedule": crontab(hour=9, minute=0),
+        "options": {"queue": "maintenance"},
+    },
+    "refresh_external_knowledge": {
+        "task": "core.tasks.ai_coach.refresh_external_knowledge",
+        "schedule": schedule(
+            run_every=timedelta(seconds=settings.KNOWLEDGE_REFRESH_INTERVAL),
+            nowfun=beat_nowfun,
+        ),
+        "options": {"queue": "maintenance"},
+    },
+    "prune_knowledge_base": {
+        "task": "core.tasks.ai_coach.prune_knowledge_base",
+        "schedule": crontab(hour=2, minute=10),
+        "options": {"queue": "maintenance"},
+    },
+}
+
+if settings.ENABLE_KB_BACKUPS:
+    beat_schedule.update(
+        {
+            "neo4j_backup": {
+                "task": "core.tasks.backups.neo4j_backup",
+                "schedule": crontab(hour=2, minute=3),
+                "options": {"queue": "maintenance"},
+            },
+            "qdrant_backup": {
+                "task": "core.tasks.backups.qdrant_backup",
+                "schedule": crontab(hour=2, minute=4),
+                "options": {"queue": "maintenance"},
+            },
+        }
+    )
+
 celery_config = {
     "broker_url": settings.RABBITMQ_URL,
     "result_backend": settings.REDIS_URL,
@@ -40,56 +107,7 @@ celery_config = {
     "task_default_delivery_mode": "persistent",
     "task_queues": CELERY_QUEUES,
     "task_routes": CELERY_TASK_ROUTES,
-    "beat_schedule": {
-        "pg_backup": {
-            "task": "core.tasks.backups.pg_backup",
-            "schedule": crontab(hour=2, minute=0),
-            "options": {"queue": "maintenance"},
-        },
-        "redis_backup": {
-            "task": "core.tasks.backups.redis_backup",
-            "schedule": crontab(hour=2, minute=1),
-            "options": {"queue": "maintenance"},
-        },
-        "cleanup_backups": {
-            "task": "core.tasks.backups.cleanup_backups",
-            "schedule": crontab(hour=2, minute=2),
-            "options": {"queue": "maintenance"},
-        },
-        "deactivate_subs": {
-            "task": "core.tasks.billing.deactivate_expired_subscriptions",
-            "schedule": crontab(hour=1, minute=0),
-            "options": {"queue": "critical"},
-        },
-        "warn_low_credits": {
-            "task": "core.tasks.billing.warn_low_credits",
-            "schedule": crontab(hour=0, minute=0),
-            "options": {"queue": "critical"},
-        },
-        "charge_due_subscriptions": {
-            "task": "core.tasks.billing.charge_due_subscriptions",
-            "schedule": crontab(hour=0, minute=30),
-            "options": {"queue": "critical"},
-        },
-        "send_daily_survey": {
-            "task": "core.tasks.bot_calls.send_daily_survey",
-            "schedule": crontab(hour=9, minute=0),
-            "options": {"queue": "maintenance"},
-        },
-        "refresh_external_knowledge": {
-            "task": "core.tasks.ai_coach.refresh_external_knowledge",
-            "schedule": schedule(
-                run_every=timedelta(seconds=settings.KNOWLEDGE_REFRESH_INTERVAL),
-                nowfun=beat_nowfun,
-            ),
-            "options": {"queue": "maintenance"},
-        },
-        "prune_knowledge_base": {
-            "task": "core.tasks.ai_coach.prune_knowledge_base",
-            "schedule": crontab(hour=2, minute=10),
-            "options": {"queue": "maintenance"},
-        },
-    },
+    "beat_schedule": beat_schedule,
 }
 
 celery_app = app

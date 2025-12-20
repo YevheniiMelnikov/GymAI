@@ -8,7 +8,7 @@ from redis.asyncio import Redis
 from redis.exceptions import RedisError
 
 from config.app_settings import settings
-from core.utils.redis_lock import get_redis_client
+from core.utils.redis_lock import get_redis_client_for_db
 
 AI_PLAN_CLAIM_KEY: Final[str] = "ai:plan:claim:{plan_id}"
 AI_PLAN_DELIVERED_KEY: Final[str] = "ai:plan:delivered:{plan_id}"
@@ -23,7 +23,7 @@ class AiPlanState:
 
     @classmethod
     def create(cls) -> "AiPlanState":
-        return cls(get_redis_client())
+        return cls(get_redis_client_for_db(settings.AI_COACH_REDIS_STATE_DB))
 
     async def claim_delivery(self, plan_id: str, ttl_s: int | None = None) -> bool:
         ttl = ttl_s or settings.AI_PLAN_DEDUP_TTL

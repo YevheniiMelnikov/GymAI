@@ -1,14 +1,12 @@
 import importlib
-import inspect
 import os
 import cognee
 from pathlib import Path
 from types import ModuleType
-from typing import Any, Awaitable, Callable, ClassVar, cast
-from uuid import uuid4
+from typing import Any, ClassVar
 
 from loguru import logger
-from sqlalchemy import schema as sa_schema
+from sqlalchemy.engine.url import URL, make_url
 
 from ai_coach.agent.knowledge.utils.storage_helpers import (
     collect_storage_info,
@@ -18,11 +16,11 @@ from ai_coach.agent.knowledge.utils.storage_helpers import (
 from config.app_settings import settings
 
 _COGNEE_MODULE: ModuleType | None = None
-_COGNEE_SETUP_DONE = False
 
 
 class CogneeConfig:
     _STORAGE_ROOT: ClassVar[Path | None] = None
+    _CACHE_PATCHED: ClassVar[bool] = False
 
     @classmethod
     def apply(cls) -> None:
@@ -34,14 +32,15 @@ class CogneeConfig:
             _COGNEE_MODULE = importlib.import_module("cognee")
         globals()["cognee"] = _COGNEE_MODULE
 
+        cls._ensure_openai_env()
+        cls._configure_cache()
+
         patch_local_file_storage(storage_root)
         cls._configure_llm()
         cls._configure_vector_db()
         cls._configure_graph_db()
         cls._configure_relational_db()
         cls._patch_cognee()
-        cls._patch_dataset_creation()
-        cls._patch_rbac_and_dataset_resolvers()
 
     @classmethod
     def storage_root(cls) -> Path | None:
@@ -57,6 +56,39 @@ class CogneeConfig:
         return collect_storage_info(root)
 
     @staticmethod
+    def _ensure_openai_env() -> None:
+        openai_key = os.environ.get("OPENAI_API_KEY")
+        if not openai_key and settings.LLM_API_KEY:
+            os.environ["OPENAI_API_KEY"] = settings.LLM_API_KEY
+            openai_key = settings.LLM_API_KEY
+
+        openai_base = os.environ.get("OPENAI_BASE_URL")
+        if not openai_base:
+            candidate_url = settings.LLM_API_URL or settings.OPENAI_BASE_URL
+            if candidate_url:
+                os.environ["OPENAI_BASE_URL"] = candidate_url
+                openai_base = candidate_url
+
+        def _mask(value: str | None) -> str:
+            if not value:
+                return "unset"
+            if len(value) <= 8:
+                return value
+            return f"{value[:4]}...{value[-4:]}"
+
+        logger.debug(
+            (
+                "cognee_embedding_env OPENAI_BASE_URL={} LLM_PROVIDER={} "
+                "AGENT_PROVIDER={} EMBEDDING_MODEL={} OPENAI_API_KEY={}"
+            ),
+            openai_base or "unset",
+            settings.LLM_PROVIDER,
+            settings.AGENT_PROVIDER,
+            settings.EMBEDDING_MODEL,
+            _mask(openai_key),
+        )
+
+    @staticmethod
     def _configure_llm() -> None:
         cognee.config.set_llm_provider(settings.LLM_PROVIDER)
         cognee.config.set_llm_model(settings.LLM_MODEL)
@@ -65,8 +97,38 @@ class CogneeConfig:
 
     @staticmethod
     def _configure_vector_db() -> None:
-        cognee.config.set_vector_db_provider(settings.VECTORDATABASE_PROVIDER)
-        cognee.config.set_vector_db_url(settings.VECTORDATABASE_URL)
+        provider = settings.VECTOR_DB_PROVIDER
+        vector_url = settings.VECTOR_DB_URL
+        vector_key = settings.VECTOR_DB_KEY
+        vector_url_safe = CogneeConfig._render_safe_url(vector_url)
+        vector_meta = CogneeConfig._extract_url_meta(vector_url)
+        vector_host = vector_meta.get("host") or ""
+
+        if provider == "qdrant":
+            importlib.import_module("cognee_community_vector_adapter_qdrant.register")
+            cognee.config.set_vector_db_config(
+                {
+                    "vector_db_provider": provider,
+                    "vector_db_url": vector_url,
+                    "vector_db_key": vector_key,
+                }
+            )
+        else:
+            cognee.config.set_vector_db_provider(provider)
+            cognee.config.set_vector_db_url(vector_url)
+        os.environ["VECTOR_DB_PROVIDER"] = provider
+        os.environ["VECTOR_DB_URL"] = vector_url
+        os.environ["VECTOR_DB_KEY"] = vector_key
+
+        logger.info(
+            "cognee_vector_config provider={} url={} host={} port={} db={} user={}",
+            provider,
+            vector_url_safe,
+            vector_host or "unset",
+            vector_meta.get("port") or "unset",
+            vector_meta.get("database") or "unset",
+            vector_meta.get("username") or "unset",
+        )
 
     @staticmethod
     def _configure_graph_db() -> None:
@@ -75,6 +137,21 @@ class CogneeConfig:
             graph_host = "neo4j"
         graph_port = settings.GRAPH_DATABASE_PORT or "7687"
         graph_url = settings.GRAPH_DATABASE_URL or f"bolt://{graph_host}:{graph_port}"
+
+        env_graph_provider = os.environ.get("GRAPH_DATABASE_PROVIDER")
+        if env_graph_provider and env_graph_provider != settings.GRAPH_DATABASE_PROVIDER:
+            logger.warning(
+                "cognee_graph_provider_mismatch env={} config={}",
+                env_graph_provider,
+                settings.GRAPH_DATABASE_PROVIDER,
+            )
+        os.environ["GRAPH_DATABASE_PROVIDER"] = settings.GRAPH_DATABASE_PROVIDER
+        os.environ.setdefault("GRAPH_DATABASE_URL", graph_url)
+        os.environ.setdefault("GRAPH_DATABASE_NAME", settings.GRAPH_DATABASE_NAME)
+        os.environ.setdefault("GRAPH_DATABASE_USERNAME", settings.GRAPH_DATABASE_USERNAME)
+        os.environ.setdefault("GRAPH_DATABASE_PASSWORD", settings.GRAPH_DATABASE_PASSWORD)
+        os.environ.setdefault("GRAPH_DATABASE_PORT", str(graph_port))
+
         graph_db_config = {
             "graph_database_provider": settings.GRAPH_DATABASE_PROVIDER,
             "graph_database_url": graph_url,
@@ -84,6 +161,21 @@ class CogneeConfig:
             "graph_database_port": graph_port,
         }
         cognee.config.set_graph_db_config(graph_db_config)
+        env_vector_provider = os.environ.get("VECTOR_DB_PROVIDER", "unset")
+        logger.info(
+            (
+                "cognee_graph_config_applied env_graph_provider={} config_graph_provider={} "
+                "env_vector_provider={} url={} host={} port={} name={} user={}"
+            ),
+            env_graph_provider or "unset",
+            settings.GRAPH_DATABASE_PROVIDER,
+            env_vector_provider,
+            CogneeConfig._render_safe_url(graph_url),
+            graph_host,
+            graph_port,
+            settings.GRAPH_DATABASE_NAME or "unset",
+            settings.GRAPH_DATABASE_USERNAME or "unset",
+        )
 
     @staticmethod
     def _configure_relational_db() -> None:
@@ -100,43 +192,49 @@ class CogneeConfig:
         )
 
     @staticmethod
-    def _patch_cognee() -> None:
+    def _configure_cache() -> None:
+        os.environ["CACHING"] = "true"
+        os.environ["CACHE_BACKEND"] = "redis"
+        if settings.REDIS_HOST:
+            os.environ["CACHE_HOST"] = settings.REDIS_HOST
+        if settings.REDIS_PORT:
+            os.environ["CACHE_PORT"] = str(settings.REDIS_PORT)
+        os.environ["CACHE_DB"] = str(settings.AI_COACH_REDIS_CHAT_DB)
+        os.environ["COGNEE_CACHE_TTL"] = str(settings.AI_COACH_COGNEE_SESSION_TTL)
+        try:
+            from cognee.infrastructure.databases.cache import get_cache_engine as cache_module
+        except Exception:
+            return
+        config = getattr(cache_module, "config", None)
+        if config is None:
+            return
+        config.caching = True
+        config.cache_host = os.getenv("CACHE_HOST", settings.REDIS_HOST)
+        config.cache_port = int(os.getenv("CACHE_PORT", str(settings.REDIS_PORT)))
+        config.cache_username = os.getenv("CACHE_USERNAME")
+        config.cache_password = os.getenv("CACHE_PASSWORD")
+        create_engine = getattr(cache_module, "create_cache_engine", None)
+        if create_engine is not None and hasattr(create_engine, "cache_clear"):
+            create_engine.cache_clear()
+
+    @classmethod
+    def _patch_cognee(cls) -> None:
         """Apply runtime patches to Cognee (ledger, embeddings, API adapter)."""
         try:
             from cognee.infrastructure.databases.vector.embeddings import LiteLLMEmbeddingEngine
-            from cognee.modules.data.models.graph_relationship_ledger import GraphRelationshipLedger
 
-            GenericAPIAdapter = None
-            for path in [
-                "cognee.infrastructure.llm.generic_api.adapter",
-                "cognee.infrastructure.llm.generic_llm_api.adapter",
-            ]:
-                try:
-                    mod = importlib.import_module(path)
-                    GenericAPIAdapter = getattr(mod, "GenericAPIAdapter", None)
-                    if GenericAPIAdapter:
-                        break
-                except Exception:
-                    continue
-
-            CogneeConfig._patch_graph_relationship_ledger(GraphRelationshipLedger)
             CogneeConfig._patch_litellm_embedding_engine(LiteLLMEmbeddingEngine)  # pyrefly: ignore[bad-argument-type]
-            if GenericAPIAdapter:
-                CogneeConfig._patch_generic_api_adapter(GenericAPIAdapter)
 
         except Exception as exc:  # noqa: BLE001
             logger.debug(f"Cognee patch failed: {exc}")
 
-    @staticmethod
-    def _patch_graph_relationship_ledger(ledger_cls: type) -> None:
-        """Fix default ID generation for graph relationship ledger."""
-        ledger_cls.__table__.c.id.default = sa_schema.ColumnDefault(uuid4)  # noqa
+        cls._patch_cache_adapter()
 
     @staticmethod
     def _patch_litellm_embedding_engine(engine_cls: type) -> None:
         """Replace embedding method with LiteLLM-powered async function."""
 
-        logger.debug(
+        logger.trace(
             "Configuring LiteLLM embedding",
             model=settings.EMBEDDING_MODEL,
             endpoint=settings.EMBEDDING_ENDPOINT,
@@ -160,126 +258,140 @@ class CogneeConfig:
         engine_cls.embedding = staticmethod(patched_embedding)  # pyrefly: ignore[missing-attribute]
 
     @staticmethod
-    def _patch_generic_api_adapter(adapter_cls: type) -> None:
-        """Force GenericAPIAdapter to use OpenAI client."""
-        original_create = getattr(adapter_cls, "create_client", None)
-
-        async def _create_client(*args: Any, **kwargs: Any) -> Any:
-            try:
-                from openai import AsyncOpenAI
-
-                return AsyncOpenAI(api_key=settings.LLM_API_KEY, base_url=settings.LLM_API_URL or None)
-            except Exception:
-                if callable(original_create):
-                    result = original_create(*args, **kwargs)
-                    if hasattr(result, "__await__"):
-                        return await cast(Awaitable[Any], result)
-                    return result
-                raise
-
-        setattr(adapter_cls, "create_client", staticmethod(_create_client))
-
-    @classmethod
-    def _patch_dataset_creation(cls) -> None:
-        """Ensure create_authorized_dataset is properly loaded in Cognee."""
-        try:
-            m_lcd = importlib.import_module("cognee.modules.data.methods.load_or_create_datasets")
-            cad_obj = m_lcd.__dict__.get("create_authorized_dataset")
-            if not callable(cad_obj):
-                m_cad = importlib.import_module("cognee.modules.data.methods.create_authorized_dataset")
-                func = getattr(m_cad, "create_authorized_dataset", None)
-                if callable(func):
-                    m_lcd.__dict__["create_authorized_dataset"] = func
-        except Exception as exc:  # noqa: BLE001
-            logger.debug(f"Patch dataset creation failed: {exc}")
-
-    @classmethod
-    def _patch_rbac_and_dataset_resolvers(cls) -> None:
-        """Harden RBAC and dataset resolvers to avoid errors on missing IDs."""
-        try:
-            m_all = importlib.import_module("cognee.modules.users.permissions.methods.get_all_user_permission_datasets")
-            orig_all = getattr(m_all, "get_all_user_permission_datasets", None)
-            m_auth = importlib.import_module("cognee.modules.data.methods.get_authorized_existing_datasets")
-            orig_auth = getattr(m_auth, "get_authorized_existing_datasets", None)
-
-            if callable(orig_all):
-                original_all = cast(Callable[[Any, str], Awaitable[list[Any] | None]], orig_all)
-
-                async def safe_all(user: Any, permission_type: str) -> list[Any]:
-                    try:
-                        res = await original_all(user, permission_type)
-                    except Exception:
-                        return []
-                    return [entry for entry in (res or []) if getattr(entry, "id", None)]
-
-                setattr(m_all, "get_all_user_permission_datasets", safe_all)
-
-            if callable(orig_auth):
-                original_auth = cast(Callable[[list[Any], str, Any], Awaitable[list[Any] | None]], orig_auth)
-
-                async def safe_auth(datasets: list[Any], permission_type: str, user: Any) -> list[Any]:
-                    try:
-                        res = await original_auth(datasets, permission_type, user)
-                    except Exception:
-                        return []
-                    return [entry for entry in (res or []) if getattr(entry, "id", None)]
-
-                setattr(m_auth, "get_authorized_existing_datasets", safe_auth)
-
-            for mod_path in [
-                "cognee.modules.data.methods.get_authorized_existing_datasets",
-                "cognee.modules.users.permissions.methods.get_specific_user_permission_datasets",
-                "cognee.modules.pipelines.layers.resolve_authorized_user_datasets",
-                "cognee.modules.data.methods.get_authorized_dataset_by_name",
-                "cognee.modules.pipelines.layers.resolve_authorized_user_dataset",
-            ]:
-                mod = importlib.import_module(mod_path)
-                if "get_all_user_permission_datasets" in mod.__dict__ and callable(orig_all):
-                    mod.__dict__["get_all_user_permission_datasets"] = m_all.get_all_user_permission_datasets
-                if "get_authorized_existing_datasets" in mod.__dict__ and callable(orig_auth):
-                    mod.__dict__["get_authorized_existing_datasets"] = m_auth.get_authorized_existing_datasets
-        except Exception as exc:  # noqa: BLE001
-            logger.debug(f"Patch RBAC resolvers failed: {exc}")
-
-
-async def ensure_cognee_ready() -> None:
-    """Ensure Cognee setup is executed only once."""
-    global _COGNEE_SETUP_DONE
-    if _COGNEE_SETUP_DONE:
-        return
-
-    try:
-        cognee_module = importlib.import_module("cognee")
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(f"Cognee setup skipped: {exc}")
-        return
-    global _COGNEE_MODULE
-    _COGNEE_MODULE = cognee_module
-
-    setup_callable = getattr(cognee_module, "setup", None)
-    if callable(setup_callable):
-        try:
-            result = setup_callable()
-            if inspect.isawaitable(result):
-                await result
-            _COGNEE_SETUP_DONE = True
+    def _patch_cache_adapter() -> None:
+        if CogneeConfig._CACHE_PATCHED:
+            logger.debug("cognee_cache_patch_skipped reason=already_patched")
             return
+        try:
+            from cognee.infrastructure.databases.cache.redis.RedisAdapter import RedisAdapter
         except Exception as exc:  # noqa: BLE001
-            logger.warning(f"Cognee setup() failed: {exc}")
+            logger.debug(f"cognee_cache_patch_skipped detail={exc}")
+            return
 
-    try:
-        from cognee.modules.engine.operations.setup import setup as legacy_setup  # type: ignore
-    except Exception as exc:  # noqa: BLE001
-        logger.debug(f"Cognee legacy setup unavailable: {exc}")
-        return
+        def _resolve_cache_db() -> int:
+            raw_db = os.getenv("CACHE_DB", "")
+            try:
+                return int(raw_db)
+            except (TypeError, ValueError):
+                return 0
 
-    if _COGNEE_SETUP_DONE:
-        return
+        def _resolve_cache_ttl() -> int | None:
+            raw_ttl = os.getenv("COGNEE_CACHE_TTL", "").strip().lower()
+            if raw_ttl in {"", "0", "none", "null", "false"}:
+                return None
+            try:
+                ttl = int(raw_ttl)
+                return ttl if ttl > 0 else None
+            except (TypeError, ValueError):
+                return None
 
-    try:
-        legacy_result = legacy_setup()
-        if inspect.isawaitable(legacy_result):
-            await legacy_result
-        _COGNEE_SETUP_DONE = True
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(f"Cognee legacy setup failed: {exc}")
+        def patched_init(
+            self,
+            host: str,
+            port: int,
+            lock_name: str = "default_lock",
+            username: str | None = None,
+            password: str | None = None,
+            timeout: int = 240,
+            blocking_timeout: int = 300,
+            connection_timeout: int = 30,
+            db: int | None = None,
+        ) -> None:
+            from cognee.infrastructure.databases.cache.cache_db_interface import CacheDBInterface
+            from cognee.infrastructure.databases.exceptions import CacheConnectionError
+            from cognee.shared.logging_utils import get_logger
+            import redis
+            import redis.asyncio as aioredis
+
+            adapter_logger = get_logger("RedisAdapter")
+            CacheDBInterface.__init__(self, host, port, lock_name)
+
+            self.host = host
+            self.port = port
+            self.connection_timeout = connection_timeout
+            db_value = db if db is not None else _resolve_cache_db()
+            try:
+                self.sync_redis = redis.Redis(
+                    host=host,
+                    port=port,
+                    username=username,
+                    password=password,
+                    db=db_value,
+                    socket_connect_timeout=connection_timeout,
+                    socket_timeout=connection_timeout,
+                )
+                self.async_redis = aioredis.Redis(
+                    host=host,
+                    port=port,
+                    username=username,
+                    password=password,
+                    db=db_value,
+                    decode_responses=True,
+                    socket_connect_timeout=connection_timeout,
+                )
+                self.timeout = timeout
+                self.blocking_timeout = blocking_timeout
+                self._validate_connection()
+                adapter_logger.debug(f"Successfully connected to Redis at {host}:{port}/{db_value}")
+            except (redis.ConnectionError, redis.TimeoutError) as exc:
+                error_msg = f"Failed to connect to Redis at {host}:{port}: {exc}"
+                adapter_logger.error(error_msg)
+                raise CacheConnectionError(error_msg) from exc
+            except Exception as exc:  # noqa: BLE001
+                error_msg = f"Unexpected error initializing Redis adapter: {exc}"
+                adapter_logger.error(error_msg)
+                raise CacheConnectionError(error_msg) from exc
+            logger.debug("cognee_cache_configured db={} host={} port={}", db_value, host, port)
+
+        async def patched_add_qa(
+            self,
+            user_id: str,
+            session_id: str,
+            question: str,
+            context: str,
+            answer: str,
+            ttl: int | None = 86400,
+        ) -> None:
+            from datetime import datetime
+            import json
+
+            session_key = f"agent_sessions:{user_id}:{session_id}"
+            qa_entry = {
+                "time": datetime.utcnow().isoformat(),
+                "question": question,
+                "context": context,
+                "answer": answer,
+            }
+            payload = json.dumps(qa_entry, ensure_ascii=False)
+            await self.async_redis.rpush(session_key, payload)
+            resolved_ttl = _resolve_cache_ttl()
+            if resolved_ttl is not None:
+                await self.async_redis.expire(session_key, resolved_ttl)
+
+        RedisAdapter.__init__ = patched_init  # type: ignore[assignment]
+        RedisAdapter.add_qa = patched_add_qa  # type: ignore[assignment]
+        CogneeConfig._CACHE_PATCHED = True
+
+    @staticmethod
+    def _render_safe_url(raw_url: str | None) -> str:
+        if not raw_url:
+            return "unset"
+        try:
+            parsed = make_url(raw_url)
+            return parsed.render_as_string(hide_password=True)
+        except Exception:
+            return raw_url
+
+    @staticmethod
+    def _extract_url_meta(raw_url: str) -> dict[str, str | int | None]:
+        try:
+            parsed: URL = make_url(raw_url)
+        except Exception:
+            return {}
+        return {
+            "host": parsed.host,
+            "port": parsed.port,
+            "database": parsed.database,
+            "username": parsed.username,
+            "password": parsed.password,
+        }

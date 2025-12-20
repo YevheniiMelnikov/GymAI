@@ -173,9 +173,12 @@ class ProjectionService:
             )
             return False, "fatal_error"
 
+        logger.debug(f"projection.rows dataset={alias} rows={len(rows)}")
+
         if not rows:
+            logger.debug(f"projection.no_rows dataset={alias} reason=dataset_entries_empty")
             self.dataset_service.log_once(
-                logging.INFO,
+                logging.DEBUG,
                 "projection:skip_no_rows",
                 dataset=alias,
                 min_interval=10.0,
@@ -216,7 +219,24 @@ class ProjectionService:
             logger.warning(f"knowledge_project_skipped dataset={alias}: user context unavailable")
             return
         dataset_id = await self.dataset_service.get_dataset_id(alias, user_ctx)
-        target = dataset_id or alias
+        target = alias
+
+        logger.info(f"projection.start dataset={alias} reason=requested allow_rebuild={allow_rebuild}")
+
+        dataset_uuid = None
+        if dataset_id:
+            try:
+                from uuid import UUID
+
+                dataset_uuid = dataset_id if isinstance(dataset_id, UUID) else UUID(str(dataset_id))
+            except Exception:
+                dataset_uuid = None
+        if dataset_uuid is None:
+            dataset_uuid = await self.dataset_service.get_dataset_uuid(alias, user_ctx)
+        if dataset_uuid is not None:
+            dataset_id = str(dataset_uuid)
+            await self.dataset_service.reset_pipeline_status(dataset_uuid, "cognify_pipeline")
+
         self.dataset_service.log_once(
             logging.DEBUG,
             "projection:cognify_start",
@@ -224,8 +244,20 @@ class ProjectionService:
             dataset_id=dataset_id,
             min_interval=5.0,
         )
+        from time import monotonic
+
         try:
-            await cognee.cognify(datasets=[target], user=user_ctx)
+            start_ts = monotonic()
+            logger.debug(f"projection.cognee_call dataset={alias} target={target}")
+            result = await cognee.cognify(datasets=[target], user=user_ctx, incremental_loading=True)
+            self._register_dataset_uuids(alias, result)
+            duration = monotonic() - start_ts
+            logger.debug(
+                f"projection.cognee_done dataset={alias} duration={duration:.2f}s result_type={type(result).__name__}"
+            )
+            summary = self._summarize_cognify_result(result)
+            if summary is not None:
+                logger.debug(f"projection.cognee_result dataset={alias} detail={summary}")
         except FileNotFoundError as exc:
             if not settings.COGNEE_ENABLE_AGGRESSIVE_REBUILD:
                 logger.warning(
@@ -253,7 +285,7 @@ class ProjectionService:
                 kb = self._knowledge_base
                 if kb is not None:
                     await kb.rebuild_dataset(alias, user)
-                    logger.info(f"knowledge_dataset_rebuilt dataset={alias}")
+                    logger.debug(f"knowledge_dataset_rebuilt dataset={alias}")
                     await self.project_dataset(alias, user, allow_rebuild=True)
                 else:
                     self.dataset_service.log_once(
@@ -267,6 +299,21 @@ class ProjectionService:
         except Exception as exc:
             logger.warning(f"knowledge_dataset_cognify_failed dataset={dataset} detail={exc}")
             raise
+        try:
+            counts = await self.dataset_service.get_counts(alias, user)
+        except Exception as exc:  # noqa: BLE001 - logging-only diagnostics
+            logger.debug(f"projection.counts_failed dataset={alias} detail={exc}")
+            counts = {}
+        duration = monotonic() - start_ts
+        logger.info(
+            (
+                f"projection.done dataset={alias} duration={duration:.2f}s "
+                f"text_rows={counts.get('text_rows', 0)} "
+                f"chunk_rows={counts.get('chunk_rows', 0)} "
+                f"graph_nodes={counts.get('graph_nodes', 0)} "
+                f"graph_edges={counts.get('graph_edges', 0)}"
+            )
+        )
         self.dataset_service.log_once(
             logging.DEBUG,
             "projection:cognify_done",
@@ -274,3 +321,34 @@ class ProjectionService:
             dataset_id=dataset_id,
             min_interval=5.0,
         )
+
+    def _register_dataset_uuids(self, alias: str, result: Any) -> None:
+        if not isinstance(result, dict):
+            return
+        from uuid import UUID
+
+        for value in result.values():
+            candidate = getattr(value, "dataset_id", None)
+            if not candidate:
+                continue
+            try:
+                dataset_uuid = candidate if isinstance(candidate, UUID) else UUID(str(candidate))
+            except Exception:
+                continue
+            self.dataset_service.register_dataset_identifier(alias, str(dataset_uuid))
+
+    @staticmethod
+    def _summarize_cognify_result(result: Any) -> Any:
+        if isinstance(result, dict):
+            summary: dict[str, Any] = {}
+            for key, value in list(result.items())[:5]:
+                if hasattr(value, "status"):
+                    summary[str(key)] = getattr(value, "status")
+                elif hasattr(value, "state"):
+                    summary[str(key)] = getattr(value, "state")
+                elif hasattr(value, "run_state"):
+                    summary[str(key)] = getattr(value, "run_state")
+                else:
+                    summary[str(key)] = type(value).__name__
+            return summary
+        return result

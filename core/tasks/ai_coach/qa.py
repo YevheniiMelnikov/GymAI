@@ -47,7 +47,7 @@ async def _refund_credits_impl(payload: dict[str, Any]) -> None:
     request_id = str(payload["request_id"])
     state = AiQuestionState.create()
     if not await state.is_charged(request_id) or not await state.unmark_charged(request_id):
-        logger.info(f"event=ask_ai_refund_skip request_id={request_id}")
+        logger.debug(f"event=ask_ai_refund_skip request_id={request_id}")
         return
 
     profile_id = _resolve_profile_id(payload)
@@ -67,7 +67,9 @@ async def _refund_credits_impl(payload: dict[str, Any]) -> None:
         raise
 
     balance = profile.credits if profile is not None else None
-    logger.info(f"event=ask_ai_refund_ok request_id={request_id} profile_id={profile_id} cost={cost} balance={balance}")
+    logger.debug(
+        f"event=ask_ai_refund_ok request_id={request_id} profile_id={profile_id} cost={cost} balance={balance}"
+    )
 
 
 @app.task(
@@ -114,15 +116,16 @@ async def _notify_ai_answer_ready(payload: dict[str, Any]) -> None:
     timeout = internal_request_timeout(settings)
     request_id = str(payload.get("request_id", ""))
     status = str(payload.get("status", "success"))
+    force_delivery = bool(payload.get("force"))
     if status == "duplicate":
-        logger.info(f"event=ask_ai_notify_skip request_id={request_id} status=duplicate")
+        logger.debug(f"event=ask_ai_notify_skip request_id={request_id} status=duplicate")
         return
     state = AiQuestionState.create()
     if request_id:
         if status == "success" and await state.is_delivered(request_id):
             logger.debug(f"event=ask_ai_notify_skip request_id={request_id} status=delivered")
             return
-        if status != "success" and await state.is_failed(request_id):
+        if status != "success" and not force_delivery and await state.is_failed(request_id):
             logger.debug(f"event=ask_ai_notify_skip request_id={request_id} status=failed")
             return
     logger.info(f"event=ask_ai_notify_start request_id={request_id} status={status}")
@@ -132,7 +135,19 @@ async def _notify_ai_answer_ready(payload: dict[str, Any]) -> None:
             response.raise_for_status()
     except httpx.HTTPStatusError as exc:
         status_code = exc.response.status_code if exc.response is not None else None
-        logger.error(f"event=ask_ai_notify_http_error request_id={request_id} status={status} code={status_code}")
+        body_preview = ""
+        if exc.response is not None:
+            try:
+                body_preview = exc.response.text
+            except Exception:
+                body_preview = "<unavailable>"
+        logger.error(
+            "event=ask_ai_notify_http_error request_id={} status={} code={} body={}",
+            request_id,
+            status,
+            status_code,
+            (body_preview[:500] if body_preview else ""),
+        )
         raise
     except httpx.TransportError as exc:
         logger.error(f"event=ask_ai_notify_transport_error request_id={request_id} error={exc}")
@@ -150,7 +165,8 @@ async def _handle_notify_answer_failure(payload: dict[str, Any], exc: Exception)
     profile_id = _resolve_profile_id(payload)
     detail = f"{type(exc).__name__}: {exc!s}"
     state = AiQuestionState.create()
-    if await state.mark_failed(request_id, detail):
+    marked_failed = await state.mark_failed(request_id, detail)
+    if marked_failed:
         logger.error(f"event=ask_ai_notify_gave_up request_id={request_id} profile_id={profile_id} detail={detail}")
         if profile_id is not None and await state.is_charged(request_id):
             refund_payload = {
@@ -163,6 +179,15 @@ async def _handle_notify_answer_failure(payload: dict[str, Any], exc: Exception)
                 queue="ai_coach",
                 routing_key="ai_coach",
             )
+    status = str(payload.get("status") or "success").lower()
+    if status == "success" and marked_failed:
+        fallback_error = f"delivery_failed:{type(exc).__name__}"
+        await _notify_ai_answer_error(
+            profile_id=profile_id,
+            request_id=request_id,
+            error=fallback_error,
+            dispatch=True,
+        )
 
 
 def _extract_failure_detail(exc_info: tuple[Any, ...]) -> str:
@@ -191,6 +216,7 @@ async def _notify_ai_answer_error(
         "status": "error",
         "request_id": request_id,
         "error": error,
+        "force": True,
     }
     if profile_id is not None:
         payload["profile_id"] = profile_id
@@ -207,7 +233,11 @@ async def _handle_ai_answer_failure_impl(payload: dict[str, Any], detail: str) -
     profile_id = _resolve_profile_id(payload)
     request_id = str(payload.get("request_id", ""))
     state = AiQuestionState.create()
-    if await state.mark_failed(request_id, detail):
+    if request_id and await state.is_failed(request_id):
+        logger.debug(f"event=ask_ai_failure_skip request_id={request_id} reason=already_failed")
+        return
+    marked_failed = await state.mark_failed(request_id, detail)
+    if marked_failed:
         logger.error(f"event=ask_ai_gave_up request_id={request_id} profile_id={profile_id} detail={detail}")
         if profile_id is not None and await state.is_charged(request_id):
             refund_payload = {
@@ -220,14 +250,17 @@ async def _handle_ai_answer_failure_impl(payload: dict[str, Any], detail: str) -
                 queue="ai_coach",
                 routing_key="ai_coach",
             )
+    else:
+        logger.debug(f"event=ask_ai_failure_skip request_id={request_id} reason=mark_failed_skipped")
 
     reason = detail or "task_failed"
-    await _notify_ai_answer_error(
-        profile_id=profile_id,
-        request_id=request_id,
-        error=reason,
-        dispatch=True,
-    )
+    if marked_failed:
+        await _notify_ai_answer_error(
+            profile_id=profile_id,
+            request_id=request_id,
+            error=reason,
+            dispatch=True,
+        )
 
 
 async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str, Any] | None:
@@ -260,7 +293,7 @@ async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str
 
     state = AiQuestionState.create()
     if not await _claim_answer_request(request_id, state, attempt=attempt):
-        logger.info(f"event=ask_ai_duplicate request_id={request_id} profile_id={profile_id}")
+        logger.debug(f"event=ask_ai_duplicate request_id={request_id} profile_id={profile_id}")
         return {
             "profile_id": profile_id,
             "request_id": request_id,
@@ -290,7 +323,7 @@ async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str
     else:
         logger.warning(f"event=ask_ai_charge_skipped request_id={request_id} profile_id={profile_id}")
 
-        logger.info(
+        logger.debug(
             (
                 f"event=ask_ai_started profile_id={profile_id} request_id={request_id} "
                 f"attempt={attempt} attachments={len(attachments)}"
@@ -339,17 +372,24 @@ async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str
 
     qa_response = response if isinstance(response, QAResponse) else QAResponse.model_validate(response)
     sources = list(qa_response.sources)
+    kb_used = any(src != "general_knowledge" for src in sources) if sources else False
     if sources:
-        sources_label = " | ".join(sources)
-        if len(sources_label) > 300:
-            sources_label = sources_label[:297] + "..."
         logger.info(
-            "event=ask_ai_sources request_id={} profile_id={} count={} sources={}",
+            "event=ask_ai_sources request_id={} profile_id={} count={}",
             request_id,
             profile_id,
             len(sources),
-            sources_label,
         )
+        if settings.AI_COACH_LOG_PAYLOADS:
+            sources_label = " | ".join(sources)
+            if len(sources_label) > 300:
+                sources_label = sources_label[:297] + "..."
+            logger.debug(
+                "event=ask_ai_sources_payload request_id={} profile_id={} sources={}",
+                request_id,
+                profile_id,
+                sources_label,
+            )
     notify_payload: dict[str, Any] = {
         "profile_id": profile_id,
         "status": "success",
@@ -360,7 +400,14 @@ async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str
     if sources:
         notify_payload["sources"] = sources
 
-    logger.info(f"event=ask_ai_completed profile_id={profile_id} request_id={request_id}")
+    answer_len = len(qa_response.answer or "")
+    logger.info(
+        "event=ask_ai_completed profile_id={} request_id={} answer_len={} kb_used={}",
+        profile_id,
+        request_id,
+        answer_len,
+        str(kb_used).lower(),
+    )
     return notify_payload
 
 
@@ -444,5 +491,5 @@ def handle_ai_question_failure(self, payload: Any, *exc_info: Any) -> None:  # p
     detail = _extract_failure_detail(exc_info)
     safe_payload = _coerce_payload(payload)
     preview = str(safe_payload)[:200]
-    logger.info(f"event=ask_ai_failure_payload shape={type(payload).__name__} preview={preview}")
+    logger.warning(f"event=ask_ai_failure_payload shape={type(payload).__name__} preview={preview}")
     async_to_sync(_handle_ai_answer_failure_impl)(safe_payload, detail)

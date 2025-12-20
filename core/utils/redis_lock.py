@@ -1,6 +1,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 from typing import ClassVar, Dict, AsyncIterator, Awaitable, cast
+from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
 from redis.asyncio import Redis
@@ -9,18 +10,28 @@ from redis.asyncio.client import Pipeline  # for typing
 from config.app_settings import settings
 
 
+def _redis_url_with_db(url: str, db: int) -> str:
+    parsed = urlsplit(url)
+    path = f"/{db}"
+    return urlunsplit((parsed.scheme, parsed.netloc, path, parsed.query, parsed.fragment))
+
+
 class _RedisFactory:
     """Per-event-loop Redis clients to avoid cross-loop issues."""
 
-    _clients: ClassVar[Dict[int, Redis]] = {}
+    _clients: ClassVar[Dict[tuple[int, int | None], Redis]] = {}
 
     @classmethod
-    def get_client(cls) -> Redis:
+    def get_client(cls, db: int | None = None) -> Redis:
         loop_id = id(asyncio.get_running_loop())
-        client = cls._clients.get(loop_id)
+        cache_key = (loop_id, db)
+        client = cls._clients.get(cache_key)
         if client is None:
-            client = Redis.from_url(settings.REDIS_URL, decode_responses=True)  # str payloads
-            cls._clients[loop_id] = client
+            url = settings.REDIS_URL
+            if db is not None:
+                url = _redis_url_with_db(url, db)
+            client = Redis.from_url(url, decode_responses=True)  # str payloads
+            cls._clients[cache_key] = client
         return client
 
     @classmethod
@@ -122,3 +133,7 @@ async def redis_try_lock(
 
 def get_redis_client() -> Redis:
     return _RedisFactory.get_client()
+
+
+def get_redis_client_for_db(db: int) -> Redis:
+    return _RedisFactory.get_client(db=db)

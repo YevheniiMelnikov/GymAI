@@ -82,74 +82,80 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
     profile = Profile.model_validate(profile_data)
     lang = profile.language or settings.DEFAULT_LANG
 
-    ask_ai_prompt_id = data.get("ask_ai_prompt_id")
-    ask_ai_prompt_chat_id = data.get("ask_ai_prompt_chat_id")
-    if ask_ai_prompt_id:
-        chat_id = int(ask_ai_prompt_chat_id or message.chat.id)
-        with suppress(TelegramBadRequest):
-            await bot.delete_message(chat_id, int(ask_ai_prompt_id))
-        await state.update_data(ask_ai_prompt_id=None, ask_ai_prompt_chat_id=None)
-
     try:
-        preparation = await prepare_ask_ai_request(
-            message=message,
-            profile=profile,
-            state_data=data,
-            bot=bot,
-        )
-    except AskAiPreparationError as error:
+        ask_ai_prompt_id = data.get("ask_ai_prompt_id")
+        ask_ai_prompt_chat_id = data.get("ask_ai_prompt_chat_id")
+        if ask_ai_prompt_id:
+            chat_id = int(ask_ai_prompt_chat_id or message.chat.id)
+            with suppress(TelegramBadRequest):
+                await bot.delete_message(chat_id, int(ask_ai_prompt_id))
+            await state.update_data(ask_ai_prompt_id=None, ask_ai_prompt_chat_id=None)
+
         try:
-            message_key = MessageText[error.message_key]
-        except KeyError as exc:
-            raise ValueError(f"Unknown message key {error.message_key}") from exc
-        response = translate(message_key, lang)
-        if error.params:
-            response = response.format(**error.params)
-        await answer_msg(message, response)
-        if error.delete_message:
-            await del_msg(message)
-        return
+            preparation = await prepare_ask_ai_request(
+                message=message,
+                profile=profile,
+                state_data=data,
+                bot=bot,
+            )
+        except AskAiPreparationError as error:
+            try:
+                message_key = MessageText[error.message_key]
+            except KeyError as exc:
+                raise ValueError(f"Unknown message key {error.message_key}") from exc
+            response = translate(message_key, lang)
+            if error.params:
+                response = response.format(**error.params)
+            await answer_msg(message, response)
+            if error.delete_message:
+                await del_msg(message)
+            return
 
-    user_profile = preparation.profile
-    question_text = preparation.prompt
-    cost = preparation.cost
-    image_base64 = preparation.image_base64
-    image_mime = preparation.image_mime
+        user_profile = preparation.profile
+        question_text = preparation.prompt
+        cost = preparation.cost
+        image_base64 = preparation.image_base64
+        image_mime = preparation.image_mime
 
-    request_id = uuid4().hex
-    logger.info(f"event=ask_ai_enqueue request_id={request_id} profile_id={profile.id}")
-    queued = await enqueue_ai_question(
-        profile=user_profile,
-        prompt=question_text,
-        language=profile.language,
-        request_id=request_id,
-        cost=cost,
-        image_base64=image_base64,
-        image_mime=image_mime,
-    )
+        request_id = uuid4().hex
+        logger.info(f"event=ask_ai_enqueue request_id={request_id} profile_id={profile.id}")
 
-    if not queued:
-        logger.error(f"event=ask_ai_enqueue_failed request_id={request_id} profile_id={profile.id}")
+        queued = await enqueue_ai_question(
+            profile=user_profile,
+            prompt=question_text,
+            language=profile.language,
+            request_id=request_id,
+            cost=cost,
+            image_base64=image_base64,
+            image_mime=image_mime,
+        )
+
+        if not queued:
+            logger.error(f"event=ask_ai_enqueue_failed request_id={request_id} profile_id={profile.id}")
+            await answer_msg(
+                message,
+                translate(MessageText.coach_agent_error, lang).format(tg=settings.TG_SUPPORT_CONTACT),
+            )
+            return
+
+        await answer_msg(message, translate(MessageText.request_in_progress, lang))
+
+        state_payload: dict[str, object] = {
+            "profile": user_profile.model_dump(),
+            "last_request_id": request_id,
+            "ask_ai_cost": cost,
+            "ask_ai_prompt_id": None,
+            "ask_ai_prompt_chat_id": None,
+            "ask_ai_question_message_id": message.message_id,
+        }
+        await show_main_menu(message, profile, state, delete_source=False)
+        await state.update_data(**state_payload)
+    except Exception:
+        logger.exception(f"event=ask_ai_process_failed profile_id={profile.id}")
         await answer_msg(
             message,
             translate(MessageText.coach_agent_error, lang).format(tg=settings.TG_SUPPORT_CONTACT),
         )
-        return
-
-    await answer_msg(message, translate(MessageText.request_in_progress, lang))
-
-    state_payload: dict[str, object] = {
-        "profile": user_profile.model_dump(),
-        "last_request_id": request_id,
-        "ask_ai_cost": cost,
-        "ask_ai_prompt_id": None,
-        "ask_ai_prompt_chat_id": None,
-        "ask_ai_question_message_id": message.message_id,
-    }
-    if not data.get("ask_ai_menu_shown"):
-        await show_main_menu(message, profile, state, delete_source=False)
-        state_payload["ask_ai_menu_shown"] = True
-    await state.update_data(**state_payload)
 
 
 @workout_router.message(States.workouts_number)

@@ -4,7 +4,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Any, Awaitable, Mapping, Sequence, TYPE_CHECKING, Optional
+from typing import Any, Awaitable, Iterable, Mapping, Sequence, TYPE_CHECKING, Optional
 from uuid import uuid4
 
 from loguru import logger
@@ -37,10 +37,14 @@ class StorageService:
         return Path(settings.COGNEE_STORAGE_PATH).expanduser().resolve()
 
     def storage_path_for_sha(self, digest_sha: str) -> Path | None:
-        if len(digest_sha) != 64:
+        if len(digest_sha) == 64:  # SHA256
+            return self.storage_root() / f"text_{digest_sha}.txt"
+        elif len(digest_sha) == 32:  # MD5
+            # Assuming MD5s are stored as text_<md5>.txt
+            return self.storage_root() / f"text_{digest_sha}.txt"
+        else:
             self.dataset_service.log_once(logging.WARNING, "storage_path_invalid_digest", sha=digest_sha)
             return None
-        return self.storage_root() / f"text_{digest_sha}.txt"
 
     async def read_storage_text(self, *, digest_sha: str) -> str | None:
         if digest_sha in self._STORAGE_CACHE:
@@ -211,9 +215,11 @@ class StorageService:
                 )
                 unreadable_count += 1
                 continue
+            # logger.debug(f"rebuild_read_ok path={path} bytes={len(contents)}")
             normalized = normalize_text(contents)
             if not normalized:
                 empty_count += 1
+                logger.debug(f"rebuild_empty_content path={path}")
                 continue
             digest_sha_from_content = self.compute_digests(normalized, dataset_alias=alias)
             if digest_sha_from_content != digest_sha_from_name:
@@ -245,7 +251,7 @@ class StorageService:
             if not already:
                 created += 1
         if created > 0 or linked > 0 or mismatch_count > 0 or unreadable_count > 0 or empty_count > 0:
-            logger.info(
+            logger.debug(
                 "rebuild:summary dataset={} created={} linked={} mismatches={} unreadable={} empty={}",
                 alias,
                 created,
@@ -268,6 +274,8 @@ class StorageService:
         if not digests:
             return result
 
+        logger.debug(f"reingest.start dataset={alias} digests={len(digests)}")
+
         kb = knowledge_base or self._knowledge_base
         if kb is None:
             result.healed = False
@@ -275,26 +283,34 @@ class StorageService:
             logger.debug(f"knowledge_reingest_failed dataset={alias} reason=knowledge_base_unavailable")
             return result
 
-        actor = user if user is not None else getattr(kb, "_user", None)
-        if actor is None:
+        raw_user = user if user is not None else getattr(kb, "_user", None)
+        actor = self.dataset_service.to_user_ctx(raw_user) if raw_user is not None else None
+        if actor is None and raw_user is not None:
+            actor = self.dataset_service.to_user_ctx_or_default(raw_user)
+
+        if actor is None and alias != settings.COGNEE_GLOBAL_DATASET:
+            actor = self.dataset_service.to_user_ctx_or_default(None)
+
+        if actor is None and alias != settings.COGNEE_GLOBAL_DATASET:
             result.healed = False
             result.reason = "update_dataset_failed_missing_user"
             logger.debug(f"knowledge_reingest_failed dataset={alias} reason=missing_user")
             return result
 
         for digest_sha, metadata in digests:
-            if len(digest_sha) != 64:
-                logger.warning("hashstore_legacy_digest_skipped digest={}", digest_sha[:12])
-                continue
             path = self.storage_path_for_sha(digest_sha)
             if path is None:
                 continue
-            logger.debug(f"[reingest_probe] sha={digest_sha} path_attempt={path}")
+
+            # Diagnostic log to trace specific files being re-evaluated
+            # logger.debug(f"[reingest_probe] sha={digest_sha} path_attempt={path}")
+
             normalized = None
             if path.exists():
                 try:
                     raw_text = await self.read_storage_text(digest_sha=digest_sha)
                     if raw_text:
+                        # logger.debug(f"reingest_read_ok path={path} bytes={len(raw_text)}")
                         normalized = normalize_text(raw_text)
                 except Exception as exc:
                     logger.debug(f"knowledge_reingest_read_failed dataset={alias} sha={digest_sha[:12]} detail={exc}")
@@ -310,6 +326,9 @@ class StorageService:
                             "knowledge_reingest_read_failed_md5_fallback "
                             f"dataset={alias} sha={digest_sha[:12]} detail={exc}"
                         )
+
+            if normalized:
+                logger.debug(f"reingest.row dataset={alias} digest={digest_sha[:12]} text_len={len(normalized)}")
 
             if not normalized and metadata and metadata.get("text"):
                 normalized = normalize_text(str(metadata["text"]))
@@ -341,13 +360,19 @@ class StorageService:
             if kind == "message":
                 continue
             meta_payload = dict(metadata) if isinstance(metadata, Mapping) else None
+            reingest_user = raw_user if raw_user is not None else actor
             try:
+                # CRITICAL: We pass force_ingest=True to bypass HashStore check inside update_dataset.
+                # Since we are re-ingesting from HashStore, the hash is inherently already there.
+                logger.debug(f"reingest.update_call dataset={alias} digest={digest_sha[:12]}")
                 dataset_name, created = await kb.update_dataset(
                     normalized,
                     alias,
-                    user=actor,
+                    user=reingest_user,
                     node_set=None,
                     metadata=meta_payload,
+                    force_ingest=True,
+                    trigger_projection=False,
                 )
             except Exception as exc:
                 result.healed = False
@@ -433,6 +458,57 @@ class StorageService:
             f"package_target={storage_info.get('package_target')} missing_count={missing_count} "
             f"healed_count={healed_count}"
         )
+
+    async def drop_dataset_storage(
+        self,
+        dataset: str,
+        digests: Sequence[str],
+        *,
+        other_datasets: Iterable[str] | None = None,
+    ) -> int:
+        alias = self.dataset_service.alias_for_dataset(dataset)
+        if not digests:
+            return 0
+        other_aliases: list[str] = []
+        for name in other_datasets or []:
+            normalized = self.dataset_service.alias_for_dataset(name)
+            if normalized and normalized != alias:
+                other_aliases.append(normalized)
+        removed = 0
+        for digest_sha in digests:
+            if await self._digest_in_use_elsewhere(digest_sha, other_aliases):
+                continue
+            path = self.storage_path_for_sha(digest_sha)
+            if path is None:
+                continue
+            try:
+                path.unlink(missing_ok=True)
+                removed += 1
+            except OSError as exc:
+                self.dataset_service.log_once(
+                    logging.DEBUG,
+                    "storage_cleanup_skip",
+                    dataset=alias,
+                    digest=digest_sha[:12],
+                    detail=str(exc),
+                    min_interval=30.0,
+                )
+        if removed:
+            logger.debug(f"storage_cleanup dataset={alias} removed={removed} digests={len(digests)}")
+        return removed
+
+    async def _digest_in_use_elsewhere(self, digest_sha: str, dataset_names: Sequence[str]) -> bool:
+        from ai_coach.agent.knowledge.utils.hash_store import HashStore
+
+        for name in dataset_names:
+            if not name:
+                continue
+            try:
+                if await HashStore.contains(name, digest_sha):
+                    return True
+            except Exception:
+                continue
+        return False
 
     async def sanitize_hash_store(self) -> None:
         md5_found_count = 0

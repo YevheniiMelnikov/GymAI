@@ -13,7 +13,7 @@ from core.tasks.ai_coach import (
     refresh_external_knowledge,
     update_ai_workout_plan,
 )
-from core.tasks.backups import cleanup_backups, pg_backup, redis_backup
+from core.tasks.backups import cleanup_backups, neo4j_backup, pg_backup, qdrant_backup, redis_backup
 from core.tasks.billing import (
     charge_due_subscriptions,
     deactivate_expired_subscriptions,
@@ -36,7 +36,9 @@ __all__ = [
     "update_ai_workout_plan",
     "prune_knowledge_base",
     "cleanup_backups",
+    "neo4j_backup",
     "pg_backup",
+    "qdrant_backup",
     "redis_backup",
     "charge_due_subscriptions",
     "deactivate_expired_subscriptions",

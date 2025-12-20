@@ -1,5 +1,5 @@
 from contextlib import suppress
-from typing import Collection, cast
+from typing import Any, Collection, TypedDict, cast
 
 from loguru import logger
 from aiogram.enums import ParseMode
@@ -105,6 +105,11 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext, 
 InteractionTarget = CallbackQuery | Message | BotMessageProxy
 
 
+class PendingFlow(TypedDict, total=False):
+    name: str
+    context: dict[str, Any]
+
+
 async def show_balance_menu(
     callback_obj: InteractionTarget,
     profile: Profile,
@@ -181,18 +186,14 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
     lang = cast(str, profile.language)
 
     if isinstance(user, Profile) and user.status != ProfileStatus.completed:
-        credits_text = translate(MessageText.finish_registration_to_get_credits, lang).format(
-            credits=settings.DEFAULT_CREDITS
+        await prompt_profile_completion_questionnaire(
+            callback_query,
+            profile,
+            state,
+            chat_id=callback_query.from_user.id,
+            language=lang,
+            pending_flow={"name": "show_profile"},
         )
-        await callback_query.answer(credits_text, show_alert=True)
-        await state.set_state(States.workout_goals)
-        msg = await answer_msg(callback_query, translate(MessageText.workout_goals, lang))
-        if msg is not None:
-            await state.update_data(
-                chat_id=callback_query.from_user.id,
-                message_ids=[msg.message_id],
-                lang=lang,
-            )
         await del_msg(cast(Message | CallbackQuery | None, callback_query))
         return
 
@@ -226,18 +227,14 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
     assert message
 
     if cached_profile.status != ProfileStatus.completed:
-        credits_text = translate(MessageText.finish_registration_to_get_credits, lang).format(
-            credits=settings.DEFAULT_CREDITS
+        await prompt_profile_completion_questionnaire(
+            callback_query,
+            profile,
+            state,
+            chat_id=callback_query.from_user.id,
+            language=lang,
         )
-        await callback_query.answer(credits_text, show_alert=True)
-        await state.set_state(States.workout_goals)
-        msg = await answer_msg(callback_query, translate(MessageText.workout_goals, lang))
-        if msg is not None:
-            await state.update_data(
-                chat_id=callback_query.from_user.id,
-                message_ids=[msg.message_id],
-                lang=lang,
-            )
+        await del_msg(cast(Message | CallbackQuery | None, callback_query))
         return
 
     await callback_query.answer()
@@ -318,19 +315,94 @@ async def _prompt_ai_services(
     return True
 
 
+def _finish_registration_text(language: str) -> str:
+    return translate(MessageText.finish_registration_to_get_credits, language).format(
+        credits=settings.DEFAULT_CREDITS,
+    )
+
+
+async def _notify_profile_incomplete(target: InteractionTarget, language: str) -> None:
+    text = _finish_registration_text(language)
+    if isinstance(target, CallbackQuery):
+        await target.answer(text, show_alert=True)
+        return
+    await answer_msg(target, text)
+
+
+def _extract_chat_id(target: InteractionTarget) -> int | None:
+    if isinstance(target, CallbackQuery):
+        user = target.from_user
+        if user:
+            return user.id
+    elif isinstance(target, Message):
+        return target.chat.id
+    elif isinstance(target, BotMessageProxy):
+        return target.chat_id
+    return None
+
+
+async def _start_profile_questionnaire(
+    target: InteractionTarget,
+    profile: Profile,
+    state: FSMContext,
+    *,
+    language: str | None = None,
+    chat_id: int | None = None,
+    pending_flow: dict[str, object] | None = None,
+) -> None:
+    lang = language or cast(str, profile.language or settings.DEFAULT_LANG)
+    msg = await answer_msg(target, translate(MessageText.workout_goals, lang))
+    message_ids: list[int] = [msg.message_id] if msg else []
+    data: dict[str, Any] = {"lang": lang, "message_ids": message_ids}
+    if pending_flow:
+        data["pending_flow"] = pending_flow
+    resolved_chat_id = chat_id or _extract_chat_id(target)
+    if resolved_chat_id is not None:
+        data["chat_id"] = resolved_chat_id
+    await state.update_data(**data)
+    await state.set_state(States.workout_goals)
+
+
+async def prompt_profile_completion_questionnaire(
+    target: InteractionTarget,
+    profile: Profile,
+    state: FSMContext,
+    *,
+    chat_id: int | None = None,
+    language: str | None = None,
+    pending_flow: dict[str, object] | None = None,
+) -> None:
+    lang = language or cast(str, profile.language or settings.DEFAULT_LANG)
+    await _notify_profile_incomplete(target, lang)
+    await _start_profile_questionnaire(
+        target,
+        profile,
+        state,
+        language=lang,
+        chat_id=chat_id,
+        pending_flow=pending_flow,
+    )
+
+
 async def _ensure_profile_completed(
     target: InteractionTarget,
     profile: Profile,
+    state: FSMContext,
+    *,
+    pending_flow: dict[str, object] | None = None,
 ) -> Profile | None:
     cached_profile = await fetch_user(profile, refresh_if_incomplete=True)
     if cached_profile.status == ProfileStatus.completed:
         return cached_profile
     language = cast(str, profile.language or settings.DEFAULT_LANG)
-    text = translate(MessageText.finish_registration_to_get_credits, language).format(credits=settings.DEFAULT_CREDITS)
-    if isinstance(target, CallbackQuery):
-        await target.answer(text, show_alert=True)
-    else:
-        await answer_msg(target, text)
+    await _notify_profile_incomplete(target, language)
+    await _start_profile_questionnaire(
+        target,
+        profile,
+        state,
+        language=language,
+        pending_flow=pending_flow,
+    )
     return None
 
 
@@ -342,7 +414,7 @@ async def show_ai_services(
     *,
     auto_select_single: bool = False,
 ) -> None:
-    cached_profile = await _ensure_profile_completed(callback_query, profile)
+    cached_profile = await _ensure_profile_completed(callback_query, profile, state)
     if cached_profile is None:
         return
     await callback_query.answer()
@@ -398,7 +470,12 @@ async def process_ai_service_selection(
 
 
 async def start_program_flow(target: InteractionTarget, profile: Profile, state: FSMContext) -> None:
-    cached_profile = await _ensure_profile_completed(target, profile)
+    cached_profile = await _ensure_profile_completed(
+        target,
+        profile,
+        state,
+        pending_flow={"name": "start_program_flow"},
+    )
     if cached_profile is None:
         return
     await state.update_data(service_type="program")
@@ -413,7 +490,12 @@ async def start_program_flow(target: InteractionTarget, profile: Profile, state:
 
 
 async def start_subscription_flow(target: InteractionTarget, profile: Profile, state: FSMContext) -> None:
-    cached_profile = await _ensure_profile_completed(target, profile)
+    cached_profile = await _ensure_profile_completed(
+        target,
+        profile,
+        state,
+        pending_flow={"name": "start_subscription_flow"},
+    )
     if cached_profile is None:
         return
     await state.update_data(service_type="subscription")

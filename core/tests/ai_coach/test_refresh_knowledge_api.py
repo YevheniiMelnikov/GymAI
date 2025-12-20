@@ -1,17 +1,17 @@
-import asyncio
+import base64
 import sys
 import types
-import hmac
-import time
-import pytest
-from httpx import AsyncClient, ASGITransport
+from typing import Any
 
-from core.tests import conftest
+from starlette.testclient import TestClient
+
+import ai_coach.application as application_module
 from ai_coach.application import app
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+from core.tests import conftest
 
 
-def _reset_settings(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
+def _reset_settings(monkeypatch: Any) -> types.SimpleNamespace:
     settings_mod = sys.modules.get("config.app_settings")
     if settings_mod is None:
         settings_mod = types.ModuleType("config.app_settings")
@@ -20,66 +20,73 @@ def _reset_settings(monkeypatch: pytest.MonkeyPatch) -> types.SimpleNamespace:
     base = types.SimpleNamespace(**conftest.settings_stub.__dict__)
     monkeypatch.setattr(settings_mod, "settings", base, raising=False)
     monkeypatch.setattr(sys.modules[__name__], "settings", base, raising=False)
-    import ai_coach.api as coach_api
-    import ai_coach.api_security as api_security
 
-    monkeypatch.setattr(api_security, "app_settings", settings_mod, raising=False)
-    monkeypatch.setattr(api_security, "settings", base, raising=False)
-    monkeypatch.setattr(coach_api, "settings", base, raising=False)
-    coach_api.app.dependency_overrides.pop(coach_api._require_hmac, None)
+    import ai_coach.api as coach_api_module
+    import ai_coach.api_security as api_security_module
+
+    monkeypatch.setattr(api_security_module, "app_settings", settings_mod, raising=False)
+    monkeypatch.setattr(api_security_module, "settings", base, raising=False)
+    monkeypatch.setattr(coach_api_module, "settings", base, raising=False)
+    coach_api_module.app.dependency_overrides.pop(coach_api_module._require_hmac, None)
     return base
 
 
-def test_refresh_knowledge(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def runner() -> None:
-        cfg = _reset_settings(monkeypatch)
-        cfg.ENVIRONMENT = "production"
-        cfg.AI_COACH_INTERNAL_KEY_ID = "key"
-        cfg.AI_COACH_INTERNAL_API_KEY = "secret"
-        cfg.INTERNAL_KEY_ID = ""
-        cfg.INTERNAL_API_KEY = ""
-        called: bool = False
+def _patch_lifespan_helpers(monkeypatch: Any) -> None:
+    async def _noop_init(_kb: KnowledgeBase, _loader: Any | None = None) -> None:
+        return None
 
-        async def fake_refresh(cls) -> None:
-            nonlocal called
-            called = True
+    class _DummyLoader:
+        def __init__(self, kb: KnowledgeBase) -> None:
+            self.kb = kb
 
-        monkeypatch.setattr(KnowledgeBase, "refresh", classmethod(fake_refresh))
-        import ai_coach.api as coach_api
-
-        coach_api.app.dependency_overrides.pop(coach_api._require_hmac, None)
-        ts = int(time.time())
-        body = b""
-        message = f"{ts}".encode() + b"." + body
-        sig = hmac.new(cfg.AI_COACH_INTERNAL_API_KEY.encode(), message, "sha256").hexdigest()
-        headers = {"X-Key-Id": cfg.AI_COACH_INTERNAL_KEY_ID, "X-TS": str(ts), "X-Sig": sig}
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            resp = await ac.post("/knowledge/refresh/", headers=headers, content=body)
-
-        assert resp.status_code == 200
-        assert resp.json() == {"status": "ok"}
-        assert called
-
-    asyncio.run(runner())
+    monkeypatch.setattr(application_module, "init_knowledge_base", _noop_init, raising=False)
+    monkeypatch.setattr(application_module, "GDriveDocumentLoader", _DummyLoader, raising=False)
 
 
-def test_refresh_knowledge_unauthorized(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def runner() -> None:
-        cfg = _reset_settings(monkeypatch)
-        cfg.ENVIRONMENT = "production"
-        cfg.AI_COACH_INTERNAL_KEY_ID = ""
-        cfg.AI_COACH_INTERNAL_API_KEY = ""
-        cfg.INTERNAL_KEY_ID = ""
-        cfg.INTERNAL_API_KEY = ""
-        import ai_coach.api as coach_api
+def _basic_auth_header(user: str, password: str) -> dict[str, str]:
+    credentials = f"{user}:{password}"
+    token = base64.b64encode(credentials.encode()).decode()
+    return {"Authorization": f"Basic {token}"}
 
-        coach_api.app.dependency_overrides.pop(coach_api._require_hmac, None)
 
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            resp = await ac.post("/knowledge/refresh/")
+def test_refresh_knowledge(monkeypatch: Any) -> None:
+    cfg = _reset_settings(monkeypatch)
+    cfg.ENVIRONMENT = "production"
+    cfg.AI_COACH_REFRESH_USER = "admin"
+    cfg.AI_COACH_REFRESH_PASSWORD = "password"
 
-        assert resp.status_code == 503
+    _patch_lifespan_helpers(monkeypatch)
 
-    asyncio.run(runner())
+    called = False
+
+    async def fake_refresh(self: KnowledgeBase, force: bool = False) -> None:
+        nonlocal called
+        called = True
+
+    monkeypatch.setattr(KnowledgeBase, "refresh", fake_refresh, raising=False)
+
+    headers = _basic_auth_header(cfg.AI_COACH_REFRESH_USER, cfg.AI_COACH_REFRESH_PASSWORD)
+    print("TEST: entering TestClient context")
+    with TestClient(app) as client:
+        print("TEST: sending request")
+        response = client.post("/knowledge/refresh/?force=False", headers=headers)
+        print("TEST: response status", response.status_code)
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+    assert called
+
+
+def test_refresh_knowledge_unauthorized(monkeypatch: Any) -> None:
+    cfg = _reset_settings(monkeypatch)
+    cfg.ENVIRONMENT = "production"
+    cfg.AI_COACH_REFRESH_USER = "admin"
+    cfg.AI_COACH_REFRESH_PASSWORD = "password"
+
+    _patch_lifespan_helpers(monkeypatch)
+
+    headers = _basic_auth_header("wrong_user", "wrong_password")
+    with TestClient(app) as client:
+        response = client.post("/knowledge/refresh/?force=False", headers=headers)
+
+    assert response.status_code == 401

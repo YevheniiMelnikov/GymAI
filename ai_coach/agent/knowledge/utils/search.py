@@ -1,18 +1,59 @@
 import asyncio
 import logging
+from time import monotonic
+from enum import Enum
 from hashlib import sha256
 from typing import Any, Awaitable, Iterable, Mapping, Sequence, cast, Literal, Optional, TYPE_CHECKING
 
-from loguru import logger
+try:
+    from cognee.modules.search.types import SearchType
+    import cognee
+except ModuleNotFoundError:  # pragma: no cover - optional dependency
+    cognee = None  # type: ignore[assignment]
 
-import cognee
+    class SearchType(str, Enum):
+        GRAPH_COMPLETION_CONTEXT_EXTENSION = "GRAPH_COMPLETION_CONTEXT_EXTENSION"
+
+        @classmethod
+        def _missing_(cls, value: object) -> "SearchType":
+            return cls.GRAPH_COMPLETION_CONTEXT_EXTENSION
+
+        def __str__(self) -> str:
+            return self.value
+
+        def __repr__(self) -> str:
+            return f"{type(self).__name__}.{self.name}"
+
+
+from loguru import logger
 
 from ai_coach.agent.knowledge.schemas import KnowledgeSnippet, ProjectionStatus
 from ai_coach.agent.knowledge.utils.datasets import DatasetService
 from ai_coach.agent.knowledge.utils.projection import ProjectionService
+from ai_coach.agent.knowledge.utils.memify_scheduler import schedule_profile_memify
+from ai_coach.exceptions import AgentExecutionAborted
+from config.app_settings import settings
+from core.utils.redis_lock import get_redis_client
+
 
 if TYPE_CHECKING:
     from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+
+
+def _resolve_search_type(mode: str | SearchType | None) -> SearchType:
+    if isinstance(mode, SearchType):
+        return mode
+    candidate = (mode or "").strip()
+    if not candidate:
+        return SearchType.GRAPH_COMPLETION_CONTEXT_EXTENSION
+    try:
+        return SearchType(candidate)
+    except ValueError:
+        upper = candidate.upper()
+        try:
+            return SearchType[upper]
+        except KeyError:
+            return SearchType.GRAPH_COMPLETION_CONTEXT_EXTENSION
 
 
 class SearchService:
@@ -26,48 +67,70 @@ class SearchService:
         self.dataset_service = dataset_service
         self.projection_service = projection_service
         self._knowledge_base: Optional["KnowledgeBase"] = knowledge_base
+        self._search_type_default = _resolve_search_type(getattr(settings, "COGNEE_SEARCH_MODE", None))
+        self._memify_delay = max(float(getattr(settings, "AI_COACH_MEMIFY_DELAY_SECONDS", 3600.0)), 0.0)
 
     def _require_kb(self) -> "KnowledgeBase":
         if self._knowledge_base is None:
             raise RuntimeError("knowledge_base_unavailable")
         return self._knowledge_base
 
-    async def search(
-        self,
-        query: str,
-        profile_id: int,
-        k: int | None = None,
-        *,
-        request_id: str | None = None,
-        datasets: Sequence[str] | None = None,
-        user: Any | None = None,
-    ) -> list[KnowledgeSnippet]:
-        normalized = query.strip()
-        if not normalized:
-            logger.debug(f"Knowledge search skipped profile_id={profile_id}: empty query")
-            return []
-        rid_value = request_id or "na"
-        actor = user if user is not None else await self.dataset_service.get_cognee_user()
-        await self._ensure_profile_indexed(profile_id, actor)
-        user_ctx = self.dataset_service.to_user_ctx(actor)
+    async def _apply_session_context(self, user_ctx: Any | None, profile_id: int) -> None:
+        if user_ctx is None:
+            return
+        try:
+            from cognee.modules.retrieval.utils.session_cache import set_session_user_context_variable
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("cognee_session_context_unavailable profile_id={} detail={}", profile_id, exc)
+            return
+        try:
+            import inspect
 
+            if inspect.iscoroutinefunction(set_session_user_context_variable):
+                await set_session_user_context_variable(user_ctx)
+            else:
+                set_session_user_context_variable(user_ctx)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("cognee_session_context_failed profile_id={} detail={}", profile_id, exc)
+
+    def _ensure_session_cache_available(self, profile_id: int) -> None:
+        try:
+            from cognee.infrastructure.databases.cache.get_cache_engine import get_cache_engine
+        except Exception as exc:  # noqa: BLE001
+            logger.error("knowledge_session_cache_unavailable profile_id={} detail={}", profile_id, exc)
+            raise AgentExecutionAborted("knowledge_base_unavailable", reason="knowledge_base_unavailable") from exc
+        cache = get_cache_engine(lock_key=f"chat_session:{profile_id}")
+        if cache is None:
+            logger.error("knowledge_session_cache_unavailable profile_id={} detail=cache_engine_none", profile_id)
+            raise AgentExecutionAborted("knowledge_base_unavailable", reason="knowledge_base_unavailable")
+
+    def _build_candidate_aliases(self, datasets: Sequence[str] | None, profile_id: int) -> list[str]:
         candidate_aliases: list[str] = []
         if datasets is not None:
             for name in datasets:
                 alias = self.dataset_service.alias_for_dataset(name)
                 if alias not in candidate_aliases:
                     candidate_aliases.append(alias)
-        else:
-            candidate_aliases.extend(
-                [
-                    self.dataset_service.alias_for_dataset(self.dataset_service.dataset_name(profile_id)),
-                    self.dataset_service.alias_for_dataset(self.dataset_service.chat_dataset_name(profile_id)),
-                ]
-            )
-            global_alias_default = self.dataset_service.alias_for(self.dataset_service.GLOBAL_DATASET)
-            if global_alias_default not in candidate_aliases:
-                candidate_aliases.append(global_alias_default)
+            return candidate_aliases
 
+        candidate_aliases.extend(
+            [
+                self.dataset_service.alias_for_dataset(self.dataset_service.dataset_name(profile_id)),
+                self.dataset_service.alias_for_dataset(self.dataset_service.chat_dataset_name(profile_id)),
+            ]
+        )
+        global_alias_default = self.dataset_service.alias_for(self.dataset_service.GLOBAL_DATASET)
+        if global_alias_default not in candidate_aliases:
+            candidate_aliases.append(global_alias_default)
+        return candidate_aliases
+
+    async def _ensure_global_dataset_ready(
+        self,
+        candidate_aliases: list[str],
+        actor: Any | None,
+        profile_id: int,
+        rid_value: str,
+    ) -> tuple[list[str], bool]:
         global_alias = self.dataset_service.alias_for(self.dataset_service.GLOBAL_DATASET)
         include_global = global_alias in candidate_aliases
         global_ready = not include_global or global_alias in self.dataset_service._PROJECTED_DATASETS
@@ -93,10 +156,14 @@ class SearchService:
                     rid=rid_value,
                 )
 
-        if not candidate_aliases:
-            logger.debug(f"knowledge_search_skipped profile_id={profile_id} rid={rid_value} reason=no_datasets")
-            return []
+        return candidate_aliases, global_unavailable
 
+    async def _resolve_datasets(
+        self,
+        candidate_aliases: list[str],
+        user_ctx: Any | None,
+        profile_id: int,
+    ) -> list[str]:
         resolved_datasets: list[str] = []
         for alias in candidate_aliases:
             resolved = self.dataset_service.alias_for_dataset(alias)
@@ -104,25 +171,24 @@ class SearchService:
                 await self.dataset_service.ensure_dataset_exists(resolved, user_ctx)
             except Exception as ensure_exc:
                 logger.debug(
-                    f"knowledge_dataset_ensure_failed profile_id={profile_id} dataset={resolved} detail={ensure_exc}"
+                    "knowledge_dataset_ensure_failed profile_id={} dataset={} detail={}",
+                    profile_id,
+                    resolved,
+                    ensure_exc,
                 )
             resolved_datasets.append(resolved)
+        return resolved_datasets
 
-        base_hash = sha256(normalized.encode()).hexdigest()[:12]
-        datasets_hint = ",".join(resolved_datasets)
-        top_k_label = k if k is not None else "default"
-        logger.debug(
-            f"knowledge_search_start profile_id={profile_id} rid={rid_value} query_hash={base_hash} "
-            f"datasets={datasets_hint} top_k={top_k_label} global_unavailable={global_unavailable}"
-        )
-
-        queries = self._expanded_queries(normalized)
-        if len(queries) > 1:
-            logger.debug(
-                f"knowledge_search_expanded profile_id={profile_id} rid={rid_value} "
-                f"variants={len(queries)} base_query_hash={base_hash}"
-            )
-
+    async def _run_queries(
+        self,
+        queries: Sequence[str],
+        resolved_datasets: list[str],
+        actor: Any | None,
+        k: int | None,
+        profile_id: int,
+        request_id: str | None,
+        session_id: str,
+    ) -> list[KnowledgeSnippet]:
         aggregated: list[KnowledgeSnippet] = []
         seen: set[str] = set()
         for variant in queries:
@@ -132,7 +198,9 @@ class SearchService:
                 actor,
                 k,
                 profile_id,
+                query_type=self._search_type_default,
                 request_id=request_id,
+                session_id=session_id,
             )
             if not snippets:
                 continue
@@ -149,20 +217,96 @@ class SearchService:
                     break
             if k is not None and len(aggregated) >= k:
                 break
-
-        if k is not None:
-            return aggregated[:k]
-        if not aggregated:
-            self.dataset_service.log_once(
-                logging.INFO,
-                "search:empty",
-                profile_id=profile_id,
-                rid=rid_value,
-                datasets=datasets_hint,
-                min_interval=60.0,
-            )
-            logger.debug(f"knowledge_search_empty profile_id={profile_id} rid={rid_value} datasets={datasets_hint}")
         return aggregated
+
+    async def search(
+        self,
+        query: str,
+        profile_id: int,
+        k: int | None = None,
+        *,
+        request_id: str | None = None,
+        datasets: Sequence[str] | None = None,
+        user: Any | None = None,
+    ) -> list[KnowledgeSnippet]:
+        started_at = monotonic()
+        if cognee is None:
+            logger.warning("knowledge_search_skipped profile_id={} reason=cognee_missing", profile_id)
+            self._log_search_completion(profile_id, request_id or "na", "none", 0, started_at)
+            return []
+
+        normalized = query.strip()
+        if not normalized:
+            logger.debug(f"Knowledge search skipped profile_id={profile_id}: empty query")
+            self._log_search_completion(profile_id, request_id or "na", "none", 0, started_at)
+            return []
+        rid_value = request_id or "na"
+        actor = user if user is not None else await self.dataset_service.get_cognee_user()
+        await self._schedule_profile_sync(profile_id)
+        user_ctx = self.dataset_service.to_user_ctx(actor)
+        session_id = self.dataset_service.session_id_for_profile(profile_id)
+        await self._apply_session_context(user_ctx, profile_id)
+        self._ensure_session_cache_available(profile_id)
+        candidate_aliases = self._build_candidate_aliases(datasets, profile_id)
+        candidate_aliases, global_unavailable = await self._ensure_global_dataset_ready(
+            candidate_aliases,
+            actor,
+            profile_id,
+            rid_value,
+        )
+
+        if not candidate_aliases:
+            logger.debug(f"knowledge_search_skipped profile_id={profile_id} rid={rid_value} reason=no_datasets")
+            self._log_search_completion(profile_id, rid_value, "none", 0, started_at)
+            return []
+
+        resolved_datasets = await self._resolve_datasets(candidate_aliases, user_ctx, profile_id)
+
+        try:
+            base_hash = sha256(normalized.encode()).hexdigest()[:12]
+            datasets_hint = ",".join(resolved_datasets)
+            top_k_label = k if k is not None else "default"
+            logger.debug(
+                f"knowledge_search_start profile_id={profile_id} rid={rid_value} query_hash={base_hash} "
+                f"datasets={datasets_hint} top_k={top_k_label} global_unavailable={global_unavailable}"
+            )
+
+            queries = self._expanded_queries(normalized)
+            if len(queries) > 1:
+                logger.debug(
+                    f"knowledge_search_expanded profile_id={profile_id} rid={rid_value} "
+                    f"variants={len(queries)} base_query_hash={base_hash}"
+                )
+
+            aggregated = await self._run_queries(
+                queries,
+                resolved_datasets,
+                actor,
+                k,
+                profile_id,
+                request_id,
+                session_id,
+            )
+
+            await self._maybe_schedule_memify(profile_id)
+            if k is not None:
+                aggregated = aggregated[:k]
+            if not aggregated:
+                self.dataset_service.log_once(
+                    logging.INFO,
+                    "search:empty",
+                    profile_id=profile_id,
+                    rid=rid_value,
+                    datasets=datasets_hint,
+                    min_interval=60.0,
+                )
+                logger.debug(f"knowledge_search_empty profile_id={profile_id} rid={rid_value} datasets={datasets_hint}")
+            self._log_search_completion(profile_id, rid_value, datasets_hint, len(aggregated), started_at)
+            return aggregated
+        except asyncio.CancelledError:
+            cancel_hint = ",".join(resolved_datasets) if resolved_datasets else ",".join(candidate_aliases)
+            self._log_search_completion(profile_id, rid_value, cancel_hint or "none", 0, started_at)
+            raise
 
     async def _search_single_query(
         self,
@@ -172,7 +316,9 @@ class SearchService:
         k: int | None,
         profile_id: int,
         *,
+        query_type: SearchType = SearchType.GRAPH_COMPLETION_CONTEXT_EXTENSION,
         request_id: str | None = None,
+        session_id: str,
     ) -> list[KnowledgeSnippet]:
         if user is None:
             logger.warning(f"knowledge_search_skipped profile_id={profile_id}: user context unavailable")
@@ -182,11 +328,14 @@ class SearchService:
         rid_value = request_id or "na"
         user_ctx = self.dataset_service.to_user_ctx(user)
 
-        async def _search_targets(targets: list[str]) -> list[str]:
+        async def _search_targets(targets: list[str], session: str | None) -> list[str]:
             params: dict[str, Any] = {
                 "datasets": targets,
                 "user": user_ctx,
+                "query_type": query_type,
             }
+            if session:
+                params["session_id"] = session
             if k is not None:
                 params["top_k"] = k
             return await cognee.search(query, **params)
@@ -280,14 +429,14 @@ class SearchService:
             logger.debug(f"kb.search alias={alias_name} target={dataset_name} q_hash={query_hash}")
 
         try:
-            results = await _search_targets(ready_datasets)
+            results = await _search_targets(ready_datasets, session_id)
             logger.debug(
                 f"knowledge_search_ok profile_id={profile_id} rid={rid_value} "
                 f"query_hash={query_hash} results={len(results)}"
             )
             if not results:
                 await asyncio.sleep(0.25)
-                retry = await _search_targets(ready_datasets)
+                retry = await _search_targets(ready_datasets, None)
                 if retry:
                     logger.info(
                         f"knowledge_search_retry_after_empty profile_id={profile_id} rid={rid_value} "
@@ -531,8 +680,67 @@ class SearchService:
             except Exception as exc:
                 logger.warning(f"knowledge_dataset_warmup_failed dataset={dataset} detail={exc}")
 
+    async def _maybe_schedule_memify(self, profile_id: int) -> None:
+        if cognee is None or not hasattr(cognee, "memify"):
+            logger.debug("knowledge_memify_schedule_skipped profile_id={} reason=memify_missing", profile_id)
+            return
+        datasets = [
+            self.dataset_service.alias_for_dataset(self.dataset_service.dataset_name(profile_id)),
+            self.dataset_service.alias_for_dataset(self.dataset_service.chat_dataset_name(profile_id)),
+        ]
+        dataset_label = ",".join(datasets)
+        scheduled = await schedule_profile_memify(profile_id, reason="paid_flow", delay_s=self._memify_delay)
+        if scheduled:
+            logger.info(
+                "knowledge_memify_scheduled profile_id={} datasets={} delay_s={}",
+                profile_id,
+                dataset_label,
+                self._memify_delay,
+            )
+        else:
+            logger.debug(
+                "knowledge_memify_schedule_declined profile_id={} datasets={} reason=dedupe_or_error",
+                profile_id,
+                dataset_label,
+            )
+
+    def _log_search_completion(
+        self,
+        profile_id: int,
+        rid_value: str,
+        datasets_hint: str,
+        hits: int,
+        started_at: float,
+    ) -> None:
+        elapsed = monotonic() - started_at
+        logger.debug(
+            "knowledge_search_finish profile_id={} rid={} datasets={} hits={} elapsed_s={:.2f}",
+            profile_id,
+            rid_value,
+            datasets_hint or "none",
+            hits,
+            elapsed,
+        )
+
     def _expanded_queries(self, query: str) -> list[str]:
         return [query]
+
+    async def _schedule_profile_sync(self, profile_id: int) -> None:
+        key = f"ai_coach:profile_sync:{profile_id}"
+        try:
+            client = get_redis_client()
+            if not await client.set(key, "1", nx=True, ex=600):
+                return
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("profile_sync_dedupe_failed profile_id={} detail={}", profile_id, exc)
+            return
+        try:
+            from core.tasks.ai_coach.maintenance import sync_profile_knowledge
+
+            getattr(sync_profile_knowledge, "delay")(profile_id, reason="search")
+            logger.info("profile_sync_enqueued profile_id={} reason=search", profile_id)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("profile_sync_enqueue_failed profile_id={} detail={}", profile_id, exc)
 
     def _resolve_snippet_kind(self, metadata: Mapping[str, Any] | None, text: str) -> str:
         if metadata:
@@ -548,28 +756,29 @@ class SearchService:
             return "message"
         return "document"
 
-    async def _ensure_profile_indexed(self, profile_id: int, user: Any | None) -> None:
+    async def _ensure_profile_indexed(self, profile_id: int, user: Any | None) -> bool:
         from core.services import APIService
 
         try:
             profile = await APIService.profile.get_profile(profile_id)
         except Exception as e:
             logger.warning(f"Failed to fetch profile id={profile_id}: {e}")
-            return
+            return False
         if not profile:
-            return
+            return False
         kb = self._knowledge_base
         if kb is None:
             logger.debug(f"knowledge_profile_index_skip profile_id={profile_id} reason=knowledge_base_unavailable")
-            return
+            return False
         text = kb._profile_text(profile)
         dataset = self.dataset_service.dataset_name(profile_id)
         dataset, created = await kb.update_dataset(
             text,
             dataset,
             user,
-            node_set=["profile"],
+            node_set=["profile", f"profile:{profile_id}"],
             metadata={"kind": "document", "source": "profile"},
         )
         if created:
             await kb._process_dataset(dataset, user)
+        return bool(created)

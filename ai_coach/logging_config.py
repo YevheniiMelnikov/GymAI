@@ -2,7 +2,9 @@ import logging
 import os
 import sys
 import time
+import warnings
 from dataclasses import asdict, is_dataclass
+from types import FrameType
 from typing import Any, Dict, MutableMapping
 
 from loguru import logger
@@ -14,9 +16,9 @@ class InterceptHandler(logging.Handler):
             level = logger.level(record.levelname).name
         except Exception:
             level = record.levelno
-        frame = logging.currentframe()
+        frame: FrameType | None = logging.currentframe()
         depth = 2
-        while frame and frame.f_code.co_filename == logging.__file__:
+        while frame is not None and frame.f_code.co_filename == logging.__file__:
             frame = frame.f_back
             depth += 1
         logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
@@ -64,6 +66,73 @@ class SamplingFilter(logging.Filter):
         return allowed
 
 
+class HealthAccessFilter(logging.Filter):
+    """Filter out noisy access logs for periodic health checks."""
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: D401
+        try:
+            message = record.getMessage()
+        except Exception:  # noqa: BLE001 - fallback best-effort
+            message = ""
+        return "GET /health" not in message
+
+
+class CogneeTelemetryFilter(logging.Filter):
+    """Filter noisy Cognee telemetry logs when disabled."""
+
+    def __init__(self, enabled: bool) -> None:
+        super().__init__()
+        self.enabled = enabled
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: D401
+        if self.enabled:
+            return True
+        try:
+            message = record.getMessage()
+        except Exception:  # noqa: BLE001 - fallback best-effort
+            return True
+        lowered = message.lower()
+        if any(
+            token in lowered
+            for token in (
+                "successfully connected to redis",
+                "successfully saved q&a to session cache",
+            )
+        ):
+            return record.levelno < logging.INFO
+        if record.name != "logging" and "run_tasks" not in lowered and "pipeline run" not in lowered:
+            return True
+        if any(
+            token in lowered
+            for token in (
+                "pipeline run started",
+                "pipeline run completed",
+                "coroutine task started",
+                "coroutine task completed",
+                "run_tasks_base",
+                "run_tasks_with_telemetry",
+            )
+        ):
+            return record.levelno < logging.INFO
+        if message.startswith("{'event':") and "pipeline run" in lowered:
+            return record.levelno < logging.INFO
+        return True
+
+
+class AiohttpSessionFilter(logging.Filter):
+    """Suppress aiohttp unclosed session warnings in INFO logs."""
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: D401
+        try:
+            message = record.getMessage()
+        except Exception:  # noqa: BLE001 - fallback best-effort
+            return True
+        lowered = message.lower()
+        if "unclosed client session" in lowered or "unclosed connector" in lowered:
+            return record.levelno < logging.INFO
+        return True
+
+
 _CONFIGURED = False
 _LOG_ONCE_STATE: dict[str, dict[str, float | int]] = {}
 
@@ -77,6 +146,9 @@ def configure_logging() -> None:
     sampling_filter = SamplingFilter(ttl=30.0)
 
     verbose = os.getenv("AI_COACH_VERBOSE_KB", "").strip() == "1"
+    telemetry_enabled = (
+        os.getenv("AI_COACH_COGNEE_TELEMETRY", "").strip() == "1" or os.getenv("AI_COACH_NOISY_LOGS", "").strip() == "1"
+    )
     level_name = "DEBUG" if verbose else "INFO"
     log_format = (
         "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
@@ -90,9 +162,16 @@ def configure_logging() -> None:
 
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("cognee").setLevel(logging.WARNING)
+    warnings.filterwarnings(
+        "ignore",
+        message="Api key is used with an insecure connection.",
+        category=UserWarning,
+    )
 
     intercept_handler = InterceptHandler()
     intercept_handler.addFilter(sampling_filter)
+    intercept_handler.addFilter(CogneeTelemetryFilter(telemetry_enabled))
+    intercept_handler.addFilter(AiohttpSessionFilter())
     logging.basicConfig(handlers=[intercept_handler], level=logging.INFO, force=True)
 
     kb_logger_names = (
@@ -110,6 +189,7 @@ def configure_logging() -> None:
     access_logger = logging.getLogger("uvicorn.access")
     access_logger.handlers = []
     access_logger.setLevel(logging.INFO)
+    access_logger.addFilter(HealthAccessFilter())
     access_logger.propagate = True
 
     noisy_loggers = (
@@ -122,6 +202,7 @@ def configure_logging() -> None:
         "OntologyAdapter",
         "CogneeGraph",
         "GraphCompletionRetriever",
+        "Neo4jAdapter",
     )
     for name in noisy_loggers:
         target = logging.getLogger(name)
@@ -129,6 +210,20 @@ def configure_logging() -> None:
         level = logging.ERROR if name == "GraphCompletionRetriever" else logging.WARNING
         target.setLevel(level)
         target.propagate = True
+
+    if not verbose:
+        kb_noisy = (
+            "ai_coach.agent.knowledge.utils.datasets",
+            "ai_coach.agent.knowledge.utils.storage",
+            "ai_coach.agent.knowledge.utils.storage_helpers",
+            "ai_coach.agent.knowledge.gdrive_knowledge_loader",
+            "ai_coach.agent.knowledge.knowledge_base",
+        )
+        for name in kb_noisy:
+            target = logging.getLogger(name)
+            target.handlers = []
+            target.setLevel(logging.WARNING)
+            target.propagate = True
 
     _CONFIGURED = True
 

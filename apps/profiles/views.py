@@ -38,6 +38,12 @@ class ProfileAPIUpdate(APIView):
                 tg_id=getattr(saved_profile, "tg_id", None),
             )
             logger.info(f"Profile id={profile_id} updated")
+            try:
+                from core.tasks.ai_coach.maintenance import sync_profile_knowledge
+
+                getattr(sync_profile_knowledge, "delay")(saved_profile.id, reason="profile_updated")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"Failed to enqueue profile sync profile_id={profile_id}: {exc}")
             return Response(serializer.data)
         logger.error(f"Validation error for Profile id={profile_id}: {serializer.errors}")
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -63,3 +69,19 @@ class ProfileAPIList(generics.ListCreateAPIView):
     serializer_class = ProfileSerializer  # pyrefly: ignore[bad-override]
     queryset = ProfileRepository  # type: ignore[assignment]
     permission_classes = [HasAPIKey]  # pyrefly: ignore[bad-override]
+
+    def perform_create(self, serializer: ProfileSerializer) -> None:  # pyrefly: ignore[bad-override]
+        profile = serializer.save()
+        ProfileRepository.invalidate_cache(profile_id=profile.id, tg_id=getattr(profile, "tg_id", None))
+        try:
+            from core.tasks.ai_coach.maintenance import sync_profile_knowledge
+
+            getattr(sync_profile_knowledge, "delay")(profile.id, reason="profile_created")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"Failed to enqueue profile sync profile_id={profile.id}: {exc}")
+        try:
+            from ai_coach.agent.knowledge.utils.memify_scheduler import schedule_profile_memify_sync
+
+            schedule_profile_memify_sync(profile.id, reason="profile_created")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"Failed to schedule memify profile_id={profile.id}: {exc}")

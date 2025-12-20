@@ -70,10 +70,12 @@ RUN echo "${STATIC_VERSION:-dev}" > /app/VERSION \
  && apt-get update \
  && apt-get install -y --no-install-recommends nodejs \
  && rm -rf /var/lib/apt/lists/*
+USER root
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
 
 FROM py-runtime AS api-runtime
 COPY --from=webbuild /app/apps/webapp/static /app/apps/webapp/static
+USER root
 ENTRYPOINT ["/app/docker/entrypoint.sh"]
 
 FROM py-base AS coach-runtime
@@ -86,4 +88,5 @@ RUN echo "${STATIC_VERSION:-dev}" > /app/VERSION \
  && apt-get update \
  && apt-get install -y --no-install-recommends curl libpq5 \
  && rm -rf /var/lib/apt/lists/*
+USER root
 ENTRYPOINT ["/app/docker/entrypoint.sh"]

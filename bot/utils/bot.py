@@ -46,6 +46,10 @@ class BotMessageProxy:
         self._bot = bot
         self._chat_id = chat_id
 
+    @property
+    def chat_id(self) -> int:
+        return self._chat_id
+
     async def answer(self, text: str, *args, **kwargs) -> Message:
         return await self._bot.send_message(self._chat_id, text, *args, **kwargs)
 

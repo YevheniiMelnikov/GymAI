@@ -2,6 +2,7 @@ x-app-image: &app_image gymbot-app:local
 x-coach-image: &coach_image gymbot-coach:local
 
 x-common-env: &common_env
+#  userns_mode: "host"
   environment:
     PYTHONPATH: /app
     DJANGO_SETTINGS_MODULE: config.settings
@@ -14,11 +15,14 @@ x-common-env: &common_env
     RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
     POSTGRES_DB: ${DB_NAME}
     POSTGRES_USER: ${DB_USER}
-    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:- password}
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
     POSTGRES_HOST: ${DB_HOST}
     POSTGRES_PORT: ${DB_PORT}
     AI_COACH_HOST: ${AI_COACH_HOST:-ai_coach}
     AI_COACH_PORT: ${COACH_PORT:-9000}
+    VECTOR_DB_PROVIDER: ${VECTOR_DB_PROVIDER:-qdrant}
+    VECTOR_DB_URL: ${VECTOR_DB_URL:-http://qdrant:6333}
+    VECTOR_DB_KEY: ${VECTOR_DB_KEY:-}
     BOT_INTERNAL_HOST: ${BOT_UPSTREAM_HOST:-host.docker.internal}
     BOT_INTERNAL_PORT: ${BOT_UPSTREAM_PORT:-8088}
   env_file:
@@ -57,17 +61,16 @@ services:
     networks: [internal]
 
   db:
-    image: pgvector/pgvector:pg17
+    image: postgres:18
     container_name: db
     environment:
       POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:- password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
       POSTGRES_HOST: ${DB_HOST}
       POSTGRES_PORT: ${DB_PORT}
-    command: [ "postgres", "-c", "shared_preload_libraries=vector" ]
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
@@ -76,6 +79,25 @@ services:
       start_period: 10s
     ports:
       - ${HOST_PG_PORT:-5432}:5432
+    networks: [internal]
+
+  qdrant:
+    image: qdrant/qdrant:v1.16
+    container_name: qdrant
+    restart: unless-stopped
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: ${QDRANT_HTTP_PORT:-6333}
+      QDRANT__SERVICE__GRPC_PORT: ${QDRANT_GRPC_PORT:-6334}
+    ports:
+      - ${HOST_QDRANT_HTTP_PORT:-6333}:6333
+      - ${HOST_QDRANT_GRPC_PORT:-6334}:6334
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:6333/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks: [internal]
 
   redis:
@@ -94,7 +116,6 @@ services:
   rabbitmq:
     image: rabbitmq:4.1.4-management
     container_name: rabbitmq
-    user: "0:0"
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-rabbitmq}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-rabbitmq}
@@ -149,6 +170,8 @@ services:
         condition: service_healthy
       ai_coach:
         condition: service_started
+      qdrant:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:${API_PORT:-8000}/health/"]
       interval: 60s
@@ -194,6 +217,8 @@ services:
         condition: service_healthy
       ai_coach:
         condition: service_started
+      qdrant:
+        condition: service_healthy
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -231,6 +256,8 @@ services:
         condition: service_started
       neo4j:
         condition: service_started
+      qdrant:
+        condition: service_healthy
     restart: unless-stopped
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -255,11 +282,10 @@ services:
       COGNEE_STORAGE_PATH: /app/cognee_storage
       COGNEE_DATA_ROOT: /app/cognee_storage
       GRAPH_DATABASE_PROVIDER: ${GRAPH_DATABASE_PROVIDER}
-      PGHOST: ${DB_HOST}
-      PGPORT: ${DB_PORT}
-      PGDATABASE: ${DB_NAME}
-      PGUSER: ${DB_USER}
-      PGPASSWORD: ${POSTGRES_PASSWORD:- password}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_API_URL: https://openrouter.ai/api/v1
+      OPENAI_API_KEY: ${LLM_API_KEY}
+      OPENAI_BASE_URL: https://openrouter.ai/api/v1
       COACH_PORT: ${COACH_PORT:-9000}
     env_file:
       - .env
@@ -272,7 +298,9 @@ services:
       db:
         condition: service_healthy
       neo4j:
-        condition: service_started
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:${COACH_PORT:-9000}/health/"]
       interval: 30s
@@ -326,9 +354,22 @@ services:
       - neo4j_plugins:/plugins
     environment:
       - NEO4J_AUTH=${GRAPH_DATABASE_USERNAME:-neo4j}/${GRAPH_DATABASE_PASSWORD:-pleaseletmein}
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+      - NEO4J_dbms_security_procedures_allowlist=apoc.*
     ports:
       - "${HOST_NEO4J_HTTP:-7474}:${NEO4J_HTTP_CONTAINER:-7474}"
       - "${HOST_NEO4J_BOLT:-7687}:${NEO4J_BOLT_CONTAINER:-7687}"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "cypher-shell -a bolt://localhost:${NEO4J_BOLT_CONTAINER:-7687} -u ${GRAPH_DATABASE_USERNAME:-neo4j} -p ${GRAPH_DATABASE_PASSWORD:-pleaseletmein} \"RETURN 1\" >/dev/null 2>&1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     restart: unless-stopped
     networks: [internal]
 
@@ -353,6 +394,7 @@ networks:
 volumes:
   cognee_storage:
   pgdata:
+  qdrant_data:
   data_storage:
   rabbitmqdata:
 

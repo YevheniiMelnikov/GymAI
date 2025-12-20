@@ -1,0 +1,11 @@
+Summarize the following chat between a client and an AI coach.
+
+Requirements:
+- Write in the same language as the messages (language code: {language}).
+- Keep key goals, constraints, injuries, preferences, and decisions.
+- Be concise (5-10 sentences or short bullet points).
+- Do not include personal data like phone numbers, emails, or addresses.
+- Return only the summary text.
+
+Chat messages:
+{messages}

@@ -33,8 +33,7 @@ def _text_response(payload: str, *, finish_reason: str = "stop") -> Any:
 async def test_fallback_summary_on_empty_completions(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = {"count": 0}
 
-    async def fake_run_completion(
-        cls,
+    async def fake_call_llm(
         client: Any,
         system_prompt: str,
         user_prompt: str,
@@ -55,9 +54,9 @@ async def test_fallback_summary_on_empty_completions(monkeypatch: pytest.MonkeyP
         return content, entry_ids
 
     helper = CoachAgent.llm_helper
-    monkeypatch.setattr(CoachAgent, "_run_completion", classmethod(fake_run_completion))
+    monkeypatch.setattr(helper, "call_llm", staticmethod(fake_call_llm))
     monkeypatch.setattr(helper, "_parse_fallback_content", classmethod(fake_parse))
-    monkeypatch.setattr(CoachAgent, "_get_completion_client", classmethod(lambda cls: (object(), settings.AGENT_MODEL)))
+    monkeypatch.setattr(CoachAgent, "get_completion_client", classmethod(lambda cls: (object(), settings.AGENT_MODEL)))
     monkeypatch.setattr(helper, "_ensure_llm_logging", classmethod(lambda cls, *args, **kwargs: None))
 
     deps = AgentDeps(profile_id=1, locale="uk")
@@ -83,8 +82,7 @@ async def test_fallback_summary_on_empty_completions(monkeypatch: pytest.MonkeyP
 async def test_complete_with_retries_returns_second_attempt(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = {"count": 0}
 
-    async def fake_run_completion(
-        cls,
+    async def fake_call_llm(
         client: Any,
         system_prompt: str,
         user_prompt: str,
@@ -107,7 +105,7 @@ async def test_complete_with_retries_returns_second_attempt(monkeypatch: pytest.
         return content, entry_ids
 
     helper = CoachAgent.llm_helper
-    monkeypatch.setattr(CoachAgent, "_run_completion", classmethod(fake_run_completion))
+    monkeypatch.setattr(helper, "call_llm", staticmethod(fake_call_llm))
     monkeypatch.setattr(helper, "_parse_fallback_content", classmethod(fake_parse))
 
     result = await CoachAgent._complete_with_retries(
@@ -160,8 +158,7 @@ def test_extract_choice_content_variants() -> None:
 async def test_complete_with_retries_length_with_content(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = {"count": 0}
 
-    async def fake_run_completion(
-        cls,
+    async def fake_call_llm(
         client: Any,
         system_prompt: str,
         user_prompt: str,
@@ -182,7 +179,7 @@ async def test_complete_with_retries_length_with_content(monkeypatch: pytest.Mon
         return content, entry_ids
 
     helper = CoachAgent.llm_helper
-    monkeypatch.setattr(CoachAgent, "_run_completion", classmethod(fake_run_completion))
+    monkeypatch.setattr(helper, "call_llm", staticmethod(fake_call_llm))
     monkeypatch.setattr(helper, "_parse_fallback_content", classmethod(fake_parse))
 
     result = await CoachAgent._complete_with_retries(
@@ -204,8 +201,7 @@ async def test_complete_with_retries_length_with_content(monkeypatch: pytest.Mon
 async def test_complete_with_retries_stops_after_two_empty(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = {"count": 0}
 
-    async def fake_run_completion(
-        cls,
+    async def fake_call_llm(
         client: Any,
         system_prompt: str,
         user_prompt: str,
@@ -226,7 +222,7 @@ async def test_complete_with_retries_stops_after_two_empty(monkeypatch: pytest.M
         return "", []
 
     helper = CoachAgent.llm_helper
-    monkeypatch.setattr(CoachAgent, "_run_completion", classmethod(fake_run_completion))
+    monkeypatch.setattr(helper, "call_llm", staticmethod(fake_call_llm))
     monkeypatch.setattr(helper, "_parse_fallback_content", classmethod(fake_parse))
 
     result = await CoachAgent._complete_with_retries(

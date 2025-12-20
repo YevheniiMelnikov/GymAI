@@ -61,7 +61,12 @@ class Settings(BaseSettings):
     DB_PROVIDER: Annotated[str, Field(default="postgres", description="Database provider type (for internal use).")]
 
     # --- Vector Database ---
-    VECTORDATABASE_PROVIDER: Annotated[str, Field(default="pgvector", description="Vector database provider (e.g., 'pgvector').")]
+    VECTOR_DB_PROVIDER: Annotated[str, Field(default="qdrant", description="Vector database provider (e.g., 'qdrant').")]
+    VECTOR_DB_URL_OVERRIDE: Annotated[str | None, Field(alias="VECTOR_DB_URL", default=None, description="Explicit connection URL for the vector database. Overrides provider-derived defaults.")]
+    VECTOR_DB_KEY: Annotated[str, Field(default="", description="API key for vector database access (e.g., Qdrant Cloud).")]
+    QDRANT_HOST: Annotated[str, Field(default="qdrant", description="Hostname of the Qdrant service within Docker networks.")]
+    QDRANT_HTTP_PORT: Annotated[int, Field(default=6333, description="HTTP port of the Qdrant service.")]
+    QDRANT_GRPC_PORT: Annotated[int, Field(default=6334, description="gRPC port of the Qdrant service.")]
 
     # --- Graph Database ---
     GRAPH_DATABASE_PROVIDER: Annotated[str, Field(default="networkx", description="Graph database provider (e.g., 'networkx', 'neo4j').")]
@@ -105,10 +110,24 @@ class Settings(BaseSettings):
     AI_COACH_REFRESH_PASSWORD: Annotated[str, Field(default="password", description="Password for AI Coach knowledge base refresh endpoint.")]
     AI_COACH_MAX_TOOL_CALLS: Annotated[int, Field(default=5, description="Maximum number of tool calls an AI agent can make in one turn.")]
     AI_COACH_REQUEST_TIMEOUT: Annotated[int, Field(default=60, description="Default timeout for requests to the AI Coach in seconds.")]
+    AI_COACH_MAX_RUN_SECONDS: Annotated[float, Field(default=200.0, description="Time budget in seconds for a single AI coach agent run before aborting.")]
     AI_COACH_GLOBAL_PROJECTION_TIMEOUT: Annotated[float, Field(default=15.0, description="Timeout for global projection operations in seconds.")]
+    AI_COACH_GRAPH_ATTACH_TIMEOUT: Annotated[
+        float,
+        Field(default=45.0, description="Maximum time to wait for the graph engine to become reachable during startup."),
+    ]
     AI_COACH_DEFAULT_TOOL_TIMEOUT: Annotated[float, Field(default=3.0, description="Default timeout for AI agent tool calls in seconds.")]
-    AI_COACH_SEARCH_TIMEOUT: Annotated[float, Field(default=12.0, description="Timeout for search tool calls in seconds.")]
-    AI_COACH_HISTORY_TIMEOUT: Annotated[float, Field(default=6.0, description="Timeout for retrieving user history in seconds.")]
+    AI_COACH_SEARCH_TIMEOUT: Annotated[float, Field(default=180.0, description="Timeout for search tool calls in seconds.")]
+    AI_COACH_MEMIFY_DELAY_SECONDS: Annotated[
+        float, Field(default=3600.0, description="Delay in seconds before scheduling Cognee memify for profile datasets.")
+    ]
+    AI_COACH_CHAT_SUMMARY_PAIR_LIMIT: Annotated[int, Field(default=10, description="Number of client/coach message pairs required before summarizing chat history.")]
+    AI_COACH_CHAT_SUMMARY_MAX_TOKENS: Annotated[int, Field(default=400, description="Max tokens for the chat summary LLM request.")]
+    AI_COACH_REDIS_CHAT_DB: Annotated[int, Field(default=2, description="Redis database index used for cached chat history summaries.")]
+    AI_COACH_REDIS_STATE_DB: Annotated[int, Field(default=3, description="Redis database index used for AI coach idempotency and delivery state.")]
+    AI_COACH_COGNEE_SESSION_TTL: Annotated[int, Field(default=0, description="TTL in seconds for Cognee session cache; 0 disables expiry.")]
+    AI_COACH_LOG_PAYLOADS: Annotated[bool, Field(default=False, description="Log AI coach payloads and sources in debug logs when enabled.")]
+    AI_COACH_HISTORY_TIMEOUT: Annotated[float, Field(default=180.0, description="Timeout for retrieving user history in seconds.")]
     AI_COACH_PROGRAM_HISTORY_TIMEOUT: Annotated[float, Field(default=6.0, description="Timeout for retrieving workout program history in seconds.")]
     AI_COACH_SAVE_TIMEOUT: Annotated[float, Field(default=30.0, description="Timeout for saving data from the AI coach in seconds.")]
     AI_COACH_ATTACH_GIFS_MIN_BUDGET: Annotated[float, Field(default=10.0, description="Minimum time budget in seconds to allow attaching GIFs.")]
@@ -153,6 +172,7 @@ class Settings(BaseSettings):
     KNOWLEDGE_BASE_FOLDER_ID: Annotated[str, Field(default="", description="Google Drive folder ID for knowledge base documents.")]
     KNOWLEDGE_REFRESH_INTERVAL: int = Field(default=60 * 60, description="Interval in seconds to refresh the knowledge base from the source.")
     KNOWLEDGE_REFRESH_START_DELAY: int = Field(default=180, description="Delay in seconds before starting the first knowledge base refresh.")
+    COGNEE_SEARCH_MODE: Annotated[str, Field(default="GRAPH_COMPLETION_CONTEXT_EXTENSION", description="Search type for Cognee queries (e.g., 'GRAPH_COMPLETION_CONTEXT_EXTENSION').")]
 
     EXERCISE_GIF_BUCKET: Annotated[str, Field(default="exercises_guide", description="Google Cloud Storage bucket name used for exercise GIF assets.")]
     EXERCISE_GIF_BASE_URL: Annotated[str, Field(default="https://storage.googleapis.com", description="Base URL for the exercise GIF storage.")]
@@ -195,7 +215,7 @@ class Settings(BaseSettings):
     SMALL_SUBSCRIPTION_PRICE: Decimal = Field(default=Decimal("500"), description="Price in credits for a 1 month AI coach subscription.")
     MEDIUM_SUBSCRIPTION_PRICE: Decimal = Field(default=Decimal("2400"), description="Price in credits for a 6 months AI coach subscription.")
     LARGE_SUBSCRIPTION_PRICE: Decimal = Field(default=Decimal("4750"), description="Price in credits for a 1 year AI coach subscription.")
-    ASK_AI_PRICE: Annotated[int, Field(default=10, description="Price in credits for a single 'Ask AI' question.")]
+    ASK_AI_PRICE: Annotated[int, Field(default=25, description="Price in credits for a single 'Ask AI' question.")]
 
     # --- Payments ---
     PAYMENT_PRIVATE_KEY: Annotated[str, Field(default="", description="Private key for the payment provider API.")]
@@ -234,6 +254,7 @@ class Settings(BaseSettings):
     EMAIL: Annotated[str, Field(default="", description="Contact email address.")]
     ADMIN_ID: Annotated[str, Field(default="", description="Telegram user ID of the primary administrator.")]
     BACKUP_RETENTION_DAYS: int = Field(default=30, description="Number of days to retain database and storage backups.")
+    ENABLE_KB_BACKUPS: bool = Field(default=False, description="Enable scheduled backups for Neo4j and Qdrant.")
 
     # --- Admin Credentials ---
     DJANGO_ADMIN: Annotated[str, Field(default="admin", description="Username for the Django admin panel superuser.")]
@@ -512,9 +533,16 @@ class Settings(BaseSettings):
         return urlunsplit((scheme, netloc, "/", "", ""))
 
     @property
-    def VECTORDATABASE_URL(self) -> str:
+    def VECTOR_DB_URL(self) -> str:
         """Construct the full connection URL for the vector database."""
-        return f"postgresql+psycopg2://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
+        if self.VECTOR_DB_URL_OVERRIDE:
+            return self.VECTOR_DB_URL_OVERRIDE
+        provider = (self.VECTOR_DB_PROVIDER or "").lower()
+        if provider == "qdrant":
+            host = self.QDRANT_HOST or "qdrant"
+            port = self.QDRANT_HTTP_PORT or 6333
+            return f"http://{host}:{port}"
+        raise RuntimeError(f"Unsupported vector database provider: {self.VECTOR_DB_PROVIDER!r}")
 
     @property
     def GRAPH_DATABASE_URL(self) -> str:

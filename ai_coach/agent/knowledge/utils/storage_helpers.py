@@ -164,7 +164,6 @@ def patch_local_file_storage(root: Path) -> None:
     allow_package_storage = os.getenv("COGNEE_ALLOW_PACKAGE_STORAGE", "0") == "1"
 
     original_open = getattr(local_storage_cls, "open", None)
-    storage_attr = getattr(local_storage_cls, "storage_path", None) or getattr(local_storage_cls, "STORAGE_PATH", None)
 
     if hasattr(local_storage_cls, "storage_path"):
         setattr(local_storage_cls, "storage_path", root)
@@ -192,6 +191,9 @@ def patch_local_file_storage(root: Path) -> None:
                         return (root / relative).resolve()
                 except ValueError:
                     continue
+            # Fallback for absolute paths outside known roots:
+            # We flatten the path to put it directly in 'root'.
+            # This handles cases where Cognee uses arbitary paths.
             return (root / raw_path.name).resolve()
         return (root / raw_path).resolve()
 
@@ -199,32 +201,47 @@ def patch_local_file_storage(root: Path) -> None:
         logger.info(
             "cognee_storage localfilestorage_no_open class={} storage_path={}",
             local_storage_cls.__name__,
-            storage_attr,
+            getattr(local_storage_cls, "storage_path", None) or getattr(local_storage_cls, "STORAGE_PATH", None),
         )
         setattr(local_storage_cls, "_gymbot_storage_patched", True)
         return
 
     def open_with_project_storage(self: Any, file_path: str, mode: str = "r", **kwargs: Any) -> Any:
         raw_path = Path(file_path)
+        # Fix: map absolute paths to root/relative structure
         target_path = _remap_path(raw_path)
+
+        # Check for write modes including '+' based on standard open() logic
         write_mode = any(flag in mode for flag in ("w", "a", "x", "+"))
+
+        # Ensure parent directories exist (crucial for hierarchical datasets)
         if write_mode:
             target_path.parent.mkdir(parents=True, exist_ok=True)
+
         try:
             return target_path.open(mode, **kwargs)
         except FileNotFoundError:
             if allow_package_storage and not write_mode and callable(original_open):
-                logger.warning("cognee_storage package_fallback file={} root={}", file_path, root)
-                return original_open(self, file_path, mode, **kwargs)
+                # If not found in our storage, try falling back to original logic (e.g. package data)
+                try:
+                    logger.warning("cognee_storage package_fallback file={} root={}", file_path, root)
+                    return original_open(self, file_path, mode, **kwargs)
+                except Exception:
+                    pass
             raise
 
     setattr(local_storage_cls, "open", open_with_project_storage)
+
+    # Restore storage_path override if getting attributes, but log what we do
+    if hasattr(local_storage_cls, "storage_path"):
+        setattr(local_storage_cls, "storage_path", root)
+
     setattr(local_storage_cls, "_gymbot_storage_patched", True)
 
     logger.info(
         "cognee_storage patched_local_file_storage class={} root={} storage_path={} allow_package_storage={}",
         local_storage_cls.__name__,
         root,
-        storage_attr,
+        getattr(local_storage_cls, "storage_path", None),
         allow_package_storage,
     )

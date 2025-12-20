@@ -10,8 +10,11 @@ from core.ai_coach.state.plan import AiPlanState
 from .maintenance import (  # noqa: F401
     ai_coach_echo,
     ai_coach_worker_report,
+    cleanup_profile_knowledge,
+    memify_profile_datasets,
     prune_knowledge_base,
     refresh_external_knowledge,
+    sync_profile_knowledge,
 )
 from .plans import (  # noqa: F401
     _generate_ai_workout_plan_impl,
@@ -66,4 +69,7 @@ __all__ = (
     "httpx",
     "prune_knowledge_base",
     "refresh_external_knowledge",
+    "cleanup_profile_knowledge",
+    "sync_profile_knowledge",
+    "memify_profile_datasets",
 )

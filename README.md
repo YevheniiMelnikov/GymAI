@@ -24,7 +24,7 @@ GymBot is a Dockerized platform that includes a Telegram bot (aiogram), API (Dja
 * **AI Coach** (FastAPI) – Cognee-powered retrieval + generation.
 * **Celery + Beat** – background jobs and schedules (AI Coach tasks run on dedicated `ai_coach_worker`).
 * **Redis** – cache, queues, idempotency.
-* **PostgreSQL (+pgvector)** – relational storage and vector embeddings.
+* **PostgreSQL + Qdrant** – relational storage via PostgreSQL while Qdrant handles vector embeddings.
 * **Nginx** – reverse proxy and TLS termination.
 
 **Key directories**
@@ -147,6 +147,8 @@ If Celery prints connection errors, verify that `RABBITMQ_URL` and `REDIS_URL` p
 | `pg_backup`                        | daily 02:00                        | dump Postgres database                            |
 | `redis_backup`                     | daily 02:01                        | export Redis data                                 |
 | `cleanup_backups`                  | daily 02:02                        | remove backups older than `BACKUP_RETENTION_DAYS` |
+| `neo4j_backup`                     | daily 02:03                        | export Neo4j graph snapshot (APOC JSON, when enabled) |
+| `qdrant_backup`                    | daily 02:04                        | export Qdrant collection snapshots (when enabled) |
 | `deactivate_expired_subscriptions` | daily 01:00                        | disable subscriptions past end date               |
 | `warn_low_credits`                 | daily 00:00                        | notify clients with insufficient credits          |
 | `charge_due_subscriptions`         | daily 00:30                        | deduct credits for active plans                   |
@@ -166,10 +168,26 @@ To refresh external knowledge (e.g., documents from Google Drive), Celery calls 
 
 * `KNOWLEDGE_REFRESH_INTERVAL` – periodic rebuild interval in seconds
 * `AI_COACH_TIMEOUT` – timeout for HTTP calls to the AI coach
+* `AI_COACH_COGNEE_TELEMETRY` – set to `1` to enable verbose Cognee telemetry logs (default: `0`)
+* `AI_COACH_LOG_PAYLOADS` – set to `1` to log AI coach answer payloads/sources in DEBUG (default: `0`)
+* `AI_COACH_CHAT_SUMMARY_PAIR_LIMIT` – number of client/coach message pairs before summarizing cached chat
+* `AI_COACH_CHAT_SUMMARY_MAX_TOKENS` – max tokens for the chat summary LLM request
+* `AI_COACH_REDIS_CHAT_DB` – Redis DB index for Cognee session cache (default: `2`)
+* `AI_COACH_REDIS_STATE_DB` – Redis DB index for AI coach idempotency state (default: `3`)
+* `AI_COACH_COGNEE_SESSION_TTL` – session TTL in seconds for Cognee cache (default: `0` disables expiry)
+* `ENABLE_KB_BACKUPS` – enable scheduled Neo4j/Qdrant backups (default: `false`)
 
 **Other maintenance**
 
 * `BACKUP_RETENTION_DAYS` – retention period for Postgres and Redis backups
+* `ENABLE_KB_BACKUPS` – schedule Neo4j/Qdrant backups when true
+
+**Redis DB usage**
+
+* DB 0 – bot FSM state (aiogram)
+* DB 1 – bot cache
+* DB 2 – AI coach Cognee session cache (keys like `agent_sessions:{user_id}:{session_id}`)
+* DB 3 – AI coach idempotency/delivery state
 
 ---
 
@@ -299,4 +317,10 @@ Create `docker/.env` from `docker/.env.example` and set the following minimum va
 * `EXERCISE_GIF_BASE_URL` – base URL for those assets (default `https://storage.googleapis.com`).
 * `LLM_API_KEY` – API key for both the Pydantic AI agent and Cognee embedding calls. OpenRouter provides a single token that covers both LLM generations and embedding generation, so no separate key is needed.
 
+* `VECTOR_DB_PROVIDER` – defaults to `qdrant`. Override `VECTOR_DB_URL` if you need a bespoke connection string.
+* `VECTOR_DB_URL` – defaults to `http://qdrant:6333` in Docker.
+* `VECTOR_DB_KEY` – optional API key (Qdrant Cloud).
+
 `WEBHOOK_URL` is auto-derived as `${WEBHOOK_HOST}${WEBHOOK_PATH}` unless explicitly set. See `config/app_settings.py` for all available options.
+
+> Qdrant is used via the community adapter; ensure the `cognee-community-vector-adapter-qdrant` package is installed and the `VECTOR_DB_*` settings point at your Qdrant instance.

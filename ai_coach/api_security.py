@@ -2,8 +2,8 @@ import hmac
 import time
 from typing import Any
 
-from fastapi import HTTPException, Request  # pyrefly: ignore[import-error]
-from fastapi.security import HTTPBasicCredentials  # pyrefly: ignore[import-error]
+from fastapi import Depends, HTTPException, Request  # pyrefly: ignore[import-error]
+from fastapi.security import HTTPBasic, HTTPBasicCredentials  # pyrefly: ignore[import-error]
 from loguru import logger  # pyrefly: ignore[import-error]
 
 import config.app_settings as app_settings
@@ -19,14 +19,31 @@ def _get_refresh_settings() -> Any:
     return getattr(app_settings, "settings", settings)
 
 
-def validate_refresh_credentials(credentials: HTTPBasicCredentials) -> None:
+_basic_auth = HTTPBasic(auto_error=False)
+
+
+def validate_refresh_credentials(
+    credentials: HTTPBasicCredentials | None = Depends(_basic_auth),
+) -> HTTPBasicCredentials | None:
     cfg = _get_refresh_settings()
-    username = str(credentials.username or "")
-    password = str(credentials.password or "")
     expected_user = str(getattr(cfg, "AI_COACH_REFRESH_USER", "") or "")
     expected_pass = str(getattr(cfg, "AI_COACH_REFRESH_PASSWORD", "") or "")
+    env_mode = str(getattr(cfg, "ENVIRONMENT", "development") or "").lower()
+    allow_insecure = env_mode != "production"
+    if not expected_user and not expected_pass:
+        if allow_insecure:
+            if not getattr(validate_refresh_credentials, "_warned_missing", False):
+                logger.warning("AI coach refresh credentials missing; allowing refresh in {} mode", env_mode)
+                setattr(validate_refresh_credentials, "_warned_missing", True)
+            return credentials
+        raise HTTPException(status_code=503, detail="Refresh auth is not configured")
+    if credentials is None:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    username = str(credentials.username or "")
+    password = str(credentials.password or "")
     if username != expected_user or password != expected_pass:
         raise HTTPException(status_code=401, detail="Unauthorized")
+    return credentials
 
 
 async def require_hmac(request: Request) -> None:

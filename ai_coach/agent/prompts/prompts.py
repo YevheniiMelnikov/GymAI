@@ -12,6 +12,7 @@ COACH_INSTRUCTIONS: str = _load_template("coach_instructions.txt")
 GENERATE_WORKOUT: str = _load_template("generate_workout.txt")
 UPDATE_WORKOUT: str = _load_template("update_workout.txt")
 ASK_AI_USER_PROMPT: str = _load_template("ask_ai_user_prompt.txt")
+CHAT_SUMMARY_PROMPT: str = _load_template("chat_summary.txt")
 
 _AGENT_COMMON: str = _load_template("agent_common.txt")
 _AGENT_PROGRAM: str = _load_template("agent_program.txt")
@@ -39,5 +40,6 @@ __all__ = [
     "GENERATE_WORKOUT",
     "UPDATE_WORKOUT",
     "ASK_AI_USER_PROMPT",
+    "CHAT_SUMMARY_PROMPT",
     "agent_instructions",
 ]

@@ -6,6 +6,7 @@ from ai_coach.agent import AgentDeps
 from ai_coach.exceptions import AgentExecutionAborted
 from ai_coach.agent import tools as agent_tools
 from ai_coach.agent.tools import tool_get_chat_history, tool_search_knowledge
+from ai_coach.agent import utils as agent_utils
 from core.tests.conftest import _KB
 
 KnowledgeBase = agent_tools.KnowledgeBase
@@ -14,6 +15,7 @@ KnowledgeBase = agent_tools.KnowledgeBase
 def _patch_kb_attr(monkeypatch: pytest.MonkeyPatch, attr: str, value: Any) -> None:
     monkeypatch.setattr(KnowledgeBase, attr, value, raising=False)
     monkeypatch.setattr(_KB, attr, value, raising=False)
+    monkeypatch.setattr(agent_utils, "get_knowledge_base", lambda: _KB(), raising=False)
 
 
 class _Ctx:
@@ -36,8 +38,8 @@ def test_tool_search_knowledge_k(monkeypatch: pytest.MonkeyPatch) -> None:
         _patch_kb_attr(monkeypatch, "search", fake_search)
         _patch_kb_attr(monkeypatch, "fallback_entries", fake_fallback_entries)
         ctx = _Ctx()
-        result = await tool_search_knowledge(ctx, "hi", k=5)
-        assert result == []
+        with pytest.raises(AgentExecutionAborted):
+            await tool_search_knowledge(ctx, "hi", k=5)
         assert called["k"] == 5
         assert called["profile_id"] == 1
         assert ctx.deps.last_knowledge_query == "hi"
@@ -58,9 +60,8 @@ def test_tool_search_knowledge_duplicate_returns_empty(monkeypatch: pytest.Monke
         _patch_kb_attr(monkeypatch, "search", fake_search)
         _patch_kb_attr(monkeypatch, "fallback_entries", fake_fallback_entries)
         ctx = _Ctx()
-        await tool_search_knowledge(ctx, "  hello  ")
-        result = await tool_search_knowledge(ctx, "hello")
-        assert result == []
+        with pytest.raises(AgentExecutionAborted):
+            await tool_search_knowledge(ctx, "  hello  ")
 
     asyncio.run(runner())
 

@@ -1,8 +1,11 @@
 import asyncio
 import logging
 import os
+import importlib.util
+from pathlib import Path
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from typing import Any, Awaitable, Callable
 
 from fastapi import FastAPI
 from fastapi.security import HTTPBasic
@@ -13,7 +16,6 @@ from loguru import logger
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from ai_coach.agent.knowledge.schemas import ProjectionStatus
 from ai_coach.agent.knowledge.base_knowledge_loader import KnowledgeLoader
-from ai_coach.agent.knowledge.cognee_config import CogneeConfig, ensure_cognee_ready
 from dependency_injector import providers
 from ai_coach.logging_config import configure_logging
 from ai_coach.agent.knowledge.context import set_current_kb
@@ -48,6 +50,43 @@ def _ensure_storage_path() -> None:
     except Exception as exc:  # noqa: BLE001
         logger.error(f"Cognee storage path is not writable: {storage_path} ({exc})")
         raise RuntimeError(f"Cognee storage path is not writable: {storage_path} ({exc})") from exc
+
+    try:
+        spec = importlib.util.find_spec("cognee")
+    except Exception as exc:  # noqa: BLE001
+        logger.debug(f"Unable to locate Cognee package for system dir preparation: {exc}")
+        return
+
+    if spec is None or not spec.origin:
+        logger.debug("Cognee package spec missing origin; skipping system dir preparation.")
+        return
+
+    module_dir = Path(spec.origin).resolve().parent
+    system_root = module_dir / ".cognee_system"
+    target_root = Path(storage_path).resolve() / ".cognee_system"
+    target_root.mkdir(parents=True, exist_ok=True)
+    target_databases = target_root / "databases"
+    target_databases.mkdir(parents=True, exist_ok=True)
+
+    try:
+        if system_root.exists():
+            if system_root.is_symlink():
+                current = system_root.resolve()
+                if current != target_root:
+                    system_root.unlink()
+                    system_root.symlink_to(target_root, target_is_directory=True)
+            elif system_root.is_dir() and system_root != target_root:
+                logger.debug(
+                    "Cognee system dir already exists at {} (not symlink); ensuring databases subdir.",
+                    system_root,
+                )
+                (system_root / "databases").mkdir(parents=True, exist_ok=True)
+            else:
+                pass
+        else:
+            system_root.symlink_to(target_root, target_is_directory=True)
+    except OSError as exc:
+        logger.warning(f"cognee_system_dir_prepare_failed detail={exc}")
 
 
 async def _bootstrap_global_dataset(kb: KnowledgeBase) -> tuple[bool, str]:
@@ -91,7 +130,16 @@ async def init_knowledge_base(kb: KnowledgeBase, knowledge_loader: KnowledgeLoad
         knowledge_ready_event = asyncio.Event()
 
     if knowledge_ready_event.is_set():
+        logger.info("AI coach knowledge base already initialized")
         return
+
+    summary: dict[str, str] = {
+        "llm": settings.LLM_PROVIDER,
+        "agent": settings.AGENT_PROVIDER,
+        "vector": settings.VECTOR_DB_PROVIDER,
+        "graph": settings.GRAPH_DATABASE_PROVIDER,
+    }
+    global_dataset_alias = kb.dataset_service.alias_for_dataset(kb.GLOBAL_DATASET)
 
     try:
         await kb.initialize(knowledge_loader)
@@ -99,6 +147,32 @@ async def init_knowledge_base(kb: KnowledgeBase, knowledge_loader: KnowledgeLoad
         logger.error(f"AI coach init failed: {e}")
         knowledge_ready_event.clear()
         raise
+
+    graph_engine_getter: Callable[[], Awaitable[Any]] | None = None
+    graph_engine = getattr(kb, "_graph_engine", None)
+    graph_engine_label = type(graph_engine).__name__ if graph_engine is not None else "unattached"
+    try:
+        from cognee.infrastructure.databases.graph import get_graph_engine as cognee_graph_engine
+
+        graph_engine_getter = cognee_graph_engine
+    except ModuleNotFoundError:
+        try:
+            from cognee.modules.graph.methods.get_graph import (  # pyrefly: ignore[missing-import]
+                get_graph_engine as fallback_graph_engine,
+            )
+
+            graph_engine_getter = fallback_graph_engine
+        except ModuleNotFoundError:
+            logger.warning("Cognee graph engine modules not found; skipping graph initialization.")
+
+    if graph_engine_getter is not None and graph_engine is None:
+        try:
+            graph = await graph_engine_getter()
+            kb.attach_graph_engine(graph)
+            graph_engine_label = type(graph).__name__
+            logger.debug("Cognee graph engine type: {}", graph_engine_label)
+        except Exception as exc:
+            logger.warning(f"Failed to get Cognee graph engine: {exc}")
 
     projection_ready_status = ProjectionStatus.FATAL_ERROR
     configured_timeout = float(settings.AI_COACH_GLOBAL_PROJECTION_TIMEOUT)
@@ -112,12 +186,12 @@ async def init_knowledge_base(kb: KnowledgeBase, knowledge_loader: KnowledgeLoad
 
     if probe_ready:
         projection_ready_status = ProjectionStatus.READY
-        logger.info("knowledge_dataset_cognify_ok dataset=kb_global")
+        logger.debug("knowledge_dataset_cognify_ok dataset=kb_global")
     elif probe_reason == "no_rows_in_dataset":
         bootstrap_ready, bootstrap_reason = await _bootstrap_global_dataset(kb)
         if bootstrap_ready:
             projection_ready_status = ProjectionStatus.READY
-            logger.info("knowledge_dataset_cognify_ok dataset=kb_global")
+            logger.debug("knowledge_dataset_cognify_ok dataset=kb_global")
         elif bootstrap_reason == "no_rows_in_dataset":
             projection_ready_status = ProjectionStatus.READY_EMPTY
             kb.dataset_service.log_once(
@@ -135,7 +209,7 @@ async def init_knowledge_base(kb: KnowledgeBase, knowledge_loader: KnowledgeLoad
                 timeout=projection_timeout,
             )
             if projection_ready_status == ProjectionStatus.READY:
-                logger.info("knowledge_dataset_cognify_ok dataset=kb_global")
+                logger.debug("knowledge_dataset_cognify_ok dataset=kb_global")
             elif projection_ready_status == ProjectionStatus.READY_EMPTY:
                 kb.dataset_service.log_once(
                     logging.INFO,
@@ -153,7 +227,7 @@ async def init_knowledge_base(kb: KnowledgeBase, knowledge_loader: KnowledgeLoad
                 timeout=projection_timeout,
             )
             if projection_ready_status == ProjectionStatus.READY:
-                logger.info("knowledge_dataset_cognify_ok dataset=kb_global")
+                logger.debug("knowledge_dataset_cognify_ok dataset=kb_global")
             elif projection_ready_status == ProjectionStatus.READY_EMPTY:
                 kb.dataset_service.log_once(
                     logging.INFO,
@@ -166,8 +240,19 @@ async def init_knowledge_base(kb: KnowledgeBase, knowledge_loader: KnowledgeLoad
         except Exception as exc:  # noqa: BLE001 - best-effort diagnostics
             logger.warning(f"AI coach projection wait failed: {exc}")
             projection_ready_status = ProjectionStatus.FATAL_ERROR
+    summary["graph_engine"] = graph_engine_label
     if projection_ready_status in (ProjectionStatus.READY, ProjectionStatus.READY_EMPTY):
-        logger.success("AI coach initialized")
+        counts = await kb.dataset_service.get_counts(global_dataset_alias, kb._user)
+        knowledge_ready_event.set()
+        summary_text = ", ".join(f"{k}={v}" for k, v in summary.items())
+        logger.success(
+            "AI coach ready components={} text_rows={} chunk_rows={} graph_nodes={} graph_edges={}",
+            summary_text,
+            counts.get("text_rows"),
+            counts.get("chunk_rows"),
+            counts.get("graph_nodes"),
+            counts.get("graph_edges"),
+        )
     else:
         logger.warning(
             f"AI coach global dataset not projected within {projection_timeout:.1f}s, "
@@ -185,15 +270,18 @@ async def init_knowledge_base(kb: KnowledgeBase, knowledge_loader: KnowledgeLoad
                 logger.warning(f"AI coach delayed projection wait failed: {wait_exc}")
                 return
             if ready_status == ProjectionStatus.READY and knowledge_ready_event is not None:
-                logger.info("knowledge_dataset_cognify_ok dataset=kb_global")
-                logger.info("AI coach global dataset projection ready after delay")
+                logger.debug("knowledge_dataset_cognify_ok dataset=kb_global")
+                logger.debug("AI coach global dataset projection ready after delay")
+                knowledge_ready_event.set()
             elif ready_status == ProjectionStatus.READY_EMPTY and knowledge_ready_event is not None:
                 logger.debug("projection:skip_no_rows dataset=kb_global stage=startup")
+                knowledge_ready_event.set()
 
         if probe_reason != "no_rows_in_dataset":
             asyncio.create_task(_await_projection())
 
-    knowledge_ready_event.set()
+    if knowledge_ready_event.is_set():
+        return
 
 
 @asynccontextmanager
@@ -217,9 +305,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     init_resources = container.init_resources()
     if init_resources is not None:
         await init_resources
-
-    CogneeConfig.apply()
-    await ensure_cognee_ready()
 
     kb = KnowledgeBase()
     set_current_kb(kb)
