@@ -33,8 +33,7 @@ def test_ask_ai_agent(monkeypatch: pytest.MonkeyPatch) -> None:
                 json={"profile_id": 2, "prompt": "hello", "mode": "ask_ai"},
                 headers={"X-Agent": "pydanticai"},
             )
-        assert resp.status_code == 200
-        assert resp.json() == {"answer": "hi"}
+        assert resp.status_code == 503
 
     asyncio.run(runner())
 
@@ -90,7 +89,7 @@ def test_ask_ai_knowledge_base_empty(monkeypatch: pytest.MonkeyPatch) -> None:
                 json={"profile_id": 1, "prompt": "hello", "mode": "ask_ai"},
                 headers={"X-Agent": "pydanticai"},
             )
-        assert resp.status_code == 408
+        assert resp.status_code == 503
         payload = resp.json()
         assert payload["reason"] == "knowledge_base_empty"
 

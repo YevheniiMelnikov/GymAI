@@ -30,7 +30,10 @@ def test_generate_plan_returns_program(monkeypatch: pytest.MonkeyPatch) -> None:
             )
 
         monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: types.SimpleNamespace(run=fake_run)))
-        monkeypatch.setattr(CoachAgent, "_message_history", staticmethod(lambda profile_id: [object(), object()]))
+        async def fake_history(cls, profile_id: int) -> list[object]:
+            return [object(), object()]
+
+        monkeypatch.setattr(CoachAgent, "_load_history_messages", classmethod(fake_history))
         deps = AgentDeps(profile_id=1)
         result = await CoachAgent.generate_workout_plan(
             "hi", deps, workout_location=WorkoutLocation.HOME, output_type=Program

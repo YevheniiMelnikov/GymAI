@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 import time
+import warnings
 from dataclasses import asdict, is_dataclass
 from types import FrameType
 from typing import Any, Dict, MutableMapping
@@ -91,6 +92,14 @@ class CogneeTelemetryFilter(logging.Filter):
         except Exception:  # noqa: BLE001 - fallback best-effort
             return True
         lowered = message.lower()
+        if any(
+            token in lowered
+            for token in (
+                "successfully connected to redis",
+                "successfully saved q&a to session cache",
+            )
+        ):
+            return record.levelno < logging.INFO
         if record.name != "logging" and "run_tasks" not in lowered and "pipeline run" not in lowered:
             return True
         if any(
@@ -106,6 +115,20 @@ class CogneeTelemetryFilter(logging.Filter):
         ):
             return record.levelno < logging.INFO
         if message.startswith("{'event':") and "pipeline run" in lowered:
+            return record.levelno < logging.INFO
+        return True
+
+
+class AiohttpSessionFilter(logging.Filter):
+    """Suppress aiohttp unclosed session warnings in INFO logs."""
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: D401
+        try:
+            message = record.getMessage()
+        except Exception:  # noqa: BLE001 - fallback best-effort
+            return True
+        lowered = message.lower()
+        if "unclosed client session" in lowered or "unclosed connector" in lowered:
             return record.levelno < logging.INFO
         return True
 
@@ -139,10 +162,16 @@ def configure_logging() -> None:
 
     logging.getLogger("uvicorn").setLevel(logging.WARNING)
     logging.getLogger("cognee").setLevel(logging.WARNING)
+    warnings.filterwarnings(
+        "ignore",
+        message="Api key is used with an insecure connection.",
+        category=UserWarning,
+    )
 
     intercept_handler = InterceptHandler()
     intercept_handler.addFilter(sampling_filter)
     intercept_handler.addFilter(CogneeTelemetryFilter(telemetry_enabled))
+    intercept_handler.addFilter(AiohttpSessionFilter())
     logging.basicConfig(handlers=[intercept_handler], level=logging.INFO, force=True)
 
     kb_logger_names = (

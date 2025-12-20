@@ -199,7 +199,7 @@ async def tool_search_knowledge(
             f"knowledge_search_aborted profile_id={profile_id} "
             f"query='{normalized_query[:80]}' reason=knowledge_base_empty"
         )
-        return _cache_result(deps, tool_name, [], cache_key=cache_key)
+        raise AgentExecutionAborted("knowledge_base_empty", reason="knowledge_base_empty")
     if deps.last_knowledge_query == normalized_query and deps.last_knowledge_empty:
         logger.debug(
             f"knowledge_search_repeat profile_id={profile_id} query='{normalized_query[:80]}' reason=empty_previous"
@@ -252,7 +252,7 @@ async def tool_search_knowledge(
                 normalized_query[:80],
             )
         )
-        return _cache_result(deps, tool_name, [], cache_key=cache_key)
+        raise AgentExecutionAborted("knowledge_base_empty", reason="knowledge_base_empty")
 
     snippets: list[Any] = []
     try:
@@ -265,6 +265,8 @@ async def tool_search_knowledge(
             ),
             timeout=timeout,
         )
+    except AgentExecutionAborted:
+        raise
     except TimeoutError:
         logger.info(
             "knowledge_search_timeout profile_id={} query='{}' timeout={:.1f}".format(
@@ -311,26 +313,17 @@ async def tool_get_chat_history(
         limited = list(cached_history[:limit]) if limit is not None else list(cached_history)
         return limited
 
-    if deps.cached_history:
-        limited = list(deps.cached_history[:limit]) if limit is not None else list(deps.cached_history)
-        return _cache_result(deps, tool_name, limited, cache_key=cache_key)
-
-    history: list[str] = deps.cached_history or []
-    try:
-        if deps.cached_history is None:
+    history = deps.cached_history
+    if history is None:
+        try:
             history = await wait_for(kb.get_message_history(profile_id, limit), timeout=timeout)
-            deps.cached_history = history
-        else:
-            history = deps.cached_history
-    except TimeoutError:
-        logger.info(f"chat_history_timeout profile_id={profile_id} tool=tool_get_chat_history timeout={timeout}")
-        history = deps.cached_history or []
+        except TimeoutError:
+            logger.info(f"chat_history_timeout profile_id={profile_id} tool=tool_get_chat_history timeout={timeout}")
+            history = []
+        except Exception as exc:
+            logger.error(f"Error getting chat history: {exc}")
+            raise
         deps.cached_history = history
-        limited = list(history[:limit]) if limit is not None else list(history)
-        return _cache_result(deps, tool_name, limited, cache_key=cache_key)
-    except Exception as e:
-        logger.error(f"Error getting chat history: {e}")
-        raise
 
     limited = list(history[:limit]) if limit is not None else list(history)
     return _cache_result(deps, tool_name, limited, cache_key=cache_key)

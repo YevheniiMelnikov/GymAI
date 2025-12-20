@@ -38,8 +38,8 @@ def test_tool_search_knowledge_k(monkeypatch: pytest.MonkeyPatch) -> None:
         _patch_kb_attr(monkeypatch, "search", fake_search)
         _patch_kb_attr(monkeypatch, "fallback_entries", fake_fallback_entries)
         ctx = _Ctx()
-        result = await tool_search_knowledge(ctx, "hi", k=5)
-        assert result == []
+        with pytest.raises(AgentExecutionAborted):
+            await tool_search_knowledge(ctx, "hi", k=5)
         assert called["k"] == 5
         assert called["profile_id"] == 1
         assert ctx.deps.last_knowledge_query == "hi"
@@ -60,9 +60,8 @@ def test_tool_search_knowledge_duplicate_returns_empty(monkeypatch: pytest.Monke
         _patch_kb_attr(monkeypatch, "search", fake_search)
         _patch_kb_attr(monkeypatch, "fallback_entries", fake_fallback_entries)
         ctx = _Ctx()
-        await tool_search_knowledge(ctx, "  hello  ")
-        result = await tool_search_knowledge(ctx, "hello")
-        assert result == []
+        with pytest.raises(AgentExecutionAborted):
+            await tool_search_knowledge(ctx, "  hello  ")
 
     asyncio.run(runner())
 

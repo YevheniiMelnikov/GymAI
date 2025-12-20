@@ -104,6 +104,14 @@ async def _send_chunk_with_reply_fallback(
 @require_internal_auth
 async def internal_ai_answer_ready(request: web.Request) -> web.Response:
     try:
+        return await _internal_ai_answer_ready_impl(request)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("event=ask_ai_answer_webhook_failed error={}", exc)
+        return web.json_response({"detail": "internal_error"}, status=500)
+
+
+async def _internal_ai_answer_ready_impl(request: web.Request) -> web.Response:
+    try:
         payload_raw = await request.json()
     except Exception:
         return web.json_response({"detail": "Invalid JSON"}, status=400)
@@ -218,12 +226,18 @@ async def internal_ai_answer_ready(request: web.Request) -> web.Response:
 
     if payload.sources:
         logger.info(
-            "event=ask_ai_answer_sources request_id={} profile_id={} count={} sources={}",
+            "event=ask_ai_answer_sources request_id={} profile_id={} count={}",
             request_id,
             payload.profile_id,
             len(payload.sources),
-            " | ".join(payload.sources),
         )
+        if settings.AI_COACH_LOG_PAYLOADS:
+            logger.debug(
+                "event=ask_ai_answer_sources_payload request_id={} profile_id={} sources={}",
+                request_id,
+                payload.profile_id,
+                " | ".join(payload.sources),
+            )
 
     incoming_template = translate(MessageText.ask_ai_response_template, language)
     escaped_answer = html.escape(answer_text).replace("\r\n", "\n")

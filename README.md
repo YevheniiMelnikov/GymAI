@@ -172,7 +172,9 @@ To refresh external knowledge (e.g., documents from Google Drive), Celery calls 
 * `AI_COACH_LOG_PAYLOADS` – set to `1` to log AI coach answer payloads/sources in DEBUG (default: `0`)
 * `AI_COACH_CHAT_SUMMARY_PAIR_LIMIT` – number of client/coach message pairs before summarizing cached chat
 * `AI_COACH_CHAT_SUMMARY_MAX_TOKENS` – max tokens for the chat summary LLM request
-* `AI_COACH_REDIS_CHAT_DB` – Redis DB index for cached chat history (default: `2`)
+* `AI_COACH_REDIS_CHAT_DB` – Redis DB index for Cognee session cache (default: `2`)
+* `AI_COACH_REDIS_STATE_DB` – Redis DB index for AI coach idempotency state (default: `3`)
+* `AI_COACH_COGNEE_SESSION_TTL` – session TTL in seconds for Cognee cache (default: `0` disables expiry)
 
 **Other maintenance**
 
@@ -180,9 +182,10 @@ To refresh external knowledge (e.g., documents from Google Drive), Celery calls 
 
 **Redis DB usage**
 
-* DB 0 – application state
+* DB 0 – bot FSM state (aiogram)
 * DB 1 – bot cache
-* DB 2 – AI coach chat history cache (for summarization into KB)
+* DB 2 – AI coach Cognee session cache (keys like `agent_sessions:{user_id}:{session_id}`)
+* DB 3 – AI coach idempotency/delivery state
 
 ---
 

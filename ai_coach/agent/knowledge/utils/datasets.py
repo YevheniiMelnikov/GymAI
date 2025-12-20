@@ -649,6 +649,9 @@ class DatasetService:
     def chat_dataset_name(self, profile_id: int) -> str:
         return f"kb_chat_{profile_id}"
 
+    def session_id_for_profile(self, profile_id: int) -> str:
+        return self.chat_dataset_name(profile_id)
+
     def is_chat_dataset(self, dataset: str) -> bool:
         alias = self.alias_for_dataset(dataset)
         return alias.startswith("kb_chat_")

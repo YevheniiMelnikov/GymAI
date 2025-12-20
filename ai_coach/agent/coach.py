@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 
 from loguru import logger  # pyrefly: ignore[import-error]
-from pydantic_ai.messages import ModelRequest  # pyrefly: ignore[import-error]
+from pydantic_ai.messages import ModelMessage, ModelRequest  # pyrefly: ignore[import-error]
 from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
 
 from config.app_settings import settings
@@ -57,6 +57,12 @@ class CoachAgent(metaclass=CoachAgentMeta):
     llm_helper: ClassVar[type[LLMHelperProto]] = LLMHelper
 
     @classmethod
+    async def _load_history_messages(cls, profile_id: int) -> list[ModelMessage]:
+        kb = get_knowledge_base()
+        raw_history = await kb.get_message_history(profile_id)
+        return cls.llm_helper._build_history_messages(raw_history)
+
+    @classmethod
     async def generate_workout_plan(
         cls,
         prompt: str | None,
@@ -93,9 +99,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
             language=cls._lang(deps),
         )
         user_prompt = f"MODE: {mode}\n{formatted}"
-        history = cls._message_history(deps.profile_id)
-        if inspect.isawaitable(history):
-            history = await history
+        history = await cls._load_history_messages(deps.profile_id)
         raw_result = await agent.run(
             user_prompt,
             deps=deps,
@@ -143,9 +147,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
         )
         rules = "\n".join(filter(None, [COACH_INSTRUCTIONS, instructions]))
         user_prompt = f"MODE: update\n{formatted}\nRules:\n{rules}"
-        history = cls._message_history(deps.profile_id)
-        if inspect.isawaitable(history):
-            history = await history
+        history = await cls._load_history_messages(deps.profile_id)
         raw_result = await agent.run(
             user_prompt,
             deps=deps,

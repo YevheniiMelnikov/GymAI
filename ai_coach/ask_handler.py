@@ -217,10 +217,20 @@ async def _handle_abort(
         "max_tool_calls_exceeded": "tool budget exceeded",
         "timeout": "request timed out",
         "knowledge_base_empty": "knowledge base returned no data",
+        "knowledge_base_unavailable": "knowledge base unavailable",
         "model_empty_response": "model returned empty response",
         "ask_ai_unavailable": "unable to process ask_ai request; credits refunded",
     }
     detail_reason = reason_map.get(exc.reason, exc.reason)
+    if exc.reason in {"knowledge_base_empty", "knowledge_base_unavailable"}:
+        logger.error("knowledge_base_unavailable profile_id={} mode={}", deps.profile_id, mode.value)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": "knowledge base unavailable",
+                "reason": exc.reason,
+            },
+        )
     if mode in {CoachMode.program, CoachMode.subscription}:
         final_result = deps.final_result
         if final_result is None:
@@ -394,8 +404,15 @@ async def handle_coach_request(
                 _log_sources(rid, data.request_id, data.profile_id, deps, cast(QAResponse, result), sources)
                 if isinstance(answer, str):
                     kb = kb_for_chat or get_knowledge_base()
-                    await kb.save_client_message(data.prompt or "", profile_id=data.profile_id, language=language)
-                    await kb.save_ai_message(answer, profile_id=data.profile_id, language=language)
+                    await kb.maybe_summarize_session(data.profile_id, language=language)
+                if not deps.kb_used:
+                    logger.error(
+                        "knowledge_base_unavailable request_id={} profile_id={} mode={}",
+                        data.request_id,
+                        data.profile_id,
+                        mode.value,
+                    )
+                    raise HTTPException(status_code=503, detail="Knowledge base unavailable")
 
                 response_data: dict[str, Any] = {"answer": answer}
                 if sources:

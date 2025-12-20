@@ -374,16 +374,22 @@ async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str
     sources = list(qa_response.sources)
     kb_used = any(src != "general_knowledge" for src in sources) if sources else False
     if sources:
-        sources_label = " | ".join(sources)
-        if len(sources_label) > 300:
-            sources_label = sources_label[:297] + "..."
         logger.info(
-            "event=ask_ai_sources request_id={} profile_id={} count={} sources={}",
+            "event=ask_ai_sources request_id={} profile_id={} count={}",
             request_id,
             profile_id,
             len(sources),
-            sources_label,
         )
+        if settings.AI_COACH_LOG_PAYLOADS:
+            sources_label = " | ".join(sources)
+            if len(sources_label) > 300:
+                sources_label = sources_label[:297] + "..."
+            logger.debug(
+                "event=ask_ai_sources_payload request_id={} profile_id={} sources={}",
+                request_id,
+                profile_id,
+                sources_label,
+            )
     notify_payload: dict[str, Any] = {
         "profile_id": profile_id,
         "status": "success",

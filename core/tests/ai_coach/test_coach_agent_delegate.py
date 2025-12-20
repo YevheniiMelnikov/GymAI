@@ -1,5 +1,3 @@
-import asyncio
-
 import pytest
 
 from ai_coach.agent.coach import CoachAgent
@@ -25,9 +23,9 @@ class _DummyHelper:
         return "complete"
 
     @staticmethod
-    async def _message_history(profile_id: int) -> list[str]:
-        _DummyHelper.calls.append(f"history:{profile_id}")
-        return ["hi"]
+    def _build_history_messages(raw: list[str]) -> list[str]:
+        _DummyHelper.calls.append(f"history_build:{len(raw)}")
+        return raw
 
     @staticmethod
     def _normalize_text(text: str | None) -> str:
@@ -62,15 +60,11 @@ def test_coach_agent_delegates_classmethods(monkeypatch: pytest.MonkeyPatch) -> 
     assert "complete" in _DummyHelper.calls
 
 
-async def _call_history() -> list[str]:
-    return await CoachAgent._message_history(5)
-
-
 def test_coach_agent_delegates_staticmethods(monkeypatch: pytest.MonkeyPatch) -> None:
     _DummyHelper.calls.clear()
     monkeypatch.setattr(CoachAgent, "llm_helper", _DummyHelper)
 
     assert CoachAgent._normalize_text(" test ") == "test"
-    assert asyncio.run(_call_history()) == ["hi"]
+    assert CoachAgent._build_history_messages(["hi"]) == ["hi"]
     assert "normalize" in _DummyHelper.calls
-    assert "history:5" in _DummyHelper.calls
+    assert "history_build:1" in _DummyHelper.calls
