@@ -131,6 +131,16 @@ class DatasetService:
             return True
         return False
 
+    @staticmethod
+    def _is_duplicate_data_error(exc: Exception) -> bool:
+        text = str(exc).lower()
+        if "duplicate key value violates unique constraint" in text:
+            if "data_pkey" in text or "insert into data" in text:
+                return True
+        if exc.__class__.__name__.lower().startswith("uniqueviolation") and "data" in text:
+            return True
+        return False
+
     def get_registered_identifier(self, dataset_or_alias: str) -> str | None:
         name = (dataset_or_alias or "").strip()
         if not name:

@@ -499,6 +499,13 @@ async def handle_coach_request(
                     raise HTTPException(status_code=503, detail="Knowledge base unavailable")
 
                 response_data: dict[str, Any] = {"answer": answer}
+                blocks = getattr(result, "blocks", None)
+                if isinstance(blocks, list) and blocks:
+                    response_data["blocks"] = [
+                        block.model_dump(mode="json") if hasattr(block, "model_dump") else dict(block)
+                        for block in blocks
+                        if block
+                    ]
                 if sources:
                     response_data["sources"] = sources
 

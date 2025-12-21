@@ -37,3 +37,14 @@ def parse_price(raw: str) -> Decimal:
         return Decimal(raw).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     except InvalidOperation as exc:
         raise ValueError("Invalid decimal value") from exc
+
+
+def parse_int_with_decimal(raw: str) -> int:
+    value = (raw or "").strip().replace(",", ".")
+    weight_re = re.compile(r"^\d+(?:\.\d+)?$")
+    if not weight_re.fullmatch(value):
+        raise ValueError("Invalid numeric value")
+    try:
+        return int(Decimal(value).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    except InvalidOperation as exc:
+        raise ValueError("Invalid decimal value") from exc

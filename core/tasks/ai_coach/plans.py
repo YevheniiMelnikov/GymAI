@@ -1,6 +1,7 @@
 """AI coach Celery tasks and helpers."""
 
 import asyncio
+from collections.abc import Mapping
 from typing import Any
 
 import httpx
@@ -32,7 +33,7 @@ AI_PLAN_NOTIFY_SOFT_LIMIT = settings.AI_PLAN_NOTIFY_TIMEOUT
 AI_PLAN_NOTIFY_TIME_LIMIT = AI_PLAN_NOTIFY_SOFT_LIMIT + 30
 
 
-def _resolve_profile_id(payload: dict[str, Any]) -> int | None:
+def _resolve_profile_id(payload: Mapping[str, Any]) -> int | None:
     raw = payload.get("profile_id")
     if raw is None:
         return None
@@ -40,6 +41,18 @@ def _resolve_profile_id(payload: dict[str, Any]) -> int | None:
         return int(raw)
     except (TypeError, ValueError):
         return None
+
+
+def _normalize_payload(payload: Any, *, context: str) -> dict[str, Any] | None:
+    if isinstance(payload, Mapping):
+        return dict(payload)
+    logger.warning(
+        "ai_plan_payload_invalid context={} type={} value={}",
+        context,
+        type(payload).__name__,
+        payload,
+    )
+    return None
 
 
 async def _claim_plan_request(request_id: str, action: str, *, attempt: int) -> bool:
@@ -128,7 +141,7 @@ def _extract_failure_detail(exc_info: tuple[Any, ...]) -> str:
 
 
 async def _handle_ai_plan_failure_impl(
-    payload: dict[str, Any],
+    payload: Mapping[str, Any],
     action: str,
     detail: str,
 ) -> None:
@@ -161,11 +174,13 @@ async def _handle_ai_plan_failure_impl(
     soft_time_limit=AI_PLAN_NOTIFY_SOFT_LIMIT,
     time_limit=AI_PLAN_NOTIFY_TIME_LIMIT,
 )
-def handle_ai_plan_failure(
-    self, payload: dict[str, Any], action: str, *exc_info: Any
-) -> None:  # pyrefly: ignore[valid-type]
+def handle_ai_plan_failure(self, payload: Any, action: str, *exc_info: Any) -> None:  # pyrefly: ignore[valid-type]
     detail = _extract_failure_detail(exc_info)
-    asyncio.run(_handle_ai_plan_failure_impl(payload, action, detail))
+    normalized = _normalize_payload(payload, context="handle_ai_plan_failure")
+    if normalized is None:
+        logger.error(f"ai_plan_failure_payload_missing action={action} detail={detail}")
+        return
+    asyncio.run(_handle_ai_plan_failure_impl(normalized, action, detail))
 
 
 def _parse_workout_location(raw: Any) -> WorkoutLocation | None:
@@ -419,20 +434,23 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> d
     time_limit=AI_PLAN_NOTIFY_TIME_LIMIT,
 )
 def notify_ai_plan_ready_task(self, payload: dict[str, Any]) -> None:  # pyrefly: ignore[valid-type]
-    request_id = str(payload.get("request_id", ""))
-    action = str(payload.get("action", ""))
+    normalized = _normalize_payload(payload, context="notify_ai_plan_ready_task")
+    if normalized is None:
+        return
+    request_id = str(normalized.get("request_id", ""))
+    action = str(normalized.get("action", ""))
     try:
-        asyncio.run(_notify_ai_plan_ready(payload))
+        asyncio.run(_notify_ai_plan_ready(normalized))
     except (httpx.HTTPStatusError, httpx.TransportError) as exc:
         attempt = int(getattr(self.request, "retries", 0))
         max_retries = int(getattr(self, "max_retries", 0) or 0)
         logger.warning(f"ai_plan_notify_retry action={action} request_id={request_id} attempt={attempt} error={exc}")
         if attempt >= max_retries:
-            asyncio.run(_handle_notify_failure(payload, exc))
+            asyncio.run(_handle_notify_failure(normalized, exc))
             raise
         raise self.retry(exc=exc)
     except Exception as exc:  # noqa: BLE001
-        asyncio.run(_handle_notify_failure(payload, exc))
+        asyncio.run(_handle_notify_failure(normalized, exc))
         raise
 
 

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, useNavigate, useSearchParams } from 'reac
 import ProgramPage from './pages/ProgramPage';
 import HistoryPage from './pages/HistoryPage';
 import PaymentPage from './pages/PaymentPage';
+import FaqPage from './pages/FaqPage';
 
 const PAYMENT_ORDER_KEY = 'webapp:payment:order_id';
 
@@ -34,6 +35,8 @@ const LegacyRedirect = () => {
             navigate(withSearch('/history'), { replace: true });
         } else if (type === 'payment') {
             navigate(withSearch('/payment'), { replace: true });
+        } else if (type === 'faq') {
+            navigate(withSearch('/faq'), { replace: true });
         } else if (type === 'program') {
             navigate(withSearch('/'), { replace: true });
         }
@@ -50,6 +53,7 @@ const App: React.FC = () => {
                 <Route path="/" element={<ProgramPage />} />
                 <Route path="/history" element={<HistoryPage />} />
                 <Route path="/payment" element={<PaymentPage />} />
+                <Route path="/faq" element={<FaqPage />} />
             </Routes>
         </BrowserRouter>
     );

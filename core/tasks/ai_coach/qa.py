@@ -397,6 +397,12 @@ async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str
         "answer": qa_response.answer,
         "cost": cost,
     }
+    if qa_response.blocks:
+        notify_payload["blocks"] = [
+            block.model_dump(mode="json") if hasattr(block, "model_dump") else dict(block)
+            for block in qa_response.blocks
+            if block
+        ]
     if sources:
         notify_payload["sources"] = sources
 

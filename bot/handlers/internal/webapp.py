@@ -9,11 +9,11 @@ from loguru import logger
 from bot.handlers.internal.auth import require_internal_auth
 from bot.utils.bot import BotMessageProxy
 from bot.utils.menus import (
+    profile_completion_prompt_text,
     prompt_profile_completion_questionnaire,
     start_program_flow,
     start_subscription_flow,
 )
-from bot.texts import MessageText, translate
 from config.app_settings import settings
 from core.cache import Cache
 from core.enums import ProfileStatus
@@ -98,9 +98,7 @@ async def internal_webapp_workout_action(request: web.Request) -> web.Response:
             language=language,
             pending_flow={"name": pending_name},
         )
-        alert_text = translate(MessageText.finish_registration_to_get_credits, language).format(
-            credits=settings.DEFAULT_CREDITS
-        )
+        alert_text = profile_completion_prompt_text(profile, language)
         return web.json_response({"status": "ok", "profile_incomplete": True, "message": alert_text})
 
     if action == "create_program":

@@ -25,10 +25,11 @@ from bot.utils.menus import (
     send_policy_confirmation,
     show_balance_menu,
 )
-from bot.utils.profiles import resolve_workout_location, update_profile_data
+from bot.utils.profiles import resolve_workout_location, should_grant_gift_credits, update_profile_data
 from bot.utils.workout_days import service_period_value, start_workout_days_selection
 from bot.utils.text import get_state_and_message
 from bot.utils.bot import del_msg, answer_msg, delete_messages, set_bot_commands
+from bot.utils.other import parse_int_with_decimal
 from bot.texts import MessageText, translate
 from core.utils.validators import is_valid_year
 
@@ -51,7 +52,7 @@ async def select_language(callback_query: CallbackQuery, state: FSMContext, bot:
     await set_bot_commands(bot, lang)
     try:
         profile = await APIService.profile.get_profile_by_tg_id(callback_query.from_user.id)
-        if profile:
+        if profile and profile.status != ProfileStatus.deleted:
             await APIService.profile.update_profile(profile.id, {"language": lang})
             await Cache.profile.update_profile(callback_query.from_user.id, dict(language=lang))
             profile.language = language
@@ -188,12 +189,46 @@ async def weight(message: Message, state: FSMContext, bot: Bot) -> None:
     lang = data.get("lang", settings.DEFAULT_LANG)
     await delete_messages(state)
 
-    if not message.text or not all(x.isdigit() for x in message.text.split()):
+    if not message.text:
+        await answer_msg(message, translate(MessageText.invalid_content, lang))
+        await state.set_state(States.weight)
+        return
+    try:
+        weight_value = parse_int_with_decimal(message.text)
+    except ValueError:
         await answer_msg(message, translate(MessageText.invalid_content, lang))
         await state.set_state(States.weight)
         return
 
-    await state.update_data(weight=message.text)
+    await state.update_data(weight=weight_value)
+    if data.get("edit_mode"):
+        await update_profile_data(cast(Message, message), state, bot)
+        return
+
+    prompt = await answer_msg(message, translate(MessageText.height, lang))
+    await state.update_data(chat_id=message.chat.id, message_ids=[prompt.message_id] if prompt else [])
+    await state.set_state(States.height)
+    await del_msg(cast(Message | CallbackQuery | None, message))
+
+
+@questionnaire_router.message(States.height)
+async def height(message: Message, state: FSMContext, bot: Bot) -> None:
+    data = await state.get_data()
+    lang = data.get("lang", settings.DEFAULT_LANG)
+    await delete_messages(state)
+
+    if not message.text:
+        await answer_msg(message, translate(MessageText.invalid_content, lang))
+        await state.set_state(States.height)
+        return
+    try:
+        height_value = parse_int_with_decimal(message.text)
+    except ValueError:
+        await answer_msg(message, translate(MessageText.invalid_content, lang))
+        await state.set_state(States.height)
+        return
+
+    await state.update_data(height=height_value)
     if data.get("edit_mode"):
         await update_profile_data(cast(Message, message), state, bot)
         return
@@ -232,9 +267,10 @@ async def health_notes_choice(callback_query: CallbackQuery, state: FSMContext, 
 
     await state.update_data(health_notes=HEALTH_NOTES_PLACEHOLDER, status=ProfileStatus.completed)
     if not data.get("edit_mode"):
-        credits_text = translate(MessageText.initial_credits_granted, lang).format(credits=settings.DEFAULT_CREDITS)
-        await answer_msg(callback_query, credits_text)
-        await state.update_data(credits_delta=settings.DEFAULT_CREDITS)
+        if await should_grant_gift_credits(callback_query.from_user.id):
+            credits_text = translate(MessageText.initial_credits_granted, lang).format(credits=settings.DEFAULT_CREDITS)
+            await answer_msg(callback_query, credits_text)
+            await state.update_data(credits_delta=settings.DEFAULT_CREDITS)
 
     if callback_query.message is not None:
         await update_profile_data(cast(Message, callback_query.message), state, bot)
@@ -250,12 +286,13 @@ async def health_notes(message: Message, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()
     await state.update_data(health_notes=message.text, status=ProfileStatus.completed)
     if not data.get("edit_mode"):
-        credits_text = translate(
-            MessageText.initial_credits_granted,
-            data.get("lang", settings.DEFAULT_LANG),
-        ).format(credits=settings.DEFAULT_CREDITS)
-        await answer_msg(message, credits_text)
-        await state.update_data(credits_delta=settings.DEFAULT_CREDITS)
+        if await should_grant_gift_credits(message.from_user.id):
+            credits_text = translate(
+                MessageText.initial_credits_granted,
+                data.get("lang", settings.DEFAULT_LANG),
+            ).format(credits=settings.DEFAULT_CREDITS)
+            await answer_msg(message, credits_text)
+            await state.update_data(credits_delta=settings.DEFAULT_CREDITS)
 
     await update_profile_data(cast(Message, message), state, bot)
 

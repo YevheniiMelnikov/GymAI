@@ -325,7 +325,9 @@ class CoachAgent(metaclass=CoachAgentMeta):
         if raw_result is None:
             raise RuntimeError("agent.ask_result_missing")
         normalized = cls._normalize_output(raw_result, QAResponse)
-        normalized.answer = normalized.answer.strip()
+        normalized.answer = cls.llm_helper._strip_markup(normalized.answer).strip()
+        if normalized.blocks:
+            normalized.blocks = cls.llm_helper._normalize_blocks(normalized.blocks) or None
         if not normalized.answer:
             fallback = await cls._fallback_answer_question(
                 prompt,

@@ -4,6 +4,7 @@ from aiogram.fsm.state import State, StatesGroup
 class States(StatesGroup):
     main_menu = State()
     feedback = State()
+    feedback_menu = State()
 
     select_language = State()
 
@@ -13,6 +14,7 @@ class States(StatesGroup):
     workout_location = State()
     workouts_number = State()
     weight = State()
+    height = State()
     workout_experience = State()
     health_notes_choice = State()
     health_notes = State()

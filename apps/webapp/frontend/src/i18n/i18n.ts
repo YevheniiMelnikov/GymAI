@@ -54,7 +54,10 @@ export const fallbackEn = {
   'payment.loading': 'Loading payment info...',
   'payment.launch': 'Launching payment...',
   'payment.open': 'Open Payment',
-  'payment.unavailable': 'Payment service unavailable'
+  'payment.unavailable': 'Payment service unavailable',
+  'faq.title': 'FAQ',
+  'faq.placeholder.title': 'Answers are on the way',
+  'faq.placeholder.body': 'We are preparing the FAQ page. Please check back soon.'
 } as const;
 
 export type TranslationKey = keyof typeof fallbackEn;

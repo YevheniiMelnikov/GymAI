@@ -3,7 +3,7 @@ from contextlib import suppress
 from aiogram import Router
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import Command
-from core.enums import CommandName
+from core.enums import CommandName, ProfileStatus
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
@@ -41,7 +41,7 @@ async def cmd_menu(message: Message, state: FSMContext) -> None:
 
     try:
         profile = await APIService.profile.get_profile_by_tg_id(message.from_user.id)
-        if profile is None:
+        if profile is None or profile.status == ProfileStatus.deleted:
             raise ProfileNotFoundError(message.from_user.id)
         await Cache.profile.save_record(profile.id, profile.model_dump(mode="json"))
         await state.update_data(lang=profile.language, profile=profile.model_dump())
@@ -60,7 +60,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
 
     try:
         profile = await APIService.profile.get_profile_by_tg_id(message.from_user.id)
-        if profile is None:
+        if profile is None or profile.status == ProfileStatus.deleted:
             raise ProfileNotFoundError(message.from_user.id)
         await Cache.profile.save_record(profile.id, profile.model_dump(mode="json"))
         await state.update_data(lang=profile.language, profile=profile.model_dump())

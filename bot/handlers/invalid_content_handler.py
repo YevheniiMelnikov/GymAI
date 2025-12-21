@@ -20,6 +20,7 @@ HANDLED_STATES = [
     States.gender,
     States.workout_goals,
     States.weight,
+    States.height,
     States.workout_experience,
     States.health_notes,
     States.main_menu,

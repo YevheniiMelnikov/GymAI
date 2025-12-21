@@ -1,12 +1,18 @@
 from pydantic import BaseModel, Field, field_validator
 
 
+class AiAnswerBlock(BaseModel):
+    title: str | None = None
+    body: str
+
+
 class AiAnswerNotify(BaseModel):
     request_id: str
     status: str = "success"
     profile_id: int
     answer: str | None = None
     sources: list[str] = Field(default_factory=list)
+    blocks: list[AiAnswerBlock] = Field(default_factory=list)
     error: str | None = None
     force: bool = False
 

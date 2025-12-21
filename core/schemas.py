@@ -15,12 +15,15 @@ class Profile(BaseModel):
     tg_id: int
     language: Annotated[Language, Field()]
     status: ProfileStatus = ProfileStatus.created
+    gift_credits_granted: bool = False
+    deleted_at: datetime | None = None
     gender: Gender | None = None
     born_in: str | None = None
     workout_experience: str | None = None
     workout_goals: str | None = None
     health_notes: str | None = None
     weight: int | None = None
+    height: int | None = None
     workout_location: str | None = None
     credits: int = Field(default=settings.DEFAULT_CREDITS, ge=0)
     profile_data: dict[str, Any] = {}
@@ -142,6 +145,12 @@ class Payment(BaseModel):
             return 0.0
 
 
+class QAResponseBlock(BaseModel):
+    title: str | None = None
+    body: str
+
+
 class QAResponse(BaseModel):
     answer: str
     sources: list[str] = Field(default_factory=list)
+    blocks: list[QAResponseBlock] | None = None

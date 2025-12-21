@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from functools import wraps
 from time import perf_counter
 from typing import Any, Awaitable, Callable, ClassVar, Mapping, Optional, Sequence, TypeVar, cast, Protocol
@@ -27,10 +28,19 @@ from ai_coach.agent.knowledge.helpers import (
 )
 from ai_coach.exceptions import AgentExecutionAborted
 from ai_coach.types import MessageRole
-from core.schemas import QAResponse
+from core.schemas import QAResponse, QAResponseBlock
 
 
 TOutput = TypeVar("TOutput", bound=BaseModel)
+
+_HTML_TAG_RE = re.compile(r"</?[^>]+>")
+_MARKDOWN_CODE_BLOCK_RE = re.compile(r"```(.*?)```", re.DOTALL)
+_MARKDOWN_INLINE_CODE_RE = re.compile(r"`([^`]*)`")
+_MARKDOWN_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+_MARKDOWN_BOLD_UNDERSCORE_RE = re.compile(r"__(.+?)__")
+_MARKDOWN_ITALIC_RE = re.compile(r"\*(.+?)\*")
+_MARKDOWN_ITALIC_UNDERSCORE_RE = re.compile(r"_(.+?)_")
+_MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\([^)]+\)")
 
 
 class LLMHelperProto(Protocol):
@@ -61,6 +71,12 @@ class LLMHelperProto(Protocol):
 
     @staticmethod
     def _normalize_text(text: str | None) -> str: ...
+
+    @staticmethod
+    def _strip_markup(text: str | None) -> str: ...
+
+    @staticmethod
+    def _normalize_blocks(raw_blocks: Any) -> list[QAResponseBlock]: ...
 
     @classmethod
     async def _complete_with_retries(
@@ -224,6 +240,24 @@ class LLMHelper:
         return str(text or "").strip()
 
     @staticmethod
+    def _strip_markup(text: str | None) -> str:
+        raw = str(text or "")
+        if not raw:
+            return ""
+        sanitized = _HTML_TAG_RE.sub("", raw)
+        sanitized = _MARKDOWN_CODE_BLOCK_RE.sub(lambda match: match.group(1).strip(), sanitized)
+        sanitized = _MARKDOWN_LINK_RE.sub(r"\1", sanitized)
+        sanitized = _MARKDOWN_INLINE_CODE_RE.sub(r"\1", sanitized)
+        for pattern in (
+            _MARKDOWN_BOLD_RE,
+            _MARKDOWN_BOLD_UNDERSCORE_RE,
+            _MARKDOWN_ITALIC_RE,
+            _MARKDOWN_ITALIC_UNDERSCORE_RE,
+        ):
+            sanitized = pattern.sub(r"\1", sanitized)
+        return sanitized.replace("\r\n", "\n")
+
+    @staticmethod
     def _normalize_output(
         raw: Any,
         expected: type[TOutput],
@@ -336,9 +370,13 @@ class LLMHelper:
             summary_text = knowledge_section or " ".join(summary_chunks)
             if not summary_text:
                 summary_text = prefix
-            fallback_answer = f"{prefix}\n{summary_text}".strip()
+            fallback_answer = cls._strip_markup(f"{prefix}\n{summary_text}").strip()
             sources = unique_sources(entry_datasets) or list(entry_datasets) or ["knowledge_base"]
-            qa = QAResponse(answer=fallback_answer, sources=sources)
+            qa = QAResponse(
+                answer=fallback_answer,
+                sources=sources,
+                blocks=[QAResponseBlock(title=None, body=fallback_answer)],
+            )
             logger.warning(
                 "agent.ask fallback summary profile_id={} kb_entries={} answer_len={}".format(
                     deps.profile_id,
@@ -475,7 +513,14 @@ class LLMHelper:
                 sources = list(entry_ids) or ["general_knowledge"]
             if answer.strip():
                 normalized_sources = list(sources) if sources else list(entry_ids) or ["general_knowledge"]
-                return QAResponse(answer=answer, sources=normalized_sources)
+                cleaned_answer = cls._strip_markup(answer).strip()
+                if not cleaned_answer:
+                    cleaned_answer = answer
+                return QAResponse(
+                    answer=cleaned_answer,
+                    sources=normalized_sources,
+                    blocks=[QAResponseBlock(title=None, body=cleaned_answer)],
+                )
         log_message = ("llm.response.empty profile_id={} reason={} model={} final_content_len={}").format(
             profile_id,
             final_finish_reason,
@@ -885,7 +930,10 @@ class LLMHelper:
                     text_item = str(item).strip()
                     if text_item:
                         sources.append(text_item)
-            sanitized = {"answer": answer, "sources": sources}
+            blocks = LLMHelper._normalize_blocks(payload.get("blocks"))
+            sanitized: dict[str, Any] = {"answer": answer, "sources": sources}
+            if blocks:
+                sanitized["blocks"] = [block.model_dump(mode="json") for block in blocks]
             return json.dumps(sanitized)
         return text
 
@@ -920,6 +968,27 @@ class LLMHelper:
             tool_summary = "tool_calls=1"
         preview_part = f"content_preview={preview_text!r}" if preview_text else "content_preview=''"
         return f"{preview_part} {tool_summary}"
+
+    @staticmethod
+    def _normalize_blocks(raw_blocks: Any) -> list[QAResponseBlock]:
+        if not isinstance(raw_blocks, Sequence) or isinstance(raw_blocks, (str, bytes, bytearray)):
+            return []
+        normalized: list[QAResponseBlock] = []
+        for item in raw_blocks:
+            if isinstance(item, QAResponseBlock):
+                title = (item.title or "").strip()
+                body = str(item.body or "").strip()
+            elif isinstance(item, dict):
+                title = str(item.get("title") or "").strip()
+                body = str(item.get("body") or "").strip()
+            else:
+                continue
+            title = LLMHelper._strip_markup(title).strip()
+            body = LLMHelper._strip_markup(body).strip()
+            if not body:
+                continue
+            normalized.append(QAResponseBlock(title=title or None, body=body))
+        return normalized
 
     @staticmethod
     def _parse_fallback_content(
@@ -980,12 +1049,15 @@ class LLMHelper:
         datasets: Sequence[str] | None,
         deps: AgentDeps | None = None,
     ) -> QAResponse:
-        answer = response.answer.strip()
+        answer = cls._strip_markup(response.answer).strip()
         if not answer:
             if deps is not None:
                 deps.fallback_used = True
             raise AgentExecutionAborted("Model returned empty response", reason="model_empty_response")
         response.answer = answer
+        if response.blocks:
+            normalized_blocks = cls._normalize_blocks(response.blocks)
+            response.blocks = normalized_blocks or None
         dataset_sources = unique_sources(datasets or [])
         if dataset_sources:
             response.sources = dataset_sources

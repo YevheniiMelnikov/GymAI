@@ -15,6 +15,7 @@ class Profile(Model):
     gender = models.CharField(max_length=50, null=True, blank=True)
     born_in = models.IntegerField(null=True, blank=True)
     weight = models.IntegerField(null=True, blank=True)
+    height = models.IntegerField(null=True, blank=True)
     health_notes = models.CharField(max_length=250, null=True, blank=True)
     workout_experience = models.CharField(max_length=50, null=True, blank=True)
     workout_goals = models.CharField(max_length=250, null=True, blank=True)
@@ -25,6 +26,8 @@ class Profile(Model):
         blank=True,
     )
     credits = models.PositiveIntegerField(default=0)
+    gift_credits_granted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "profile"

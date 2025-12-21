@@ -26,8 +26,10 @@ PROFILE_UPDATE_FIELDS: tuple[str, ...] = (
     "workout_location",
     "health_notes",
     "weight",
+    "height",
     "status",
     "credits",
+    "gift_credits_granted",
 )
 
 
@@ -89,7 +91,7 @@ async def update_profile_data(
                 status_value = value if isinstance(value, ProfileStatus) else ProfileStatus(str(value))
                 normalized_updates[field] = status_value
                 api_payload[field] = status_value.value
-            elif field in {"weight", "credits"}:
+            elif field in {"weight", "height", "credits"}:
                 try:
                     numeric_value = int(value)
                 except (TypeError, ValueError):
@@ -106,13 +108,15 @@ async def update_profile_data(
             api_payload["language"] = lang_override
 
         credits_delta = int(data.get("credits_delta") or 0)
-        if credits_delta and (profile.credits or 0) < settings.DEFAULT_CREDITS:
-            remaining = settings.DEFAULT_CREDITS - (profile.credits or 0)
+        if credits_delta and not profile.gift_credits_granted:
+            remaining = max(0, settings.DEFAULT_CREDITS - (profile.credits or 0))
             credits_delta_to_apply = min(credits_delta, remaining)
             if credits_delta_to_apply:
                 new_credits = (profile.credits or 0) + credits_delta_to_apply
                 normalized_updates["credits"] = new_credits
                 api_payload["credits"] = new_credits
+            normalized_updates["gift_credits_granted"] = True
+            api_payload["gift_credits_granted"] = True
 
         if api_payload:
             update_success = await APIService.profile.update_profile(profile.id, api_payload)
@@ -148,6 +152,19 @@ async def update_profile_data(
 
     finally:
         await del_msg(cast(TgMessage | TgCallbackQuery | None, message))
+
+
+async def should_grant_gift_credits(tg_id: int) -> bool:
+    try:
+        profile = await APIService.profile.get_profile_by_tg_id(tg_id)
+    except Exception:  # noqa: BLE001
+        logger.warning(f"gift_credits_check_failed tg_id={tg_id}")
+        return True
+    if profile is None:
+        return True
+    if profile.gift_credits_granted:
+        return False
+    return (profile.credits or 0) < settings.DEFAULT_CREDITS
 
 
 async def _handle_pending_flow(

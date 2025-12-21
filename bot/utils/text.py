@@ -46,6 +46,7 @@ def get_profile_attributes(user: Optional[Profile], lang: str) -> dict[str, str]
         "goals": attr("workout_goals"),
         "workout_location": workout_locations.get(location_key, "") if location_key else "",
         "weight": attr("weight"),
+        "height": attr("height"),
         "notes": attr("health_notes"),
     }
 
@@ -57,6 +58,7 @@ _STATE_MESSAGE_KEYS: dict[str, StateMessageKey] = {
     "workout_goals": (States.workout_goals, MessageText.workout_goals),
     "workout_location": (States.workout_location, MessageText.workout_location),
     "weight": (States.weight, MessageText.weight),
+    "height": (States.height, MessageText.height),
     "health_notes": (States.health_notes_choice, MessageText.health_notes_question),
 }
 

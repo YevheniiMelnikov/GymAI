@@ -1,10 +1,6 @@
-import html
-from typing import Any
-
 from aiohttp import web
 from aiogram import Bot
 from aiogram.enums import ParseMode
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from loguru import logger
@@ -13,92 +9,19 @@ from pydantic import ValidationError
 from bot.handlers.internal.auth import require_internal_auth
 from bot.handlers.internal.schemas import AiAnswerNotify
 from bot.keyboards import ask_ai_again_kb
-from bot.utils.chat import chunk_message
 from bot.states import States
 from bot.texts import MessageText, translate
+from bot.utils.ask_ai_messages import (
+    chunk_formatted_message,
+    format_answer_blocks,
+    format_plain_answer,
+    send_chunk_with_reply_fallback,
+)
 from config.app_settings import settings
 from core.ai_coach.state.ask_ai import AiQuestionState
 from core.exceptions import ProfileNotFoundError
 
 from .tasks import _resolve_profile
-
-
-def _reply_target_missing(exc: TelegramBadRequest) -> bool:
-    text = str(getattr(exc, "message", "") or "")
-    if not text and exc.args:
-        first_arg = exc.args[0]
-        if isinstance(first_arg, str):
-            text = first_arg
-    lowered = text.lower()
-    return (
-        "reply message not found" in lowered
-        or "message to reply not found" in lowered
-        or "replied message not found" in lowered
-    )
-
-
-def _extract_error_text(exc: TelegramBadRequest) -> str:
-    text = str(getattr(exc, "message", "") or "")
-    if not text and exc.args:
-        for arg in exc.args:
-            if isinstance(arg, str):
-                text = arg
-                break
-    return text
-
-
-async def _send_chunk_with_reply_fallback(
-    *,
-    bot: Bot,
-    chat_id: int,
-    text: str,
-    parse_mode: ParseMode,
-    reply_markup: Any | None,
-    reply_to_message_id: int | None,
-) -> int | None:
-    try:
-        await bot.send_message(
-            chat_id=chat_id,
-            text=text,
-            parse_mode=parse_mode,
-            disable_web_page_preview=True,
-            reply_to_message_id=reply_to_message_id,
-            reply_markup=reply_markup,
-        )
-        return reply_to_message_id
-    except TelegramBadRequest as exc:
-        if reply_to_message_id is not None:
-            error_text = _extract_error_text(exc)
-            if _reply_target_missing(exc):
-                logger.warning(
-                    "event=ask_ai_reply_target_missing chat_id={} detail={}",
-                    chat_id,
-                    error_text,
-                )
-            else:
-                logger.warning(
-                    "event=ask_ai_reply_send_failed chat_id={} detail={}",
-                    chat_id,
-                    error_text,
-                )
-            await bot.send_message(
-                chat_id=chat_id,
-                text=text,
-                parse_mode=parse_mode,
-                disable_web_page_preview=True,
-                reply_to_message_id=None,
-                reply_markup=reply_markup,
-            )
-            return None
-        raise
-    except Exception as exc:  # noqa: BLE001
-        logger.exception(
-            "event=ask_ai_reply_unexpected_failure chat_id={} reply_to={} error={}",
-            chat_id,
-            reply_to_message_id,
-            exc,
-        )
-        raise
 
 
 @require_internal_auth
@@ -181,7 +104,7 @@ async def _internal_ai_answer_ready_impl(request: web.Request) -> web.Response:
         await state_tracker.mark_failed(request_id, reason)
         error_message = translate(MessageText.coach_agent_error, language).format(tg=settings.TG_SUPPORT_CONTACT)
         try:
-            await _send_chunk_with_reply_fallback(
+            await send_chunk_with_reply_fallback(
                 bot=bot,
                 chat_id=profile.tg_id,
                 text=error_message,
@@ -207,7 +130,7 @@ async def _internal_ai_answer_ready_impl(request: web.Request) -> web.Response:
         if not settings.DISABLE_MANUAL_PLACEHOLDER:
             fallback = translate(MessageText.coach_agent_error, language).format(tg=settings.TG_SUPPORT_CONTACT)
             try:
-                await _send_chunk_with_reply_fallback(
+                await send_chunk_with_reply_fallback(
                     bot=bot,
                     chat_id=profile.tg_id,
                     text=fallback,
@@ -240,8 +163,8 @@ async def _internal_ai_answer_ready_impl(request: web.Request) -> web.Response:
             )
 
     incoming_template = translate(MessageText.ask_ai_response_template, language)
-    escaped_answer = html.escape(answer_text).replace("\r\n", "\n")
-    chunks = list(chunk_message(escaped_answer, template=incoming_template, sender_name=settings.BOT_NAME))
+    rendered_body = format_answer_blocks(payload.blocks) if payload.blocks else format_plain_answer(answer_text)
+    chunks = chunk_formatted_message(rendered_body, template=incoming_template, sender_name=settings.BOT_NAME)
     rendered_len = sum(len(incoming_template.format(name=settings.BOT_NAME, message=chunk)) for chunk in chunks)
     truncated = "yes" if len(chunks) > 1 else "no"
     logger.info(
@@ -257,7 +180,7 @@ async def _internal_ai_answer_ready_impl(request: web.Request) -> web.Response:
         for index, chunk in enumerate(chunks):
             message_text = incoming_template.format(name=settings.BOT_NAME, message=chunk)
             reply_markup = ask_again_keyboard if index == len(chunks) - 1 else None
-            current_reply_id = await _send_chunk_with_reply_fallback(
+            current_reply_id = await send_chunk_with_reply_fallback(
                 bot=bot,
                 chat_id=profile.tg_id,
                 text=message_text,

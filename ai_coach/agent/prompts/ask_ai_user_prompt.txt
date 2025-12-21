@@ -11,3 +11,5 @@ Expectations:
 - Deliver a structured answer covering: training strategy, nutrition, recovery/monitoring, and clear next steps.
 - Be concise but thorough: include specific ranges (sets/reps, scheduling tips, nutritional targets) when relevant, but stay within the scope of general advice.
 - Return a JSON object matching the QAResponse schema with no surrounding text.
+- Use QAResponse.blocks for structure. Each block has a short title and a plain-text body with line breaks.
+- Do not use Markdown or HTML in any field.

@@ -63,6 +63,11 @@ feedback:
   ru: "Оставьте свой отзыв ✍️"
   ua: "Залиште свій відгук ✍️"
 
+feedback_menu:
+  eng: "Choose an option 👇"
+  ru: "Выберите вариант 👇"
+  ua: "Оберіть варіант 👇"
+
 feedback_sent:
   eng: "Thank you for your feedback 🙏"
   ru: "Спасибо за ваш отзыв 🙏"
@@ -72,9 +77,9 @@ new_feedback:
   ru: "Новый отзыв от профиля {profile_id}:\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<em>{feedback}</em>"
 
 profile_info:
-  eng: "<b>Workout goals 🎯</b>\n<em>{goals}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Workout location 🏋️‍♂️</b>\n{workout_location}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Weight (kg) ⚖️</b>\n{weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Workout experience (years) 💪</b>\n{experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Health notes 🩺</b>\n<em>{notes}</em>"
-  ru: "<b>Тренировочные цели 🎯</b>\n<em>{goals}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Формат тренировок 🏋️‍♂️</b>\n{workout_location}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Вес (кг) ⚖️</b>\n{weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Опыт тренировок (лет) 💪</b>\n{experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Примечания по здоровью 🩺</b>\n<em>{notes}</em>"
-  ua: "<b>Тренувальні цілі 🎯</b>\n<em>{goals}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Формат тренувань 🏋️‍♂️</b>\n{workout_location}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Вага (кг) ⚖️</b>\n{weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Тренувальний досвід (років) 💪</b>\n{experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Примітки по здоров'ю 🩺</b>\n<em>{notes}</em>"
+  eng: "<b>Workout goals 🎯</b>\n<em>{goals}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Workout location 🏋️‍♂️</b>\n{workout_location}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Weight (kg) ⚖️</b>\n{weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Height (cm) 📏</b>\n{height}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Workout experience (years) 💪</b>\n{experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Health notes 🩺</b>\n<em>{notes}</em>"
+  ru: "<b>Тренировочные цели 🎯</b>\n<em>{goals}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Формат тренировок 🏋️‍♂️</b>\n{workout_location}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Вес (кг) ⚖️</b>\n{weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Рост (см) 📏</b>\n{height}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Опыт тренировок (лет) 💪</b>\n{experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Примечания по здоровью 🩺</b>\n<em>{notes}</em>"
+  ua: "<b>Тренувальні цілі 🎯</b>\n<em>{goals}</em>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Формат тренувань 🏋️‍♂️</b>\n{workout_location}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Вага (кг) ⚖️</b>\n{weight}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Зріст (см) 📏</b>\n{height}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Тренувальний досвід (років) 💪</b>\n{experience}\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n<b>Примітки по здоров'ю 🩺</b>\n<em>{notes}</em>"
 
 edit_profile:
   eng: "There will be a few questions, this won't take long to answer ⏳"
@@ -85,6 +90,11 @@ finish_registration_to_get_credits:
   eng: "For more relevant results, please answer a few questions.. After that you will receive a gift {credits} GYMCOINs 🎁"
   ru: "Для более релевантных результатов ответьте пожалуйста на несколько вопросов. После этого вы получите подарочные {credits} GYMCOIN-ов 🎁"
   ua: "Для більш релевантних результатів дайте відповідь будь ласка на кілька запитань. Після цього ви отримаєте подарункові {credits} GYMCOIN-ів 🎁"
+
+finish_registration:
+  eng: "For more relevant results, please answer a few questions."
+  ru: "Для более релевантных результатов ответьте пожалуйста на несколько вопросов."
+  ua: "Для більш релевантних результатів дайте відповідь будь ласка на кілька запитань."
 
 initial_credits_granted:
   eng: "{credits} bonus GYMCOINs have been added to your account 🎉"
@@ -105,6 +115,11 @@ weight:
   eng: "Enter your weight in kg ⚖️"
   ru: "Укажите свой вес в кг ⚖️"
   ua: "Введіть свою вагу в кг ⚖️"
+
+height:
+  eng: "Enter your height in cm 📏"
+  ru: "Укажите свой рост в см 📏"
+  ua: "Вкажіть свій зріст у см 📏"
 
 workout_experience:
   eng: "Indicate your workout experience 💪"

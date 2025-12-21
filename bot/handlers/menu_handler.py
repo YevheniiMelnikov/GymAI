@@ -29,6 +29,7 @@ from core.exceptions import ProfileNotFoundError, SubscriptionNotFoundError
 from core.services import APIService
 from bot.keyboards import (
     feedback_kb,
+    feedback_menu_kb,
     payment_kb,
     yes_no_kb,
 )
@@ -63,11 +64,12 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
 
     if cb_data == "feedback":
         await callback_query.answer()
+        faq_url = get_webapp_url("faq", profile.language)
         await message.answer(
-            translate(MessageText.feedback, profile.language),
-            reply_markup=feedback_kb(profile.language),
+            translate(MessageText.feedback_menu, profile.language),
+            reply_markup=feedback_menu_kb(profile.language, faq_url=faq_url),
         )
-        await state.set_state(States.feedback)
+        await state.set_state(States.feedback_menu)
         await del_msg(message)
 
     elif cb_data == "ask_ai":
@@ -308,6 +310,38 @@ async def feedback_menu(callback_query: CallbackQuery, state: FSMContext) -> Non
     await callback_query.answer()
     await show_main_menu(message, profile, state)
     await del_msg(callback_query)
+
+
+@menu_router.callback_query(States.feedback_menu)
+async def feedback_submenu(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    profile_data = data.get("profile")
+    if not profile_data:
+        return
+    profile = Profile.model_validate(profile_data)
+    message = callback_query.message
+    if message is None or not isinstance(message, Message):
+        await callback_query.answer()
+        return
+    cb_data = callback_query.data or ""
+
+    if cb_data == "send_feedback":
+        await callback_query.answer()
+        await message.answer(
+            translate(MessageText.feedback, profile.language),
+            reply_markup=feedback_kb(profile.language),
+        )
+        await state.set_state(States.feedback)
+        await del_msg(message)
+        return
+    if cb_data == "back":
+        await callback_query.answer()
+        await show_main_menu(message, profile, state)
+        await del_msg(callback_query)
+        return
+    if cb_data == "faq_unavailable":
+        await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
+        return
 
 
 @menu_router.message(States.feedback)

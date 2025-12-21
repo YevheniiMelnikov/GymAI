@@ -13,6 +13,16 @@ feedback:
   ru: "Обратная связь ✍️"
   ua: "Зворотній зв'язок ✍️"
 
+send_feedback:
+  eng: "Contact 💬"
+  ru: "Написать 💬"
+  ua: "Написати 💬️️"
+
+faq:
+  eng: "FAQ ❓"
+  ru: "FAQ ❓"
+  ua: "FAQ ❓"
+
 my_profile:
   eng: "My profile 👤"
   ru: "Мой профиль 👤"
@@ -123,6 +133,11 @@ weight:
   ru: "Вес ⚖️"
   ua: "Вага ⚖️"
 
+height:
+  eng: "Height 📏"
+  ru: "Рост 📏"
+  ua: "Зріст 📏"
+
 workout_experience:
   eng: "Workout experience 💪"
   ru: "Опыт тренировок 💪"
@@ -212,6 +227,11 @@ prev_menu:
   eng: "Back ⬅️"
   ru: "Назад ⬅️"
   ua: "Назад ⬅️"
+
+main_menu:
+  eng: "Main menu 🏠"
+  ru: "Главное меню 🏠"
+  ua: "Головне меню 🏠"
 
 delete:
   eng: "Delete 🗑"

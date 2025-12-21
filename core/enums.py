@@ -4,6 +4,7 @@ from enum import Enum
 class ProfileStatus(str, Enum):
     created = "created"
     completed = "completed"
+    deleted = "deleted"
 
     def __str__(self) -> str:
         return self.value

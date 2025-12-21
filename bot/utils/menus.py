@@ -315,14 +315,16 @@ async def _prompt_ai_services(
     return True
 
 
-def _finish_registration_text(language: str) -> str:
+def profile_completion_prompt_text(profile: Profile, language: str) -> str:
+    if profile.gift_credits_granted:
+        return translate(MessageText.finish_registration, language)
     return translate(MessageText.finish_registration_to_get_credits, language).format(
         credits=settings.DEFAULT_CREDITS,
     )
 
 
-async def _notify_profile_incomplete(target: InteractionTarget, language: str) -> None:
-    text = _finish_registration_text(language)
+async def _notify_profile_incomplete(target: InteractionTarget, profile: Profile, language: str) -> None:
+    text = profile_completion_prompt_text(profile, language)
     if isinstance(target, CallbackQuery):
         await target.answer(text, show_alert=True)
         return
@@ -373,7 +375,7 @@ async def prompt_profile_completion_questionnaire(
     pending_flow: dict[str, object] | None = None,
 ) -> None:
     lang = language or cast(str, profile.language or settings.DEFAULT_LANG)
-    await _notify_profile_incomplete(target, lang)
+    await _notify_profile_incomplete(target, profile, lang)
     await _start_profile_questionnaire(
         target,
         profile,
@@ -395,7 +397,7 @@ async def _ensure_profile_completed(
     if cached_profile.status == ProfileStatus.completed:
         return cached_profile
     language = cast(str, profile.language or settings.DEFAULT_LANG)
-    await _notify_profile_incomplete(target, language)
+    await _notify_profile_incomplete(target, cached_profile, language)
     await _start_profile_questionnaire(
         target,
         profile,

@@ -105,8 +105,9 @@ def edit_profile_kb(lang: str) -> KbMarkup:
         [builder.add(ButtonText.workout_experience, "workout_experience")],
         [builder.add(ButtonText.workout_goals, "workout_goals")],
         [builder.add(ButtonText.workout_location, "workout_location")],
-        [builder.add(ButtonText.health_notes, "health_notes")],
         [builder.add(ButtonText.weight, "weight")],
+        [builder.add(ButtonText.height, "height")],
+        [builder.add(ButtonText.health_notes, "health_notes")],
         [builder.add(ButtonText.prev_menu, "back")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
@@ -131,7 +132,10 @@ def ask_ai_prompt_kb(lang: str) -> KbMarkup:
 
 def ask_ai_again_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
-    buttons = [[builder.add(ButtonText.ask_ai_again, "ask_ai_again")]]
+    buttons = [
+        [builder.add(ButtonText.ask_ai_again, "ask_ai_again")],
+        [builder.add(ButtonText.main_menu, "ask_ai_main_menu")],
+    ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
@@ -203,6 +207,19 @@ def workout_location_kb(lang: str) -> KbMarkup:
 def feedback_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [[builder.add(ButtonText.prev_menu, "back")]]
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
+def feedback_menu_kb(lang: str, *, faq_url: str | None = None) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [
+        [builder.add(ButtonText.send_feedback, "send_feedback")],
+    ]
+    if faq_url:
+        buttons.append([builder.add(ButtonText.faq, webapp_url=faq_url)])
+    else:
+        buttons.append([builder.add(ButtonText.faq, "faq_unavailable")])
+    buttons.append([builder.add(ButtonText.prev_menu, "back")])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 

@@ -152,3 +152,19 @@ async def ask_ai_repeat(callback_query: CallbackQuery, state: FSMContext) -> Non
     )
     if handled:
         await callback_query.answer()
+
+
+@chat_router.callback_query(F.data == "ask_ai_main_menu")
+async def ask_ai_main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    profile_data = data.get("profile")
+    if not profile_data:
+        await callback_query.answer()
+        return
+    profile = Profile.model_validate(profile_data)
+    message = callback_query.message
+    if message is None or not isinstance(message, Message):
+        await callback_query.answer()
+        return
+    await callback_query.answer()
+    await show_main_menu(message, profile, state, delete_source=False)

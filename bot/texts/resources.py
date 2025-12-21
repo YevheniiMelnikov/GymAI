@@ -35,6 +35,7 @@ class ButtonText(AutoName):
     subscription_1_month = auto()
     ask_ai = auto()
     ask_ai_again = auto()
+    main_menu = auto()
 
     my_profile = auto()
     my_program = auto()
@@ -51,8 +52,11 @@ class ButtonText(AutoName):
     toggle_drop_set = auto()
     health_notes = auto()
     weight = auto()
+    height = auto()
 
     feedback = auto()
+    send_feedback = auto()
+    faq = auto()
 
     beginner = auto()
     intermediate = auto()
@@ -98,6 +102,7 @@ class MessageText(AutoName):
     workout_goals = auto()
     workout_location = auto()
     weight = auto()
+    height = auto()
     workout_experience = auto()
     health_notes = auto()
     health_notes_question = auto()
@@ -107,6 +112,7 @@ class MessageText(AutoName):
     update_your_data = auto()
     verified = auto()
     finish_registration_to_get_credits = auto()
+    finish_registration = auto()
     initial_credits_granted = auto()
     credit_balance = auto()
     tariff_plans = auto()
@@ -173,6 +179,7 @@ class MessageText(AutoName):
     start = auto()
     saved = auto()
     feedback = auto()
+    feedback_menu = auto()
     feedback_sent = auto()
     new_feedback = auto()
     message_sent = auto()

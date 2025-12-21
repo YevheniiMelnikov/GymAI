@@ -693,6 +693,26 @@ class KnowledgeBase:
                 node_set=list(node_set or []),
             )
         except Exception as exc:
+            if self.dataset_service._is_duplicate_data_error(exc):
+                logger.info(
+                    "kb_update_duplicate_entry dataset={} digest={} detail={}",
+                    alias,
+                    digest_sha[:12],
+                    exc,
+                )
+                await HashStore.add(alias, digest_sha, metadata=metadata_payload)
+                rows_after = await self.dataset_service.get_row_count(alias, user=actor)
+                logger.debug(
+                    "kb.update rows raw={} alias={} resolved={} rows_before={} rows_after={} digest={} force={}",
+                    dataset,
+                    alias,
+                    alias,
+                    rows_before,
+                    rows_after,
+                    digest_sha[:12],
+                    force_ingest,
+                )
+                return alias, False
             raise RuntimeError(f"Failed to add dataset entry for {alias}") from exc
 
         await HashStore.add(alias, digest_sha, metadata=metadata_payload)
@@ -1285,6 +1305,8 @@ class KnowledgeBase:
             parts.append(f"born_in: {profile.born_in}")
         if profile.weight:
             parts.append(f"weight: {profile.weight}")
+        if profile.height:
+            parts.append(f"height: {profile.height}")
         if profile.workout_experience:
             parts.append(f"workout_experience: {profile.workout_experience}")
         if profile.workout_goals:
