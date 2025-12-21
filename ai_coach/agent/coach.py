@@ -1,6 +1,7 @@
 import inspect
 import os
 from datetime import datetime
+from time import monotonic
 from typing import Any, ClassVar, Sequence
 
 from zoneinfo import ZoneInfo
@@ -35,6 +36,24 @@ from ai_coach.types import CoachMode
 from ai_coach.agent.utils import get_knowledge_base
 
 _LOG_PAYLOADS = os.getenv("AI_COACH_LOG_PAYLOADS", "").strip() == "1"
+
+
+def _log_agent_stage(
+    stage: str,
+    elapsed_ms: int,
+    *,
+    profile_id: int,
+    mode: CoachMode,
+    **fields: Any,
+) -> None:
+    extra_parts = " ".join(f"{key}={value}" for key, value in fields.items() if value is not None)
+    message = f"agent.stage stage={stage} profile_id={profile_id} mode={mode.value} elapsed_ms={elapsed_ms}"
+    if extra_parts:
+        message = f"{message} {extra_parts}"
+    if elapsed_ms >= 500:
+        logger.info(message)
+    else:
+        logger.debug(message)
 
 
 class CoachAgentMeta(type):
@@ -88,6 +107,8 @@ class CoachAgent(metaclass=CoachAgentMeta):
             context_lines.append(prompt)
         if period:
             context_lines.append(f"Period: {period}")
+        if workout_days:
+            context_lines.append(f"Workout days: {', '.join(workout_days)} (count: {len(workout_days)})")
         if wishes:
             context_lines.append(f"Wishes: {wishes}")
         mode = "program" if output_type is Program else "subscription"
@@ -99,7 +120,22 @@ class CoachAgent(metaclass=CoachAgentMeta):
             language=cls._lang(deps),
         )
         user_prompt = f"MODE: {mode}\n{formatted}"
+        history_started = monotonic()
         history = await cls._load_history_messages(deps.profile_id)
+        _log_agent_stage(
+            "history_load",
+            int((monotonic() - history_started) * 1000),
+            profile_id=deps.profile_id,
+            mode=deps.mode,
+            messages=len(history),
+        )
+        logger.info(
+            "agent.stage stage=run_start profile_id={} mode={} prompt_len={}",
+            deps.profile_id,
+            deps.mode.value,
+            len(user_prompt),
+        )
+        run_started = monotonic()
         raw_result = await agent.run(
             user_prompt,
             deps=deps,
@@ -109,6 +145,12 @@ class CoachAgent(metaclass=CoachAgentMeta):
                 temperature=settings.COACH_AGENT_TEMPERATURE,
                 extra_body={"response_format": {"type": "json_object"}},
             ),
+        )
+        _log_agent_stage(
+            "run",
+            int((monotonic() - run_started) * 1000),
+            profile_id=deps.profile_id,
+            mode=deps.mode,
         )
         if output_type is Program:
             normalized = cls._normalize_output(raw_result, Program)
@@ -147,7 +189,22 @@ class CoachAgent(metaclass=CoachAgentMeta):
         )
         rules = "\n".join(filter(None, [COACH_INSTRUCTIONS, instructions]))
         user_prompt = f"MODE: update\n{formatted}\nRules:\n{rules}"
+        history_started = monotonic()
         history = await cls._load_history_messages(deps.profile_id)
+        _log_agent_stage(
+            "history_load",
+            int((monotonic() - history_started) * 1000),
+            profile_id=deps.profile_id,
+            mode=deps.mode,
+            messages=len(history),
+        )
+        logger.info(
+            "agent.stage stage=run_start profile_id={} mode={} prompt_len={}",
+            deps.profile_id,
+            deps.mode.value,
+            len(user_prompt),
+        )
+        run_started = monotonic()
         raw_result = await agent.run(
             user_prompt,
             deps=deps,
@@ -157,6 +214,12 @@ class CoachAgent(metaclass=CoachAgentMeta):
                 temperature=settings.COACH_AGENT_TEMPERATURE,
                 extra_body={"response_format": {"type": "json_object"}},
             ),
+        )
+        _log_agent_stage(
+            "run",
+            int((monotonic() - run_started) * 1000),
+            profile_id=deps.profile_id,
+            mode=deps.mode,
         )
         if output_type is Program:
             return cls._normalize_output(raw_result, Program)
@@ -173,9 +236,17 @@ class CoachAgent(metaclass=CoachAgentMeta):
         agent = cls._get_agent()
         _, language_label = cls._language_context(deps)
         kb = get_knowledge_base()
+        history_started = monotonic()
         raw_history = await kb.get_message_history(deps.profile_id)
         deps.cached_history = list(raw_history)
         history = cls.llm_helper._build_history_messages(raw_history)
+        _log_agent_stage(
+            "history_load",
+            int((monotonic() - history_started) * 1000),
+            profile_id=deps.profile_id,
+            mode=deps.mode,
+            messages=len(history),
+        )
         user_prompt = ASK_AI_USER_PROMPT.format(
             language=language_label,
             question=prompt,
@@ -184,7 +255,13 @@ class CoachAgent(metaclass=CoachAgentMeta):
         multimodal_input = cls._build_user_message(user_prompt, attachments)
 
         async def _run_agent(user_input: Any) -> Any:
-            return await agent.run(
+            mode = deps.mode or CoachMode.ask_ai
+            logger.info(
+                f"agent.stage stage=run_start profile_id={deps.profile_id} mode={mode.value} "
+                f"prompt_len={len(user_prompt)}"
+            )
+            run_started = monotonic()
+            result = await agent.run(
                 user_input,
                 deps=deps,
                 output_type=QAResponse,
@@ -194,6 +271,13 @@ class CoachAgent(metaclass=CoachAgentMeta):
                     extra_body={"response_format": {"type": "json_object"}},
                 ),
             )
+            _log_agent_stage(
+                "run",
+                int((monotonic() - run_started) * 1000),
+                profile_id=deps.profile_id,
+                mode=mode,
+            )
+            return result
 
         async def _handle_abort(exc: AgentExecutionAborted) -> QAResponse | None:
             logger.info(f"agent.ask completion_aborted profile_id={deps.profile_id} reason={exc.reason}")

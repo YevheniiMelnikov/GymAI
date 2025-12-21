@@ -103,6 +103,14 @@ def clear_hash_store():
     yield
 
 
+@pytest.fixture(autouse=True)
+def reset_kb_class() -> Iterable[None]:
+    yield
+    kb_module.KnowledgeBase = _KB
+    api_module.KnowledgeBase = _KB
+    agent_tools_module.KnowledgeBase = _KB
+
+
 class _DatasetService:
     def __init__(self):
         self._PROJECTED_DATASETS: set[str] = set()

@@ -133,6 +133,22 @@ class AiohttpSessionFilter(logging.Filter):
         return True
 
 
+class ExternalNoiseFilter(logging.Filter):
+    """Suppress noisy third-party log lines that are not actionable."""
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: D401
+        try:
+            message = record.getMessage()
+        except Exception:  # noqa: BLE001 - fallback best-effort
+            return True
+        lowered = message.lower()
+        if "coding_rule_association" in lowered:
+            return False
+        if "no valid origin_id or rules provided" in lowered:
+            return False
+        return True
+
+
 _CONFIGURED = False
 _LOG_ONCE_STATE: dict[str, dict[str, float | int]] = {}
 
@@ -172,6 +188,7 @@ def configure_logging() -> None:
     intercept_handler.addFilter(sampling_filter)
     intercept_handler.addFilter(CogneeTelemetryFilter(telemetry_enabled))
     intercept_handler.addFilter(AiohttpSessionFilter())
+    intercept_handler.addFilter(ExternalNoiseFilter())
     logging.basicConfig(handlers=[intercept_handler], level=logging.INFO, force=True)
 
     kb_logger_names = (

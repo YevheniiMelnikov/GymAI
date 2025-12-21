@@ -350,6 +350,7 @@ async def workouts_action(request: HttpRequest) -> JsonResponse:
         "id": profile.id,
         "tg_id": profile.tg_id,
         "language": profile.language or settings.DEFAULT_LANG,
+        "status": profile.status,
     }
     logger.info(f"workouts_action_request profile_id={profile.id} action={action}")
 

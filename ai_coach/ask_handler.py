@@ -1,6 +1,7 @@
 from base64 import b64decode
 from binascii import Error as BinasciiError
 from hashlib import sha1
+import asyncio
 import os
 from time import monotonic
 from typing import Any, cast, Iterable
@@ -27,8 +28,11 @@ from core.services import APIService
 
 DEFAULT_WORKOUT_DAYS: tuple[str, ...] = ("Day 1", "Day 2", "Day 3", "Day 4")
 dedupe_cache = TTLCache(maxsize=2048, ttl=15)
+request_cache = TTLCache(maxsize=2048, ttl=900)
 _ALLOWED_ATTACHMENT_MIME = {"image/jpeg", "image/png", "image/webp"}
 _LOG_PAYLOADS = os.getenv("AI_COACH_LOG_PAYLOADS", "").strip() == "1"
+_inflight_requests: dict[str, asyncio.Future] = {}
+_inflight_lock = asyncio.Lock()
 
 
 def _to_language_code(raw: object, default: str) -> str:
@@ -208,6 +212,29 @@ def _log_sources(
     )
 
 
+def _log_stage_duration(
+    stage: str,
+    started: float,
+    *,
+    request_id: str | None,
+    profile_id: int,
+    mode: CoachMode,
+    **fields: Any,
+) -> None:
+    elapsed_ms = int((monotonic() - started) * 1000)
+    extra_parts = " ".join(f"{key}={value}" for key, value in fields.items() if value is not None)
+    message = (
+        f"ask.stage stage={stage} request_id={request_id} profile_id={profile_id} "
+        f"mode={mode.value} elapsed_ms={elapsed_ms}"
+    )
+    if extra_parts:
+        message = f"{message} {extra_parts}"
+    if elapsed_ms >= 500:
+        logger.info(message)
+    else:
+        logger.debug(message)
+
+
 async def _handle_abort(
     exc: AgentExecutionAborted,
     deps: AgentDeps,
@@ -327,12 +354,33 @@ async def handle_coach_request(
     rid = str(uuid4())
     started = monotonic()
     result: Any | None = None
+    inflight_future: asyncio.Future | None = None
+    inflight_owner = False
+    inflight_error: Exception | None = None
     attachments, attachments_bytes = _normalize_attachments(data.attachments)
     dedupe_key = _compute_dedupe_key(data.prompt, data.profile_id, mode, attachments=attachments)
 
     if dedupe_key and dedupe_key in dedupe_cache:
         logger.debug(f"ask.deduped rid={rid} key={dedupe_key}")
         return dedupe_cache[dedupe_key]
+
+    request_id = str(data.request_id or "")
+    if request_id and mode in {CoachMode.program, CoachMode.subscription, CoachMode.update}:
+        cached = request_cache.get(request_id)
+        if cached is not None:
+            logger.info(f"ask.request_cache_hit request_id={request_id} profile_id={data.profile_id} mode={mode.value}")
+            return cached
+        async with _inflight_lock:
+            inflight_future = _inflight_requests.get(request_id)
+            if inflight_future is None:
+                inflight_future = asyncio.get_running_loop().create_future()
+                _inflight_requests[request_id] = inflight_future
+                inflight_owner = True
+            else:
+                inflight_owner = False
+        if inflight_future is not None and not inflight_owner:
+            logger.info(f"ask.request_deduped request_id={request_id} profile_id={data.profile_id} mode={mode.value}")
+            return await inflight_future
 
     with logger.contextualize(rid=rid):
         logger.debug(
@@ -348,9 +396,23 @@ async def handle_coach_request(
             else SubscriptionPeriod(data.period or SubscriptionPeriod.one_month.value)
         )
 
+        profile_started = monotonic()
         profile = await _fetch_profile(data.profile_id)
+        _log_stage_duration(
+            "profile_fetch",
+            profile_started,
+            request_id=data.request_id,
+            profile_id=data.profile_id,
+            mode=mode,
+            found=str(profile is not None).lower(),
+        )
         language = _resolve_language(data.language, profile)
         workout_days: list[str] = data.workout_days or list(DEFAULT_WORKOUT_DAYS)
+        if mode in {CoachMode.program, CoachMode.subscription}:
+            logger.info(
+                f"ask.inputs request_id={data.request_id} profile_id={data.profile_id} mode={mode.value} "
+                f"workout_days_count={len(workout_days)}"
+            )
 
         if attachments:
             kb = round(attachments_bytes / 1024, 1)
@@ -381,7 +443,16 @@ async def handle_coach_request(
         ctx: AskCtx = _build_context(data, language, period, workout_days, deps, attachments)
         logger.debug(f"/ask ctx.language={language} deps.locale={deps.locale} mode={mode.value}")
 
+        kb_started = monotonic()
         kb_for_chat = await _prepare_chat_kb(mode, data.prompt, data.profile_id, language)
+        _log_stage_duration(
+            "kb_prepare",
+            kb_started,
+            request_id=data.request_id,
+            profile_id=data.profile_id,
+            mode=mode,
+            enabled=str(kb_for_chat is not None).lower(),
+        )
 
         try:
             coach_agent_action: CoachAction = DISPATCH[mode]
@@ -390,7 +461,20 @@ async def handle_coach_request(
             raise HTTPException(status_code=422, detail="Unsupported mode") from exc
 
         try:
+            logger.info(
+                f"ask.stage stage=agent_run_start request_id={data.request_id} "
+                f"profile_id={data.profile_id} mode={mode.value}"
+            )
+            agent_started = monotonic()
             result = await coach_agent_action(ctx)
+            _log_stage_duration(
+                "agent_run",
+                agent_started,
+                request_id=data.request_id,
+                profile_id=data.profile_id,
+                mode=mode,
+                tools_used=deps.tool_calls,
+            )
 
             if mode == CoachMode.ask_ai:
                 answer = getattr(result, "answer", None)
@@ -425,6 +509,9 @@ async def handle_coach_request(
 
             if dedupe_key and result and not isinstance(result, JSONResponse):
                 dedupe_cache[dedupe_key] = result
+            if request_id and mode in {CoachMode.program, CoachMode.subscription, CoachMode.update}:
+                if result is not None and not isinstance(result, JSONResponse):
+                    request_cache[request_id] = result
 
             return result
 
@@ -436,10 +523,19 @@ async def handle_coach_request(
             result = await _handle_abort(exc, deps, mode)
             return result
         except ValidationError as exc:
+            inflight_error = exc
             logger.exception(f"/ask agent validation error rid={rid}: {exc}")
             raise HTTPException(status_code=422, detail="Invalid response") from exc
         except Exception as exc:  # pragma: no cover - log unexpected errors
+            inflight_error = exc
             logger.exception(f"/ask agent failed rid={rid}: {exc}")
             raise HTTPException(status_code=503, detail="Service unavailable") from exc
         finally:
             _final_log(mode, result, deps, started, data.profile_id, data.request_id)
+            if inflight_owner and request_id and inflight_future is not None:
+                if not inflight_future.done():
+                    if inflight_error is not None:
+                        inflight_future.set_exception(inflight_error)
+                    else:
+                        inflight_future.set_result(result)
+                _inflight_requests.pop(request_id, None)

@@ -105,22 +105,17 @@ class Settings(BaseSettings):
     AI_COACH_URL: Annotated[str, Field(default="http://ai_coach:9000/", description="URL of the AI Coach service.")]
     AI_COACH_HOST: Annotated[str, Field(default="ai_coach", description="Hostname of the AI Coach service.")]
     AI_COACH_PORT: Annotated[int, Field(default=9000, description="Port of the AI Coach service.")]
-    AI_COACH_TIMEOUT: int = Field(default=420, description="Timeout in seconds for long-running AI coach operations.")
+    AI_COACH_TIMEOUT: int = Field(default=600, description="Timeout in seconds for long-running AI coach operations.")
     AI_COACH_REFRESH_USER: Annotated[str, Field(default="admin", description="Username for AI Coach knowledge base refresh endpoint.")]
     AI_COACH_REFRESH_PASSWORD: Annotated[str, Field(default="password", description="Password for AI Coach knowledge base refresh endpoint.")]
     AI_COACH_MAX_TOOL_CALLS: Annotated[int, Field(default=5, description="Maximum number of tool calls an AI agent can make in one turn.")]
     AI_COACH_REQUEST_TIMEOUT: Annotated[int, Field(default=60, description="Default timeout for requests to the AI Coach in seconds.")]
     AI_COACH_MAX_RUN_SECONDS: Annotated[float, Field(default=200.0, description="Time budget in seconds for a single AI coach agent run before aborting.")]
     AI_COACH_GLOBAL_PROJECTION_TIMEOUT: Annotated[float, Field(default=15.0, description="Timeout for global projection operations in seconds.")]
-    AI_COACH_GRAPH_ATTACH_TIMEOUT: Annotated[
-        float,
-        Field(default=45.0, description="Maximum time to wait for the graph engine to become reachable during startup."),
-    ]
+    AI_COACH_GRAPH_ATTACH_TIMEOUT: Annotated[float, Field(default=45.0, description="Maximum time to wait for the graph engine to become reachable during startup.")]
     AI_COACH_DEFAULT_TOOL_TIMEOUT: Annotated[float, Field(default=3.0, description="Default timeout for AI agent tool calls in seconds.")]
     AI_COACH_SEARCH_TIMEOUT: Annotated[float, Field(default=180.0, description="Timeout for search tool calls in seconds.")]
-    AI_COACH_MEMIFY_DELAY_SECONDS: Annotated[
-        float, Field(default=3600.0, description="Delay in seconds before scheduling Cognee memify for profile datasets.")
-    ]
+    AI_COACH_MEMIFY_DELAY_SECONDS: Annotated[float, Field(default=3600.0, description="Delay in seconds before scheduling Cognee memify for profile datasets.")]
     AI_COACH_CHAT_SUMMARY_PAIR_LIMIT: Annotated[int, Field(default=10, description="Number of client/coach message pairs required before summarizing chat history.")]
     AI_COACH_CHAT_SUMMARY_MAX_TOKENS: Annotated[int, Field(default=400, description="Max tokens for the chat summary LLM request.")]
     AI_COACH_REDIS_CHAT_DB: Annotated[int, Field(default=2, description="Redis database index used for cached chat history summaries.")]

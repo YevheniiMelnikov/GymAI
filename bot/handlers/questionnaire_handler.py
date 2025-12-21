@@ -25,7 +25,8 @@ from bot.utils.menus import (
     send_policy_confirmation,
     show_balance_menu,
 )
-from bot.utils.profiles import update_profile_data
+from bot.utils.profiles import resolve_workout_location, update_profile_data
+from bot.utils.workout_days import service_period_value, start_workout_days_selection
 from bot.utils.text import get_state_and_message
 from bot.utils.bot import del_msg, answer_msg, delete_messages, set_bot_commands
 from bot.texts import MessageText, translate
@@ -309,18 +310,34 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
             await show_balance_menu(message, profile, state)
             return
 
-        await state.update_data(wishes=wishes)
-        await state.set_state(States.ai_confirm_service)
-        await answer_msg(
+        service = str(data.get("ai_service") or "program")
+        lang = profile.language or settings.DEFAULT_LANG
+
+        if service == "program":
+            workout_location = resolve_workout_location(selected_profile)
+            if workout_location is None:
+                logger.error(f"Workout location missing for completed profile_id={selected_profile.id}")
+                await answer_msg(message, translate(MessageText.unexpected_error, lang))
+                return
+            await start_workout_days_selection(
+                message,
+                state,
+                lang=lang,
+                service=service,
+                workout_location=workout_location.value,
+                show_wishes_prompt=False,
+            )
+            return
+
+        period_value = service_period_value(service)
+        await start_workout_days_selection(
             message,
-            translate(MessageText.confirm_service, profile.language).format(
-                balance=selected_profile.credits,
-                price=required,
-            ),
-            reply_markup=yes_no_kb(profile.language),
+            state,
+            lang=lang,
+            service=service,
+            period_value=period_value,
+            show_wishes_prompt=False,
         )
-        if message is not None:
-            await del_msg(cast(Message | CallbackQuery | None, message))
         return
 
     return

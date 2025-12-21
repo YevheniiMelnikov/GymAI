@@ -16,7 +16,7 @@ from core.enums import PaymentStatus, SubscriptionPeriod
 from core.services import APIService
 from bot.utils.menus import show_main_menu, show_my_workouts_menu, show_balance_menu
 from core.schemas import Profile
-from bot.utils.workout_plans import cache_program_data, process_new_subscription
+from bot.utils.workout_plans import cache_program_data, process_new_program, process_new_subscription
 from bot.utils.profiles import resolve_workout_location
 from bot.texts import MessageText, translate
 
@@ -127,3 +127,7 @@ async def confirm_service(callback_query: CallbackQuery, state: FSMContext) -> N
     if service_type == "subscription":
         await process_new_subscription(callback_query, profile, state, confirmed=True)
         return
+    if service_type == "program":
+        await process_new_program(callback_query, profile, state, confirmed=True)
+        return
+    await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)

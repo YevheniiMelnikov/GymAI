@@ -22,7 +22,13 @@ from ai_coach.types import CoachMode
 from ..schemas import ProgramPayload
 from core.services import get_gif_manager
 
-from ai_coach.agent.utils import ProgramAdapter, get_knowledge_base
+from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
+from ai_coach.agent.utils import ProgramAdapter
+from ai_coach.agent import utils as agent_utils
+
+
+def get_knowledge_base() -> KnowledgeBase:
+    return agent_utils.get_knowledge_base()
 
 
 toolset = FunctionToolset()

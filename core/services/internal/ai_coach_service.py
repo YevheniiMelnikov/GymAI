@@ -1,6 +1,7 @@
 # ai_coach_service.py
 import asyncio
 import json
+from time import monotonic
 from enum import Enum
 from typing import Any
 from urllib.parse import urljoin, urlsplit
@@ -219,6 +220,7 @@ class AiCoachService(APIClient):
         ping_url = urljoin(self.base_url, ping_path)
         ping_headers = self._hmac_headers(b"")
         logger.debug("ai_coach.ping.start request_id={} url={}", request_id, ping_url)
+        ping_started = monotonic()
         # Retry readiness ping with exponential backoff
         attempts = 5
         delay = 0.5
@@ -238,6 +240,17 @@ class AiCoachService(APIClient):
                     ping_status,
                     attempt,
                 )
+                ping_elapsed_ms = int((monotonic() - ping_started) * 1000)
+                if ping_elapsed_ms >= 500:
+                    logger.info(
+                        f"ai_coach.ping.done request_id={request_id} status={ping_status} "
+                        f"attempt={attempt} elapsed_ms={ping_elapsed_ms}"
+                    )
+                else:
+                    logger.debug(
+                        f"ai_coach.ping.done request_id={request_id} status={ping_status} "
+                        f"attempt={attempt} elapsed_ms={ping_elapsed_ms}"
+                    )
                 break
             except (APIClientTransportError, APIClientHTTPError) as exc:
                 if attempt >= attempts:
@@ -260,6 +273,7 @@ class AiCoachService(APIClient):
         status: int = 0
         data: Any | None = None
         for attempt in range(1, attempts + 1):
+            attempt_started = monotonic()
             try:
                 async with httpx.AsyncClient(base_url=self.base_url, timeout=self.settings.AI_COACH_TIMEOUT) as client:
                     status, data = await self._api_request(
@@ -271,8 +285,24 @@ class AiCoachService(APIClient):
                         timeout=self.settings.AI_COACH_TIMEOUT,
                         client=client,
                     )
+                attempt_elapsed_ms = int((monotonic() - attempt_started) * 1000)
+                if attempt_elapsed_ms >= 500:
+                    logger.info(
+                        f"ai_coach.request.ok request_id={request_id} endpoint={endpoint} "
+                        f"attempt={attempt} elapsed_ms={attempt_elapsed_ms}"
+                    )
+                else:
+                    logger.debug(
+                        f"ai_coach.request.ok request_id={request_id} endpoint={endpoint} "
+                        f"attempt={attempt} elapsed_ms={attempt_elapsed_ms}"
+                    )
                 break
             except (APIClientHTTPError, APIClientTransportError) as exc:
+                attempt_elapsed_ms = int((monotonic() - attempt_started) * 1000)
+                logger.warning(
+                    f"ai_coach.request.failed request_id={request_id} endpoint={endpoint} "
+                    f"attempt={attempt} elapsed_ms={attempt_elapsed_ms} error={exc}"
+                )
                 if attempt >= attempts:
                     if isinstance(exc, APIClientHTTPError):
                         logger.error(

@@ -1,4 +1,4 @@
-from typing import Awaitable, Callable
+from typing import Awaitable, Callable, cast
 
 from ai_coach.agent import CoachAgent
 from ai_coach.types import AskCtx, CoachMode
@@ -7,15 +7,37 @@ from core.schemas import Program, QAResponse, Subscription
 
 CoachAction = Callable[[AskCtx], Awaitable[Program | Subscription | QAResponse | list[str] | None]]
 
+
+def _dispatch_program(ctx: AskCtx) -> Awaitable[Program | None]:
+    workout_days = ctx.get("workout_days")
+    if workout_days is None:
+        return cast(
+            Awaitable[Program],
+            CoachAgent.generate_workout_plan(
+                ctx.get("prompt"),
+                deps=ctx["deps"],
+                workout_location=ctx.get("workout_location"),
+                wishes=ctx["wishes"],
+                instructions=ctx.get("instructions"),
+                output_type=Program,
+            ),
+        )
+    return cast(
+        Awaitable[Program],
+        CoachAgent.generate_workout_plan(
+            ctx.get("prompt"),
+            deps=ctx["deps"],
+            workout_location=ctx.get("workout_location"),
+            workout_days=workout_days,
+            wishes=ctx["wishes"],
+            instructions=ctx.get("instructions"),
+            output_type=Program,
+        ),
+    )
+
+
 DISPATCH: dict[CoachMode, CoachAction] = {
-    CoachMode.program: lambda ctx: CoachAgent.generate_workout_plan(
-        ctx.get("prompt"),
-        deps=ctx["deps"],
-        workout_location=ctx.get("workout_location"),
-        wishes=ctx["wishes"],
-        instructions=ctx.get("instructions"),
-        output_type=Program,
-    ),
+    CoachMode.program: _dispatch_program,
     CoachMode.subscription: lambda ctx: CoachAgent.generate_workout_plan(
         ctx.get("prompt"),
         deps=ctx["deps"],

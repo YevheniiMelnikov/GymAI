@@ -3,7 +3,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from typing import cast
 from loguru import logger
-from uuid import uuid4
 
 from bot.states import States
 from bot.texts import MessageText, translate
@@ -23,7 +22,7 @@ from bot.utils.menus import (
     show_balance_menu,
     process_ai_service_selection,
 )
-from bot.utils.workout_plans import cancel_subscription, enqueue_subscription_plan
+from bot.utils.workout_plans import cancel_subscription, process_new_program, process_new_subscription
 from bot.utils.other import generate_order_id
 from bot.utils.bot import del_msg, answer_msg, get_webapp_url
 from core.exceptions import ProfileNotFoundError, SubscriptionNotFoundError
@@ -34,9 +33,7 @@ from bot.keyboards import (
     yes_no_kb,
 )
 from bot.utils.credits import available_packages
-from bot.utils.ai_coach import enqueue_workout_plan_generation
 from bot.utils.profiles import resolve_workout_location
-from core.enums import WorkoutLocation, WorkoutPlanType
 from core.utils.idempotency import acquire_once
 from bot.utils.workout_days import (
     WORKOUT_DAYS_BACK,
@@ -196,6 +193,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
             lang=lang,
             service=service,
             workout_location=workout_location.value,
+            show_wishes_prompt=False,
         )
         return
 
@@ -211,6 +209,7 @@ async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -
         lang=lang,
         service=service,
         period_value=period.value,
+        show_wishes_prompt=False,
     )
     return
 
@@ -255,58 +254,11 @@ async def workout_days_selection(callback_query: CallbackQuery, state: FSMContex
     await callback_query.answer()
     service = data.get("workout_days_service", "program")
     selected_days = day_labels(count)
-    required = int(data.get("required", 0))
-    wishes = data.get("wishes", "")
+    await state.update_data(workout_days=selected_days)
     if service == "program":
-        workout_location_value = data.get("workout_days_location")
-        if not workout_location_value:
-            logger.error(f"Workout location missing during program flow for profile_id={profile.id}")
-            await callback_query.answer(translate(MessageText.unexpected_error, lang), show_alert=True)
-            return
-        await APIService.profile.adjust_credits(profile.id, -required)
-        await Cache.profile.update_record(profile.id, {"credits": profile.credits - required})
-        request_id = str(uuid4())
-        await answer_msg(callback_query, translate(MessageText.request_in_progress, lang))
-        message = callback_query.message
-        if message and isinstance(message, Message):
-            await show_main_menu(message, profile, state)
-        queued = await enqueue_workout_plan_generation(
-            profile=profile,
-            plan_type=WorkoutPlanType.PROGRAM,
-            workout_location=WorkoutLocation(workout_location_value),
-            wishes=wishes,
-            request_id=request_id,
-            workout_days=selected_days,
-        )
-        if not queued:
-            await answer_msg(
-                callback_query,
-                translate(MessageText.coach_agent_error, lang).format(tg=settings.TG_SUPPORT_CONTACT),
-            )
-            logger.error(f"ai_plan_dispatch_failed plan_type=program profile_id={profile.id} request_id={request_id}")
-            return
-        logger.debug(
-            "AI coach plan generation started plan_type=program "
-            f"profile_id={profile.id} request_id={request_id} ttl={settings.LLM_COOLDOWN}"
-        )
-        logger.info(
-            f"ai_plan_generation_requested request_id={request_id} profile_id={profile.id} "
-            f"plan_type={WorkoutPlanType.PROGRAM.value}"
-        )
+        await process_new_program(callback_query, profile, state, confirmed=False)
         return
-    period_value = data.get("workout_days_period")
-    try:
-        period = SubscriptionPeriod(period_value) if period_value else SubscriptionPeriod.one_month
-    except ValueError:
-        period = SubscriptionPeriod.one_month
-    await APIService.profile.adjust_credits(profile.id, -required)
-    await Cache.profile.update_record(profile.id, {"credits": profile.credits - required})
-    await enqueue_subscription_plan(
-        callback_query,
-        state,
-        period=period,
-        workout_days=selected_days,
-    )
+    await process_new_subscription(callback_query, profile, state, confirmed=False)
     return
 
 

@@ -30,6 +30,7 @@ def test_generate_plan_returns_program(monkeypatch: pytest.MonkeyPatch) -> None:
             )
 
         monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: types.SimpleNamespace(run=fake_run)))
+
         async def fake_history(cls, profile_id: int) -> list[object]:
             return [object(), object()]
 

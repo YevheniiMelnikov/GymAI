@@ -35,6 +35,7 @@ class DatasetService:
     GLOBAL_DATASET: ClassVar[str] = settings.COGNEE_GLOBAL_DATASET
 
     def __init__(self, storage_service: Any | None = None):
+        type(self).GLOBAL_DATASET = settings.COGNEE_GLOBAL_DATASET
         self._user: Any | None = None
         self._list_data_supports_user: bool | None = None
         self._list_data_requires_user: bool | None = None

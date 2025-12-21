@@ -65,6 +65,7 @@ class KnowledgeBase:
     GLOBAL_DATASET: str = settings.COGNEE_GLOBAL_DATASET
 
     def __init__(self) -> None:
+        type(self).GLOBAL_DATASET = settings.COGNEE_GLOBAL_DATASET
         self._projection_health: dict[str, tuple[ProjectionStatus, str]] = {}
         self.dataset_service = DatasetService()
         self.storage_service = StorageService(self.dataset_service)
@@ -355,6 +356,21 @@ class KnowledgeBase:
             except Exception as exc:  # noqa: BLE001
                 logger.warning(f"knowledge_memify_failed dataset={alias} detail={exc}")
         return {"profile_id": profile_id, "datasets": processed}
+
+    @classmethod
+    def _resolve_dataset_alias(cls, alias: str) -> str:
+        """Resolve dataset alias for compatibility with legacy callers."""
+        value = str(alias or "")
+        if not value:
+            return value
+        try:
+            instance = cls()
+            resolver = getattr(instance.dataset_service, "resolve_dataset_alias", None)
+            if callable(resolver):
+                return str(resolver(value))
+        except Exception:  # noqa: BLE001 - best effort for logging compatibility
+            return value
+        return value
 
     async def _invoke_memify(self, memify_fn: Any, *, datasets: list[str], user: Any | None) -> None:
         params = {}

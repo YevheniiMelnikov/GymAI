@@ -48,6 +48,7 @@ const ProgramPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [actionLoading, setActionLoading] = useState(false);
+    const [fabPressed, setFabPressed] = useState(false);
     const [dateText, setDateText] = useState('');
     const [activeSegment, setActiveSegment] = useState<SegmentId>(() => {
         const source = searchParams.get('source');
@@ -255,6 +256,8 @@ const ProgramPage: React.FC = () => {
         boxShadow: '0 8px 16px rgba(0, 0, 0, 0.25)',
         zIndex: 1000,
         cursor: 'pointer',
+        transform: fabPressed ? 'scale(0.94)' : 'scale(1)',
+        transition: 'transform 120ms ease, box-shadow 120ms ease',
     };
 
     const handleBack = useCallback(() => {
@@ -365,6 +368,9 @@ const ProgramPage: React.FC = () => {
                     style={fabStyle}
                     aria-label={t('program.create_new')}
                     onClick={handleFabClick}
+                    onPointerDown={() => setFabPressed(true)}
+                    onPointerUp={() => setFabPressed(false)}
+                    onPointerLeave={() => setFabPressed(false)}
                     disabled={actionLoading}
                 >
                     +

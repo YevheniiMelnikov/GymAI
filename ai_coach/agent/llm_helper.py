@@ -572,20 +572,11 @@ class LLMHelper:
             start = perf_counter()
             request_meta = cls._llm_request_metadata(kwargs)
             logger.debug(
-                (
-                    "llm.request model={} json_format={} stream={} messages={} system_len={} user_len={} "
-                    "temperature={} max_tokens={} tool_choice={}"
-                ).format(
-                    resolved_model,
-                    request_meta["json_format"],
-                    request_meta["stream"],
-                    request_meta["messages"],
-                    request_meta["system_len"],
-                    request_meta["user_len"],
-                    request_meta["temperature"],
-                    request_meta["max_tokens"],
-                    request_meta["tool_choice"],
-                )
+                "llm.request "
+                f"model={resolved_model} json_format={request_meta['json_format']} stream={request_meta['stream']} "
+                f"messages={request_meta['messages']} system_len={request_meta['system_len']} "
+                f"user_len={request_meta['user_len']} temperature={request_meta['temperature']} "
+                f"max_tokens={request_meta['max_tokens']} tool_choice={request_meta['tool_choice']}"
             )
             try:
                 response = await typed_create(*args, **kwargs)
@@ -595,32 +586,21 @@ class LLMHelper:
                 raise
             latency = (perf_counter() - start) * 1000.0
             response_meta = cls._llm_response_metadata(response)
-            logger.debug(
-                (
-                    "llm.response model={} choices={} finish_reason={} content_len={} "
-                    "has_tool_calls={} prompt_tokens={} completion_tokens={} total_tokens={} "
-                    "latency_ms={:.0f} preview={}"
-                ).format(
-                    resolved_model,
-                    response_meta["choices"],
-                    response_meta["finish_reason"],
-                    response_meta["content_len"],
-                    response_meta["has_tool_calls"],
-                    response_meta["prompt_tokens"],
-                    response_meta["completion_tokens"],
-                    response_meta["total_tokens"],
-                    latency,
-                    response_meta["preview"],
-                )
+            response_log = (
+                f"model={resolved_model} choices={response_meta['choices']} "
+                f"finish_reason={response_meta['finish_reason']} content_len={response_meta['content_len']} "
+                f"has_tool_calls={response_meta['has_tool_calls']} prompt_tokens={response_meta['prompt_tokens']} "
+                f"completion_tokens={response_meta['completion_tokens']} total_tokens={response_meta['total_tokens']} "
+                f"latency_ms={latency:.0f} preview={response_meta['preview']}"
             )
+            if latency >= 10000:
+                logger.info(f"llm.response.slow {response_log}")
+            else:
+                logger.debug(f"llm.response {response_log}")
             if os.getenv("LOG_LLM_RAW", "").lower() in {"1", "true", "yes"}:
                 raw_snapshot, raw_keys = cls._raw_choice_snapshot(response)
                 logger.debug(
-                    "llm.response.raw model={} raw_first_200={} raw_keys={}".format(
-                        resolved_model,
-                        raw_snapshot,
-                        raw_keys or "na",
-                    )
+                    f"llm.response.raw model={resolved_model} raw_first_200={raw_snapshot} raw_keys={raw_keys or 'na'}"
                 )
             return response
 

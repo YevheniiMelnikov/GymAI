@@ -91,6 +91,7 @@ async def start_workout_days_selection(
     service: str,
     period_value: str | None = None,
     workout_location: str | None = None,
+    show_wishes_prompt: bool = True,
 ) -> None:
     await state.update_data(
         build_workout_days_state(
@@ -100,8 +101,9 @@ async def start_workout_days_selection(
         )
     )
     await state.set_state(States.workout_days_selection)
-    instructions = translate(MessageText.enter_wishes, lang)
-    await answer_msg(source, instructions)
+    if show_wishes_prompt:
+        instructions = translate(MessageText.enter_wishes, lang)
+        await answer_msg(source, instructions)
     text = compose_workout_days_prompt(lang, DEFAULT_WORKOUT_DAYS_COUNT)
     await answer_msg(source, text, reply_markup=workout_days_selection_kb(lang))
     if isinstance(source, CallbackQuery):

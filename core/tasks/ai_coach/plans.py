@@ -223,7 +223,7 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
 
     logger.info(
         f"ai_generate_plan started profile_id={profile_id} plan_type={plan_type.value} "
-        f"request_id={request_id} attempt={attempt}"
+        f"request_id={request_id} attempt={attempt} workout_days_count={len(workout_days)}"
     )
 
     try:
