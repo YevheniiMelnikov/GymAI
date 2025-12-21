@@ -7,6 +7,9 @@ type TopBarProps = {
 };
 
 const TopBar: React.FC<React.PropsWithChildren<TopBarProps>> = ({ title, onBack, children }) => {
+    const leadingStyle: React.CSSProperties = { marginLeft: '-6px' };
+    const backStyle: React.CSSProperties = { padding: '6px' };
+
     const renderBackControl = () => {
         if (!onBack) {
             return <span aria-hidden="true" className="topbar__spacer" />;
@@ -17,6 +20,7 @@ const TopBar: React.FC<React.PropsWithChildren<TopBarProps>> = ({ title, onBack,
                 className="topbar__back"
                 aria-label={t('back')}
                 onClick={onBack}
+                style={backStyle}
             >
                 <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <path
@@ -33,7 +37,9 @@ const TopBar: React.FC<React.PropsWithChildren<TopBarProps>> = ({ title, onBack,
 
     return (
         <header className="topbar" role="banner">
-            <div className="topbar__leading">{renderBackControl()}</div>
+            <div className="topbar__leading" style={leadingStyle}>
+                {renderBackControl()}
+            </div>
 
             <h1 id="page-title" className="topbar__title">
                 {title}

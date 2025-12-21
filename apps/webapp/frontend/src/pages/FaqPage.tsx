@@ -2,12 +2,13 @@ import React, { useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import { applyLang, t } from '../i18n/i18n';
-import { readLocale, showBackButton, hideBackButton, onBackButtonClick, offBackButtonClick } from '../telegram';
+import { closeWebApp, readLocale, showBackButton, hideBackButton, onBackButtonClick, offBackButtonClick } from '../telegram';
 
 const FaqPage: React.FC = () => {
     const navigate = useNavigate();
 
     const handleBack = useCallback(() => {
+        closeWebApp();
         navigate(-1);
     }, [navigate]);
 

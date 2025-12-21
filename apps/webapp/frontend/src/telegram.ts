@@ -13,6 +13,7 @@ type TelegramWebApp = {
   initDataUnsafe?: TelegramInitData;
   ready?: () => void;
   expand?: () => void;
+  close?: () => void;
   platform?: string;
   setBackgroundColor?: (color: string) => void;
   setHeaderColor?: (color: string | 'bg_color' | 'secondary_bg_color') => void;
@@ -46,6 +47,17 @@ export function tmeReady(): void {
 
 export function tmeExpand(): void {
   try { getWebApp()?.expand?.(); } catch {}
+}
+
+export function closeWebApp(): void {
+  try {
+    const webApp = getWebApp();
+    if (webApp?.close) {
+      webApp.close();
+      return;
+    }
+  } catch {}
+  try { window.close(); } catch {}
 }
 
 export function showBackButton(): void {

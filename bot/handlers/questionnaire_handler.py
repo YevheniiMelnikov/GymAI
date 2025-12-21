@@ -31,7 +31,7 @@ from bot.utils.text import get_state_and_message
 from bot.utils.bot import del_msg, answer_msg, delete_messages, set_bot_commands
 from bot.utils.other import parse_int_with_decimal
 from bot.texts import MessageText, translate
-from core.utils.validators import is_valid_year
+from core.utils.validators import extract_birth_year
 
 questionnaire_router = Router()
 HEALTH_NOTES_PLACEHOLDER = "-"
@@ -103,12 +103,13 @@ async def born_in(message: Message, state: FSMContext, bot: Bot) -> None:
     await delete_messages(state)
     data = await state.get_data()
     lang = data.get("lang", settings.DEFAULT_LANG)
-    if not is_valid_year(message.text):
+    year = extract_birth_year(message.text)
+    if year is None:
         await answer_msg(message, translate(MessageText.invalid_content, lang))
         return
 
     await state.update_data(
-        born_in=message.text,
+        born_in=str(year),
         chat_id=message.chat.id,
     )
     await send_policy_confirmation(cast(Message, message), state)
