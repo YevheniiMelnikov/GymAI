@@ -46,14 +46,22 @@ class Profile(BaseModel):
         return str(value)
 
 
+class ExerciseSetDetail(BaseModel):
+    reps: int
+    weight: float
+    weight_unit: str | None = None
+    model_config = ConfigDict(extra="ignore")
+
+
 class Exercise(BaseModel):
     name: str
-    sets: str
-    reps: str
+    sets: str | int
+    reps: str | int
     gif_link: str | None = None
     weight: str | None = None
     set_id: int | None = None
     drop_set: bool = False
+    sets_detail: list[ExerciseSetDetail] | None = None
     model_config = ConfigDict(extra="ignore")
 
 

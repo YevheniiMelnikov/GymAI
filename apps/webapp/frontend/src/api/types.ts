@@ -5,12 +5,19 @@ export type Weight = {
   unit: string;
 };
 
+export type ExerciseSetDetail = {
+  reps: number;
+  weight: number;
+  weight_unit?: string | null;
+};
+
 export type Exercise = {
   id: string;
   name: string;
   sets: number | string | null;
   reps: number | string | null;
   weight: Weight | null;
+  sets_detail?: ExerciseSetDetail[] | null;
   equipment: string | null;
   notes: string | null;
 };

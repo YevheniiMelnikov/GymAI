@@ -14,6 +14,9 @@ urlpatterns = [
     path(  # pyrefly: ignore[no-matching-overload]
         "api/workouts/action/", views.workouts_action, name="webapp-workouts-action"
     ),
+    path(  # pyrefly: ignore[no-matching-overload]
+        "api/program/exercise/", views.update_exercise_sets, name="webapp-program-exercise-update"
+    ),
     path("", views.index, name="webapp"),
     path("__ping__", views.ping, name="webapp-ping"),
     re_path(r"^(?!api/).*$", views.index),

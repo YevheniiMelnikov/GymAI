@@ -1,5 +1,7 @@
+import { saveExerciseSets } from '../api/http';
 import { Day, Exercise, Locale, Program, Week } from '../api/types';
 import { t } from '../i18n/i18n';
+import { readInitData } from '../telegram';
 
 export type RenderedProgram = {
   readonly fragment: DocumentFragment;
@@ -61,6 +63,12 @@ type ExercisePresentation = {
   readonly extraDetails: readonly string[];
 };
 
+type DisplaySet = {
+  readonly reps: number;
+  readonly weight: number;
+  readonly weightUnit: string | null;
+};
+
 const LEADING_NUMBER_PATTERN = /^\s*\d+(?:\.\d+)*\s*[).:\-–—]?\s*/;
 const NOISE_TOKEN_PATTERN = /\bset\s+\d+\b/i;
 const NOISE_TOKEN_GLOBAL_PATTERN = /\bset\s+\d+\b/gi;
@@ -116,18 +124,73 @@ function sanitizeNote(value: string | null | undefined): string | null {
   return trimmed;
 }
 
-const REFRESH_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-  <path d="M4.2 5.8a4 4 0 0 1 6.6-1.6L12 5.4V2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M11.8 10.2a4 4 0 0 1-6.6 1.6L4 10.6v2.9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+function formatNumber(value: number): string {
+  if (Number.isInteger(value)) return String(value);
+  return value.toFixed(2).replace(/\.?0+$/, '');
+}
+
+function buildDisplaySets(exercise: Exercise): DisplaySet[] {
+  if (exercise.sets_detail && exercise.sets_detail.length > 0) {
+    return exercise.sets_detail.map((detail) => ({
+      reps: Math.max(1, Math.floor(parseNumeric(detail.reps, 1))),
+      weight: Math.max(0, parseNumeric(detail.weight, 0)),
+      weightUnit: detail.weight_unit ?? null
+    }));
+  }
+
+  const setsCount = Math.max(1, Math.floor(parseNumeric(exercise.sets, 1)));
+  const reps = parseReps(exercise.reps, 1);
+  const weight = Math.max(0, parseNumeric(exercise.weight?.value ?? null, 0));
+  const weightUnit = exercise.weight?.unit ?? null;
+  return Array.from({ length: setsCount }, () => ({
+    reps,
+    weight,
+    weightUnit
+  }));
+}
+
+const CLOSE_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <path d="M4 4L12 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M12 4L4 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
 </svg>`;
+const EXERCISE_EDIT_EVENT = 'exercise-edit-dialog';
+export const EXERCISE_EDIT_SAVED_EVENT = 'exercise-edit-saved';
+
+type ProgramSource = 'direct' | 'subscription';
+type ProgramContext = {
+  programId: string | null;
+  source: ProgramSource | null;
+};
+
+let programContext: ProgramContext = { programId: null, source: null };
+
+export function setProgramContext(programId: string | null, source: ProgramSource | null): void {
+  programContext = { programId, source };
+}
 
 type ExerciseDialogController = {
   open: () => void;
   close: () => void;
 };
 
+type EditableSet = {
+  id: string;
+  reps: number;
+  weight: number;
+};
+
+type ExerciseEditDialogController = {
+  open: (exercise: Exercise) => void;
+  close: () => void;
+};
+
 const REPLACE_DIALOG_ID = 'exercise-replace-dialog';
 let exerciseDialog: ExerciseDialogController | null = null;
+const TECHNIQUE_DIALOG_ID = 'exercise-technique-dialog';
+let exerciseTechniqueDialog: ExerciseDialogController | null = null;
+const EDIT_DIALOG_ID = 'exercise-edit-dialog';
+let exerciseEditDialog: ExerciseEditDialogController | null = null;
+let editSetCounter = 0;
 
 function getExerciseDialog(): ExerciseDialogController {
   if (exerciseDialog) return exerciseDialog;
@@ -214,28 +277,422 @@ function getExerciseDialog(): ExerciseDialogController {
   return exerciseDialog;
 }
 
-function createExerciseActions(details: HTMLDetailsElement): HTMLDivElement {
+function getExerciseTechniqueDialog(): ExerciseDialogController {
+  if (exerciseTechniqueDialog) return exerciseTechniqueDialog;
+
+  const root = document.createElement('div');
+  root.id = TECHNIQUE_DIALOG_ID;
+  root.className = 'exercise-dialog exercise-technique-dialog';
+  root.setAttribute('aria-hidden', 'true');
+
+  const panel = document.createElement('div');
+  panel.className = 'exercise-dialog__panel';
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-modal', 'true');
+  panel.setAttribute('aria-labelledby', `${TECHNIQUE_DIALOG_ID}-title`);
+  panel.tabIndex = -1;
+
+  const title = document.createElement('h3');
+  title.id = `${TECHNIQUE_DIALOG_ID}-title`;
+  title.className = 'exercise-dialog__title';
+
+  const body = document.createElement('p');
+  body.className = 'exercise-dialog__body';
+
+  const actions = document.createElement('div');
+  actions.className = 'exercise-dialog__actions';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'primary-button';
+
+  actions.append(closeBtn);
+  panel.append(title, body, actions);
+  root.appendChild(panel);
+  document.body.appendChild(root);
+
+  const close = () => {
+    root.dataset.state = 'closed';
+    root.setAttribute('aria-hidden', 'true');
+    document.removeEventListener('keydown', handleKeydown);
+  };
+
+  const handleKeydown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      close();
+    }
+  };
+
+  const open = () => {
+    title.textContent = t('program.exercise.technique.title');
+    body.textContent = t('program.exercise.technique.body');
+    closeBtn.textContent = t('program.exercise.technique.close');
+    root.dataset.state = 'open';
+    root.setAttribute('aria-hidden', 'false');
+    document.addEventListener('keydown', handleKeydown);
+    window.requestAnimationFrame(() => {
+      panel.focus();
+    });
+  };
+
+  const onBackdropClick = (event: MouseEvent) => {
+    if (event.target === root) {
+      event.preventDefault();
+      close();
+    }
+  };
+
+  closeBtn.addEventListener('click', (event) => {
+    event.preventDefault();
+    close();
+  });
+  root.addEventListener('click', onBackdropClick);
+
+  exerciseTechniqueDialog = { open, close };
+  return exerciseTechniqueDialog;
+}
+
+function parseNumeric(value: number | string | null | undefined, fallback: number): number {
+  if (value === null || value === undefined || value === '') return fallback;
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? fallback : parsed;
+}
+
+function parseReps(value: number | string | null | undefined, fallback: number): number {
+  if (typeof value === 'number') {
+    return Math.max(1, Math.floor(value));
+  }
+  if (typeof value === 'string') {
+    const matches = value.match(/\d+(?:[.,]\d+)?/g);
+    if (matches && matches.length > 0) {
+      const nums = matches
+        .map((item) => Number(item.replace(',', '.')))
+        .filter((item) => !Number.isNaN(item));
+      if (nums.length > 0) {
+        return Math.max(1, Math.floor(Math.max(...nums)));
+      }
+    }
+  }
+  return Math.max(1, Math.floor(fallback));
+}
+
+function buildInitialSets(exercise: Exercise): EditableSet[] {
+  if (exercise.sets_detail && exercise.sets_detail.length > 0) {
+    return exercise.sets_detail.map((detail) => ({
+      id: `set-${editSetCounter++}`,
+      reps: Math.max(1, Math.floor(parseNumeric(detail.reps, 1))),
+      weight: Math.max(0, parseNumeric(detail.weight, 0))
+    }));
+  }
+
+  const setsCount = Math.max(1, Math.floor(parseNumeric(exercise.sets, 1)));
+  const reps = parseReps(exercise.reps, 1);
+  const weight = Math.max(0, parseNumeric(exercise.weight?.value ?? null, 0));
+  return Array.from({ length: setsCount }, () => ({
+    id: `set-${editSetCounter++}`,
+    reps,
+    weight
+  }));
+}
+
+
+function getExerciseEditDialog(): ExerciseEditDialogController {
+  if (exerciseEditDialog) return exerciseEditDialog;
+
+  const root = document.createElement('div');
+  root.id = EDIT_DIALOG_ID;
+  root.className = 'exercise-dialog exercise-edit-dialog';
+  root.setAttribute('aria-hidden', 'true');
+
+  const panel = document.createElement('div');
+  panel.className = 'exercise-dialog__panel exercise-edit-dialog__panel';
+  panel.setAttribute('role', 'dialog');
+  panel.setAttribute('aria-modal', 'true');
+  panel.tabIndex = -1;
+
+  const header = document.createElement('div');
+  header.className = 'exercise-edit-dialog__header';
+
+  const title = document.createElement('h3');
+  title.className = 'exercise-edit-dialog__title';
+
+  const body = document.createElement('div');
+  body.className = 'exercise-edit-dialog__body';
+
+  const listHeader = document.createElement('div');
+  listHeader.className = 'exercise-edit-dialog__list-header';
+  const listHeaderLabel = document.createElement('div');
+  listHeaderLabel.className = 'exercise-edit-dialog__list-header-label';
+  const listHeaderFields = document.createElement('div');
+  listHeaderFields.className = 'exercise-edit-dialog__fields exercise-edit-dialog__fields-header';
+  const listHeaderReps = document.createElement('div');
+  listHeaderReps.className = 'exercise-edit-dialog__field-label';
+  const listHeaderWeight = document.createElement('div');
+  listHeaderWeight.className = 'exercise-edit-dialog__field-label';
+  const listHeaderSpacer = document.createElement('div');
+  listHeaderSpacer.className = 'exercise-edit-dialog__list-header-spacer';
+
+  listHeaderFields.append(listHeaderReps, listHeaderWeight);
+  listHeader.append(listHeaderLabel, listHeaderFields, listHeaderSpacer);
+
+  const list = document.createElement('div');
+  list.className = 'exercise-edit-dialog__list';
+
+  const replaceButton = document.createElement('button');
+  replaceButton.type = 'button';
+  replaceButton.className = 'exercise-edit-dialog__replace';
+
+  const addButton = document.createElement('button');
+  addButton.type = 'button';
+  addButton.className = 'button-ghost exercise-edit-dialog__add';
+  addButton.textContent = t('program.exercise.edit_dialog.add_set');
+
+  const footer = document.createElement('div');
+  footer.className = 'exercise-edit-dialog__footer';
+
+  const cancelButton = document.createElement('button');
+  cancelButton.type = 'button';
+  cancelButton.className = 'button-ghost';
+  cancelButton.textContent = t('program.exercise.edit_dialog.cancel');
+
+  const saveButton = document.createElement('button');
+  saveButton.type = 'button';
+  saveButton.className = 'primary-button';
+  saveButton.textContent = t('program.exercise.edit_dialog.save');
+
+  footer.append(cancelButton, saveButton);
+
+  header.append(title);
+  body.append(listHeader, list, addButton);
+  panel.append(header, body, footer, replaceButton);
+  root.appendChild(panel);
+  document.body.appendChild(root);
+
+  let currentExercise: Exercise | null = null;
+  let initialSets: EditableSet[] = [];
+  let sets: EditableSet[] = [];
+  let isSaving = false;
+
+  const renderSets = (scrollToLast = false) => {
+    list.innerHTML = '';
+    sets.forEach((set, index) => {
+      const row = document.createElement('div');
+      row.className = 'exercise-edit-dialog__set';
+
+      const label = document.createElement('div');
+      label.className = 'exercise-edit-dialog__set-label';
+      label.textContent = String(index + 1);
+
+      const fields = document.createElement('div');
+      fields.className = 'exercise-edit-dialog__fields';
+
+      const repsField = document.createElement('label');
+      repsField.className = 'exercise-edit-dialog__field';
+      const repsInput = document.createElement('input');
+      repsInput.type = 'number';
+      repsInput.inputMode = 'numeric';
+      repsInput.min = '1';
+      repsInput.step = '1';
+      repsInput.value = String(set.reps);
+      repsInput.className = 'exercise-edit-dialog__input';
+      repsInput.setAttribute('aria-label', t('program.exercise.edit_dialog.reps'));
+      repsField.append(repsInput);
+
+      const weightField = document.createElement('label');
+      weightField.className = 'exercise-edit-dialog__field';
+      const weightInput = document.createElement('input');
+      weightInput.type = 'number';
+      weightInput.inputMode = 'decimal';
+      weightInput.min = '0';
+      weightInput.step = '0.5';
+      weightInput.value = String(set.weight);
+      weightInput.className = 'exercise-edit-dialog__input';
+      weightInput.setAttribute('aria-label', t('program.exercise.edit_dialog.weight'));
+      weightField.append(weightInput);
+
+      const deleteButton = document.createElement('button');
+      deleteButton.type = 'button';
+      deleteButton.className = 'exercise-edit-dialog__delete';
+      deleteButton.innerHTML = CLOSE_ICON;
+      deleteButton.setAttribute('aria-label', t('program.exercise.edit_dialog.delete_set'));
+      if (sets.length === 1) {
+        deleteButton.disabled = true;
+      }
+
+      repsInput.addEventListener('input', () => {
+        const value = Math.floor(parseNumeric(repsInput.value, set.reps));
+        set.reps = Math.max(1, value);
+      });
+      repsInput.addEventListener('blur', () => {
+        repsInput.value = String(set.reps);
+      });
+
+      weightInput.addEventListener('input', () => {
+        const value = parseNumeric(weightInput.value, set.weight);
+        set.weight = Math.max(0, value);
+      });
+      weightInput.addEventListener('blur', () => {
+        weightInput.value = String(set.weight);
+      });
+
+      deleteButton.addEventListener('click', (event) => {
+        event.preventDefault();
+        if (sets.length === 1) return;
+        sets = sets.filter((item) => item.id !== set.id);
+        renderSets();
+      });
+
+      fields.append(repsField, weightField);
+      row.append(label, fields, deleteButton);
+      list.appendChild(row);
+    });
+
+    if (scrollToLast) {
+      const last = list.lastElementChild;
+      if (last) {
+        last.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
+  };
+
+  const syncButtons = () => {
+    cancelButton.textContent = t('program.exercise.edit_dialog.cancel');
+    saveButton.textContent = isSaving
+      ? t('program.exercise.edit_dialog.saving')
+      : t('program.exercise.edit_dialog.save');
+    cancelButton.disabled = isSaving;
+    saveButton.disabled = isSaving;
+    addButton.disabled = isSaving;
+  };
+
+  const close = () => {
+    root.dataset.state = 'closed';
+    root.setAttribute('aria-hidden', 'true');
+    document.removeEventListener('keydown', handleKeydown);
+    window.dispatchEvent(new CustomEvent(EXERCISE_EDIT_EVENT, { detail: { open: false } }));
+  };
+
+  const handleKeydown = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      close();
+    }
+  };
+
+  const open = () => {
+    if (!currentExercise) return;
+    title.textContent = currentExercise.name;
+    panel.setAttribute('aria-label', t('program.exercise.edit'));
+    root.dataset.state = 'open';
+    root.setAttribute('aria-hidden', 'false');
+    document.addEventListener('keydown', handleKeydown);
+    window.dispatchEvent(new CustomEvent(EXERCISE_EDIT_EVENT, { detail: { open: true } }));
+    window.requestAnimationFrame(() => {
+      panel.focus();
+    });
+  };
+
+  const onBackdropClick = (event: MouseEvent) => {
+    if (event.target === root) {
+      event.preventDefault();
+      close();
+    }
+  };
+
+  root.addEventListener('click', onBackdropClick);
+
+  addButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    const last = sets[sets.length - 1];
+    const clone = {
+      id: `set-${editSetCounter++}`,
+      reps: last ? last.reps : 1,
+      weight: last ? last.weight : 0
+    };
+    sets = [...sets, clone];
+    renderSets(true);
+  });
+
+  cancelButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    sets = initialSets.map((set) => ({ ...set }));
+    close();
+  });
+
+  replaceButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    if (!currentExercise) return;
+    getExerciseDialog().open();
+  });
+
+  saveButton.addEventListener('click', async (event) => {
+    event.preventDefault();
+    if (!currentExercise || isSaving) return;
+    if (!programContext.programId || programContext.source !== 'direct') {
+      window.alert(t('program.action_error'));
+      return;
+    }
+    try {
+      (window as any).Telegram?.WebApp?.HapticFeedback?.impactOccurred?.('medium');
+    } catch {
+    }
+    isSaving = true;
+    syncButtons();
+    try {
+      const initData = readInitData();
+      const weightUnit =
+        currentExercise.weight?.unit ?? currentExercise.sets_detail?.[0]?.weight_unit ?? null;
+      const payload = sets.map((set) => ({ reps: set.reps, weight: set.weight }));
+      await saveExerciseSets(programContext.programId, currentExercise.id, weightUnit, payload, initData);
+      window.dispatchEvent(new CustomEvent(EXERCISE_EDIT_SAVED_EVENT));
+      close();
+    } finally {
+      isSaving = false;
+      syncButtons();
+    }
+  });
+
+  exerciseEditDialog = {
+    open: (exercise: Exercise) => {
+      currentExercise = exercise;
+      initialSets = buildInitialSets(exercise);
+      sets = initialSets.map((set) => ({ ...set }));
+      addButton.textContent = t('program.exercise.edit_dialog.add_set');
+      title.textContent = exercise.name;
+      listHeaderLabel.textContent = t('program.exercise.edit_dialog.set');
+      listHeaderReps.textContent = t('program.exercise.edit_dialog.reps');
+      listHeaderWeight.textContent = t('program.exercise.edit_dialog.weight');
+      replaceButton.textContent = t('program.exercise.replace');
+      renderSets();
+      syncButtons();
+      open();
+    },
+    close
+  };
+  return exerciseEditDialog;
+}
+
+function createExerciseActions(details: HTMLDetailsElement, exercise: Exercise): HTMLDivElement {
   const actions = document.createElement('div');
   actions.className = 'program-exercise-actions';
 
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'exercise-refresh-btn';
-  button.setAttribute('aria-label', t('program.exercise.replace'));
-  button.title = t('program.exercise.replace');
-  button.innerHTML = REFRESH_ICON;
+  const editButton = document.createElement('button');
+  editButton.type = 'button';
+  editButton.className = 'program-exercise-edit-btn';
+  editButton.textContent = t('program.exercise.edit');
 
-  const dialog = getExerciseDialog();
-  button.addEventListener('click', (event) => {
+  const editDialog = getExerciseEditDialog();
+  editButton.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
     if (!details.open) {
       details.open = true;
     }
-    dialog.open();
+    editDialog.open(exercise);
   });
 
-  actions.appendChild(button);
+  actions.append(editButton);
   return actions;
 }
 
@@ -263,28 +720,83 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
   summary.appendChild(titleLabel);
   details.appendChild(summary);
 
-  const metaParts: string[] = [...presentation.extraDetails];
-  if (ex.sets !== null && ex.sets !== undefined && ex.sets !== '') {
-    metaParts.push(`Sets: ${String(ex.sets)}`);
-  }
-  if (ex.reps !== null && ex.reps !== undefined && ex.reps !== '') {
-    metaParts.push(`Reps: ${String(ex.reps)}`);
-  }
-  if (ex.weight) metaParts.push(`Weight: ${ex.weight.value} ${ex.weight.unit}`);
-  if (ex.equipment) metaParts.push(`Equipment: ${ex.equipment}`);
-
   const content = document.createElement('div');
   content.className = 'program-exercise-content';
 
   const note = sanitizeNote(ex.notes);
-
-  const meaningfulMeta = metaParts.filter((part) => !isNoiseToken(part));
-
-  if (meaningfulMeta.length > 0) {
+  const detailParts: string[] = [...presentation.extraDetails];
+  if (ex.equipment) detailParts.push(`Equipment: ${ex.equipment}`);
+  const meaningfulDetails = detailParts.filter((part) => !isNoiseToken(part));
+  if (meaningfulDetails.length > 0) {
     const meta = document.createElement('div');
     meta.className = 'program-exercise-meta';
-    meta.textContent = meaningfulMeta.join(', ');
+    meta.textContent = meaningfulDetails.join(', ');
     content.appendChild(meta);
+  }
+
+  const techniqueLink = document.createElement('span');
+  techniqueLink.className = 'exercise-sets-link';
+  techniqueLink.textContent = t('program.exercise.technique.button');
+  techniqueLink.setAttribute('role', 'button');
+  techniqueLink.tabIndex = 0;
+  const techniqueDialog = getExerciseTechniqueDialog();
+  const openTechniqueDialog = () => {
+    if (!details.open) {
+      details.open = true;
+    }
+    techniqueDialog.open();
+  };
+  techniqueLink.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openTechniqueDialog();
+  });
+  techniqueLink.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openTechniqueDialog();
+    }
+  });
+  content.appendChild(techniqueLink);
+
+  const sets = buildDisplaySets(ex);
+  if (sets.length > 0) {
+    const table = document.createElement('div');
+    table.className = 'exercise-sets-table';
+
+    const header = document.createElement('div');
+    header.className = 'exercise-sets-table__row exercise-sets-table__row--header';
+
+    const repsHeader = document.createElement('div');
+    repsHeader.className = 'exercise-sets-table__cell';
+    repsHeader.textContent = t('program.exercise.edit_dialog.reps');
+
+    const weightHeader = document.createElement('div');
+    weightHeader.className = 'exercise-sets-table__cell';
+    weightHeader.textContent = t('program.exercise.edit_dialog.weight');
+
+    header.append(repsHeader, weightHeader);
+    table.appendChild(header);
+
+    sets.forEach((set) => {
+      const row = document.createElement('div');
+      row.className = 'exercise-sets-table__row';
+
+      const repsCell = document.createElement('div');
+      repsCell.className = 'exercise-sets-table__cell';
+      repsCell.textContent = formatNumber(set.reps);
+
+      const weightCell = document.createElement('div');
+      weightCell.className = 'exercise-sets-table__cell';
+      const weightValue = formatNumber(set.weight);
+      weightCell.textContent =
+        set.weight <= 0 ? '—' : set.weightUnit ? `${weightValue} ${set.weightUnit}` : weightValue;
+
+      row.append(repsCell, weightCell);
+      table.appendChild(row);
+    });
+
+    content.appendChild(table);
   }
 
   if (note) {
@@ -298,7 +810,7 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
     content.classList.add('program-exercise-content--minimal');
   }
 
-  content.appendChild(createExerciseActions(details));
+  content.appendChild(createExerciseActions(details, ex));
   details.appendChild(content);
   li.appendChild(details);
   return li;

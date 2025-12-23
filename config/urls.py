@@ -25,6 +25,11 @@ urlpatterns = [
     path("api/subscription/", webapp_views.subscription_data, name="webapp-subscription-data-direct"),  # type: ignore[arg-type]
     path("api/payment/", webapp_views.payment_data, name="webapp-payment-data-direct"),  # type: ignore[arg-type]
     path("api/workouts/action/", webapp_views.workouts_action, name="webapp-workouts-action-direct"),  # type: ignore[arg-type]
+    path(  # type: ignore[no-matching-overload]
+        "api/program/exercise/",
+        webapp_views.update_exercise_sets,
+        name="webapp-program-exercise-update-direct",
+    ),
     path("webapp", RedirectView.as_view(url="/webapp/", permanent=False)),
     path("webapp/", include("apps.webapp.urls")),
     path("", RedirectView.as_view(url="/webapp/", permanent=False, query_string=True)),

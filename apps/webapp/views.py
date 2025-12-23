@@ -1,7 +1,8 @@
 import json
+import re
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Any, cast
+from typing import Any, TypedDict, cast
 
 import httpx
 from django.http import HttpRequest, HttpResponse, JsonResponse
@@ -26,6 +27,84 @@ from .utils import (
     ensure_container_ready,
     parse_program_id,
 )
+
+EXERCISE_ID_PATTERN = re.compile(r"^ex-(\d+)-(\d+)$")
+
+
+class ExerciseSetPayload(TypedDict):
+    reps: int
+    weight: float
+
+
+class UpdateExercisePayload(TypedDict):
+    program_id: int
+    exercise_id: str
+    weight_unit: str | None
+    sets: list[ExerciseSetPayload]
+
+
+def _format_number(value: float) -> str:
+    if value.is_integer():
+        return str(int(value))
+    return f"{value:.2f}".rstrip("0").rstrip(".")
+
+
+def _format_range(values: list[float]) -> str:
+    min_value = min(values)
+    max_value = max(values)
+    if min_value == max_value:
+        return _format_number(max_value)
+    return f"{_format_number(min_value)}-{_format_number(max_value)}"
+
+
+def _update_exercise_entry(
+    exercises_by_day: list[dict[str, Any]],
+    exercise_id: str,
+    payload: UpdateExercisePayload,
+) -> bool:
+    match = EXERCISE_ID_PATTERN.match(exercise_id)
+    if match:
+        day_index = int(match.group(1)) - 1
+        exercise_index = int(match.group(2))
+        if 0 <= day_index < len(exercises_by_day):
+            day_entry = exercises_by_day[day_index]
+            day_exercises = day_entry.get("exercises", [])
+            if isinstance(day_exercises, list) and 0 <= exercise_index < len(day_exercises):
+                _apply_sets_update(day_exercises[exercise_index], payload)
+                return True
+
+    for day_entry in exercises_by_day:
+        day_exercises = day_entry.get("exercises", [])
+        if not isinstance(day_exercises, list):
+            continue
+        for exercise_entry in day_exercises:
+            entry_id = exercise_entry.get("set_id")
+            if entry_id is not None and str(entry_id) == exercise_id:
+                _apply_sets_update(exercise_entry, payload)
+                return True
+    return False
+
+
+def _apply_sets_update(exercise_entry: dict[str, Any], payload: UpdateExercisePayload) -> None:
+    sets_payload = payload["sets"]
+    reps_values = [float(item["reps"]) for item in sets_payload]
+    weights = [float(item["weight"]) for item in sets_payload]
+    weight_unit = payload.get("weight_unit") or ""
+
+    reps_summary = _format_range(reps_values)
+    weight_summary = None
+    if any(value > 0 for value in weights):
+        weight_summary = _format_range(weights)
+        if weight_unit:
+            weight_summary = f"{weight_summary} {weight_unit}"
+
+    exercise_entry["sets"] = str(len(sets_payload))
+    exercise_entry["reps"] = reps_summary
+    exercise_entry["weight"] = weight_summary
+    exercise_entry["sets_detail"] = [
+        {"reps": int(item["reps"]), "weight": float(item["weight"]), "weight_unit": weight_unit}
+        for item in sets_payload
+    ]
 
 
 # type checking of async views with require_GET is not supported by stubs
@@ -415,6 +494,89 @@ async def workouts_action(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"error": "server_error"}, status=502)
 
     logger.info(f"workouts_action_dispatched profile_id={profile.id} action={action}")
+    return JsonResponse({"status": "ok"})
+
+
+@csrf_exempt  # type: ignore[bad-specialization]
+@require_POST  # type: ignore[misc]
+async def update_exercise_sets(request: HttpRequest) -> JsonResponse:
+    await ensure_container_ready()
+
+    try:
+        auth_ctx = await authenticate(request)
+    except Exception:
+        logger.exception("Auth resolution failed")
+        return JsonResponse({"error": "server_error"}, status=500)
+    if auth_ctx.error:
+        return auth_ctx.error
+
+    profile = auth_ctx.profile
+    if profile is None:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    try:
+        payload_raw = json.loads(request.body or "{}")
+    except Exception:
+        logger.warning("update_exercise_sets_invalid_payload")
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    exercise_id_raw = payload_raw.get("exercise_id")
+    program_id_raw = payload_raw.get("program_id")
+    sets_raw = payload_raw.get("sets")
+    weight_unit_raw = payload_raw.get("weight_unit")
+
+    if not exercise_id_raw or not isinstance(exercise_id_raw, str):
+        return JsonResponse({"error": "bad_request"}, status=400)
+    try:
+        program_id = int(program_id_raw)
+    except (TypeError, ValueError):
+        program_id = 0
+    if not program_id:
+        return JsonResponse({"error": "bad_request"}, status=400)
+    if not isinstance(sets_raw, list) or not sets_raw:
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    sets_payload: list[ExerciseSetPayload] = []
+    for entry in sets_raw:
+        if not isinstance(entry, dict):
+            return JsonResponse({"error": "bad_request"}, status=400)
+        reps_raw = entry.get("reps")
+        weight_raw = entry.get("weight")
+        if not isinstance(reps_raw, (int, str)):
+            return JsonResponse({"error": "bad_request"}, status=400)
+        if not isinstance(weight_raw, (int, float, str)):
+            return JsonResponse({"error": "bad_request"}, status=400)
+        try:
+            reps_value = int(reps_raw)
+            weight_value = float(weight_raw)
+        except (TypeError, ValueError):
+            return JsonResponse({"error": "bad_request"}, status=400)
+        if reps_value < 1 or weight_value < 0:
+            return JsonResponse({"error": "bad_request"}, status=400)
+        sets_payload.append({"reps": reps_value, "weight": weight_value})
+
+    weight_unit = str(weight_unit_raw) if weight_unit_raw is not None else None
+    payload: UpdateExercisePayload = {
+        "program_id": program_id,
+        "exercise_id": exercise_id_raw,
+        "weight_unit": weight_unit,
+        "sets": sets_payload,
+    }
+
+    program = await call_repo(ProgramRepository.get_by_id, profile.id, program_id)
+    if program is None:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    exercises_by_day = getattr(program, "exercises_by_day", None)
+    if not isinstance(exercises_by_day, list):
+        return JsonResponse({"error": "server_error"}, status=500)
+
+    updated = _update_exercise_entry(exercises_by_day, exercise_id_raw, payload)
+    if not updated:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    await call_repo(ProgramRepository.create_or_update, profile.id, exercises_by_day, instance=program)
+    logger.info(f"exercise_sets_updated profile_id={profile.id} program_id={program_id} exercise_id={exercise_id_raw}")
     return JsonResponse({"status": "ok"})
 
 

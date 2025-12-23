@@ -207,3 +207,35 @@ export async function triggerWorkoutAction(action: WorkoutAction, initData: stri
   } catch {
   }
 }
+
+export type ExerciseSetPayload = {
+  reps: number;
+  weight: number;
+};
+
+export async function saveExerciseSets(
+  programId: string,
+  exerciseId: string,
+  weightUnit: string | null,
+  sets: ExerciseSetPayload[],
+  initData: string
+): Promise<void> {
+  const url = new URL('api/program/exercise/', window.location.href);
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (initData) headers['X-Telegram-InitData'] = initData;
+
+  const resp = await fetch(url.toString(), {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      program_id: programId,
+      exercise_id: exerciseId,
+      weight_unit: weightUnit,
+      sets
+    })
+  });
+
+  if (!resp.ok) {
+    throw new HttpError(resp.status, statusToMessage(resp.status));
+  }
+}

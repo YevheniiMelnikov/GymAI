@@ -246,6 +246,7 @@ def transform_days(exercises_by_day: list) -> list[dict]:
                     "sets": ex_data.get("sets"),
                     "reps": ex_data.get("reps"),
                     "weight": weight,
+                    "sets_detail": ex_data.get("sets_detail"),
                     "equipment": None,
                     "notes": None,
                 }

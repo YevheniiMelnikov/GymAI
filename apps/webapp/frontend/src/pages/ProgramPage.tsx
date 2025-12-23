@@ -2,7 +2,13 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getProgram, getSubscription, HttpError, triggerWorkoutAction, WorkoutAction } from '../api/http';
 import { applyLang, t } from '../i18n/i18n';
-import { renderProgramDays, renderLegacyProgram, fmtDate } from '../ui/render_program';
+import {
+    EXERCISE_EDIT_SAVED_EVENT,
+    fmtDate,
+    renderLegacyProgram,
+    renderProgramDays,
+    setProgramContext,
+} from '../ui/render_program';
 import { readInitData, tmeReady } from '../telegram';
 import type { Locale, Program } from '../api/types';
 import { renderSegmented, SegmentId } from '../components/Segmented';
@@ -49,6 +55,8 @@ const ProgramPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [actionLoading, setActionLoading] = useState(false);
     const [fabPressed, setFabPressed] = useState(false);
+    const [isExerciseEditOpen, setIsExerciseEditOpen] = useState(false);
+    const [refreshKey, setRefreshKey] = useState(0);
     const [dateText, setDateText] = useState('');
     const [activeSegment, setActiveSegment] = useState<SegmentId>(() => {
         const source = searchParams.get('source');
@@ -85,6 +93,27 @@ const ProgramPage: React.FC = () => {
     useEffect(() => {
         storeLastWorkoutSegment(activeSegment);
     }, [activeSegment]);
+
+    useEffect(() => {
+        const handleEditDialog = (event: Event) => {
+            const detail = (event as CustomEvent<{ open?: boolean }>).detail;
+            setIsExerciseEditOpen(Boolean(detail?.open));
+        };
+        window.addEventListener('exercise-edit-dialog', handleEditDialog);
+        return () => {
+            window.removeEventListener('exercise-edit-dialog', handleEditDialog);
+        };
+    }, []);
+
+    useEffect(() => {
+        const handleSaved = () => {
+            setRefreshKey(Date.now());
+        };
+        window.addEventListener(EXERCISE_EDIT_SAVED_EVENT, handleSaved);
+        return () => {
+            window.removeEventListener(EXERCISE_EDIT_SAVED_EVENT, handleSaved);
+        };
+    }, []);
 
     useEffect(() => {
         if (!switcherRef.current) return;
@@ -149,12 +178,17 @@ const ProgramPage: React.FC = () => {
                 if (contentRef.current) {
                     contentRef.current.innerHTML = '';
                     if (programData) {
+                        setProgramContext(
+                            programData.id ? String(programData.id) : null,
+                            activeSegment === 'program' ? 'direct' : 'subscription'
+                        );
                         if (programData.created_at) {
                             setDateText(t('program.created', { date: fmtDate(programData.created_at, appliedLocale) }));
                         }
                         const { fragment } = renderProgramDays(programData);
                         contentRef.current.appendChild(fragment);
                     } else if (legacyText) {
+                        setProgramContext(null, null);
                         if (createdAt) {
                             setDateText(t('program.created', { date: fmtDate(createdAt, appliedLocale) }));
                         }
@@ -185,7 +219,7 @@ const ProgramPage: React.FC = () => {
         return () => {
             controller.abort();
         };
-    }, [programId, activeSegment, paramLang]);
+    }, [programId, activeSegment, paramLang, refreshKey]);
 
     const handleWorkoutAction = useCallback(
         async (nextAction: WorkoutAction | null) => {
@@ -246,8 +280,8 @@ const ProgramPage: React.FC = () => {
         width: 56,
         height: 56,
         borderRadius: '50%',
-        backgroundColor: '#2563eb',
-        color: '#fff',
+        backgroundColor: 'var(--accent)',
+        color: 'var(--accent-contrast)',
         border: 'none',
         display: 'flex',
         alignItems: 'center',
@@ -301,32 +335,7 @@ const ProgramPage: React.FC = () => {
                     aria-label={t('program.view_history')}
                     style={historyIconStyle}
                 >
-                    <svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                        <path
-                            d="M3 3v5h5"
-                            stroke="currentColor"
-                            strokeWidth="1.6"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            fill="none"
-                        />
-                        <path
-                            d="M3 12a9 9 0 1 0 9-9"
-                            stroke="currentColor"
-                            strokeWidth="1.6"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            fill="none"
-                        />
-                        <path
-                            d="M12 7v5l3 3"
-                            stroke="currentColor"
-                            strokeWidth="1.6"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            fill="none"
-                        />
-                    </svg>
+                    <span className="topbar__icon topbar__icon--archive" aria-hidden="true" />
                 </button>
             </TopBar>
 
@@ -362,7 +371,7 @@ const ProgramPage: React.FC = () => {
 
                 <div className="history-footer" />
             </div>
-            {creationAction && (
+            {creationAction && !isExerciseEditOpen && (
                 <button
                     type="button"
                     style={fabStyle}

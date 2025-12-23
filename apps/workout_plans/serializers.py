@@ -7,6 +7,12 @@ from apps.profiles.serializers import ProfileSerializer
 from apps.workout_plans.models import Subscription, Program
 
 
+class ExerciseSetDetailSerializer(serializers.Serializer):
+    reps = serializers.IntegerField()
+    weight = serializers.FloatField()
+    weight_unit = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+
+
 class ExerciseSerializer(serializers.Serializer):
     name = serializers.CharField()
     sets = serializers.CharField()
@@ -14,6 +20,7 @@ class ExerciseSerializer(serializers.Serializer):
     gif_link = serializers.CharField(required=False, allow_null=True)
     weight = serializers.CharField(required=False, allow_null=True)
     set_id = serializers.IntegerField(required=False, allow_null=True)
+    sets_detail = ExerciseSetDetailSerializer(many=True, required=False)
 
 
 class DayExercisesSerializer(serializers.Serializer):
