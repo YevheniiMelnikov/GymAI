@@ -5,6 +5,7 @@ from .prompts import (
     UPDATE_WORKOUT,
     ASK_AI_USER_PROMPT,
     CHAT_SUMMARY_PROMPT,
+    REPLACE_EXERCISE_PROMPT,
     agent_instructions,
 )
 
@@ -15,5 +16,6 @@ __all__ = [
     "UPDATE_WORKOUT",
     "ASK_AI_USER_PROMPT",
     "CHAT_SUMMARY_PROMPT",
+    "REPLACE_EXERCISE_PROMPT",
     "agent_instructions",
 ]

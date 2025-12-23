@@ -69,14 +69,15 @@ def read_init_data(request: HttpRequest) -> str:
     return ""
 
 
-async def authenticate(request: HttpRequest) -> AuthResult:
+async def authenticate(request: HttpRequest, *, log_request: bool = True) -> AuthResult:
     """
     Verify Telegram init_data and resolve tg_id -> Profile.
 
     Returns (profile | None, error_response | None).
     """
     init_data: str = read_init_data(request)
-    logger.debug(f"Webapp request: init_data length={len(init_data)}")
+    if log_request:
+        logger.debug(f"Webapp request: init_data length={len(init_data)}")
     try:
         data: dict[str, Any] = verify_init_data(init_data)
     except Exception as exc:

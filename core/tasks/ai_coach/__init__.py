@@ -24,6 +24,10 @@ from .plans import (  # noqa: F401
     notify_ai_plan_ready_task,
     update_ai_workout_plan,
 )
+from .replace_exercise import (  # noqa: F401
+    enqueue_exercise_replace_task,
+    replace_exercise_task,
+)
 from .qa import (  # noqa: F401
     ask_ai_question,
     _claim_answer_request,
@@ -72,4 +76,6 @@ __all__ = (
     "cleanup_profile_knowledge",
     "sync_profile_knowledge",
     "memify_profile_datasets",
+    "replace_exercise_task",
+    "enqueue_exercise_replace_task",
 )

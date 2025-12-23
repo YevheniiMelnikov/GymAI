@@ -25,7 +25,7 @@
   "program.exercise.edit": "Edit",
   "program.exercise.replace_dialog.title": "Need an alternative?",
   "program.exercise.replace_dialog.body": "We'll suggest another exercise for this slot at no extra cost. Use it when you lack equipment or want a different option. Daily replacements are limited.",
-  "program.exercise.replace_dialog.confirm": "Generate",
+  "program.exercise.replace_dialog.confirm": "Yes",
   "program.exercise.replace_dialog.cancel": "Cancel",
   "program.exercise.edit_dialog.close": "Close",
   "program.exercise.technique.button": "🏋️‍♂️ Show technique",

@@ -178,14 +178,14 @@ services:
     restart: unless-stopped
 
   ai_coach_worker:
-    image: *app_image
+    image: *coach_image
     build:
       context: ..
       dockerfile: docker/Dockerfile
-      target: py-runtime
+      target: coach-runtime
       args:
         INSTALL_DEV: false
-        EXTRAS: ""
+        EXTRAS: coach
     <<: *common_env
     entrypoint: /app/docker/entrypoint.sh
     command: celery -A config.celery:celery_app worker -l info -Q ai_coach -P threads --concurrency ${AI_COACH_WORKER_CONCURRENCY:-2}

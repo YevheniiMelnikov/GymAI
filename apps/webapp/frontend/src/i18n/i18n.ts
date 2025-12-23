@@ -37,7 +37,7 @@ export const fallbackEn = {
   'program.exercise.replace_dialog.title': 'Need an alternative?',
   'program.exercise.replace_dialog.body':
     'We can generate another exercise for this slot at no extra cost. Use it when you lack equipment or want a different variation. The number of such generations within a single program is limited.',
-  'program.exercise.replace_dialog.confirm': 'Generate',
+  'program.exercise.replace_dialog.confirm': 'Yes',
   'program.exercise.replace_dialog.cancel': 'Cancel',
   'program.exercise.edit_dialog.close': 'Close',
   'program.exercise.technique.button': '🏋️‍♂️ Show technique',

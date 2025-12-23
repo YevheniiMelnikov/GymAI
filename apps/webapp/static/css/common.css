@@ -616,6 +616,19 @@ h1.page-title,
   transition: transform .2s ease;
   margin-left: auto;
 }
+.program-exercise-details--loading .program-exercise-summary{
+  cursor: default;
+  pointer-events: none;
+}
+.program-exercise-details--loading .program-exercise-summary::after{
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 2px solid color-mix(in oklab, var(--link) 60%, transparent);
+  border-top-color: var(--link);
+  transform: none;
+  animation: spin .7s linear infinite;
+}
 .program-exercise-summary:hover{
   color: color-mix(in oklab, var(--text) 86%, var(--link));
   background: color-mix(in oklab, var(--surface) 68%, transparent);
@@ -943,6 +956,15 @@ h1.page-title,
   min-width: 120px;
   padding: 12px 18px;
   font-size: 14px;
+}
+.button-spinner{
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 2px solid color-mix(in oklab, var(--accent-contrast) 40%, transparent);
+  border-top-color: var(--accent-contrast);
+  display: inline-block;
+  animation: spin 0.7s linear infinite;
 }
 .exercise-edit-dialog__panel{
   position: relative;

@@ -220,14 +220,14 @@ services:
     networks: [internal]
 
   ai_coach_worker:
-    image: *app_image
+    image: *coach_image
     build:
       context: ..
       dockerfile: docker/Dockerfile
-      target: py-runtime
+      target: coach-runtime
       args:
         INSTALL_DEV: true
-        EXTRAS: ""
+        EXTRAS: coach
     container_name: ai_coach_worker
     <<: *common_env
     environment:

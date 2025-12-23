@@ -10,6 +10,7 @@ from core.tasks.ai_coach import (
     notify_ai_answer_ready_task,
     notify_ai_plan_ready_task,
     prune_knowledge_base,
+    replace_exercise_task,
     refresh_external_knowledge,
     update_ai_workout_plan,
 )
@@ -35,6 +36,7 @@ __all__ = [
     "refresh_external_knowledge",
     "update_ai_workout_plan",
     "prune_knowledge_base",
+    "replace_exercise_task",
     "cleanup_backups",
     "neo4j_backup",
     "pg_backup",

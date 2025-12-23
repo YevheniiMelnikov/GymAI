@@ -1,4 +1,4 @@
-import { saveExerciseSets } from '../api/http';
+import { getReplaceExerciseStatus, replaceExercise, saveExerciseSets } from '../api/http';
 import { Day, Exercise, Locale, Program, Week } from '../api/types';
 import { t } from '../i18n/i18n';
 import { readInitData } from '../telegram';
@@ -173,6 +173,16 @@ type ExerciseDialogController = {
   close: () => void;
 };
 
+type ReplaceExerciseContext = {
+  exercise: Exercise;
+  details: HTMLDetailsElement;
+};
+
+type ReplaceExerciseDialogController = {
+  open: (context: ReplaceExerciseContext) => void;
+  close: () => void;
+};
+
 type EditableSet = {
   id: string;
   reps: number;
@@ -180,19 +190,21 @@ type EditableSet = {
 };
 
 type ExerciseEditDialogController = {
-  open: (exercise: Exercise) => void;
+  open: (exercise: Exercise, details: HTMLDetailsElement) => void;
   close: () => void;
 };
 
 const REPLACE_DIALOG_ID = 'exercise-replace-dialog';
-let exerciseDialog: ExerciseDialogController | null = null;
+const REPLACE_POLL_INTERVAL_MS = 1500;
+const REPLACE_POLL_MAX_ATTEMPTS = 80;
+let exerciseDialog: ReplaceExerciseDialogController | null = null;
 const TECHNIQUE_DIALOG_ID = 'exercise-technique-dialog';
 let exerciseTechniqueDialog: ExerciseDialogController | null = null;
 const EDIT_DIALOG_ID = 'exercise-edit-dialog';
 let exerciseEditDialog: ExerciseEditDialogController | null = null;
 let editSetCounter = 0;
 
-function getExerciseDialog(): ExerciseDialogController {
+function getExerciseDialog(): ReplaceExerciseDialogController {
   if (exerciseDialog) return exerciseDialog;
 
   const root = document.createElement('div');
@@ -230,6 +242,34 @@ function getExerciseDialog(): ExerciseDialogController {
   root.appendChild(panel);
   document.body.appendChild(root);
 
+  let replaceContext: ReplaceExerciseContext | null = null;
+  let isLoading = false;
+
+  const setLoading = (loading: boolean) => {
+    isLoading = loading;
+    confirmBtn.disabled = loading;
+    cancelBtn.disabled = loading;
+    confirmBtn.innerHTML = '';
+    confirmBtn.textContent = t('program.exercise.replace_dialog.confirm');
+  };
+
+  const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+  const waitForReplace = async (taskId: string) => {
+    const initData = readInitData();
+    for (let attempt = 0; attempt < REPLACE_POLL_MAX_ATTEMPTS; attempt += 1) {
+      const status = await getReplaceExerciseStatus(taskId, initData);
+      if (status.status === 'success') {
+        return;
+      }
+      if (status.status === 'error') {
+        throw new Error(status.error || 'replace_failed');
+      }
+      await sleep(REPLACE_POLL_INTERVAL_MS);
+    }
+    throw new Error('replace_timeout');
+  };
+
   const close = () => {
     root.dataset.state = 'closed';
     root.setAttribute('aria-hidden', 'true');
@@ -243,11 +283,13 @@ function getExerciseDialog(): ExerciseDialogController {
     }
   };
 
-  const open = () => {
+  const open = (context: ReplaceExerciseContext) => {
+    replaceContext = context;
     title.textContent = t('program.exercise.replace_dialog.title');
     body.textContent = t('program.exercise.replace_dialog.body');
     confirmBtn.textContent = t('program.exercise.replace_dialog.confirm');
     cancelBtn.textContent = t('program.exercise.replace_dialog.cancel');
+    setLoading(false);
     root.dataset.state = 'open';
     root.setAttribute('aria-hidden', 'false');
     document.addEventListener('keydown', handleKeydown);
@@ -269,7 +311,35 @@ function getExerciseDialog(): ExerciseDialogController {
   });
   confirmBtn.addEventListener('click', (event) => {
     event.preventDefault();
+    if (!replaceContext || isLoading) return;
+    if (!programContext.programId || programContext.source !== 'direct') {
+      window.alert(t('program.action_error'));
+      close();
+      return;
+    }
+    try {
+      (window as any).Telegram?.WebApp?.HapticFeedback?.impactOccurred?.('medium');
+    } catch {
+    }
+    setLoading(true);
+    const editDialog = getExerciseEditDialog();
+    editDialog.close();
+    replaceContext.details.open = false;
+    replaceContext.details.classList.add('program-exercise-details--loading');
     close();
+    const initData = readInitData();
+    replaceExercise(programContext.programId, replaceContext.exercise.id, initData)
+      .then((taskId) => waitForReplace(taskId))
+      .then(() => {
+        replaceContext?.details.classList.remove('program-exercise-details--loading');
+        window.dispatchEvent(new CustomEvent(EXERCISE_EDIT_SAVED_EVENT));
+        close();
+      })
+      .catch(() => {
+        replaceContext?.details.classList.remove('program-exercise-details--loading');
+        window.alert(t('program.action_error'));
+        setLoading(false);
+      });
   });
   root.addEventListener('click', onBackdropClick);
 
@@ -470,6 +540,7 @@ function getExerciseEditDialog(): ExerciseEditDialogController {
   document.body.appendChild(root);
 
   let currentExercise: Exercise | null = null;
+  let currentDetails: HTMLDetailsElement | null = null;
   let initialSets: EditableSet[] = [];
   let sets: EditableSet[] = [];
   let isSaving = false;
@@ -622,8 +693,8 @@ function getExerciseEditDialog(): ExerciseEditDialogController {
 
   replaceButton.addEventListener('click', (event) => {
     event.preventDefault();
-    if (!currentExercise) return;
-    getExerciseDialog().open();
+    if (!currentExercise || !currentDetails) return;
+    getExerciseDialog().open({ exercise: currentExercise, details: currentDetails });
   });
 
   saveButton.addEventListener('click', async (event) => {
@@ -654,8 +725,9 @@ function getExerciseEditDialog(): ExerciseEditDialogController {
   });
 
   exerciseEditDialog = {
-    open: (exercise: Exercise) => {
+    open: (exercise: Exercise, details: HTMLDetailsElement) => {
       currentExercise = exercise;
+      currentDetails = details;
       initialSets = buildInitialSets(exercise);
       sets = initialSets.map((set) => ({ ...set }));
       addButton.textContent = t('program.exercise.edit_dialog.add_set');
@@ -689,7 +761,7 @@ function createExerciseActions(details: HTMLDetailsElement, exercise: Exercise):
     if (!details.open) {
       details.open = true;
     }
-    editDialog.open(exercise);
+    editDialog.open(exercise, details);
   });
 
   actions.append(editButton);

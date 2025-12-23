@@ -1,4 +1,6 @@
-from django.http import JsonResponse, HttpResponseNotFound
+from typing import Callable, cast
+
+from django.http import JsonResponse, HttpResponseNotFound, HttpResponseBase
 from django.urls import include, path
 from django.contrib import admin
 from django.views.generic import RedirectView
@@ -6,6 +8,9 @@ from loguru import logger
 
 from apps.payments.views import PaymentWebhookView
 from apps.webapp import views as webapp_views
+
+
+WebappView = Callable[..., HttpResponseBase]
 
 
 def healthcheck_view(_):
@@ -25,10 +30,20 @@ urlpatterns = [
     path("api/subscription/", webapp_views.subscription_data, name="webapp-subscription-data-direct"),  # type: ignore[arg-type]
     path("api/payment/", webapp_views.payment_data, name="webapp-payment-data-direct"),  # type: ignore[arg-type]
     path("api/workouts/action/", webapp_views.workouts_action, name="webapp-workouts-action-direct"),  # type: ignore[arg-type]
-    path(  # type: ignore[no-matching-overload]
+    path(
         "api/program/exercise/",
-        webapp_views.update_exercise_sets,
+        cast(WebappView, webapp_views.update_exercise_sets),
         name="webapp-program-exercise-update-direct",
+    ),
+    path(
+        "api/program/exercise/replace/",
+        cast(WebappView, webapp_views.replace_exercise),
+        name="webapp-program-exercise-replace-direct",
+    ),
+    path(
+        "api/program/exercise/replace/status/",
+        cast(WebappView, webapp_views.replace_exercise_status),
+        name="webapp-program-exercise-replace-status-direct",
     ),
     path("webapp", RedirectView.as_view(url="/webapp/", permanent=False)),
     path("webapp/", include("apps.webapp.urls")),

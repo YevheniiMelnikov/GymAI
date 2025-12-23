@@ -239,3 +239,48 @@ export async function saveExerciseSets(
     throw new HttpError(resp.status, statusToMessage(resp.status));
   }
 }
+
+export async function replaceExercise(
+  programId: string,
+  exerciseId: string,
+  initData: string
+): Promise<string> {
+  const url = new URL('api/program/exercise/replace/', window.location.href);
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (initData) headers['X-Telegram-InitData'] = initData;
+
+  const resp = await fetch(url.toString(), {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      program_id: programId,
+      exercise_id: exerciseId
+    })
+  });
+
+  if (!resp.ok) {
+    throw new HttpError(resp.status, statusToMessage(resp.status));
+  }
+  const data = (await resp.json()) as { task_id?: string | null };
+  if (!data.task_id) {
+    throw new Error('missing_task_id');
+  }
+  return data.task_id;
+}
+
+export type ReplaceExerciseStatus = {
+  status: 'queued' | 'processing' | 'success' | 'error';
+  error?: string | null;
+};
+
+export async function getReplaceExerciseStatus(
+  taskId: string,
+  initData: string
+): Promise<ReplaceExerciseStatus> {
+  const url = new URL('api/program/exercise/replace/status/', window.location.href);
+  url.searchParams.set('task_id', taskId);
+  const headers: Record<string, string> = {};
+  if (initData) headers['X-Telegram-InitData'] = initData;
+
+  return getJSON<ReplaceExerciseStatus>(url.toString(), { headers });
+}
