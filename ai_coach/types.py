@@ -14,6 +14,7 @@ class CoachMode(str, Enum):
     subscription = "subscription"
     update = "update"
     ask_ai = "ask_ai"
+    diet = "diet"
 
 
 class MessageRole(str, Enum):
@@ -37,5 +38,8 @@ class AskCtx(TypedDict):
     language: str
     workout_location: WorkoutLocation | None
     plan_type: WorkoutPlanType | None
+    diet_allergies: NotRequired[str | None]
+    diet_products: NotRequired[list[str]]
+    profile_context: NotRequired[str | None]
     instructions: NotRequired[str | None]
     deps: NotRequired["AgentDeps"]

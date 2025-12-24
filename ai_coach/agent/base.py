@@ -4,6 +4,7 @@ from time import monotonic
 
 from core.schemas import Program, Subscription
 from core.schemas import QAResponse
+from core.schemas import DietPlan
 from core.enums import WorkoutLocation
 from ai_coach.types import CoachMode
 from config.app_settings import settings
@@ -45,6 +46,7 @@ class CoachAgentProtocol(Protocol):
         period: str | None = None,
         workout_days: list[str] | None = None,
         wishes: str | None = None,
+        profile_context: str | None = None,
         output_type: type[Program] | type[Subscription],
         instructions: str | None = None,
     ) -> Program | Subscription: ...
@@ -58,6 +60,7 @@ class CoachAgentProtocol(Protocol):
         deps: AgentDeps,
         *,
         workout_location: WorkoutLocation | None = None,
+        profile_context: str | None = None,
         output_type: type[Program] | type[Subscription] = Subscription,
         instructions: str | None = None,
     ) -> Program | Subscription: ...
@@ -69,3 +72,15 @@ class CoachAgentProtocol(Protocol):
         deps: AgentDeps,
         attachments: list[dict[str, str]] | None = None,
     ) -> QAResponse: ...
+
+    @classmethod
+    async def generate_diet_plan(
+        cls,
+        prompt: str | None,
+        deps: AgentDeps,
+        *,
+        profile_context: str | None = None,
+        diet_allergies: str | None = None,
+        diet_products: list[str] | None = None,
+        instructions: str | None = None,
+    ) -> DietPlan: ...

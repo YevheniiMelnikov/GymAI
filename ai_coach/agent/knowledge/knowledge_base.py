@@ -1311,6 +1311,12 @@ class KnowledgeBase:
             parts.append(f"workout_experience: {profile.workout_experience}")
         if profile.workout_goals:
             parts.append(f"workout_goals: {profile.workout_goals}")
+        if profile.diet_allergies:
+            parts.append(f"diet_allergies: {profile.diet_allergies}")
+        if profile.diet_products:
+            products = ", ".join(profile.diet_products)
+            if products:
+                parts.append(f"diet_products: {products}")
         health_notes, is_placeholder = cls._health_notes_context(profile.health_notes)
         if health_notes:
             parts.append(f"health_notes: {health_notes}")

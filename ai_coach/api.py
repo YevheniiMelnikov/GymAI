@@ -17,7 +17,7 @@ from ai_coach.schemas import AICoachRequest
 from ai_coach.types import CoachMode
 from config.app_settings import settings
 from core.exceptions import UserServiceError
-from core.schemas import Program, QAResponse, Subscription
+from core.schemas import DietPlan, Program, QAResponse, Subscription
 from pydantic import BaseModel
 
 # Re-export compatibility symbols expected by tests/old clients
@@ -188,6 +188,16 @@ async def coach_chat(
     if data.mode != CoachMode.ask_ai:
         raise HTTPException(status_code=422, detail="chat endpoint accepts only ask_ai mode")
     return cast(QAResponse | JSONResponse | None, await handle_coach_request(data, allowed_modes={CoachMode.ask_ai}))
+
+
+@app.post("/coach/diet/", response_model=DietPlan | None)
+async def coach_diet(
+    data: AICoachRequest,
+    _: None = Depends(_require_hmac),
+) -> DietPlan | JSONResponse | None:
+    if data.mode != CoachMode.diet:
+        raise HTTPException(status_code=422, detail="diet endpoint accepts only diet mode")
+    return cast(DietPlan | JSONResponse | None, await handle_coach_request(data, allowed_modes={CoachMode.diet}))
 
 
 @app.post("/knowledge/refresh/")

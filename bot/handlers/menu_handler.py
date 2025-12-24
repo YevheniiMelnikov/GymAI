@@ -21,6 +21,7 @@ from bot.utils.menus import (
     show_subscription_history,
     show_balance_menu,
     process_ai_service_selection,
+    start_diet_flow,
 )
 from bot.utils.workout_plans import cancel_subscription, process_new_program, process_new_subscription
 from bot.utils.other import generate_order_id
@@ -80,6 +81,10 @@ async def main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
             delete_origin=True,
             show_balance_menu_on_insufficient=True,
         )
+        return
+
+    elif cb_data == "create_diet":
+        await start_diet_flow(callback_query, profile, state, delete_origin=True)
         return
 
     elif cb_data == "my_profile":

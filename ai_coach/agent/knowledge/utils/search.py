@@ -33,6 +33,7 @@ from ai_coach.agent.knowledge.utils.projection import ProjectionService
 from ai_coach.agent.knowledge.utils.memify_scheduler import schedule_profile_memify
 from ai_coach.exceptions import AgentExecutionAborted
 from config.app_settings import settings
+from core.schemas import Profile
 from core.utils.redis_lock import get_redis_client
 
 
@@ -659,6 +660,8 @@ class SearchService:
         return collected
 
     async def fallback_entries(self, profile_id: int, limit: int = 6) -> list[tuple[str, str]]:
+        from core.services import APIService
+
         user = await self.dataset_service.get_cognee_user()
         aliases = [
             self.dataset_service.dataset_name(profile_id),
@@ -667,7 +670,22 @@ class SearchService:
         ]
         datasets = [self.dataset_service.alias_for_dataset(alias) for alias in aliases]
         user_ctx = self.dataset_service.to_user_ctx(user)
-        return await self._fallback_dataset_entries(datasets, user_ctx, top_k=limit)
+        entries = await self._fallback_dataset_entries(datasets, user_ctx, top_k=limit)
+        if entries:
+            return entries
+        try:
+            profile = await APIService.profile.get_profile(profile_id)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"knowledge_profile_fallback_failed profile_id={profile_id} detail={exc}")
+            return []
+        if not profile:
+            return []
+        text = self._profile_snapshot_text(profile)
+        if not text.strip():
+            return []
+        alias = self.dataset_service.alias_for_dataset(self.dataset_service.dataset_name(profile_id))
+        logger.info(f"knowledge_profile_fallback_used profile_id={profile_id} dataset={alias}")
+        return [(text, alias)]
 
     async def _warm_up_datasets(self, datasets: list[str], user: Any | None) -> None:
         kb = self._knowledge_base
@@ -755,6 +773,45 @@ class SearchService:
         if inferred and inferred.get("kind") == "message":
             return "message"
         return "document"
+
+    @staticmethod
+    def _health_notes_context(raw: str | None) -> tuple[str | None, bool]:
+        if raw is None:
+            return None, False
+        cleaned = str(raw).strip()
+        if not cleaned:
+            return None, False
+        if cleaned in {"-", "—"}:
+            return None, True
+        return cleaned, False
+
+    @classmethod
+    def _profile_snapshot_text(cls, profile: Profile) -> str:
+        parts: list[str] = []
+        if profile.gender:
+            parts.append(f"gender: {profile.gender}")
+        if profile.born_in:
+            parts.append(f"born_in: {profile.born_in}")
+        if profile.weight:
+            parts.append(f"weight: {profile.weight}")
+        if profile.height:
+            parts.append(f"height: {profile.height}")
+        if profile.workout_experience:
+            parts.append(f"workout_experience: {profile.workout_experience}")
+        if profile.workout_goals:
+            parts.append(f"workout_goals: {profile.workout_goals}")
+        if profile.diet_allergies:
+            parts.append(f"diet_allergies: {profile.diet_allergies}")
+        if profile.diet_products:
+            products = ", ".join(profile.diet_products)
+            if products:
+                parts.append(f"diet_products: {products}")
+        health_notes, is_placeholder = cls._health_notes_context(profile.health_notes)
+        if health_notes:
+            parts.append(f"health_notes: {health_notes}")
+        elif is_placeholder:
+            parts.append("health_notes: no known injuries or contraindications reported")
+        return "profile: " + "; ".join(parts)
 
     async def _ensure_profile_indexed(self, profile_id: int, user: Any | None) -> bool:
         from core.services import APIService

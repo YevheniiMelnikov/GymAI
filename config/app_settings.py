@@ -115,6 +115,10 @@ class Settings(BaseSettings):
     AI_COACH_GRAPH_ATTACH_TIMEOUT: Annotated[float, Field(default=45.0, description="Maximum time to wait for the graph engine to become reachable during startup.")]
     AI_COACH_DEFAULT_TOOL_TIMEOUT: Annotated[float, Field(default=3.0, description="Default timeout for AI agent tool calls in seconds.")]
     AI_COACH_SEARCH_TIMEOUT: Annotated[float, Field(default=180.0, description="Timeout for search tool calls in seconds.")]
+    AI_COACH_GENERATION_SEARCH_TIMEOUT: Annotated[
+        float,
+        Field(default=45.0, description="Search timeout cap in seconds for workout/diet generation modes."),
+    ]
     AI_COACH_MEMIFY_DELAY_SECONDS: Annotated[float, Field(default=3600.0, description="Delay in seconds before scheduling Cognee memify for profile datasets.")]
     AI_COACH_CHAT_SUMMARY_PAIR_LIMIT: Annotated[int, Field(default=10, description="Number of client/coach message pairs required before summarizing chat history.")]
     AI_COACH_CHAT_SUMMARY_MAX_TOKENS: Annotated[int, Field(default=400, description="Max tokens for the chat summary LLM request.")]
@@ -211,6 +215,7 @@ class Settings(BaseSettings):
     MEDIUM_SUBSCRIPTION_PRICE: Decimal = Field(default=Decimal("2400"), description="Price in credits for a 6 months AI coach subscription.")
     LARGE_SUBSCRIPTION_PRICE: Decimal = Field(default=Decimal("4750"), description="Price in credits for a 1 year AI coach subscription.")
     ASK_AI_PRICE: Annotated[int, Field(default=25, description="Price in credits for a single 'Ask AI' question.")]
+    DIET_PLAN_PRICE: Annotated[int, Field(default=50, description="Price in credits for generating a nutrition plan.")]
 
     # --- Payments ---
     PAYMENT_PRIVATE_KEY: Annotated[str, Field(default="", description="Private key for the payment provider API.")]

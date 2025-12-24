@@ -33,6 +33,7 @@ async def setup_app(app: "web.Application", bot: "Bot", dp: "Dispatcher") -> Non
         internal_send_daily_survey,
         internal_ai_coach_plan_ready,
         internal_ai_answer_ready,
+        internal_ai_diet_ready,
         internal_webapp_workout_action,
     )
 
@@ -45,6 +46,7 @@ async def setup_app(app: "web.Application", bot: "Bot", dp: "Dispatcher") -> Non
     app.router.add_post("/internal/tasks/send_daily_survey/", internal_send_daily_survey)
     app.router.add_post("/internal/tasks/ai_plan_ready/", internal_ai_coach_plan_ready)
     app.router.add_post("/internal/tasks/ai_answer_ready/", internal_ai_answer_ready)
+    app.router.add_post("/internal/tasks/ai_diet_ready/", internal_ai_diet_ready)
     app.router.add_post("/internal/webapp/workouts/action/", internal_webapp_workout_action)
     setup_application(app, dp, bot=bot)
 

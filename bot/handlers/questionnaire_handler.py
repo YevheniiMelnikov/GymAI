@@ -11,6 +11,7 @@ from bot.keyboards import (
     workout_location_kb,
     yes_no_kb,
     select_language_kb,
+    diet_products_kb,
 )
 from bot.states import States
 from config.app_settings import settings
@@ -26,6 +27,7 @@ from bot.utils.menus import (
     show_balance_menu,
 )
 from bot.utils.profiles import resolve_workout_location, should_grant_gift_credits, update_profile_data
+from bot.utils.diet_plans import normalize_diet_products
 from bot.utils.workout_days import service_period_value, start_workout_days_selection
 from bot.utils.text import get_state_and_message
 from bot.utils.bot import del_msg, answer_msg, delete_messages, set_bot_commands
@@ -321,8 +323,19 @@ async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> No
         reply_markup = workout_location_kb(profile.language or settings.DEFAULT_LANG)
     elif state_to_set == States.health_notes_choice:
         reply_markup = yes_no_kb(profile.language or settings.DEFAULT_LANG)
+    elif state_to_set == States.diet_allergies_choice:
+        reply_markup = yes_no_kb(profile.language or settings.DEFAULT_LANG)
     if callback_query.message is not None:
-        await answer_msg(cast(Message, callback_query.message), message_text, reply_markup=reply_markup)
+        if state_to_set == States.diet_products:
+            selected = normalize_diet_products(profile.diet_products)
+            await state.update_data(diet_products=selected)
+            await answer_msg(
+                cast(Message, callback_query.message),
+                message_text,
+                reply_markup=diet_products_kb(profile.language or settings.DEFAULT_LANG, set(selected)),
+            )
+        else:
+            await answer_msg(cast(Message, callback_query.message), message_text, reply_markup=reply_markup)
     await state.set_state(state_to_set)
     await del_msg(cast(Message | CallbackQuery | None, callback_query))
 

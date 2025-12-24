@@ -7,6 +7,7 @@ from .tasks import (
     internal_ai_coach_plan_ready,
 )
 from .answers import internal_ai_answer_ready
+from .diet import internal_ai_diet_ready
 from .webapp import internal_webapp_workout_action
 
 __all__ = (
@@ -15,5 +16,6 @@ __all__ = (
     "internal_send_daily_survey",
     "internal_ai_coach_plan_ready",
     "internal_ai_answer_ready",
+    "internal_ai_diet_ready",
     "internal_webapp_workout_action",
 )

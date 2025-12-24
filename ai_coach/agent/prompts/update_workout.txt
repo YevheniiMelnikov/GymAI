@@ -1,5 +1,7 @@
 Your task is to update a client's workout plan based on:
 
+Date: {current_date}
+
 1. The workout that was originally expected from the client.
 2. The feedback the client provided after performing that workout.
 3. Additional context from the client’s past training history or program notes.

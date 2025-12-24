@@ -23,6 +23,8 @@ class AICoachRequest(BaseModel):
     request_id: str | None = None
     instructions: str | None = None  # User-provided custom instructions
     attachments: list[dict[str, str]] | None = None
+    diet_allergies: str | None = None
+    diet_products: list[str] | None = None
 
     def __init__(self, **data: Any) -> None:
         mode = data.get("mode")

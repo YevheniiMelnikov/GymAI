@@ -129,6 +129,7 @@ def test_update_mode(monkeypatch: pytest.MonkeyPatch) -> None:
             deps: object | None = None,
             output_type: type[Program] | None = None,
             instructions: str | None = None,
+            profile_context: str | None = None,
         ) -> Program:
             assert workout_location is WorkoutLocation.HOME
             assert output_type is Program

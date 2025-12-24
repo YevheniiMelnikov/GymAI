@@ -13,7 +13,7 @@ from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
 
 from config.app_settings import settings
 from core.enums import WorkoutLocation
-from core.schemas import Program, QAResponse, Subscription
+from core.schemas import DietPlan, Program, QAResponse, Subscription
 from ai_coach.exceptions import AgentExecutionAborted
 from ai_coach.agent.knowledge.schemas import KnowledgeSnippet
 
@@ -29,6 +29,7 @@ from .llm_helper import LLMHelper, LLMHelperProto
 from .prompts import (
     ASK_AI_USER_PROMPT,
     COACH_INSTRUCTIONS,
+    DIET_PLAN,
     GENERATE_WORKOUT,
     UPDATE_WORKOUT,
 )
@@ -91,6 +92,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
         period: str | None = None,
         workout_days: list[str] | None = None,
         wishes: str | None = None,
+        profile_context: str | None = None,
         output_type: type[Program] | type[Subscription],
         instructions: str | None = None,
     ) -> Program | Subscription:
@@ -103,6 +105,8 @@ class CoachAgent(metaclass=CoachAgentMeta):
         context_lines: list[str] = []
         if workout_location:
             context_lines.append(f"Workout location: {workout_location.value}")
+        if profile_context:
+            context_lines.append(f"Profile context:\n{profile_context}")
         if prompt:
             context_lines.append(prompt)
         if period:
@@ -163,6 +167,83 @@ class CoachAgent(metaclass=CoachAgentMeta):
         return normalized
 
     @classmethod
+    async def generate_diet_plan(
+        cls,
+        prompt: str | None,
+        deps: AgentDeps,
+        *,
+        profile_context: str | None = None,
+        diet_allergies: str | None = None,
+        diet_products: list[str] | None = None,
+        instructions: str | None = None,
+    ) -> DietPlan:
+        deps.mode = CoachMode.diet
+        deps.max_tool_calls = 6
+        agent = cls._get_agent()
+        today = datetime.now(ZoneInfo(settings.TIME_ZONE)).date().isoformat()
+        context_lines: list[str] = []
+        if profile_context:
+            context_lines.append(profile_context)
+        else:
+            context_lines.append("Profile data: not provided.")
+        if prompt:
+            context_lines.append(f"User request: {prompt}")
+        diet_pref_lines: list[str] = []
+        if diet_allergies:
+            diet_pref_lines.append(f"Allergies: {diet_allergies}")
+        if diet_products:
+            diet_pref_lines.append(f"Allowed products: {', '.join(diet_products)}")
+        if not diet_pref_lines:
+            diet_pref_lines.append("No additional diet preferences provided.")
+        rules = "\n".join(filter(None, [instructions]))
+        formatted = DIET_PLAN.format(
+            current_date=today,
+            profile_context="\n".join(context_lines),
+            diet_preferences="\n".join(diet_pref_lines),
+            language=cls._lang(deps),
+        )
+        if rules:
+            formatted = f"{formatted}\n\nRules:\n{rules}"
+        user_prompt = f"MODE: diet\n{formatted}"
+        history_started = monotonic()
+        history = await cls._load_history_messages(deps.profile_id)
+        _log_agent_stage(
+            "history_load",
+            int((monotonic() - history_started) * 1000),
+            profile_id=deps.profile_id,
+            mode=deps.mode,
+            messages=len(history),
+        )
+        logger.info(
+            "agent.stage stage=run_start profile_id={} mode={} prompt_len={}",
+            deps.profile_id,
+            deps.mode.value,
+            len(user_prompt),
+        )
+        run_started = monotonic()
+        raw_result = await agent.run(
+            user_prompt,
+            deps=deps,
+            output_type=DietPlan,
+            message_history=history,
+            model_settings=ModelSettings(
+                temperature=settings.COACH_AGENT_TEMPERATURE,
+                extra_body={"response_format": {"type": "json_object"}},
+            ),
+        )
+        _log_agent_stage(
+            "run",
+            int((monotonic() - run_started) * 1000),
+            profile_id=deps.profile_id,
+            mode=deps.mode,
+        )
+        normalized = cls._normalize_output(raw_result, DietPlan)
+        logger.debug(
+            f"agent.done profile_id={deps.profile_id} mode={deps.mode.value} tools_called={sorted(deps.called_tools)}"
+        )
+        return normalized
+
+    @classmethod
     async def update_workout_plan(
         cls,
         prompt: str | None,
@@ -171,17 +252,22 @@ class CoachAgent(metaclass=CoachAgentMeta):
         deps: AgentDeps,
         *,
         workout_location: WorkoutLocation | None = None,
+        profile_context: str | None = None,
         output_type: type[Program] | type[Subscription] = Subscription,
         instructions: str | None = None,
     ) -> Program | Subscription:
         agent = cls._get_agent()
         deps.mode = CoachMode.update
+        today = datetime.now(ZoneInfo(settings.TIME_ZONE)).date().isoformat()
         context_lines: list[str] = []
         if workout_location:
             context_lines.append(f"Workout location: {workout_location.value}")
+        if profile_context:
+            context_lines.append(f"Profile context:\n{profile_context}")
         if prompt:
             context_lines.append(prompt)
         formatted = UPDATE_WORKOUT.format(
+            current_date=today,
             expected_workout=expected_workout,
             feedback=feedback,
             context="\n".join(context_lines),

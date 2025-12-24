@@ -182,6 +182,10 @@ async def tool_search_knowledge(
     deps, skipped, cached = _start_tool(ctx, tool_name, cache_key=cache_key)
     timeout = _tool_timeout("tool_search_knowledge")
     profile_id = deps.profile_id
+    if deps.mode in {CoachMode.diet, CoachMode.program, CoachMode.subscription, CoachMode.update}:
+        cap = float(settings.AI_COACH_GENERATION_SEARCH_TIMEOUT)
+        if cap > 0:
+            timeout = min(timeout, cap)
     logger.debug(f"tool_search_knowledge profile_id={profile_id} query='{normalized_query[:80]}' k={k}")
     if skipped:
         cached_result = cast(list[str], cached if cached is not None else [])

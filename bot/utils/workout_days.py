@@ -6,6 +6,7 @@ from contextlib import suppress
 from bot.keyboards import workout_days_selection_kb
 from bot.states import States
 from bot.texts import MessageText, translate
+from config.app_settings import settings
 from bot.utils.bot import answer_msg, del_msg
 from core.enums import SubscriptionPeriod
 
@@ -102,7 +103,7 @@ async def start_workout_days_selection(
     )
     await state.set_state(States.workout_days_selection)
     if show_wishes_prompt:
-        instructions = translate(MessageText.enter_wishes, lang)
+        instructions = translate(MessageText.enter_wishes, lang).format(bot_name=settings.BOT_NAME)
         await answer_msg(source, instructions)
     text = compose_workout_days_prompt(lang, DEFAULT_WORKOUT_DAYS_COUNT)
     await answer_msg(source, text, reply_markup=workout_days_selection_kb(lang))

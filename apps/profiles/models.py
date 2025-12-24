@@ -19,6 +19,8 @@ class Profile(Model):
     health_notes = models.CharField(max_length=250, null=True, blank=True)
     workout_experience = models.CharField(max_length=50, null=True, blank=True)
     workout_goals = models.CharField(max_length=250, null=True, blank=True)
+    diet_allergies = models.CharField(max_length=250, null=True, blank=True)
+    diet_products = models.JSONField(null=True, blank=True, default=None)
     workout_location = models.CharField(
         max_length=32,
         choices=[("gym", "gym"), ("home", "home")],

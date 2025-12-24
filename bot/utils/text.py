@@ -38,6 +38,53 @@ def get_profile_attributes(user: Optional[Profile], lang: str) -> dict[str, str]
         val = getattr(user, name, "") if user else ""
         return str(val) if val is not None else ""
 
+    def diet_block() -> str:
+        if user is None:
+            return ""
+        allergies = str(user.diet_allergies or "").strip()
+        products = user.diet_products or []
+        if not allergies and not products:
+            return ""
+        labels = {
+            "eng": {
+                "title": "Diet preferences 🥗",
+                "allergies": "Allergies",
+                "products": "Products",
+            },
+            "ru": {
+                "title": "Пищевые привычки 🥗",
+                "allergies": "Аллергии",
+                "products": "Продукты",
+            },
+            "ua": {
+                "title": "Харчові звички 🥗",
+                "allergies": "Алергії",
+                "products": "Продукти",
+            },
+        }.get(
+            lang,
+            {
+                "title": "Diet preferences 🥗",
+                "allergies": "Allergies",
+                "products": "Products",
+            },
+        )
+        lines = [f"<b>{labels['title']}</b>"]
+        if allergies:
+            lines.append(f"{labels['allergies']}: <em>{allergies}</em>")
+        if products:
+            product_labels = {
+                "plant_food": translate(ButtonText.plant_food, lang),
+                "meat": translate(ButtonText.meat, lang),
+                "fish_seafood": translate(ButtonText.fish_seafood, lang),
+                "eggs": translate(ButtonText.eggs, lang),
+                "dairy": translate(ButtonText.dairy, lang),
+            }
+            translated = [product_labels.get(item, item) for item in products if str(item).strip()]
+            if translated:
+                lines.append(f"{labels['products']}: <em>{', '.join(translated)}</em>")
+        return "\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n" + "\n".join(lines)
+
     location_key = attr("workout_location").strip().lower()
     workout_locations = get_workout_locations(lang)
     return {
@@ -48,6 +95,7 @@ def get_profile_attributes(user: Optional[Profile], lang: str) -> dict[str, str]
         "weight": attr("weight"),
         "height": attr("height"),
         "notes": attr("health_notes"),
+        "diet_preferences": diet_block(),
     }
 
 
@@ -60,6 +108,8 @@ _STATE_MESSAGE_KEYS: dict[str, StateMessageKey] = {
     "weight": (States.weight, MessageText.weight),
     "height": (States.height, MessageText.height),
     "health_notes": (States.health_notes_choice, MessageText.health_notes_question),
+    "diet_allergies": (States.diet_allergies_choice, MessageText.diet_allergies_question),
+    "diet_products": (States.diet_products, MessageText.diet_products),
 }
 
 

@@ -23,6 +23,7 @@ HANDLED_STATES = [
     States.height,
     States.workout_experience,
     States.health_notes,
+    States.diet_allergies,
     States.main_menu,
     States.profile_delete,
     States.program_edit,

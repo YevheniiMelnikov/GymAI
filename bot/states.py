@@ -21,6 +21,11 @@ class States(StatesGroup):
     enter_wishes = State()
     accept_policy = State()
 
+    diet_allergies_choice = State()
+    diet_allergies = State()
+    diet_products = State()
+    diet_confirm_service = State()
+
     edit_profile = State()
     profile = State()
     profile_delete = State()

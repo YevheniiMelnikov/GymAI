@@ -20,6 +20,8 @@ _AGENT_PROGRAM: str = _load_template("agent_program.txt")
 _AGENT_SUBSCRIPTION: str = _load_template("agent_subscription.txt")
 _AGENT_UPDATE: str = _load_template("agent_update.txt")
 _AGENT_ASK_AI: str = _load_template("agent_ask_ai.txt")
+_AGENT_DIET: str = _load_template("agent_diet.txt")
+DIET_PLAN: str = _load_template("diet_plan.txt")
 
 
 def agent_instructions(mode: str) -> str:
@@ -28,6 +30,7 @@ def agent_instructions(mode: str) -> str:
         "subscription": _AGENT_SUBSCRIPTION,
         "update": _AGENT_UPDATE,
         "ask_ai": _AGENT_ASK_AI,
+        "diet": _AGENT_DIET,
     }
     try:
         return f"{_AGENT_COMMON}\n{mapping[mode]}"
@@ -43,5 +46,6 @@ __all__ = [
     "ASK_AI_USER_PROMPT",
     "CHAT_SUMMARY_PROMPT",
     "REPLACE_EXERCISE_PROMPT",
+    "DIET_PLAN",
     "agent_instructions",
 ]

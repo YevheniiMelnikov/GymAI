@@ -1,0 +1,8 @@
+MODE: diet
+1) Call tool_search_knowledge(query) (use top-6 results).
+   - Build a compact query that starts with `profile:` and lists key fields (gender, birth_year, weight, height,
+     workout_goals, diet_allergies, diet_products, health_notes) plus a short cue like "diet plan".
+   - Keep the query <=120 characters. Do not include role text, instructions, or anything starting with "MODE:".
+2) Use the retrieved knowledge and the profile context to build a 1-day diet plan.
+3) Return a JSON DietPlan with meals and items; include KBJU for each item, meal totals, and daily totals.
+4) Do not include any Markdown or HTML in the JSON output.

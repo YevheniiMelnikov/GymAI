@@ -36,6 +36,12 @@ from .qa import (  # noqa: F401
     handle_ai_question_failure,
     notify_ai_answer_ready_task,
 )
+from .diet import (  # noqa: F401
+    generate_ai_diet_plan,
+    handle_ai_diet_failure,
+    notify_ai_diet_ready_task,
+    refund_ai_diet_credits_task,
+)
 
 
 async def _notify_ai_plan_ready(payload: dict[str, Any]) -> None:
@@ -65,6 +71,7 @@ __all__ = (
     "handle_ai_plan_failure",
     "handle_ai_question_failure",
     "notify_ai_answer_ready_task",
+    "notify_ai_diet_ready_task",
     "notify_ai_plan_ready_task",
     "plans",
     "update_ai_workout_plan",
@@ -78,4 +85,7 @@ __all__ = (
     "memify_profile_datasets",
     "replace_exercise_task",
     "enqueue_exercise_replace_task",
+    "generate_ai_diet_plan",
+    "handle_ai_diet_failure",
+    "refund_ai_diet_credits_task",
 )

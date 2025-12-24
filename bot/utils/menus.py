@@ -9,7 +9,7 @@ from aiogram.types import CallbackQuery, Message, FSInputFile
 from pathlib import Path
 
 from bot import keyboards as kb
-from bot.keyboards import subscription_manage_kb, program_edit_kb, program_view_kb, select_gender_kb
+from bot.keyboards import subscription_manage_kb, program_edit_kb, program_view_kb, select_gender_kb, yes_no_kb
 from bot.utils.profiles import fetch_user, answer_profile
 from bot.utils.credits import available_packages, available_ai_services
 from bot.states import States
@@ -57,7 +57,12 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
     reply_markup = None
     try:
         user_profile = await Cache.profile.get_record(profile.id)
-        reply_markup = kb.edit_profile_kb(profile.language)
+        show_diet = False
+        if user_profile is not None:
+            allergies = (user_profile.diet_allergies or "").strip()
+            products = user_profile.diet_products or []
+            show_diet = bool(allergies or products)
+        reply_markup = kb.edit_profile_kb(profile.language, show_diet=show_diet)
     except ProfileNotFoundError:
         logger.info(f"Profile data not found for profile {profile.id} during profile editing setup.")
 
@@ -467,7 +472,7 @@ async def process_ai_service_selection(
         required=required,
     )
     await state.set_state(States.enter_wishes)
-    await answer_msg(interaction, translate(MessageText.enter_wishes, language))
+    await answer_msg(interaction, translate(MessageText.enter_wishes, language).format(bot_name=settings.BOT_NAME))
     return True
 
 
@@ -508,6 +513,58 @@ async def start_subscription_flow(target: InteractionTarget, profile: Profile, s
         allowed_services=("subscription_1_month", "subscription_6_months", "subscription_12_months"),
         current_profile=cached_profile,
     )
+
+
+async def start_diet_flow(
+    target: InteractionTarget, profile: Profile, state: FSMContext, *, delete_origin: bool
+) -> None:
+    language = cast(str, profile.language or settings.DEFAULT_LANG)
+    if isinstance(target, CallbackQuery):
+        await target.answer()
+    try:
+        user_profile = await _ensure_profile_completed(
+            target,
+            profile,
+            state,
+            pending_flow={"name": "start_diet_flow"},
+        )
+    except ValueError:
+        await answer_msg(target, translate(MessageText.unexpected_error, language))
+        return
+    if user_profile is None:
+        if delete_origin:
+            await del_msg(target if isinstance(target, (CallbackQuery, Message)) else None)
+        return
+    if user_profile.diet_products is None:
+        await state.update_data(diet_allergies=None, diet_products=[])
+        await answer_msg(
+            target,
+            translate(MessageText.diet_allergies_question, language),
+            reply_markup=yes_no_kb(language),
+        )
+        await state.set_state(States.diet_allergies_choice)
+        if delete_origin:
+            await del_msg(target if isinstance(target, (CallbackQuery, Message)) else None)
+        return
+    await state.update_data(
+        diet_allergies=user_profile.diet_allergies,
+        diet_products=user_profile.diet_products or [],
+    )
+    required = int(settings.DIET_PLAN_PRICE)
+    if user_profile.credits < required:
+        if isinstance(target, CallbackQuery):
+            await target.answer(translate(MessageText.not_enough_credits, language), show_alert=True)
+        await show_balance_menu(target, profile, state, already_answered=True)
+        return
+    await state.update_data(required=required)
+    await state.set_state(States.diet_confirm_service)
+    await answer_msg(
+        target,
+        translate(MessageText.confirm_service, language).format(balance=user_profile.credits, price=required),
+        reply_markup=yes_no_kb(language),
+    )
+    if delete_origin:
+        await del_msg(target if isinstance(target, (CallbackQuery, Message)) else None)
 
 
 async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, profile: Profile) -> None:

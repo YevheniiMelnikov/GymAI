@@ -25,6 +25,8 @@ PROFILE_UPDATE_FIELDS: tuple[str, ...] = (
     "workout_goals",
     "workout_location",
     "health_notes",
+    "diet_allergies",
+    "diet_products",
     "weight",
     "height",
     "status",
@@ -154,6 +156,32 @@ async def update_profile_data(
         await del_msg(cast(TgMessage | TgCallbackQuery | None, message))
 
 
+async def update_diet_preferences(
+    profile: Profile,
+    *,
+    diet_allergies: str | None,
+    diet_products: list[str] | None,
+) -> Profile | None:
+    api_payload: dict[str, Any] = {
+        "diet_allergies": diet_allergies,
+        "diet_products": diet_products,
+    }
+    try:
+        update_success = await APIService.profile.update_profile(profile.id, api_payload)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(f"diet_preferences_update_failed profile_id={profile.id} error={exc}")
+        return None
+    if not update_success:
+        logger.error(f"diet_preferences_update_failed profile_id={profile.id} error=api_rejected")
+        return None
+    updated = await APIService.profile.get_profile(profile.id)
+    if updated is None:
+        logger.warning(f"diet_preferences_refresh_failed profile_id={profile.id}")
+        updated = profile.model_copy(update=api_payload)
+    await Cache.profile.save_record(updated.id, updated.model_dump(mode="json"))
+    return updated
+
+
 async def should_grant_gift_credits(tg_id: int) -> bool:
     try:
         profile = await APIService.profile.get_profile_by_tg_id(tg_id)
@@ -186,6 +214,11 @@ async def _handle_pending_flow(
         from bot.utils.menus import start_subscription_flow
 
         await start_subscription_flow(message, profile, state)
+        return True
+    if flow_name == "start_diet_flow":
+        from bot.utils.menus import start_diet_flow
+
+        await start_diet_flow(message, profile, state, delete_origin=False)
         return True
     if flow_name == "ask_ai_prompt":
         from bot.utils.ask_ai import start_ask_ai_prompt

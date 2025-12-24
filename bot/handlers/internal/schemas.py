@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field, field_validator
 
+from core.schemas import DietPlan
+
 
 class AiAnswerBlock(BaseModel):
     title: str | None = None
@@ -15,6 +17,21 @@ class AiAnswerNotify(BaseModel):
     blocks: list[AiAnswerBlock] = Field(default_factory=list)
     error: str | None = None
     force: bool = False
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _normalize_status(cls, value: str) -> str:
+        return (value or "success").lower()
+
+
+class AiDietNotify(BaseModel):
+    request_id: str
+    status: str = "success"
+    profile_id: int
+    plan: DietPlan | None = None
+    error: str | None = None
+    force: bool = False
+    cost: int | None = None
 
     @field_validator("status", mode="before")
     @classmethod

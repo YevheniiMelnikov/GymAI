@@ -23,7 +23,7 @@ from ai_coach.types import AskCtx, CoachMode, MessageRole
 from ai_coach.coach_actions import DISPATCH, CoachAction
 from config.app_settings import settings
 from core.enums import SubscriptionPeriod
-from core.schemas import Program, Profile, QAResponse, Subscription
+from core.schemas import DietPlan, Program, Profile, QAResponse, Subscription
 from core.services import APIService
 
 DEFAULT_WORKOUT_DAYS: tuple[str, ...] = ("Day 1", "Day 2", "Day 3", "Day 4")
@@ -130,6 +130,8 @@ def _build_context(
     workout_days: list[str],
     deps: AgentDeps,
     attachments: list[dict[str, str]],
+    *,
+    profile_context: str | None = None,
 ) -> AskCtx:
     return {
         "prompt": data.prompt,
@@ -143,9 +145,50 @@ def _build_context(
         "language": language,
         "workout_location": data.workout_location,
         "plan_type": data.plan_type,
+        "diet_allergies": data.diet_allergies,
+        "diet_products": data.diet_products or [],
+        "profile_context": profile_context,
         "instructions": data.instructions,
         "deps": deps,
     }
+
+
+def _build_profile_context(profile: Profile | None) -> str | None:
+    if profile is None:
+        return None
+    lines: list[str] = []
+    workout_goals = getattr(profile, "workout_goals", None)
+    if workout_goals:
+        lines.append(f"Workout goals: {workout_goals}")
+    weight = getattr(profile, "weight", None)
+    if weight:
+        lines.append(f"Weight (kg): {weight}")
+    height = getattr(profile, "height", None)
+    if height:
+        lines.append(f"Height (cm): {height}")
+    workout_experience = getattr(profile, "workout_experience", None)
+    if workout_experience:
+        lines.append(f"Workout experience: {workout_experience}")
+    health_notes = getattr(profile, "health_notes", None)
+    if health_notes:
+        lines.append(f"Health notes: {health_notes}")
+    diet_allergies = getattr(profile, "diet_allergies", None)
+    if diet_allergies is not None:
+        allergies = str(diet_allergies).strip()
+        if allergies:
+            lines.append(f"Diet allergies: {allergies}")
+        else:
+            lines.append("Diet allergies: none")
+    diet_products = getattr(profile, "diet_products", None)
+    if diet_products:
+        lines.append(f"Diet products: {', '.join(diet_products)}")
+    gender = getattr(profile, "gender", None)
+    if gender:
+        lines.append(f"Gender: {gender.value}")
+    born_in = getattr(profile, "born_in", None)
+    if born_in:
+        lines.append(f"Birth year: {born_in}")
+    return "\n".join(lines) if lines else None
 
 
 def _normalize_attachments(raw: Any) -> tuple[list[dict[str, str]], int]:
@@ -348,7 +391,7 @@ async def handle_coach_request(
     data: AICoachRequest,
     *,
     allowed_modes: set[CoachMode] | None = None,
-) -> Program | Subscription | QAResponse | list[str] | None | JSONResponse:
+) -> Program | Subscription | QAResponse | DietPlan | list[str] | None | JSONResponse:
     mode = data.mode if isinstance(data.mode, CoachMode) else CoachMode(data.mode)
     _allowed_mode_or_422(mode, allowed_modes or set())
     rid = str(uuid4())
@@ -365,7 +408,7 @@ async def handle_coach_request(
         return dedupe_cache[dedupe_key]
 
     request_id = str(data.request_id or "")
-    if request_id and mode in {CoachMode.program, CoachMode.subscription, CoachMode.update}:
+    if request_id and mode in {CoachMode.program, CoachMode.subscription, CoachMode.update, CoachMode.diet}:
         cached = request_cache.get(request_id)
         if cached is not None:
             logger.info(f"ask.request_cache_hit request_id={request_id} profile_id={data.profile_id} mode={mode.value}")
@@ -427,7 +470,7 @@ async def handle_coach_request(
             )
 
         model_name = CoachAgent._completion_model_name or settings.AGENT_MODEL
-        kb_enabled = mode == CoachMode.ask_ai
+        kb_enabled = mode in {CoachMode.ask_ai, CoachMode.diet}
         logger.info(
             f"ask.in request_id={data.request_id} profile_id={data.profile_id} mode={mode.value} "
             f"model={model_name} kb_enabled={str(kb_enabled).lower()}"
@@ -440,7 +483,16 @@ async def handle_coach_request(
             client_name=getattr(profile, "name", None),
             request_rid=rid,
         )
-        ctx: AskCtx = _build_context(data, language, period, workout_days, deps, attachments)
+        profile_context = _build_profile_context(profile)
+        ctx: AskCtx = _build_context(
+            data,
+            language,
+            period,
+            workout_days,
+            deps,
+            attachments,
+            profile_context=profile_context,
+        )
         logger.debug(f"/ask ctx.language={language} deps.locale={deps.locale} mode={mode.value}")
 
         kb_started = monotonic()
@@ -514,9 +566,18 @@ async def handle_coach_request(
 
                 return JSONResponse(content=response_data)
 
+            if mode == CoachMode.diet and not deps.kb_used:
+                logger.error(
+                    "knowledge_base_unavailable request_id={} profile_id={} mode={}",
+                    data.request_id,
+                    data.profile_id,
+                    mode.value,
+                )
+                raise HTTPException(status_code=503, detail="Knowledge base unavailable")
+
             if dedupe_key and result and not isinstance(result, JSONResponse):
                 dedupe_cache[dedupe_key] = result
-            if request_id and mode in {CoachMode.program, CoachMode.subscription, CoachMode.update}:
+            if request_id and mode in {CoachMode.program, CoachMode.subscription, CoachMode.update, CoachMode.diet}:
                 if result is not None and not isinstance(result, JSONResponse):
                     request_cache[request_id] = result
 

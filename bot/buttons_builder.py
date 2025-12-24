@@ -39,9 +39,10 @@ class ButtonsBuilder:
         self, text_key: ButtonText | str, callback: str, condition: bool, true_text: str, false_text: str
     ) -> InlineKeyboardButton:
         key = self._resolve_key(text_key)
-        text = translate(key, lang=self.lang).format(true_text if condition else false_text)
+        text = translate(key, lang=self.lang)
         formatted_text = self._replace_emoji_tags(html.unescape(text))
-        return InlineKeyboardButton(text=formatted_text, callback_data=callback)
+        suffix = true_text if condition else false_text
+        return InlineKeyboardButton(text=f"{formatted_text}{suffix}", callback_data=callback)
 
 
 def _create_web_app(url: str) -> WebAppInfo:

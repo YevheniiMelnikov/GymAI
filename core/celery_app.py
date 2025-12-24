@@ -97,6 +97,22 @@ AI_COACH_TASK_ROUTES: dict[str, dict[str, str]] = {
         "queue": "ai_coach",
         "routing_key": "ai_coach",
     },
+    "core.tasks.ai_coach.diet.generate_ai_diet_plan": {
+        "queue": "ai_coach",
+        "routing_key": "ai_coach",
+    },
+    "core.tasks.ai_coach.diet.notify_ai_diet_ready_task": {
+        "queue": "ai_coach",
+        "routing_key": "ai_coach",
+    },
+    "core.tasks.ai_coach.diet.handle_ai_diet_failure": {
+        "queue": "ai_coach",
+        "routing_key": "ai_coach",
+    },
+    "core.tasks.ai_coach.diet.refund_ai_diet_credits_task": {
+        "queue": "ai_coach",
+        "routing_key": "ai_coach",
+    },
     "core.tasks.ai_coach.maintenance.ai_coach_echo": {
         "queue": "ai_coach",
         "routing_key": "ai_coach",
@@ -127,6 +143,7 @@ CELERY_INCLUDE: tuple[str, ...] = (
     "core.tasks.ai_coach",
     "core.tasks.ai_coach.qa",
     "core.tasks.ai_coach.plans",
+    "core.tasks.ai_coach.diet",
     "core.tasks.ai_coach.maintenance",
     "core.tasks.ai_coach.replace_exercise",
     "apps.payments.tasks",

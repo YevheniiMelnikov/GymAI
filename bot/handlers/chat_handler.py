@@ -11,7 +11,8 @@ from bot.utils.ask_ai import start_ask_ai_prompt
 from core.cache import Cache
 from core.schemas import Profile
 from bot.utils.exercises import edit_subscription_exercises
-from bot.utils.menus import show_main_menu, show_exercises_menu, program_menu_pagination
+from bot.utils.menus import show_main_menu, show_exercises_menu, program_menu_pagination, start_diet_flow
+from bot.utils.diet_plans import DIET_RESULT_MENU, DIET_RESULT_REPEAT
 from bot.texts import MessageText, translate
 from bot.utils.bot import del_msg, answer_msg
 
@@ -156,6 +157,33 @@ async def ask_ai_repeat(callback_query: CallbackQuery, state: FSMContext) -> Non
 
 @chat_router.callback_query(F.data == "ask_ai_main_menu")
 async def ask_ai_main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    profile_data = data.get("profile")
+    if not profile_data:
+        await callback_query.answer()
+        return
+    profile = Profile.model_validate(profile_data)
+    message = callback_query.message
+    if message is None or not isinstance(message, Message):
+        await callback_query.answer()
+        return
+    await callback_query.answer()
+    await show_main_menu(message, profile, state, delete_source=False)
+
+
+@chat_router.callback_query(F.data == DIET_RESULT_REPEAT)
+async def diet_repeat(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    profile_data = data.get("profile")
+    if not profile_data:
+        await callback_query.answer()
+        return
+    profile = Profile.model_validate(profile_data)
+    await start_diet_flow(callback_query, profile, state, delete_origin=False)
+
+
+@chat_router.callback_query(F.data == DIET_RESULT_MENU)
+async def diet_main_menu(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     profile_data = data.get("profile")
     if not profile_data:

@@ -43,7 +43,7 @@ def test_program_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
             "p",
             "d",
             WorkoutLocation.HOME,
-            {"wishes": "w", "instructions": "i", "output_type": Program},
+            {"wishes": "w", "instructions": "i", "output_type": Program, "profile_context": None},
         )
 
     asyncio.run(runner())
@@ -85,6 +85,7 @@ def test_subscription_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
                 "wishes": "w",
                 "instructions": "i",
                 "output_type": Subscription,
+                "profile_context": None,
             },
         )
 
@@ -104,6 +105,7 @@ def test_update_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
             deps: object | None = None,
             output_type: type[Program] | None = None,
             instructions: str | None = None,
+            profile_context: str | None = None,
         ) -> str:
             captured["args"] = (
                 prompt,
@@ -113,6 +115,7 @@ def test_update_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
                 deps,
                 output_type,
                 instructions,
+                profile_context,
             )
             return "update-result"
 
@@ -129,7 +132,7 @@ def test_update_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
         }
         result = await DISPATCH[CoachMode.update](ctx)  # pyrefly: ignore[bad-argument-type]
         assert result == "update-result"
-        assert captured["args"] == ("p", "ew", "fb", WorkoutLocation.HOME, "d", Program, "i")
+        assert captured["args"] == ("p", "ew", "fb", WorkoutLocation.HOME, "d", Program, "i", None)
 
     asyncio.run(runner())
 
@@ -152,6 +155,7 @@ def test_ask_ai_dispatch_and_keys(monkeypatch: pytest.MonkeyPatch) -> None:
             CoachMode.subscription,
             CoachMode.update,
             CoachMode.ask_ai,
+            CoachMode.diet,
         }
 
     asyncio.run(runner())

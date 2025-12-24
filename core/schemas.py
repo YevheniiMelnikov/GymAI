@@ -25,6 +25,8 @@ class Profile(BaseModel):
     weight: int | None = None
     height: int | None = None
     workout_location: str | None = None
+    diet_allergies: str | None = None
+    diet_products: list[str] | None = None
     credits: int = Field(default=settings.DEFAULT_CREDITS, ge=0)
     profile_data: dict[str, Any] = {}
     model_config = ConfigDict(extra="ignore")
@@ -162,3 +164,36 @@ class QAResponse(BaseModel):
     answer: str
     sources: list[str] = Field(default_factory=list)
     blocks: list[QAResponseBlock] | None = None
+
+
+class NutritionTotals(BaseModel):
+    calories: int
+    protein_g: float
+    fat_g: float
+    carbs_g: float
+    model_config = ConfigDict(extra="ignore")
+
+
+class DietPlanItem(BaseModel):
+    name: str
+    grams: int
+    calories: int
+    protein_g: float
+    fat_g: float
+    carbs_g: float
+    model_config = ConfigDict(extra="ignore")
+
+
+class DietMeal(BaseModel):
+    name: str
+    items: list[DietPlanItem] = Field(default_factory=list)
+    totals: NutritionTotals
+    model_config = ConfigDict(extra="ignore")
+
+
+class DietPlan(BaseModel):
+    meals: list[DietMeal] = Field(default_factory=list)
+    totals: NutritionTotals
+    notes: list[str] = Field(default_factory=list)
+    schema_version: str | None = None
+    model_config = ConfigDict(extra="ignore")

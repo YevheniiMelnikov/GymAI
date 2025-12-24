@@ -13,7 +13,7 @@ from pydantic import ValidationError
 from ai_coach.schemas import AICoachRequest
 from ai_coach.types import CoachMode
 from core.exceptions import UserServiceError
-from core.schemas import Program, Subscription
+from core.schemas import DietPlan, Program, Subscription
 from core.schemas import QAResponse
 from core.internal_http import build_internal_hmac_auth_headers, resolve_hmac_credentials
 from .api_client import APIClient, APIClientHTTPError, APIClientTransportError
@@ -161,6 +161,30 @@ class AiCoachService(APIClient):
             )
         return Subscription.model_validate(data)
 
+    async def create_diet_plan(
+        self,
+        *,
+        profile_id: int,
+        language: str | Enum | None = None,
+        diet_allergies: str | None = None,
+        diet_products: list[str] | None = None,
+        prompt: str | None = None,
+        request_id: str | None = None,
+    ) -> DietPlan | None:
+        payload = AICoachRequest(
+            prompt=prompt,
+            profile_id=profile_id,
+            language=language.value if isinstance(language, Enum) else language,
+            mode=CoachMode.diet,
+            request_id=request_id,
+            diet_allergies=diet_allergies,
+            diet_products=diet_products,
+        )
+        data = await self._post_ask(payload, request_id=request_id)
+        if data is None:
+            return None
+        return DietPlan.model_validate(data)
+
     def _hmac_headers(self, body: bytes) -> dict[str, str]:
         env_mode = str(getattr(self.settings, "ENVIRONMENT", "development")).lower()
         creds = resolve_hmac_credentials(self.settings, prefer_ai_coach=True)
@@ -207,7 +231,12 @@ class AiCoachService(APIClient):
         body_bytes: bytes = json.dumps(payload_dict, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
         headers.setdefault("Content-Type", "application/json")
         headers.update(self._hmac_headers(body_bytes))
-        endpoint = "coach/chat/" if payload.mode is CoachMode.ask_ai else "coach/plan/"
+        if payload.mode is CoachMode.ask_ai:
+            endpoint = "coach/chat/"
+        elif payload.mode is CoachMode.diet:
+            endpoint = "coach/diet/"
+        else:
+            endpoint = "coach/plan/"
         logger.debug(
             "ai_coach.request POST endpoint={} profile_id={} mode={} language={} request_id={}",
             endpoint,
