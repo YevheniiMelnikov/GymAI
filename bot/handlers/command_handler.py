@@ -44,7 +44,7 @@ async def cmd_menu(message: Message, state: FSMContext) -> None:
         if profile is None or profile.status == ProfileStatus.deleted:
             raise ProfileNotFoundError(message.from_user.id)
         await Cache.profile.save_record(profile.id, profile.model_dump(mode="json"))
-        await state.update_data(lang=profile.language, profile=profile.model_dump())
+        await state.update_data(lang=profile.language, profile=profile.model_dump(mode="json"))
         await show_main_menu(message, profile, state)
         with suppress(TelegramBadRequest):
             await message.delete()
@@ -63,7 +63,7 @@ async def cmd_start(message: Message, state: FSMContext) -> None:
         if profile is None or profile.status == ProfileStatus.deleted:
             raise ProfileNotFoundError(message.from_user.id)
         await Cache.profile.save_record(profile.id, profile.model_dump(mode="json"))
-        await state.update_data(lang=profile.language, profile=profile.model_dump())
+        await state.update_data(lang=profile.language, profile=profile.model_dump(mode="json"))
         await show_main_menu(message, profile, state)
         with suppress(TelegramBadRequest):
             await message.delete()

@@ -63,10 +63,7 @@ def main_menu_kb(lang: str, *, webapp_url: str | None = None) -> KbMarkup:
 
 def balance_menu_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
-    buttons = [
-        [builder.add(ButtonText.tariff_plans, "plans")],
-        [builder.add(ButtonText.prev_menu, "back")],
-    ]
+    buttons = [[builder.add(ButtonText.prev_menu, "back")]]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
@@ -108,7 +105,7 @@ def profile_menu_kb(lang: str, show_balance: bool = False) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def edit_profile_kb(lang: str, *, show_diet: bool = False) -> KbMarkup:
+def edit_profile_kb(lang: str, *, show_diet: bool = False, show_language: bool = False) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
         [builder.add(ButtonText.workout_experience, "workout_experience")],
@@ -122,6 +119,8 @@ def edit_profile_kb(lang: str, *, show_diet: bool = False) -> KbMarkup:
     if show_diet:
         buttons.insert(-1, [builder.add(ButtonText.diet_allergies, "diet_allergies")])
         buttons.insert(-1, [builder.add(ButtonText.diet_products, "diet_products")])
+    if show_language:
+        buttons.insert(-1, [builder.add(ButtonText.language, "language")])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
@@ -374,6 +373,14 @@ def yes_no_kb(lang: str) -> KbMarkup:
         [builder.add(ButtonText.answer_no, "no"), builder.add(ButtonText.answer_yes, "yes")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
+def diet_confirm_kb(lang: str) -> KbMarkup:
+    builder = ButtonsBuilder(lang)
+    buttons = [
+        [builder.add(ButtonText.prev_menu, "diet_back"), builder.add(ButtonText.diet_generate, "diet_generate")],
+    ]
+    return KbMarkup(inline_keyboard=buttons, row_width=2)
 
 
 def payment_kb(lang: str, service_type: str, *, webapp_url: str | None = None, link: str | None = None) -> KbMarkup:

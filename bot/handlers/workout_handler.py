@@ -141,7 +141,7 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
         await answer_msg(message, translate(MessageText.request_in_progress, lang))
 
         state_payload: dict[str, object] = {
-            "profile": user_profile.model_dump(),
+            "profile": user_profile.model_dump(mode="json"),
             "last_request_id": request_id,
             "ask_ai_cost": cost,
             "ask_ai_prompt_id": None,

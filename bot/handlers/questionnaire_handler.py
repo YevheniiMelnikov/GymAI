@@ -309,7 +309,30 @@ async def update_profile(callback_query: CallbackQuery, state: FSMContext) -> No
     if callback_query.data == "back":
         message = callback_query.message
         if message is not None:
-            await show_main_menu(cast(Message, message), profile, state)
+            await show_my_profile_menu(callback_query, profile, state)
+        return
+    if callback_query.data == "language":
+        await callback_query.answer()
+        lang = settings.DEFAULT_LANG
+        try:
+            cached_profile = await Cache.profile.get_profile(callback_query.from_user.id)
+            if cached_profile is not None and cached_profile.language:
+                lang = cached_profile.language
+        except ProfileNotFoundError:
+            pass
+        prompt_msg = await answer_msg(
+            cast(Message, callback_query.message),
+            translate(MessageText.select_language, lang),
+            reply_markup=select_language_kb(lang),
+        )
+        message_ids = [prompt_msg.message_id] if prompt_msg is not None else []
+        await state.update_data(
+            lang=lang,
+            chat_id=callback_query.message.chat.id if callback_query.message else 0,
+            message_ids=message_ids,
+        )
+        await state.set_state(States.select_language)
+        await del_msg(cast(Message | CallbackQuery | None, callback_query))
         return
 
     state_to_set, message_text = get_state_and_message(

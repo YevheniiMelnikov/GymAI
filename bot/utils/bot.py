@@ -207,5 +207,3 @@ async def prompt_language_selection(message: Message, state: FSMContext) -> None
         message_ids.append(language_msg.message_id)
     await state.update_data(message_ids=message_ids, chat_id=message.chat.id)
     await state.set_state(States.select_language)
-    with suppress(TelegramBadRequest):
-        await message.delete()

@@ -75,7 +75,7 @@ async def _internal_ai_diet_ready_impl(request: web.Request) -> web.Response:
         state_data = await fsm.get_data()
         state_data.update(
             {
-                "profile": profile.model_dump(),
+                "profile": profile.model_dump(mode="json"),
                 "last_request_id": payload.request_id,
             }
         )

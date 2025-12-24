@@ -6,7 +6,7 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import diet_products_kb, yes_no_kb
+from bot.keyboards import diet_confirm_kb, diet_products_kb
 from bot.states import States
 from bot.texts import MessageText, translate
 from bot.utils.bot import answer_msg, del_msg
@@ -133,7 +133,7 @@ async def diet_products(callback_query: CallbackQuery, state: FSMContext) -> Non
         await answer_msg(
             callback_query,
             translate(MessageText.confirm_service, lang).format(balance=user_profile.credits, price=required),
-            reply_markup=yes_no_kb(lang),
+            reply_markup=diet_confirm_kb(lang),
         )
         await del_msg(callback_query)
         return
@@ -157,7 +157,11 @@ async def diet_confirm_service(callback_query: CallbackQuery, state: FSMContext)
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
     lang = profile.language or settings.DEFAULT_LANG
-    if callback_query.data == "no":
+    action = str(callback_query.data or "").lower()
+    if action not in {"diet_generate", "diet_back"}:
+        await callback_query.answer()
+        return
+    if action == "diet_back":
         await show_main_menu(cast(Message, callback_query.message), profile, state)
         await del_msg(callback_query)
         return

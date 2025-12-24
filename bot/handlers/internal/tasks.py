@@ -366,7 +366,7 @@ async def _process_ai_plan_ready(
             logger.error(f"Plan payload missing profile_id={resolved_profile_id} request_id={request_id}")
             return
 
-        profile_dump = profile.model_dump()
+        profile_dump = profile.model_dump(mode="json")
 
         await state.clear()
         base_state: dict[str, object] = {"profile": profile_dump}

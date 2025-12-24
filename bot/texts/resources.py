@@ -26,7 +26,6 @@ class ButtonText(AutoName):
     pay = auto()
     new_workout_plan = auto()
     history = auto()
-    tariff_plans = auto()
     start_plan = auto()
     optimum_plan = auto()
     max_plan = auto()
@@ -37,6 +36,7 @@ class ButtonText(AutoName):
     ask_ai_again = auto()
     create_diet = auto()
     diet_again = auto()
+    diet_generate = auto()
     main_menu = auto()
 
     my_profile = auto()
@@ -55,6 +55,7 @@ class ButtonText(AutoName):
     health_notes = auto()
     diet_allergies = auto()
     diet_products = auto()
+    language = auto()
     weight = auto()
     height = auto()
 
@@ -118,6 +119,7 @@ class MessageText(AutoName):
     diet_allergies_question = auto()
     diet_allergies = auto()
     diet_products = auto()
+    diet_service_intro = auto()
 
     edit_profile = auto()
     choose_profile_parameter = auto()
@@ -126,8 +128,7 @@ class MessageText(AutoName):
     finish_registration_to_get_credits = auto()
     finish_registration = auto()
     initial_credits_granted = auto()
-    credit_balance = auto()
-    tariff_plans = auto()
+    credit_balance_menu = auto()
     not_enough_credits = auto()
     ai_services = auto()
     confirm_service = auto()

@@ -9,7 +9,14 @@ from aiogram.types import CallbackQuery, Message, FSInputFile
 from pathlib import Path
 
 from bot import keyboards as kb
-from bot.keyboards import subscription_manage_kb, program_edit_kb, program_view_kb, select_gender_kb, yes_no_kb
+from bot.keyboards import (
+    subscription_manage_kb,
+    program_edit_kb,
+    program_view_kb,
+    select_gender_kb,
+    yes_no_kb,
+    diet_confirm_kb,
+)
 from bot.utils.profiles import fetch_user, answer_profile
 from bot.utils.credits import available_packages, available_ai_services
 from bot.states import States
@@ -62,7 +69,7 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
             allergies = (user_profile.diet_allergies or "").strip()
             products = user_profile.diet_products or []
             show_diet = bool(allergies or products)
-        reply_markup = kb.edit_profile_kb(profile.language, show_diet=show_diet)
+        reply_markup = kb.edit_profile_kb(profile.language, show_diet=show_diet, show_language=True)
     except ProfileNotFoundError:
         logger.info(f"Profile data not found for profile {profile.id} during profile editing setup.")
 
@@ -100,7 +107,7 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext, 
     webapp_url = get_webapp_url("program", language)
     menu = kb.main_menu_kb(language, webapp_url=webapp_url)
     await state.clear()
-    await state.update_data(profile=profile.model_dump())
+    await state.update_data(profile=profile.model_dump(mode="json"))
     await state.set_state(States.main_menu)
     await answer_msg(message, translate(MessageText.main_menu, profile.language), reply_markup=menu)
     if delete_source:
@@ -132,32 +139,12 @@ async def show_balance_menu(
     await state.set_state(States.choose_plan)
     await answer_msg(
         callback_obj,
-        caption=(
-            translate(MessageText.credit_balance, lang).format(credits=cached_profile.credits)
-            + "\n"
-            + translate(MessageText.tariff_plans, lang)
-        ),
+        caption=translate(MessageText.credit_balance_menu, lang).format(credits=cached_profile.credits),
         photo=packages_img,
         reply_markup=kb.tariff_plans_kb(lang, plans),
     )
     callback_target = callback_obj if not isinstance(callback_obj, BotMessageProxy) else None
     await del_msg(callback_target)
-
-
-async def show_tariff_plans(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    language = cast(str, profile.language)
-    plans = [p.name for p in available_packages()]
-    await callback_query.answer()
-    await state.set_state(States.choose_plan)
-    file_path = Path(settings.BOT_PAYMENT_OPTIONS) / f"credit_packages_{language}.png"
-    packages_img = FSInputFile(file_path)
-    await answer_msg(
-        callback_query,
-        caption=translate(MessageText.tariff_plans, language),
-        photo=packages_img,
-        reply_markup=kb.tariff_plans_kb(language, plans),
-    )
-    await del_msg(callback_query)
 
 
 async def send_policy_confirmation(message: Message, state: FSMContext) -> None:
@@ -558,11 +545,25 @@ async def start_diet_flow(
         return
     await state.update_data(required=required)
     await state.set_state(States.diet_confirm_service)
-    await answer_msg(
-        target,
-        translate(MessageText.confirm_service, language).format(balance=user_profile.credits, price=required),
-        reply_markup=yes_no_kb(language),
+    file_path = Path(__file__).resolve().parent.parent / "images" / "ai_diet.png"
+    description = translate(MessageText.diet_service_intro, language).format(
+        bot_name=settings.BOT_NAME,
+        balance=user_profile.credits,
+        price=required,
     )
+    if file_path.exists():
+        await answer_msg(
+            target,
+            caption=description,
+            photo=FSInputFile(file_path),
+            reply_markup=diet_confirm_kb(language),
+        )
+    else:
+        await answer_msg(
+            target,
+            description,
+            reply_markup=diet_confirm_kb(language),
+        )
     if delete_origin:
         await del_msg(target if isinstance(target, (CallbackQuery, Message)) else None)
 

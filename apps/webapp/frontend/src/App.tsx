@@ -4,6 +4,7 @@ import ProgramPage from './pages/ProgramPage';
 import HistoryPage from './pages/HistoryPage';
 import PaymentPage from './pages/PaymentPage';
 import FaqPage from './pages/FaqPage';
+import { useTelegramInit } from './hooks/useTelegramInit';
 
 const PAYMENT_ORDER_KEY = 'webapp:payment:order_id';
 
@@ -46,6 +47,7 @@ const LegacyRedirect = () => {
 };
 
 const App: React.FC = () => {
+    useTelegramInit();
     return (
         <BrowserRouter>
             <LegacyRedirect />

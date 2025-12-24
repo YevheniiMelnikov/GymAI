@@ -84,7 +84,7 @@ async def _internal_ai_answer_ready_impl(request: web.Request) -> web.Response:
         reply_to_message_id = state_data.get("ask_ai_question_message_id")
         state_data.update(
             {
-                "profile": profile.model_dump(),
+                "profile": profile.model_dump(mode="json"),
                 "last_request_id": payload.request_id,
             }
         )

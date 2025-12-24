@@ -143,7 +143,7 @@ async def start_ask_ai_prompt(
         bot_name=settings.BOT_NAME,
     )
     update_payload: dict[str, object] = {
-        "profile": user_profile.model_dump(),
+        "profile": user_profile.model_dump(mode="json"),
         "ask_ai_cost": cost,
     }
     if file_path.exists():

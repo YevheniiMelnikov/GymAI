@@ -82,7 +82,8 @@ def get_profile_attributes(user: Optional[Profile], lang: str) -> dict[str, str]
             }
             translated = [product_labels.get(item, item) for item in products if str(item).strip()]
             if translated:
-                lines.append(f"{labels['products']}: <em>{', '.join(translated)}</em>")
+                lines.append(f"{labels['products']}:")
+                lines.extend(f"- <em>{product}</em>" for product in translated)
         return "\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n" + "\n".join(lines)
 
     location_key = attr("workout_location").strip().lower()
