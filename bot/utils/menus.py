@@ -16,6 +16,7 @@ from bot.keyboards import (
     select_gender_kb,
     yes_no_kb,
     diet_confirm_kb,
+    enter_wishes_kb,
 )
 from bot.utils.profiles import fetch_user, answer_profile
 from bot.utils.credits import available_packages, available_ai_services
@@ -459,7 +460,12 @@ async def process_ai_service_selection(
         required=required,
     )
     await state.set_state(States.enter_wishes)
-    await answer_msg(interaction, translate(MessageText.enter_wishes, language).format(bot_name=settings.BOT_NAME))
+    webapp_url = get_webapp_url("program", language)
+    await answer_msg(
+        interaction,
+        translate(MessageText.enter_wishes, language).format(bot_name=settings.BOT_NAME),
+        reply_markup=enter_wishes_kb(language, webapp_url),
+    )
     return True
 
 

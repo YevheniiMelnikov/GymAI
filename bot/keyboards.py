@@ -158,6 +158,14 @@ def ask_ai_again_kb(lang: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
+def enter_wishes_kb(lang: str, webapp_url: str | None) -> KbMarkup | None:
+    if not webapp_url:
+        return None
+    builder = ButtonsBuilder(lang)
+    buttons = [[builder.add(ButtonText.prev_menu, webapp_url=webapp_url)]]
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
 def workout_days_selection_kb(lang: str) -> KbMarkup:
     builder = ButtonsBuilder(lang)
     buttons = [
