@@ -342,9 +342,9 @@ subscription_cancel_warning:
   ua: "Сталася помилка під час продовження вашої підписки, вона буде припинена {date}\nЗа бажанням ви можете оформити її повторно\nЗв'язатися з підтримкою ви можете поштою: {mail} або в телеграм: {tg} ✍️"
 
 enter_wishes:
-  eng: "Describe your preferences for the training program or other important details that will help {bot_name} create a plan (body fat percentage, date of last workout, etc.) ✍️"
-  ru: "Опишите ваши пожелания к тренировочной программе или другие важные детали, которые помогут {bot_name} составить план (процент жира, дата прошлой тренировки и т.д.) ✍️"
-  ua: "Опишіть ваші побажання до тренувальної програми або інші важливі деталі, які допоможуть {bot_name} скласти план (відсоток жиру, дата останнього тренування тощо) ✍️"
+  eng: "Describe your preferences for the training program — maybe you'd like to focus on something specific? You can include any details here that will help {bot_name} create a workout plan (body fat percentage, date of your last workout, etc.) ✍️"
+  ru: "Опишите ваши пожелания к тренировочной программе, возможно вы хотели бы сделать акцент на чем-либо? Можете описать здесь любые детали, которые помогут {bot_name} составить тренировочный план (процент жира, дата прошлой тренировки и т.д.) ✍️"
+  ua: "Опишіть ваші побажання до тренувальної програми, можливо ви хотіли б зробити акцент на чомусь конкретному? Можете вказати тут будь-які деталі, які допоможуть {bot_name} скласти план тренувань (відсоток жиру, дата попереднього тренування тощо) ✍️"
 
 subscription_price:
   eng: "The subscription fee is {price} GYMCOINs/month"
