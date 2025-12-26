@@ -1,32 +1,28 @@
 from aiogram import Bot, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
-from typing import cast
 from loguru import logger
 
 from bot.states import States
 from bot.texts import MessageText, translate
 from config.app_settings import settings
 from core.cache import Cache
-from core.enums import SubscriptionPeriod
 from core.schemas import Profile
 from bot.utils.ask_ai import start_ask_ai_prompt
 from bot.utils.chat import process_feedback_content
 from bot.utils.menus import (
     show_main_menu,
-    show_exercises_menu,
     show_profile_editing_menu,
     show_my_workouts_menu,
     show_my_profile_menu,
-    show_subscription_history,
     show_balance_menu,
     process_ai_service_selection,
     start_diet_flow,
 )
-from bot.utils.workout_plans import cancel_subscription, process_new_program, process_new_subscription
+from bot.utils.workout_plans import process_new_program, process_new_subscription
 from bot.utils.other import generate_order_id
 from bot.utils.bot import del_msg, answer_msg, get_webapp_url
-from core.exceptions import ProfileNotFoundError, SubscriptionNotFoundError
+from core.exceptions import ProfileNotFoundError
 from core.services import APIService
 from bot.keyboards import (
     feedback_kb,
@@ -35,8 +31,6 @@ from bot.keyboards import (
     yes_no_kb,
 )
 from bot.utils.credits import available_packages
-from bot.utils.profiles import resolve_workout_location
-from core.utils.idempotency import acquire_once
 from bot.utils.workout_days import (
     WORKOUT_DAYS_BACK,
     WORKOUT_DAYS_CONTINUE,
@@ -44,7 +38,6 @@ from bot.utils.workout_days import (
     WORKOUT_DAYS_PLUS,
     DEFAULT_WORKOUT_DAYS_COUNT,
     day_labels,
-    start_workout_days_selection,
     update_workout_days_message,
 )
 
@@ -168,57 +161,6 @@ async def ai_service_choice(callback_query: CallbackQuery, state: FSMContext) ->
         if handled:
             await del_msg(callback_query)
         return
-
-
-@menu_router.callback_query(States.ai_confirm_service)
-async def ai_confirm_service(callback_query: CallbackQuery, state: FSMContext) -> None:
-    data = await state.get_data()
-    profile = Profile.model_validate(data.get("profile"))
-    user_profile = Profile.model_validate(data.get("profile"))
-    service = data.get("ai_service", "program")
-
-    if callback_query.data == "no":
-        await show_main_menu(cast(Message, callback_query.message), profile, state)
-        await del_msg(callback_query)
-        return
-
-    lang = profile.language or settings.DEFAULT_LANG
-
-    if service == "program":
-        workout_location = resolve_workout_location(user_profile)
-        if workout_location is None:
-            logger.error(f"Workout location missing for completed profile_id={user_profile.id}")
-            await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
-            return
-        if not await acquire_once(f"gen_program:{user_profile.id}", settings.LLM_COOLDOWN):
-            logger.warning(f"Duplicate program generation suppressed for profile_id={user_profile.id}")
-            await del_msg(callback_query)
-            return
-        await start_workout_days_selection(
-            callback_query,
-            state,
-            lang=lang,
-            service=service,
-            workout_location=workout_location.value,
-            show_wishes_prompt=False,
-        )
-        return
-
-    period_map = {
-        "subscription_1_month": SubscriptionPeriod.one_month,
-        "subscription_6_months": SubscriptionPeriod.six_months,
-        "subscription_12_months": SubscriptionPeriod.twelve_months,
-    }
-    period = period_map.get(service, SubscriptionPeriod.one_month)
-    await start_workout_days_selection(
-        callback_query,
-        state,
-        lang=lang,
-        service=service,
-        period_value=period.value,
-        show_wishes_prompt=False,
-    )
-    return
 
 
 @menu_router.callback_query(States.workout_days_selection)
@@ -361,63 +303,3 @@ async def handle_feedback(message: Message, state: FSMContext, bot: Bot) -> None
         logger.info(f"Profile_id {profile.id} sent feedback")
         await message.answer(translate(MessageText.feedback_sent, profile.language))
         await show_main_menu(message, profile, state)
-
-
-@menu_router.callback_query(States.show_subscription)
-async def show_subscription_actions(callback_query: CallbackQuery, state: FSMContext, bot: Bot) -> None:
-    data = await state.get_data()
-    profile_data = data.get("profile")
-    if not profile_data:
-        return
-    profile = Profile.model_validate(profile_data)
-    message = callback_query.message
-    if message is None or not isinstance(message, Message):
-        return
-    cb_data = callback_query.data or ""
-
-    try:
-        profile_record = await Cache.profile.get_record(profile.id)
-    except ProfileNotFoundError:
-        logger.warning(f"Profile not found for profile_id {profile.id}")
-        await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
-        return
-
-    if cb_data == "back":
-        await callback_query.answer()
-        await show_main_menu(message, profile, state)
-
-    elif cb_data == "history":
-        await show_subscription_history(callback_query, profile, state)
-
-    elif cb_data == "cancel":
-        logger.info(f"User {profile.id} requested to stop the subscription")
-        await callback_query.answer(translate(MessageText.subscription_canceled, profile.language), show_alert=True)
-
-        if not callback_query.from_user:
-            return
-        subscription = await Cache.workout.get_latest_subscription(profile_record.id)
-        if subscription is None:
-            return
-
-        await cancel_subscription(profile_record.id, subscription.id)
-        logger.info(f"Subscription for profile_id {profile_record.id} deactivated")
-        await show_main_menu(message, profile, state)
-
-    else:
-        await callback_query.answer()
-        try:
-            subscription = await Cache.workout.get_latest_subscription(profile_record.id)
-        except SubscriptionNotFoundError:
-            logger.warning(f"Subscription not found for profile_id {profile_record.id}")
-            await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
-            return
-
-        workout_days = subscription.workout_days
-        await state.update_data(
-            exercises=subscription.exercises,
-            days=workout_days,
-            split=len(workout_days),
-        )
-        await show_exercises_menu(callback_query, state, profile)
-
-    await del_msg(message)

@@ -10,8 +10,7 @@ from bot.states import States
 from bot.utils.ask_ai import start_ask_ai_prompt
 from core.cache import Cache
 from core.schemas import Profile
-from bot.utils.exercises import edit_subscription_exercises
-from bot.utils.menus import show_main_menu, show_exercises_menu, program_menu_pagination, start_diet_flow
+from bot.utils.menus import show_main_menu, start_diet_flow
 from bot.utils.diet_plans import DIET_RESULT_MENU, DIET_RESULT_REPEAT
 from bot.texts import MessageText, translate
 from bot.utils.bot import del_msg, answer_msg
@@ -77,24 +76,6 @@ async def close_notification(callback_query: CallbackQuery, state: FSMContext) -
             await show_main_menu(cast(Message, callback_query.message), profile, state)
 
 
-@chat_router.callback_query(F.data == "subscription_view")
-async def subscription_view(callback_query: CallbackQuery, state: FSMContext) -> None:
-    data = await state.get_data()
-    profile = Profile.model_validate(data["profile"])
-    assert profile is not None
-    profile_record = await Cache.profile.get_record(profile.id)
-    subscription = await Cache.workout.get_latest_subscription(profile_record.id)
-    assert subscription is not None
-
-    await state.update_data(
-        exercises=subscription.exercises,
-        split=len(subscription.workout_days),
-        days=subscription.workout_days,
-        subscription=True,
-    )
-    await show_exercises_menu(callback_query, state, profile)
-
-
 @chat_router.callback_query(F.data.startswith("answer"))
 async def answer_message(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
@@ -107,33 +88,6 @@ async def answer_message(callback_query: CallbackQuery, state: FSMContext) -> No
     except (IndexError, ValueError):
         await callback_query.answer("Invalid recipient id")
         return
-
-
-@chat_router.callback_query(F.data.in_({"previous", "next"}))
-async def navigate_days(callback_query: CallbackQuery, state: FSMContext) -> None:
-    data = await state.get_data()
-    profile = Profile.model_validate(data["profile"])
-    assert profile is not None
-    profile_record = await Cache.profile.get_record(profile.id)
-    program = await Cache.workout.get_latest_program(profile_record.id)
-
-    if data.get("subscription"):
-        subscription = await Cache.workout.get_latest_subscription(profile_record.id)
-        assert subscription is not None
-        split_number = len(subscription.workout_days)
-        exercises = subscription.exercises
-    else:
-        assert program is not None
-        split_number = program.split_number
-        exercises = program.exercises_by_day
-
-    await state.update_data(exercises=exercises, split=split_number, client=True)
-    await program_menu_pagination(state, callback_query)
-
-
-@chat_router.callback_query(F.data.startswith("edit_"))
-async def edit_subscription(callback_query: CallbackQuery, state: FSMContext) -> None:
-    await edit_subscription_exercises(callback_query, state)
 
 
 @chat_router.callback_query(F.data.startswith("ask_ai_again"))

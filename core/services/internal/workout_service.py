@@ -17,7 +17,7 @@ class WorkoutService(APIClient):
     async def save_program(
         self, profile_id: int, exercises: list[DayExercises], split_number: int, wishes: str
     ) -> Program:
-        from bot.utils.exercises import serialize_day_exercises
+        from core.exercises import serialize_day_exercises
 
         url = urljoin(self.api_url, "api/v1/programs/")
 

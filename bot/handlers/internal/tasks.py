@@ -122,7 +122,7 @@ async def _finalize_program_plan(
     }
     await state.update_data(**program_payload)
     await state.storage.update_data(state.key, data=program_payload)
-    await state.set_state(States.program_view)
+    await state.set_state(States.main_menu)
     try:
         await bot.send_message(
             chat_id=profile.tg_id,
@@ -198,7 +198,7 @@ async def _finalize_subscription_plan(
             update_payload["last_request_id"] = request_id
         await state.update_data(**update_payload)
         await state.storage.update_data(state.key, data=update_payload)
-        await state.set_state(States.program_view)
+        await state.set_state(States.main_menu)
         try:
             await bot.send_message(
                 chat_id=profile.tg_id,
@@ -263,7 +263,7 @@ async def _finalize_subscription_plan(
         update_payload["last_request_id"] = request_id
     await state.update_data(**update_payload)
     await state.storage.update_data(state.key, data=update_payload)
-    await state.set_state(States.program_view)
+    await state.set_state(States.main_menu)
     try:
         await bot.send_message(
             chat_id=profile.tg_id,

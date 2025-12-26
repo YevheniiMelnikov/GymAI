@@ -26,7 +26,6 @@ HANDLED_STATES = [
     States.diet_allergies,
     States.main_menu,
     States.profile_delete,
-    States.program_edit,
 ]
 
 

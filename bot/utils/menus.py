@@ -2,22 +2,13 @@ from contextlib import suppress
 from typing import Any, Collection, TypedDict, cast
 
 from loguru import logger
-from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message, FSInputFile
 from pathlib import Path
 
 from bot import keyboards as kb
-from bot.keyboards import (
-    subscription_manage_kb,
-    program_edit_kb,
-    program_view_kb,
-    select_gender_kb,
-    yes_no_kb,
-    diet_confirm_kb,
-    enter_wishes_kb,
-)
+from bot.keyboards import select_gender_kb, yes_no_kb, diet_confirm_kb, enter_wishes_kb
 from bot.utils.profiles import fetch_user, answer_profile
 from bot.utils.credits import available_packages, available_ai_services
 from bot.states import States
@@ -25,36 +16,10 @@ from bot.texts import MessageText, translate
 from core.cache import Cache
 from core.enums import ProfileStatus
 from core.exceptions import ProfileNotFoundError
-from core.schemas import Profile, Subscription
+from core.schemas import Profile
 from bot.utils.text import get_profile_attributes
-from bot.utils.exercises import format_full_program
 from config.app_settings import settings
 from bot.utils.bot import BotMessageProxy, del_msg, answer_msg, get_webapp_url
-
-
-async def show_subscription_page(callback_query: CallbackQuery, state: FSMContext, subscription: Subscription) -> None:
-    await callback_query.answer()
-    profile = await Cache.profile.get_profile(callback_query.from_user.id)
-    assert profile is not None
-    lang = cast(str, profile.language)
-
-    next_payment_date_str = subscription.payment_date
-    enabled_status = "✅" if subscription.enabled else "❌"
-    await state.set_state(States.show_subscription)
-    message = callback_query.message
-
-    if message and isinstance(message, Message):
-        await answer_msg(
-            message,
-            translate(MessageText.subscription_page, lang).format(
-                next_payment_date=next_payment_date_str,
-                enabled=enabled_status,
-                price=subscription.price,
-                period=subscription.period,
-            ),
-            reply_markup=kb.show_subscriptions_kb(lang, get_webapp_url("subscription", lang)),
-        )
-        await del_msg(message)
 
 
 async def show_profile_editing_menu(message: Message, profile: Profile, state: FSMContext) -> None:
@@ -232,41 +197,6 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
 
     await callback_query.answer()
     await show_main_menu(message, profile, state)
-
-
-async def show_my_subscription_menu(
-    callback_query: CallbackQuery,
-    profile: Profile,
-    state: FSMContext,
-    *,
-    force_new: bool = False,
-) -> None:
-    language = cast(str, profile.language)
-    message = cast(Message, callback_query.message)
-    assert message
-
-    webapp_url = get_webapp_url("subscription", language)
-
-    await callback_query.answer()
-    await state.set_state(States.subscription_action_choice)
-    await answer_msg(
-        message,
-        translate(MessageText.select_action, language),
-        reply_markup=kb.subscription_action_kb(language, webapp_url),
-    )
-    await del_msg(cast(Message | CallbackQuery | None, message))
-
-
-async def show_my_program_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:
-    message = cast(Message, callback_query.message)
-    assert message
-    await answer_msg(
-        message,
-        translate(MessageText.select_action, profile.language),
-        reply_markup=kb.program_action_kb(profile.language, get_webapp_url("program", profile.language)),
-    )
-    await state.set_state(States.program_action_choice)
-    await del_msg(cast(Message | CallbackQuery | None, message))
 
 
 async def _prompt_ai_services(
@@ -572,142 +502,3 @@ async def start_diet_flow(
         )
     if delete_origin:
         await del_msg(target if isinstance(target, (CallbackQuery, Message)) else None)
-
-
-async def show_exercises_menu(callback_query: CallbackQuery, state: FSMContext, profile: Profile) -> None:
-    message = cast(Message, callback_query.message)
-    assert message
-    language = cast(str, profile.language)
-
-    webapp_url = get_webapp_url("program", language)
-    if webapp_url is None:
-        logger.warning(f"program_view_missing_webapp_url profile_id={profile.id} language={language}")
-        reply_markup = None
-    else:
-        reply_markup = program_view_kb(language, webapp_url)
-
-    await answer_msg(
-        message,
-        translate(MessageText.new_workout_plan, language),
-        reply_markup=reply_markup,
-        disable_web_page_preview=True,
-    )
-
-    await state.update_data(profile_view=True, day_index=0)
-    await state.set_state(States.program_view)
-    await del_msg(cast(Message | CallbackQuery | None, message))
-
-
-async def program_menu_pagination(state: FSMContext, callback_query: CallbackQuery) -> None:
-    profile = await Cache.profile.get_profile(callback_query.from_user.id)
-    assert profile is not None
-
-    if callback_query.data == "quit":
-        await callback_query.answer()
-        message = callback_query.message
-        if message and isinstance(message, Message):
-            await show_main_menu(message, profile, state)
-        return
-
-    data = await state.get_data()
-    current_day = data.get("day_index", 0)
-
-    split_number = data.get("split")
-    assert split_number is not None
-
-    if data.get("profile_view"):
-        webapp_url = get_webapp_url("program", profile.language)
-        if webapp_url is None:
-            logger.warning(f"program_pagination_missing_webapp_url profile_id={profile.id} language={profile.language}")
-            reply_markup = None
-        else:
-            reply_markup = program_view_kb(profile.language, webapp_url)
-        state_to_set = States.program_view
-    else:
-        reply_markup = (
-            subscription_manage_kb(profile.language) if data.get("subscription") else program_edit_kb(profile.language)
-        )
-        state_to_set = States.subscription_manage if data.get("subscription") else States.program_edit
-
-    await state.set_state(state_to_set)
-    current_day += -1 if callback_query.data in ["prev_day", "previous"] else 1
-
-    if current_day < 0 or current_day >= split_number:
-        current_day = max(0, min(current_day, split_number - 1))
-        await callback_query.answer(translate(MessageText.out_of_range, profile.language))
-        await state.update_data(day_index=current_day)
-        return
-
-    await state.update_data(day_index=current_day)
-
-    with suppress(TelegramBadRequest):
-        message = callback_query.message
-        if message and isinstance(message, Message):
-            await message.edit_text(
-                translate(MessageText.new_workout_plan, profile.language),
-                reply_markup=reply_markup,
-                disable_web_page_preview=True,
-            )
-
-    await callback_query.answer()
-
-
-async def show_subscription_history(
-    callback_query: CallbackQuery,
-    profile: Profile,
-    state: FSMContext,
-    index: int = 0,
-) -> None:
-    subscriptions = await Cache.workout.get_all_subscriptions(profile.id)
-    if not subscriptions:
-        await callback_query.answer(translate(MessageText.subscription_canceled, profile.language), show_alert=True)
-        return
-
-    index %= len(subscriptions)
-    sub = subscriptions[index]
-    program_text = await format_full_program(sub.exercises)
-    date = sub.payment_date
-
-    await state.update_data(subscriptions_history=[s.model_dump() for s in subscriptions])
-    await state.set_state(States.subscription_history)
-
-    message = callback_query.message
-    if message and isinstance(message, Message):
-        await message.edit_text(
-            translate(MessageText.subscription_history_page, profile.language).format(program=program_text, date=date),
-            reply_markup=kb.history_nav_kb(profile.language, "sh", index),
-            parse_mode=ParseMode.HTML,
-            disable_web_page_preview=True,
-        )
-
-
-async def subscription_history_pagination(
-    callback_query: CallbackQuery,
-    profile: Profile,
-    index: int,
-    state: FSMContext,
-) -> None:
-    data = await state.get_data()
-    subs_data = data.get("subscriptions_history", [])
-    subscriptions = [Subscription.model_validate(s) for s in subs_data]
-
-    if not subscriptions:
-        await callback_query.answer(translate(MessageText.subscription_canceled, profile.language))
-        return
-
-    if index < 0 or index >= len(subscriptions):
-        await callback_query.answer(translate(MessageText.out_of_range, profile.language))
-        return
-
-    sub = subscriptions[index]
-    program_text = await format_full_program(sub.exercises)
-    date = sub.payment_date
-    message = callback_query.message
-    if message and isinstance(message, Message):
-        await message.edit_text(
-            translate(MessageText.subscription_history_page, profile.language).format(program=program_text, date=date),
-            reply_markup=kb.history_nav_kb(profile.language, "sh", index),
-            parse_mode=ParseMode.HTML,
-            disable_web_page_preview=True,
-        )
-    await callback_query.answer()
