@@ -16,6 +16,8 @@ from core.internal_http import build_internal_hmac_auth_headers, internal_reques
 from core.schemas import Profile, QAResponse
 from core.services import APIService
 from core.services.internal.api_client import APIClientHTTPError, APIClientTransportError
+from core.metrics.constants import METRICS_EVENT_ASK_AI_ANSWER, METRICS_SOURCE_ASK_AI
+from core.tasks.ai_coach.metrics import emit_metrics_event
 
 __all__ = [
     "ask_ai_question",
@@ -413,6 +415,11 @@ async def _ask_ai_question_impl(payload: dict[str, Any], task: Task) -> dict[str
         request_id,
         answer_len,
         str(kb_used).lower(),
+    )
+    await emit_metrics_event(
+        METRICS_EVENT_ASK_AI_ANSWER,
+        source=METRICS_SOURCE_ASK_AI,
+        source_id=request_id,
     )
     return notify_payload
 

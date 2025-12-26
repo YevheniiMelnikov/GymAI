@@ -296,13 +296,18 @@ const ProgramPage: React.FC = () => {
 
     const handleBack = useCallback(() => {
         const tg = (window as any).Telegram?.WebApp;
+        const fromHistory = searchParams.get('from') === 'history';
+        if (fromHistory) {
+            navigate('/history');
+            return;
+        }
         const currentKey = `${window.location.pathname}${window.location.search}`;
         if (currentKey !== initialLocationKeyRef.current) {
             window.history.back();
         } else {
             tg?.close();
         }
-    }, []);
+    }, [navigate, searchParams]);
 
     const handleHistoryIconClick = useCallback(() => {
         navigate('/history');

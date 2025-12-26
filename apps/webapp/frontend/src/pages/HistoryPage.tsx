@@ -121,7 +121,10 @@ const HistoryPage: React.FC = () => {
     }, [activeItems, sortOrder]);
 
     const handleProgramClick = (id: number) => {
-        navigate(`/?id=${id}`);
+        const params = new URLSearchParams();
+        params.set('id', String(id));
+        params.set('from', 'history');
+        navigate(`/?${params.toString()}`);
     };
 
     return (

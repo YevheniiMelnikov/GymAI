@@ -82,11 +82,25 @@ class HTTPPaymentRepository(APIClient):
         if payment_id is None or payment is None:
             logger.error(f"Payment {order_id} not found")
             return None
+        try:
+            new_status = PaymentStatus(status_)
+        except Exception as exc:  # noqa: BLE001
+            logger.error(f"Invalid payment status '{status_}' for order_id={order_id}: {exc}")
+            return None
+
+        if payment.status == new_status:
+            if error and error != payment.error:
+                ok = await self.update_payment(payment_id, {"error": error})
+                if not ok:
+                    logger.error(f"Failed to update payment error for {order_id}")
+                    return None
+                payment.error = error
+            return payment
 
         ok = await self.update_payment(
             payment_id,
             {
-                "status": PaymentStatus(status_),
+                "status": new_status,
                 "error": error,
                 "processed": False,
             },
@@ -95,8 +109,8 @@ class HTTPPaymentRepository(APIClient):
             logger.error(f"Failed to update payment {order_id}")
             return None
 
-        logger.info(f"Payment {order_id} set to '{PaymentStatus(status_)}'")
-        payment.status = PaymentStatus(status_)
+        logger.info(f"Payment {order_id} set to '{new_status}'")
+        payment.status = new_status
         payment.error = error
         payment.processed = False
         return payment

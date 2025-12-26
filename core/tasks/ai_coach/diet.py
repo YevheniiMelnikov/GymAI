@@ -17,6 +17,8 @@ from core.internal_http import build_internal_hmac_auth_headers, internal_reques
 from core.schemas import DietPlan, Profile
 from core.services import APIService
 from core.services.internal.api_client import APIClientHTTPError, APIClientTransportError
+from core.metrics.constants import METRICS_EVENT_DIET_PLAN, METRICS_SOURCE_DIET
+from core.tasks.ai_coach.metrics import emit_metrics_event
 
 __all__ = [
     "generate_ai_diet_plan",
@@ -412,6 +414,11 @@ async def _generate_diet_plan_impl(payload: dict[str, Any], task: Task) -> dict[
         profile_id,
         request_id,
         len(diet_plan.meals),
+    )
+    await emit_metrics_event(
+        METRICS_EVENT_DIET_PLAN,
+        source=METRICS_SOURCE_DIET,
+        source_id=request_id,
     )
     return notify_payload
 

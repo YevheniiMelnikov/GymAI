@@ -27,6 +27,7 @@ env_defaults = {
     "AI_COACH_REFRESH_PASSWORD": "password",
     "AI_COACH_TIMEOUT": "60",
     "BACKUP_RETENTION_DAYS": "30",
+    "WEBAPP_INIT_DATA_MAX_AGE_SEC": "0",
 }
 
 for key, value in env_defaults.items():
@@ -38,6 +39,12 @@ from .settings import *  # noqa
 
 TIME_ZONE = "Europe/Kyiv"
 SECRET_KEY = "dummy-key-for-testing"
+SECURE_SSL_REDIRECT = False
+SESSION_COOKIE_SECURE = False
+CSRF_COOKIE_SECURE = False
+SECURE_HSTS_SECONDS = 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+SECURE_HSTS_PRELOAD = False
 
 DATABASES = {
     "default": {

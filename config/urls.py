@@ -8,6 +8,7 @@ from loguru import logger
 
 from apps.payments.views import PaymentWebhookView
 from apps.webapp import views as webapp_views
+from apps.metrics import views as metrics_views
 
 
 WebappView = Callable[..., HttpResponseBase]
@@ -30,6 +31,11 @@ urlpatterns = [
     path("api/subscription/", webapp_views.subscription_data, name="webapp-subscription-data-direct"),  # type: ignore[arg-type]
     path("api/payment/", webapp_views.payment_data, name="webapp-payment-data-direct"),  # type: ignore[arg-type]
     path("api/workouts/action/", webapp_views.workouts_action, name="webapp-workouts-action-direct"),  # type: ignore[arg-type]
+    path(
+        "internal/metrics/event/",
+        cast(WebappView, metrics_views.record_metrics_event),
+        name="internal-metrics-event",
+    ),
     path(
         "api/program/exercise/",
         cast(WebappView, webapp_views.update_exercise_sets),

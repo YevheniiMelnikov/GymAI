@@ -43,12 +43,20 @@ class Settings(BaseSettings):
     WEBHOOK_URL: str | None = Field(default=None, description="Full URL for the Telegram bot webhook. Auto-derived if not set.")
     WEBAPP_PUBLIC_URL: Annotated[str | None, Field(default=None, description="Public URL for the web application. Auto-derived if not set.")]
     PAYMENT_CALLBACK_URL: str | None = Field(default=None, description="URL for receiving payment status callbacks. Auto-derived if not set.")
+    WEBAPP_INIT_DATA_MAX_AGE_SEC: Annotated[
+        int,
+        Field(default=86_400, description="Maximum age in seconds for Telegram WebApp init_data."),
+    ]
 
     # --- Security & API Keys ---
     API_KEY: Annotated[str, Field(default="", description="External API key for client access. Must be set in production.")]
     INTERNAL_KEY_ID: Annotated[str, Field(default="gymbot-internal-v1", description="Identifier for the internal HMAC key.")]
     INTERNAL_API_KEY: Annotated[str, Field(default="", description="Shared secret for internal service-to-service HMAC authentication.")]
     INTERNAL_IP_ALLOWLIST: Annotated[list[str], Field(default_factory=list, description="List of IP addresses allowed to bypass certain checks.")]
+    INTERNAL_TRUSTED_PROXIES: Annotated[
+        list[str],
+        Field(default_factory=list, description="List of trusted proxy IPs allowed to supply X-Forwarded-For."),
+    ]
     AI_COACH_INTERNAL_KEY_ID: Annotated[str, Field(default="", description="Key ID for authenticating with the AI Coach service.")]
     AI_COACH_INTERNAL_API_KEY: Annotated[str, Field(default="", description="Secret key for authenticating with the AI Coach service.")]
 
@@ -155,6 +163,20 @@ class Settings(BaseSettings):
     DISABLE_MANUAL_PLACEHOLDER: Annotated[bool, Field(default=True, description="Disable manual placeholder replacement in AI responses.")]
     COACH_AGENT_TEMPERATURE: Annotated[float, Field(default=0.2, description="Temperature used by the AI coach agent when sampling responses from the LLM.")]
 
+    # --- Django Security ---
+    SECURE_SSL_REDIRECT: Annotated[bool, Field(default=True, description="Redirect all HTTP requests to HTTPS.")]
+    SESSION_COOKIE_SECURE: Annotated[bool, Field(default=True, description="Send session cookies only over HTTPS.")]
+    CSRF_COOKIE_SECURE: Annotated[bool, Field(default=True, description="Send CSRF cookies only over HTTPS.")]
+    SECURE_HSTS_SECONDS: Annotated[int, Field(default=31_536_000, description="HSTS max-age in seconds.")]
+    SECURE_HSTS_INCLUDE_SUBDOMAINS: Annotated[bool, Field(default=True, description="Apply HSTS to all subdomains.")]
+    SECURE_HSTS_PRELOAD: Annotated[bool, Field(default=True, description="Allow domain to be preloaded for HSTS.")]
+    SECURE_CONTENT_TYPE_NOSNIFF: Annotated[bool, Field(default=True, description="Disable content type sniffing.")]
+    SECURE_REFERRER_POLICY: Annotated[
+        str, Field(default="strict-origin-when-cross-origin", description="Referrer-Policy header value.")
+    ]
+    SESSION_COOKIE_SAMESITE: Annotated[str, Field(default="Lax", description="SameSite policy for session cookies.")]
+    CSRF_COOKIE_SAMESITE: Annotated[str, Field(default="Lax", description="SameSite policy for CSRF cookies.")]
+
     # --- Embedding Settings ---
     EMBEDDING_MODEL: Annotated[str, Field(default="openai/text-embedding-3-large", description="Identifier for the text embedding model.")]
     EMBEDDING_PROVIDER: Annotated[str, Field(default="openai", description="Provider for the text embedding model.")]
@@ -247,7 +269,7 @@ class Settings(BaseSettings):
 
     # --- Miscellaneous & Integrations ---
     GOOGLE_APPLICATION_CREDENTIALS: Annotated[str, Field(default="google_creds.json", description="Path to Google Cloud service account credentials file.")]
-    SPREADSHEET_ID: Annotated[str, Field(default="", description="ID of the Google Sheet for data integration.")]
+    SPREADSHEET_ID: Annotated[str, Field(default="", description="ID of the Google Sheet for weekly reports.")]
     TG_SUPPORT_CONTACT: Annotated[str, Field(default="", description="Telegram username or link for user support.")]
     PUBLIC_OFFER: Annotated[str, Field(default="", description="URL to the public offer document.")]
     PRIVACY_POLICY: Annotated[str, Field(default="", description="URL to the privacy policy document.")]
@@ -293,7 +315,7 @@ class Settings(BaseSettings):
             return [p.strip() for p in s.split(",") if p.strip()]
         return v
 
-    @field_validator("INTERNAL_IP_ALLOWLIST", mode="before")
+    @field_validator("INTERNAL_IP_ALLOWLIST", "INTERNAL_TRUSTED_PROXIES", mode="before")
     @classmethod
     def _normalize_ip_allowlist(cls, value: Any) -> list[str]:
         """

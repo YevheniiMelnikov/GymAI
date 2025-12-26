@@ -10,6 +10,8 @@ from apps.profiles.models import Profile
 from apps.profiles.choices import ProfileStatus
 from apps.profiles.serializers import ProfileSerializer
 from apps.profiles.repos import ProfileRepository
+from apps.metrics.utils import record_event
+from core.metrics.constants import METRICS_EVENT_NEW_USER, METRICS_SOURCE_PROFILE
 
 
 class ProfileByTelegramIDView(APIView):
@@ -129,6 +131,7 @@ class ProfileAPIList(generics.ListCreateAPIView):
             return Response(response_data, status=status.HTTP_201_CREATED)
         profile = serializer.save()
         ProfileRepository.invalidate_cache(profile_id=profile.id, tg_id=getattr(profile, "tg_id", None))
+        record_event(METRICS_EVENT_NEW_USER, METRICS_SOURCE_PROFILE, str(profile.id))
         self._enqueue_profile_init(profile.id, reason="profile_created")
         headers = self.get_success_headers(serializer.data)
         return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)

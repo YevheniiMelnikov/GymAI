@@ -109,6 +109,11 @@ The Django API is served by `uvicorn`.
 
 Use the credentials from `docker/.env` (`DJANGO_ADMIN` / `DJANGO_PASSWORD`) to access the admin interface.
 
+**Internal requests**
+
+Internal endpoints rely on HMAC headers (`INTERNAL_KEY_ID`/`INTERNAL_API_KEY`). If the API is behind a proxy, set
+`INTERNAL_TRUSTED_PROXIES` to trusted proxy IPs/CIDRs so `X-Forwarded-For` is honored.
+
 ---
 
 
@@ -155,8 +160,12 @@ If Celery prints connection errors, verify that `RABBITMQ_URL` and `REDIS_URL` p
 | `send_daily_survey`                | daily 09:00                        | trigger workout feedback survey                   |
 | `refresh_external_knowledge`       | every `KNOWLEDGE_REFRESH_INTERVAL` | rebuild AI coach knowledge                        |
 | `prune_knowledge_base`             | daily 02:10                        | clear cached Cognee data                          |
+| `collect_weekly_metrics`           | weekly Mon 03:00                   | append weekly metrics to Google Sheets            |
 
 ---
+Weekly metrics are appended to the `Weekly Metrics` worksheet in the Google Sheet configured by `SPREADSHEET_ID`.
+The report covers the previous calendar week (Mon 00:00 → Mon 00:00, server timezone).
+AI coach reports successful `ask_ai`, diet, and plan generations to the API via `/internal/metrics/event/` using `INTERNAL_KEY_ID` and `INTERNAL_API_KEY`.
 
 ## AI Coach and Knowledge Base
 

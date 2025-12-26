@@ -17,6 +17,8 @@ from core.internal_http import build_internal_hmac_auth_headers, internal_reques
 from core.schemas import Program, Subscription
 from core.services import APIService
 from core.services.internal.api_client import APIClientHTTPError, APIClientTransportError
+from core.metrics.constants import METRICS_EVENT_WORKOUT_PLAN, METRICS_SOURCE_WORKOUT_PLAN
+from core.tasks.ai_coach.metrics import emit_metrics_event
 
 __all__ = [
     "handle_ai_plan_failure",
@@ -314,6 +316,11 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
     }
     logger.info(
         f"ai_generate_plan completed profile_id={profile_id} plan_type={plan_type.value} request_id={request_id}"
+    )
+    await emit_metrics_event(
+        METRICS_EVENT_WORKOUT_PLAN,
+        source=METRICS_SOURCE_WORKOUT_PLAN,
+        source_id=request_id,
     )
     return notify_payload
 

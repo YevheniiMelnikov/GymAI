@@ -1,11 +1,14 @@
 from datetime import UTC, datetime, timedelta
 
 
+import importlib
+import os
+import sys
+
 from celery.schedules import crontab, schedule
 
-
 from config.app_settings import settings
-from core.celery_app import CELERY_QUEUES, CELERY_TASK_ROUTES, app
+from core.celery_app import CELERY_INCLUDE, CELERY_QUEUES, CELERY_TASK_ROUTES, app
 from core.celery_signals import setup_celery_signals
 
 
@@ -68,6 +71,11 @@ beat_schedule = {
         "schedule": crontab(hour=2, minute=10),
         "options": {"queue": "maintenance"},
     },
+    "collect_weekly_metrics": {
+        "task": "core.tasks.metrics.collect_weekly_metrics",
+        "schedule": crontab(day_of_week="mon", hour=3, minute=0),
+        "options": {"queue": "maintenance"},
+    },
 }
 
 if settings.ENABLE_KB_BACKUPS:
@@ -115,8 +123,12 @@ celery_conf = getattr(celery_app, "conf", None)
 if celery_conf is None:
     raise RuntimeError("Celery app configuration is not available")
 celery_conf.update(celery_config)
+celery_conf.setdefault("include", list(CELERY_INCLUDE))
 
 celery_app.autodiscover_tasks(["core", "apps.payments"])
+if os.getenv("PYTEST_CURRENT_TEST") or "pytest" in sys.modules:
+    for module_name in CELERY_INCLUDE:
+        importlib.import_module(module_name)
 setup_celery_signals()
 
 __all__ = ("celery_app",)

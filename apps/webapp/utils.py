@@ -163,6 +163,24 @@ def verify_init_data(init_data: str) -> dict[str, object]:
         )
         raise ValueError("Invalid init data")
 
+    auth_date_raw = items.get("auth_date")
+    if not auth_date_raw:
+        env_mode = str(settings.ENVIRONMENT or "development").lower()
+        if env_mode == "production":
+            raise ValueError("Missing auth_date")
+        logger.warning("Init data missing auth_date; skipping TTL check in non-production")
+    else:
+        try:
+            auth_date = int(str(auth_date_raw))
+        except ValueError as exc:
+            raise ValueError("Invalid auth_date") from exc
+        max_age = int(settings.WEBAPP_INIT_DATA_MAX_AGE_SEC or 0)
+        now = int(time.time())
+        if auth_date > now + 60:
+            raise ValueError("auth_date is in the future")
+        if max_age > 0 and now - auth_date > max_age:
+            raise ValueError("auth_date is too old")
+
     result: dict[str, object] = {}
     for k, v in items.items():
         if k in {"user", "chat", "receiver"}:

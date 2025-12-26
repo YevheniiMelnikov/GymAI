@@ -146,6 +146,7 @@ CELERY_INCLUDE: tuple[str, ...] = (
     "core.tasks.ai_coach.diet",
     "core.tasks.ai_coach.maintenance",
     "core.tasks.ai_coach.replace_exercise",
+    "core.tasks.metrics",
     "apps.payments.tasks",
 )
 

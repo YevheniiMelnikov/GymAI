@@ -36,6 +36,17 @@ if DEBUG:
 else:
     STATICFILES_STORAGE = "django.contrib.staticfiles.storage.ManifestStaticFilesStorage"
 
+SECURE_SSL_REDIRECT = settings.SECURE_SSL_REDIRECT if not DEBUG else False
+SESSION_COOKIE_SECURE = settings.SESSION_COOKIE_SECURE if not DEBUG else False
+CSRF_COOKIE_SECURE = settings.CSRF_COOKIE_SECURE if not DEBUG else False
+SECURE_HSTS_SECONDS = settings.SECURE_HSTS_SECONDS if not DEBUG else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = settings.SECURE_HSTS_INCLUDE_SUBDOMAINS if not DEBUG else False
+SECURE_HSTS_PRELOAD = settings.SECURE_HSTS_PRELOAD if not DEBUG else False
+SECURE_CONTENT_TYPE_NOSNIFF = settings.SECURE_CONTENT_TYPE_NOSNIFF
+SECURE_REFERRER_POLICY = settings.SECURE_REFERRER_POLICY
+SESSION_COOKIE_SAMESITE = settings.SESSION_COOKIE_SAMESITE
+CSRF_COOKIE_SAMESITE = settings.CSRF_COOKIE_SAMESITE
+
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -47,6 +58,7 @@ INSTALLED_APPS = [
     "unfold",
     "apps.profiles.apps.ProfilesConfig",
     "apps.payments.apps.PaymentsConfig",
+    "apps.metrics.apps.MetricsConfig",
     "apps.webapp.apps.WebappConfig",
     "apps.workout_plans.apps.WorkoutPlansConfig",
     "rest_framework",
@@ -127,7 +139,7 @@ CACHES = {
         "LOCATION": REDIS_URL,
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
-            "SERIALIZER": "django_redis.serializers.pickle.PickleSerializer",
+            "SERIALIZER": "django_redis.serializers.json.JSONSerializer",
             "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
         },
         "TIMEOUT": 60 * 60,

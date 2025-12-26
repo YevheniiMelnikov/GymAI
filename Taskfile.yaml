@@ -2,12 +2,12 @@ version: '3'
 
 tasks:
   run:
-    desc: Run production docker setup
+    desc: Build and run containers (DEV mode)
     cmds:
-      - docker compose -f docker/docker-compose.yml up --build
+      - docker compose -f docker/docker-compose-local.yml up --build
 
   runapi:
-    desc: Rebuild and run API container (for dev needs)
+    desc: Rebuild and run API container (DEV mode)
     cmds:
       - docker compose -f docker/docker-compose-local.yml up -d --build api --no-deps
 

@@ -14,16 +14,49 @@ from config.app_settings import settings
 Handler = TypeVar("Handler", bound=Callable[..., Awaitable[web.StreamResponse]])
 
 
+def _is_trusted_proxy(peer_ip: str | None) -> bool:
+    trusted = [entry.strip() for entry in settings.INTERNAL_TRUSTED_PROXIES if entry.strip()]
+    if not trusted or not peer_ip:
+        return False
+    try:
+        peer_address = ip_address(peer_ip)
+    except ValueError:
+        logger.debug(f"internal_auth_invalid_proxy_ip peer_ip={peer_ip}")
+        return False
+    for candidate in trusted:
+        try:
+            if "/" in candidate:
+                network = ip_network(candidate, strict=False)
+                if peer_address in network:
+                    return True
+            else:
+                if peer_address == ip_address(candidate):
+                    return True
+        except ValueError:
+            logger.debug(f"internal_auth_invalid_trusted_proxy_entry entry={candidate}")
+            continue
+    return False
+
+
 def _client_ip(request: web.Request) -> str | None:
     peer = request.transport.get_extra_info("peername") if request.transport else None
+    peer_ip: str | None = None
     if isinstance(peer, tuple) and peer:
         host = peer[0]
         if isinstance(host, str):
-            return host
+            peer_ip = host
+
     forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return None
+    if forwarded and _is_trusted_proxy(peer_ip):
+        forwarded_ip = forwarded.split(",")[0].strip()
+        if forwarded_ip:
+            return forwarded_ip
+
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip and _is_trusted_proxy(peer_ip):
+        return real_ip.strip()
+
+    return peer_ip
 
 
 def _is_ip_allowed(request: web.Request) -> tuple[bool, str | None]:
