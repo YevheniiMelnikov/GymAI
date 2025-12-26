@@ -40,10 +40,6 @@ async def main() -> None:
     container.wire(
         modules=[
             "bot.utils.other",
-            "core.tasks.ai_coach",
-            "core.tasks.billing",
-            "core.tasks.bot_calls",
-            "core.tasks.backups",
         ]
     )
     init_result = container.init_resources()

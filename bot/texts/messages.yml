@@ -72,9 +72,9 @@ edit_profile:
   ua: "Буде кілька запитань, це не займе багато часу ⏳"
 
 finish_registration_to_get_credits:
-  eng: "For more relevant results, please answer a few questions.. After that you will receive a gift {credits} GYMCOINs 🎁"
-  ru: "Для более релевантных результатов ответьте пожалуйста на несколько вопросов. После этого вы получите подарочные {credits} GYMCOIN-ов 🎁"
-  ua: "Для більш релевантних результатів дайте відповідь будь ласка на кілька запитань. Після цього ви отримаєте подарункові {credits} GYMCOIN-ів 🎁"
+  eng: "For more relevant results, please answer a few questions.. After that you will receive a gift {credits} GYMCOIN 🎁"
+  ru: "Для более релевантных результатов ответьте пожалуйста на несколько вопросов. После этого вы получите подарочные {credits} GYMCOIN 🎁"
+  ua: "Для більш релевантних результатів дайте відповідь будь ласка на кілька запитань. Після цього ви отримаєте подарункові {credits} GYMCOIN 🎁"
 
 finish_registration:
   eng: "For more relevant results, please answer a few questions."
@@ -82,9 +82,9 @@ finish_registration:
   ua: "Для більш релевантних результатів дайте відповідь будь ласка на кілька запитань."
 
 initial_credits_granted:
-  eng: "{credits} bonus GYMCOINs have been added to your account 🎉"
-  ru: "На ваш баланс начислено {credits} бонусных GYMCOIN-ов 🎉"
-  ua: "На ваш рахунок зараховано {credits} бонусних GYMCOIN-ів 🎉"
+  eng: "{credits} bonus GYMCOIN have been added to your account 🎉"
+  ru: "На ваш баланс начислено {credits} бонусных GYMCOIN 🎉"
+  ua: "На ваш рахунок зараховано {credits} бонусних GYMCOIN 🎉"
 
 workout_goals:
   eng: "Describe your training goals (weight loss, muscle gain, wellness, etc.) 🎯"
@@ -152,9 +152,9 @@ out_of_range:
   ua: "Це все ⛔️"
 
 new_workout_plan:
-  eng: "<b>A new training program has been put together for you</b> 🥳"
-  ru: "<b>Для вас была составлена новая тренировочная программа</b> 🥳"
-  ua: "<b>Для вас було складено нову тренувальну програму</b> 🥳"
+  eng: "<b>Your training plan is ready</b> ✅"
+  ru: "<b>Ваш план тренировок готов</b> ✅"
+  ua: "<b>Ваш план тренувань готовий</b> ✅"
 
 program_updated:
   eng: "<b>{bot_name} has updated your training program</b> ✅"
@@ -162,14 +162,9 @@ program_updated:
   ua: "<b>{bot_name} оновив вашу тренувальну програму</b> ✅"
 
 subscription_created:
-  eng: "<b>{bot_name} has prepared your subscription plan</b> ✅"
-  ru: "<b>{bot_name} подготовил ваш план по подписке</b> ✅"
-  ua: "<b>{bot_name} підготував ваш план за підпискою</b> ✅"
-
-payment_success:
-  eng: "Your payments is successful. Wait, thank you for your trust 🙏"
-  ru: "Ваш платеж успешен. Ожидайте, благодарим вас за доверие 🙏"
-  ua: "Ваш платіж успішний. Очікуйте, дякуємо вам за довіру 🙏"
+  eng: "<b>Your training plan is ready</b> ✅"
+  ru: "<b>Ваш план тренировок готов</b> ✅"
+  ua: "<b>Ваш план тренувань готовий</b> ✅"
 
 payment_in_progress:
   eng: "Your payments is being processed, pending ⏳"
@@ -181,26 +176,6 @@ request_in_progress:
   eng: "Your request is being processed, we will notify you when it is ready ⏳"
   ru: "Запрос принят, мы уведомим вас когда будет готово ⏳"
   ua: "Запит прийнято, ми повідомимо коли буде готово ⏳"
-
-have_you_trained:  # TODO: REMOVE
-  eng: "Did you worked out yesterday? 🙂 "
-  ru: "Вчерашняя тренировка состоялась? 🙂"
-  ua: "Вчорашнє тренування відбулося? 🙂"
-
-workout_results:  # TODO: REMOVE
-  eng: "Did you manage to accomplish everything? 🤔"
-  ru: "Всё ли вам удалось выполнить? 🤔"
-  ua: "Чи все вам вдалося виконати? 🤔"
-
-keep_going:  # TODO: REMOVE
-  eng: "Your results have been sent to the coach, way to go 👍"
-  ru: "Ваши результаты отправлены тренеру, так держать 👍"
-  ua: "Ваші результати відправлені тренеру, так тримати 👍"
-
-workout_description:
-  eng: "Describe the challenges you faced and what you managed to do 👇"
-  ru: "Опишите с какими трудностями вы столкнулись и что вам удалось сделать 👇"
-  ua: "Опишіть з якими труднощами ви зіткнулися і що вам вдалося зробити 👇"
 
 ask_ai_prompt:
   eng: "Ask your question in text and optionally attach a photo. Each request is a detailed analysis of your situation, based on everything you’ve shared with {bot_name}, grounded in scientific evidence and real coaching experience.\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nRequest cost: <b>{cost}</b>\nYour balance: <b>{balance}</b>"
@@ -218,14 +193,29 @@ diet_response_template:
   ua: "<b>{name} підготував ваш раціон на день 👇</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n{message}"
 
 diet_service_intro:
-  eng: "{bot_name} will create a 1-day meal plan based on your food preferences and training goals. You can edit it in the «My Profile» section.\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nYour balance: <b>{balance}</b> GYMCOINs\nPrice: <b>{price}</b> GYMCOINs"
-  ru: "{bot_name} составит для вас рацион питания на день исходя из ваших пищевых предпочтений и тренировочных целей. Их вы можете редактировать в разделе «Мой профиль»\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nВаш баланс: <b>{balance}</b> GYMCOIN-ов\nСтоимость: <b>{price}</b> GYMCOIN-ов"
-  ua: "{bot_name} складе для вас раціон харчування на день з урахуванням ваших харчових вподобань та тренувальних цілей. Ви можете редагувати їх у розділі «Мій профіль».\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nВаш баланс: <b>{balance}</b> GYMCOIN-ів\nВартість: <b>{price}</b> GYMCOIN-ів"
+  eng: "{bot_name} will create a 1-day meal plan based on your food preferences and training goals. You can edit it in the «My Profile» section.\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nYour balance: <b>{balance}</b> GYMCOIN\nPrice: <b>{price}</b> GYMCOIN"
+  ru: "{bot_name} составит для вас рацион питания на день исходя из ваших пищевых предпочтений и тренировочных целей. Их вы можете редактировать в разделе «Мой профиль»\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nВаш баланс: <b>{balance}</b> GYMCOIN\nСтоимость: <b>{price}</b> GYMCOIN"
+  ua: "{bot_name} складе для вас раціон харчування на день з урахуванням ваших харчових вподобань та тренувальних цілей. Ви можете редагувати їх у розділі «Мій профіль».\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nВаш баланс: <b>{balance}</b> GYMCOIN\nВартість: <b>{price}</b> GYMCOIN"
 
 workout_days_selection:
-  eng: "Choose the number of workouts per week 👇\nTarget: {days}"
-  ru: "Выберите количество тренировок в неделю 👇\nТекущая цель: {days}"
-  ua: "Оберіть кількість тренувань на тиждень 👇\nПоточна ціль: {days}"
+  eng: "Choose the number of workouts per week\nTarget {days}"
+  ru: "Выберите количество тренировок в неделю\nТекущая цель {days}"
+  ua: "Оберіть кількість тренувань на тиждень\nПоточна ціль {days}"
+
+weekly_survey_prompt:
+  eng: "How was your week? Share your results with {bot_name} to update your training plan."
+  ru: "Как прошла ваша неделя? Поделитесь с {bot_name} своими результатами для обновления вашего тренировочного плана."
+  ua: "Як пройшов ваш тиждень? Поділіться з {bot_name} своїми результатами для оновлення вашого тренувального плану."
+
+subscription_type_prompt:
+  eng: "Choose your subscription type 👇"
+  ru: "Выберите тип вашей подписки 👇"
+  ua: "Оберіть тип вашої підписки 👇"
+
+subscription_already_active:
+  eng: "You already have an active subscription."
+  ru: "У вас уже есть активная подписка."
+  ua: "У вас уже є активна підписка."
 
 payment_failure:
   eng: "An error occurred during your payments, please try again later\nYou can contact support by mail: {mail} or in telegram: {tg} ✍️"
@@ -269,20 +259,15 @@ enter_wishes:
 
 credit_balance_menu:
   eng: "<b>GYMCOIN balance: </b>{credits}\n\nWould you like to top up your balance? Choose from the available packages 👇"
-  ru: "<b>Баланс GYMCOIN-ов: </b>{credits}\n\nЖелаете пополнить баланс? Выберите из доступных пакетов 👇"
-  ua: "<b>Баланс GYMCOIN-ів: </b>{credits}\n\nБажаєте поповнити баланс? Виберіть з доступних пакетів 👇"
+  ru: "<b>Баланс GYMCOIN: </b>{credits}\n\nЖелаете пополнить баланс? Выберите из доступных пакетов 👇"
+  ua: "<b>Баланс GYMCOIN: </b>{credits}\n\nБажаєте поповнити баланс? Виберіть з доступних пакетів 👇"
 
 not_enough_credits:
-  eng: "Not enough GYMCOINs. Please top up your balance."
-  ru: "Недостаточно GYMCOIN-ов. Пополните баланс."
-  ua: "Недостатньо GYMCOIN-ів. Поповніть баланс."
+  eng: "Not enough GYMCOIN. Please top up your balance."
+  ru: "Недостаточно GYMCOIN. Пополните баланс."
+  ua: "Недостатньо GYMCOIN. Поповніть баланс."
 
 confirm_service:
-  eng: "Your balance: {balance} GYMCOINs 💰\nPrice: {price} GYMCOINs\nProceed?"
-  ru: "Ваш баланс: {balance} GYMCOIN-ов 💰\nСтоимость: {price} GYMCOIN-ов\nСписать?"
-  ua: "Ваш баланс: {balance} GYMCOIN-ів 💰\nВартість: {price} GYMCOIN-ів\nПідтвердити?"
-
-ai_services:  # TODO: UPDATE MESSAGE
-  ua: "<b>{bot_name} 🤖</b>\n<blockquote>Вказана вага для вправ приблизна й розрахована на основі вашої інформації. Реальна вага може відрізнятися.</blockquote>\nДля вибору послуги натисніть відповідну кнопку нижче 👇"
-  ru: "<b>{bot_name} 🤖</b>\n<blockquote>Указанный вес упражнений примерный и рассчитывается по предоставленной информации. Фактический вес может отличаться.</blockquote>\nДля выбора услуги нажмите соответствующую кнопку ниже 👇"
-  eng: "<b>{bot_name} 🤖</b>\n<blockquote>Weights suggested for exercises are approximate and based on your data. Actual weight may vary.</blockquote>\nPlease choose a service by pressing the button below 👇"
+  eng: "Your balance: {balance} GYMCOIN \nPrice: {price} GYMCOIN"
+  ru: "Ваш баланс: {balance} GYMCOIN \nСтоимость: {price} GYMCOIN"
+  ua: "Ваш баланс: {balance} GYMCOIN \nВартість: {price} GYMCOIN"

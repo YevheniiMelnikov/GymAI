@@ -371,49 +371,63 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
     await delete_messages(state)
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
-
-    # AI coach flow
-    if data.get("ai_service"):
-        selected_profile = Profile.model_validate(data.get("profile"))
-        required = int(data.get("required", 0))
-        wishes = message.text
-        await state.update_data(wishes=wishes)
-
-        if selected_profile.credits < required:
-            await answer_msg(message, translate(MessageText.not_enough_credits, profile.language))
-            await show_balance_menu(message, profile, state)
+    try:
+        if data.get("subscription_flow"):
+            wishes = message.text
+            await state.update_data(wishes=wishes)
+            lang = profile.language or settings.DEFAULT_LANG
+            await start_workout_days_selection(
+                message,
+                state,
+                lang=lang,
+                service="subscription",
+                show_wishes_prompt=False,
+            )
             return
 
-        service = str(data.get("ai_service") or "program")
-        lang = profile.language or settings.DEFAULT_LANG
+        # AI coach flow
+        if data.get("ai_service"):
+            selected_profile = Profile.model_validate(data.get("profile"))
+            required = int(data.get("required", 0))
+            wishes = message.text
+            await state.update_data(wishes=wishes)
 
-        if service == "program":
-            workout_location = resolve_workout_location(selected_profile)
-            if workout_location is None:
-                logger.error(f"Workout location missing for completed profile_id={selected_profile.id}")
-                await answer_msg(message, translate(MessageText.unexpected_error, lang))
+            if selected_profile.credits < required:
+                await answer_msg(message, translate(MessageText.not_enough_credits, profile.language))
+                await show_balance_menu(message, profile, state)
                 return
+
+            service = str(data.get("ai_service") or "program")
+            lang = profile.language or settings.DEFAULT_LANG
+
+            if service == "program":
+                workout_location = resolve_workout_location(selected_profile)
+                if workout_location is None:
+                    logger.error(f"Workout location missing for completed profile_id={selected_profile.id}")
+                    await answer_msg(message, translate(MessageText.unexpected_error, lang))
+                    return
+                await start_workout_days_selection(
+                    message,
+                    state,
+                    lang=lang,
+                    service=service,
+                    workout_location=workout_location.value,
+                    show_wishes_prompt=False,
+                )
+                return
+
+            period_value = service_period_value(service)
             await start_workout_days_selection(
                 message,
                 state,
                 lang=lang,
                 service=service,
-                workout_location=workout_location.value,
+                period_value=period_value,
                 show_wishes_prompt=False,
             )
             return
-
-        period_value = service_period_value(service)
-        await start_workout_days_selection(
-            message,
-            state,
-            lang=lang,
-            service=service,
-            period_value=period_value,
-            show_wishes_prompt=False,
-        )
-        return
-
+    finally:
+        await del_msg(message)
     return
 
 

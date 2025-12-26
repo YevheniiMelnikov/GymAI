@@ -30,7 +30,7 @@ async def setup_app(app: "web.Application", bot: "Bot", dp: "Dispatcher") -> Non
     from bot.handlers.internal import (
         internal_payment_handler,
         internal_send_payment_message,
-        internal_send_daily_survey,
+        internal_send_weekly_survey,
         internal_ai_coach_plan_ready,
         internal_ai_answer_ready,
         internal_ai_diet_ready,
@@ -43,7 +43,7 @@ async def setup_app(app: "web.Application", bot: "Bot", dp: "Dispatcher") -> Non
     app.router.add_get(f"{path}/__ping", ping_handler)
     app.router.add_post("/internal/payments/process/", internal_payment_handler)
     app.router.add_post("/internal/payments/send_message/", internal_send_payment_message)
-    app.router.add_post("/internal/tasks/send_daily_survey/", internal_send_daily_survey)
+    app.router.add_post("/internal/tasks/send_weekly_survey/", internal_send_weekly_survey)
     app.router.add_post("/internal/tasks/ai_plan_ready/", internal_ai_coach_plan_ready)
     app.router.add_post("/internal/tasks/ai_answer_ready/", internal_ai_answer_ready)
     app.router.add_post("/internal/tasks/ai_diet_ready/", internal_ai_diet_ready)

@@ -3,6 +3,7 @@ from typing import Any
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
+from apps.profiles.models import Profile
 from apps.profiles.serializers import ProfileSerializer
 from apps.workout_plans.models import Subscription, Program
 
@@ -46,6 +47,11 @@ class ProgramSerializer(serializers.ModelSerializer):
 
 class SubscriptionSerializer(serializers.ModelSerializer):
     profile = ProfileSerializer(read_only=True)
+    profile_id = serializers.PrimaryKeyRelatedField(
+        queryset=Profile.objects.all(),
+        source="profile",
+        write_only=True,
+    )
     exercises = DayExercisesSerializer(many=True)
 
     class Meta:  # pyrefly: ignore[bad-override]
@@ -53,15 +59,27 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         fields = "__all__"
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
-        user = self.context["request"].user
+        request = self.context["request"]
+        user = request.user
+        auth_header = request.headers.get("Authorization", "")
+        has_api_key = auth_header.startswith("Api-Key ")
 
-        if not user.is_authenticated:
+        if not user.is_authenticated and not has_api_key:
             raise ValidationError(["User is not authenticated"])
 
         if "profile" not in attrs:
-            if not hasattr(user, "profile"):
+            if self.instance is not None:
+                return attrs
+            if user.is_authenticated and hasattr(user, "profile"):
+                attrs["profile"] = user.profile
+            else:
                 raise ValidationError(["User profile not found"])
-            attrs["profile"] = user.profile
+
+        if self.instance is None:
+            if "workout_location" not in attrs:
+                raise ValidationError(["Workout location is required"])
+            if "wishes" not in attrs:
+                raise ValidationError(["Wishes are required"])
 
         if not self.instance:
             if Subscription.objects.filter(profile=attrs["profile"], enabled=True).exists():  # type: ignore[attr-defined]

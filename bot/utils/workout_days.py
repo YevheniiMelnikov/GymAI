@@ -3,11 +3,11 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.exceptions import TelegramBadRequest
 from contextlib import suppress
 
-from bot.keyboards import enter_wishes_kb, workout_days_selection_kb
+from bot.keyboards import workout_days_selection_kb
 from bot.states import States
 from bot.texts import MessageText, translate
-from config.app_settings import settings
-from bot.utils.bot import answer_msg, del_msg, get_webapp_url
+from bot.utils.bot import answer_msg, del_msg
+from bot.utils.prompts import send_enter_wishes_prompt
 from core.enums import SubscriptionPeriod
 
 WORKOUT_DAYS_PLUS = "workout_days_plus"
@@ -103,9 +103,7 @@ async def start_workout_days_selection(
     )
     await state.set_state(States.workout_days_selection)
     if show_wishes_prompt:
-        instructions = translate(MessageText.enter_wishes, lang).format(bot_name=settings.BOT_NAME)
-        webapp_url = get_webapp_url("program", lang)
-        await answer_msg(source, instructions, reply_markup=enter_wishes_kb(lang, webapp_url))
+        await send_enter_wishes_prompt(source, lang)
     text = compose_workout_days_prompt(lang, DEFAULT_WORKOUT_DAYS_COUNT)
     await answer_msg(source, text, reply_markup=workout_days_selection_kb(lang))
     if isinstance(source, CallbackQuery):

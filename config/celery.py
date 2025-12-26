@@ -53,11 +53,6 @@ beat_schedule = {
         "schedule": crontab(hour=0, minute=30),
         "options": {"queue": "critical"},
     },
-    "send_daily_survey": {
-        "task": "core.tasks.bot_calls.send_daily_survey",
-        "schedule": crontab(hour=9, minute=0),
-        "options": {"queue": "maintenance"},
-    },
     "refresh_external_knowledge": {
         "task": "core.tasks.ai_coach.refresh_external_knowledge",
         "schedule": schedule(
@@ -74,6 +69,11 @@ beat_schedule = {
     "collect_weekly_metrics": {
         "task": "core.tasks.metrics.collect_weekly_metrics",
         "schedule": crontab(day_of_week="mon", hour=3, minute=0),
+        "options": {"queue": "maintenance"},
+    },
+    "send_weekly_survey": {
+        "task": "core.tasks.bot_calls.send_weekly_survey",
+        "schedule": crontab(day_of_week="sun", hour=10, minute=0),
         "options": {"queue": "maintenance"},
     },
 }

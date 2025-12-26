@@ -158,10 +158,10 @@ async def diet_confirm_service(callback_query: CallbackQuery, state: FSMContext)
     profile = Profile.model_validate(data["profile"])
     lang = profile.language or settings.DEFAULT_LANG
     action = str(callback_query.data or "").lower()
-    if action not in {"diet_generate", "diet_back"}:
+    if action not in {"confirm_generate", "back"}:
         await callback_query.answer()
         return
-    if action == "diet_back":
+    if action == "back":
         await show_main_menu(cast(Message, callback_query.message), profile, state)
         await del_msg(callback_query)
         return

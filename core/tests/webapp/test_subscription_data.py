@@ -38,7 +38,17 @@ def test_subscription_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(
             views.SubscriptionRepository,
             "get_latest",
-            lambda _id: SimpleNamespace(exercises=[]),
+            lambda _id: SimpleNamespace(
+                id=1,
+                exercises=[
+                    {
+                        "day": "Day 1",
+                        "exercises": [
+                            {"name": "Squat", "sets": "3", "reps": "10"},
+                        ],
+                    }
+                ],
+            ),
         )
 
         request: HttpRequest = HttpRequest()
@@ -48,7 +58,7 @@ def test_subscription_data_success(monkeypatch: pytest.MonkeyPatch) -> None:
         response: JsonResponse = await views.subscription_data(request)
         assert response.status_code == 200
         data = json.loads(response.content)
-        assert data["program"] == []
+        assert data["program"]
         assert data["language"] == "eng"
 
     asyncio.run(runner())

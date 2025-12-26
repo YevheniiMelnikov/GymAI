@@ -1,6 +1,4 @@
-from datetime import datetime
 from decimal import InvalidOperation, Decimal, ROUND_HALF_UP
-from typing import cast
 
 from aiogram import Router
 from aiogram.fsm.context import FSMContext
@@ -10,14 +8,12 @@ from aiogram.types import CallbackQuery, Message
 from bot.utils.bot import del_msg
 from bot.states import States
 
-from core.cache import Cache
 from core.cache.payment import PaymentCacheManager
-from core.enums import PaymentStatus, SubscriptionPeriod
+from core.enums import PaymentStatus
 from core.services import APIService
 from bot.utils.menus import show_main_menu, show_my_workouts_menu, show_balance_menu
 from core.schemas import Profile
-from bot.utils.workout_plans import cache_program_data, process_new_program, process_new_subscription
-from bot.utils.profiles import resolve_workout_location
+from bot.utils.workout_plans import process_new_program, process_new_subscription
 from bot.texts import MessageText, translate
 
 payment_router = Router()
@@ -40,7 +36,6 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext) -> No
     order_id = data.get("order_id")
     amount = data.get("amount")
     service_type = data.get("service_type")
-    wishes = data.get("wishes", "")
 
     if not isinstance(order_id, str) or not isinstance(service_type, str):
         await callback_query.answer("Invalid payments data", show_alert=True)
@@ -62,47 +57,9 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext) -> No
         return
     selected_profile = Profile.model_validate(profile_data)
 
-    workout_location = resolve_workout_location(selected_profile)
-    workout_location_value = workout_location.value if workout_location else None
-    if service_type == "program":
-        required = int(data.get("required", 0))
-        await APIService.profile.adjust_credits(profile.id, -required)
-        await Cache.profile.update_record(selected_profile.id, {"credits": selected_profile.credits - required})
-        await cache_program_data(data, selected_profile.id, workout_location_value)
-        await callback_query.answer(translate(MessageText.payment_success, profile.language), show_alert=True)
-        if callback_query.message:
-            await show_main_menu(cast(Message, callback_query.message), profile, state)
-        await del_msg(callback_query)
+    if service_type != "credits":
+        await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
         return
-    else:
-        required = int(data.get("required", 0))
-        price = Decimal(required)
-        period_map = {
-            "subscription_1_month": SubscriptionPeriod.one_month,
-            "subscription_6_months": SubscriptionPeriod.six_months,
-            "subscription_12_months": SubscriptionPeriod.twelve_months,
-        }
-        period = period_map.get(service_type, SubscriptionPeriod.one_month)
-        subscription_id = await APIService.workout.create_subscription(
-            profile_id=selected_profile.id,
-            workout_days=data.get("workout_days", []),
-            wishes=wishes,
-            amount=price,
-            period=period,
-        )
-
-        subscription_data = {
-            "id": subscription_id,
-            "payment_date": datetime.today().strftime("%Y-%m-%d"),
-            "enabled": False,
-            "price": price,
-            "period": period.value,
-            "profile": selected_profile.id,
-            "workout_days": data.get("workout_days", []),
-            "workout_location": workout_location_value,
-            "wishes": wishes,
-        }
-        await Cache.workout.update_subscription(selected_profile.id, subscription_data)
 
     await PaymentCacheManager.set_status(selected_profile.id, service_type, PaymentStatus.PENDING)
     await APIService.payment.create_payment(selected_profile.id, service_type, order_id, amount)
@@ -119,15 +76,22 @@ async def handle_payment(callback_query: CallbackQuery, state: FSMContext) -> No
 async def confirm_service(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     profile = Profile.model_validate(data["profile"])
-    if callback_query.data == "no":
+    action = str(callback_query.data or "").lower()
+    if action in {"no", "back"}:
         await show_my_workouts_menu(callback_query, profile, state)
         return
 
     service_type = data.get("service_type")
     if service_type == "subscription":
+        if action not in {"confirm_generate", "yes"}:
+            await callback_query.answer()
+            return
         await process_new_subscription(callback_query, profile, state, confirmed=True)
         return
     if service_type == "program":
+        if action not in {"confirm_generate", "yes"}:
+            await callback_query.answer()
+            return
         await process_new_program(callback_query, profile, state, confirmed=True)
         return
     await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)

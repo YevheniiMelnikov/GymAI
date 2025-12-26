@@ -49,13 +49,6 @@ def tariff_plans_kb(lang: str, plans: list[str]) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def ai_services_kb(lang: str, services: list[str]) -> KbMarkup:
-    builder = KeyboardBuilder(lang)
-    buttons = [[builder.add(ButtonText[service], f"ai_service_{service}")] for service in services]
-    buttons.append([builder.add(ButtonText.prev_menu, "back")])
-    return KbMarkup(inline_keyboard=buttons, row_width=1)
-
-
 def select_gender_kb(lang: str) -> KbMarkup:
     builder = KeyboardBuilder(lang)
     buttons = [
@@ -145,11 +138,10 @@ def workout_days_selection_kb(lang: str) -> KbMarkup:
     builder = KeyboardBuilder(lang)
     buttons = [
         [
-            KbBtn(text="➕", callback_data="workout_days_plus"),
             KbBtn(text="➖", callback_data="workout_days_minus"),
+            KbBtn(text="➕", callback_data="workout_days_plus"),
         ],
-        [builder.add(ButtonText.done, "workout_days_continue")],
-        [builder.add(ButtonText.prev_menu, "workout_days_back")],
+        [builder.add(ButtonText.prev_menu, "workout_days_back"), builder.add(ButtonText.done, "workout_days_continue")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=2)
 
@@ -200,26 +192,29 @@ def program_view_kb(lang: str, webapp_url: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def workout_survey_kb(lang: str, day: str) -> KbMarkup:
+def subscription_type_kb(lang: str, services: list[tuple[str, int]]) -> KbMarkup:
     builder = KeyboardBuilder(lang)
-    buttons = [
-        [
-            builder.add(ButtonText.answer_no, f"no_{day}"),
-            builder.add(ButtonText.answer_yes, f"yes_{day}"),
-        ]
-    ]
-    return KbMarkup(inline_keyboard=buttons, row_width=2)
+    labels = {
+        "subscription_1_month": ButtonText.subscription_1_month,
+        "subscription_6_months": ButtonText.subscription_6_months,
+        "subscription_12_months": ButtonText.subscription_12_months,
+    }
+    buttons: list[list[KbBtn]] = []
+    for service_name, price in services:
+        label_key = labels.get(service_name)
+        if label_key is None:
+            continue
+        label = translate(label_key, lang)
+        text = f"{label} - {price} GYMCOIN"
+        buttons.append([KbBtn(text=text, callback_data=f"subscription_type_{service_name}")])
+    buttons.append([builder.add(ButtonText.prev_menu, "back")])
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def workout_results_kb(lang: str) -> KbMarkup:
+def weekly_survey_kb(lang: str, webapp_url: str) -> KbMarkup:
     builder = KeyboardBuilder(lang)
-    buttons = [
-        [
-            builder.add(ButtonText.answer_no, "not_completed"),
-            builder.add(ButtonText.answer_yes, "completed"),
-        ]
-    ]
-    return KbMarkup(inline_keyboard=buttons)
+    buttons = [[builder.add(ButtonText.weekly_survey_answer, webapp_url=webapp_url)]]
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
 def yes_no_kb(lang: str) -> KbMarkup:
@@ -233,7 +228,7 @@ def yes_no_kb(lang: str) -> KbMarkup:
 def diet_confirm_kb(lang: str) -> KbMarkup:
     builder = KeyboardBuilder(lang)
     buttons = [
-        [builder.add(ButtonText.prev_menu, "diet_back"), builder.add(ButtonText.diet_generate, "diet_generate")],
+        [builder.add(ButtonText.prev_menu, "back"), builder.add(ButtonText.confirm_generate, "confirm_generate")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=2)
 

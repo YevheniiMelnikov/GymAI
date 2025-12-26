@@ -38,7 +38,12 @@ class Subscription(models.Model):
     )
     workout_days = ArrayField(models.CharField(max_length=100), default=list, blank=True)
     exercises = JSONField(default=list, blank=True, null=True)
-    wishes = models.CharField(max_length=500, null=True, blank=True)
+    workout_location = models.CharField(
+        max_length=32,
+        choices=[("gym", "gym"), ("home", "home")],
+        default="gym",
+    )
+    wishes = models.CharField(max_length=500, default="")
     payment_date = models.CharField(max_length=100, null=True, blank=True)
 
     class Meta:

@@ -492,6 +492,7 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
         wishes: str,
         amount: Decimal,
         period: SubscriptionPeriod,
+        workout_location: str,
         exercises: list[dict[str, Any]],
     ) -> int | None:
         created_payload.update(
@@ -501,6 +502,7 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
                 "wishes": wishes,
                 "amount": amount,
                 "period": period,
+                "workout_location": workout_location,
                 "exercises": exercises,
             }
         )
@@ -526,7 +528,7 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
     )
     monkeypatch.setattr(
         "bot.handlers.internal.tasks.get_webapp_url",
-        lambda name: f"url:{name}",
+        lambda name, _lang=None: f"url:{name}",
     )
     dummy_redis = DummyRedis()
     monkeypatch.setattr("bot.handlers.internal.tasks.AiPlanState.create", lambda: AiPlanState(dummy_redis))

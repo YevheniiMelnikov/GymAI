@@ -446,6 +446,14 @@ def notify_ai_plan_ready_task(self, payload: dict[str, Any]) -> None:  # pyrefly
         return
     request_id = str(normalized.get("request_id", ""))
     action = str(normalized.get("action", ""))
+    logger.info(
+        "ai_plan_notify_enqueued action={} request_id={} status={} plan_type={} profile_id={}",
+        action,
+        request_id,
+        normalized.get("status"),
+        normalized.get("plan_type"),
+        normalized.get("profile_id"),
+    )
     try:
         asyncio.run(_notify_ai_plan_ready(normalized))
     except (httpx.HTTPStatusError, httpx.TransportError) as exc:
@@ -476,6 +484,12 @@ def notify_ai_plan_ready_task(self, payload: dict[str, Any]) -> None:  # pyrefly
 )
 def generate_ai_workout_plan(self, payload: dict[str, Any]) -> dict[str, Any] | None:  # pyrefly: ignore[valid-type]
     try:
+        logger.info(
+            "ai_generate_plan_task_start request_id={} profile_id={} plan_type={}",
+            payload.get("request_id"),
+            payload.get("profile_id"),
+            payload.get("plan_type"),
+        )
         notify_payload = asyncio.run(_generate_ai_workout_plan_impl(payload, self))
     except APIClientHTTPError as exc:
         retries = int(getattr(self.request, "retries", 0))
@@ -485,6 +499,13 @@ def generate_ai_workout_plan(self, payload: dict[str, Any]) -> dict[str, Any] | 
             raise self.retry(exc=exc)
         raise
     else:
+        if notify_payload is None:
+            logger.error(
+                "ai_generate_plan_task_empty request_id={} profile_id={} plan_type={}",
+                payload.get("request_id"),
+                payload.get("profile_id"),
+                payload.get("plan_type"),
+            )
         return notify_payload
 
 

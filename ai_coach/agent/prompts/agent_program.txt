@@ -20,3 +20,9 @@ PROGRAM PAYLOAD REQUIREMENTS:
 - Do not return empty or partially filled fields.
 - Label each block as "Day 1", "Day 2", etc. Do not refer to calendar weekday names, and ensure each exercise includes a name, sets, and reps.
 - If split_number is missing, set it to the number of workout days.
+
+Program field guide:
+- exercises_by_day: list of DayExercises; each has day label and exercises with name/sets/reps.
+- split_number: number of workout days in the plan.
+- workout_location: training location from the profile ("home", "gym", "strength").
+- wishes: client's preferences or limitations (optional).

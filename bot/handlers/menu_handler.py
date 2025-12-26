@@ -16,7 +16,7 @@ from bot.utils.menus import (
     show_my_workouts_menu,
     show_my_profile_menu,
     show_balance_menu,
-    process_ai_service_selection,
+    prompt_subscription_type,
     start_diet_flow,
 )
 from bot.utils.workout_plans import process_new_program, process_new_subscription
@@ -30,7 +30,7 @@ from bot.keyboards import (
     payment_kb,
     yes_no_kb,
 )
-from bot.utils.credits import available_packages
+from bot.utils.credits import available_ai_services, available_packages
 from bot.utils.workout_days import (
     WORKOUT_DAYS_BACK,
     WORKOUT_DAYS_CONTINUE,
@@ -141,28 +141,6 @@ async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
     await del_msg(callback_query)
 
 
-@menu_router.callback_query(States.choose_ai_service)
-async def ai_service_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
-    data = await state.get_data()
-    profile = Profile.model_validate(data.get("profile"))
-    cb_data = callback_query.data or ""
-
-    if cb_data == "back":
-        await show_my_workouts_menu(callback_query, profile, state)
-        return
-
-    if cb_data.startswith("ai_service_"):
-        handled = await process_ai_service_selection(
-            callback_query,
-            profile,
-            state,
-            service_name=cb_data.removeprefix("ai_service_"),
-        )
-        if handled:
-            await del_msg(callback_query)
-        return
-
-
 @menu_router.callback_query(States.workout_days_selection)
 async def workout_days_selection(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
@@ -204,11 +182,44 @@ async def workout_days_selection(callback_query: CallbackQuery, state: FSMContex
     service = data.get("workout_days_service", "program")
     selected_days = day_labels(count)
     await state.update_data(workout_days=selected_days)
+    await del_msg(callback_query)
     if service == "program":
         await process_new_program(callback_query, profile, state, confirmed=False)
         return
+    if service == "subscription":
+        await prompt_subscription_type(callback_query, profile, state)
+        return
     await process_new_subscription(callback_query, profile, state, confirmed=False)
     return
+
+
+@menu_router.callback_query(States.choose_subscription)
+async def subscription_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
+    data = await state.get_data()
+    profile_data = data.get("profile")
+    if not profile_data:
+        return
+    profile = Profile.model_validate(profile_data)
+    cb_data = callback_query.data or ""
+
+    if cb_data == "back":
+        await show_my_workouts_menu(callback_query, profile, state)
+        return
+
+    if not cb_data.startswith("subscription_type_"):
+        await callback_query.answer()
+        return
+
+    service_name = cb_data.removeprefix("subscription_type_")
+    services = {service.name: service.credits for service in available_ai_services()}
+    required = services.get(service_name)
+    if required is None:
+        await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)
+        return
+
+    await state.update_data(ai_service=service_name, required=required)
+    await del_msg(callback_query)
+    await process_new_subscription(callback_query, profile, state, confirmed=False)
 
 
 @menu_router.callback_query(States.profile)

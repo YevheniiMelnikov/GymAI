@@ -122,6 +122,15 @@ class Subscription(BaseModel):
     payment_date: str
     model_config = ConfigDict(extra="ignore")
 
+    @field_validator("profile", mode="before")
+    @classmethod
+    def _normalize_profile(cls, value: Any) -> int:
+        if isinstance(value, dict):
+            return int(value.get("id", 0))
+        if hasattr(value, "id"):
+            return int(value.id)
+        return int(value)
+
     @field_validator("payment_date", mode="before")
     @classmethod
     def normalize_payment_date(cls, value: Any) -> str:

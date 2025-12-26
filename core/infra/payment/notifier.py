@@ -22,9 +22,7 @@ class TaskPaymentNotifier(PaymentNotifier):
         self._undelivered = deque()
 
     def success(self, profile_id: int, language: str) -> None:
-        message = translate(MessageText.payment_success, language)
-        self._task.delay(profile_id, message)
-        self._undelivered.append(profile_id)
+        return
 
     def failure(self, profile_id: int, language: str) -> None:
         message = translate(MessageText.payment_failure, language).format(

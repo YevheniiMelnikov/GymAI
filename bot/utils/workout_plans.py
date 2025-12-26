@@ -1,5 +1,4 @@
-from datetime import datetime, date
-from dateutil.relativedelta import relativedelta
+from datetime import datetime
 from decimal import Decimal
 from typing import cast
 from uuid import uuid4
@@ -8,28 +7,20 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from loguru import logger
 
-from bot.keyboards import yes_no_kb
+from bot.keyboards import diet_confirm_kb
 from bot.states import States
 from config.app_settings import settings
 from core.cache import Cache
 from core.enums import SubscriptionPeriod, WorkoutPlanType, WorkoutLocation
+from core.exceptions import SubscriptionNotFoundError
 from core.schemas import Profile
 from core.services import APIService
 from core.utils.idempotency import acquire_once
 from bot.utils.ai_coach import enqueue_workout_plan_generation
-from bot.utils.menus import show_main_menu, show_balance_menu
+from bot.utils.menus import ensure_credits, show_main_menu
 from bot.utils.bot import del_msg, answer_msg
 from bot.texts import MessageText, translate
 from bot.utils.profiles import resolve_workout_location
-
-
-def _next_payment_date(period: SubscriptionPeriod = SubscriptionPeriod.one_month) -> str:
-    today = date.today()
-    if period is SubscriptionPeriod.six_months:
-        next_date = cast(date, today + relativedelta(months=+6))  # pyrefly: ignore[redundant-cast]
-    else:
-        next_date = cast(date, today + relativedelta(months=+1))  # pyrefly: ignore[redundant-cast]
-    return next_date.strftime("%Y-%m-%d")
 
 
 async def enqueue_subscription_plan(
@@ -108,10 +99,40 @@ async def process_new_subscription(
     workout_days = data.get("workout_days", [])
     logger.debug(f"subscription_confirm_flow profile_id={profile.id} workout_days_count={len(workout_days)}")
     required = int(data.get("required", 0))
-    if profile_record.credits < required:
-        await callback_query.answer(translate(MessageText.not_enough_credits, language), show_alert=True)
-        await show_balance_menu(callback_query, profile, state, already_answered=True)
+    if not await ensure_credits(
+        callback_query,
+        profile,
+        state,
+        required=required,
+        credits=profile_record.credits,
+    ):
         return
+
+    workout_location = resolve_workout_location(profile_record)
+    if workout_location is None:
+        await callback_query.answer(translate(MessageText.unexpected_error, language), show_alert=True)
+        return
+
+    try:
+        existing = await Cache.workout.get_latest_subscription(profile_record.id)
+    except SubscriptionNotFoundError:
+        existing = None
+    if existing and existing.enabled:
+        exercises = existing.exercises or []
+        if not exercises:
+            existing_id = getattr(existing, "id", None)
+            if not existing_id:
+                await callback_query.answer(translate(MessageText.unexpected_error, language), show_alert=True)
+                await show_main_menu(cast(Message, callback_query.message), profile, state)
+                await del_msg(callback_query)
+                return
+            await APIService.workout.update_subscription(existing_id, {"enabled": False})
+            await Cache.workout.update_subscription(profile_record.id, {"enabled": False})
+        else:
+            await callback_query.answer(translate(MessageText.subscription_already_active, language), show_alert=True)
+            await show_main_menu(cast(Message, callback_query.message), profile, state)
+            await del_msg(callback_query)
+            return
 
     service_type = data.get("service_type", "subscription")
     period_map = {
@@ -135,8 +156,13 @@ async def process_new_subscription(
         await answer_msg(
             callback_query,
             translate(MessageText.confirm_service, language).format(balance=profile_record.credits, price=required),
-            reply_markup=yes_no_kb(language),
+            reply_markup=diet_confirm_kb(language),
         )
+        return
+
+    if not await acquire_once(f"gen_subscription:{profile_record.id}", settings.LLM_COOLDOWN):
+        logger.warning(f"Duplicate subscription generation suppressed for profile_id={profile_record.id}")
+        await del_msg(callback_query)
         return
 
     sub_id = await APIService.workout.create_subscription(
@@ -145,6 +171,7 @@ async def process_new_subscription(
         wishes=data.get("wishes", ""),
         amount=Decimal(required),
         period=period,
+        workout_location=workout_location.value,
     )
     if sub_id is None:
         await callback_query.answer(translate(MessageText.unexpected_error, language), show_alert=True)
@@ -152,20 +179,49 @@ async def process_new_subscription(
 
     await APIService.profile.adjust_credits(profile.id, -required)
     await Cache.profile.update_record(profile_record.id, {"credits": profile_record.credits - required})
-    next_payment = _next_payment_date(period)
-    await APIService.workout.update_subscription(sub_id, {"enabled": True, "payment_date": next_payment})
     await Cache.workout.update_subscription(
         profile_record.id,
         {
             "id": sub_id,
-            "enabled": True,
-            "payment_date": next_payment,
+            "enabled": False,
             "period": period.value,
             "price": required,
+            "workout_location": workout_location.value,
+            "wishes": data.get("wishes", ""),
         },
     )
-    await Cache.payment.reset_status(profile_record.id, "subscription")
-    await callback_query.answer(translate(MessageText.payment_success, language), show_alert=True)
+    request_id = uuid4().hex
+    await answer_msg(callback_query, translate(MessageText.request_in_progress, language))
+    message = callback_query.message
+    if message and isinstance(message, Message):
+        await show_main_menu(message, profile, state)
+    queued = await enqueue_workout_plan_generation(
+        profile=profile_record,
+        plan_type=WorkoutPlanType.SUBSCRIPTION,
+        workout_location=workout_location,
+        wishes=data.get("wishes", ""),
+        request_id=request_id,
+        period=period.value,
+        workout_days=workout_days,
+    )
+    if not queued:
+        await answer_msg(
+            callback_query,
+            translate(MessageText.coach_agent_error, language).format(tg=settings.TG_SUPPORT_CONTACT),
+        )
+        logger.error(
+            f"ai_plan_dispatch_failed plan_type=subscription profile_id={profile_record.id} request_id={request_id}"
+        )
+        return
+    logger.debug(
+        "AI coach plan generation started plan_type=subscription "
+        f"profile_id={profile_record.id} request_id={request_id} ttl={settings.LLM_COOLDOWN}"
+    )
+    logger.info(
+        f"ai_plan_generation_requested request_id={request_id} profile_id={profile_record.id} "
+        f"plan_type={WorkoutPlanType.SUBSCRIPTION.value}"
+    )
+    await del_msg(callback_query)
 
 
 async def process_new_program(
@@ -181,9 +237,13 @@ async def process_new_program(
     workout_days = data.get("workout_days", [])
     logger.debug(f"program_confirm_flow profile_id={profile.id} workout_days_count={len(workout_days)}")
     required = int(data.get("required", 0))
-    if profile_record.credits < required:
-        await callback_query.answer(translate(MessageText.not_enough_credits, language), show_alert=True)
-        await show_balance_menu(callback_query, profile, state, already_answered=True)
+    if not await ensure_credits(
+        callback_query,
+        profile,
+        state,
+        required=required,
+        credits=profile_record.credits,
+    ):
         return
 
     workout_location_value = data.get("workout_days_location")
@@ -198,7 +258,7 @@ async def process_new_program(
         await answer_msg(
             callback_query,
             translate(MessageText.confirm_service, language).format(balance=profile_record.credits, price=required),
-            reply_markup=yes_no_kb(language),
+            reply_markup=diet_confirm_kb(language),
         )
         return
 

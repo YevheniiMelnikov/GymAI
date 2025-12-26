@@ -1,8 +1,6 @@
 import asyncio
-from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, Awaitable, Callable
-from zoneinfo import ZoneInfo
 
 from aiohttp import web
 from aiogram import Bot
@@ -10,15 +8,17 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from loguru import logger
+from pydantic import ValidationError
 
-from bot.keyboards import program_view_kb, workout_survey_kb
+from bot.keyboards import program_view_kb, weekly_survey_kb
 from bot.states import States
 from bot.texts import MessageText, translate
-from bot.utils.profiles import get_profiles_to_survey
+from bot.handlers.internal.schemas import WeeklySurveyNotify
 from config.app_settings import settings
 from core.exceptions import ProfileNotFoundError, SubscriptionNotFoundError
 from core.cache import Cache
 from core.enums import SubscriptionPeriod, WorkoutPlanType
+from core.utils.billing import next_payment_date
 from bot.utils.bot import get_webapp_url
 from core.services import APIService
 from core.schemas import DayExercises, Profile, Subscription
@@ -228,12 +228,22 @@ async def _finalize_subscription_plan(
     if price <= 0:
         price = Decimal(settings.SMALL_SUBSCRIPTION_PRICE)
 
+    workout_location = subscription.workout_location or profile.workout_location or ""
+    if not workout_location:
+        await notify_failure("subscription_missing_workout_location")
+        logger.error(
+            "Subscription workout_location missing "
+            f"profile_id={resolved_profile_id} request_id={request_id} plan_type={plan_type.value}"
+        )
+        return
+
     subscription_id = await APIService.workout.create_subscription(
         profile_id=resolved_profile_id,
         workout_days=subscription.workout_days,
         wishes=subscription.wishes,
         amount=price,
         period=period_enum,
+        workout_location=workout_location,
         exercises=serialized_exercises,
     )
     if subscription_id is None:
@@ -271,6 +281,15 @@ async def _finalize_subscription_plan(
             reply_markup=program_view_kb(profile.language, get_webapp_url("subscription", profile.language)),
             disable_notification=True,
         )
+        payment_date = next_payment_date(period_enum)
+        await APIService.workout.update_subscription(
+            subscription_id,
+            {"enabled": True, "payment_date": payment_date},
+        )
+        await Cache.workout.update_subscription(
+            resolved_profile_id,
+            {"enabled": True, "payment_date": payment_date},
+        )
     except Exception as exc:  # noqa: BLE001
         logger.error(
             "ai_plan_subscription_create_notify_failed "
@@ -300,6 +319,14 @@ async def _process_ai_plan_ready(
     state_tracker = AiPlanState.create()
     bot: Bot = request.app["bot"]
     dispatcher = request.app.get("dp")
+    logger.info(
+        "ai_plan_ready_start action={} status={} plan_type={} profile_id={} request_id={}",
+        action,
+        status,
+        plan_type.value,
+        profile_id,
+        request_id,
+    )
     try:
         payload_profile_id = profile_hint
         profile = await _resolve_profile(profile_id, profile_hint)
@@ -412,34 +439,42 @@ async def _process_ai_plan_ready(
 
 
 @require_internal_auth
-async def internal_send_daily_survey(request: web.Request) -> web.Response:
+async def internal_send_weekly_survey(request: web.Request) -> web.Response:
     bot: Bot = request.app["bot"]
     try:
-        profiles = await get_profiles_to_survey()
-    except Exception as e:
-        logger.error(f"Unexpected error in retrieving profiles: {e}")
-        return web.json_response({"detail": str(e)}, status=500)
+        raw_payload = await request.json()
+    except Exception:
+        logger.error("weekly_survey_invalid_json")
+        return web.json_response({"detail": "Invalid JSON"}, status=400)
 
-    if not profiles:
-        logger.info("No profiles to survey today")
-        return web.json_response({"result": "no_profiles"})
+    try:
+        payload = WeeklySurveyNotify.model_validate(raw_payload)
+    except ValidationError as exc:
+        logger.error(f"weekly_survey_invalid_payload error={exc}")
+        return web.json_response({"detail": "Invalid payload"}, status=400)
 
-    now = datetime.now(ZoneInfo(settings.TIME_ZONE))
-    yesterday = (now - timedelta(days=1)).strftime("%A").lower()
+    if not payload.recipients:
+        logger.info("weekly_survey_skipped reason=no_recipients")
+        return web.json_response({"result": "no_recipients"})
 
-    for user_profile in profiles:
+    for recipient in payload.recipients:
+        lang = recipient.language or settings.DEFAULT_LANG
+        webapp_url = get_webapp_url("weekly_survey", lang)
+        if not webapp_url:
+            logger.warning(f"weekly_survey_skipped reason=missing_webapp_url profile_id={recipient.profile_id}")
+            continue
         try:
             await bot.send_message(
-                chat_id=user_profile.tg_id,
-                text=translate(MessageText.have_you_trained, user_profile.language),
-                reply_markup=workout_survey_kb(user_profile.language, yesterday),
+                chat_id=recipient.tg_id,
+                text=translate(MessageText.weekly_survey_prompt, lang).format(bot_name=settings.BOT_NAME),
+                reply_markup=weekly_survey_kb(lang, webapp_url),
                 disable_notification=True,
             )
-            logger.info(f"Survey sent to profile {user_profile.id}")
-        except Exception as e:
-            logger.error(f"Survey push failed for profile_id={user_profile.id}: {e}")
+            logger.info(f"weekly_survey_sent profile_id={recipient.profile_id}")
+        except Exception as exc:
+            logger.error(f"weekly_survey_failed profile_id={recipient.profile_id} error={exc!s}")
 
-    return web.json_response({"result": "ok"})
+    return web.json_response({"result": "ok", "sent": len(payload.recipients)})
 
 
 @require_internal_auth
@@ -462,6 +497,15 @@ async def internal_ai_coach_plan_ready(request: web.Request) -> web.Response:
 
     status = str(payload.get("status", "success"))
     action = str(payload.get("action", "create"))
+    logger.info(
+        "ai_plan_ready_received action={} status={} request_id={} plan_type={} profile_id={} has_plan={}",
+        action,
+        status,
+        request_id,
+        payload.get("plan_type"),
+        payload.get("profile_id"),
+        "plan" in payload,
+    )
 
     try:
         plan_type = WorkoutPlanType(payload["plan_type"])

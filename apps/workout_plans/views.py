@@ -1,8 +1,6 @@
 from typing import Any, Optional
 
 from django.core.cache import cache
-from django.utils.decorators import method_decorator
-from django.views.decorators.cache import cache_page
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import status, serializers
 from rest_framework.response import Response
@@ -23,7 +21,6 @@ def _parse_profile_id(profile_id_str: Optional[str]) -> Optional[int]:
         return None
 
 
-@method_decorator(cache_page(60 * 5), name="list")
 class ProgramViewSet(ModelViewSet):
     queryset = ProgramRepository.base_qs()  # type: ignore[assignment]
     serializer_class = ProgramSerializer  # pyrefly: ignore[bad-override]
@@ -80,7 +77,6 @@ class ProgramViewSet(ModelViewSet):
         return Response(self.get_serializer(program).data, status=status.HTTP_200_OK)
 
 
-@method_decorator(cache_page(60 * 5), name="list")
 class SubscriptionViewSet(ModelViewSet):
     queryset = SubscriptionRepository.base_qs()  # type: ignore[assignment]
     serializer_class = SubscriptionSerializer  # pyrefly: ignore[bad-override]

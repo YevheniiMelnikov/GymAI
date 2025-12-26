@@ -1,7 +1,9 @@
 from asyncio import TimeoutError, wait_for
+from datetime import datetime
 from inspect import signature
 from time import monotonic
 from typing import Any, Callable, Coroutine, TypeVar, cast
+from zoneinfo import ZoneInfo
 
 from loguru import logger
 from pydantic_ai import ModelRetry, RunContext  # pyrefly: ignore[import-error]
@@ -468,7 +470,6 @@ async def tool_create_subscription(
     from decimal import Decimal
 
     from core.services import APIService
-    from core.utils.billing import next_payment_date
     from config.app_settings import settings
 
     tool_name = "tool_create_subscription"
@@ -478,6 +479,10 @@ async def tool_create_subscription(
     if not deps.allow_save:
         raise RuntimeError("saving not allowed in this mode")
     profile_id = deps.profile_id
+    profile = await APIService.profile.get_profile(profile_id)
+    workout_location = profile.workout_location if profile and profile.workout_location else None
+    if not workout_location:
+        raise ModelRetry("Workout location is required to create a subscription.")
     normalized_days = _normalize_subscription_day_labels(exercises)
     logger.debug(f"tool_create_subscription profile_id={profile_id} period={period} days={normalized_days}")
     exercises_payload = [d.model_dump() for d in exercises]
@@ -494,13 +499,12 @@ async def tool_create_subscription(
             wishes=wishes or "",
             amount=Decimal(price),
             period=period,
+            workout_location=workout_location,
             exercises=exercises_payload,
         )
         if sub_id is None:
             raise ModelRetry("Subscription creation failed. Adjust provided data and retry.")
-        payment_date = next_payment_date(period)
-        await APIService.workout.update_subscription(sub_id, {"enabled": True, "payment_date": payment_date})
-        logger.debug(f"event=create_subscription.success subscription_id={sub_id} payment_date={payment_date}")
+        logger.debug(f"event=create_subscription.success subscription_id={sub_id}")
         sub = await APIService.workout.get_latest_subscription(profile_id)
         if sub is not None:
             deps.final_result = sub
@@ -508,14 +512,14 @@ async def tool_create_subscription(
         data = {
             "id": sub_id,
             "profile": profile_id,
-            "enabled": True,
+            "enabled": False,
             "price": price,
-            "workout_location": "",
+            "workout_location": workout_location,
             "wishes": wishes or "",
             "period": period.value,
             "workout_days": normalized_days,
             "exercises": exercises_payload,
-            "payment_date": payment_date,
+            "payment_date": datetime.now(ZoneInfo(settings.TIME_ZONE)).date().isoformat(),
         }
         subscription = Subscription.model_validate(data)
         deps.final_result = subscription

@@ -48,6 +48,21 @@ subscription:
   ru: "Подписки 📅"
   ua: "Підписки 📅"
 
+subscription_1_month:
+  eng: "1 month"
+  ru: "1 месяц"
+  ua: "1 місяць"
+
+subscription_6_months:
+  eng: "6 months"
+  ru: "6 месяцев"
+  ua: "6 місяців"
+
+subscription_12_months:
+  eng: "12 months"
+  ru: "12 месяцев"
+  ua: "12 місяців"
+
 program:
   eng: "Programs 🏋️"
   ru: "Программы 🏋️"
@@ -68,7 +83,7 @@ diet_again:
   ru: "Сгенерировать повторно 🔁"
   ua: "Згенерувати повторно 🔁"
 
-diet_generate:
+confirm_generate:
   eng: "Generate ✨"
   ru: "Сгенерировать ✨"
   ua: "Згенерувати ✨"
@@ -217,6 +232,11 @@ view:
   eng: "View 👀"
   ru: "Просмотреть 👀"
   ua: "Переглянути 👀"
+
+weekly_survey_answer:
+  eng: "Answer ✍️"
+  ru: "Ответить ✍️"
+  ua: "Відповісти ✍️"
 
 prev_menu:
   eng: "Back ⬅️"

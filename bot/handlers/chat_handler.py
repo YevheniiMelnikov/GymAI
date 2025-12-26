@@ -1,67 +1,16 @@
 from typing import cast
 
-from loguru import logger
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery
 
-from bot.keyboards import workout_results_kb
-from bot.states import States
 from bot.utils.ask_ai import start_ask_ai_prompt
-from core.cache import Cache
 from core.schemas import Profile
 from bot.utils.menus import show_main_menu, start_diet_flow
 from bot.utils.diet_plans import DIET_RESULT_MENU, DIET_RESULT_REPEAT
-from bot.texts import MessageText, translate
-from bot.utils.bot import del_msg, answer_msg
+from bot.utils.bot import del_msg
 
 chat_router = Router()
-
-
-@chat_router.callback_query(F.data.startswith("yes_") | F.data.startswith("no_"))
-async def have_you_trained(callback_query: CallbackQuery, state: FSMContext) -> None:
-    data = await state.get_data()
-    profile = Profile.model_validate(data["profile"])
-    assert profile is not None
-    profile_record = await Cache.profile.get_record(profile.id)
-    subscription = await Cache.workout.get_latest_subscription(profile_record.id)
-    assert subscription is not None
-
-    data_str = cast(str, callback_query.data)
-    try:
-        _, weekday = data_str.split("_", 1)
-    except ValueError:
-        await callback_query.answer("❓")
-        return
-
-    workout_days = subscription.workout_days or []
-    day_index = workout_days.index(weekday) if weekday in workout_days else -1
-
-    if data_str.startswith("yes"):
-        exercises = next(
-            (
-                day.exercises
-                for day in subscription.exercises
-                if day.day == weekday or subscription.exercises.index(day) == day_index
-            ),
-            [],
-        )
-
-        await state.update_data(exercises=exercises, day=weekday, day_index=day_index)
-        await callback_query.answer("🔥")
-        if callback_query.message and isinstance(callback_query.message, Message):
-            await answer_msg(
-                callback_query.message,
-                translate(MessageText.workout_results, profile.language),
-                reply_markup=workout_results_kb(profile.language),
-            )
-            await del_msg(callback_query.message)
-        await state.set_state(States.workout_survey)
-    else:
-        await callback_query.answer("😢")
-        if callback_query.message and isinstance(callback_query.message, Message):
-            await del_msg(callback_query.message)
-        logger.debug(f"User {profile.id} reported no training on {weekday}")
 
 
 @chat_router.callback_query(F.data.in_({"quit", "later"}))

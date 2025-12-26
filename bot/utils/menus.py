@@ -1,5 +1,5 @@
 from contextlib import suppress
-from typing import Any, Collection, TypedDict, cast
+from typing import Any, TypedDict, cast
 
 from loguru import logger
 from aiogram.exceptions import TelegramBadRequest
@@ -8,7 +8,7 @@ from aiogram.types import CallbackQuery, Message, FSInputFile
 from pathlib import Path
 
 from bot import keyboards as kb
-from bot.keyboards import select_gender_kb, yes_no_kb, diet_confirm_kb, enter_wishes_kb
+from bot.keyboards import select_gender_kb, yes_no_kb, diet_confirm_kb
 from bot.utils.profiles import fetch_user, answer_profile
 from bot.utils.credits import available_packages, available_ai_services
 from bot.states import States
@@ -20,6 +20,7 @@ from core.schemas import Profile
 from bot.utils.text import get_profile_attributes
 from config.app_settings import settings
 from bot.utils.bot import BotMessageProxy, del_msg, answer_msg, get_webapp_url
+from bot.utils.prompts import send_enter_wishes_prompt
 
 
 async def show_profile_editing_menu(message: Message, profile: Profile, state: FSMContext) -> None:
@@ -113,6 +114,31 @@ async def show_balance_menu(
     await del_msg(callback_target)
 
 
+async def ensure_credits(
+    interaction: InteractionTarget,
+    profile: Profile,
+    state: FSMContext,
+    *,
+    required: int,
+    credits: int | None = None,
+) -> bool:
+    language = cast(str, profile.language or settings.DEFAULT_LANG)
+    available = credits
+    if available is None:
+        cached_profile = await Cache.profile.get_record(profile.id)
+        available = cached_profile.credits
+    if available < required:
+        message = translate(MessageText.not_enough_credits, language)
+        if isinstance(interaction, CallbackQuery):
+            await interaction.answer(message, show_alert=True)
+            await show_balance_menu(interaction, profile, state, already_answered=True)
+        else:
+            await answer_msg(interaction, message)
+            await show_balance_menu(interaction, profile, state, already_answered=True)
+        return False
+    return True
+
+
 async def send_policy_confirmation(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     lang = data.get("lang", settings.DEFAULT_LANG)
@@ -199,45 +225,6 @@ async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile,
     await show_main_menu(message, profile, state)
 
 
-async def _prompt_ai_services(
-    target: InteractionTarget,
-    profile: Profile,
-    state: FSMContext,
-    *,
-    allowed_services: Collection[str] | None = None,
-    auto_select_single: bool = False,
-    current_profile: Profile | None = None,
-) -> bool:
-    language = cast(str, profile.language or settings.DEFAULT_LANG)
-    cached_profile = current_profile or await fetch_user(profile, refresh_if_incomplete=True)
-    file_path = Path(__file__).resolve().parent.parent / "images" / "ai_coach.png"
-    services = available_ai_services()
-    if allowed_services is not None:
-        allowed_set = {name for name in allowed_services}
-        filtered_services = [service for service in services if service.name in allowed_set]
-        if filtered_services:
-            services = filtered_services
-    if auto_select_single and len(services) == 1:
-        await process_ai_service_selection(
-            target,
-            profile,
-            state,
-            service_name=services[0].name,
-        )
-        return False
-    await state.set_state(States.choose_ai_service)
-    await answer_msg(
-        target,
-        caption=translate(MessageText.ai_services, language).format(
-            balance=cached_profile.credits,
-            bot_name=settings.BOT_NAME,
-        ),
-        photo=FSInputFile(file_path),
-        reply_markup=kb.ai_services_kb(language, [p.name for p in services]),
-    )
-    return True
-
-
 def profile_completion_prompt_text(profile: Profile, language: str) -> str:
     if profile.gift_credits_granted:
         return translate(MessageText.finish_registration, language)
@@ -264,6 +251,15 @@ def _extract_chat_id(target: InteractionTarget) -> int | None:
     elif isinstance(target, BotMessageProxy):
         return target.chat_id
     return None
+
+
+async def _track_prompt_message(state: FSMContext, message: Message | None) -> None:
+    if message is None:
+        return
+    data = await state.get_data()
+    message_ids = list(data.get("message_ids", []))
+    message_ids.append(message.message_id)
+    await state.update_data(message_ids=message_ids, chat_id=message.chat.id)
 
 
 async def _start_profile_questionnaire(
@@ -331,30 +327,6 @@ async def _ensure_profile_completed(
     return None
 
 
-async def show_ai_services(
-    callback_query: CallbackQuery,
-    profile: Profile,
-    state: FSMContext,
-    allowed_services: Collection[str] | None = None,
-    *,
-    auto_select_single: bool = False,
-) -> None:
-    cached_profile = await _ensure_profile_completed(callback_query, profile, state)
-    if cached_profile is None:
-        return
-    await callback_query.answer()
-    menu_sent = await _prompt_ai_services(
-        callback_query,
-        profile,
-        state,
-        allowed_services=allowed_services,
-        auto_select_single=auto_select_single,
-        current_profile=cached_profile,
-    )
-    if menu_sent:
-        await del_msg(callback_query)
-
-
 async def process_ai_service_selection(
     interaction: InteractionTarget,
     profile: Profile,
@@ -376,13 +348,13 @@ async def process_ai_service_selection(
         await answer_msg(interaction, translate(MessageText.unexpected_error, language))
         return False
 
-    if selected_profile.credits < required:
-        if isinstance(interaction, CallbackQuery):
-            await interaction.answer(translate(MessageText.not_enough_credits, language), show_alert=True)
-            await show_balance_menu(interaction, profile, state, already_answered=True)
-        else:
-            await answer_msg(interaction, translate(MessageText.not_enough_credits, language))
-            await show_balance_menu(interaction, profile, state, already_answered=True)
+    if not await ensure_credits(
+        interaction,
+        profile,
+        state,
+        required=required,
+        credits=selected_profile.credits,
+    ):
         return False
 
     await state.update_data(
@@ -390,12 +362,8 @@ async def process_ai_service_selection(
         required=required,
     )
     await state.set_state(States.enter_wishes)
-    webapp_url = get_webapp_url("program", language)
-    await answer_msg(
-        interaction,
-        translate(MessageText.enter_wishes, language).format(bot_name=settings.BOT_NAME),
-        reply_markup=enter_wishes_kb(language, webapp_url),
-    )
+    prompt = await send_enter_wishes_prompt(interaction, language)
+    await _track_prompt_message(state, prompt)
     return True
 
 
@@ -409,13 +377,11 @@ async def start_program_flow(target: InteractionTarget, profile: Profile, state:
     if cached_profile is None:
         return
     await state.update_data(service_type="program")
-    await _prompt_ai_services(
+    await process_ai_service_selection(
         target,
         profile,
         state,
-        allowed_services=("program",),
-        auto_select_single=True,
-        current_profile=cached_profile,
+        service_name="program",
     )
 
 
@@ -428,14 +394,28 @@ async def start_subscription_flow(target: InteractionTarget, profile: Profile, s
     )
     if cached_profile is None:
         return
-    await state.update_data(service_type="subscription")
-    await _prompt_ai_services(
+    language = cast(str, profile.language or settings.DEFAULT_LANG)
+    await state.update_data(service_type="subscription", subscription_flow=True)
+    await state.set_state(States.enter_wishes)
+    prompt = await send_enter_wishes_prompt(target, language)
+    await _track_prompt_message(state, prompt)
+
+
+async def prompt_subscription_type(target: InteractionTarget, profile: Profile, state: FSMContext) -> None:
+    language = cast(str, profile.language or settings.DEFAULT_LANG)
+    services = [
+        (service.name, service.credits)
+        for service in available_ai_services()
+        if service.name.startswith("subscription_")
+    ]
+    await state.update_data(subscription_flow=False)
+    await state.set_state(States.choose_subscription)
+    prompt = await answer_msg(
         target,
-        profile,
-        state,
-        allowed_services=("subscription_1_month", "subscription_6_months", "subscription_12_months"),
-        current_profile=cached_profile,
+        translate(MessageText.subscription_type_prompt, language),
+        reply_markup=kb.subscription_type_kb(language, services),
     )
+    await _track_prompt_message(state, prompt)
 
 
 async def start_diet_flow(

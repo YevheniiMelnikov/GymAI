@@ -99,17 +99,19 @@ class WorkoutService(APIClient):
         wishes: str,
         amount: Decimal,
         period: SubscriptionPeriod = SubscriptionPeriod.one_month,
+        workout_location: str | None = None,
         exercises: list[dict] | None = None,
     ) -> int | None:
         url = urljoin(self.api_url, "api/v1/subscriptions/")
         data = {
-            "profile": profile_id,
+            "profile_id": profile_id,
             "enabled": False,
             "price": str(amount),
             "workout_days": workout_days,
             "period": period.value,
             "payment_date": datetime.now(ZoneInfo(settings.TIME_ZONE)).date().isoformat(),
             "wishes": wishes,
+            "workout_location": workout_location,
             "exercises": exercises or [],
         }
         status_code, response = await self._api_request(
@@ -153,7 +155,7 @@ class WorkoutService(APIClient):
     async def update_subscription(self, subscription_id: int, data: dict[str, Any]) -> None:
         url = urljoin(self.api_url, f"api/v1/subscriptions/{subscription_id}/")
         status_code, response = await self._api_request(
-            "put", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
+            "patch", url, data, headers={"Authorization": f"Api-Key {self.api_key}"}
         )
         if status_code != 200:
             logger.error(

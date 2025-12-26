@@ -1,4 +1,3 @@
-from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any, Optional, cast
 
 from loguru import logger
@@ -295,41 +294,3 @@ async def answer_profile(
         )
     except TelegramBadRequest as exc:
         logger.warning(f"Failed to send profile info for profile {profile.id}: {exc}")
-
-
-async def get_profiles_to_survey() -> list[Profile]:
-    profiles_with_workout: list[Profile] = []
-
-    try:
-        yesterday = (datetime.now() - timedelta(days=1)).strftime("%A").lower()
-        raw_profiles = await Cache.profile.get_all_records() or {}
-
-        for profile_id_str in raw_profiles:
-            try:
-                profile_id = int(profile_id_str)
-                cached_profile = await Cache.profile.get_record(profile_id)
-                subscription = await Cache.workout.get_latest_subscription(cached_profile.id)
-                if not subscription:
-                    continue
-
-                if not isinstance(subscription.workout_days, list):
-                    logger.warning(f"Invalid workout_days format for profile_id={profile_id}")
-                    continue
-
-                if (
-                    subscription.enabled
-                    and subscription.exercises
-                    and yesterday in [day.lower() for day in subscription.workout_days]
-                ):
-                    profile = await APIService.profile.get_profile(cached_profile.id)
-                    if profile is not None:
-                        profiles_with_workout.append(profile)
-
-            except Exception as profile_err:
-                logger.warning(f"Skipping profile_id={profile_id_str} due to error: {profile_err}")
-                continue
-
-    except Exception as e:
-        logger.error(f"Failed to load profiles for survey: {e}")
-
-    return profiles_with_workout

@@ -4,7 +4,7 @@ tasks:
   run:
     desc: Build and run containers (DEV mode)
     cmds:
-      - docker compose -f docker/docker-compose-local.yml up --build
+      - docker compose -f docker/docker-compose-local.yml up -d --build
 
   runapi:
     desc: Rebuild and run API container (DEV mode)
@@ -43,3 +43,8 @@ tasks:
     desc: Run pre-commit hooks
     cmds:
       - uv run pre-commit run --all-files
+
+  weekly-survey:
+    desc: Trigger weekly survey flow (DEV only)
+    cmds:
+      - docker compose -f docker/docker-compose-local.yml exec -T api celery -A config.celery:celery_app call core.tasks.bot_calls.send_weekly_survey

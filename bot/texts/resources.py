@@ -21,7 +21,7 @@ class ButtonText(AutoName):
     ask_ai_again = auto()
     create_diet = auto()
     diet_again = auto()
-    diet_generate = auto()
+    confirm_generate = auto()
     main_menu = auto()
 
     my_profile = auto()
@@ -30,6 +30,9 @@ class ButtonText(AutoName):
     edit = auto()
     program = auto()
     subscription = auto()
+    subscription_1_month = auto()
+    subscription_6_months = auto()
+    subscription_12_months = auto()
     workout_goals = auto()
     workout_experience = auto()
     workout_location = auto()
@@ -52,6 +55,7 @@ class ButtonText(AutoName):
     home_workout = auto()
 
     view = auto()
+    weekly_survey_answer = auto()
 
     answer_yes = auto()
     answer_no = auto()
@@ -99,7 +103,8 @@ class MessageText(AutoName):
     initial_credits_granted = auto()
     credit_balance_menu = auto()
     not_enough_credits = auto()
-    ai_services = auto()
+    subscription_type_prompt = auto()
+    subscription_already_active = auto()
     confirm_service = auto()
 
     profile_deleted = auto()
@@ -111,12 +116,8 @@ class MessageText(AutoName):
     enter_wishes = auto()
     delete_confirmation = auto()
     workout_days_selection = auto()
-    workout_results = auto()
-    have_you_trained = auto()
-    keep_going = auto()
-    workout_description = auto()
+    weekly_survey_prompt = auto()
 
-    payment_success = auto()
     payment_failure = auto()
     payment_in_progress = auto()
     contract_info_message = auto()

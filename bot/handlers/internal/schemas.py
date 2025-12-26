@@ -37,3 +37,13 @@ class AiDietNotify(BaseModel):
     @classmethod
     def _normalize_status(cls, value: str) -> str:
         return (value or "success").lower()
+
+
+class WeeklySurveyRecipient(BaseModel):
+    profile_id: int
+    tg_id: int
+    language: str | None = None
+
+
+class WeeklySurveyNotify(BaseModel):
+    recipients: list[WeeklySurveyRecipient] = Field(default_factory=list)

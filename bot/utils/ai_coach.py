@@ -125,6 +125,16 @@ async def enqueue_workout_plan_generation(
         return False
 
     language = str(profile.language or settings.DEFAULT_LANG)
+    logger.info(
+        "ai_plan_generate_start request_id={} profile_id={} plan_type={} workout_days_count={} wishes_len={} "
+        "workout_location={}",
+        request_id,
+        profile_id,
+        plan_type.value,
+        len(workout_days or []),
+        len(wishes or ""),
+        workout_location.value if workout_location else None,
+    )
 
     try:
         payload_model = AiPlanGenerationPayload(

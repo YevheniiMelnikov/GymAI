@@ -258,8 +258,12 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
     if subscription is None:
         return JsonResponse({"error": "not_found"}, status=404)
 
+    exercises = subscription.exercises if isinstance(subscription.exercises, list) else []
+    if not exercises:
+        return JsonResponse({"error": "not_found"}, status=404)
+
     subscription_id = getattr(subscription, "id", None)
-    days = transform_days(subscription.exercises)
+    days = transform_days(exercises)
     response: dict[str, object] = {"days": days, "language": profile.language, "program": days}
     if subscription_id is not None:
         response["id"] = str(subscription_id)

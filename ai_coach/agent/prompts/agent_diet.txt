@@ -6,3 +6,9 @@ MODE: diet
 2) Use the retrieved knowledge and the profile context to build a 1-day diet plan.
 3) Return a JSON DietPlan with meals and items; include KBJU for each item, meal totals, and daily totals.
 4) Do not include any Markdown or HTML in the JSON output.
+
+DietPlan field guide:
+- meals: list of meals for one day.
+- items: foods/products within a meal, with grams and KBJU fields.
+- totals: per-meal and daily nutrition totals (calories, protein_g, fat_g, carbs_g).
+- notes: optional short notes or tips.

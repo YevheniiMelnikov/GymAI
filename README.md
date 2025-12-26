@@ -157,7 +157,7 @@ If Celery prints connection errors, verify that `RABBITMQ_URL` and `REDIS_URL` p
 | `deactivate_expired_subscriptions` | daily 01:00                        | disable subscriptions past end date               |
 | `warn_low_credits`                 | daily 00:00                        | notify clients with insufficient credits          |
 | `charge_due_subscriptions`         | daily 00:30                        | deduct credits for active plans                   |
-| `send_daily_survey`                | daily 09:00                        | trigger workout feedback survey                   |
+| `send_weekly_survey`               | weekly Sun 10:00                   | trigger weekly workout survey                     |
 | `refresh_external_knowledge`       | every `KNOWLEDGE_REFRESH_INTERVAL` | rebuild AI coach knowledge                        |
 | `prune_knowledge_base`             | daily 02:10                        | clear cached Cognee data                          |
 | `collect_weekly_metrics`           | weekly Mon 03:00                   | append weekly metrics to Google Sheets            |

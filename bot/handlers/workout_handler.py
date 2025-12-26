@@ -1,5 +1,4 @@
 from contextlib import suppress
-from typing import cast
 from uuid import uuid4
 
 from aiogram import Bot, Router
@@ -130,18 +129,3 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
             message,
             translate(MessageText.coach_agent_error, lang).format(tg=settings.TG_SUPPORT_CONTACT),
         )
-
-
-@workout_router.callback_query(States.workout_survey)
-async def send_workout_results(callback_query: CallbackQuery, state: FSMContext, bot: Bot):
-    data = await state.get_data()
-    profile = Profile.model_validate(data["profile"])
-    if callback_query.data == "completed":
-        await callback_query.answer()
-        await callback_query.answer(translate(MessageText.keep_going, profile.language), show_alert=True)
-        message = cast(Message, callback_query.message)
-        assert message is not None
-        await show_main_menu(message, profile, state)
-        await del_msg(cast(Message | CallbackQuery | None, callback_query))
-    else:
-        await callback_query.answer(translate(MessageText.workout_description, profile.language), show_alert=True)

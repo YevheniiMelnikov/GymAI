@@ -14,3 +14,9 @@ Instructions:
 - You MUST produce all output strictly in the language code "{language}" (examples: "ua", "ru", "en"). Do not switch languages.
 - Keep every exercise name exactly as generated in "{language}"; do not translate or replace them with English equivalents.
 - If any tool returns English text, rewrite it into "{language}" before presenting the final answer.
+
+Program field guide:
+- exercises_by_day: list of DayExercises; each has day label and exercises with name/sets/reps.
+- split_number: number of workout days in the plan.
+- workout_location: training location from the profile ("home", "gym", "strength").
+- wishes: client's preferences or limitations (optional).
