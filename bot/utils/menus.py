@@ -79,7 +79,7 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
 
     profile_msg = await answer_msg(
         message,
-        translate(response_text, profile.language),
+        translate(response_text, profile.language).format(bot_name=settings.BOT_NAME),
         reply_markup=reply_markup,
     )
     if profile_msg is None:

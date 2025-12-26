@@ -181,3 +181,5 @@ diff*
 /GEMINI.md
 /.uv-cache/
 .cognee_test_storage/
+/to_be_removed.jsonl
+/gif_catalog.jsonl
