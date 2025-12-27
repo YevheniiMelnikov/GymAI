@@ -65,6 +65,11 @@ export const fallbackEn = {
     'You already have an active subscription. If you create a new one, the current subscription will be moved to Archive and stop updating. Continue?',
   'subscriptions.replace_confirm.confirm': 'Continue',
   'subscriptions.replace_confirm.cancel': 'Cancel',
+  'intro.title': 'How it works',
+  'intro.program': 'Program: a list of exercises with technique tips, tailored to you.',
+  'intro.subscription':
+    'Subscription: personal coaching with weekly plan updates based on your progress.',
+  'intro.ok': 'OK',
   'page.program': 'Program',
   'page.history': 'Archive',
   'page.subscriptions': 'Subscriptions',

@@ -53,6 +53,10 @@
   "subscriptions.replace_confirm.body": "You already have an active subscription. If you create a new one, the current subscription will be moved to Archive and stop updating. Continue?",
   "subscriptions.replace_confirm.confirm": "Continue",
   "subscriptions.replace_confirm.cancel": "Cancel",
+  "intro.title": "How it works",
+  "intro.program": "Program: personalized training plan with visualization of exercise techniques.",
+  "intro.subscription": "Subscription: personal coaching with weekly plan updates based on your progress.",
+  "intro.ok": "OK",
 
   "page.program": "Program",
   "page.history": "Archive",

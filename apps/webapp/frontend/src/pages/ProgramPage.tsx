@@ -16,12 +16,13 @@ import {
     renderProgramDays,
     setProgramContext,
 } from '../ui/render_program';
-import { readInitData, tmeReady } from '../telegram';
+import { readInitData, readLocale, tmeReady } from '../telegram';
 import type { Locale, Program } from '../api/types';
 import { renderSegmented, SegmentId } from '../components/Segmented';
 import TopBar from '../components/TopBar';
 
 const LAST_WORKOUT_SEGMENT_KEY = 'gymbot.workouts.lastSegment';
+const INTRO_SEEN_KEY = 'gymbot.webapp.introSeen';
 
 const readLastWorkoutSegment = (): SegmentId => {
     if (typeof window === 'undefined') {
@@ -65,6 +66,7 @@ const ProgramPage: React.FC = () => {
     const [refreshKey, setRefreshKey] = useState(0);
     const [dateText, setDateText] = useState('');
     const [showSubscriptionConfirm, setShowSubscriptionConfirm] = useState(false);
+    const [showIntro, setShowIntro] = useState(false);
     const [activeSegment, setActiveSegment] = useState<SegmentId>(() => {
         const source = searchParams.get('source');
         if (source === 'subscription') {
@@ -316,6 +318,58 @@ const ProgramPage: React.FC = () => {
         setShowSubscriptionConfirm(false);
     }, []);
 
+    useEffect(() => {
+        let existing: string | null = null;
+        try {
+            existing = window.localStorage.getItem(INTRO_SEEN_KEY);
+        } catch {
+            return;
+        }
+        if (existing) {
+            return;
+        }
+        const initData = readInitData();
+        if (!initData) {
+            return;
+        }
+        const controller = new AbortController();
+        let active = true;
+
+        const checkEmptyState = async () => {
+            try {
+                const locale = readLocale();
+                const url = new URL('/api/programs/', window.location.origin);
+                url.searchParams.set('locale', locale);
+                const headers: Record<string, string> = { 'X-Telegram-InitData': initData };
+                const resp = await fetch(url.toString(), { headers, signal: controller.signal });
+                if (!resp.ok) {
+                    return;
+                }
+                const data = (await resp.json()) as { programs?: unknown[]; subscriptions?: unknown[] };
+                const programs = Array.isArray(data.programs) ? data.programs : [];
+                const subscriptions = Array.isArray(data.subscriptions) ? data.subscriptions : [];
+                if (active && programs.length === 0 && subscriptions.length === 0) {
+                    setShowIntro(true);
+                }
+            } catch {
+            }
+        };
+
+        void checkEmptyState();
+        return () => {
+            active = false;
+            controller.abort();
+        };
+    }, []);
+
+    const handleIntroClose = useCallback(() => {
+        try {
+            window.localStorage.setItem(INTRO_SEEN_KEY, '1');
+        } catch {
+        }
+        setShowIntro(false);
+    }, []);
+
     const fabStyle: React.CSSProperties = {
         position: 'fixed',
         bottom: 30,
@@ -441,6 +495,32 @@ const ProgramPage: React.FC = () => {
                                 {t('subscriptions.replace_confirm.confirm')}
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+            {showIntro && (
+                <div
+                    role="dialog"
+                    aria-modal="true"
+                    className="intro-modal"
+                    onClick={handleIntroClose}
+                >
+                    <div
+                        className="intro-modal__dialog"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                        }}
+                    >
+                        <h3 className="intro-modal__title">{t('intro.title')}</h3>
+                        <p className="intro-modal__text">
+                            {t('intro.program')}
+                        </p>
+                        <p className="intro-modal__text">
+                            {t('intro.subscription')}
+                        </p>
+                        <button type="button" className="intro-modal__btn" onClick={handleIntroClose}>
+                            {t('intro.ok')}
+                        </button>
                     </div>
                 </div>
             )}

@@ -1437,6 +1437,48 @@ a:hover{ opacity: .9; }
   color: var(--accent-contrast);
 }
 
+.intro-modal{
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: color-mix(in oklab, var(--bg) 35%, rgba(0, 0, 0, .6));
+}
+.intro-modal__dialog{
+  width: min(92vw, 440px);
+  background: color-mix(in oklab, var(--surface) 92%, var(--bg));
+  border-radius: 18px;
+  padding: 22px 20px;
+  box-shadow: var(--shadow-strong);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.intro-modal__title{
+  margin: 0;
+  font-size: 18px;
+}
+.intro-modal__text{
+  margin: 0;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.intro-modal__btn{
+  align-self: flex-end;
+  margin-top: 6px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: none;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .week.centered{
   max-width: 720px;
   width: 100%;

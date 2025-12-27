@@ -53,6 +53,10 @@
   "subscriptions.replace_confirm.body": "У вас уже є активна підписка. Під час створення нової поточна буде переміщена в архів і перестане оновлюватися. Продовжити?",
   "subscriptions.replace_confirm.confirm": "Продовжити",
   "subscriptions.replace_confirm.cancel": "Скасувати",
+  "intro.title": "Як це працює",
+  "intro.program": "Програма: персоналізований тренувальний план з візуалізацією техніки виконання вправ.",
+  "intro.subscription": "Subscription: a program with weekly updates to your training plan based on your progress.",
+  "intro.ok": "Ок",
 
   "page.program": "Програма",
   "page.history": "Архів",
