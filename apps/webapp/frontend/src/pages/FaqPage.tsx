@@ -27,7 +27,7 @@ const FaqPage: React.FC = () => {
 
     return (
         <div className="page-container">
-            <TopBar title={t('faq.title')} onBack={handleBack} />
+            <TopBar title={t('faq.title')} />
             <main className="page-shell">
                 <section className="notice">
                     <h2>{t('faq.placeholder.title')}</h2>
