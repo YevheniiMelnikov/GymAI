@@ -83,6 +83,12 @@ export type SubscriptionResp = {
   language?: string;
 };
 
+export type SubscriptionStatusResp = {
+  active: boolean;
+  id?: string;
+  error?: string;
+};
+
 export type PaymentPayloadResp = {
   data: string;
   signature: string;

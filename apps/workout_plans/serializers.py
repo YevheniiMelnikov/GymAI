@@ -58,6 +58,11 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         model = Subscription
         fields = "__all__"
 
+    def validate_split_number(self, value: int) -> int:
+        if value < 1 or value > 7:
+            raise ValidationError("split_number must be between 1 and 7")
+        return value
+
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         request = self.context["request"]
         user = request.user
@@ -80,9 +85,7 @@ class SubscriptionSerializer(serializers.ModelSerializer):
                 raise ValidationError(["Workout location is required"])
             if "wishes" not in attrs:
                 raise ValidationError(["Wishes are required"])
-
-        if not self.instance:
-            if Subscription.objects.filter(profile=attrs["profile"], enabled=True).exists():  # type: ignore[attr-defined]
-                raise ValidationError(["User already has an active subscription"])
+            if "split_number" not in attrs:
+                raise ValidationError(["Split number is required"])
 
         return attrs

@@ -21,7 +21,7 @@ from core.schemas import DietPlan, Program, QAResponse, Subscription
 from pydantic import BaseModel
 
 # Re-export compatibility symbols expected by tests/old clients
-DEFAULT_WORKOUT_DAYS = _ask_handler.DEFAULT_WORKOUT_DAYS
+DEFAULT_SPLIT_NUMBER = _ask_handler.DEFAULT_SPLIT_NUMBER
 dedupe_cache = _ask_handler.dedupe_cache
 # Primary request handler
 handle_coach_request = _ask_handler.handle_coach_request

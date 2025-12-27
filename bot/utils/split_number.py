@@ -3,18 +3,18 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.exceptions import TelegramBadRequest
 from contextlib import suppress
 
-from bot.keyboards import workout_days_selection_kb
+from bot.keyboards import split_number_selection_kb
 from bot.states import States
 from bot.texts import MessageText, translate
 from bot.utils.bot import answer_msg, del_msg
 from bot.utils.prompts import send_enter_wishes_prompt
-from core.enums import SubscriptionPeriod
+from bot.services.pricing import ServiceCatalog
 
-WORKOUT_DAYS_PLUS = "workout_days_plus"
-WORKOUT_DAYS_MINUS = "workout_days_minus"
-WORKOUT_DAYS_CONTINUE = "workout_days_continue"
-WORKOUT_DAYS_BACK = "workout_days_back"
-DEFAULT_WORKOUT_DAYS_COUNT = 3
+SPLIT_NUMBER_PLUS = "split_number_plus"
+SPLIT_NUMBER_MINUS = "split_number_minus"
+SPLIT_NUMBER_CONTINUE = "split_number_continue"
+SPLIT_NUMBER_BACK = "split_number_back"
+DEFAULT_SPLIT_NUMBER = 3
 
 _DIGIT_EMOJIS: dict[int, str] = {
     1: "1️⃣",
@@ -27,13 +27,8 @@ _DIGIT_EMOJIS: dict[int, str] = {
 }
 
 
-def _clamp_workout_days(count: int) -> int:
+def _clamp_split_number(count: int) -> int:
     return max(1, min(7, count))
-
-
-def day_labels(count: int) -> list[str]:
-    capped = _clamp_workout_days(count)
-    return [f"Day {index}" for index in range(1, capped + 1)]
 
 
 def _digit_to_emoji(count: int) -> str:
@@ -42,49 +37,41 @@ def _digit_to_emoji(count: int) -> str:
     return _DIGIT_EMOJIS.get(count, str(count))
 
 
-def compose_workout_days_prompt(lang: str, count: int) -> str:
+def compose_split_number_prompt(lang: str, count: int) -> str:
     days_label = _digit_to_emoji(count)
-    return translate(MessageText.workout_days_selection, lang).format(days=days_label)
+    return translate(MessageText.split_number_selection, lang).format(days=days_label)
 
 
-def build_workout_days_state(
+def build_split_number_state(
     *,
     service: str,
     period_value: str | None = None,
     workout_location: str | None = None,
-    count: int = DEFAULT_WORKOUT_DAYS_COUNT,
+    count: int = DEFAULT_SPLIT_NUMBER,
 ) -> dict[str, object]:
     return {
-        "workout_days_count": _clamp_workout_days(count),
-        "workout_days_service": service,
-        "workout_days_period": period_value,
-        "workout_days_location": workout_location,
+        "split_number": _clamp_split_number(count),
+        "split_number_service": service,
+        "split_number_period": period_value,
+        "split_number_location": workout_location,
     }
 
 
-async def update_workout_days_message(callback_query: CallbackQuery, lang: str, count: int) -> None:
+async def update_split_number_message(callback_query: CallbackQuery, lang: str, count: int) -> None:
     if callback_query.message is None or not isinstance(callback_query.message, Message):
         return
-    text = compose_workout_days_prompt(lang, count)
-    markup = workout_days_selection_kb(lang)
+    text = compose_split_number_prompt(lang, count)
+    markup = split_number_selection_kb(lang)
     with suppress(TelegramBadRequest):
         await callback_query.message.edit_text(text, reply_markup=markup)
 
 
-def _map_service_period(service: str) -> SubscriptionPeriod | None:
-    return {
-        "subscription_1_month": SubscriptionPeriod.one_month,
-        "subscription_6_months": SubscriptionPeriod.six_months,
-        "subscription_12_months": SubscriptionPeriod.twelve_months,
-    }.get(service)
-
-
 def service_period_value(service: str) -> str | None:
-    period = _map_service_period(service)
+    period = ServiceCatalog.subscription_period(service)
     return period.value if period else None
 
 
-async def start_workout_days_selection(
+async def start_split_number_selection(
     source: CallbackQuery | Message,
     state: FSMContext,
     *,
@@ -95,16 +82,16 @@ async def start_workout_days_selection(
     show_wishes_prompt: bool = True,
 ) -> None:
     await state.update_data(
-        build_workout_days_state(
+        build_split_number_state(
             service=service,
             period_value=period_value,
             workout_location=workout_location,
         )
     )
-    await state.set_state(States.workout_days_selection)
+    await state.set_state(States.split_number_selection)
     if show_wishes_prompt:
         await send_enter_wishes_prompt(source, lang)
-    text = compose_workout_days_prompt(lang, DEFAULT_WORKOUT_DAYS_COUNT)
-    await answer_msg(source, text, reply_markup=workout_days_selection_kb(lang))
+    text = compose_split_number_prompt(lang, DEFAULT_SPLIT_NUMBER)
+    await answer_msg(source, text, reply_markup=split_number_selection_kb(lang))
     if isinstance(source, CallbackQuery):
         await del_msg(source)

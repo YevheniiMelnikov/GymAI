@@ -117,10 +117,30 @@ class Subscription(BaseModel):
     workout_location: str
     wishes: str
     period: str
-    workout_days: list[str] = Field(default_factory=list)
+    split_number: int = Field(ge=1, le=7)
     exercises: list[DayExercises] = Field(default_factory=list)
     payment_date: str
     model_config = ConfigDict(extra="ignore")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _fill_split_number(cls, values: Any) -> Any:
+        if not isinstance(values, dict):
+            return values
+        split_raw = values.get("split_number")
+        if split_raw in (None, ""):
+            fallback = 0
+            workout_days = values.get("workout_days")
+            if isinstance(workout_days, list):
+                fallback = len(workout_days)
+            if not fallback:
+                exercises = values.get("exercises")
+                if isinstance(exercises, list):
+                    fallback = len(exercises)
+            if not fallback:
+                fallback = 3
+            values["split_number"] = max(1, min(7, int(fallback)))
+        return values
 
     @field_validator("profile", mode="before")
     @classmethod

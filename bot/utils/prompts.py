@@ -5,7 +5,8 @@ from loguru import logger
 
 from bot.keyboards import enter_wishes_kb
 from bot.texts import MessageText, translate
-from bot.utils.bot import BotMessageProxy, answer_msg, get_webapp_url
+from bot.types.messaging import BotMessageProxy
+from bot.utils.bot import answer_msg, get_webapp_url
 from config.app_settings import settings
 
 InteractionTarget = CallbackQuery | Message | BotMessageProxy

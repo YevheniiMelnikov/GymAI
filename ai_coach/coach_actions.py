@@ -9,8 +9,8 @@ CoachAction = Callable[[AskCtx], Awaitable[Program | Subscription | QAResponse |
 
 
 def _dispatch_program(ctx: AskCtx) -> Awaitable[Program | None]:
-    workout_days = ctx.get("workout_days")
-    if workout_days is None:
+    split_number = ctx.get("split_number")
+    if split_number is None:
         return cast(
             Awaitable[Program],
             CoachAgent.generate_workout_plan(
@@ -29,7 +29,7 @@ def _dispatch_program(ctx: AskCtx) -> Awaitable[Program | None]:
             ctx.get("prompt"),
             deps=ctx["deps"],
             workout_location=ctx.get("workout_location"),
-            workout_days=workout_days,
+            split_number=split_number,
             wishes=ctx["wishes"],
             profile_context=ctx.get("profile_context"),
             instructions=ctx.get("instructions"),
@@ -45,7 +45,7 @@ DISPATCH: dict[CoachMode, CoachAction] = {
         deps=ctx["deps"],
         workout_location=ctx.get("workout_location"),
         period=ctx["period"],
-        workout_days=ctx["workout_days"],
+        split_number=ctx["split_number"],
         wishes=ctx["wishes"],
         profile_context=ctx.get("profile_context"),
         instructions=ctx.get("instructions"),

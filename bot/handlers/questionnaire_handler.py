@@ -28,7 +28,7 @@ from bot.utils.menus import (
 )
 from bot.utils.profiles import resolve_workout_location, should_grant_gift_credits, update_profile_data
 from bot.utils.diet_plans import normalize_diet_products
-from bot.utils.workout_days import service_period_value, start_workout_days_selection
+from bot.utils.split_number import service_period_value, start_split_number_selection
 from bot.utils.text import get_state_and_message
 from bot.utils.bot import del_msg, answer_msg, delete_messages, set_bot_commands
 from bot.utils.other import parse_int_with_decimal
@@ -376,7 +376,7 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
             wishes = message.text
             await state.update_data(wishes=wishes)
             lang = profile.language or settings.DEFAULT_LANG
-            await start_workout_days_selection(
+            await start_split_number_selection(
                 message,
                 state,
                 lang=lang,
@@ -406,7 +406,7 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
                     logger.error(f"Workout location missing for completed profile_id={selected_profile.id}")
                     await answer_msg(message, translate(MessageText.unexpected_error, lang))
                     return
-                await start_workout_days_selection(
+                await start_split_number_selection(
                     message,
                     state,
                     lang=lang,
@@ -417,7 +417,7 @@ async def enter_wishes(message: Message, state: FSMContext, bot: Bot):
                 return
 
             period_value = service_period_value(service)
-            await start_workout_days_selection(
+            await start_split_number_selection(
                 message,
                 state,
                 lang=lang,

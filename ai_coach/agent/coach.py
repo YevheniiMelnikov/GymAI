@@ -90,7 +90,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
         *,
         workout_location: WorkoutLocation | None = None,
         period: str | None = None,
-        workout_days: list[str] | None = None,
+        split_number: int | None = None,
         wishes: str | None = None,
         profile_context: str | None = None,
         output_type: type[Program] | type[Subscription],
@@ -111,8 +111,8 @@ class CoachAgent(metaclass=CoachAgentMeta):
             context_lines.append(prompt)
         if period:
             context_lines.append(f"Period: {period}")
-        if workout_days:
-            context_lines.append(f"Workout days: {', '.join(workout_days)} (count: {len(workout_days)})")
+        if split_number:
+            context_lines.append(f"Split number: {split_number}")
         if wishes:
             context_lines.append(f"Wishes: {wishes}")
         mode = "program" if output_type is Program else "subscription"

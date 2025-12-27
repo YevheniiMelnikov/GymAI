@@ -5,7 +5,7 @@ from httpx import AsyncClient, ASGITransport
 from ai_coach.application import app
 from ai_coach.agent import CoachAgent
 import ai_coach.api as coach_api
-from ai_coach.api import DEFAULT_WORKOUT_DAYS
+from ai_coach.api import DEFAULT_SPLIT_NUMBER
 from core.enums import WorkoutLocation
 from core.schemas import DayExercises, Exercise, Program, Subscription
 
@@ -33,7 +33,7 @@ def _sample_subscription() -> Subscription:
         workout_location="",
         wishes="",
         period="1m",
-        workout_days=["mon"],
+        split_number=1,
         exercises=[day],
         payment_date="2024-01-01",
     )
@@ -91,7 +91,7 @@ def test_subscription_mode(monkeypatch: pytest.MonkeyPatch) -> None:
         ) -> Subscription:
             assert workout_location is WorkoutLocation.HOME
             assert kwargs.get("period") == "1m"
-            assert kwargs.get("workout_days") == list(DEFAULT_WORKOUT_DAYS)
+            assert kwargs.get("split_number") == DEFAULT_SPLIT_NUMBER
             assert kwargs.get("wishes") == "w"
             assert kwargs.get("instructions") == "i"
             assert kwargs.get("output_type") is Subscription

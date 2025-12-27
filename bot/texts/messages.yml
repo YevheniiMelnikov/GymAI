@@ -173,9 +173,9 @@ payment_in_progress:
 
 
 request_in_progress:
-  eng: "Your request is being processed, we will notify you when it is ready ⏳"
-  ru: "Запрос принят, мы уведомим вас когда будет готово ⏳"
-  ua: "Запит прийнято, ми повідомимо коли буде готово ⏳"
+  eng: "Processing your request will take a few minutes, we will notify you when everything is ready ⏳"
+  ru: "Обработка вашего запроса займет несколько минут, мы уведомим вас когда всё будет готово ⏳"
+  ua: "Обробка вашого запиту займе кілька хвилин, ми повідомимо коли все буде готово ⏳"
 
 ask_ai_prompt:
   eng: "Ask your question in text and optionally attach a photo. Each request is a detailed analysis of your situation, based on everything you’ve shared with {bot_name}, grounded in scientific evidence and real coaching experience.\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nRequest cost: <b>{cost}</b>\nYour balance: <b>{balance}</b>"
@@ -197,7 +197,7 @@ diet_service_intro:
   ru: "{bot_name} составит для вас рацион питания на день исходя из ваших пищевых предпочтений и тренировочных целей. Их вы можете редактировать в разделе «Мой профиль»\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nВаш баланс: <b>{balance}</b> GYMCOIN\nСтоимость: <b>{price}</b> GYMCOIN"
   ua: "{bot_name} складе для вас раціон харчування на день з урахуванням ваших харчових вподобань та тренувальних цілей. Ви можете редагувати їх у розділі «Мій профіль».\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nВаш баланс: <b>{balance}</b> GYMCOIN\nВартість: <b>{price}</b> GYMCOIN"
 
-workout_days_selection:
+split_number_selection:
   eng: "Choose the number of workouts per week\nTarget {days}"
   ru: "Выберите количество тренировок в неделю\nТекущая цель {days}"
   ua: "Оберіть кількість тренувань на тиждень\nПоточна ціль {days}"

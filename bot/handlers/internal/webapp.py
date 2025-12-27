@@ -7,7 +7,7 @@ from aiogram.fsm.storage.base import StorageKey
 from loguru import logger
 
 from bot.handlers.internal.auth import require_internal_auth
-from bot.utils.bot import BotMessageProxy
+from bot.types.messaging import BotMessageProxy
 from bot.utils.menus import (
     profile_completion_prompt_text,
     prompt_profile_completion_questionnaire,

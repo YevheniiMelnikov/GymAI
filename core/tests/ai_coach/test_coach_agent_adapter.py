@@ -86,10 +86,10 @@ def test_payload_missing_fields_validation() -> None:
 
 def test_subscription_payload_validation() -> None:
     with pytest.raises(ValueError):
-        SubscriptionPayload(workout_days=[], exercises=[])
+        SubscriptionPayload(split_number=0, exercises=[])
     day = {"day": "d", "exercises": [{"name": "x", "sets": "1", "reps": "1"}]}
-    payload = SubscriptionPayload(workout_days=["mon"], exercises=[day])
-    assert payload.workout_days == ["mon"]
+    payload = SubscriptionPayload(split_number=1, exercises=[day])
+    assert payload.split_number == 1
 
 
 def test_ask_request_accepts_ask_ai() -> None:

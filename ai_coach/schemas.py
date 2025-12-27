@@ -14,7 +14,7 @@ class AICoachRequest(BaseModel):
     language: str | None = None
     mode: CoachMode = CoachMode.program
     period: str | None = None
-    workout_days: list[str] | None = None
+    split_number: int | None = None
     expected_workout: str | None = None
     feedback: str | None = None
     wishes: str | None = None
@@ -31,6 +31,15 @@ class AICoachRequest(BaseModel):
         if isinstance(mode, str):
             data["mode"] = CoachMode(mode)
         super().__init__(**data)
+
+    @field_validator("split_number")
+    @classmethod
+    def _validate_split_number(cls, value: int | None) -> int | None:
+        if value is None:
+            return None
+        if value < 1 or value > 7:
+            raise ValueError("split_number must be between 1 and 7")
+        return value
 
     @field_validator("workout_location", mode="before")
     @staticmethod
@@ -83,15 +92,15 @@ class ProgramPayload(Program):
 class SubscriptionPayload(BaseModel):
     """Subscription schema produced by the agent."""
 
-    workout_days: list[str]
+    split_number: int
     exercises: list[DayExercises]
     wishes: str | None = None
     schema_version: str | None = None
 
     @model_validator(mode="after")
     def _validate(self) -> "SubscriptionPayload":
-        if not self.workout_days:
-            raise ValueError("workout_days must not be empty")
+        if self.split_number < 1 or self.split_number > 7:
+            raise ValueError("split_number must be between 1 and 7")
         if not self.exercises:
             raise ValueError("exercises must not be empty")
         return self

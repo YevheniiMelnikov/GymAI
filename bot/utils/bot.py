@@ -14,6 +14,7 @@ from bot.texts import MessageText, TextManager, translate
 from config.app_settings import settings
 from bot.keyboards import select_language_kb
 from bot.states import States
+from bot.types.messaging import BotMessageProxy
 
 
 class _WebAppTarget(NamedTuple):
@@ -41,28 +42,6 @@ async def del_msg(msg_obj: Message | CallbackQuery | None) -> None:
         return
     with suppress(TelegramBadRequest):
         await message.delete()
-
-
-class BotMessageProxy:
-    def __init__(self, *, bot: Bot, chat_id: int):
-        self._bot = bot
-        self._chat_id = chat_id
-
-    @property
-    def chat_id(self) -> int:
-        return self._chat_id
-
-    async def answer(self, text: str, *args, **kwargs) -> Message:
-        return await self._bot.send_message(self._chat_id, text, *args, **kwargs)
-
-    async def answer_photo(self, photo, *args, **kwargs) -> Message:  # type: ignore[override]
-        return await self._bot.send_photo(self._chat_id, photo, *args, **kwargs)
-
-    async def answer_document(self, document, *args, **kwargs) -> Message:  # type: ignore[override]
-        return await self._bot.send_document(self._chat_id, document, *args, **kwargs)
-
-    async def answer_video(self, video, *args, **kwargs) -> Message:  # type: ignore[override]
-        return await self._bot.send_video(self._chat_id, video, *args, **kwargs)
 
 
 async def answer_msg(msg_obj: Message | CallbackQuery | BotMessageProxy | None, *args, **kwargs) -> Message | None:
@@ -105,6 +84,19 @@ async def answer_msg(msg_obj: Message | CallbackQuery | BotMessageProxy | None, 
 
     except TelegramBadRequest:
         return None
+
+
+async def notify_request_in_progress(
+    target: Message | CallbackQuery | BotMessageProxy,
+    lang: str,
+    *,
+    show_alert: bool = True,
+) -> None:
+    text = translate(MessageText.request_in_progress, lang)
+    if isinstance(target, CallbackQuery):
+        await target.answer(text, show_alert=show_alert)
+        return
+    await answer_msg(target, text)
 
 
 async def delete_messages(state: FSMContext, bot: Bot | None = None) -> None:

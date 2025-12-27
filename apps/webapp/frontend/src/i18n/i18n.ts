@@ -12,7 +12,7 @@ function resolveLangCode(raw?: string): LangCode {
 }
 
 export const fallbackEn = {
-  history: 'History',
+  history: 'Archive',
   created: 'Created',
   ai_label: 'AI',
   service_unavailable: 'Service temporarily unavailable',
@@ -28,7 +28,7 @@ export const fallbackEn = {
   open_from_telegram: 'Open this page from Telegram.',
   'program.title': 'My Workouts',
   'program.created': '📅 Created: {date}',
-  'program.view_history': 'History',
+  'program.view_history': 'Archive',
   'program.week': 'Week {n}',
   'program.day': 'Day {n}',
   'program.day.rest': 'Rest Day',
@@ -59,9 +59,14 @@ export const fallbackEn = {
   'tabs.program': 'Programs',
   'tabs.subscriptions': 'Subscriptions',
   'subscriptions.title': 'Subscriptions',
-  'subscriptions.empty': 'You have no subscriptions yet',
+  'subscriptions.empty': 'You have no active subscriptions yet',
+  'subscriptions.replace_confirm.title': 'Replace current subscription?',
+  'subscriptions.replace_confirm.body':
+    'You already have an active subscription. If you create a new one, the current subscription will be moved to Archive and stop updating. Continue?',
+  'subscriptions.replace_confirm.confirm': 'Continue',
+  'subscriptions.replace_confirm.cancel': 'Cancel',
   'page.program': 'Program',
-  'page.history': 'History',
+  'page.history': 'Archive',
   'page.subscriptions': 'Subscriptions',
   'payment.title': 'Payment',
   'payment.amount': 'Amount: {amount} {currency}',

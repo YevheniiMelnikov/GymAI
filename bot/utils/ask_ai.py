@@ -14,7 +14,7 @@ from bot.keyboards import ask_ai_prompt_kb
 from bot.texts import MessageText, translate
 from bot.states import States
 from bot.utils.bot import answer_msg, del_msg
-from bot.utils.credits import available_ai_services
+from bot.services.pricing import ServiceCatalog
 from bot.utils.media import download_limited_file, get_ai_qa_image_limit
 from bot.utils.menus import prompt_profile_completion_questionnaire, show_balance_menu
 from config.app_settings import settings
@@ -46,10 +46,9 @@ async def prepare_ask_ai_request(
     if not prompt_raw:
         raise AskAiPreparationError("invalid_content")
 
-    services = {service.name: service.credits for service in available_ai_services()}
     default_cost = int(settings.ASK_AI_PRICE)
     cost_hint = state_data.get("ask_ai_cost")
-    cost = int(cost_hint or services.get("ask_ai", default_cost))
+    cost = int(cost_hint or ServiceCatalog.service_price("ask_ai") or default_cost)
 
     if user_profile.credits < cost:
         raise AskAiPreparationError("not_enough_credits")
@@ -126,8 +125,7 @@ async def start_ask_ai_prompt(
             await del_msg(origin)
         return False
 
-    services = {service.name: service.credits for service in available_ai_services()}
-    cost = int(services.get("ask_ai", int(settings.ASK_AI_PRICE)))
+    cost = int(ServiceCatalog.service_price("ask_ai") or settings.ASK_AI_PRICE)
     if user_profile.credits < cost:
         await _notify_user(origin, translate(MessageText.not_enough_credits, lang), show_alert=True)
         if show_balance_menu_on_insufficient:

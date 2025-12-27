@@ -1,6 +1,5 @@
 from django.db import models
 from django.db.models import JSONField, Q
-from django.contrib.postgres.fields import ArrayField
 
 from apps.profiles.models import Profile
 
@@ -36,7 +35,7 @@ class Subscription(models.Model):
         choices=SubscriptionPeriod.choices,
         default=SubscriptionPeriod.ONE_MONTH,
     )
-    workout_days = ArrayField(models.CharField(max_length=100), default=list, blank=True)
+    split_number = models.IntegerField(default=3)
     exercises = JSONField(default=list, blank=True, null=True)
     workout_location = models.CharField(
         max_length=32,

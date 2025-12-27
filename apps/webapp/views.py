@@ -270,6 +270,37 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
     return JsonResponse(response)
 
 
+@require_GET  # type: ignore[misc]
+async def subscription_status(request: HttpRequest) -> JsonResponse:
+    await ensure_container_ready()
+
+    try:
+        auth_ctx = await authenticate(request)
+    except Exception:
+        logger.exception("Auth resolution failed")
+        return JsonResponse({"error": "server_error"}, status=500)
+    if auth_ctx.error:
+        return auth_ctx.error
+    profile = auth_ctx.profile
+    if profile is None:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    active = cast(
+        Subscription | None,
+        await call_repo(
+            lambda pid: SubscriptionRepository.base_qs()
+            .filter(profile_id=pid, enabled=True)
+            .order_by("-updated_at")
+            .first(),
+            int(getattr(profile, "id", 0)),
+        ),
+    )
+    response: dict[str, object] = {"active": bool(active)}
+    if active is not None:
+        response["id"] = str(getattr(active, "id", ""))
+    return JsonResponse(response)
+
+
 # type checking of async views with require_GET is not supported by stubs
 @require_GET  # type: ignore[misc]
 async def payment_data(request: HttpRequest) -> JsonResponse:

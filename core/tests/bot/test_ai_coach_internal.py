@@ -178,13 +178,13 @@ async def test_enqueue_workout_plan_generation_dispatch(monkeypatch: pytest.Monk
         wishes="lean",
         request_id="req-1",
         period="4w",
-        workout_days=["mon", "wed"],
+        split_number=2,
     )
 
     assert queued is True
     assert captured["profile_id"] == profile_record.id
     assert captured["plan_type"] == WorkoutPlanType.PROGRAM.value
-    assert captured["workout_days"] == ["mon", "wed"]
+    assert captured["split_number"] == 2
 
 
 @pytest.mark.asyncio
@@ -358,7 +358,7 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
         workout_location="gym",
         wishes="",
         period="1m",
-        workout_days=["mon"],
+        split_number=1,
         exercises=[DayExercises(day="1", exercises=[Exercise(name="squat", sets="3", reps="12")])],
         payment_date="2024-01-01",
     )
@@ -371,7 +371,7 @@ async def test_internal_ai_plan_ready_update(monkeypatch: pytest.MonkeyPatch) ->
         workout_location="gym",
         wishes="",
         period="1m",
-        workout_days=["mon"],
+        split_number=1,
         exercises=[DayExercises(day="1", exercises=[Exercise(name="old", sets="3", reps="8")])],
         payment_date="2024-01-01",
     )
@@ -467,7 +467,7 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
         workout_location="gym",
         wishes="lean",
         period=SubscriptionPeriod.one_month.value,
-        workout_days=["mon", "wed"],
+        split_number=2,
         exercises=[DayExercises(day="1", exercises=[Exercise(name="lunge", sets="3", reps="12")])],
         payment_date="2024-01-01",
     )
@@ -488,7 +488,7 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
 
     async def fake_create_subscription(
         profile_id: int,
-        workout_days: list[str],
+        split_number: int,
         wishes: str,
         amount: Decimal,
         period: SubscriptionPeriod,
@@ -498,7 +498,7 @@ async def test_internal_ai_plan_ready_subscription_create(monkeypatch: pytest.Mo
         created_payload.update(
             {
                 "profile_id": profile_id,
-                "workout_days": workout_days,
+                "split_number": split_number,
                 "wishes": wishes,
                 "amount": amount,
                 "period": period,

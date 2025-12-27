@@ -26,7 +26,7 @@ from core.enums import SubscriptionPeriod
 from core.schemas import DietPlan, Program, Profile, QAResponse, Subscription
 from core.services import APIService
 
-DEFAULT_WORKOUT_DAYS: tuple[str, ...] = ("Day 1", "Day 2", "Day 3", "Day 4")
+DEFAULT_SPLIT_NUMBER = 3
 dedupe_cache = TTLCache(maxsize=2048, ttl=15)
 request_cache = TTLCache(maxsize=2048, ttl=900)
 _ALLOWED_ATTACHMENT_MIME = {"image/jpeg", "image/png", "image/webp"}
@@ -127,7 +127,7 @@ def _build_context(
     data,
     language: str,
     period: SubscriptionPeriod,
-    workout_days: list[str],
+    split_number: int,
     deps: AgentDeps,
     attachments: list[dict[str, str]],
     *,
@@ -138,7 +138,7 @@ def _build_context(
         "profile_id": data.profile_id,
         "attachments": attachments,
         "period": period.value,
-        "workout_days": workout_days,
+        "split_number": split_number,
         "expected_workout": data.expected_workout or "",
         "feedback": data.feedback or "",
         "wishes": data.wishes or "",
@@ -450,11 +450,11 @@ async def handle_coach_request(
             found=str(profile is not None).lower(),
         )
         language = _resolve_language(data.language, profile)
-        workout_days: list[str] = data.workout_days or list(DEFAULT_WORKOUT_DAYS)
+        split_number = data.split_number or DEFAULT_SPLIT_NUMBER
         if mode in {CoachMode.program, CoachMode.subscription}:
             logger.info(
                 f"ask.inputs request_id={data.request_id} profile_id={data.profile_id} mode={mode.value} "
-                f"workout_days_count={len(workout_days)}"
+                f"split_number={split_number}"
             )
 
         if attachments:
@@ -488,7 +488,7 @@ async def handle_coach_request(
             data,
             language,
             period,
-            workout_days,
+            split_number,
             deps,
             attachments,
             profile_context=profile_context,

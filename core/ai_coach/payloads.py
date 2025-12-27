@@ -30,7 +30,15 @@ class AiPlanBasePayload(BaseModel):
 class AiPlanGenerationPayload(AiPlanBasePayload):
     workout_location: WorkoutLocation
     period: str | None = None
-    workout_days: list[str] = Field(default_factory=list)
+    split_number: int
+    previous_subscription_id: int | None = None
+
+    @field_validator("split_number")
+    @classmethod
+    def _ensure_split_number(cls, value: int) -> int:
+        if value < 1 or value > 7:
+            raise ValueError("split_number must be between 1 and 7")
+        return value
 
 
 class AiPlanUpdatePayload(AiPlanBasePayload):

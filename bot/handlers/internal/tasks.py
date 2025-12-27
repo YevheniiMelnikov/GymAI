@@ -1,29 +1,28 @@
 import asyncio
-from decimal import Decimal
-from typing import Any, Awaitable, Callable
+from typing import Any
 
 from aiohttp import web
 from aiogram import Bot
-from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.storage.base import StorageKey
 from loguru import logger
 from pydantic import ValidationError
 
-from bot.keyboards import program_view_kb, weekly_survey_kb
-from bot.states import States
+from bot.keyboards import program_view_kb as _program_view_kb, weekly_survey_kb
 from bot.texts import MessageText, translate
 from bot.handlers.internal.schemas import WeeklySurveyNotify
+from bot.handlers.internal.plan_finalizers import FINALIZERS, PlanFinalizeContext
 from config.app_settings import settings
-from core.exceptions import ProfileNotFoundError, SubscriptionNotFoundError
+from core.exceptions import ProfileNotFoundError
 from core.cache import Cache
-from core.enums import SubscriptionPeriod, WorkoutPlanType
-from core.utils.billing import next_payment_date
+from core.enums import WorkoutPlanType
 from bot.utils.bot import get_webapp_url
 from core.services import APIService
-from core.schemas import DayExercises, Profile, Subscription
+from core.schemas import Profile
 from core.ai_coach.state.plan import AiPlanState
 from .auth import require_internal_auth
+
+program_view_kb = _program_view_kb
 
 
 async def _resolve_profile(profile_id: int, profile_hint: int | None) -> Profile:
@@ -62,247 +61,6 @@ async def _resolve_profile(profile_id: int, profile_hint: int | None) -> Profile
         raise ProfileNotFoundError(profile_id)
 
     return profile
-
-
-def _extract_program_exercises(plan_payload_raw: dict[str, Any]) -> list[DayExercises]:
-    raw_days = plan_payload_raw.get("exercises_by_day")
-    if not isinstance(raw_days, list):
-        raw_days = plan_payload_raw.get("exercises")
-    if not isinstance(raw_days, list):
-        raw_days = []
-    return [day if isinstance(day, DayExercises) else DayExercises.model_validate(day) for day in raw_days]
-
-
-async def _finalize_program_plan(
-    *,
-    plan_payload_raw: dict[str, Any],
-    resolved_profile_id: int,
-    profile: Profile,
-    request_id: str,
-    state: FSMContext,
-    bot: Bot,
-    state_tracker: AiPlanState,
-    notify_failure: Callable[[str], Awaitable[None]],
-) -> None:
-    try:
-        exercises_by_day = _extract_program_exercises(plan_payload_raw)
-    except Exception as exc:  # noqa: BLE001
-        await notify_failure(f"day_exercises_validation:{exc!s}")
-        logger.error(
-            f"day_exercises_validation_failed profile_id={resolved_profile_id} request_id={request_id} err={exc}"
-        )
-        return
-
-    split_number = plan_payload_raw.get("split_number")
-    try:
-        split_value = int(split_number) if split_number is not None else len(exercises_by_day)
-    except (TypeError, ValueError):
-        split_value = len(exercises_by_day)
-
-    wishes_raw = plan_payload_raw.get("wishes")
-    wishes = str(wishes_raw) if wishes_raw is not None else ""
-
-    saved_program = await APIService.workout.save_program(
-        profile_id=resolved_profile_id,
-        exercises=exercises_by_day,
-        split_number=split_value,
-        wishes=wishes,
-    )
-    await Cache.workout.save_program(resolved_profile_id, saved_program.model_dump(mode="json"))
-    try:
-        await APIService.workout.get_latest_program(resolved_profile_id)
-    except Exception as exc:  # noqa: BLE001
-        logger.debug(f"warm_program_cache_failed profile_id={resolved_profile_id} request_id={request_id} err={exc!s}")
-    exercises_dump = [day.model_dump() for day in saved_program.exercises_by_day]
-    program_payload = {
-        "exercises": exercises_dump,
-        "split": len(exercises_dump),
-        "day_index": 0,
-        "profile": True,
-    }
-    await state.update_data(**program_payload)
-    await state.storage.update_data(state.key, data=program_payload)
-    await state.set_state(States.main_menu)
-    try:
-        await bot.send_message(
-            chat_id=profile.tg_id,
-            text=translate(MessageText.new_workout_plan, profile.language),
-            reply_markup=program_view_kb(profile.language, get_webapp_url("program", profile.language)),
-            disable_notification=True,
-        )
-    except Exception as exc:  # noqa: BLE001
-        logger.error(
-            f"ai_plan_program_send_failed profile_id={resolved_profile_id} request_id={request_id} error={exc!s}"
-        )
-        await notify_failure(f"program_send_failed:{exc!s}")
-        return
-
-    await state_tracker.mark_delivered(request_id)
-    logger.info(
-        "AI coach plan generation finished plan_type=program "
-        f"profile_id={resolved_profile_id} request_id={request_id} program_id={saved_program.id}"
-    )
-    return
-
-
-async def _finalize_subscription_plan(
-    *,
-    plan_payload_raw: dict[str, Any],
-    resolved_profile_id: int,
-    profile: Profile,
-    request_id: str,
-    state: FSMContext,
-    bot: Bot,
-    state_tracker: AiPlanState,
-    notify_failure: Callable[[str], Awaitable[None]],
-    action: str,
-    plan_type: WorkoutPlanType,
-) -> None:
-    subscription = Subscription.model_validate(plan_payload_raw)
-    serialized_exercises = [day.model_dump() for day in subscription.exercises]
-
-    if action == "update":
-        try:
-            current = await Cache.workout.get_latest_subscription(resolved_profile_id)
-        except SubscriptionNotFoundError:
-            await notify_failure("subscription_missing")
-            logger.error(f"Subscription missing for update profile_id={resolved_profile_id} request_id={request_id}")
-            return
-
-        subscription_data = current.model_dump()
-        subscription_data.update(
-            profile=resolved_profile_id,
-            exercises=serialized_exercises,
-            workout_days=subscription.workout_days,
-            wishes=subscription.wishes,
-        )
-        await APIService.workout.update_subscription(current.id, subscription_data)
-        await Cache.workout.update_subscription(
-            resolved_profile_id,
-            {
-                "exercises": serialized_exercises,
-                "profile": resolved_profile_id,
-                "workout_days": subscription.workout_days,
-                "wishes": subscription.wishes,
-            },
-        )
-        update_payload = {
-            "exercises": serialized_exercises,
-            "split": len(serialized_exercises),
-            "day_index": 0,
-            "profile": True,
-            "subscription": True,
-            "days": subscription.workout_days,
-        }
-        if request_id:
-            update_payload["last_request_id"] = request_id
-        await state.update_data(**update_payload)
-        await state.storage.update_data(state.key, data=update_payload)
-        await state.set_state(States.main_menu)
-        try:
-            await bot.send_message(
-                chat_id=profile.tg_id,
-                text=translate(MessageText.program_updated, profile.language),
-                parse_mode=ParseMode.HTML,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.error(
-                f"ai_plan_subscription_update_notify_failed profile_id={resolved_profile_id} "
-                f"request_id={request_id} error={exc!s}"
-            )
-            await notify_failure(f"subscription_update_send_failed:{exc!s}")
-            return
-        await state_tracker.mark_delivered(request_id)
-        logger.info(
-            "AI coach plan generation finished plan_type=subscription-update "
-            f"profile_id={resolved_profile_id} request_id={request_id} subscription_id={current.id}"
-        )
-        return
-
-    try:
-        period_enum = SubscriptionPeriod(subscription.period)
-    except ValueError:
-        period_enum = SubscriptionPeriod.one_month
-
-    price = Decimal(subscription.price)
-    if price <= 0:
-        price = Decimal(settings.SMALL_SUBSCRIPTION_PRICE)
-
-    workout_location = subscription.workout_location or profile.workout_location or ""
-    if not workout_location:
-        await notify_failure("subscription_missing_workout_location")
-        logger.error(
-            "Subscription workout_location missing "
-            f"profile_id={resolved_profile_id} request_id={request_id} plan_type={plan_type.value}"
-        )
-        return
-
-    subscription_id = await APIService.workout.create_subscription(
-        profile_id=resolved_profile_id,
-        workout_days=subscription.workout_days,
-        wishes=subscription.wishes,
-        amount=price,
-        period=period_enum,
-        workout_location=workout_location,
-        exercises=serialized_exercises,
-    )
-    if subscription_id is None:
-        await notify_failure("subscription_create_failed")
-        logger.error(
-            "Subscription create failed "
-            f"profile_id={resolved_profile_id} request_id={request_id} plan_type={plan_type.value}"
-        )
-        return
-
-    subscription_dump = subscription.model_dump(mode="json")
-    subscription_dump.update(
-        id=subscription_id,
-        profile=resolved_profile_id,
-        exercises=serialized_exercises,
-    )
-    await Cache.workout.save_subscription(resolved_profile_id, subscription_dump)
-    update_payload = {
-        "subscription": True,
-        "exercises": serialized_exercises,
-        "split": len(serialized_exercises),
-        "day_index": 0,
-        "profile": True,
-        "days": subscription.workout_days,
-    }
-    if request_id:
-        update_payload["last_request_id"] = request_id
-    await state.update_data(**update_payload)
-    await state.storage.update_data(state.key, data=update_payload)
-    await state.set_state(States.main_menu)
-    try:
-        await bot.send_message(
-            chat_id=profile.tg_id,
-            text=translate(MessageText.subscription_created, profile.language).format(bot_name=settings.BOT_NAME),
-            reply_markup=program_view_kb(profile.language, get_webapp_url("subscription", profile.language)),
-            disable_notification=True,
-        )
-        payment_date = next_payment_date(period_enum)
-        await APIService.workout.update_subscription(
-            subscription_id,
-            {"enabled": True, "payment_date": payment_date},
-        )
-        await Cache.workout.update_subscription(
-            resolved_profile_id,
-            {"enabled": True, "payment_date": payment_date},
-        )
-    except Exception as exc:  # noqa: BLE001
-        logger.error(
-            "ai_plan_subscription_create_notify_failed "
-            f"profile_id={resolved_profile_id} request_id={request_id} error={exc}"
-        )
-        await notify_failure(f"subscription_create_send_failed:{exc!s}")
-        return
-    await state_tracker.mark_delivered(request_id)
-    logger.info(
-        f"AI coach plan generation finished plan_type=subscription-create profile_id={resolved_profile_id} "
-        f"request_id={request_id} subscription_id={subscription_id}"
-    )
-    return
 
 
 async def _process_ai_plan_ready(
@@ -397,12 +155,30 @@ async def _process_ai_plan_ready(
 
         await state.clear()
         base_state: dict[str, object] = {"profile": profile_dump}
+        if plan_type is WorkoutPlanType.SUBSCRIPTION:
+            base_state["subscription"] = True
         if request_id:
             base_state["last_request_id"] = request_id
+        if plan_type is WorkoutPlanType.SUBSCRIPTION and action == "create":
+            previous_subscription_id = payload.get("previous_subscription_id")
+            if previous_subscription_id is not None:
+                base_state["previous_subscription_id"] = previous_subscription_id
+        if plan_type is WorkoutPlanType.SUBSCRIPTION and action == "update":
+            subscription_id = payload.get("subscription_id")
+            if subscription_id is not None:
+                base_state["subscription_id"] = subscription_id
         await state.update_data(**base_state)
 
-        if plan_type is WorkoutPlanType.PROGRAM:
-            await _finalize_program_plan(
+        finalizer = FINALIZERS.get(plan_type)
+        if finalizer is None:
+            await notify_failure("finalizer_missing")
+            logger.error(
+                "Finalizer missing "
+                f"plan_type={plan_type.value} profile_id={resolved_profile_id} request_id={request_id}"
+            )
+            return
+        await finalizer.finalize(
+            PlanFinalizeContext(
                 plan_payload_raw=plan_payload_raw,
                 resolved_profile_id=resolved_profile_id,
                 profile=profile,
@@ -411,20 +187,9 @@ async def _process_ai_plan_ready(
                 bot=bot,
                 state_tracker=state_tracker,
                 notify_failure=notify_failure,
+                action=action,
+                plan_type=plan_type,
             )
-            return
-
-        await _finalize_subscription_plan(
-            plan_payload_raw=plan_payload_raw,
-            resolved_profile_id=resolved_profile_id,
-            profile=profile,
-            request_id=request_id,
-            state=state,
-            bot=bot,
-            state_tracker=state_tracker,
-            notify_failure=notify_failure,
-            action=action,
-            plan_type=plan_type,
         )
         return
     except ProfileNotFoundError:

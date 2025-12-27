@@ -1,6 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getProgram, getSubscription, HttpError, triggerWorkoutAction, WorkoutAction } from '../api/http';
+import {
+    getProgram,
+    getSubscription,
+    getSubscriptionStatus,
+    HttpError,
+    triggerWorkoutAction,
+    WorkoutAction
+} from '../api/http';
 import { applyLang, t } from '../i18n/i18n';
 import {
     EXERCISE_EDIT_SAVED_EVENT,
@@ -58,6 +65,7 @@ const ProgramPage: React.FC = () => {
     const [isExerciseEditOpen, setIsExerciseEditOpen] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
     const [dateText, setDateText] = useState('');
+    const [showSubscriptionConfirm, setShowSubscriptionConfirm] = useState(false);
     const [activeSegment, setActiveSegment] = useState<SegmentId>(() => {
         const source = searchParams.get('source');
         if (source === 'subscription') {
@@ -234,6 +242,12 @@ const ProgramPage: React.FC = () => {
             }
             setActionLoading(true);
             try {
+                const payload =
+                    nextAction === 'create_program' ? 'create_new_program' : 'create_new_subscription';
+                try {
+                    tg?.sendData(payload);
+                } catch {
+                }
                 await triggerWorkoutAction(nextAction, initData);
                 tg?.close();
             } catch (err) {
@@ -260,18 +274,42 @@ const ProgramPage: React.FC = () => {
             return;
         }
         const tg = (window as any).Telegram?.WebApp;
-        const payload =
-            creationAction === 'create_program' ? 'create_new_program' : 'create_new_subscription';
         try {
             tg?.HapticFeedback?.impactOccurred('medium');
         } catch {
         }
-        try {
-            tg?.sendData(payload);
-        } catch {
+        if (creationAction === 'create_subscription') {
+            const initData = readInitData();
+            if (!initData) {
+                window.alert(t('open_from_telegram'));
+                return;
+            }
+            setActionLoading(true);
+            try {
+                const status = await getSubscriptionStatus(initData);
+                if (status.active) {
+                    setShowSubscriptionConfirm(true);
+                    return;
+                }
+            } catch (err) {
+                console.error('subscription_status_failed', err);
+                window.alert(t('program.action_error'));
+                return;
+            } finally {
+                setActionLoading(false);
+            }
         }
         await handleWorkoutAction(creationAction);
     }, [creationAction, handleWorkoutAction]);
+
+    const handleSubscriptionConfirm = useCallback(async () => {
+        setShowSubscriptionConfirm(false);
+        await handleWorkoutAction('create_subscription');
+    }, [handleWorkoutAction]);
+
+    const handleSubscriptionCancel = useCallback(() => {
+        setShowSubscriptionConfirm(false);
+    }, []);
 
     const fabStyle: React.CSSProperties = {
         position: 'fixed',
@@ -310,7 +348,9 @@ const ProgramPage: React.FC = () => {
     }, [navigate, searchParams]);
 
     const handleHistoryIconClick = useCallback(() => {
-        navigate('/history');
+        const params = new URLSearchParams();
+        params.set('segment', activeSegment);
+        navigate(`/history?${params.toString()}`);
         const tg = (window as any).Telegram?.WebApp;
         try {
             tg?.HapticFeedback?.impactOccurred('medium');
@@ -320,7 +360,7 @@ const ProgramPage: React.FC = () => {
             tg?.sendData?.('view_history');
         } catch {
         }
-    }, [navigate]);
+    }, [activeSegment, navigate]);
 
     const historyIconStyle: React.CSSProperties = {
         background: 'none',
@@ -389,6 +429,30 @@ const ProgramPage: React.FC = () => {
                 >
                     +
                 </button>
+            )}
+            {showSubscriptionConfirm && (
+                <div role="dialog" aria-modal="true" className="subscription-confirm">
+                    <div className="subscription-confirm__dialog">
+                        <h3 className="subscription-confirm__title">{t('subscriptions.replace_confirm.title')}</h3>
+                        <p className="subscription-confirm__body">{t('subscriptions.replace_confirm.body')}</p>
+                        <div className="subscription-confirm__actions">
+                            <button
+                                type="button"
+                                onClick={handleSubscriptionCancel}
+                                className="subscription-confirm__btn subscription-confirm__btn--cancel"
+                            >
+                                {t('subscriptions.replace_confirm.cancel')}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSubscriptionConfirm}
+                                className="subscription-confirm__btn subscription-confirm__btn--confirm"
+                            >
+                                {t('subscriptions.replace_confirm.confirm')}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

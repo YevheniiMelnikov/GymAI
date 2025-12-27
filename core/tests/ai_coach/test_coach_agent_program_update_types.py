@@ -97,7 +97,7 @@ def test_generate_plan_returns_subscription(monkeypatch: pytest.MonkeyPatch) -> 
                 workout_location="",
                 wishes="",
                 period="1m",
-                workout_days=["mon"],
+                split_number=1,
                 exercises=[],
                 payment_date="2024-01-01",
             )
@@ -109,7 +109,7 @@ def test_generate_plan_returns_subscription(monkeypatch: pytest.MonkeyPatch) -> 
             deps,
             workout_location=WorkoutLocation.HOME,
             period="1m",
-            workout_days=["mon"],
+            split_number=1,
             output_type=Subscription,
         )
         assert isinstance(result, Subscription)

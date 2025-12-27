@@ -115,7 +115,7 @@ class MessageText(AutoName):
 
     enter_wishes = auto()
     delete_confirmation = auto()
-    workout_days_selection = auto()
+    split_number_selection = auto()
     weekly_survey_prompt = auto()
 
     payment_failure = auto()

@@ -30,15 +30,14 @@ from bot.keyboards import (
     payment_kb,
     yes_no_kb,
 )
-from bot.utils.credits import available_ai_services, available_packages
-from bot.utils.workout_days import (
-    WORKOUT_DAYS_BACK,
-    WORKOUT_DAYS_CONTINUE,
-    WORKOUT_DAYS_MINUS,
-    WORKOUT_DAYS_PLUS,
-    DEFAULT_WORKOUT_DAYS_COUNT,
-    day_labels,
-    update_workout_days_message,
+from bot.services.pricing import ServiceCatalog
+from bot.utils.split_number import (
+    SPLIT_NUMBER_BACK,
+    SPLIT_NUMBER_CONTINUE,
+    SPLIT_NUMBER_MINUS,
+    SPLIT_NUMBER_PLUS,
+    DEFAULT_SPLIT_NUMBER,
+    update_split_number_message,
 )
 
 menu_router = Router()
@@ -99,7 +98,7 @@ async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
 
     if cb_data.startswith("plan_"):
         plan_name = cb_data.split("_", 1)[1]
-        packages = {p.name: p for p in available_packages()}
+        packages = {p.name: p for p in ServiceCatalog.credit_packages()}
         pkg = packages.get(plan_name)
         if not pkg:
             await callback_query.answer()
@@ -141,47 +140,46 @@ async def plan_choice(callback_query: CallbackQuery, state: FSMContext) -> None:
     await del_msg(callback_query)
 
 
-@menu_router.callback_query(States.workout_days_selection)
-async def workout_days_selection(callback_query: CallbackQuery, state: FSMContext) -> None:
+@menu_router.callback_query(States.split_number_selection)
+async def split_number_selection(callback_query: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     profile_data = data.get("profile")
     if not profile_data:
         return
     profile = Profile.model_validate(profile_data)
     lang = profile.language or settings.DEFAULT_LANG
-    count = int(data.get("workout_days_count", DEFAULT_WORKOUT_DAYS_COUNT))
+    count = int(data.get("split_number", DEFAULT_SPLIT_NUMBER))
     action = callback_query.data
-    if action == WORKOUT_DAYS_PLUS:
+    if action == SPLIT_NUMBER_PLUS:
         if count >= 7:
             await callback_query.answer(translate(MessageText.out_of_range, lang), show_alert=True)
             return
         count += 1
-        await state.update_data(workout_days_count=count)
-        await update_workout_days_message(callback_query, lang, count)
+        await state.update_data(split_number=count)
+        await update_split_number_message(callback_query, lang, count)
         await callback_query.answer()
         return
-    if action == WORKOUT_DAYS_MINUS:
+    if action == SPLIT_NUMBER_MINUS:
         if count <= 1:
             await callback_query.answer(translate(MessageText.out_of_range, lang), show_alert=True)
             return
         count -= 1
-        await state.update_data(workout_days_count=count)
-        await update_workout_days_message(callback_query, lang, count)
+        await state.update_data(split_number=count)
+        await update_split_number_message(callback_query, lang, count)
         await callback_query.answer()
         return
-    if action == WORKOUT_DAYS_BACK:
+    if action == SPLIT_NUMBER_BACK:
         await callback_query.answer()
         message = callback_query.message
         if message and isinstance(message, Message):
             await show_main_menu(message, profile, state)
         return
-    if action != WORKOUT_DAYS_CONTINUE:
+    if action != SPLIT_NUMBER_CONTINUE:
         await callback_query.answer()
         return
     await callback_query.answer()
-    service = data.get("workout_days_service", "program")
-    selected_days = day_labels(count)
-    await state.update_data(workout_days=selected_days)
+    service = data.get("split_number_service", "program")
+    await state.update_data(split_number=count)
     await del_msg(callback_query)
     if service == "program":
         await process_new_program(callback_query, profile, state, confirmed=False)
@@ -211,7 +209,7 @@ async def subscription_choice(callback_query: CallbackQuery, state: FSMContext) 
         return
 
     service_name = cb_data.removeprefix("subscription_type_")
-    services = {service.name: service.credits for service in available_ai_services()}
+    services = {service.name: service.credits for service in ServiceCatalog.ai_services()}
     required = services.get(service_name)
     if required is None:
         await callback_query.answer(translate(MessageText.unexpected_error, profile.language), show_alert=True)

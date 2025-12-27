@@ -8,9 +8,9 @@ from aiogram.types import CallbackQuery, Message, FSInputFile
 from pathlib import Path
 
 from bot import keyboards as kb
-from bot.keyboards import select_gender_kb, yes_no_kb, diet_confirm_kb
+from bot.keyboards import select_gender_kb, yes_no_kb, confirm_service_kb
 from bot.utils.profiles import fetch_user, answer_profile
-from bot.utils.credits import available_packages, available_ai_services
+from bot.services.pricing import ServiceCatalog
 from bot.states import States
 from bot.texts import MessageText, translate
 from core.cache import Cache
@@ -19,7 +19,8 @@ from core.exceptions import ProfileNotFoundError
 from core.schemas import Profile
 from bot.utils.text import get_profile_attributes
 from config.app_settings import settings
-from bot.utils.bot import BotMessageProxy, del_msg, answer_msg, get_webapp_url
+from bot.types.messaging import BotMessageProxy
+from bot.utils.bot import del_msg, answer_msg, get_webapp_url
 from bot.utils.prompts import send_enter_wishes_prompt
 
 
@@ -98,7 +99,7 @@ async def show_balance_menu(
 ) -> None:
     lang = cast(str, profile.language)
     cached_profile = await Cache.profile.get_record(profile.id)
-    plans = [p.name for p in available_packages()]
+    plans = [p.name for p in ServiceCatalog.credit_packages()]
     file_path = Path(settings.BOT_PAYMENT_OPTIONS) / f"credit_packages_{lang}.png"
     packages_img = FSInputFile(file_path)
     if isinstance(callback_obj, CallbackQuery) and not already_answered:
@@ -342,7 +343,7 @@ async def process_ai_service_selection(
         return False
 
     selected_profile = Profile.model_validate(profile_data)
-    services = {service.name: service.credits for service in available_ai_services()}
+    services = {service.name: service.credits for service in ServiceCatalog.ai_services()}
     required = services.get(service_name)
     if required is None:
         await answer_msg(interaction, translate(MessageText.unexpected_error, language))
@@ -403,11 +404,7 @@ async def start_subscription_flow(target: InteractionTarget, profile: Profile, s
 
 async def prompt_subscription_type(target: InteractionTarget, profile: Profile, state: FSMContext) -> None:
     language = cast(str, profile.language or settings.DEFAULT_LANG)
-    services = [
-        (service.name, service.credits)
-        for service in available_ai_services()
-        if service.name.startswith("subscription_")
-    ]
+    services = [(service.name, service.credits) for service in ServiceCatalog.subscription_services()]
     await state.update_data(subscription_flow=False)
     await state.set_state(States.choose_subscription)
     prompt = await answer_msg(
@@ -472,13 +469,13 @@ async def start_diet_flow(
             target,
             caption=description,
             photo=FSInputFile(file_path),
-            reply_markup=diet_confirm_kb(language),
+            reply_markup=confirm_service_kb(language),
         )
     else:
         await answer_msg(
             target,
             description,
-            reply_markup=diet_confirm_kb(language),
+            reply_markup=confirm_service_kb(language),
         )
     if delete_origin:
         await del_msg(target if isinstance(target, (CallbackQuery, Message)) else None)

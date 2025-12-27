@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { renderSegmented, SegmentId } from '../components/Segmented';
 import TopBar from '../components/TopBar';
 import { applyLang, t } from '../i18n/i18n';
@@ -24,6 +24,7 @@ async function getHistory(locale: Locale): Promise<HistoryResp> {
 
 const HistoryPage: React.FC = () => {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const switcherRef = useRef<HTMLDivElement>(null);
     const fallbackIllustration =
         "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='360' height='260' viewBox='0 0 360 260' fill='none'><defs><linearGradient id='g1' x1='50' y1='30' x2='310' y2='210' gradientUnits='userSpaceOnUse'><stop stop-color='%23C7DFFF'/><stop offset='1' stop-color='%23E7EEFF'/></linearGradient><linearGradient id='g2' x1='120' y1='80' x2='240' y2='200' gradientUnits='userSpaceOnUse'><stop stop-color='%237AA7FF'/><stop offset='1' stop-color='%235B8BFF'/></linearGradient></defs><rect x='30' y='24' width='300' height='200' rx='28' fill='url(%23g1)'/><rect x='62' y='56' width='236' height='136' rx='18' fill='white' stroke='%23B8C7E6' stroke-width='3'/><path d='M90 174c18-30 42-30 60 0s42 30 60 0 42-30 60 0' stroke='%23A7B9DB' stroke-width='6' stroke-linecap='round' fill='none'/><circle cx='136' cy='106' r='16' fill='url(%23g2)'/><circle cx='216' cy='118' r='12' fill='%23E6ECFC'/><circle cx='248' cy='94' r='8' fill='%23E6ECFC'/></svg>";
@@ -33,7 +34,13 @@ const HistoryPage: React.FC = () => {
     const [locale, setLocale] = useState<string>('en');
     const [sortOrder, setSortOrder] = useState<'newest' | 'oldest'>('newest');
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-    const [activeSegment, setActiveSegment] = useState<SegmentId>('program');
+    const [activeSegment, setActiveSegment] = useState<SegmentId>(() => {
+        const segment = searchParams.get('segment');
+        if (segment === 'subscriptions') {
+            return 'subscriptions';
+        }
+        return 'program';
+    });
     const dropdownRef = useRef<HTMLDivElement>(null);
     const activeItems = useMemo<HistoryItem[]>(
         () => (activeSegment === 'subscriptions' ? data?.subscriptions : data?.programs) ?? [],

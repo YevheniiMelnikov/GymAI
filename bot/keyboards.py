@@ -134,14 +134,14 @@ def enter_wishes_kb(lang: str, webapp_url: str | None) -> KbMarkup | None:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def workout_days_selection_kb(lang: str) -> KbMarkup:
+def split_number_selection_kb(lang: str) -> KbMarkup:
     builder = KeyboardBuilder(lang)
     buttons = [
         [
-            KbBtn(text="➖", callback_data="workout_days_minus"),
-            KbBtn(text="➕", callback_data="workout_days_plus"),
+            KbBtn(text="➖", callback_data="split_number_minus"),
+            KbBtn(text="➕", callback_data="split_number_plus"),
         ],
-        [builder.add(ButtonText.prev_menu, "workout_days_back"), builder.add(ButtonText.done, "workout_days_continue")],
+        [builder.add(ButtonText.prev_menu, "split_number_back"), builder.add(ButtonText.done, "split_number_continue")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=2)
 
@@ -225,7 +225,7 @@ def yes_no_kb(lang: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
-def diet_confirm_kb(lang: str) -> KbMarkup:
+def confirm_service_kb(lang: str) -> KbMarkup:
     builder = KeyboardBuilder(lang)
     buttons = [
         [builder.add(ButtonText.prev_menu, "back"), builder.add(ButtonText.confirm_generate, "confirm_generate")],

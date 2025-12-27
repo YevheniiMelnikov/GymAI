@@ -33,5 +33,5 @@ class States(StatesGroup):
     choose_plan = State()
     ask_ai_question = State()
     choose_subscription = State()
-    workout_days_selection = State()
+    split_number_selection = State()
     confirm_service = State()

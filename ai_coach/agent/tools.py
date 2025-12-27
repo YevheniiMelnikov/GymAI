@@ -158,7 +158,7 @@ def _single_use_prepare(
     return _prepare
 
 
-def _normalize_subscription_day_labels(exercises: list[DayExercises]) -> list[str]:
+def _normalize_exercise_day_labels(exercises: list[DayExercises]) -> list[str]:
     normalized: list[str] = []
     for idx, day in enumerate(exercises):
         label = f"Day {idx + 1}"
@@ -461,7 +461,7 @@ async def tool_attach_gifs(
 @toolset.tool(prepare=_single_use_prepare("tool_create_subscription"))  # pyrefly: ignore[no-matching-overload]
 async def tool_create_subscription(
     ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
-    workout_days: list[str],
+    split_number: int,
     exercises: list[DayExercises],
     period: SubscriptionPeriod = SubscriptionPeriod.one_month,
     wishes: str | None = None,
@@ -483,8 +483,12 @@ async def tool_create_subscription(
     workout_location = profile.workout_location if profile and profile.workout_location else None
     if not workout_location:
         raise ModelRetry("Workout location is required to create a subscription.")
-    normalized_days = _normalize_subscription_day_labels(exercises)
-    logger.debug(f"tool_create_subscription profile_id={profile_id} period={period} days={normalized_days}")
+    normalized_days = _normalize_exercise_day_labels(exercises)
+    normalized_split = max(1, min(7, int(split_number)))
+    logger.debug(
+        f"tool_create_subscription profile_id={profile_id} period={period} "
+        f"split_number={normalized_split} days={normalized_days}"
+    )
     exercises_payload = [d.model_dump() for d in exercises]
     price_map = {
         SubscriptionPeriod.one_month: int(settings.SMALL_SUBSCRIPTION_PRICE),
@@ -495,7 +499,7 @@ async def tool_create_subscription(
     try:
         sub_id = await APIService.workout.create_subscription(
             profile_id=profile_id,
-            workout_days=normalized_days,
+            split_number=normalized_split,
             wishes=wishes or "",
             amount=Decimal(price),
             period=period,
@@ -517,7 +521,7 @@ async def tool_create_subscription(
             "workout_location": workout_location,
             "wishes": wishes or "",
             "period": period.value,
-            "workout_days": normalized_days,
+            "split_number": normalized_split,
             "exercises": exercises_payload,
             "payment_date": datetime.now(ZoneInfo(settings.TIME_ZONE)).date().isoformat(),
         }

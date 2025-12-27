@@ -10,7 +10,7 @@ from loguru import logger
 
 from bot.states import States
 from bot.utils.menus import show_main_menu
-from bot.utils.bot import del_msg, answer_msg
+from bot.utils.bot import del_msg, answer_msg, notify_request_in_progress
 from bot.utils.ai_coach import enqueue_ai_question
 from bot.utils.ask_ai import prepare_ask_ai_request
 from core.schemas import Profile
@@ -111,7 +111,7 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
             )
             return
 
-        await answer_msg(message, translate(MessageText.request_in_progress, lang))
+        await notify_request_in_progress(message, lang, show_alert=False)
 
         state_payload: dict[str, object] = {
             "profile": user_profile.model_dump(mode="json"),

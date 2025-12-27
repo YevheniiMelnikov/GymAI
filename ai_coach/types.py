@@ -31,7 +31,7 @@ class AskCtx(TypedDict):
     profile_id: int
     attachments: NotRequired[list[dict[str, str]] | None]
     period: str
-    workout_days: list[str]
+    split_number: int
     expected_workout: str
     feedback: str
     wishes: str

@@ -1,5 +1,5 @@
 {
-  "history": "Історія",
+  "history": "Архів",
   "created": "Створено",
   "ai_label": "ШІ",
   "service_unavailable": "Сервіс тимчасово недоступний",
@@ -17,7 +17,7 @@
 
   "program.title": "Мої тренування",
   "program.created": "📅 Створено: {date}",
-  "program.view_history": "Історія",
+  "program.view_history": "Архів",
   "program.week": "Тиждень {n}",
   "program.day": "День {n}",
   "program.day.rest": "День відпочинку",
@@ -48,10 +48,14 @@
   "tabs.program": "Програми",
   "tabs.subscriptions": "Підписки",
   "subscriptions.title": "Підписки",
-  "subscriptions.empty": "У вас поки немає підписок",
+  "subscriptions.empty": "У вас немає активних підписок",
+  "subscriptions.replace_confirm.title": "Замінити поточну підписку?",
+  "subscriptions.replace_confirm.body": "У вас уже є активна підписка. Під час створення нової поточна буде переміщена в архів і перестане оновлюватися. Продовжити?",
+  "subscriptions.replace_confirm.confirm": "Продовжити",
+  "subscriptions.replace_confirm.cancel": "Скасувати",
 
   "page.program": "Програма",
-  "page.history": "Історія",
+  "page.history": "Архів",
   "page.subscriptions": "Підписки",
   "page.payment": "Оплата",
 

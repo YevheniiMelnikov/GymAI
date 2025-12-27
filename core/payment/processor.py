@@ -18,7 +18,7 @@ from .strategies import (
     SuccessPayment,
 )
 from .types import CacheProtocol, PaymentNotifier
-from bot.utils.credits import available_packages
+from bot.services.pricing import ServiceCatalog
 
 
 class PaymentProcessor:
@@ -66,7 +66,7 @@ class PaymentProcessor:
 
     async def process_credit_topup(self, profile: Profile, amount: Decimal) -> None:
         normalized = amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        package_map = {package.price: package.credits for package in available_packages()}
+        package_map = {package.price: package.credits for package in ServiceCatalog.credit_packages()}
         credits = package_map.get(normalized)
         if credits is None:
             message = f"Unsupported payment amount for credits: {normalized}"

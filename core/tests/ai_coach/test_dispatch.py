@@ -67,7 +67,7 @@ def test_subscription_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
         ctx = {
             "prompt": "p",
             "period": "1m",
-            "workout_days": ["mon"],
+            "split_number": 1,
             "deps": "d",
             "wishes": "w",
             "workout_location": WorkoutLocation.HOME,
@@ -81,7 +81,7 @@ def test_subscription_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
             WorkoutLocation.HOME,
             {
                 "period": "1m",
-                "workout_days": ["mon"],
+                "split_number": 1,
                 "wishes": "w",
                 "instructions": "i",
                 "output_type": Subscription,

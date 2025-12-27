@@ -23,12 +23,23 @@ const TopBar: React.FC<React.PropsWithChildren<TopBarProps>> = ({ title, onBack,
                 style={backStyle}
             >
                 <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                    <path
-                        d="M15 18L9 12L15 6"
+                    <line
+                        x1="15"
+                        y1="6"
+                        x2="9"
+                        y2="12"
                         stroke="currentColor"
                         strokeWidth="2"
                         strokeLinecap="round"
-                        strokeLinejoin="round"
+                    />
+                    <line
+                        x1="15"
+                        y1="18"
+                        x2="9"
+                        y2="12"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
                     />
                 </svg>
             </button>

@@ -6,7 +6,7 @@ from typing import Any, Awaitable, Callable
 from core.enums import PaymentStatus
 from core.payment import PaymentProcessor
 from core.payment.types import PaymentNotifier
-from bot.utils.credits import available_packages
+from bot.services.pricing import ServiceCatalog
 from config.app_settings import settings
 
 
@@ -196,7 +196,7 @@ def test_process_credit_topup_updates_profile_and_cache() -> None:
         await processor.process_credit_topup(profile, amount)
 
         normalized = amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        package_map = {package.price: package.credits for package in available_packages()}
+        package_map = {package.price: package.credits for package in ServiceCatalog.credit_packages()}
         expected_credits = package_map[normalized]
         assert profile_calls == [(profile_id, expected_credits)]
         assert cache_updates == [(profile_id, {"credits": profile.credits + expected_credits})]

@@ -3,14 +3,14 @@ MODE: subscription
    - Build a compact query that starts with `profile:` and lists key fields (gender, birth_year, weight, height,
      workout_goals, workout_experience, workout_location, health_notes) plus a short cue like "workout plan".
    - Keep the query <=120 characters. Do not include role text, instructions, or anything starting with "MODE:".
-2) Generate SubscriptionPayload including sequential workout_days (e.g., "Day 1", "Day 2", ...) and exercises, avoiding calendar weekday names.
+2) Generate SubscriptionPayload including split_number (1-7) and exercises, avoiding calendar weekday names.
 Subscription field guide:
-- workout_days: ordered list of labels like "Day 1", "Day 2"; must align with exercises[*].day.
+- split_number: number of training days per week (1-7). Exercises must have "Day 1".."Day N" matching split_number.
 - exercises: list of DayExercises; each item has day + exercises with name, sets, reps.
 - period: subscription billing period ("1m", "6m", "12m").
 - wishes: client's preferences or limitations in free-form text.
 - workout_location: training location ("home", "gym", "strength").
 3) Call tool_attach_gifs(payload.exercises) and replace payload.exercises with the returned list.
-4) Call tool_create_subscription(workout_days, payload.exercises, period, wishes, workout_location) and return Subscription.
+4) Call tool_create_subscription(split_number, payload.exercises, period, wishes, workout_location) and return Subscription.
 
 Execute each tool exactly once in the given order. If you receive a response indicating a tool was already run, skip additional calls and complete the subscription with the existing data.

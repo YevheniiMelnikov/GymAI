@@ -44,7 +44,7 @@ class CoachAgentProtocol(Protocol):
         *,
         workout_location: WorkoutLocation | None = None,
         period: str | None = None,
-        workout_days: list[str] | None = None,
+        split_number: int | None = None,
         wishes: str | None = None,
         profile_context: str | None = None,
         output_type: type[Program] | type[Subscription],

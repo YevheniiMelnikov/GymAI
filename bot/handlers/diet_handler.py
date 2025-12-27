@@ -6,10 +6,10 @@ from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
-from bot.keyboards import diet_confirm_kb, diet_products_kb
+from bot.keyboards import confirm_service_kb, diet_products_kb
 from bot.states import States
 from bot.texts import MessageText, translate
-from bot.utils.bot import answer_msg, del_msg
+from bot.utils.bot import answer_msg, del_msg, notify_request_in_progress
 from bot.utils.diet_plans import (
     DIET_PRODUCT_CALLBACK_PREFIX,
     DIET_PRODUCTS_BACK,
@@ -133,7 +133,7 @@ async def diet_products(callback_query: CallbackQuery, state: FSMContext) -> Non
         await answer_msg(
             callback_query,
             translate(MessageText.confirm_service, lang).format(balance=user_profile.credits, price=required),
-            reply_markup=diet_confirm_kb(lang),
+            reply_markup=confirm_service_kb(lang),
         )
         await del_msg(callback_query)
         return
@@ -194,7 +194,7 @@ async def diet_confirm_service(callback_query: CallbackQuery, state: FSMContext)
             translate(MessageText.coach_agent_error, lang).format(tg=settings.TG_SUPPORT_CONTACT),
         )
         return
-    await answer_msg(callback_query, translate(MessageText.request_in_progress, lang))
+    await notify_request_in_progress(callback_query, lang)
     message = callback_query.message
     if message and isinstance(message, Message):
         await show_main_menu(message, profile, state)

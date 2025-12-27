@@ -1359,6 +1359,55 @@ a:hover{ opacity: .9; }
   margin: 0;
 }
 
+.subscription-confirm{
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: color-mix(in oklab, var(--bg) 35%, rgba(0, 0, 0, .6));
+}
+.subscription-confirm__dialog{
+  width: min(92vw, 420px);
+  background: color-mix(in oklab, var(--surface) 92%, var(--bg));
+  border-radius: 16px;
+  padding: 20px 18px;
+  box-shadow: var(--shadow-strong);
+  border: 1px solid var(--border);
+}
+.subscription-confirm__title{
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+.subscription-confirm__body{
+  margin: 0 0 18px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.subscription-confirm__actions{
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.subscription-confirm__btn{
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.subscription-confirm__btn--cancel{
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg) 90%, var(--surface));
+  color: var(--text);
+}
+.subscription-confirm__btn--confirm{
+  border: none;
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
 .week.centered{
   max-width: 720px;
   width: 100%;

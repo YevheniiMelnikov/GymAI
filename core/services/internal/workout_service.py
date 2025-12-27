@@ -95,7 +95,7 @@ class WorkoutService(APIClient):
     async def create_subscription(
         self,
         profile_id: int,
-        workout_days: list[str],
+        split_number: int,
         wishes: str,
         amount: Decimal,
         period: SubscriptionPeriod = SubscriptionPeriod.one_month,
@@ -107,7 +107,7 @@ class WorkoutService(APIClient):
             "profile_id": profile_id,
             "enabled": False,
             "price": str(amount),
-            "workout_days": workout_days,
+            "split_number": split_number,
             "period": period.value,
             "payment_date": datetime.now(ZoneInfo(settings.TIME_ZONE)).date().isoformat(),
             "wishes": wishes,

@@ -227,7 +227,14 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
     wishes = str(payload.get("wishes", ""))
     language = str(payload.get("language", settings.DEFAULT_LANG))
     period = payload.get("period")
-    workout_days = payload.get("workout_days") or []
+    split_raw = payload.get("split_number")
+    if isinstance(split_raw, int):
+        split_number = split_raw
+    elif isinstance(split_raw, (str, bytes, bytearray)) and str(split_raw).strip().isdigit():
+        split_number = int(split_raw)
+    else:
+        split_number = 3
+    split_number = max(1, min(7, split_number))
     plan_type = WorkoutPlanType(payload.get("plan_type", WorkoutPlanType.PROGRAM.value))
     workout_location = _parse_workout_location(payload.get("workout_location"))
     attempt = getattr(task.request, "retries", 0)
@@ -240,7 +247,7 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
 
     logger.info(
         f"ai_generate_plan started profile_id={profile_id} plan_type={plan_type.value} "
-        f"request_id={request_id} attempt={attempt} workout_days_count={len(workout_days)}"
+        f"request_id={request_id} attempt={attempt} split_number={split_number}"
     )
 
     try:
@@ -249,7 +256,7 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
             profile_id=profile_id,
             language=language,
             period=str(period) if period else None,
-            workout_days=list(workout_days),
+            split_number=split_number,
             wishes=wishes,
             workout_location=workout_location,
             request_id=request_id or None,
@@ -306,6 +313,7 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
         subscription = Subscription.model_validate(plan)
         plan_payload = subscription.model_dump(mode="json")
 
+    previous_subscription_id = payload.get("previous_subscription_id")
     notify_payload = {
         "profile_id": profile_id,
         "plan_type": plan_type.value,
@@ -314,6 +322,8 @@ async def _generate_ai_workout_plan_impl(payload: dict[str, Any], task: Task) ->
         "request_id": request_id,
         "plan": plan_payload,
     }
+    if previous_subscription_id is not None:
+        notify_payload["previous_subscription_id"] = previous_subscription_id
     logger.info(
         f"ai_generate_plan completed profile_id={profile_id} plan_type={plan_type.value} request_id={request_id}"
     )

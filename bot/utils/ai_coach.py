@@ -38,7 +38,7 @@ async def generate_workout_plan(
     wishes: str,
     request_id: str,
     period: str | None = None,
-    workout_days: list[str] | None = None,
+    split_number: int | None = None,
 ) -> list[DayExercises]:
     profile_id = profile.id
     logger.debug(f"generate_workout_plan request_id={request_id} profile_id={profile_id} type={plan_type}")
@@ -47,7 +47,7 @@ async def generate_workout_plan(
         profile_id=profile.id,
         language=language,
         period=period,
-        workout_days=workout_days,
+        split_number=split_number,
         wishes=wishes,
         workout_location=workout_location,
         request_id=request_id,
@@ -100,7 +100,7 @@ async def process_workout_plan_result(
         workout_location="",
         wishes="",
         period="",
-        workout_days=[],
+        split_number=1,
         exercises=[],
         payment_date="1970-01-01",
     )
@@ -114,7 +114,8 @@ async def enqueue_workout_plan_generation(
     wishes: str,
     request_id: str,
     period: str | None = None,
-    workout_days: list[str] | None = None,
+    split_number: int | None = None,
+    previous_subscription_id: int | None = None,
 ) -> bool:
     profile_id = int(getattr(profile, "id", 0) or 0)
     if profile_id <= 0:
@@ -126,12 +127,12 @@ async def enqueue_workout_plan_generation(
 
     language = str(profile.language or settings.DEFAULT_LANG)
     logger.info(
-        "ai_plan_generate_start request_id={} profile_id={} plan_type={} workout_days_count={} wishes_len={} "
+        "ai_plan_generate_start request_id={} profile_id={} plan_type={} split_number={} wishes_len={} "
         "workout_location={}",
         request_id,
         profile_id,
         plan_type.value,
-        len(workout_days or []),
+        split_number,
         len(wishes or ""),
         workout_location.value if workout_location else None,
     )
@@ -144,7 +145,8 @@ async def enqueue_workout_plan_generation(
             workout_location=workout_location,
             wishes=wishes,
             period=period,
-            workout_days=workout_days or [],
+            split_number=split_number or 1,
+            previous_subscription_id=previous_subscription_id,
             request_id=request_id,
         )
     except ValidationError as exc:
