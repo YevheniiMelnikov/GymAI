@@ -33,6 +33,7 @@ from .utils import (
     call_repo,
     ensure_container_ready,
     parse_program_id,
+    parse_subscription_id,
 )
 
 
@@ -240,6 +241,10 @@ async def programs_history(request: HttpRequest) -> JsonResponse:
 async def subscription_data(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
+    subscription_id, id_error = parse_subscription_id(request)
+    if id_error:
+        return id_error
+
     try:
         auth_ctx = await authenticate(request)
     except Exception:
@@ -251,10 +256,16 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
     if profile is None:
         return JsonResponse({"error": "not_found"}, status=404)
 
-    subscription = cast(
-        Subscription | None,
-        await call_repo(SubscriptionRepository.get_latest, int(getattr(profile, "id", 0))),
-    )
+    if subscription_id is not None:
+        subscription = cast(
+            Subscription | None,
+            await call_repo(SubscriptionRepository.get_by_id, int(getattr(profile, "id", 0)), subscription_id),
+        )
+    else:
+        subscription = cast(
+            Subscription | None,
+            await call_repo(SubscriptionRepository.get_latest, int(getattr(profile, "id", 0))),
+        )
     if subscription is None:
         return JsonResponse({"error": "not_found"}, status=404)
 

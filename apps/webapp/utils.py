@@ -111,6 +111,17 @@ def parse_program_id(request: HttpRequest) -> tuple[int | None, JsonResponse | N
         return None, JsonResponse({"error": "bad_request"}, status=400)
 
 
+def parse_subscription_id(request: HttpRequest) -> tuple[int | None, JsonResponse | None]:
+    raw = request.GET.get("subscription_id")
+    if not isinstance(raw, str) or not raw:
+        return None, None
+    try:
+        return int(raw), None
+    except ValueError:
+        logger.warning(f"Invalid subscription_id={raw}")
+        return None, JsonResponse({"error": "bad_request"}, status=400)
+
+
 def build_payment_gateway() -> LiqPayGateway:
     return LiqPayGateway(
         settings.PAYMENT_PUB_KEY,

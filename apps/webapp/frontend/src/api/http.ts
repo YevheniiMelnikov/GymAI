@@ -156,10 +156,14 @@ export async function getProgram(
 
 export async function getSubscription(
   initData: string,
+  subscriptionId?: string,
   signal?: AbortSignal
 ): Promise<SubscriptionResp> {
   const locale = readLocale();
   const url = new URL('api/subscription/', window.location.href);
+  if (subscriptionId) {
+    url.searchParams.set('subscription_id', subscriptionId);
+  }
   const headers: Record<string, string> = {};
   if (initData) headers['X-Telegram-InitData'] = initData;
 

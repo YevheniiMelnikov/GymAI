@@ -76,6 +76,11 @@ const HistoryPage: React.FC = () => {
     useEffect(() => {
         if (switcherRef.current) {
             return renderSegmented(switcherRef.current, activeSegment, (next) => {
+                try {
+                    const tg = (window as any).Telegram?.WebApp;
+                    tg?.HapticFeedback?.impactOccurred('light');
+                } catch {
+                }
                 setActiveSegment(next);
             });
         }
@@ -130,6 +135,14 @@ const HistoryPage: React.FC = () => {
     const handleProgramClick = (id: number) => {
         const params = new URLSearchParams();
         params.set('id', String(id));
+        params.set('from', 'history');
+        navigate(`/?${params.toString()}`);
+    };
+
+    const handleSubscriptionClick = (id: number) => {
+        const params = new URLSearchParams();
+        params.set('subscription_id', String(id));
+        params.set('source', 'subscription');
         params.set('from', 'history');
         navigate(`/?${params.toString()}`);
     };
@@ -239,9 +252,16 @@ const HistoryPage: React.FC = () => {
                                                     {formattedDate}
                                                 </a>
                                             ) : (
-                                                <div className="program-day-summary">
+                                                <a
+                                                    href="#"
+                                                    onClick={(e) => {
+                                                        e.preventDefault();
+                                                        handleSubscriptionClick(it.id);
+                                                    }}
+                                                    className="program-day-summary"
+                                                >
                                                     {formattedDate}
-                                                </div>
+                                                </a>
                                             )}
                                         </li>
                                     );

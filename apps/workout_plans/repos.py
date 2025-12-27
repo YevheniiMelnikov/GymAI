@@ -106,5 +106,9 @@ class SubscriptionRepository:
         return SubscriptionRepository.base_qs().filter(profile_id=profile_id).order_by("-updated_at").first()
 
     @staticmethod
+    def get_by_id(profile_id: int, subscription_id: int) -> Subscription | None:
+        return SubscriptionRepository.base_qs().filter(profile_id=profile_id, id=subscription_id).first()
+
+    @staticmethod
     def get_all(profile_id: int) -> list[Subscription]:
         return list(SubscriptionRepository.base_qs().filter(profile_id=profile_id).order_by("-updated_at"))

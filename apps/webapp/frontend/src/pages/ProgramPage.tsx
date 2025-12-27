@@ -57,7 +57,6 @@ const ProgramPage: React.FC = () => {
     const switcherRef = useRef<HTMLDivElement>(null);
     const fallbackIllustration =
         "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='360' height='260' viewBox='0 0 360 260' fill='none'><defs><linearGradient id='g1' x1='50' y1='30' x2='310' y2='210' gradientUnits='userSpaceOnUse'><stop stop-color='%23C7DFFF'/><stop offset='1' stop-color='%23E7EEFF'/></linearGradient><linearGradient id='g2' x1='120' y1='80' x2='240' y2='200' gradientUnits='userSpaceOnUse'><stop stop-color='%237AA7FF'/><stop offset='1' stop-color='%235B8BFF'/></linearGradient></defs><rect x='30' y='24' width='300' height='200' rx='28' fill='url(%23g1)'/><rect x='62' y='56' width='236' height='136' rx='18' fill='white' stroke='%23B8C7E6' stroke-width='3'/><path d='M90 174c18-30 42-30 60 0s42 30 60 0 42-30 60 0' stroke='%23A7B9DB' stroke-width='6' stroke-linecap='round' fill='none'/><circle cx='136' cy='106' r='16' fill='url(%23g2)'/><circle cx='216' cy='118' r='12' fill='%23E6ECFC'/><circle cx='248' cy='94' r='8' fill='%23E6ECFC'/></svg>";
-    const initialLocationKeyRef = useRef(`${window.location.pathname}${window.location.search}`);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [actionLoading, setActionLoading] = useState(false);
@@ -126,6 +125,11 @@ const ProgramPage: React.FC = () => {
     useEffect(() => {
         if (!switcherRef.current) return;
         return renderSegmented(switcherRef.current, activeSegment, (next) => {
+            try {
+                const tg = (window as any).Telegram?.WebApp;
+                tg?.HapticFeedback?.impactOccurred('light');
+            } catch {
+            }
             setActiveSegment(next);
             const nextParams = new URLSearchParams(searchParamsKey);
             if (next === 'subscriptions') {
@@ -165,7 +169,8 @@ const ProgramPage: React.FC = () => {
                     }
                 } else {
                     // Subscriptions
-                    const sub = await getSubscription(initData, controller.signal);
+                    const subscriptionId = searchParams.get('subscription_id') || '';
+                    const sub = await getSubscription(initData, subscriptionId, controller.signal);
                     appliedLocale = await applyLang(sub.language || paramLang);
 
                     if (sub.days) {
@@ -315,8 +320,8 @@ const ProgramPage: React.FC = () => {
         position: 'fixed',
         bottom: 30,
         right: 20,
-        width: 56,
-        height: 56,
+        width: 68,
+        height: 68,
         borderRadius: '50%',
         backgroundColor: 'var(--accent)',
         color: 'var(--accent-contrast)',
@@ -324,28 +329,13 @@ const ProgramPage: React.FC = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: 32,
+        fontSize: 38,
         boxShadow: '0 8px 16px rgba(0, 0, 0, 0.25)',
         zIndex: 1000,
         cursor: 'pointer',
         transform: fabPressed ? 'scale(0.94)' : 'scale(1)',
         transition: 'transform 120ms ease, box-shadow 120ms ease',
     };
-
-    const handleBack = useCallback(() => {
-        const tg = (window as any).Telegram?.WebApp;
-        const fromHistory = searchParams.get('from') === 'history';
-        if (fromHistory) {
-            navigate('/history');
-            return;
-        }
-        const currentKey = `${window.location.pathname}${window.location.search}`;
-        if (currentKey !== initialLocationKeyRef.current) {
-            window.history.back();
-        } else {
-            tg?.close();
-        }
-    }, [navigate, searchParams]);
 
     const handleHistoryIconClick = useCallback(() => {
         const params = new URLSearchParams();
@@ -373,7 +363,7 @@ const ProgramPage: React.FC = () => {
 
     return (
         <div className="page-container">
-            <TopBar title={t('program.title')} onBack={handleBack}>
+            <TopBar title={t('program.title')}>
                 <button
                     type="button"
                     onClick={handleHistoryIconClick}
