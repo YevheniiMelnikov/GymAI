@@ -72,9 +72,9 @@ edit_profile:
   ua: "Буде кілька запитань, це не займе багато часу ⏳"
 
 finish_registration_to_get_credits:
-  eng: "For more relevant results, please answer a few questions.. After that you will receive a gift {credits} GYMCOIN 🎁"
-  ru: "Для более релевантных результатов ответьте пожалуйста на несколько вопросов. После этого вы получите подарочные {credits} GYMCOIN 🎁"
-  ua: "Для більш релевантних результатів дайте відповідь будь ласка на кілька запитань. Після цього ви отримаєте подарункові {credits} GYMCOIN 🎁"
+  eng: "For more relevant results, please answer a few questions.. After that you will receive a gift {credits} GYMCOINS 🎁"
+  ru: "Для более релевантных результатов ответьте пожалуйста на несколько вопросов. После этого вы получите подарочные {credits} GYMCOINS 🎁"
+  ua: "Для більш релевантних результатів дайте відповідь будь ласка на кілька запитань. Після цього ви отримаєте подарункові {credits} GYMCOINS 🎁"
 
 finish_registration:
   eng: "For more relevant results, please answer a few questions."
@@ -82,9 +82,9 @@ finish_registration:
   ua: "Для більш релевантних результатів дайте відповідь будь ласка на кілька запитань."
 
 initial_credits_granted:
-  eng: "{credits} bonus GYMCOIN have been added to your account 🎉"
-  ru: "На ваш баланс начислено {credits} бонусных GYMCOIN 🎉"
-  ua: "На ваш рахунок зараховано {credits} бонусних GYMCOIN 🎉"
+  eng: "{credits} bonus GYMCOINS have been added to your account 🎉"
+  ru: "На ваш баланс начислено {credits} бонусных GYMCOINS 🎉"
+  ua: "На ваш рахунок зараховано {credits} бонусних GYMCOINS 🎉"
 
 workout_goals:
   eng: "Describe your training goals (weight loss, muscle gain, wellness, etc.) 🎯"
@@ -198,9 +198,9 @@ diet_response_template:
   ua: "<b>{name} підготував ваш раціон на день 👇</b>\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\n{message}"
 
 diet_service_intro:
-  eng: "{bot_name} will create a 1-day meal plan based on your food preferences and training goals. You can edit it in the «My Profile» section.\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nYour balance: <b>{balance}</b> GYMCOIN\nPrice: <b>{price}</b> GYMCOIN"
-  ru: "{bot_name} составит для вас рацион питания на день исходя из ваших пищевых предпочтений и тренировочных целей. Их вы можете редактировать в разделе «Мой профиль»\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nВаш баланс: <b>{balance}</b> GYMCOIN\nСтоимость: <b>{price}</b> GYMCOIN"
-  ua: "{bot_name} складе для вас раціон харчування на день з урахуванням ваших харчових вподобань та тренувальних цілей. Ви можете редагувати їх у розділі «Мій профіль».\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nВаш баланс: <b>{balance}</b> GYMCOIN\nВартість: <b>{price}</b> GYMCOIN"
+  eng: "{bot_name} will create a 1-day meal plan based on your food preferences and training goals. You can edit it in the «My Profile» section.\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nYour balance: <b>{balance}</b> GYMCOINS\nPrice: <b>{price}</b> GYMCOINS"
+  ru: "{bot_name} составит для вас рацион питания на день исходя из ваших пищевых предпочтений и тренировочных целей. Их вы можете редактировать в разделе «Мой профиль»\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nВаш баланс: <b>{balance}</b> GYMCOINS\nСтоимость: <b>{price}</b> GYMCOINS"
+  ua: "{bot_name} складе для вас раціон харчування на день з урахуванням ваших харчових вподобань та тренувальних цілей. Ви можете редагувати їх у розділі «Мій профіль».\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nВаш баланс: <b>{balance}</b> GYMCOINS\nВартість: <b>{price}</b> GYMCOINS"
 
 split_number_selection:
   eng: "Choose the number of workouts per week\nTarget {days}"
@@ -263,16 +263,16 @@ enter_wishes:
   ua: "Вкажіть текстом будь-які дані, які допоможуть {bot_name} скласти персоналізований тренувальний план (відсоток жиру, дата останнього тренування, поточний рівень активності, загальні побажання) ✍️"
 
 credit_balance_menu:
-  eng: "<b>GYMCOIN balance: </b>{credits}\n\nWould you like to top up your balance? Choose from the available packages 👇"
-  ru: "<b>Баланс GYMCOIN: </b>{credits}\n\nЖелаете пополнить баланс? Выберите из доступных пакетов 👇"
-  ua: "<b>Баланс GYMCOIN: </b>{credits}\n\nБажаєте поповнити баланс? Виберіть з доступних пакетів 👇"
+  eng: "<b>GYMCOINS balance: </b>{credits}\n\nChoose from the available packages 👇"
+  ru: "<b>Баланс GYMCOINS: </b>{credits}\n\nВыберите из доступных пакетов 👇"
+  ua: "<b>Баланс GYMCOINS: </b>{credits}\n\nВиберіть з доступних пакетів 👇"
 
 not_enough_credits:
-  eng: "Not enough GYMCOIN. Please top up your balance."
-  ru: "Недостаточно GYMCOIN. Пополните баланс."
-  ua: "Недостатньо GYMCOIN. Поповніть баланс."
+  eng: "Not enough GYMCOINS. Please top up your balance."
+  ru: "Недостаточно GYMCOINS. Пополните баланс."
+  ua: "Недостатньо GYMCOINS. Поповніть баланс."
 
 confirm_service:
-  eng: "Your balance: {balance} GYMCOIN \nPrice: {price} GYMCOIN"
-  ru: "Ваш баланс: {balance} GYMCOIN \nСтоимость: {price} GYMCOIN"
-  ua: "Ваш баланс: {balance} GYMCOIN \nВартість: {price} GYMCOIN"
+  eng: "Your balance: {balance} GYMCOINS \nPrice: {price} GYMCOINS"
+  ru: "Ваш баланс: {balance} GYMCOINS \nСтоимость: {price} GYMCOINS"
+  ua: "Ваш баланс: {balance} GYMCOINS \nВартість: {price} GYMCOINS"

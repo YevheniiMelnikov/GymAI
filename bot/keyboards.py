@@ -214,7 +214,7 @@ def subscription_type_kb(lang: str, services: list[tuple[str, int]]) -> KbMarkup
         if label_key is None:
             continue
         label = translate(label_key, lang)
-        text = f"{label} - {price} GYMCOIN"
+        text = f"{label} - {price} GYMCOINS"
         buttons.append([KbBtn(text=text, callback_data=f"subscription_type_{service_name}")])
     buttons.append([builder.add(ButtonText.prev_menu, "back")])
     return KbMarkup(inline_keyboard=buttons, row_width=1)
