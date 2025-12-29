@@ -109,6 +109,7 @@ async def update_profile_data(
             api_payload["language"] = lang_override
 
         credits_delta = int(data.get("credits_delta") or 0)
+        memify_after_bonus = False
         if credits_delta and not profile.gift_credits_granted:
             remaining = max(0, settings.DEFAULT_CREDITS - (profile.credits or 0))
             credits_delta_to_apply = min(credits_delta, remaining)
@@ -116,6 +117,7 @@ async def update_profile_data(
                 new_credits = (profile.credits or 0) + credits_delta_to_apply
                 normalized_updates["credits"] = new_credits
                 api_payload["credits"] = new_credits
+                memify_after_bonus = True
             normalized_updates["gift_credits_granted"] = True
             api_payload["gift_credits_granted"] = True
 
@@ -136,6 +138,17 @@ async def update_profile_data(
         await Cache.profile.save_record(profile.id, profile.model_dump(mode="json"))
         await answer_msg(message, translate(MessageText.your_data_updated, lang))
         await state.update_data(profile=profile.model_dump(mode="json"))
+        if memify_after_bonus and settings.AI_COACH_KB_ENABLED:
+            try:
+                from core.tasks.ai_coach.maintenance import memify_profile_datasets
+
+                getattr(memify_profile_datasets, "delay")(
+                    profile.id,
+                    reason="profile_completed",
+                )
+                logger.info(f"memify_profile_enqueued profile_id={profile.id} reason=profile_completed")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"memify_profile_enqueue_failed profile_id={profile.id} detail={exc!s}")
         pending_data = await state.get_data()
         pending_flow = pending_data.get("pending_flow")
         if pending_flow:

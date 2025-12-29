@@ -30,7 +30,6 @@ from loguru import logger
 from ai_coach.agent.knowledge.schemas import KnowledgeSnippet, ProjectionStatus
 from ai_coach.agent.knowledge.utils.datasets import DatasetService
 from ai_coach.agent.knowledge.utils.projection import ProjectionService
-from ai_coach.agent.knowledge.utils.memify_scheduler import schedule_profile_memify
 from ai_coach.exceptions import AgentExecutionAborted
 from config.app_settings import settings
 from core.schemas import Profile
@@ -69,7 +68,6 @@ class SearchService:
         self.projection_service = projection_service
         self._knowledge_base: Optional["KnowledgeBase"] = knowledge_base
         self._search_type_default = _resolve_search_type(getattr(settings, "COGNEE_SEARCH_MODE", None))
-        self._memify_delay = max(float(getattr(settings, "AI_COACH_MEMIFY_DELAY_SECONDS", 3600.0)), 0.0)
 
     def _require_kb(self) -> "KnowledgeBase":
         if self._knowledge_base is None:
@@ -289,7 +287,6 @@ class SearchService:
                 session_id,
             )
 
-            await self._maybe_schedule_memify(profile_id)
             if k is not None:
                 aggregated = aggregated[:k]
             if not aggregated:
@@ -697,30 +694,6 @@ class SearchService:
                 await kb._process_dataset(dataset, user)
             except Exception as exc:
                 logger.warning(f"knowledge_dataset_warmup_failed dataset={dataset} detail={exc}")
-
-    async def _maybe_schedule_memify(self, profile_id: int) -> None:
-        if cognee is None or not hasattr(cognee, "memify"):
-            logger.debug("knowledge_memify_schedule_skipped profile_id={} reason=memify_missing", profile_id)
-            return
-        datasets = [
-            self.dataset_service.alias_for_dataset(self.dataset_service.dataset_name(profile_id)),
-            self.dataset_service.alias_for_dataset(self.dataset_service.chat_dataset_name(profile_id)),
-        ]
-        dataset_label = ",".join(datasets)
-        scheduled = await schedule_profile_memify(profile_id, reason="paid_flow", delay_s=self._memify_delay)
-        if scheduled:
-            logger.info(
-                "knowledge_memify_scheduled profile_id={} datasets={} delay_s={}",
-                profile_id,
-                dataset_label,
-                self._memify_delay,
-            )
-        else:
-            logger.debug(
-                "knowledge_memify_schedule_declined profile_id={} datasets={} reason=dedupe_or_error",
-                profile_id,
-                dataset_label,
-            )
 
     def _log_search_completion(
         self,
