@@ -1,8 +1,14 @@
 import asyncio
+import time
 
 from loguru import logger
 
 from config.app_settings import settings
+from core.utils.ai_coach_memify import (
+    memify_run_at_key,
+    memify_schedule_ttl,
+    memify_scheduled_key,
+)
 from core.utils.redis_lock import get_redis_client
 
 
@@ -20,23 +26,28 @@ async def schedule_profile_memify(
     Schedule a delayed memify for profile datasets with cross-process dedup.
     Returns True if a task was enqueued.
     """
+    env_mode = str(getattr(settings, "ENVIRONMENT", "development")).lower()
+    if env_mode != "production":
+        logger.info(f"memify_schedule_skipped profile_id={profile_id} reason=non_production environment={env_mode}")
+        return False
     delay_value = float(delay_s if delay_s is not None else settings.AI_COACH_MEMIFY_DELAY_SECONDS)
     countdown = max(delay_value, 0.0)
-    dedupe_ttl = int(countdown) + 300
-    key = f"ai_coach:memify:profile:{profile_id}"
+    run_at = time.time() + countdown
+    ttl = memify_schedule_ttl(countdown)
+    scheduled_key = memify_scheduled_key(profile_id)
+    run_at_key = memify_run_at_key(profile_id)
     datasets = _dataset_labels(profile_id)
     try:
         client = get_redis_client()
-        already_scheduled = not await client.set(key, "1", nx=True, ex=dedupe_ttl)
+        await client.set(run_at_key, f"{run_at}", ex=ttl)
+        already_scheduled = not await client.set(scheduled_key, "1", nx=True, ex=ttl)
     except Exception as exc:  # noqa: BLE001
-        logger.warning("memify_schedule_dedupe_failed profile_id={} detail={}", profile_id, exc)
+        logger.warning(f"memify_schedule_dedupe_failed profile_id={profile_id} detail={exc}")
         return False
     if already_scheduled:
+        await client.set(scheduled_key, "1", ex=ttl)
         logger.info(
-            "memify_schedule_skipped profile_id={} datasets={} reason=dedupe_hit delay_s={}",
-            profile_id,
-            datasets,
-            countdown,
+            f"memify_schedule_skipped profile_id={profile_id} datasets={datasets} reason=dedupe_hit delay_s={countdown}"
         )
         return False
 
@@ -48,16 +59,12 @@ async def schedule_profile_memify(
             countdown=countdown,
         )
         logger.info(
-            "memify_schedule_enqueued profile_id={} datasets={} reason={} delay_s={} task_id={}",
-            profile_id,
-            datasets,
-            reason,
-            countdown,
-            getattr(task, "id", "unknown"),
+            f"memify_schedule_enqueued profile_id={profile_id} datasets={datasets} "
+            f"reason={reason} delay_s={countdown} task_id={getattr(task, 'id', 'unknown')}"
         )
         return True
     except Exception as exc:  # noqa: BLE001
-        logger.warning("memify_schedule_failed profile_id={} detail={}", profile_id, exc)
+        logger.warning(f"memify_schedule_failed profile_id={profile_id} detail={exc}")
         return False
 
 

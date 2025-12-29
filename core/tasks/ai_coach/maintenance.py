@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import time
 from typing import Any
 
 import httpx
@@ -11,6 +12,12 @@ from config.app_settings import settings
 from core.celery_app import app
 from core.internal_http import build_internal_hmac_auth_headers, resolve_hmac_credentials
 from core.services import APIService
+from core.utils.ai_coach_memify import (
+    memify_run_at_key,
+    memify_schedule_ttl,
+    memify_scheduled_key,
+    parse_memify_run_at,
+)
 from core.utils.redis_lock import get_redis_client, redis_try_lock
 
 __all__ = [
@@ -159,7 +166,7 @@ def cleanup_profile_knowledge(
     self, profile_id: int, reason: str = "profile_deleted"
 ) -> None:  # pyrefly: ignore[valid-type]
     """Remove Cognee datasets linked to the specified profile."""
-    logger.info("cleanup_profile_knowledge start profile_id=%s reason=%s", profile_id, reason)
+    logger.info(f"cleanup_profile_knowledge start profile_id={profile_id} reason={reason}")
     payload: dict[str, Any] = {"reason": reason}
     timeout = settings.AI_COACH_TIMEOUT
     creds = resolve_hmac_credentials(settings, prefer_ai_coach=True)
@@ -181,9 +188,9 @@ def cleanup_profile_knowledge(
         resp = httpx.post(url, timeout=timeout, **request_kwargs)
         resp.raise_for_status()
     except httpx.HTTPError as exc:
-        logger.warning("cleanup_profile_knowledge failed profile_id=%s detail=%s", profile_id, exc)
+        logger.warning(f"cleanup_profile_knowledge failed profile_id={profile_id} detail={exc}")
         raise self.retry(exc=exc)
-    logger.info("cleanup_profile_knowledge done profile_id=%s", profile_id)
+    logger.info(f"cleanup_profile_knowledge done profile_id={profile_id}")
 
 
 @app.task(
@@ -252,9 +259,27 @@ def sync_profile_knowledge(
 )
 def memify_profile_datasets(self, profile_id: int, reason: str = "paid_flow") -> None:  # pyrefly: ignore[valid-type]
     """Trigger Cognee memify for profile datasets."""
-    logger.info("memify_profile_datasets.start profile_id=%s reason=%s", profile_id, reason)
+    logger.info(f"memify_profile_datasets.start profile_id={profile_id} reason={reason}")
     payload: dict[str, Any] = {"reason": reason}
     timeout = settings.AI_COACH_TIMEOUT
+    now = time.time()
+    run_at_key = memify_run_at_key(profile_id)
+    scheduled_key = memify_scheduled_key(profile_id)
+    env_mode = str(getattr(settings, "ENVIRONMENT", "development")).lower()
+    if env_mode != "production":
+
+        async def _clear_schedule_keys() -> None:
+            client = get_redis_client()
+            await client.delete(run_at_key, scheduled_key)
+
+        try:
+            asyncio.run(_clear_schedule_keys())
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"memify_profile_datasets.clear_failed profile_id={profile_id} detail={exc}")
+        logger.info(
+            f"memify_profile_datasets.skipped profile_id={profile_id} reason=non_production environment={env_mode}"
+        )
+        return
     creds = resolve_hmac_credentials(settings, prefer_ai_coach=True)
     if creds:
         path = f"internal/knowledge/profiles/{profile_id}/memify/"
@@ -270,10 +295,65 @@ def memify_profile_datasets(self, profile_id: int, reason: str = "paid_flow") ->
             "auth": (settings.AI_COACH_REFRESH_USER, settings.AI_COACH_REFRESH_PASSWORD),
         }
     url = _ai_coach_path(path)
+
+    async def _read_run_at() -> float | None:
+        client = get_redis_client()
+        raw = await client.get(run_at_key)
+        return parse_memify_run_at(raw)
+
+    async def _touch_schedule(ttl_seconds: float, run_at: float | None) -> None:
+        client = get_redis_client()
+        ttl = memify_schedule_ttl(ttl_seconds)
+        await client.set(scheduled_key, "1", ex=ttl)
+        if run_at is not None:
+            await client.set(run_at_key, f"{run_at}", ex=ttl)
+
+    async def _finalize_schedule() -> float | None:
+        client = get_redis_client()
+        raw = await client.get(run_at_key)
+        run_at = parse_memify_run_at(raw)
+        if run_at is None:
+            await client.delete(run_at_key, scheduled_key)
+            return None
+        remaining = run_at - time.time()
+        if remaining <= 0:
+            await client.delete(run_at_key, scheduled_key)
+            return None
+        ttl = memify_schedule_ttl(remaining)
+        await client.set(scheduled_key, "1", ex=ttl)
+        await client.set(run_at_key, f"{run_at}", ex=ttl)
+        return remaining
+
+    try:
+        planned_run_at = asyncio.run(_read_run_at())
+    except Exception as exc:  # noqa: BLE001
+        planned_run_at = None
+        logger.warning(f"memify_profile_datasets.schedule_read_failed profile_id={profile_id} detail={exc}")
+
+    if planned_run_at is not None and planned_run_at > now:
+        delay_seconds = planned_run_at - now
+        try:
+            asyncio.run(_touch_schedule(delay_seconds, planned_run_at))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"memify_profile_datasets.schedule_touch_failed profile_id={profile_id} detail={exc}")
+        self.apply_async(kwargs={"profile_id": profile_id, "reason": reason}, countdown=delay_seconds)
+        logger.info(f"memify_profile_datasets.deferred profile_id={profile_id} delay_s={delay_seconds:.1f}")
+        return
+
     try:
         resp = httpx.post(url, timeout=timeout, **request_kwargs)
         resp.raise_for_status()
     except httpx.HTTPError as exc:
-        logger.warning("memify_profile_datasets.retry profile_id=%s detail=%s", profile_id, exc)
+        logger.warning(f"memify_profile_datasets.retry profile_id={profile_id} detail={exc}")
         raise self.retry(exc=exc)
-    logger.info("memify_profile_datasets.done profile_id=%s", profile_id)
+    logger.info(f"memify_profile_datasets.done profile_id={profile_id}")
+
+    try:
+        next_delay = asyncio.run(_finalize_schedule())
+    except Exception as exc:  # noqa: BLE001
+        next_delay = None
+        logger.warning(f"memify_profile_datasets.schedule_finalize_failed profile_id={profile_id} detail={exc}")
+
+    if next_delay is not None:
+        self.apply_async(kwargs={"profile_id": profile_id, "reason": reason}, countdown=next_delay)
+        logger.info(f"memify_profile_datasets.rescheduled profile_id={profile_id} delay_s={next_delay:.1f}")

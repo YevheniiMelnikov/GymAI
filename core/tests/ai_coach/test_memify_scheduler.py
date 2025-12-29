@@ -29,6 +29,7 @@ class _DummyTask:
 
 @pytest.mark.asyncio
 async def test_schedule_profile_memify_dedup(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(memify_scheduler.settings, "ENVIRONMENT", "production")
     dummy_redis = _DummyRedis()
     dummy_task = _DummyTask()
     monkeypatch.setattr(memify_scheduler, "get_redis_client", lambda: dummy_redis)
