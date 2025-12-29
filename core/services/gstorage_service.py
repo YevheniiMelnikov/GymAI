@@ -6,7 +6,6 @@ from google.cloud import storage
 from google.auth.exceptions import DefaultCredentialsError
 
 from config.app_settings import settings
-from core.cache import Cache
 
 
 class GCStorageService:
@@ -90,10 +89,6 @@ class ExerciseGIFStorage(GCStorageService):
 
         exercise_lc = exercise.lower()
 
-        cached = await Cache.workout.get_exercise_gif(exercise_lc)
-        if cached:
-            return f"{self.base_url}/{self.bucket_name}/{cached}"
-
         try:
             for filename, synonyms in exercise_dict.items():
                 if exercise_lc not in {s.lower() for s in synonyms}:
@@ -105,9 +100,6 @@ class ExerciseGIFStorage(GCStorageService):
 
                 blob = blobs[0]
                 file_url = f"{self.base_url}/{self.bucket_name}/{blob.name}"
-
-                for syn in synonyms:
-                    await Cache.workout.cache_gif_filename(syn.lower(), blob.name)
 
                 return file_url
         except Exception as exc:

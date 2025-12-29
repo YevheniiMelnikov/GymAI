@@ -224,7 +224,11 @@ async def internal_send_weekly_survey(request: web.Request) -> web.Response:
 
     for recipient in payload.recipients:
         lang = recipient.language or settings.DEFAULT_LANG
-        webapp_url = get_webapp_url("weekly_survey", lang)
+        webapp_url = get_webapp_url(
+            "weekly_survey",
+            lang,
+            extra_params={"subscription_id": str(recipient.subscription_id)},
+        )
         if not webapp_url:
             logger.warning(f"weekly_survey_skipped reason=missing_webapp_url profile_id={recipient.profile_id}")
             continue

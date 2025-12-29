@@ -32,7 +32,6 @@ class AskCtx(TypedDict):
     attachments: NotRequired[list[dict[str, str]] | None]
     period: str
     split_number: int
-    expected_workout: str
     feedback: str
     wishes: str
     language: str

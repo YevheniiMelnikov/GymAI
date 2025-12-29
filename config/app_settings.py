@@ -133,11 +133,11 @@ class Settings(BaseSettings):
     AI_COACH_REDIS_CHAT_DB: Annotated[int, Field(default=2, description="Redis database index used for cached chat history summaries.")]
     AI_COACH_REDIS_STATE_DB: Annotated[int, Field(default=3, description="Redis database index used for AI coach idempotency and delivery state.")]
     AI_COACH_COGNEE_SESSION_TTL: Annotated[int, Field(default=0, description="TTL in seconds for Cognee session cache; 0 disables expiry.")]
+    AI_COACH_KB_ENABLED: Annotated[bool, Field(default=True, description="Enable Cognee knowledge base usage for AI coach flows.")]
     AI_COACH_LOG_PAYLOADS: Annotated[bool, Field(default=False, description="Log AI coach payloads and sources in debug logs when enabled.")]
     AI_COACH_HISTORY_TIMEOUT: Annotated[float, Field(default=180.0, description="Timeout for retrieving user history in seconds.")]
     AI_COACH_PROGRAM_HISTORY_TIMEOUT: Annotated[float, Field(default=6.0, description="Timeout for retrieving workout program history in seconds.")]
     AI_COACH_SAVE_TIMEOUT: Annotated[float, Field(default=30.0, description="Timeout for saving data from the AI coach in seconds.")]
-    AI_COACH_ATTACH_GIFS_MIN_BUDGET: Annotated[float, Field(default=10.0, description="Minimum time budget in seconds to allow attaching GIFs.")]
     AI_COACH_RATE_LIMIT: Annotated[int, Field(default=120, description="Number of allowed AI Coach requests per rate-limiting period.")]
     AI_COACH_RATE_PERIOD: Annotated[int, Field(default=60, description="Rate-limiting period in seconds for AI Coach requests.")]
 

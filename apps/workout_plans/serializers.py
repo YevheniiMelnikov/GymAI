@@ -18,7 +18,6 @@ class ExerciseSerializer(serializers.Serializer):
     name = serializers.CharField()
     sets = serializers.CharField()
     reps = serializers.CharField()
-    gif_link = serializers.CharField(required=False, allow_null=True)
     weight = serializers.CharField(required=False, allow_null=True)
     set_id = serializers.IntegerField(required=False, allow_null=True)
     sets_detail = ExerciseSetDetailSerializer(many=True, required=False)

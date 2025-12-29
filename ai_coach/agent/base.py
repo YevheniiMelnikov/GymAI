@@ -55,7 +55,6 @@ class CoachAgentProtocol(Protocol):
     async def update_workout_plan(
         cls,
         prompt: str | None,
-        expected_workout: str,
         feedback: str,
         deps: AgentDeps,
         *,

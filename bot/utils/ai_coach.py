@@ -67,7 +67,6 @@ async def generate_workout_plan(
 async def process_workout_plan_result(
     *,
     profile_id: int,
-    expected_workout_result: str,
     feedback: str,
     language: str,
     plan_type: WorkoutPlanType,
@@ -76,7 +75,6 @@ async def process_workout_plan_result(
         plan_type,
         profile_id=profile_id,
         language=language,
-        expected_workout=expected_workout_result,
         feedback=feedback,
     )
     if plan:
@@ -322,7 +320,6 @@ async def enqueue_ai_question(
 async def enqueue_workout_plan_update(
     *,
     profile_id: int,
-    expected_workout_result: str,
     feedback: str,
     language: str,
     plan_type: WorkoutPlanType,
@@ -334,7 +331,6 @@ async def enqueue_workout_plan_update(
             profile_id=profile_id,
             language=language,
             plan_type=plan_type,
-            expected_workout_result=expected_workout_result,
             feedback=feedback,
             workout_location=workout_location,
             request_id=request_id,

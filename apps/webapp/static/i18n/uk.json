@@ -68,5 +68,23 @@
   "payment.amount": "До сплати: {amount} {currency}",
   "payment.launch": "Форма оплати відкриється всередині Telegram. Якщо цього не сталося, натисніть кнопку нижче.",
   "payment.open": "Відкрити сторінку оплати",
-  "payment.unavailable": "Зараз оплата недоступна, спробуйте пізніше"
+  "payment.unavailable": "Зараз оплата недоступна, спробуйте пізніше",
+
+  "weekly_survey.title": "Щотижневе опитування",
+  "weekly_survey.loading": "Готуємо щотижневе опитування...",
+  "weekly_survey.no_data": "Потрібен структурований план тренувань, щоб показати опитування.",
+  "weekly_survey.no_workouts": "За тиждень поки немає тренувальних днів.",
+  "weekly_survey.day_title": "День {n}",
+  "weekly_survey.context": "Наскільки важкою була кожна вправа?",
+  "weekly_survey.edit_exercise": "Редагувати вправу",
+  "weekly_survey.exercise_difficulty": "Складність вправи",
+  "weekly_survey.scale.easy": "Легше",
+  "weekly_survey.scale.hard": "Важче",
+  "weekly_survey.skip_day": "Тренування не було",
+  "weekly_survey.next_day": "Наступний день",
+  "weekly_survey.send": "Відправити",
+  "weekly_survey.sending": "Надсилаємо...",
+  "weekly_survey.comment.add": "Додати коментар",
+  "weekly_survey.comment.edit": "Змінити коментар",
+  "weekly_survey.comment.placeholder": "Можете зазначити тут будь-яку корисну тренеру інформацію"
 }

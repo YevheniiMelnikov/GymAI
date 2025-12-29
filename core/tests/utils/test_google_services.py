@@ -64,8 +64,6 @@ def test_create_new_payment_sheet(monkeypatch: Any) -> None:
 def test_find_gif(monkeypatch: Any) -> None:
     import asyncio
 
-    stored: dict[str, str] = {}
-
     class FakeBlob:
         name = "pushup.gif"
 
@@ -85,17 +83,5 @@ def test_find_gif(monkeypatch: Any) -> None:
 
     storage = ExerciseGIFStorage("bucket")
 
-    async def fake_get(name: str) -> None:
-        return None
-
-    async def fake_cache(name: str, value: str) -> None:
-        stored[name] = value
-
-    from types import SimpleNamespace
-
-    dummy_cache = SimpleNamespace(workout=SimpleNamespace(get_exercise_gif=fake_get, cache_gif_filename=fake_cache))
-    monkeypatch.setattr(gs_store_module, "Cache", dummy_cache)
-
     url = asyncio.run(storage.find_gif("Push Up", {"pushup": ["Push Up"]}))
     assert url == "https://storage.googleapis.com/bucket/pushup.gif"
-    assert stored["push up"] == "pushup.gif"

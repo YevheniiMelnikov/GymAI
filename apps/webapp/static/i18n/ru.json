@@ -68,5 +68,23 @@
   "payment.amount": "К оплате: {amount} {currency}",
   "payment.launch": "Форма оплаты откроется внутри Telegram. Если этого не произошло, нажмите кнопку ниже.",
   "payment.open": "Открыть страницу оплаты",
-  "payment.unavailable": "Сейчас оплата недоступна, попробуйте позже"
+  "payment.unavailable": "Сейчас оплата недоступна, попробуйте позже",
+
+  "weekly_survey.title": "Еженедельный опрос",
+  "weekly_survey.loading": "Готовим еженедельный опрос...",
+  "weekly_survey.no_data": "Нужен структурированный план тренировок, чтобы показать опрос.",
+  "weekly_survey.no_workouts": "За неделю пока нет тренировочных дней.",
+  "weekly_survey.day_title": "День {n}",
+  "weekly_survey.context": "Насколько тяжелым было каждое упражнение?",
+  "weekly_survey.edit_exercise": "Редактировать упражнение",
+  "weekly_survey.exercise_difficulty": "Сложность упражнения",
+  "weekly_survey.scale.easy": "Легче",
+  "weekly_survey.scale.hard": "Тяжелее",
+  "weekly_survey.skip_day": "Тренировки не было",
+  "weekly_survey.next_day": "Следующий день",
+  "weekly_survey.send": "Отправить",
+  "weekly_survey.sending": "Отправляем...",
+  "weekly_survey.comment.add": "Добавить комментарий",
+  "weekly_survey.comment.edit": "Изменить комментарий",
+  "weekly_survey.comment.placeholder": "Можете указать здесь какую-либо полезную тренеру информацию"
 }

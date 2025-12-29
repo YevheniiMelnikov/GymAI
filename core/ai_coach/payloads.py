@@ -42,7 +42,6 @@ class AiPlanGenerationPayload(AiPlanBasePayload):
 
 
 class AiPlanUpdatePayload(AiPlanBasePayload):
-    expected_workout_result: str
     feedback: str
     workout_location: WorkoutLocation | None = None
 

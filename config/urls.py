@@ -37,6 +37,11 @@ urlpatterns = [
     path("api/payment/", webapp_views.payment_data, name="webapp-payment-data-direct"),  # type: ignore[arg-type]
     path("api/workouts/action/", webapp_views.workouts_action, name="webapp-workouts-action-direct"),  # type: ignore[arg-type]
     path(
+        "api/weekly-survey/",
+        cast(WebappView, webapp_views.weekly_survey_submit),
+        name="webapp-weekly-survey-submit-direct",
+    ),
+    path(
         "internal/metrics/event/",
         cast(WebappView, metrics_views.record_metrics_event),
         name="internal-metrics-event",
@@ -45,6 +50,11 @@ urlpatterns = [
         "api/program/exercise/",
         cast(WebappView, webapp_views.update_exercise_sets),
         name="webapp-program-exercise-update-direct",
+    ),
+    path(
+        "api/subscription/exercise/",
+        cast(WebappView, webapp_views.update_subscription_exercise_sets),
+        name="webapp-subscription-exercise-update-direct",
     ),
     path(
         "api/program/exercise/replace/",

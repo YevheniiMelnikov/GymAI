@@ -216,7 +216,6 @@ async def test_enqueue_workout_plan_update_dispatch(monkeypatch: pytest.MonkeyPa
 
     queued = await enqueue_workout_plan_update(
         profile_id=9,
-        expected_workout_result="squats",
         feedback="tough",
         language="en",
         plan_type=WorkoutPlanType.SUBSCRIPTION,
@@ -227,7 +226,7 @@ async def test_enqueue_workout_plan_update_dispatch(monkeypatch: pytest.MonkeyPa
     assert queued is True
     assert captured["profile_id"] == 9
     assert captured["plan_type"] == WorkoutPlanType.SUBSCRIPTION.value
-    assert captured["expected_workout_result"] == "squats"
+    assert captured["feedback"] == "tough"
 
 
 @pytest.mark.asyncio

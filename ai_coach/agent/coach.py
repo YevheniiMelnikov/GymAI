@@ -247,7 +247,6 @@ class CoachAgent(metaclass=CoachAgentMeta):
     async def update_workout_plan(
         cls,
         prompt: str | None,
-        expected_workout: str,
         feedback: str,
         deps: AgentDeps,
         *,
@@ -258,6 +257,7 @@ class CoachAgent(metaclass=CoachAgentMeta):
     ) -> Program | Subscription:
         agent = cls._get_agent()
         deps.mode = CoachMode.update
+        deps.disabled_tools.add("tool_search_knowledge")
         today = datetime.now(ZoneInfo(settings.TIME_ZONE)).date().isoformat()
         context_lines: list[str] = []
         if workout_location:
@@ -268,7 +268,6 @@ class CoachAgent(metaclass=CoachAgentMeta):
             context_lines.append(prompt)
         formatted = UPDATE_WORKOUT.format(
             current_date=today,
-            expected_workout=expected_workout,
             feedback=feedback,
             context="\n".join(context_lines),
             language=cls._lang(deps),

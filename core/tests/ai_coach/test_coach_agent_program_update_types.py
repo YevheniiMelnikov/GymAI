@@ -54,7 +54,7 @@ def test_update_workout_plan_returns_program(monkeypatch: pytest.MonkeyPatch) ->
             **kwargs: Any,
         ) -> Program:
             assert "MODE: update" in prompt
-            assert "Client Feedback" in prompt
+            assert "Weekly Survey Summary" in prompt
             assert "WORKOUT PROGRAM RULES" in prompt
             assert "Workout location: home" in prompt
             return Program(
@@ -70,7 +70,7 @@ def test_update_workout_plan_returns_program(monkeypatch: pytest.MonkeyPatch) ->
         monkeypatch.setattr(CoachAgent, "_get_agent", classmethod(lambda cls: types.SimpleNamespace(run=fake_run)))
         deps = AgentDeps(profile_id=1)
         result = await CoachAgent.update_workout_plan(
-            "hi", "exp", "fb", deps, workout_location=WorkoutLocation.HOME, output_type=Program
+            "hi", "fb", deps, workout_location=WorkoutLocation.HOME, output_type=Program
         )
         assert isinstance(result, Program)
 

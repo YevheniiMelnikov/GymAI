@@ -179,6 +179,7 @@ To refresh external knowledge (e.g., documents from Google Drive), Celery calls 
 * `AI_COACH_TIMEOUT` – timeout for HTTP calls to the AI coach
 * `AI_COACH_COGNEE_TELEMETRY` – set to `1` to enable verbose Cognee telemetry logs (default: `0`)
 * `AI_COACH_LOG_PAYLOADS` – set to `1` to log AI coach answer payloads/sources in DEBUG (default: `0`)
+* `AI_COACH_KB_ENABLED` – set to `0` to disable Cognee knowledge base usage globally (default: `1`)
 * `AI_COACH_GENERATION_SEARCH_TIMEOUT` – search timeout cap (seconds) for workout and diet generation modes
 * `AI_COACH_CHAT_SUMMARY_PAIR_LIMIT` – number of client/coach message pairs before summarizing cached chat
 * `AI_COACH_CHAT_SUMMARY_MAX_TOKENS` – max tokens for the chat summary LLM request

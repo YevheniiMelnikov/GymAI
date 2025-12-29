@@ -301,7 +301,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 20s
+      start_period: 60s
     entrypoint: /app/docker/entrypoint.sh
     command: >
       bash -lc "uvicorn ai_coach.api:app --host 0.0.0.0 --port ${COACH_PORT:-9000}"

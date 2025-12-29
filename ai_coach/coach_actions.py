@@ -53,7 +53,6 @@ DISPATCH: dict[CoachMode, CoachAction] = {
     ),
     CoachMode.update: lambda ctx: CoachAgent.update_workout_plan(
         ctx.get("prompt"),
-        expected_workout=ctx["expected_workout"],
         feedback=ctx["feedback"],
         workout_location=ctx.get("workout_location"),
         deps=ctx["deps"],

@@ -10,7 +10,6 @@ Subscription field guide:
 - period: subscription billing period ("1m", "6m", "12m").
 - wishes: client's preferences or limitations in free-form text.
 - workout_location: training location ("home", "gym", "strength").
-3) Call tool_attach_gifs(payload.exercises) and replace payload.exercises with the returned list.
-4) Call tool_create_subscription(split_number, payload.exercises, period, wishes, workout_location) and return Subscription.
+3) Call tool_create_subscription(split_number, payload.exercises, period, wishes, workout_location) and return Subscription.
 
 Execute each tool exactly once in the given order. If you receive a response indicating a tool was already run, skip additional calls and complete the subscription with the existing data.

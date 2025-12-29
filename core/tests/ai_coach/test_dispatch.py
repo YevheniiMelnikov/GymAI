@@ -98,7 +98,6 @@ def test_update_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
 
         async def fake_update(
             prompt: str | None,
-            expected_workout: str,
             feedback: str,
             *,
             workout_location: WorkoutLocation | None = None,
@@ -109,7 +108,6 @@ def test_update_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
         ) -> str:
             captured["args"] = (
                 prompt,
-                expected_workout,
                 feedback,
                 workout_location,
                 deps,
@@ -122,7 +120,6 @@ def test_update_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
         _patch_agent(monkeypatch, "update_workout_plan", staticmethod(fake_update))
         ctx = {
             "prompt": "p",
-            "expected_workout": "ew",
             "feedback": "fb",
             "deps": "d",
             "wishes": "",
@@ -132,7 +129,7 @@ def test_update_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
         }
         result = await DISPATCH[CoachMode.update](ctx)  # pyrefly: ignore[bad-argument-type]
         assert result == "update-result"
-        assert captured["args"] == ("p", "ew", "fb", WorkoutLocation.HOME, "d", Program, "i", None)
+        assert captured["args"] == ("p", "fb", WorkoutLocation.HOME, "d", Program, "i", None)
 
     asyncio.run(runner())
 

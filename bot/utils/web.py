@@ -35,6 +35,7 @@ async def setup_app(app: "web.Application", bot: "Bot", dp: "Dispatcher") -> Non
         internal_ai_answer_ready,
         internal_ai_diet_ready,
         internal_webapp_workout_action,
+        internal_webapp_weekly_survey_submitted,
     )
 
     path = settings.WEBHOOK_PATH.rstrip("/")
@@ -48,6 +49,10 @@ async def setup_app(app: "web.Application", bot: "Bot", dp: "Dispatcher") -> Non
     app.router.add_post("/internal/tasks/ai_answer_ready/", internal_ai_answer_ready)
     app.router.add_post("/internal/tasks/ai_diet_ready/", internal_ai_diet_ready)
     app.router.add_post("/internal/webapp/workouts/action/", internal_webapp_workout_action)
+    app.router.add_post(
+        "/internal/webapp/weekly-survey/submitted/",
+        internal_webapp_weekly_survey_submitted,
+    )
     setup_application(app, dp, bot=bot)
 
 

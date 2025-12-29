@@ -10,10 +10,7 @@ from pydantic_ai import ModelRetry, RunContext  # pyrefly: ignore[import-error]
 from pydantic_ai.tools import ToolDefinition  # pyrefly: ignore[import-error]
 from pydantic_ai.toolsets.function import FunctionToolset  # pyrefly: ignore[import-error]
 
-from core.cache import Cache
-from core.exercises import exercise_dict
 from core.schemas import DayExercises, Program, Subscription
-from core.utils.short_url import short_url
 from core.enums import SubscriptionPeriod
 from config.app_settings import settings
 
@@ -22,8 +19,6 @@ from ai_coach.exceptions import AgentExecutionAborted
 from ai_coach.types import CoachMode
 
 from ..schemas import ProgramPayload
-from core.services import get_gif_manager
-
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
 from ai_coach.agent.utils import ProgramAdapter
 from ai_coach.agent import utils as agent_utils
@@ -145,6 +140,9 @@ def _single_use_prepare(
         ctx: RunContext[AgentDeps], tool_def: ToolDefinition
     ) -> ToolDefinition | None:  # pyrefly: ignore[unsupported-operation]
         deps = ctx.deps
+        if tool_name in deps.disabled_tools:
+            _log_tool_disabled(deps, tool_name, reason="tool_disabled_explicitly")
+            return None
         allowed_modes = TOOL_ALLOWED_MODES.get(tool_name)
         mode = deps.mode
         if allowed_modes is not None and mode is not None and mode not in allowed_modes:
@@ -403,59 +401,6 @@ async def tool_get_program_history(
         return _cache_result(deps, tool_name, [])
     except Exception as e:  # pragma: no cover - forward to model
         raise ModelRetry(f"Program history unavailable: {e}. Try calling the tool again later.") from e
-
-
-@toolset.tool(prepare=_single_use_prepare("tool_attach_gifs"))  # pyrefly: ignore[no-matching-overload]
-async def tool_attach_gifs(
-    ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
-    exercises: list[DayExercises],
-) -> list[DayExercises]:
-    """Attach GIF links to exercises if available."""
-    tool_name = "tool_attach_gifs"
-    deps, skipped, cached = _start_tool(ctx, tool_name)
-    profile_id = deps.profile_id
-    if skipped:
-        cached_days = cast(list[DayExercises], cached if cached is not None else exercises)
-        return cached_days
-    if deps.max_run_seconds > 0:
-        remaining_budget: float = deps.max_run_seconds - (monotonic() - deps.started_at)
-        min_budget: float = float(settings.AI_COACH_ATTACH_GIFS_MIN_BUDGET)
-        if remaining_budget < min_budget:
-            logger.info(f"skip_attach_gifs profile_id={profile_id} reason=low_budget remaining={remaining_budget:.2f}")
-            return _cache_result(deps, tool_name, exercises)
-    try:
-        gif_manager = get_gif_manager()
-    except Exception as e:  # pragma: no cover - optional service
-        logger.info(f"gif manager unavailable: {e}")
-        return _cache_result(deps, tool_name, exercises)
-
-    result: list[DayExercises] = []
-    for day in exercises:
-        new_day = DayExercises(day=day.day, exercises=[])
-        for ex in day.exercises:
-            try:
-                link = await gif_manager.find_gif(ex.name, exercise_dict)
-            except Exception as e:
-                logger.debug(f"find_gif failed name={ex.name} err={e}")
-                link = None
-
-            ex_copy = ex.model_copy()
-            if link:
-                try:
-                    short = await short_url(link)
-                except Exception as e:
-                    logger.debug(f"short_url failed link={link} err={e}")
-                    short = link
-                ex_copy.gif_link = short
-                try:
-                    await Cache.workout.cache_gif_filename(ex.name, link.split("/")[-1])
-                except Exception as e:  # pragma: no cover - cache errors ignored
-                    logger.debug(f"cache_gif_filename failed name={ex.name} err={e}")
-            new_day.exercises.append(ex_copy)
-        result.append(new_day)
-    first_exercise = result[0].exercises[0].name if result and result[0].exercises else None
-    logger.debug(f"tool_attach_gifs done profile_id={profile_id} first_name={first_exercise!r}")
-    return _cache_result(deps, tool_name, result)
 
 
 @toolset.tool(prepare=_single_use_prepare("tool_create_subscription"))  # pyrefly: ignore[no-matching-overload]

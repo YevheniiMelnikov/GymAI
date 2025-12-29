@@ -81,7 +81,24 @@ export const fallbackEn = {
   'payment.unavailable': 'Payment service unavailable',
   'faq.title': 'FAQ',
   'faq.placeholder.title': 'Answers are on the way',
-  'faq.placeholder.body': 'We are preparing the FAQ page. Please check back soon.'
+  'faq.placeholder.body': 'We are preparing the FAQ page. Please check back soon.',
+  'weekly_survey.title': 'Weekly Survey',
+  'weekly_survey.loading': 'Preparing your weekly survey...',
+  'weekly_survey.no_data': 'We need a structured workout plan to show this survey.',
+  'weekly_survey.no_workouts': 'No workout days found for the week yet.',
+  'weekly_survey.day_title': 'Day {n}',
+  'weekly_survey.context': 'How challenging was each exercise?',
+  'weekly_survey.edit_exercise': 'Edit exercise',
+  'weekly_survey.exercise_difficulty': 'Exercise difficulty',
+  'weekly_survey.scale.easy': 'Easier',
+  'weekly_survey.scale.hard': 'Harder',
+  'weekly_survey.skip_day': 'No workout',
+  'weekly_survey.next_day': 'Next day',
+  'weekly_survey.send': 'Send',
+  'weekly_survey.sending': 'Sending...',
+  'weekly_survey.comment.add': 'Add comment',
+  'weekly_survey.comment.edit': 'Edit comment',
+  'weekly_survey.comment.placeholder': 'You can leave any information that might help your coach'
 } as const;
 
 export type TranslationKey = keyof typeof fallbackEn;

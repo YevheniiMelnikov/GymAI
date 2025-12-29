@@ -18,6 +18,11 @@ urlpatterns = [
         "api/workouts/action/", views.workouts_action, name="webapp-workouts-action"
     ),
     path(  # pyrefly: ignore[no-matching-overload]
+        "api/weekly-survey/",
+        views.weekly_survey_submit,
+        name="webapp-weekly-survey-submit",
+    ),
+    path(  # pyrefly: ignore[no-matching-overload]
         "api/program/exercise/replace/",
         views.replace_exercise,
         name="webapp-program-exercise-replace",
@@ -29,6 +34,11 @@ urlpatterns = [
     ),
     path(  # pyrefly: ignore[no-matching-overload]
         "api/program/exercise/", views.update_exercise_sets, name="webapp-program-exercise-update"
+    ),
+    path(  # pyrefly: ignore[no-matching-overload]
+        "api/subscription/exercise/",
+        views.update_subscription_exercise_sets,
+        name="webapp-subscription-exercise-update",
     ),
     path("", views.index, name="webapp"),
     path("__ping__", views.ping, name="webapp-ping"),

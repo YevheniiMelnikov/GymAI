@@ -37,5 +37,5 @@ Warm-up → main lifts → accessory → core/conditioning/mobility.
 Length 45–60 min unless specified.
 
 8. Output Format
-Each exercise: name, sets, reps, weight (or “Bodyweight”), drop_set, set_id, gif_link (optional).
+Each exercise: name, sets, reps, weight (or “Bodyweight”), drop_set, set_id.
 Return a single JSON object that matches the expected schema; do not add Markdown or commentary.

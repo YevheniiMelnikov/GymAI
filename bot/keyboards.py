@@ -192,6 +192,15 @@ def program_view_kb(lang: str, webapp_url: str) -> KbMarkup:
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
 
+def plan_updated_kb(lang: str, webapp_url: str) -> KbMarkup:
+    builder = KeyboardBuilder(lang)
+    buttons = [
+        [KbBtn(text=translate(ButtonText.view, lang), web_app=WebAppInfo(url=webapp_url))],
+        [builder.add(ButtonText.main_menu, "main_menu")],
+    ]
+    return KbMarkup(inline_keyboard=buttons, row_width=1)
+
+
 def subscription_type_kb(lang: str, services: list[tuple[str, int]]) -> KbMarkup:
     builder = KeyboardBuilder(lang)
     labels = {

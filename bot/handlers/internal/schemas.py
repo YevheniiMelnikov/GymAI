@@ -43,6 +43,7 @@ class WeeklySurveyRecipient(BaseModel):
     profile_id: int
     tg_id: int
     language: str | None = None
+    subscription_id: int
 
 
 class WeeklySurveyNotify(BaseModel):

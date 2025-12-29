@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from uuid import uuid4
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Any, cast
 
@@ -9,19 +10,30 @@ from django.shortcuts import render
 from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.csrf import csrf_exempt
 from loguru import logger
+from pydantic import ValidationError
 from rest_framework.exceptions import NotFound
 
 from apps.payments.repos import PaymentRepository
 from apps.workout_plans.models import Program as ProgramModel
 from apps.workout_plans.repos import ProgramRepository, SubscriptionRepository
+from apps.webapp.weekly_survey import (
+    WeeklySurveyPayload,
+    SurveyFeedbackContext,
+    build_weekly_survey_feedback,
+    enqueue_subscription_update,
+    resolve_plan_age_weeks,
+)
 from config.app_settings import settings
 from core.internal_http import build_internal_hmac_auth_headers, internal_request_timeout
+from core.cache import Cache
+from core.enums import WorkoutLocation
 from core.schemas import Program as ProgramSchema, Subscription
 from django.core.cache import cache
 from core.tasks.ai_coach.replace_exercise import enqueue_exercise_replace_task
 from apps.webapp.exercise_replace import (
     ExerciseSetPayload,
     UpdateExercisePayload,
+    UpdateSubscriptionExercisePayload,
     apply_sets_update,
     resolve_exercise_entry,
 )
@@ -474,6 +486,174 @@ async def workouts_action(request: HttpRequest) -> JsonResponse:
 
 @csrf_exempt  # type: ignore[bad-specialization]
 @require_POST  # type: ignore[misc]
+async def weekly_survey_submit(request: HttpRequest) -> JsonResponse:
+    await ensure_container_ready()
+
+    try:
+        auth_ctx = await authenticate(request)
+    except Exception:
+        logger.exception("Auth resolution failed")
+        return JsonResponse({"error": "server_error"}, status=500)
+    if auth_ctx.error:
+        return auth_ctx.error
+
+    profile = auth_ctx.profile
+    if profile is None:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    try:
+        payload_raw = json.loads(request.body or "{}")
+    except Exception:
+        logger.warning("weekly_survey_invalid_payload")
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    try:
+        payload = WeeklySurveyPayload.model_validate(payload_raw)
+    except ValidationError as exc:
+        logger.warning(f"weekly_survey_invalid_schema error={exc!s}")
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    subscription_id = payload.subscription_id
+    subscription = cast(
+        Subscription | None,
+        await call_repo(
+            lambda pid: SubscriptionRepository.base_qs()
+            .filter(profile_id=pid, id=subscription_id, enabled=True)
+            .first(),
+            int(getattr(profile, "id", 0)),
+        ),
+    )
+    if subscription is None:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    exercises_by_day = getattr(subscription, "exercises", None)
+    if not isinstance(exercises_by_day, list):
+        return JsonResponse({"error": "server_error"}, status=500)
+
+    sets_updated = False
+    for day in payload.days:
+        for exercise in day.exercises:
+            if not exercise.sets_detail:
+                continue
+            entry = resolve_exercise_entry(exercises_by_day, exercise.id)
+            if entry is None:
+                continue
+            sets_payload: list[ExerciseSetPayload] = [
+                {"reps": int(item.reps), "weight": float(item.weight)} for item in exercise.sets_detail
+            ]
+            if not sets_payload:
+                continue
+            weight_unit = next((item.weight_unit for item in exercise.sets_detail if item.weight_unit), None)
+            apply_sets_update(
+                entry,
+                {
+                    "weight_unit": weight_unit,
+                    "sets": sets_payload,
+                },
+            )
+            sets_updated = True
+
+    if sets_updated:
+        await call_repo(SubscriptionRepository.update_exercises, profile.id, exercises_by_day, subscription)
+        await Cache.workout.update_subscription(profile.id, {"exercises": exercises_by_day})
+
+    plan_age_weeks = resolve_plan_age_weeks(getattr(subscription, "updated_at", None))
+    context = SurveyFeedbackContext(
+        workout_goals=getattr(profile, "workout_goals", None),
+        workout_experience=getattr(profile, "workout_experience", None),
+        plan_age_weeks=plan_age_weeks,
+    )
+    feedback = build_weekly_survey_feedback(payload, context=context)
+
+    workout_location_value = getattr(subscription, "workout_location", None) or getattr(
+        profile, "workout_location", None
+    )
+    workout_location: WorkoutLocation | None = None
+    if workout_location_value:
+        try:
+            workout_location = WorkoutLocation(str(workout_location_value))
+        except ValueError:
+            workout_location = None
+
+    request_id = uuid4().hex
+    queued = enqueue_subscription_update(
+        profile_id=profile.id,
+        language=profile.language or settings.DEFAULT_LANG,
+        feedback=feedback,
+        workout_location=workout_location,
+        request_id=request_id,
+    )
+    if not queued:
+        return JsonResponse({"error": "service_unavailable"}, status=503)
+
+    raw_base_url = (settings.BOT_INTERNAL_URL or "").rstrip("/")
+    fallback_base = f"http://{settings.BOT_INTERNAL_HOST}:{settings.BOT_INTERNAL_PORT}"
+    base_url = raw_base_url or fallback_base
+    logger.debug(f"weekly_survey_internal_base profile_id={profile.id} base_url={base_url}")
+
+    proxy_payload = {
+        "profile_id": profile.id,
+        "telegram_id": profile.tg_id,
+        "profile": {
+            "id": profile.id,
+            "tg_id": profile.tg_id,
+            "language": profile.language or settings.DEFAULT_LANG,
+            "status": profile.status,
+        },
+    }
+    body = json.dumps(proxy_payload).encode("utf-8")
+    try:
+        headers = build_internal_hmac_auth_headers(
+            key_id=settings.INTERNAL_KEY_ID,
+            secret_key=settings.INTERNAL_API_KEY,
+            body=body,
+        )
+    except Exception:
+        logger.exception("Failed to build internal auth headers for weekly_survey_submit")
+        headers = None
+
+    if headers:
+        headers["Content-Type"] = "application/json"
+        timeout = internal_request_timeout(settings)
+
+        async def _post(target_url: str) -> httpx.Response:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                return await client.post(target_url, content=body, headers=headers)
+
+        primary_url = f"{base_url}/internal/webapp/weekly-survey/submitted/"
+        try:
+            resp = await _post(primary_url)
+            if resp.status_code >= 400:
+                logger.warning(
+                    "weekly_survey_notify_rejected "
+                    f"profile_id={profile.id} status={resp.status_code} body={resp.text[:200]}"
+                )
+        except httpx.HTTPError as exc:
+            logger.error(f"weekly_survey_notify_failed profile_id={profile.id} base_url={base_url} err={exc}")
+            if base_url != fallback_base:
+                fallback_url = f"{fallback_base}/internal/webapp/weekly-survey/submitted/"
+                logger.info(f"weekly_survey_notify_retry profile_id={profile.id} fallback={fallback_base}")
+                try:
+                    resp = await _post(fallback_url)
+                    if resp.status_code >= 400:
+                        logger.warning(
+                            "weekly_survey_notify_rejected "
+                            f"profile_id={profile.id} status={resp.status_code} body={resp.text[:200]}"
+                        )
+                except httpx.HTTPError as exc2:
+                    logger.error(
+                        f"weekly_survey_notify_failed profile_id={profile.id} fallback={fallback_base} err={exc2}"
+                    )
+
+    subscription_log_id = getattr(subscription, "id", None)
+    logger.info(
+        f"weekly_survey_enqueued profile_id={profile.id} request_id={request_id} subscription_id={subscription_log_id}"
+    )
+    return JsonResponse({"status": "ok", "request_id": request_id})
+
+
+@csrf_exempt  # type: ignore[bad-specialization]
+@require_POST  # type: ignore[misc]
 async def update_exercise_sets(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
@@ -554,6 +734,103 @@ async def update_exercise_sets(request: HttpRequest) -> JsonResponse:
 
     await call_repo(ProgramRepository.create_or_update, profile.id, exercises_by_day, instance=program)
     logger.info(f"exercise_sets_updated profile_id={profile.id} program_id={program_id} exercise_id={exercise_id_raw}")
+    return JsonResponse({"status": "ok"})
+
+
+@csrf_exempt  # type: ignore[bad-specialization]
+@require_POST  # type: ignore[misc]
+async def update_subscription_exercise_sets(request: HttpRequest) -> JsonResponse:
+    await ensure_container_ready()
+
+    try:
+        auth_ctx = await authenticate(request)
+    except Exception:
+        logger.exception("Auth resolution failed")
+        return JsonResponse({"error": "server_error"}, status=500)
+    if auth_ctx.error:
+        return auth_ctx.error
+
+    profile = auth_ctx.profile
+    if profile is None:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    try:
+        payload_raw = json.loads(request.body or "{}")
+    except Exception:
+        logger.warning("update_subscription_exercise_sets_invalid_payload")
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    exercise_id_raw = payload_raw.get("exercise_id")
+    subscription_id_raw = payload_raw.get("subscription_id")
+    sets_raw = payload_raw.get("sets")
+    weight_unit_raw = payload_raw.get("weight_unit")
+
+    if not exercise_id_raw or not isinstance(exercise_id_raw, str):
+        return JsonResponse({"error": "bad_request"}, status=400)
+    try:
+        subscription_id = int(subscription_id_raw)
+    except (TypeError, ValueError):
+        subscription_id = 0
+    if not subscription_id:
+        return JsonResponse({"error": "bad_request"}, status=400)
+    if not isinstance(sets_raw, list) or not sets_raw:
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    sets_payload: list[ExerciseSetPayload] = []
+    for entry in sets_raw:
+        if not isinstance(entry, dict):
+            return JsonResponse({"error": "bad_request"}, status=400)
+        reps_raw = entry.get("reps")
+        weight_raw = entry.get("weight")
+        if not isinstance(reps_raw, (int, str)):
+            return JsonResponse({"error": "bad_request"}, status=400)
+        if not isinstance(weight_raw, (int, float, str)):
+            return JsonResponse({"error": "bad_request"}, status=400)
+        try:
+            reps_value = int(str(reps_raw))
+            weight_value = float(str(weight_raw))
+        except (TypeError, ValueError):
+            return JsonResponse({"error": "bad_request"}, status=400)
+        if reps_value < 1 or weight_value < 0:
+            return JsonResponse({"error": "bad_request"}, status=400)
+        sets_payload.append({"reps": reps_value, "weight": weight_value})
+
+    weight_unit = str(weight_unit_raw) if weight_unit_raw is not None else None
+    payload: UpdateSubscriptionExercisePayload = {
+        "subscription_id": subscription_id,
+        "exercise_id": exercise_id_raw,
+        "weight_unit": weight_unit,
+        "sets": sets_payload,
+    }
+
+    subscription = cast(
+        Subscription | None,
+        await call_repo(
+            lambda pid: SubscriptionRepository.base_qs()
+            .filter(profile_id=pid, id=subscription_id, enabled=True)
+            .first(),
+            profile.id,
+        ),
+    )
+    if subscription is None:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    exercises_by_day = getattr(subscription, "exercises", None)
+    if not isinstance(exercises_by_day, list):
+        return JsonResponse({"error": "server_error"}, status=500)
+
+    entry = resolve_exercise_entry(exercises_by_day, exercise_id_raw)
+    if entry is None:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    apply_sets_update(entry, payload)
+
+    await call_repo(SubscriptionRepository.update_exercises, profile.id, exercises_by_day, subscription)
+    await Cache.workout.update_subscription(profile.id, {"exercises": exercises_by_day})
+    logger.info(
+        "subscription_exercise_sets_updated "
+        f"profile_id={profile.id} subscription_id={subscription_id} exercise_id={exercise_id_raw}"
+    )
     return JsonResponse({"status": "ok"})
 
 

@@ -109,6 +109,7 @@ class MessageText(AutoName):
     subscription_type_prompt = auto()
     subscription_already_active = auto()
     confirm_service = auto()
+    weekly_survey_submitted = auto()
 
     profile_deleted = auto()
     profile_data_not_found_error = auto()

@@ -15,7 +15,6 @@ class AICoachRequest(BaseModel):
     mode: CoachMode = CoachMode.program
     period: str | None = None
     split_number: int | None = None
-    expected_workout: str | None = None
     feedback: str | None = None
     wishes: str | None = None
     workout_location: WorkoutLocation | None = None

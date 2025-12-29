@@ -71,7 +71,6 @@ async def test_enqueue_update_uses_chain(monkeypatch: pytest.MonkeyPatch) -> Non
 
     ok = await enqueue_workout_plan_update(
         profile_id=11,
-        expected_workout_result="result",
         feedback="good",
         language="en",
         plan_type=WorkoutPlanType.SUBSCRIPTION,

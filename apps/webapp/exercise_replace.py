@@ -14,11 +14,19 @@ class ExerciseSetPayload(TypedDict):
     weight: float
 
 
-class UpdateExercisePayload(TypedDict):
-    program_id: int
-    exercise_id: str
+class SetsUpdatePayload(TypedDict):
     weight_unit: str | None
     sets: list[ExerciseSetPayload]
+
+
+class UpdateExercisePayload(SetsUpdatePayload):
+    program_id: int
+    exercise_id: str
+
+
+class UpdateSubscriptionExercisePayload(SetsUpdatePayload):
+    subscription_id: int
+    exercise_id: str
 
 
 class ReplaceExerciseSet(BaseModel):
@@ -66,7 +74,7 @@ def format_range(values: list[float]) -> str:
     return f"{format_number(min_value)}-{format_number(max_value)}"
 
 
-def apply_sets_update(exercise_entry: dict[str, Any], payload: UpdateExercisePayload) -> None:
+def apply_sets_update(exercise_entry: dict[str, Any], payload: SetsUpdatePayload) -> None:
     sets_payload = payload["sets"]
     reps_values = [float(item["reps"]) for item in sets_payload]
     weights = [float(item["weight"]) for item in sets_payload]

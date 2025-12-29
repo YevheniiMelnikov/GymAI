@@ -122,7 +122,6 @@ def test_update_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     async def runner() -> None:
         async def fake_update(
             prompt: str,
-            expected_workout: object,
             feedback: object,
             *,
             workout_location: WorkoutLocation | None = None,

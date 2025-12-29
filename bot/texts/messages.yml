@@ -157,9 +157,9 @@ new_workout_plan:
   ua: "<b>Ваш план тренувань готовий</b> ✅"
 
 program_updated:
-  eng: "<b>{bot_name} has updated your training program</b> ✅"
-  ru: "<b>{bot_name} обновил вашу тренировочную программу</b> ✅"
-  ua: "<b>{bot_name} оновив вашу тренувальну програму</b> ✅"
+  eng: "<b>Your training plan has been updated</b> ✅"
+  ru: "<b>Ваш тренировочный план был обновлен</b> ✅"
+  ua: "<b>Ваш тренувальний план було оновлено</b> ✅"
 
 subscription_created:
   eng: "<b>Your training plan is ready</b> ✅"
@@ -176,6 +176,11 @@ request_in_progress:
   eng: "Processing your request will take a few minutes, we will notify you when everything is ready ⏳"
   ru: "Обработка вашего запроса займет несколько минут, мы уведомим вас когда всё будет готово ⏳"
   ua: "Обробка вашого запиту займе кілька хвилин, ми повідомимо коли все буде готово ⏳"
+
+weekly_survey_submitted:
+  eng: "Thanks for your feedback! Your training plan will be updated soon 👌"
+  ru: "Ваш тренировочный план будет обновлен, спасибо за обратную связь 👌"
+  ua: "Ваш тренувальний план буде оновлено, дякуємо за зворотний зв'язок 👌"
 
 ask_ai_prompt:
   eng: "Ask your question in text and optionally attach a photo. Each request is a detailed analysis of your situation, based on everything you’ve shared with {bot_name}, grounded in scientific evidence and real coaching experience.\n<code>➖➖➖➖➖➖➖➖➖➖➖➖➖</code>\nRequest cost: <b>{cost}</b>\nYour balance: <b>{balance}</b>"

@@ -18,6 +18,7 @@ class WeeklySurveyRecipient(TypedDict):
     profile_id: int
     tg_id: int
     language: str | None
+    subscription_id: int
 
 
 class WeeklySurveyPayload(TypedDict):
@@ -38,7 +39,7 @@ def _active_subscriptions_queryset() -> "QuerySet[Subscription]":
             profile__deleted_at__isnull=True,
             profile__tg_id__isnull=False,
         )
-        .order_by("profile_id")
+        .order_by("profile_id", "-updated_at")
         .distinct("profile_id")
     )
 
@@ -46,6 +47,7 @@ def _active_subscriptions_queryset() -> "QuerySet[Subscription]":
 def _fetch_weekly_survey_recipients() -> list[WeeklySurveyRecipient]:
     recipients: list[WeeklySurveyRecipient] = []
     for row in _active_subscriptions_queryset().values(
+        "id",
         "profile_id",
         "profile__tg_id",
         "profile__language",
@@ -58,6 +60,7 @@ def _fetch_weekly_survey_recipients() -> list[WeeklySurveyRecipient]:
                 "profile_id": int(row["profile_id"]),
                 "tg_id": int(tg_id),
                 "language": row.get("profile__language"),
+                "subscription_id": int(row["id"]),
             }
         )
     return recipients

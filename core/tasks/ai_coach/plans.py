@@ -343,11 +343,6 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> d
         return None
     request_id = str(payload.get("request_id", ""))
     language = str(payload.get("language", settings.DEFAULT_LANG))
-    expected_workout = payload.get("expected_workout")
-    if expected_workout is None:
-        expected_workout = payload.get("expected_workout_result")
-    expected_workout = str(expected_workout) if expected_workout is not None else None
-
     feedback_val = payload.get("feedback")
     feedback = str(feedback_val) if feedback_val is not None else None
     plan_type = WorkoutPlanType(payload.get("plan_type", WorkoutPlanType.SUBSCRIPTION.value))
@@ -370,7 +365,6 @@ async def _update_ai_workout_plan_impl(payload: dict[str, Any], task: Task) -> d
             plan_type,
             profile_id=profile_id,
             language=language,
-            expected_workout=expected_workout,
             feedback=feedback,
             workout_location=workout_location,
             request_id=request_id or None,

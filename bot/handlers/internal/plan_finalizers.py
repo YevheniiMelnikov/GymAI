@@ -8,7 +8,7 @@ from aiogram.enums import ParseMode
 from aiogram.fsm.context import FSMContext
 from loguru import logger
 
-from bot.keyboards import program_view_kb
+from bot.keyboards import plan_updated_kb, program_view_kb
 from bot.states import States
 from bot.texts import MessageText, translate
 from bot.utils.bot import get_webapp_url
@@ -48,6 +48,39 @@ class PlanFinalizer(ABC):
     async def _apply_fsm_payload(self, context: PlanFinalizeContext, payload: dict[str, object]) -> None:
         await context.state.update_data(**payload)
         await context.state.set_state(States.main_menu)
+
+
+def _sanitize_exercises_payload(exercises: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    sanitized: list[dict[str, Any]] = []
+    for day in exercises:
+        day_copy = dict(day)
+        raw_exercises = day_copy.get("exercises", [])
+        if not isinstance(raw_exercises, list):
+            sanitized.append(day_copy)
+            continue
+        cleaned_exercises: list[dict[str, Any]] = []
+        for exercise in raw_exercises:
+            if not isinstance(exercise, dict):
+                continue
+            exercise_copy = dict(exercise)
+            if exercise_copy.get("sets_detail") is None:
+                exercise_copy.pop("sets_detail", None)
+            cleaned_exercises.append(exercise_copy)
+        day_copy["exercises"] = cleaned_exercises
+        sanitized.append(day_copy)
+    return sanitized
+
+
+def _resolve_subscription_period(payload_period: str | None, current_period: str | None) -> str:
+    if current_period:
+        return str(current_period)
+    if payload_period:
+        try:
+            SubscriptionPeriod(str(payload_period))
+            return str(payload_period)
+        except ValueError:
+            return SubscriptionPeriod.one_month.value
+    return SubscriptionPeriod.one_month.value
 
 
 class ProgramPlanFinalizer(PlanFinalizer):
@@ -152,9 +185,10 @@ class SubscriptionPlanFinalizer(PlanFinalizer):
     ) -> None:
         state_data = await context.state.get_data()
         subscription_id = state_data.get("subscription_id")
+        current_subscription: Subscription | None = None
         if subscription_id is None:
             try:
-                current = await Cache.workout.get_latest_subscription(context.resolved_profile_id)
+                current_subscription = await Cache.workout.get_latest_subscription(context.resolved_profile_id)
             except SubscriptionNotFoundError:
                 await context.notify_failure("subscription_missing")
                 logger.error(
@@ -162,20 +196,45 @@ class SubscriptionPlanFinalizer(PlanFinalizer):
                     f"profile_id={context.resolved_profile_id} request_id={context.request_id}"
                 )
                 return
-            subscription_id = current.id
+            subscription_id = current_subscription.id
+        else:
+            try:
+                current_subscription = await Cache.workout.get_latest_subscription(context.resolved_profile_id)
+                if current_subscription.id != int(subscription_id):
+                    logger.warning(
+                        "Subscription update id mismatch "
+                        f"profile_id={context.resolved_profile_id} request_id={context.request_id} "
+                        f"state_id={subscription_id} latest_id={current_subscription.id}"
+                    )
+            except SubscriptionNotFoundError:
+                current_subscription = None
 
-        subscription_data = subscription.model_dump(mode="json")
-        subscription_data.update(
-            profile=context.resolved_profile_id,
-            exercises=serialized_exercises,
-            split_number=subscription.split_number,
-            wishes=subscription.wishes,
+        sanitized_exercises = _sanitize_exercises_payload(serialized_exercises)
+        resolved_period = _resolve_subscription_period(
+            subscription.period,
+            getattr(current_subscription, "period", None) if current_subscription else None,
         )
+        subscription_data = {
+            "profile": context.resolved_profile_id,
+            "exercises": sanitized_exercises,
+            "split_number": subscription.split_number,
+            "wishes": subscription.wishes,
+            "period": resolved_period,
+        }
+        if current_subscription is not None:
+            subscription_data.update(
+                {
+                    "price": current_subscription.price,
+                    "enabled": current_subscription.enabled,
+                    "payment_date": current_subscription.payment_date,
+                    "workout_location": current_subscription.workout_location,
+                }
+            )
         await APIService.workout.update_subscription(int(subscription_id), subscription_data)
         await Cache.workout.update_subscription(
             context.resolved_profile_id,
             {
-                "exercises": serialized_exercises,
+                "exercises": sanitized_exercises,
                 "profile": context.resolved_profile_id,
                 "split_number": subscription.split_number,
                 "wishes": subscription.wishes,
@@ -184,7 +243,7 @@ class SubscriptionPlanFinalizer(PlanFinalizer):
         await self._apply_fsm_payload(
             context,
             {
-                "exercises": serialized_exercises,
+                "exercises": sanitized_exercises,
                 "split": subscription.split_number,
                 "day_index": 0,
                 "subscription": True,
@@ -197,6 +256,10 @@ class SubscriptionPlanFinalizer(PlanFinalizer):
                 chat_id=context.profile.tg_id,
                 text=translate(MessageText.program_updated, context.profile.language),
                 parse_mode=ParseMode.HTML,
+                reply_markup=plan_updated_kb(
+                    context.profile.language,
+                    get_webapp_url("subscription", context.profile.language),
+                ),
             )
         except Exception as exc:  # noqa: BLE001
             logger.error(
@@ -208,7 +271,8 @@ class SubscriptionPlanFinalizer(PlanFinalizer):
         await context.state_tracker.mark_delivered(context.request_id)
         logger.info(
             "AI coach plan generation finished plan_type=subscription-update "
-            f"profile_id={context.resolved_profile_id} request_id={context.request_id} subscription_id={current.id}"
+            f"profile_id={context.resolved_profile_id} "
+            f"request_id={context.request_id} subscription_id={subscription_id}"
         )
 
     async def _finalize_create(

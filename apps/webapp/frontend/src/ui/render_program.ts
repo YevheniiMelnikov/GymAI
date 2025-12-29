@@ -1,4 +1,4 @@
-import { getReplaceExerciseStatus, replaceExercise, saveExerciseSets } from '../api/http';
+import { getReplaceExerciseStatus, replaceExercise, saveExerciseSets, saveSubscriptionExerciseSets } from '../api/http';
 import { Day, Exercise, Locale, Program, Week } from '../api/types';
 import { t } from '../i18n/i18n';
 import { readInitData } from '../telegram';
@@ -168,6 +168,15 @@ export function setProgramContext(programId: string | null, source: ProgramSourc
   programContext = { programId, source };
 }
 
+type ExerciseEditDialogOptions = {
+  allowReplace?: boolean;
+  onSave?: (exercise: Exercise, sets: Array<{ reps: number; weight: number }>) => void | Promise<void>;
+};
+
+export function openExerciseEditDialog(exercise: Exercise, options?: ExerciseEditDialogOptions): void {
+  getExerciseEditDialog().open(exercise, null, options);
+}
+
 type ExerciseDialogController = {
   open: () => void;
   close: () => void;
@@ -190,7 +199,7 @@ type EditableSet = {
 };
 
 type ExerciseEditDialogController = {
-  open: (exercise: Exercise, details: HTMLDetailsElement) => void;
+  open: (exercise: Exercise, details: HTMLDetailsElement | null, options?: ExerciseEditDialogOptions) => void;
   close: () => void;
 };
 
@@ -541,6 +550,7 @@ function getExerciseEditDialog(): ExerciseEditDialogController {
 
   let currentExercise: Exercise | null = null;
   let currentDetails: HTMLDetailsElement | null = null;
+  let currentOptions: ExerciseEditDialogOptions | null = null;
   let initialSets: EditableSet[] = [];
   let sets: EditableSet[] = [];
   let isSaving = false;
@@ -700,7 +710,19 @@ function getExerciseEditDialog(): ExerciseEditDialogController {
   saveButton.addEventListener('click', async (event) => {
     event.preventDefault();
     if (!currentExercise || isSaving) return;
-    if (!programContext.programId || programContext.source !== 'direct') {
+    if (currentOptions?.onSave) {
+      isSaving = true;
+      syncButtons();
+      try {
+        await currentOptions.onSave(currentExercise, sets.map((set) => ({ reps: set.reps, weight: set.weight })));
+        close();
+      } finally {
+        isSaving = false;
+        syncButtons();
+      }
+      return;
+    }
+    if (!programContext.programId) {
       window.alert(t('program.action_error'));
       return;
     }
@@ -715,7 +737,14 @@ function getExerciseEditDialog(): ExerciseEditDialogController {
       const weightUnit =
         currentExercise.weight?.unit ?? currentExercise.sets_detail?.[0]?.weight_unit ?? null;
       const payload = sets.map((set) => ({ reps: set.reps, weight: set.weight }));
-      await saveExerciseSets(programContext.programId, currentExercise.id, weightUnit, payload, initData);
+      if (programContext.source === 'direct') {
+        await saveExerciseSets(programContext.programId, currentExercise.id, weightUnit, payload, initData);
+      } else if (programContext.source === 'subscription') {
+        await saveSubscriptionExerciseSets(programContext.programId, currentExercise.id, weightUnit, payload, initData);
+      } else {
+        window.alert(t('program.action_error'));
+        return;
+      }
       window.dispatchEvent(new CustomEvent(EXERCISE_EDIT_SAVED_EVENT));
       close();
     } finally {
@@ -725,9 +754,11 @@ function getExerciseEditDialog(): ExerciseEditDialogController {
   });
 
   exerciseEditDialog = {
-    open: (exercise: Exercise, details: HTMLDetailsElement) => {
+    open: (exercise: Exercise, details: HTMLDetailsElement | null, options?: ExerciseEditDialogOptions) => {
+      const allowReplace = options?.allowReplace !== false;
       currentExercise = exercise;
       currentDetails = details;
+      currentOptions = options ?? null;
       initialSets = buildInitialSets(exercise);
       sets = initialSets.map((set) => ({ ...set }));
       addButton.textContent = t('program.exercise.edit_dialog.add_set');
@@ -736,6 +767,9 @@ function getExerciseEditDialog(): ExerciseEditDialogController {
       listHeaderReps.textContent = t('program.exercise.edit_dialog.reps');
       listHeaderWeight.textContent = t('program.exercise.edit_dialog.weight');
       replaceButton.textContent = t('program.exercise.replace');
+      replaceButton.style.display = allowReplace ? '' : 'none';
+      replaceButton.disabled = !allowReplace;
+      replaceButton.tabIndex = allowReplace ? 0 : -1;
       renderSets();
       syncButtons();
       open();

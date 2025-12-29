@@ -152,19 +152,3 @@ class WorkoutCacheManager(BaseCacheManager):
             json.dumps([p.model_dump() for p in programs]),
         )
         return programs
-
-    @classmethod
-    async def cache_gif_filename(cls, exercise_name: str, filename: str) -> None:
-        try:
-            if exercise_name and filename:
-                await cls.set("gifs", exercise_name, filename)
-        except Exception as e:
-            logger.error(f"Failed to cache GIF for {exercise_name}: {e}")
-
-    @classmethod
-    async def get_exercise_gif(cls, exercise_name: str) -> str | None:
-        try:
-            return await cls.get("gifs", exercise_name)
-        except Exception as e:
-            logger.error(f"Failed to get GIF for {exercise_name}: {e}")
-            return None

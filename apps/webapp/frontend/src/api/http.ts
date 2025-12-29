@@ -235,6 +235,42 @@ export type ExerciseSetPayload = {
   weight: number;
 };
 
+export type WeeklySurveyExercisePayload = {
+  id: string;
+  name: string;
+  difficulty: number;
+  comment?: string | null;
+  sets_detail?: Array<ExerciseSetPayload & { weight_unit?: string | null }>;
+};
+
+export type WeeklySurveyDayPayload = {
+  id: string;
+  title?: string | null;
+  skipped: boolean;
+  exercises: WeeklySurveyExercisePayload[];
+};
+
+export type WeeklySurveyPayload = {
+  subscription_id: number;
+  days: WeeklySurveyDayPayload[];
+};
+
+export async function submitWeeklySurvey(payload: WeeklySurveyPayload, initData: string): Promise<void> {
+  const url = new URL('api/weekly-survey/', window.location.href);
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (initData) headers['X-Telegram-InitData'] = initData;
+
+  const resp = await fetch(url.toString(), {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload)
+  });
+
+  if (!resp.ok) {
+    throw new HttpError(resp.status, statusToMessage(resp.status));
+  }
+}
+
 export async function saveExerciseSets(
   programId: string,
   exerciseId: string,
@@ -251,6 +287,33 @@ export async function saveExerciseSets(
     headers,
     body: JSON.stringify({
       program_id: programId,
+      exercise_id: exerciseId,
+      weight_unit: weightUnit,
+      sets
+    })
+  });
+
+  if (!resp.ok) {
+    throw new HttpError(resp.status, statusToMessage(resp.status));
+  }
+}
+
+export async function saveSubscriptionExerciseSets(
+  subscriptionId: string,
+  exerciseId: string,
+  weightUnit: string | null,
+  sets: ExerciseSetPayload[],
+  initData: string
+): Promise<void> {
+  const url = new URL('api/subscription/exercise/', window.location.href);
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (initData) headers['X-Telegram-InitData'] = initData;
+
+  const resp = await fetch(url.toString(), {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      subscription_id: subscriptionId,
       exercise_id: exerciseId,
       weight_unit: weightUnit,
       sets

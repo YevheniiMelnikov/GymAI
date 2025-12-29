@@ -112,3 +112,9 @@ class SubscriptionRepository:
     @staticmethod
     def get_all(profile_id: int) -> list[Subscription]:
         return list(SubscriptionRepository.base_qs().filter(profile_id=profile_id).order_by("-updated_at"))
+
+    @staticmethod
+    def update_exercises(profile_id: int, exercises: Any, instance: Subscription) -> Subscription:
+        Subscription.objects.filter(id=instance.id, profile_id=profile_id).update(exercises=exercises)
+        instance.exercises = exercises  # type: ignore[attr-defined]
+        return cast(Subscription, instance)

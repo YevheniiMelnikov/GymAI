@@ -22,8 +22,9 @@ from ai_coach.schemas import AICoachRequest
 from ai_coach.types import AskCtx, CoachMode, MessageRole
 from ai_coach.coach_actions import DISPATCH, CoachAction
 from config.app_settings import settings
+from core.cache import Cache
 from core.enums import SubscriptionPeriod
-from core.schemas import DietPlan, Program, Profile, QAResponse, Subscription
+from core.schemas import DayExercises, DietPlan, Exercise, Program, Profile, QAResponse, Subscription
 from core.services import APIService
 
 DEFAULT_SPLIT_NUMBER = 3
@@ -139,7 +140,6 @@ def _build_context(
         "attachments": attachments,
         "period": period.value,
         "split_number": split_number,
-        "expected_workout": data.expected_workout or "",
         "feedback": data.feedback or "",
         "wishes": data.wishes or "",
         "language": language,
@@ -153,7 +153,44 @@ def _build_context(
     }
 
 
-def _build_profile_context(profile: Profile | None) -> str | None:
+def _format_exercise_entry(exercise: Exercise) -> str:
+    details: list[str] = []
+    sets = getattr(exercise, "sets", None)
+    reps = getattr(exercise, "reps", None)
+    if sets and reps:
+        details.append(f"{sets}x{reps}")
+    elif sets:
+        details.append(f"{sets} sets")
+    elif reps:
+        details.append(f"{reps} reps")
+    weight = getattr(exercise, "weight", None)
+    if weight:
+        details.append(f"weight {weight}")
+    if details:
+        return f"{exercise.name} ({', '.join(details)})"
+    return exercise.name
+
+
+def _format_plan_days(days: list[DayExercises], *, max_exercises: int = 8) -> list[str]:
+    lines: list[str] = []
+    for day in days:
+        exercises = day.exercises or []
+        if not exercises:
+            lines.append(f"{day.day}: no exercises")
+            continue
+        entries = [_format_exercise_entry(ex) for ex in exercises[:max_exercises]]
+        if len(exercises) > max_exercises:
+            entries.append("…")
+        lines.append(f"{day.day}: {', '.join(entries)}")
+    return lines
+
+
+def _format_program_label(program: Program) -> str:
+    created_at = getattr(program, "created_at", None)
+    return f"Latest program (created_at: {created_at})"
+
+
+async def _build_profile_context(profile: Profile | None, *, include_plans: bool) -> str | None:
     if profile is None:
         return None
     lines: list[str] = []
@@ -188,6 +225,37 @@ def _build_profile_context(profile: Profile | None) -> str | None:
     born_in = getattr(profile, "born_in", None)
     if born_in:
         lines.append(f"Birth year: {born_in}")
+    if include_plans:
+        try:
+            latest_program = await Cache.workout.get_latest_program(profile.id)
+        except Exception:  # noqa: BLE001
+            latest_program = None
+        if latest_program is not None:
+            try:
+                program_days = [
+                    day if isinstance(day, DayExercises) else DayExercises.model_validate(day)
+                    for day in latest_program.exercises_by_day
+                ]
+            except Exception:  # noqa: BLE001
+                program_days = []
+            if program_days:
+                lines.append(_format_program_label(latest_program))
+                lines.extend(_format_plan_days(program_days))
+        try:
+            latest_subscription = await Cache.workout.get_latest_subscription(profile.id)
+        except Exception:  # noqa: BLE001
+            latest_subscription = None
+        if latest_subscription is not None:
+            try:
+                sub_days = [
+                    day if isinstance(day, DayExercises) else DayExercises.model_validate(day)
+                    for day in latest_subscription.exercises
+                ]
+            except Exception:  # noqa: BLE001
+                sub_days = []
+            if sub_days:
+                lines.append("Latest subscription plan:")
+                lines.extend(_format_plan_days(sub_days))
     return "\n".join(lines) if lines else None
 
 
@@ -470,7 +538,7 @@ async def handle_coach_request(
             )
 
         model_name = CoachAgent._completion_model_name or settings.AGENT_MODEL
-        kb_enabled = mode in {CoachMode.ask_ai, CoachMode.diet}
+        kb_enabled = mode in {CoachMode.ask_ai, CoachMode.diet} and settings.AI_COACH_KB_ENABLED
         logger.info(
             f"ask.in request_id={data.request_id} profile_id={data.profile_id} mode={mode.value} "
             f"model={model_name} kb_enabled={str(kb_enabled).lower()}"
@@ -483,7 +551,10 @@ async def handle_coach_request(
             client_name=getattr(profile, "name", None),
             request_rid=rid,
         )
-        profile_context = _build_profile_context(profile)
+        if not settings.AI_COACH_KB_ENABLED:
+            deps.disabled_tools.add("tool_search_knowledge")
+        include_plans = mode in {CoachMode.program, CoachMode.subscription, CoachMode.update}
+        profile_context = await _build_profile_context(profile, include_plans=include_plans)
         ctx: AskCtx = _build_context(
             data,
             language,
@@ -496,7 +567,16 @@ async def handle_coach_request(
         logger.debug(f"/ask ctx.language={language} deps.locale={deps.locale} mode={mode.value}")
 
         kb_started = monotonic()
-        kb_for_chat = await _prepare_chat_kb(mode, data.prompt, data.profile_id, language)
+        if settings.AI_COACH_KB_ENABLED:
+            kb_for_chat = await _prepare_chat_kb(mode, data.prompt, data.profile_id, language)
+        else:
+            kb_for_chat = None
+            logger.info(
+                "kb_disabled request_id={} profile_id={} mode={}",
+                data.request_id,
+                data.profile_id,
+                mode.value,
+            )
         _log_stage_duration(
             "kb_prepare",
             kb_started,
@@ -541,7 +621,7 @@ async def handle_coach_request(
                 if isinstance(answer, str):
                     kb = kb_for_chat or get_knowledge_base()
                     await kb.maybe_summarize_session(data.profile_id, language=language)
-                if not deps.kb_used:
+                if settings.AI_COACH_KB_ENABLED and not deps.kb_used:
                     logger.error(
                         "knowledge_base_unavailable request_id={} profile_id={} mode={}",
                         data.request_id,
@@ -566,7 +646,7 @@ async def handle_coach_request(
 
                 return JSONResponse(content=response_data)
 
-            if mode == CoachMode.diet and not deps.kb_used:
+            if mode == CoachMode.diet and settings.AI_COACH_KB_ENABLED and not deps.kb_used:
                 logger.error(
                     "knowledge_base_unavailable request_id={} profile_id={} mode={}",
                     data.request_id,

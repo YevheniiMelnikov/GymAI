@@ -5,7 +5,7 @@ from .payment import (
 from .tasks import internal_ai_coach_plan_ready, internal_send_weekly_survey
 from .answers import internal_ai_answer_ready
 from .diet import internal_ai_diet_ready
-from .webapp import internal_webapp_workout_action
+from .webapp import internal_webapp_workout_action, internal_webapp_weekly_survey_submitted
 
 __all__ = (
     "internal_payment_handler",
@@ -15,4 +15,5 @@ __all__ = (
     "internal_ai_answer_ready",
     "internal_ai_diet_ready",
     "internal_webapp_workout_action",
+    "internal_webapp_weekly_survey_submitted",
 )
