@@ -27,6 +27,11 @@ Deliver production-grade improvements to GymBot's multi-service stack (Django AP
 ## Testing Policy
 - Add or update tests only when a change touches critical paths (auth flows, payments, subscription lifecycle, workout plan generation, AI coach reasoning, Celery scheduling). Keep them targeted and deterministic. Do not create more than 2 tests per task.
 - Honour existing tests even if the module is low priority. Adjust them when behaviour legitimately changes.
+- When a test fails, first determine the cause:
+  - If the failure indicates incorrect or broken logic, fix the production code and keep the test.
+  - If the failure is caused by an intentional contract or behaviour change, update the test accordingly and clearly explain why the previous expectation is no longer valid.
+  Do not blindly fix tests just to make them pass.
+
 
 ## Quality Gates
 - Always use **f-strings** instead of "%s" or .format()
