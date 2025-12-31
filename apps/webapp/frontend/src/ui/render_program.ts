@@ -7,6 +7,40 @@ export type RenderedProgram = {
   readonly fragment: DocumentFragment;
 };
 
+function preloadTechniqueGifs(program: Program): void {
+  const urls: string[] = [];
+  const seen = new Set<string>();
+  const weeks = ensureWeeks(program);
+  weeks.forEach((week) => {
+    week.days.forEach((day) => {
+      if (day.type !== 'workout') return;
+      day.exercises.forEach((exercise) => {
+        const url = exercise.gif_url || (exercise.gif_key ? `/api/gif/${encodeURIComponent(exercise.gif_key)}` : null);
+        if (!url || seen.has(url)) return;
+        seen.add(url);
+        urls.push(url);
+      });
+    });
+  });
+
+  if (urls.length === 0) return;
+
+  const preload = () => {
+    urls.forEach((url) => {
+      const img = new Image();
+      img.decoding = 'async';
+      img.loading = 'eager';
+      img.src = url;
+    });
+  };
+
+  if ('requestIdleCallback' in window) {
+    window.requestIdleCallback(() => preload(), { timeout: 1500 });
+  } else {
+    window.setTimeout(preload, 300);
+  }
+}
+
 export function fmtDate(value: string | number, locale: string): string {
   const date = typeof value === 'number' ? new Date(value * 1000) : new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -1001,6 +1035,7 @@ export function renderProgramDays(program: Program): RenderedProgram {
 
     fragment.appendChild(wrap);
   });
+  preloadTechniqueGifs(program);
   return { fragment };
 }
 
