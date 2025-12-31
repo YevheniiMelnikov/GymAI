@@ -61,6 +61,7 @@ class Exercise(BaseModel):
     reps: str | int
     weight: str | None = None
     set_id: int | None = None
+    gif_key: str | None = None
     drop_set: bool = False
     sets_detail: list[ExerciseSetDetail] | None = None
     model_config = ConfigDict(extra="ignore")

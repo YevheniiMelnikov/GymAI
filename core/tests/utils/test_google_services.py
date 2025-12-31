@@ -62,17 +62,15 @@ def test_create_new_payment_sheet(monkeypatch: Any) -> None:
 
 
 def test_find_gif(monkeypatch: Any) -> None:
-    import asyncio
+    class FakeBucket:
+        def blob(self, name: str):
+            assert name == "pushup.gif"
+            return FakeBlob()
 
     class FakeBlob:
-        name = "pushup.gif"
-
-        def exists(self) -> bool:
-            return True
-
-    class FakeBucket:
-        def list_blobs(self, prefix: str | None = None, max_results: int | None = None) -> list[FakeBlob]:
-            return [FakeBlob()]
+        def generate_signed_url(self, *, expiration, version: str):
+            assert version == "v4"
+            return "https://signed.example/pushup.gif"
 
     class FakeClient:
         def bucket(self, name: str) -> FakeBucket:
@@ -83,5 +81,5 @@ def test_find_gif(monkeypatch: Any) -> None:
 
     storage = ExerciseGIFStorage("bucket")
 
-    url = asyncio.run(storage.find_gif("Push Up", {"pushup": ["Push Up"]}))
-    assert url == "https://storage.googleapis.com/bucket/pushup.gif"
+    url = storage.find_gif("pushup.gif")
+    assert url == "https://signed.example/pushup.gif"

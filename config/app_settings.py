@@ -195,8 +195,9 @@ class Settings(BaseSettings):
     KNOWLEDGE_REFRESH_START_DELAY: int = Field(default=180, description="Delay in seconds before starting the first knowledge base refresh.")
     COGNEE_SEARCH_MODE: Annotated[str, Field(default="GRAPH_COMPLETION_CONTEXT_EXTENSION", description="Search type for Cognee queries (e.g., 'GRAPH_COMPLETION_CONTEXT_EXTENSION').")]
 
-    EXERCISE_GIF_BUCKET: Annotated[str, Field(default="exercises_guide", description="Google Cloud Storage bucket name used for exercise GIF assets.")]
+    EXERCISE_GIF_BUCKET: Annotated[str, Field(default="exercises_catalog", description="Google Cloud Storage bucket name used for exercise GIF assets.")]
     EXERCISE_GIF_BASE_URL: Annotated[str, Field(default="https://storage.googleapis.com", description="Base URL for the exercise GIF storage.")]
+    EXERCISE_GIF_URL_TTL_SEC: Annotated[int, Field(default=10_800, description="TTL in seconds for signed exercise GIF URLs.")]
 
     # --- AI-Generated Workout Plans ---
     AI_PLAN_DEDUP_TTL: Annotated[int, Field(default=3600, description="TTL in seconds for workout plan request deduplication.")]

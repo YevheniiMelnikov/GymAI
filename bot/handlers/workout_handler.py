@@ -9,7 +9,7 @@ from aiogram.exceptions import TelegramBadRequest
 from loguru import logger
 
 from bot.states import States
-from bot.utils.menus import show_main_menu
+from bot.utils.menus import reset_main_menu_state, show_main_menu
 from bot.utils.bot import del_msg, answer_msg, notify_request_in_progress
 from bot.utils.ai_coach import enqueue_ai_question
 from bot.utils.ask_ai import prepare_ask_ai_request
@@ -121,7 +121,7 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
             "ask_ai_prompt_chat_id": None,
             "ask_ai_question_message_id": message.message_id,
         }
-        await show_main_menu(message, profile, state, delete_source=False)
+        await reset_main_menu_state(state, profile)
         await state.update_data(**state_payload)
     except Exception:
         logger.exception(f"event=ask_ai_process_failed profile_id={profile.id}")

@@ -2,13 +2,13 @@ from datetime import datetime
 from uuid import uuid4
 
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery
 from loguru import logger
 
 from bot.texts import MessageText, translate
 from bot.utils.ai_coach import enqueue_workout_plan_generation
 from bot.utils.bot import answer_msg, notify_request_in_progress
-from bot.utils.menus import show_main_menu
+from bot.utils.menus import reset_main_menu_state
 from bot.flows.plan import ProgramPlanFlow, SubscriptionPlanFlow
 from bot.utils.profiles import resolve_workout_location
 from config.app_settings import settings
@@ -40,9 +40,7 @@ async def enqueue_subscription_plan(
 
     request_id = uuid4().hex
     await notify_request_in_progress(callback_query, lang)
-    message = callback_query.message
-    if message and isinstance(message, Message):
-        await show_main_menu(message, profile, state)
+    await reset_main_menu_state(state, profile)
     queued = await enqueue_workout_plan_generation(
         profile=selected_profile,
         plan_type=WorkoutPlanType.SUBSCRIPTION,

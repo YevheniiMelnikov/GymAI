@@ -40,6 +40,11 @@ urlpatterns = [
         views.update_subscription_exercise_sets,
         name="webapp-subscription-exercise-update",
     ),
+    path(  # pyrefly: ignore[no-matching-overload]
+        "api/gif/<path:gif_key>/",
+        views.exercise_gif,
+        name="webapp-exercise-gif",
+    ),
     path("", views.index, name="webapp"),
     path("__ping__", views.ping, name="webapp-ping"),
     re_path(r"^(?!api/).*$", views.index),

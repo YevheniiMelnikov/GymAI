@@ -5,7 +5,7 @@ from typing import Mapping, cast
 from uuid import uuid4
 
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery
 from loguru import logger
 
 from bot.keyboards import confirm_service_kb
@@ -13,7 +13,7 @@ from bot.states import States
 from bot.texts import MessageText, translate
 from bot.utils.ai_coach import enqueue_workout_plan_generation
 from bot.utils.bot import answer_msg, del_msg, notify_request_in_progress
-from bot.utils.menus import ensure_credits, show_main_menu
+from bot.utils.menus import ensure_credits, reset_main_menu_state
 from bot.utils.profiles import resolve_workout_location
 from config.app_settings import settings
 from core.cache import Cache
@@ -224,9 +224,7 @@ class SubscriptionPlanFlow(PlanFlowBase):
         await context.state.update_data(subscription_id=sub_id)
         request_id = uuid4().hex
         await notify_request_in_progress(context.callback_query, context.language)
-        message = context.callback_query.message
-        if message and isinstance(message, Message):
-            await show_main_menu(message, context.profile, context.state)
+        await reset_main_menu_state(context.state, context.profile)
         await del_msg(context.callback_query)
         queued = await enqueue_workout_plan_generation(
             profile=context.profile_record,
@@ -336,9 +334,7 @@ class ProgramPlanFlow(PlanFlowBase):
         )
         request_id = uuid4().hex
         await notify_request_in_progress(context.callback_query, context.language)
-        message = context.callback_query.message
-        if message and isinstance(message, Message):
-            await show_main_menu(message, context.profile, context.state)
+        await reset_main_menu_state(context.state, context.profile)
         await del_msg(context.callback_query)
         queued = await enqueue_workout_plan_generation(
             profile=context.profile_record,

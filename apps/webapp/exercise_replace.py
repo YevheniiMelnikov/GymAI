@@ -40,6 +40,7 @@ class ReplaceExercise(BaseModel):
     sets: str | int | None = None
     reps: str | int | None = None
     weight: str | None = None
+    gif_key: str | None = None
     sets_detail: list[ReplaceExerciseSet]
 
 

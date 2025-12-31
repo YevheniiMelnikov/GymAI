@@ -66,6 +66,11 @@ urlpatterns = [
         cast(WebappView, webapp_views.replace_exercise_status),
         name="webapp-program-exercise-replace-status-direct",
     ),
+    path(
+        "api/gif/<path:gif_key>/",
+        cast(WebappView, webapp_views.exercise_gif),
+        name="webapp-exercise-gif-direct",
+    ),
     path("webapp", RedirectView.as_view(url="/webapp/", permanent=False)),
     path("webapp/", include("apps.webapp.urls")),
     path("", RedirectView.as_view(url="/webapp/", permanent=False, query_string=True)),

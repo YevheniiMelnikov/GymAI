@@ -17,7 +17,7 @@ from bot.utils.diet_plans import (
     normalize_diet_products,
     toggle_diet_product,
 )
-from bot.utils.menus import show_balance_menu, show_main_menu
+from bot.utils.menus import reset_main_menu_state, show_balance_menu, show_main_menu
 from bot.utils.ai_coach import enqueue_diet_plan_generation
 from bot.utils.profiles import fetch_user, update_diet_preferences, update_profile_data
 from config.app_settings import settings
@@ -195,7 +195,5 @@ async def diet_confirm_service(callback_query: CallbackQuery, state: FSMContext)
         )
         return
     await notify_request_in_progress(callback_query, lang)
-    message = callback_query.message
-    if message and isinstance(message, Message):
-        await show_main_menu(message, profile, state)
+    await reset_main_menu_state(state, profile)
     await del_msg(callback_query)

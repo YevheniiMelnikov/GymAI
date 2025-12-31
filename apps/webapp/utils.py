@@ -5,10 +5,11 @@ import inspect
 import json
 import os
 import time
+from functools import lru_cache
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Awaitable, Callable, TypeVar, cast
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, quote
 
 from asgiref.sync import sync_to_async
 from django.http import HttpRequest, JsonResponse
@@ -20,6 +21,8 @@ from config.app_settings import settings
 from core.payment.providers.liqpay import LiqPayGateway
 
 from apps.profiles.repos import ProfileRepository
+from core.ai_coach.exercise_catalog import search_exercises
+from core.services.gstorage_service import ExerciseGIFStorage
 
 T = TypeVar("T")
 
@@ -255,11 +258,26 @@ def _resolve_static_version() -> str:
 STATIC_VERSION: str = _resolve_static_version()
 
 
+@lru_cache(maxsize=1)
+def _get_gif_storage() -> ExerciseGIFStorage:
+    return ExerciseGIFStorage(settings.EXERCISE_GIF_BUCKET)
+
+
 def transform_days(exercises_by_day: list) -> list[dict]:
     days = []
+    storage = _get_gif_storage()
+    has_bucket = storage.bucket is not None
+    total_exercises = 0
+    with_gif_key = 0
+    with_gif_url = 0
+    proxy_urls = 0
+    missing_url_samples: list[str] = []
+    sample_url: str | None = None
+    sample_key: str | None = None
     for idx, day_data in enumerate(exercises_by_day, start=1):
         exercises = []
         for ex_idx, ex_data in enumerate(day_data.get("exercises", [])):
+            total_exercises += 1
             weight_str = ex_data.get("weight")
             weight = None
             if weight_str:
@@ -268,6 +286,27 @@ def transform_days(exercises_by_day: list) -> list[dict]:
                     weight = {"value": parts[0], "unit": parts[1]}
                 else:
                     weight = {"value": weight_str, "unit": ""}
+
+            gif_key = ex_data.get("gif_key")
+            if not gif_key:
+                name_query = str(ex_data.get("name") or "").strip()
+                if name_query:
+                    matches = search_exercises(name_query=name_query, limit=1)
+                    if matches:
+                        gif_key = matches[0].gif_key
+            if gif_key:
+                with_gif_key += 1
+            gif_url = None
+            if gif_key and has_bucket:
+                gif_url = f"/api/gif/{quote(str(gif_key))}"
+            if gif_url:
+                with_gif_url += 1
+                proxy_urls += 1
+                if sample_url is None:
+                    sample_url = gif_url
+                    sample_key = str(gif_key)
+            elif gif_key and len(missing_url_samples) < 3:
+                missing_url_samples.append(str(gif_key))
 
             exercises.append(
                 {
@@ -279,6 +318,8 @@ def transform_days(exercises_by_day: list) -> list[dict]:
                     "sets_detail": ex_data.get("sets_detail"),
                     "equipment": None,
                     "notes": None,
+                    "gif_key": str(gif_key) if gif_key else None,
+                    "gif_url": gif_url,
                 }
             )
 
@@ -290,5 +331,20 @@ def transform_days(exercises_by_day: list) -> list[dict]:
                 "title": day_data.get("day"),
                 "exercises": exercises,
             }
+        )
+    logger.info(
+        "webapp_gif_urls total_exercises={} with_gif_key={} with_gif_url={} has_bucket={} proxy={} missing_samples={}",
+        total_exercises,
+        with_gif_key,
+        with_gif_url,
+        has_bucket,
+        proxy_urls,
+        ",".join(missing_url_samples) or "none",
+    )
+    if sample_url:
+        logger.info(
+            "webapp_gif_sample gif_key={} gif_url={}",
+            sample_key,
+            sample_url,
         )
     return days

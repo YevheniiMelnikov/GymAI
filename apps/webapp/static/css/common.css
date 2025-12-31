@@ -1044,6 +1044,17 @@ h1.page-title,
   color: var(--muted);
   font-size: 14px;
 }
+.exercise-dialog__message{
+  margin: 0;
+}
+.exercise-dialog__media{
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  background: color-mix(in oklab, var(--surface) 80%, var(--bg));
+  box-shadow: 0 10px 30px rgba(9, 14, 24, 0.2);
+}
 .exercise-dialog__actions{
   display: flex;
   justify-content: flex-end;

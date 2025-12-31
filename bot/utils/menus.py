@@ -82,6 +82,12 @@ async def show_main_menu(message: Message, profile: Profile, state: FSMContext, 
         await del_msg(cast(Message | CallbackQuery | None, message))
 
 
+async def reset_main_menu_state(state: FSMContext, profile: Profile) -> None:
+    await state.clear()
+    await state.update_data(profile=profile.model_dump(mode="json"))
+    await state.set_state(States.main_menu)
+
+
 InteractionTarget = CallbackQuery | Message | BotMessageProxy
 
 

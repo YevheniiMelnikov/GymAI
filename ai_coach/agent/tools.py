@@ -2,7 +2,7 @@ from asyncio import TimeoutError, wait_for
 from datetime import datetime
 from inspect import signature
 from time import monotonic
-from typing import Any, Callable, Coroutine, TypeVar, cast
+from typing import Any, Callable, Coroutine, TypeVar, TypedDict, cast
 from zoneinfo import ZoneInfo
 
 from loguru import logger
@@ -20,7 +20,8 @@ from ai_coach.types import CoachMode
 
 from ..schemas import ProgramPayload
 from ai_coach.agent.knowledge.knowledge_base import KnowledgeBase
-from ai_coach.agent.utils import ProgramAdapter
+from core.ai_coach.exercise_catalog import EXERCISE_CATEGORIES, MUSCLE_GROUPS, load_exercise_catalog, search_exercises
+from ai_coach.agent.utils import ProgramAdapter, ensure_catalog_gif_keys, fill_missing_gif_keys
 from ai_coach.agent import utils as agent_utils
 
 
@@ -148,7 +149,7 @@ def _single_use_prepare(
         if allowed_modes is not None and mode is not None and mode not in allowed_modes:
             _log_tool_disabled(deps, tool_name, reason="tool_disabled_for_mode")
             return None
-        if mode in (CoachMode.program, CoachMode.subscription) and tool_name in deps.called_tools:
+        if mode in (CoachMode.program, CoachMode.subscription, CoachMode.update) and tool_name in deps.called_tools:
             _log_tool_disabled(deps, tool_name, reason="tool_disabled_after_first_call")
             return None
         return tool_def
@@ -165,6 +166,95 @@ def _normalize_exercise_day_labels(exercises: list[DayExercises]) -> list[str]:
     if not normalized:
         normalized.append("Day 1")
     return normalized
+
+
+class ExerciseCatalogItem(TypedDict):
+    gif_key: str
+    canonical: str
+    aliases: list[str]
+    category: str
+    primary_muscles: list[str]
+    secondary_muscles: list[str]
+
+
+@toolset.tool(prepare=_single_use_prepare("tool_search_exercises"))  # pyrefly: ignore[no-matching-overload]
+async def tool_search_exercises(
+    ctx: RunContext[AgentDeps],  # pyrefly: ignore[unsupported-operation]
+    *,
+    category: str | None = None,
+    primary_muscles: list[str] | None = None,
+    secondary_muscles: list[str] | None = None,
+    name_query: str | None = None,
+    limit: int = 30,
+) -> list[ExerciseCatalogItem]:
+    """Search the exercise catalog by category, muscle groups, or name."""
+    tool_name = "tool_search_exercises"
+    cache_key = (
+        tool_name,
+        str(category or ""),
+        ",".join(primary_muscles or []),
+        ",".join(secondary_muscles or []),
+        str(name_query or ""),
+        str(limit),
+    )
+    deps, skipped, cached = _start_tool(ctx, tool_name, cache_key=cache_key)
+    if skipped:
+        return cast(list[ExerciseCatalogItem], cached if cached is not None else [])
+    entries = load_exercise_catalog()
+    if not entries:
+        raise AgentExecutionAborted("Exercise catalog is missing", reason="exercise_catalog_missing")
+    logger.debug(
+        "tool_search_exercises profile_id={} category={} primary={} secondary={} name_query='{}' limit={}",
+        deps.profile_id,
+        category,
+        primary_muscles,
+        secondary_muscles,
+        str(name_query or "")[:80],
+        limit,
+    )
+    results = search_exercises(
+        category=category,
+        primary_muscles=primary_muscles,
+        secondary_muscles=secondary_muscles,
+        name_query=name_query,
+        limit=limit,
+    )
+    if not results:
+        fallback = search_exercises(limit=limit)
+        if fallback:
+            logger.info(
+                "tool_search_exercises_fallback profile_id={} reason=empty_results fallback_count={}",
+                deps.profile_id,
+                len(fallback),
+            )
+            results = fallback
+    logger.info(
+        "tool_search_exercises_result profile_id={} count={}",
+        deps.profile_id,
+        len(results),
+    )
+    payload: list[ExerciseCatalogItem] = [
+        {
+            "gif_key": entry.gif_key,
+            "canonical": entry.canonical,
+            "aliases": list(entry.aliases),
+            "category": entry.category,
+            "primary_muscles": list(entry.primary_muscles),
+            "secondary_muscles": list(entry.secondary_muscles),
+        }
+        for entry in results
+    ]
+    if category and str(category).lower() not in EXERCISE_CATEGORIES:
+        _log_tool_disabled(deps, tool_name, reason="invalid_category")
+    if primary_muscles:
+        invalid_primary = {item.lower() for item in primary_muscles} - MUSCLE_GROUPS
+        if invalid_primary:
+            _log_tool_disabled(deps, tool_name, reason="invalid_primary_muscles")
+    if secondary_muscles:
+        invalid_secondary = {item.lower() for item in secondary_muscles} - MUSCLE_GROUPS
+        if invalid_secondary:
+            _log_tool_disabled(deps, tool_name, reason="invalid_secondary_muscles")
+    return _cache_result(deps, tool_name, payload, cache_key=cache_key)
 
 
 @toolset.tool(prepare=_single_use_prepare("tool_search_knowledge"))  # pyrefly: ignore[no-matching-overload]
@@ -435,6 +525,8 @@ async def tool_create_subscription(
         f"split_number={normalized_split} days={normalized_days}"
     )
     exercises_payload = [d.model_dump() for d in exercises]
+    fill_missing_gif_keys(exercises_payload)
+    ensure_catalog_gif_keys(exercises_payload)
     price_map = {
         SubscriptionPeriod.one_month: int(settings.SMALL_SUBSCRIPTION_PRICE),
         SubscriptionPeriod.six_months: int(settings.MEDIUM_SUBSCRIPTION_PRICE),

@@ -6,6 +6,7 @@ from typing import Any, cast
 
 import httpx
 from django.http import HttpRequest, HttpResponse, JsonResponse
+from google.api_core.exceptions import NotFound as GCSNotFound
 from django.shortcuts import render
 from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.csrf import csrf_exempt
@@ -29,6 +30,8 @@ from core.cache import Cache
 from core.enums import WorkoutLocation
 from core.schemas import Program as ProgramSchema, Subscription
 from django.core.cache import cache
+from core.ai_coach.exercise_catalog import load_exercise_catalog
+from core.services.gstorage_service import ExerciseGIFStorage
 from core.tasks.ai_coach.replace_exercise import enqueue_exercise_replace_task
 from apps.webapp.exercise_replace import (
     ExerciseSetPayload,
@@ -174,6 +177,37 @@ async def program_data(request: HttpRequest) -> JsonResponse:
         data["program"] = program_obj.exercises_by_day
 
     return JsonResponse(data)
+
+
+@require_GET  # type: ignore[misc]
+def exercise_gif(request: HttpRequest, gif_key: str) -> HttpResponse:
+    safe_key = str(gif_key or "").strip().lstrip("/")
+    if not safe_key:
+        return HttpResponse(status=404)
+
+    entries = load_exercise_catalog()
+    if entries and safe_key not in {entry.gif_key for entry in entries}:
+        logger.warning(f"exercise_gif_rejected gif_key={safe_key}")
+        return HttpResponse(status=404)
+
+    storage = ExerciseGIFStorage(settings.EXERCISE_GIF_BUCKET)
+    if storage.bucket is None:
+        logger.warning("exercise_gif_storage_unavailable")
+        return HttpResponse(status=404)
+
+    blob = storage.bucket.blob(safe_key)
+    try:
+        content = blob.download_as_bytes()
+    except GCSNotFound:
+        logger.warning(f"exercise_gif_missing gif_key={safe_key}")
+        return HttpResponse(status=404)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(f"exercise_gif_failed gif_key={safe_key} detail={exc}")
+        return HttpResponse(status=502)
+
+    response = HttpResponse(content, content_type=blob.content_type or "image/gif")
+    response["Cache-Control"] = "public, max-age=3600"
+    return response
 
 
 # type checking of async views with require_GET is not supported by stubs

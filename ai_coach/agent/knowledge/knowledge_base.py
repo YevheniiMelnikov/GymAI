@@ -1325,6 +1325,9 @@ class KnowledgeBase:
         return "profile: " + "; ".join(parts)
 
     async def sync_profile_dataset(self, profile_id: int) -> bool:
+        if not settings.AI_COACH_KB_ENABLED:
+            logger.info("profile_sync_skipped profile_id={} reason=kb_disabled", profile_id)
+            return False
         actor = self._user
         if actor is None:
             try:

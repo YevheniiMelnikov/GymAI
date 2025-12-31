@@ -178,7 +178,7 @@ export function openExerciseEditDialog(exercise: Exercise, options?: ExerciseEdi
 }
 
 type ExerciseDialogController = {
-  open: () => void;
+  open: (gifUrl?: string | null, exerciseName?: string) => void;
   close: () => void;
 };
 
@@ -232,8 +232,16 @@ function getExerciseDialog(): ReplaceExerciseDialogController {
   title.id = `${REPLACE_DIALOG_ID}-title`;
   title.className = 'exercise-dialog__title';
 
-  const body = document.createElement('p');
+  const body = document.createElement('div');
   body.className = 'exercise-dialog__body';
+
+  const message = document.createElement('p');
+  message.className = 'exercise-dialog__message';
+
+  const media = document.createElement('img');
+  media.className = 'exercise-dialog__media';
+  media.loading = 'lazy';
+  media.hidden = true;
 
   const actions = document.createElement('div');
   actions.className = 'exercise-dialog__actions';
@@ -247,6 +255,7 @@ function getExerciseDialog(): ReplaceExerciseDialogController {
   confirmBtn.className = 'primary-button';
 
   actions.append(cancelBtn, confirmBtn);
+  body.append(message, media);
   panel.append(title, body, actions);
   root.appendChild(panel);
   document.body.appendChild(root);
@@ -375,8 +384,16 @@ function getExerciseTechniqueDialog(): ExerciseDialogController {
   title.id = `${TECHNIQUE_DIALOG_ID}-title`;
   title.className = 'exercise-dialog__title';
 
-  const body = document.createElement('p');
+  const body = document.createElement('div');
   body.className = 'exercise-dialog__body';
+
+  const message = document.createElement('p');
+  message.className = 'exercise-dialog__message';
+
+  const media = document.createElement('img');
+  media.className = 'exercise-dialog__media';
+  media.loading = 'lazy';
+  media.hidden = true;
 
   const actions = document.createElement('div');
   actions.className = 'exercise-dialog__actions';
@@ -386,6 +403,7 @@ function getExerciseTechniqueDialog(): ExerciseDialogController {
   closeBtn.className = 'primary-button';
 
   actions.append(closeBtn);
+  body.append(message, media);
   panel.append(title, body, actions);
   root.appendChild(panel);
   document.body.appendChild(root);
@@ -403,10 +421,23 @@ function getExerciseTechniqueDialog(): ExerciseDialogController {
     }
   };
 
-  const open = () => {
-    title.textContent = t('program.exercise.technique.title');
-    body.textContent = t('program.exercise.technique.body');
+  const open = (gifUrl?: string | null, exerciseName?: string) => {
+    const hasGif = Boolean(gifUrl);
+    title.textContent = hasGif ? '' : t('program.exercise.technique.title');
+    title.hidden = hasGif;
+    message.textContent = t('program.exercise.technique.body');
     closeBtn.textContent = t('program.exercise.technique.close');
+    if (gifUrl) {
+      media.src = gifUrl;
+      media.alt = exerciseName || t('program.exercise.technique.title');
+      media.hidden = false;
+      message.hidden = true;
+    } else {
+      media.removeAttribute('src');
+      media.hidden = true;
+      message.hidden = false;
+      title.hidden = false;
+    }
     root.dataset.state = 'open';
     root.setAttribute('aria-hidden', 'false');
     document.addEventListener('keydown', handleKeydown);
@@ -425,6 +456,11 @@ function getExerciseTechniqueDialog(): ExerciseDialogController {
   closeBtn.addEventListener('click', (event) => {
     event.preventDefault();
     close();
+  });
+  media.addEventListener('error', () => {
+    media.removeAttribute('src');
+    media.hidden = true;
+    message.hidden = false;
   });
   root.addEventListener('click', onBackdropClick);
 
@@ -847,10 +883,13 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
   techniqueLink.tabIndex = 0;
   const techniqueDialog = getExerciseTechniqueDialog();
   const openTechniqueDialog = () => {
+    const resolvedGifUrl =
+      ex.gif_url ||
+      (ex.gif_key ? `/api/gif/${encodeURIComponent(ex.gif_key)}` : null);
     if (!details.open) {
       details.open = true;
     }
-    techniqueDialog.open();
+    techniqueDialog.open(resolvedGifUrl, title);
   };
   techniqueLink.addEventListener('click', (event) => {
     event.preventDefault();

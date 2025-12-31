@@ -20,6 +20,8 @@ export type Exercise = {
   sets_detail?: ExerciseSetDetail[] | null;
   equipment: string | null;
   notes: string | null;
+  gif_key?: string | null;
+  gif_url?: string | null;
 };
 
 export type WorkoutDay = {

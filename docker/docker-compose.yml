@@ -109,7 +109,7 @@ services:
     <<: *common_env
     entrypoint: /app/docker/entrypoint.sh
     environment:
-      GOOGLE_APPLICATION_CREDENTIALS: /app/google_creds.json
+      GOOGLE_APPLICATION_CREDENTIALS: /app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}
       RUN_MIGRATIONS: true
       API_PORT: ${API_PORT:-8000}
       COGNEE_STORAGE_PATH: /app/cognee_storage
@@ -143,7 +143,7 @@ services:
     volumes:
       - staticfiles:/app/staticfiles
       - cognee_storage:/app/cognee_storage
-      - ../google_creds.json:/app/google_creds.json:ro
+      - ../${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}:/app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}:ro
       - ../apps/webapp/static:/app/apps/webapp/static
     restart: unless-stopped
 
@@ -162,6 +162,7 @@ services:
     environment:
       SERVICE_ROLE: worker
       COGNEE_STORAGE_PATH: /app/cognee_storage
+      GOOGLE_APPLICATION_CREDENTIALS: /app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}
     extra_hosts:
       - "host.docker.internal:172.17.0.1"
     depends_on:
@@ -176,6 +177,10 @@ services:
       qdrant:
         condition: service_started
     restart: unless-stopped
+    volumes:
+      - staticfiles:/app/staticfiles
+      - cognee_storage:/app/cognee_storage
+      - ../${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}:/app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}:ro
 
   ai_coach_worker:
     image: *coach_image
@@ -192,6 +197,7 @@ services:
     environment:
       SERVICE_ROLE: ai_coach_worker
       COGNEE_STORAGE_PATH: /app/cognee_storage
+      GOOGLE_APPLICATION_CREDENTIALS: /app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}
     extra_hosts:
       - "host.docker.internal:172.17.0.1"
     depends_on:
@@ -206,6 +212,10 @@ services:
       qdrant:
         condition: service_started
     restart: unless-stopped
+    volumes:
+      - staticfiles:/app/staticfiles
+      - cognee_storage:/app/cognee_storage
+      - ../${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}:/app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}:ro
 
   beat:
     image: *app_image
@@ -222,6 +232,7 @@ services:
     environment:
       SERVICE_ROLE: beat
       COGNEE_STORAGE_PATH: /app/cognee_storage
+      GOOGLE_APPLICATION_CREDENTIALS: /app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}
     depends_on:
       redis:
         condition: service_healthy
@@ -234,6 +245,10 @@ services:
       qdrant:
         condition: service_healthy
     restart: unless-stopped
+    volumes:
+      - staticfiles:/app/staticfiles
+      - cognee_storage:/app/cognee_storage
+      - ../${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}:/app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}:ro
 
   ai_coach:
     image: *coach_image
@@ -250,6 +265,7 @@ services:
       SKIP_COLLECTSTATIC: "true"
       COGNEE_STORAGE_PATH: /app/cognee_storage
       COGNEE_DATA_ROOT: /app/cognee_storage
+      GOOGLE_APPLICATION_CREDENTIALS: /app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}
       GRAPH_DATABASE_PROVIDER: ${GRAPH_DATABASE_PROVIDER}
       LLM_API_KEY: ${LLM_API_KEY}
       LLM_API_URL: https://openrouter.ai/api/v1
@@ -278,6 +294,7 @@ services:
       start_period: 60s
     volumes:
       - cognee_storage:/app/cognee_storage
+      - ../${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}:/app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}:ro
     restart: unless-stopped
 
   bot:
@@ -291,7 +308,7 @@ services:
         EXTRAS: ""
     <<: *common_env
     environment:
-      GOOGLE_APPLICATION_CREDENTIALS: /app/google_creds.json
+      GOOGLE_APPLICATION_CREDENTIALS: /app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}
       DOCKER_BOT_START: ${DOCKER_BOT_START:-false}
       BOT_CONTAINER_PORT: ${BOT_CONTAINER_PORT:-8000}
       COGNEE_STORAGE_PATH: /app/cognee_storage
@@ -305,6 +322,10 @@ services:
       ai_coach:
         condition: service_started
     restart: unless-stopped
+    volumes:
+      - staticfiles:/app/staticfiles
+      - cognee_storage:/app/cognee_storage
+      - ../${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}:/app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}:ro
 
   neo4j:
     image: neo4j:5.26

@@ -10,6 +10,7 @@ from celery import Task
 from loguru import logger
 from config.app_settings import settings
 from core.celery_app import app
+from core.ai_coach.exercise_catalog import suggest_replacement_exercises
 from apps.webapp.exercise_replace import (
     ReplaceExerciseResponse,
     extract_json_payload,
@@ -56,18 +57,33 @@ def _resolve_task_id(task: Task) -> str:
 def _build_prompt(
     *,
     exercise_id: str,
+    exercise_name: str,
     profile_payload: dict[str, Any],
     exercises_by_day: list[dict[str, Any]],
     language: str,
 ) -> str:
     prompt_template = Template(_load_prompt("replace_exercise.txt"))
+    suggestions = [
+        {
+            "gif_key": entry.gif_key,
+            "canonical": entry.canonical,
+            "aliases": list(entry.aliases),
+            "category": entry.category,
+            "primary_muscles": list(entry.primary_muscles),
+            "secondary_muscles": list(entry.secondary_muscles),
+        }
+        for entry in suggest_replacement_exercises(name_query=exercise_name, limit=25)
+    ]
     profile_json = json.dumps(profile_payload, ensure_ascii=False)
     program_json = json.dumps(exercises_by_day, ensure_ascii=False)
+    catalog_json = json.dumps(suggestions, ensure_ascii=False)
     return prompt_template.safe_substitute(
         language=language,
         exercise_id=exercise_id,
+        exercise_name=exercise_name,
         profile_json=profile_json,
         program_json=program_json,
+        catalog_json=catalog_json,
     )
 
 
@@ -142,6 +158,9 @@ def _apply_replacement(
             weight_summary = f"{weight_summary} {weight_unit}"
     exercise_entry["weight"] = weight_summary
     exercise_entry["sets_detail"] = sets_detail
+    gif_key = getattr(exercise, "gif_key", None)
+    if gif_key:
+        exercise_entry["gif_key"] = str(gif_key)
 
 
 def _replace_exercise_impl(profile_id: int, program_id: int, exercise_id: str, task_id: str) -> None:
@@ -165,6 +184,7 @@ def _replace_exercise_impl(profile_id: int, program_id: int, exercise_id: str, t
 
     prompt = _build_prompt(
         exercise_id=exercise_id,
+        exercise_name=str(exercise_entry.get("name") or ""),
         profile_payload=resolve_profile_payload(profile),
         exercises_by_day=exercises_by_day,
         language=str(profile.language or "en"),

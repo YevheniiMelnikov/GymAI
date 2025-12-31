@@ -206,6 +206,9 @@ def sync_profile_knowledge(
     self, profile_id: int, reason: str = "profile_updated"
 ) -> None:  # pyrefly: ignore[valid-type]
     """Ensure Cognee profile dataset is synchronized with latest data."""
+    if not settings.AI_COACH_KB_ENABLED:
+        logger.info(f"sync_profile_knowledge.skipped profile_id={profile_id} reason=kb_disabled")
+        return
     logger.info(f"sync_profile_knowledge.start profile_id={profile_id} reason={reason}")
     payload: dict[str, Any] = {"reason": reason}
     timeout = settings.AI_COACH_TIMEOUT

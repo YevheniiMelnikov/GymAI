@@ -1,111 +1,67 @@
 import os
+from datetime import timedelta
+from pathlib import Path
+from typing import cast
 
 from loguru import logger
-from aiogram.types import Message
 from google.cloud import storage
 from google.auth.exceptions import DefaultCredentialsError
 
 from config.app_settings import settings
 
 
-class GCStorageService:
-    def __init__(self, bucket_name: str):
+class ExerciseGIFStorage:
+    def __init__(self, bucket_name: str) -> None:
         self.bucket_name = bucket_name
+        self._warned_missing_client = False
+        creds_path = Path(settings.GOOGLE_APPLICATION_CREDENTIALS)
+        self.storage_client: storage.Client | None = None
+        self.bucket: storage.bucket.Bucket | None = None
         try:
-            self.storage_client: storage.Client | None = storage.Client()
-            self.bucket: storage.bucket.Bucket | None = self.storage_client.bucket(bucket_name)
+            if creds_path.exists():
+                self.storage_client = cast(
+                    storage.Client,
+                    storage.Client.from_service_account_json(str(creds_path)),
+                )
+            else:
+                logger.warning("GCS credentials file not found path={}", creds_path)
+                self.storage_client = storage.Client()
+            if self.storage_client is not None:
+                self.bucket = self.storage_client.bucket(bucket_name)
+                credentials = getattr(self.storage_client, "_credentials", None)
+            else:
+                credentials = None
+            service_account = getattr(credentials, "service_account_email", None)
+            project_id = getattr(self.storage_client, "project", None)
+            if service_account:
+                logger.info(
+                    "GCS client ready bucket={} account={} project={}",
+                    bucket_name,
+                    service_account,
+                    project_id,
+                )
         except DefaultCredentialsError as exc:  # noqa: BLE001
-            logger.error(f"GCS credentials error: {exc}")
-            self.storage_client = None
-            self.bucket = None
+            creds_hint = "set" if os.getenv("GOOGLE_APPLICATION_CREDENTIALS") else "missing"
+            logger.error(f"GCS credentials error: {exc} google_credentials={creds_hint}")
+        self.base_url = settings.EXERCISE_GIF_BASE_URL.rstrip("/")
 
-    def load_file_to_bucket(self, source_file_name: str) -> bool:
-        if not self.bucket:
-            logger.warning("GCS bucket is not configured")
-            return False
-        try:
-            blob = self.bucket.blob(os.path.basename(source_file_name))
-            blob.upload_from_filename(source_file_name)
-            logger.debug(f"File {source_file_name[:10]}...jpg successfully uploaded to storage")
-            return True
-        except Exception as e:  # noqa: BLE001
-            logger.error(f"Failed to upload {source_file_name[:10]}...jpg to storage: {e}")
-            return False
-
-    @staticmethod
-    async def save_image(message: Message) -> str | None:
-        try:
-            if not message.photo:
-                return None
-            photo = message.photo[-1]
-            file_id = photo.file_id
-
-            bot = message.bot
-            if bot is None:
-                return None
-
-            file = await bot.get_file(file_id)
-            if file.file_path is None:
-                return None
-
-            local_file_path = f"{file_id}.jpg"
-            await bot.download_file(file.file_path, destination=local_file_path)
-
-            logger.debug(f"File {file_id[:10]}...jpg successfully saved locally")
-            await message.delete()
-            return local_file_path
-
-        except Exception as e:
-            logger.error(f"Error saving file: {e}")
+    def find_gif(self, gif_name: str) -> str | None:
+        safe_name = str(gif_name or "").strip().lstrip("/")
+        if not safe_name:
             return None
 
-    @staticmethod
-    def clean_up_file(file: str) -> None:
-        if os.path.exists(file):
-            os.remove(file)
-            logger.debug(f"File {file[:10]}...jpg successfully deleted")
-        else:
-            logger.warning(f"File {file[:10]}...jpg does not exist, skipping deletion")
-
-    @staticmethod
-    def check_file_size(file_path: str) -> bool:
-        file_size = os.path.getsize(file_path) / (1024 * 1024)
-        return file_size <= settings.MAX_FILE_SIZE_MB
-
-
-class ExerciseGIFStorage(GCStorageService):
-    def __init__(self, bucket_name: str):
-        super().__init__(bucket_name)
-        self.base_url = settings.EXERCISE_GIF_BASE_URL
-
-    async def find_gif(
-        self,
-        exercise: str,
-        exercise_dict: dict[str, list[str]],
-    ) -> str | None:
-        if not self.bucket:
-            logger.warning("GCS bucket is not configured")
-            return None
-
-        exercise_lc = exercise.lower()
-
-        try:
-            for filename, synonyms in exercise_dict.items():
-                if exercise_lc not in {s.lower() for s in synonyms}:
-                    continue
-
-                blobs = list(self.bucket.list_blobs(prefix=filename, max_results=1))
-                if not blobs or not blobs[0].exists():
-                    continue
-
-                blob = blobs[0]
-                file_url = f"{self.base_url}/{self.bucket_name}/{blob.name}"
-
-                return file_url
-        except Exception as exc:
-            if "403" in str(exc) and "billing account" in str(exc):
-                logger.debug(f"Billing disabled, skipping GIF search for {exercise}")
-                return None
-            logger.debug(f"Failed to find gif for exercise {exercise}: {exc}")
-
-        return None
+        ttl_seconds = int(getattr(settings, "EXERCISE_GIF_URL_TTL_SEC", 0) or 0)
+        if ttl_seconds > 0 and self.bucket is not None:
+            try:
+                blob = self.bucket.blob(safe_name)
+                signed_url = blob.generate_signed_url(
+                    expiration=timedelta(seconds=ttl_seconds),
+                    version="v4",
+                )
+                return signed_url
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"Failed to sign GIF url gif_name={safe_name} error={exc}")
+        if self.bucket is None and not self._warned_missing_client:
+            logger.warning("GCS client unavailable; using public GIF URLs without signing")
+            self._warned_missing_client = True
+        return f"{self.base_url}/{self.bucket_name}/{safe_name}"

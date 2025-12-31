@@ -717,6 +717,9 @@ class SearchService:
         return [query]
 
     async def _schedule_profile_sync(self, profile_id: int) -> None:
+        if not settings.AI_COACH_KB_ENABLED:
+            logger.debug("profile_sync_skipped profile_id={} reason=kb_disabled", profile_id)
+            return
         key = f"ai_coach:profile_sync:{profile_id}"
         try:
             client = get_redis_client()

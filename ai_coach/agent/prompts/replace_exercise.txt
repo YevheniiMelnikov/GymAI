@@ -4,6 +4,7 @@ Return ONLY valid JSON in the exact structure below, with no extra text:
 {
   "exercise": {
     "name": "string",
+    "gif_key": "string",
     "sets": "string",
     "reps": "string",
     "weight": "string or null",
@@ -17,6 +18,7 @@ Rules:
 - Output exercise names and notes in ${language}.
 - Replace only the target exercise. Keep the rest of the program unchanged.
 - Use the client's profile to choose a suitable alternative: goals, experience, limitations, location, equipment, and health notes.
+- Select the replacement ONLY from the catalog list below. Use its "canonical" as the exercise name and include its "gif_key".
 - Avoid exercises already present in the program (including warm-up). Provide a distinct alternative for the same muscle group/pattern.
 - Prefer common, accessible exercises and equipment. Avoid exotic machines or rare variations.
 - Keep the same number of sets as in the target exercise unless the profile implies otherwise.
@@ -26,9 +28,13 @@ Rules:
 - If the exercise is bodyweight, set weight to null and set weight=0 in sets_detail with weight_unit null.
 
 Target exercise id: ${exercise_id}
+Target exercise name: ${exercise_name}
 
 Client profile (JSON):
 ${profile_json}
 
 Program (JSON, exercises_by_day):
 ${program_json}
+
+Catalog (JSON list; choose ONLY from here):
+${catalog_json}

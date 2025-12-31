@@ -276,6 +276,13 @@ async def cleanup_profile_knowledge_public(
 
 
 async def _sync_profile(profile_id: int, payload: ProfileSyncRequest | None = None) -> dict[str, Any]:
+    if not settings.AI_COACH_KB_ENABLED:
+        logger.info(
+            "profile_sync_skipped profile_id={} reason={} detail=kb_disabled",
+            profile_id,
+            payload.reason if payload else None,
+        )
+        return {"profile_id": profile_id, "indexed": False}
     kb = get_knowledge_base()
     indexed = await kb.sync_profile_dataset(profile_id)
     logger.info(

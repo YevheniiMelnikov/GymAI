@@ -3,13 +3,21 @@ MODE: subscription
    - Build a compact query that starts with `profile:` and lists key fields (gender, birth_year, weight, height,
      workout_goals, workout_experience, workout_location, health_notes) plus a short cue like "workout plan".
    - Keep the query <=120 characters. Do not include role text, instructions, or anything starting with "MODE:".
-2) Generate SubscriptionPayload including split_number (1-7) and exercises, avoiding calendar weekday names.
+2) Call tool_search_exercises(category, primary_muscles, secondary_muscles, name_query) ONCE to fetch exercises from
+   the catalog. Use a broader query and limit up to 30 items.
+   - Categories: conditioning, strength, health.
+   - Muscle groups: chest, upper_back, lats, lower_back, front_delts, side_delts, rear_delts, biceps, triceps,
+     forearms, quadriceps, hamstrings, glutes, calves, abs, obliques, core.
+3) Generate SubscriptionPayload including split_number (1-7) and exercises, avoiding calendar weekday names.
+   Use ONLY exercises from the catalog results and include gif_key for each exercise.
 Subscription field guide:
 - split_number: number of training days per week (1-7). Exercises must have "Day 1".."Day N" matching split_number.
-- exercises: list of DayExercises; each item has day + exercises with name, sets, reps.
+- exercises: list of DayExercises; each item has day + exercises with name, sets, reps, gif_key.
 - period: subscription billing period ("1m", "6m", "12m").
 - wishes: client's preferences or limitations in free-form text.
 - workout_location: training location ("home", "gym", "strength").
-3) Call tool_create_subscription(split_number, payload.exercises, period, wishes, workout_location) and return Subscription.
+4) Call tool_create_subscription(split_number, payload.exercises, period, wishes, workout_location) and return Subscription.
 
-Execute each tool exactly once in the given order. If you receive a response indicating a tool was already run, skip additional calls and complete the subscription with the existing data.
+Execute tool_search_knowledge and tool_create_subscription exactly once in the given order. You may call
+tool_search_exercises multiple times if needed. If you receive a response indicating a tool was already run, skip
+additional calls and complete the subscription with the existing data.

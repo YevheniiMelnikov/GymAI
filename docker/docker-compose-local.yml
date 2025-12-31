@@ -142,7 +142,7 @@ services:
     container_name: api
     <<: *common_env
     environment:
-      GOOGLE_APPLICATION_CREDENTIALS: /app/google_creds.json
+      GOOGLE_APPLICATION_CREDENTIALS: /app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}
       RUN_MIGRATIONS: true
       WEBAPP_AUTO_BUILD: "true"
       API_PORT: ${API_PORT:-8000}
@@ -176,7 +176,7 @@ services:
     volumes:
       - ../:/app
       - ../apps/webapp/static:/app/staticfiles
-      - ../google_creds.json:/app/google_creds.json:ro
+      - ../${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}:/app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}:ro
     ports:
       - ${HOST_API_PORT:-8000}:${API_PORT:-8000}
     extra_hosts:
@@ -197,6 +197,7 @@ services:
     environment:
       SERVICE_ROLE: celery
       COGNEE_STORAGE_PATH: /app/cognee_storage
+      GOOGLE_APPLICATION_CREDENTIALS: /app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}
     entrypoint: /app/docker/entrypoint.sh
     command: >
       celery -A config.celery:celery_app worker
@@ -233,6 +234,7 @@ services:
     environment:
       SERVICE_ROLE: ai_coach_worker
       COGNEE_STORAGE_PATH: /app/cognee_storage
+      GOOGLE_APPLICATION_CREDENTIALS: /app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}
     entrypoint: /app/docker/entrypoint.sh
     command: >
       celery -A config.celery:celery_app worker
@@ -276,6 +278,7 @@ services:
       LOGURU_LEVEL: DEBUG
       COGNEE_STORAGE_PATH: /app/cognee_storage
       COGNEE_DATA_ROOT: /app/cognee_storage
+      GOOGLE_APPLICATION_CREDENTIALS: /app/${GOOGLE_APPLICATION_CREDENTIALS:-google_creds.json}
       GRAPH_DATABASE_PROVIDER: ${GRAPH_DATABASE_PROVIDER}
       LLM_API_KEY: ${LLM_API_KEY}
       LLM_API_URL: https://openrouter.ai/api/v1

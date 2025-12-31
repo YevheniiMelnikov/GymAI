@@ -8,12 +8,13 @@ from zoneinfo import ZoneInfo
 
 
 from loguru import logger  # pyrefly: ignore[import-error]
+from pydantic_ai import ModelRetry  # pyrefly: ignore[import-error]
 from pydantic_ai.messages import ModelMessage, ModelRequest  # pyrefly: ignore[import-error]
 from pydantic_ai.settings import ModelSettings  # pyrefly: ignore[import-error]
 
 from config.app_settings import settings
 from core.enums import WorkoutLocation
-from core.schemas import DietPlan, Program, QAResponse, Subscription
+from core.schemas import DayExercises, DietPlan, Program, QAResponse, Subscription
 from ai_coach.exceptions import AgentExecutionAborted
 from ai_coach.agent.knowledge.schemas import KnowledgeSnippet
 
@@ -34,7 +35,7 @@ from .prompts import (
     UPDATE_WORKOUT,
 )
 from ai_coach.types import CoachMode
-from ai_coach.agent.utils import get_knowledge_base
+from ai_coach.agent.utils import ensure_catalog_gif_keys, fill_missing_gif_keys, get_knowledge_base
 
 _LOG_PAYLOADS = os.getenv("AI_COACH_LOG_PAYLOADS", "").strip() == "1"
 
@@ -307,8 +308,28 @@ class CoachAgent(metaclass=CoachAgentMeta):
             mode=deps.mode,
         )
         if output_type is Program:
-            return cls._normalize_output(raw_result, Program)
-        return cls._normalize_output(raw_result, Subscription)
+            normalized = cls._normalize_output(raw_result, Program)
+            exercises = [day.model_dump() for day in normalized.exercises_by_day]
+            try:
+                fill_missing_gif_keys(exercises)
+                ensure_catalog_gif_keys(exercises)
+            except ValueError as exc:
+                raise ModelRetry(
+                    f"Exercise catalog validation failed: {exc}. Use tool_search_exercises and include gif_key."
+                ) from exc
+            normalized.exercises_by_day = [DayExercises.model_validate(day) for day in exercises]
+            return normalized
+        normalized = cls._normalize_output(raw_result, Subscription)
+        exercises = [day.model_dump() for day in normalized.exercises]
+        try:
+            fill_missing_gif_keys(exercises)
+            ensure_catalog_gif_keys(exercises)
+        except ValueError as exc:
+            raise ModelRetry(
+                f"Exercise catalog validation failed: {exc}. Use tool_search_exercises and include gif_key."
+            ) from exc
+        normalized.exercises = [DayExercises.model_validate(day) for day in exercises]
+        return normalized
 
     @classmethod
     async def answer_question(
