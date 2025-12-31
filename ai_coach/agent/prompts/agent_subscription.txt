@@ -7,7 +7,7 @@ MODE: subscription
    the catalog. Use a broader query and limit up to 30 items.
    - Categories: conditioning, strength, health.
    - Muscle groups: chest, upper_back, lats, lower_back, front_delts, side_delts, rear_delts, biceps, triceps,
-     forearms, quadriceps, hamstrings, glutes, calves, abs, obliques, core.
+     forearms, quadriceps, hamstrings, glutes, calves, adductors, abductors, abs, obliques, core.
 3) Generate SubscriptionPayload including split_number (1-7) and exercises, avoiding calendar weekday names.
    Use ONLY exercises from the catalog results and include gif_key for each exercise.
 Subscription field guide:

@@ -14,6 +14,8 @@ MUSCLE_GROUPS: set[str] = {
     "hamstrings",
     "glutes",
     "calves",
+    "adductors",
+    "abductors",
     "abs",
     "obliques",
     "core",

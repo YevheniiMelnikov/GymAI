@@ -3,7 +3,7 @@ MODE: update
    the catalog. Use a broader query and limit up to 30 items.
    - Categories: conditioning, strength, health.
    - Muscle groups: chest, upper_back, lats, lower_back, front_delts, side_delts, rear_delts, biceps, triceps,
-     forearms, quadriceps, hamstrings, glutes, calves, abs, obliques, core.
+     forearms, quadriceps, hamstrings, glutes, calves, adductors, abductors, abs, obliques, core.
 2) Generate a new ProgramPayload using the feedback and context. Use ONLY exercises from the catalog results and
    include gif_key for each exercise.
 3) Call tool_save_program(plan) and return the resulting Program.
