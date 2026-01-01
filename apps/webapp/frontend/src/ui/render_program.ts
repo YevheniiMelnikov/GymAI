@@ -1,4 +1,13 @@
-import { getReplaceExerciseStatus, replaceExercise, saveExerciseSets, saveSubscriptionExerciseSets } from '../api/http';
+import {
+  getReplaceExerciseStatus,
+  getReplaceSubscriptionExerciseStatus,
+  HttpError,
+  replaceExercise,
+  replaceSubscriptionExercise,
+  ReplaceExerciseStatus,
+  saveExerciseSets,
+  saveSubscriptionExerciseSets
+} from '../api/http';
 import { Day, Exercise, Locale, Program, Week } from '../api/types';
 import { t } from '../i18n/i18n';
 import { readInitData } from '../telegram';
@@ -34,10 +43,15 @@ function preloadTechniqueGifs(program: Program): void {
     });
   };
 
-  if ('requestIdleCallback' in window) {
-    window.requestIdleCallback(() => preload(), { timeout: 1500 });
+  const idleCallback = (
+    globalThis as unknown as Window & {
+      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+    }
+  ).requestIdleCallback;
+  if (idleCallback) {
+    idleCallback(() => preload(), { timeout: 1500 });
   } else {
-    window.setTimeout(preload, 300);
+    globalThis.setTimeout(preload, 300);
   }
 }
 
@@ -307,10 +321,12 @@ function getExerciseDialog(): ReplaceExerciseDialogController {
 
   const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-  const waitForReplace = async (taskId: string) => {
+  type ReplaceStatusLoader = (taskId: string, initData: string) => Promise<ReplaceExerciseStatus>;
+
+  const waitForReplace = async (taskId: string, statusLoader: ReplaceStatusLoader) => {
     const initData = readInitData();
     for (let attempt = 0; attempt < REPLACE_POLL_MAX_ATTEMPTS; attempt += 1) {
-      const status = await getReplaceExerciseStatus(taskId, initData);
+      const status = await statusLoader(taskId, initData);
       if (status.status === 'success') {
         return;
       }
@@ -364,7 +380,7 @@ function getExerciseDialog(): ReplaceExerciseDialogController {
   confirmBtn.addEventListener('click', (event) => {
     event.preventDefault();
     if (!replaceContext || isLoading) return;
-    if (!programContext.programId || programContext.source !== 'direct') {
+    if (!programContext.programId) {
       window.alert(t('program.action_error'));
       close();
       return;
@@ -380,16 +396,23 @@ function getExerciseDialog(): ReplaceExerciseDialogController {
     replaceContext.details.classList.add('program-exercise-details--loading');
     close();
     const initData = readInitData();
-    replaceExercise(programContext.programId, replaceContext.exercise.id, initData)
-      .then((taskId) => waitForReplace(taskId))
+    const isSubscription = programContext.source === 'subscription';
+    const replaceAction = isSubscription ? replaceSubscriptionExercise : replaceExercise;
+    const statusLoader = isSubscription ? getReplaceSubscriptionExerciseStatus : getReplaceExerciseStatus;
+    replaceAction(programContext.programId, replaceContext.exercise.id, initData)
+      .then((taskId) => waitForReplace(taskId, statusLoader))
       .then(() => {
         replaceContext?.details.classList.remove('program-exercise-details--loading');
         window.dispatchEvent(new CustomEvent(EXERCISE_EDIT_SAVED_EVENT));
         close();
       })
-      .catch(() => {
+      .catch((err) => {
         replaceContext?.details.classList.remove('program-exercise-details--loading');
-        window.alert(t('program.action_error'));
+        const message =
+          err instanceof HttpError && err.status === 429
+            ? t('program.exercise.replace_limit')
+            : t('program.action_error');
+        window.alert(message);
         setLoading(false);
       });
   });

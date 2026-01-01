@@ -15,6 +15,7 @@ from bot.utils.ai_coach import enqueue_ai_question
 from bot.utils.ask_ai import prepare_ask_ai_request
 from core.schemas import Profile
 from bot.texts import MessageText, translate
+from bot.utils.text import support_contact_url
 from core.exceptions import AskAiPreparationError
 from config.app_settings import settings
 
@@ -107,7 +108,7 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
             logger.error(f"event=ask_ai_enqueue_failed request_id={request_id} profile_id={profile.id}")
             await answer_msg(
                 message,
-                translate(MessageText.coach_agent_error, lang).format(tg=settings.TG_SUPPORT_CONTACT),
+                translate(MessageText.coach_agent_error, lang).format(tg=support_contact_url()),
             )
             return
 
@@ -127,5 +128,5 @@ async def process_ask_ai_question(message: Message, state: FSMContext, bot: Bot)
         logger.exception(f"event=ask_ai_process_failed profile_id={profile.id}")
         await answer_msg(
             message,
-            translate(MessageText.coach_agent_error, lang).format(tg=settings.TG_SUPPORT_CONTACT),
+            translate(MessageText.coach_agent_error, lang).format(tg=support_contact_url()),
         )

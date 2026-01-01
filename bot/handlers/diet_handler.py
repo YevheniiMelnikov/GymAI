@@ -9,6 +9,7 @@ from aiogram.types import CallbackQuery, Message
 from bot.keyboards import confirm_service_kb, diet_products_kb
 from bot.states import States
 from bot.texts import MessageText, translate
+from bot.utils.text import support_contact_url
 from bot.utils.bot import answer_msg, del_msg, notify_request_in_progress
 from bot.utils.diet_plans import (
     DIET_PRODUCT_CALLBACK_PREFIX,
@@ -191,7 +192,7 @@ async def diet_confirm_service(callback_query: CallbackQuery, state: FSMContext)
     if not queued:
         await answer_msg(
             callback_query,
-            translate(MessageText.coach_agent_error, lang).format(tg=settings.TG_SUPPORT_CONTACT),
+            translate(MessageText.coach_agent_error, lang).format(tg=support_contact_url()),
         )
         return
     await notify_request_in_progress(callback_query, lang)

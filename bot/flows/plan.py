@@ -11,6 +11,7 @@ from loguru import logger
 from bot.keyboards import confirm_service_kb
 from bot.states import States
 from bot.texts import MessageText, translate
+from bot.utils.text import support_contact_url
 from bot.utils.ai_coach import enqueue_workout_plan_generation
 from bot.utils.bot import answer_msg, del_msg, notify_request_in_progress
 from bot.utils.menus import ensure_credits, reset_main_menu_state
@@ -239,7 +240,7 @@ class SubscriptionPlanFlow(PlanFlowBase):
         if not queued:
             await answer_msg(
                 context.callback_query,
-                translate(MessageText.coach_agent_error, context.language).format(tg=settings.TG_SUPPORT_CONTACT),
+                translate(MessageText.coach_agent_error, context.language).format(tg=support_contact_url()),
             )
             logger.error(
                 f"ai_plan_dispatch_failed plan_type=subscription profile_id={context.profile_record.id} "
@@ -347,7 +348,7 @@ class ProgramPlanFlow(PlanFlowBase):
         if not queued:
             await answer_msg(
                 context.callback_query,
-                translate(MessageText.coach_agent_error, context.language).format(tg=settings.TG_SUPPORT_CONTACT),
+                translate(MessageText.coach_agent_error, context.language).format(tg=support_contact_url()),
             )
             logger.error(
                 f"ai_plan_dispatch_failed plan_type=program profile_id={context.profile_record.id} "

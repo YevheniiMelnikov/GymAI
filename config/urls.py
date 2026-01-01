@@ -62,9 +62,19 @@ urlpatterns = [
         name="webapp-program-exercise-replace-direct",
     ),
     path(
+        "api/subscription/exercise/replace/",
+        cast(WebappView, webapp_views.replace_subscription_exercise),
+        name="webapp-subscription-exercise-replace-direct",
+    ),
+    path(
         "api/program/exercise/replace/status/",
         cast(WebappView, webapp_views.replace_exercise_status),
         name="webapp-program-exercise-replace-status-direct",
+    ),
+    path(
+        "api/subscription/exercise/replace/status/",
+        cast(WebappView, webapp_views.replace_subscription_exercise_status),
+        name="webapp-subscription-exercise-replace-status-direct",
     ),
     path(
         "api/gif/<path:gif_key>/",

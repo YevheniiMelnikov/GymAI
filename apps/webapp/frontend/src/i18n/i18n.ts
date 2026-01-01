@@ -39,6 +39,7 @@ export const fallbackEn = {
     'We can generate another exercise for this slot at no extra cost. Use it when you lack equipment or want a different variation. The number of such generations within a single program is limited.',
   'program.exercise.replace_dialog.confirm': 'Yes',
   'program.exercise.replace_dialog.cancel': 'Cancel',
+  'program.exercise.replace_limit': 'Exercise replacement limit reached.',
   'program.exercise.edit_dialog.close': 'Close',
   'program.exercise.technique.button': '🏋️‍♂️ Show technique',
   'program.exercise.technique.title': 'Technique not available',
@@ -82,6 +83,28 @@ export const fallbackEn = {
   'faq.title': 'FAQ',
   'faq.placeholder.title': 'Answers are on the way',
   'faq.placeholder.body': 'We are preparing the FAQ page. Please check back soon.',
+  'faq.q1.question': 'What is included in a Program and a Subscription, and how are they different?',
+  'faq.q1.program.label': 'Program',
+  'faq.q1.program.body':
+    'is a personalized workout plan with exercise technique demonstrations and the ability to manually adjust training load.',
+  'faq.q1.subscription.label': 'Subscription',
+  'faq.q1.subscription.body':
+    'is an ongoing version of the program that updates weekly based on your questionnaire responses and accumulated training data.',
+  'faq.q2.question': "Can I replace exercises if they don't suit me?",
+  'faq.q2.answer':
+    'Yes. Within programs and subscriptions, you can request alternative exercises if a suggested one does not suit you. The number of replacements is limited depending on the selected format.',
+  'faq.q3.question': 'How are my goals and experience taken into account, and can I change them?',
+  'faq.q3.answer':
+    'All interaction with the bot builds contextual knowledge: your goals, progress, discussed topics, health considerations, and feedback. This information is continuously taken into account. You can update key details at any time in the My Profile section.',
+  'faq.q4.question': 'How does the payment system work?',
+  'faq.q4.answer':
+    'You purchase a credit package (several options available) using a Ukrainian bank card. Credits do not expire and can be used for any services in the bot, including workout plans, nutrition plans, and personalized consultations.',
+  'faq.q5.question': 'How much can I trust the AI coach on training and nutrition?',
+  'faq.q5.answer':
+    'Recommendations are based on current scientific research and practical coaching experience. If you have medical conditions or injuries, consulting a healthcare professional before starting training is advised.',
+  'faq.q6.question': 'How is your product different from competitors?',
+  'faq.q6.answer':
+    'This is not just an exercise library or a generic AI chat. The product is a structured system of knowledge and rules designed to support and adapt to the user throughout their entire training journey.',
   'weekly_survey.title': 'Weekly Survey',
   'weekly_survey.loading': 'Preparing your weekly survey...',
   'weekly_survey.no_data': 'We need a structured workout plan to show this survey.',

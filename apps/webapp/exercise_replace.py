@@ -1,8 +1,13 @@
 import json
 import re
+from datetime import datetime
 from typing import Any, Protocol, TypedDict
 
 from pydantic import BaseModel
+from django.core.cache import cache
+from django.utils import timezone
+
+from config.app_settings import settings
 
 EXERCISE_ID_PATTERN = re.compile(r"^ex-(\d+)-(\d+)$")
 MARKDOWN_BLOCK_RE = re.compile(r"```(?:json)?\s*([\s\S]*?)```", re.IGNORECASE)
@@ -59,6 +64,63 @@ class ProfilePayload(Protocol):
     workout_experience: str | None
     workout_goals: str | None
     workout_location: str | None
+
+
+def _limit_key(prefix: str, identifier: int) -> str:
+    return f"exercise_replace_limit:{prefix}:{identifier}"
+
+
+def _subscription_month_key(subscription_id: int, now: datetime) -> str:
+    return f"exercise_replace_limit:subscription:{subscription_id}:{now:%Y%m}"
+
+
+def _month_ttl_seconds(now: datetime) -> int:
+    if now.month == 12:
+        next_month = now.replace(year=now.year + 1, month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    else:
+        next_month = now.replace(month=now.month + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    return max(1, int((next_month - now).total_seconds()))
+
+
+def _consume_limit(key: str, limit: int, *, ttl: int | None) -> bool:
+    if limit <= 0:
+        return False
+    cache.add(key, 0, timeout=ttl)
+    try:
+        current = cache.incr(key)
+    except ValueError:
+        cache.set(key, 1, timeout=ttl)
+        current = 1
+    if current > limit:
+        try:
+            cache.decr(key)
+        except ValueError:
+            pass
+        return False
+    return True
+
+
+def consume_program_replace_limit(program_id: int) -> bool:
+    return _consume_limit(
+        _limit_key("program", program_id),
+        settings.EXERCISE_REPLACE_PROGRAM_LIMIT,
+        ttl=None,
+    )
+
+
+def consume_subscription_replace_limit(subscription_id: int, *, period: str) -> bool:
+    if period in {"6m", "12m"}:
+        now = timezone.now()
+        return _consume_limit(
+            _subscription_month_key(subscription_id, now),
+            settings.EXERCISE_REPLACE_SUBSCRIPTION_MONTHLY_LIMIT,
+            ttl=_month_ttl_seconds(now),
+        )
+    return _consume_limit(
+        _limit_key("subscription", subscription_id),
+        settings.EXERCISE_REPLACE_SUBSCRIPTION_LIMIT,
+        ttl=None,
+    )
 
 
 def format_number(value: float) -> str:

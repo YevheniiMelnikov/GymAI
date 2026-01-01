@@ -10,6 +10,7 @@ from bot.handlers.internal.auth import require_internal_auth
 from bot.handlers.internal.schemas import AiDietNotify
 from bot.states import States
 from bot.texts import MessageText, translate
+from bot.utils.text import support_contact_url
 from bot.utils.ask_ai_messages import chunk_formatted_message, send_chunk_with_reply_fallback
 from bot.utils.diet_plans import format_diet_plan
 from bot.keyboards import diet_result_kb
@@ -88,7 +89,7 @@ async def _internal_ai_diet_ready_impl(request: web.Request) -> web.Response:
     if payload.status != "success":
         reason = payload.error or "unknown_error"
         await state_tracker.mark_failed(request_id, reason)
-        error_message = translate(MessageText.coach_agent_error, language).format(tg=settings.TG_SUPPORT_CONTACT)
+        error_message = translate(MessageText.coach_agent_error, language).format(tg=support_contact_url())
         try:
             await send_chunk_with_reply_fallback(
                 bot=bot,

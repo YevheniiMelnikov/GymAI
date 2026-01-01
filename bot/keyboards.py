@@ -3,6 +3,7 @@ from aiogram.types import WebAppInfo
 
 from bot.keyboard_builder import KeyboardBuilder, SafeInlineKeyboardMarkup as KbMarkup
 from bot.texts import ButtonText, translate
+from bot.utils.text import normalize_support_contact
 from config.app_settings import settings
 from bot.utils.diet_plans import (
     DIET_PRODUCT_CALLBACK_PREFIX,
@@ -95,10 +96,10 @@ def edit_profile_kb(lang: str, *, show_diet: bool = False, show_language: bool =
 def workout_experience_kb(lang: str) -> KbMarkup:
     builder = KeyboardBuilder(lang)
     buttons = [
-        [builder.add(ButtonText.beginner, "0-1")],
-        [builder.add(ButtonText.intermediate, "1-3")],
-        [builder.add(ButtonText.advanced, "3-5")],
-        [builder.add(ButtonText.experienced, "5+")],
+        [builder.add(ButtonText.beginner, "beginner")],
+        [builder.add(ButtonText.intermediate, "amateur")],
+        [builder.add(ButtonText.advanced, "advanced")],
+        [builder.add(ButtonText.experienced, "pro")],
     ]
     return KbMarkup(inline_keyboard=buttons, row_width=1)
 
@@ -175,6 +176,9 @@ def feedback_menu_kb(lang: str, *, faq_url: str | None = None) -> KbMarkup:
     buttons = [
         [builder.add(ButtonText.send_feedback, "send_feedback")],
     ]
+    support_url = normalize_support_contact(settings.TG_SUPPORT_CONTACT)
+    if support_url:
+        buttons.append([KbBtn(text=translate(ButtonText.support_contact, lang), url=support_url)])
     if faq_url:
         buttons.append([builder.add(ButtonText.faq, webapp_url=faq_url)])
     else:

@@ -28,9 +28,19 @@ urlpatterns = [
         name="webapp-program-exercise-replace",
     ),
     path(  # pyrefly: ignore[no-matching-overload]
+        "api/subscription/exercise/replace/",
+        views.replace_subscription_exercise,
+        name="webapp-subscription-exercise-replace",
+    ),
+    path(  # pyrefly: ignore[no-matching-overload]
         "api/program/exercise/replace/status/",
         views.replace_exercise_status,
         name="webapp-program-exercise-replace-status",
+    ),
+    path(  # pyrefly: ignore[no-matching-overload]
+        "api/subscription/exercise/replace/status/",
+        views.replace_subscription_exercise_status,
+        name="webapp-subscription-exercise-replace-status",
     ),
     path(  # pyrefly: ignore[no-matching-overload]
         "api/program/exercise/", views.update_exercise_sets, name="webapp-program-exercise-update"

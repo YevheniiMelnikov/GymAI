@@ -666,6 +666,13 @@ h1.page-title,
   opacity: 1;
   transform: translateY(0);
 }
+.faq-answer{
+  font-size: clamp(13px, 2vw, 15px);
+  color: var(--muted);
+  line-height: 1.5;
+}
+.faq-answer p{ margin: 0; }
+.faq-answer p + p{ margin-top: 8px; }
 .program-exercise-details{
   border: none;
   border-radius: clamp(12px, 2.4vw, 16px);

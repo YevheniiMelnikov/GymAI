@@ -114,7 +114,21 @@ class ProfileCacheManager(BaseCacheManager):
     @classmethod
     async def save_record(cls, profile_id: int, profile_data: dict[str, Any]) -> None:
         try:
-            await cls._cache_profile_data(profile_id, profile_data)
+            data = dict(profile_data)
+            data["id"] = profile_id
+            tg_id = data.get("tg_id")
+            if tg_id is None:
+                logger.error(f"Cannot cache profile {profile_id}: missing tg_id")
+                return
+            try:
+                int(tg_id)
+            except (TypeError, ValueError):
+                logger.error(f"Cannot cache profile {profile_id}: invalid tg_id={tg_id}")
+                return
+            existing = await cls.get_json(cls.PROFILE_DATA_KEY, str(profile_id))
+            if existing == data:
+                return
+            await cls._cache_profile_data(profile_id, data)
             logger.debug(f"Profile record saved profile_id={profile_id}")
         except Exception as exc:
             logger.error(f"Failed to save profile record profile_id={profile_id}: {exc}")

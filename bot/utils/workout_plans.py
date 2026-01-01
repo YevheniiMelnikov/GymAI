@@ -6,6 +6,7 @@ from aiogram.types import CallbackQuery
 from loguru import logger
 
 from bot.texts import MessageText, translate
+from bot.utils.text import support_contact_url
 from bot.utils.ai_coach import enqueue_workout_plan_generation
 from bot.utils.bot import answer_msg, notify_request_in_progress
 from bot.utils.menus import reset_main_menu_state
@@ -53,7 +54,7 @@ async def enqueue_subscription_plan(
     if not queued:
         await answer_msg(
             callback_query,
-            translate(MessageText.coach_agent_error, lang).format(tg=settings.TG_SUPPORT_CONTACT),
+            translate(MessageText.coach_agent_error, lang).format(tg=support_contact_url()),
         )
         logger.error(
             f"ai_plan_dispatch_failed plan_type=subscription profile_id={selected_profile.id} request_id={request_id}"

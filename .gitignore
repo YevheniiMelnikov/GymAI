@@ -175,7 +175,6 @@ apps/webapp/static/js-build-v2/
 apps/webapp/static/admin/
 apps/webapp/static/rest_framework/
 apps/webapp/static/unfold/
-/docker/nginx.conf.template
 /docker/nginx.local.conf.template
 diff*
 /GEMINI.md

@@ -6,6 +6,7 @@ from aiogram.fsm.state import State
 from bot.states import States
 from core.schemas import Profile
 from bot.texts import ButtonText, MessageText, translate
+from config.app_settings import settings
 
 
 @lru_cache(maxsize=None)
@@ -88,9 +89,11 @@ def get_profile_attributes(user: Optional[Profile], lang: str) -> dict[str, str]
 
     location_key = attr("workout_location").strip().lower()
     workout_locations = get_workout_locations(lang)
+    experience_key = attr("workout_experience").strip().lower()
+    experience_levels = get_workout_experience_levels(lang)
     return {
         "born_in": attr("born_in"),
-        "experience": attr("workout_experience"),
+        "experience": experience_levels.get(experience_key, attr("workout_experience")),
         "goals": attr("workout_goals"),
         "workout_location": workout_locations.get(location_key, "") if location_key else "",
         "weight": attr("weight"),
@@ -126,3 +129,37 @@ def get_workout_locations(lang: str) -> dict[str, str]:
         "home": translate(ButtonText.home_workout, lang),
         "gym": translate(ButtonText.gym_workout, lang),
     }
+
+
+@lru_cache(maxsize=None)
+def get_workout_experience_levels(lang: str) -> dict[str, str]:
+    return {
+        "beginner": translate(ButtonText.beginner, lang),
+        "amateur": translate(ButtonText.intermediate, lang),
+        "advanced": translate(ButtonText.advanced, lang),
+        "pro": translate(ButtonText.experienced, lang),
+        "0-1": translate(ButtonText.beginner, lang),
+        "1-3": translate(ButtonText.intermediate, lang),
+        "3-5": translate(ButtonText.advanced, lang),
+        "5+": translate(ButtonText.experienced, lang),
+    }
+
+
+def normalize_support_contact(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    value = raw.strip()
+    if not value:
+        return None
+    lowered = value.lower()
+    if lowered.startswith("http://") or lowered.startswith("https://"):
+        return value
+    if value.startswith("@"):
+        value = value[1:]
+    if value.startswith("t.me/") or value.startswith("telegram.me/"):
+        return f"https://{value}"
+    return f"https://t.me/{value}"
+
+
+def support_contact_url() -> str:
+    return normalize_support_contact(settings.TG_SUPPORT_CONTACT) or settings.TG_SUPPORT_CONTACT or ""

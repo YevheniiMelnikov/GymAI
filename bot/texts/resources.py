@@ -49,6 +49,7 @@ class ButtonText(AutoName):
     feedback = auto()
     send_feedback = auto()
     faq = auto()
+    support_contact = auto()
 
     beginner = auto()
     intermediate = auto()

@@ -129,6 +129,10 @@ AI_COACH_TASK_ROUTES: dict[str, dict[str, str]] = {
         "queue": "ai_coach",
         "routing_key": "ai_coach",
     },
+    "core.tasks.ai_coach.replace_exercise.replace_subscription_exercise_task": {
+        "queue": "ai_coach",
+        "routing_key": "ai_coach",
+    },
 }
 
 CELERY_TASK_ROUTES: dict[str, dict[str, str]] = {

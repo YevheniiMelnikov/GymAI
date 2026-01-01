@@ -32,12 +32,17 @@ from core.schemas import Program as ProgramSchema, Subscription
 from django.core.cache import cache
 from core.ai_coach.exercise_catalog import load_exercise_catalog
 from core.services.gstorage_service import ExerciseGIFStorage
-from core.tasks.ai_coach.replace_exercise import enqueue_exercise_replace_task
+from core.tasks.ai_coach.replace_exercise import (
+    enqueue_exercise_replace_task,
+    enqueue_subscription_exercise_replace_task,
+)
 from apps.webapp.exercise_replace import (
     ExerciseSetPayload,
     UpdateExercisePayload,
     UpdateSubscriptionExercisePayload,
     apply_sets_update,
+    consume_program_replace_limit,
+    consume_subscription_replace_limit,
     resolve_exercise_entry,
 )
 from .utils import STATIC_VERSION, transform_days
@@ -902,6 +907,10 @@ async def replace_exercise(request: HttpRequest) -> JsonResponse:
     if not program_id:
         return JsonResponse({"error": "bad_request"}, status=400)
 
+    if not consume_program_replace_limit(program_id):
+        logger.info(f"exercise_replace_limit_reached profile_id={profile.id} program_id={program_id}")
+        return JsonResponse({"error": "limit_reached"}, status=429)
+
     task_id = enqueue_exercise_replace_task(profile.id, program_id, exercise_id_raw)
     if not task_id:
         return JsonResponse({"error": "server_error"}, status=500)
@@ -913,8 +922,71 @@ async def replace_exercise(request: HttpRequest) -> JsonResponse:
     return JsonResponse({"task_id": task_id})
 
 
-@require_GET  # type: ignore[misc]
-async def replace_exercise_status(request: HttpRequest) -> JsonResponse:
+@csrf_exempt  # type: ignore[bad-specialization]
+@require_POST  # type: ignore[misc]
+async def replace_subscription_exercise(request: HttpRequest) -> JsonResponse:
+    await ensure_container_ready()
+
+    try:
+        auth_ctx = await authenticate(request)
+    except Exception:
+        logger.exception("Auth resolution failed")
+        return JsonResponse({"error": "server_error"}, status=500)
+    if auth_ctx.error:
+        return auth_ctx.error
+
+    profile = auth_ctx.profile
+    if profile is None:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    try:
+        payload_raw = json.loads(request.body or "{}")
+    except Exception:
+        logger.warning("replace_subscription_exercise_invalid_payload")
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    exercise_id_raw = payload_raw.get("exercise_id")
+    subscription_id_raw = payload_raw.get("subscription_id")
+    if not exercise_id_raw or not isinstance(exercise_id_raw, str):
+        return JsonResponse({"error": "bad_request"}, status=400)
+    try:
+        subscription_id = int(subscription_id_raw)
+    except (TypeError, ValueError):
+        subscription_id = 0
+    if not subscription_id:
+        return JsonResponse({"error": "bad_request"}, status=400)
+
+    subscription = cast(
+        Subscription | None,
+        await call_repo(
+            lambda pid: SubscriptionRepository.base_qs()
+            .filter(profile_id=pid, id=subscription_id, enabled=True)
+            .first(),
+            profile.id,
+        ),
+    )
+    if subscription is None:
+        return JsonResponse({"error": "not_found"}, status=404)
+
+    if not consume_subscription_replace_limit(subscription.id, period=str(subscription.period)):
+        logger.info(
+            f"exercise_replace_limit_reached profile_id={profile.id} subscription_id={subscription.id} "
+            f"period={subscription.period}"
+        )
+        return JsonResponse({"error": "limit_reached"}, status=429)
+
+    task_id = enqueue_subscription_exercise_replace_task(profile.id, subscription.id, exercise_id_raw)
+    if not task_id:
+        return JsonResponse({"error": "server_error"}, status=500)
+    cache.set(
+        f"exercise_replace:{task_id}",
+        {"status": "queued", "profile_id": profile.id},
+        timeout=settings.AI_COACH_TIMEOUT,
+    )
+    return JsonResponse({"task_id": task_id})
+
+
+async def _replace_exercise_status(request: HttpRequest) -> JsonResponse:
     await ensure_container_ready()
 
     try:
@@ -941,6 +1013,16 @@ async def replace_exercise_status(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"error": "not_found"}, status=404)
 
     return JsonResponse({"status": cached.get("status"), "error": cached.get("error")})
+
+
+@require_GET  # type: ignore[misc]
+async def replace_exercise_status(request: HttpRequest) -> JsonResponse:
+    return await _replace_exercise_status(request)
+
+
+@require_GET  # type: ignore[misc]
+async def replace_subscription_exercise_status(request: HttpRequest) -> JsonResponse:
+    return await _replace_exercise_status(request)
 
 
 def index(request: HttpRequest) -> HttpResponse:

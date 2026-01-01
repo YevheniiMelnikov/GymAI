@@ -22,6 +22,8 @@ from apps.webapp.exercise_replace import (
 __all__ = [
     "replace_exercise_task",
     "enqueue_exercise_replace_task",
+    "replace_subscription_exercise_task",
+    "enqueue_subscription_exercise_replace_task",
 ]
 
 AI_REPLACE_SOFT_LIMIT = settings.AI_COACH_TIMEOUT
@@ -163,41 +165,31 @@ def _apply_replacement(
         exercise_entry["gif_key"] = str(gif_key)
 
 
-def _replace_exercise_impl(profile_id: int, program_id: int, exercise_id: str, task_id: str) -> None:
+def _request_replacement(
+    *,
+    profile_id: int,
+    plan_label: str,
+    plan_id: int,
+    exercise_id: str,
+    exercise_entry: dict[str, Any],
+    exercises_by_day: list[dict[str, Any]],
+    language: str,
+    profile_payload: dict[str, Any],
+) -> ReplaceExerciseResponse:
     from ai_coach.agent.llm_helper import LLMHelper
-    from apps.profiles.models import Profile
-    from apps.workout_plans.repos import ProgramRepository
-
-    profile = Profile.objects.filter(id=profile_id).first()
-    if profile is None:
-        raise ValueError("profile_not_found")
-    program = ProgramRepository.get_by_id(profile_id, program_id)
-    if program is None:
-        raise ValueError("program_not_found")
-    exercises_by_day = getattr(program, "exercises_by_day", None)
-    if not isinstance(exercises_by_day, list):
-        raise ValueError("program_invalid")
-
-    exercise_entry = resolve_exercise_entry(exercises_by_day, exercise_id)
-    if exercise_entry is None:
-        raise ValueError("exercise_not_found")
 
     prompt = _build_prompt(
         exercise_id=exercise_id,
         exercise_name=str(exercise_entry.get("name") or ""),
-        profile_payload=resolve_profile_payload(profile),
+        profile_payload=profile_payload,
         exercises_by_day=exercises_by_day,
-        language=str(profile.language or "en"),
+        language=language,
     )
 
     client, model_name = LLMHelper.get_completion_client()
     logger.info(
-        "exercise_replace_llm_request profile_id={} program_id={} exercise_id={} model={} prompt_len={}",
-        profile_id,
-        program_id,
-        exercise_id,
-        model_name,
-        len(prompt),
+        f"exercise_replace_llm_request profile_id={profile_id} {plan_label}_id={plan_id} "
+        f"exercise_id={exercise_id} model={model_name} prompt_len={len(prompt)}"
     )
     response = asyncio.run(
         LLMHelper.call_llm(
@@ -215,20 +207,88 @@ def _replace_exercise_impl(profile_id: int, program_id: int, exercise_id: str, t
     if not content:
         raise ValueError("empty_llm_response")
     logger.info(
-        "exercise_replace_llm_response profile_id={} program_id={} exercise_id={} model={} raw_len={}",
-        profile_id,
-        program_id,
-        exercise_id,
-        model_name,
-        len(str(content)),
+        f"exercise_replace_llm_response profile_id={profile_id} {plan_label}_id={plan_id} "
+        f"exercise_id={exercise_id} model={model_name} raw_len={len(str(content))}"
     )
     parsed = extract_json_payload(str(content))
-    replacement = ReplaceExerciseResponse.model_validate(parsed)
+    return ReplaceExerciseResponse.model_validate(parsed)
+
+
+def _replace_exercise_impl(profile_id: int, program_id: int, exercise_id: str, task_id: str) -> None:
+    from apps.profiles.models import Profile
+    from apps.workout_plans.repos import ProgramRepository
+
+    profile = Profile.objects.filter(id=profile_id).first()
+    if profile is None:
+        raise ValueError("profile_not_found")
+    program = ProgramRepository.get_by_id(profile_id, program_id)
+    if program is None:
+        raise ValueError("program_not_found")
+    exercises_by_day = getattr(program, "exercises_by_day", None)
+    if not isinstance(exercises_by_day, list):
+        raise ValueError("program_invalid")
+
+    exercise_entry = resolve_exercise_entry(exercises_by_day, exercise_id)
+    if exercise_entry is None:
+        raise ValueError("exercise_not_found")
+
+    replacement = _request_replacement(
+        profile_id=profile_id,
+        plan_label="program",
+        plan_id=program_id,
+        exercise_id=exercise_id,
+        exercise_entry=exercise_entry,
+        exercises_by_day=exercises_by_day,
+        language=str(profile.language or "en"),
+        profile_payload=resolve_profile_payload(profile),
+    )
 
     _apply_replacement(exercise_entry, replacement)
     ProgramRepository.create_or_update(profile_id, exercises_by_day, instance=program)
     logger.info(
         f"exercise_replace_done profile_id={profile_id} program_id={program_id} "
+        f"exercise_id={exercise_id} task_id={task_id}"
+    )
+
+
+def _replace_subscription_exercise_impl(
+    profile_id: int,
+    subscription_id: int,
+    exercise_id: str,
+    task_id: str,
+) -> None:
+    from apps.profiles.models import Profile
+    from apps.workout_plans.repos import SubscriptionRepository
+
+    profile = Profile.objects.filter(id=profile_id).first()
+    if profile is None:
+        raise ValueError("profile_not_found")
+    subscription = SubscriptionRepository.get_by_id(profile_id, subscription_id)
+    if subscription is None:
+        raise ValueError("subscription_not_found")
+    exercises_by_day = getattr(subscription, "exercises", None)
+    if not isinstance(exercises_by_day, list):
+        raise ValueError("subscription_invalid")
+
+    exercise_entry = resolve_exercise_entry(exercises_by_day, exercise_id)
+    if exercise_entry is None:
+        raise ValueError("exercise_not_found")
+
+    replacement = _request_replacement(
+        profile_id=profile_id,
+        plan_label="subscription",
+        plan_id=subscription_id,
+        exercise_id=exercise_id,
+        exercise_entry=exercise_entry,
+        exercises_by_day=exercises_by_day,
+        language=str(profile.language or "en"),
+        profile_payload=resolve_profile_payload(profile),
+    )
+
+    _apply_replacement(exercise_entry, replacement)
+    SubscriptionRepository.update_exercises(profile_id, exercises_by_day, instance=subscription)
+    logger.info(
+        f"exercise_replace_done profile_id={profile_id} subscription_id={subscription_id} "
         f"exercise_id={exercise_id} task_id={task_id}"
     )
 
@@ -269,6 +329,48 @@ def replace_exercise_task(  # pyrefly: ignore[valid-type]
 def enqueue_exercise_replace_task(profile_id: int, program_id: int, exercise_id: str) -> str:
     result = replace_exercise_task.apply_async(  # pyrefly: ignore[not-callable]
         args=[profile_id, program_id, exercise_id],
+        queue="ai_coach",
+        routing_key="ai_coach",
+    )
+    return str(result.id) if result and result.id else ""
+
+
+@app.task(
+    bind=True,
+    queue="ai_coach",
+    routing_key="ai_coach",
+    acks_late=True,
+    task_acks_on_failure_or_timeout=False,
+    soft_time_limit=AI_REPLACE_SOFT_LIMIT,
+    time_limit=AI_REPLACE_TIME_LIMIT,
+)
+def replace_subscription_exercise_task(  # pyrefly: ignore[valid-type]
+    self,
+    profile_id: int,
+    subscription_id: int,
+    exercise_id: str,
+) -> None:
+    task_id = _resolve_task_id(self)
+    if not task_id:
+        logger.error("exercise_replace_missing_task_id")
+        return
+    _store_status(task_id, profile_id, "processing")
+    try:
+        _replace_subscription_exercise_impl(profile_id, subscription_id, exercise_id, task_id)
+    except Exception as exc:
+        detail = f"{type(exc).__name__}: {exc!s}"
+        _store_status(task_id, profile_id, "error", error=detail)
+        logger.error(
+            f"exercise_replace_failed profile_id={profile_id} subscription_id={subscription_id} "
+            f"exercise_id={exercise_id} task_id={task_id} error={detail}"
+        )
+        return
+    _store_status(task_id, profile_id, "success")
+
+
+def enqueue_subscription_exercise_replace_task(profile_id: int, subscription_id: int, exercise_id: str) -> str:
+    result = replace_subscription_exercise_task.apply_async(  # pyrefly: ignore[not-callable]
+        args=[profile_id, subscription_id, exercise_id],
         queue="ai_coach",
         routing_key="ai_coach",
     )

@@ -1,11 +1,88 @@
-import React, { useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import TopBar from '../components/TopBar';
 import { applyLang, t } from '../i18n/i18n';
 import { closeWebApp, readLocale, showBackButton, hideBackButton, onBackButtonClick, offBackButtonClick } from '../telegram';
+import type { LangCode, TranslationKey } from '../i18n/i18n';
+
+type FaqAnswer =
+    | {
+          kind: 'single';
+          answerKey: TranslationKey;
+      }
+    | {
+          kind: 'double';
+          firstLabelKey: TranslationKey;
+          firstBodyKey: TranslationKey;
+          secondLabelKey: TranslationKey;
+          secondBodyKey: TranslationKey;
+      };
+
+type FaqItem = {
+    id: string;
+    questionKey: TranslationKey;
+    answer: FaqAnswer;
+};
+
+const FAQ_ITEMS: FaqItem[] = [
+    {
+        id: 'program-subscription',
+        questionKey: 'faq.q1.question',
+        answer: {
+            kind: 'double',
+            firstLabelKey: 'faq.q1.program.label',
+            firstBodyKey: 'faq.q1.program.body',
+            secondLabelKey: 'faq.q1.subscription.label',
+            secondBodyKey: 'faq.q1.subscription.body'
+        }
+    },
+    {
+        id: 'exercise-replace',
+        questionKey: 'faq.q2.question',
+        answer: {
+            kind: 'single',
+            answerKey: 'faq.q2.answer'
+        }
+    },
+    {
+        id: 'goals-experience',
+        questionKey: 'faq.q3.question',
+        answer: {
+            kind: 'single',
+            answerKey: 'faq.q3.answer'
+        }
+    },
+    {
+        id: 'payment',
+        questionKey: 'faq.q4.question',
+        answer: {
+            kind: 'single',
+            answerKey: 'faq.q4.answer'
+        }
+    },
+    {
+        id: 'ai-trust',
+        questionKey: 'faq.q5.question',
+        answer: {
+            kind: 'single',
+            answerKey: 'faq.q5.answer'
+        }
+    },
+    {
+        id: 'difference',
+        questionKey: 'faq.q6.question',
+        answer: {
+            kind: 'single',
+            answerKey: 'faq.q6.answer'
+        }
+    }
+];
 
 const FaqPage: React.FC = () => {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const [lang, setLang] = useState<LangCode>('en');
+    const paramLang = searchParams.get('lang') || undefined;
 
     const handleBack = useCallback(() => {
         closeWebApp();
@@ -13,8 +90,8 @@ const FaqPage: React.FC = () => {
     }, [navigate]);
 
     useEffect(() => {
-        applyLang(readLocale());
-    }, []);
+        void applyLang(paramLang ?? readLocale()).then((resolved) => setLang(resolved));
+    }, [paramLang]);
 
     useEffect(() => {
         showBackButton();
@@ -25,13 +102,35 @@ const FaqPage: React.FC = () => {
         };
     }, [handleBack]);
 
+    const renderAnswer = (answer: FaqAnswer): React.ReactNode => {
+        if (answer.kind === 'single') {
+            return <p>{t(answer.answerKey)}</p>;
+        }
+        return (
+            <>
+                <p>
+                    <strong>{t(answer.firstLabelKey)}</strong> {t(answer.firstBodyKey)}
+                </p>
+                <p>
+                    <strong>{t(answer.secondLabelKey)}</strong> {t(answer.secondBodyKey)}
+                </p>
+            </>
+        );
+    };
+
     return (
-        <div className="page-container">
+        <div className="page-container" data-lang={lang}>
             <TopBar title={t('faq.title')} />
             <main className="page-shell">
-                <section className="notice">
-                    <h2>{t('faq.placeholder.title')}</h2>
-                    <p>{t('faq.placeholder.body')}</p>
+                <section className="program-panel">
+                    <div className="week">
+                        {FAQ_ITEMS.map((item) => (
+                            <details className="program-day" key={item.id}>
+                                <summary className="program-day-summary">{t(item.questionKey)}</summary>
+                                <div className="program-day-list faq-answer">{renderAnswer(item.answer)}</div>
+                            </details>
+                        ))}
+                    </div>
                 </section>
             </main>
         </div>

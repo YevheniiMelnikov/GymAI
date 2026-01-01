@@ -26,7 +26,9 @@ from .plans import (  # noqa: F401
 )
 from .replace_exercise import (  # noqa: F401
     enqueue_exercise_replace_task,
+    enqueue_subscription_exercise_replace_task,
     replace_exercise_task,
+    replace_subscription_exercise_task,
 )
 from .qa import (  # noqa: F401
     ask_ai_question,
@@ -85,6 +87,8 @@ __all__ = (
     "memify_profile_datasets",
     "replace_exercise_task",
     "enqueue_exercise_replace_task",
+    "replace_subscription_exercise_task",
+    "enqueue_subscription_exercise_replace_task",
     "generate_ai_diet_plan",
     "handle_ai_diet_failure",
     "refund_ai_diet_credits_task",

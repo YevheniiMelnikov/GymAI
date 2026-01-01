@@ -11,6 +11,7 @@ from bot.handlers.internal.schemas import AiAnswerNotify
 from bot.keyboards import ask_ai_again_kb
 from bot.states import States
 from bot.texts import MessageText, translate
+from bot.utils.text import support_contact_url
 from bot.utils.ask_ai_messages import (
     chunk_formatted_message,
     format_answer_blocks,
@@ -102,7 +103,7 @@ async def _internal_ai_answer_ready_impl(request: web.Request) -> web.Response:
     if payload.status != "success":
         reason = payload.error or "unknown_error"
         await state_tracker.mark_failed(request_id, reason)
-        error_message = translate(MessageText.coach_agent_error, language).format(tg=settings.TG_SUPPORT_CONTACT)
+        error_message = translate(MessageText.coach_agent_error, language).format(tg=support_contact_url())
         try:
             await send_chunk_with_reply_fallback(
                 bot=bot,
@@ -128,7 +129,7 @@ async def _internal_ai_answer_ready_impl(request: web.Request) -> web.Response:
             settings.DISABLE_MANUAL_PLACEHOLDER,
         )
         if not settings.DISABLE_MANUAL_PLACEHOLDER:
-            fallback = translate(MessageText.coach_agent_error, language).format(tg=settings.TG_SUPPORT_CONTACT)
+            fallback = translate(MessageText.coach_agent_error, language).format(tg=support_contact_url())
             try:
                 await send_chunk_with_reply_fallback(
                     bot=bot,

@@ -1,7 +1,7 @@
 from django.db import models
 from django.db.models import Model
 
-from apps.profiles.choices import ProfileStatus
+from apps.profiles.choices import ProfileStatus, WorkoutExperience
 
 
 class Profile(Model):
@@ -17,7 +17,12 @@ class Profile(Model):
     weight = models.IntegerField(null=True, blank=True)
     height = models.IntegerField(null=True, blank=True)
     health_notes = models.CharField(max_length=250, null=True, blank=True)
-    workout_experience = models.CharField(max_length=50, null=True, blank=True)
+    workout_experience = models.CharField(
+        max_length=50,
+        null=True,
+        blank=True,
+        choices=WorkoutExperience.choices,
+    )
     workout_goals = models.CharField(max_length=250, null=True, blank=True)
     diet_allergies = models.CharField(max_length=250, null=True, blank=True)
     diet_products = models.JSONField(null=True, blank=True, default=None)

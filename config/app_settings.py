@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     TIME_ZONE: Annotated[str, Field(default="Europe/Kyiv", description="Default timezone for the application, used for dates and times.")]
     DEFAULT_LANG: Annotated[str, Field(default="ua", description="Default language for user-facing content.")]
     ADMIN_LANG: Annotated[str, Field(default="ru", description="Default language for the admin interface.")]
-    SITE_NAME: Annotated[str, Field(default="AchieveTogether", description="Public name of the site or application.")]
+    SITE_NAME: Annotated[str, Field(default="Lifty", description="Public name of the site or application.")]
     SECRET_KEY: Annotated[str, Field(default="", description="Secret key for signing session data and tokens. Must be set in production.")]
 
     # --- Logging ---
@@ -204,6 +204,20 @@ class Settings(BaseSettings):
     AI_PLAN_NOTIFY_TIMEOUT: Annotated[int, Field(default=900, description="Timeout in seconds for sending workout plan notifications.")]
     AI_PLAN_NOTIFY_POLL_INTERVAL: Annotated[int, Field(default=30, description="Polling interval in seconds for workout plan notification status.")]
     AI_PLAN_NOTIFY_FAILURE_TTL: Annotated[int, Field(default=86400, description="TTL in seconds for storing workout plan notification failures.")]
+
+    # --- Exercise Replacement Limits ---
+    EXERCISE_REPLACE_PROGRAM_LIMIT: Annotated[
+        int,
+        Field(default=3, description="Maximum number of exercise replacements per program."),
+    ]
+    EXERCISE_REPLACE_SUBSCRIPTION_LIMIT: Annotated[
+        int,
+        Field(default=3, description="Maximum number of exercise replacements per 1-month subscription."),
+    ]
+    EXERCISE_REPLACE_SUBSCRIPTION_MONTHLY_LIMIT: Annotated[
+        int,
+        Field(default=3, description="Monthly exercise replacement limit for long subscriptions."),
+    ]
 
     # --- AI Q&A Feature ---
     AI_QA_IMAGE_MAX_BYTES: Annotated[int, Field(default=512_000, description="Maximum size in bytes for images uploaded for AI Q&A.")]
