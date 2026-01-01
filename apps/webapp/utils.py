@@ -264,6 +264,17 @@ def _get_gif_storage() -> ExerciseGIFStorage:
 
 
 def transform_days(exercises_by_day: list) -> list[dict]:
+    def _normalize_int(value: object | None) -> int | None:
+        if isinstance(value, bool) or value is None:
+            return None
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float) and value.is_integer():
+            return int(value)
+        if isinstance(value, str) and value.strip().isdigit():
+            return int(value.strip())
+        return None
+
     days = []
     storage = _get_gif_storage()
     has_bucket = storage.bucket is not None
@@ -278,6 +289,9 @@ def transform_days(exercises_by_day: list) -> list[dict]:
         exercises = []
         for ex_idx, ex_data in enumerate(day_data.get("exercises", [])):
             total_exercises += 1
+            set_id = _normalize_int(ex_data.get("set_id"))
+            superset_id = _normalize_int(ex_data.get("superset_id"))
+            superset_order = _normalize_int(ex_data.get("superset_order"))
             weight_str = ex_data.get("weight")
             weight = None
             if weight_str:
@@ -310,7 +324,8 @@ def transform_days(exercises_by_day: list) -> list[dict]:
 
             exercises.append(
                 {
-                    "id": str(ex_data.get("set_id") or f"ex-{idx}-{ex_idx}"),
+                    "id": str(set_id or f"ex-{idx}-{ex_idx}"),
+                    "set_id": set_id,
                     "name": ex_data.get("name", ""),
                     "sets": ex_data.get("sets"),
                     "reps": ex_data.get("reps"),
@@ -318,6 +333,9 @@ def transform_days(exercises_by_day: list) -> list[dict]:
                     "sets_detail": ex_data.get("sets_detail"),
                     "equipment": None,
                     "notes": None,
+                    "drop_set": bool(ex_data.get("drop_set", False)),
+                    "superset_id": superset_id,
+                    "superset_order": superset_order,
                     "gif_key": str(gif_key) if gif_key else None,
                     "gif_url": gif_url,
                 }

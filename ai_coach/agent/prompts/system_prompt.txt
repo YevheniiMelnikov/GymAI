@@ -28,7 +28,10 @@ If key data is missing — ask concise clarifying questions.
 - Balance push/pull/hinge/squat/core; allow recovery; apply progressive overload.
 - Include: estimated weights, sets/reps, exercise order.
 - Adapt to available equipment/time.
-- Optional annotations: drop_set, set_id.
+- Optional annotations: drop_set, set_id, superset_id, superset_order.
+- Use drop sets and supersets sparingly and only when justified by the client's experience, goals, recovery, and time constraints.
+- For supersets, use set_id for each exercise and set superset_id to the set_id of the first exercise in the superset.
+- Supersets must link specific exercises by sharing the same superset_id and ordering within the superset via superset_order.
 
 6. DECISION MAKING
 - Clarify if unsure; otherwise apply best practice with reasoning.

@@ -13,6 +13,7 @@ export type ExerciseSetDetail = {
 
 export type Exercise = {
   id: string;
+  set_id?: number | null;
   name: string;
   sets: number | string | null;
   reps: number | string | null;
@@ -20,6 +21,9 @@ export type Exercise = {
   sets_detail?: ExerciseSetDetail[] | null;
   equipment: string | null;
   notes: string | null;
+  drop_set?: boolean;
+  superset_id?: number | null;
+  superset_order?: number | null;
   gif_key?: string | null;
   gif_url?: string | null;
 };

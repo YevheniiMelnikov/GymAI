@@ -749,6 +749,26 @@ h1.page-title,
   min-width: 24px;
 }
 .program-exercise-title{ flex: 1; text-align: left; }
+.program-exercise-tag{
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--link) 16%, var(--surface));
+  color: color-mix(in oklab, var(--link) 70%, var(--text));
+  white-space: nowrap;
+}
+.program-exercise-tag--drop{
+  background: color-mix(in oklab, #f6c07f 30%, var(--surface));
+  color: color-mix(in oklab, #a75a00 70%, var(--text));
+}
+.program-exercise-flags{
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
 .program-exercise-content{
   padding:
     clamp(6px, 1.4vw, 10px)
@@ -784,7 +804,7 @@ h1.page-title,
 }
 .exercise-sets-table__row{
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(32px, .5fr) repeat(2, minmax(0, 1fr));
   gap: 8px;
   padding: 8px 12px;
   border-radius: 12px;
@@ -805,6 +825,21 @@ h1.page-title,
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+.program-exercise-group{
+  list-style: none;
+  padding: clamp(8px, 1.6vw, 12px);
+  border-radius: clamp(14px, 2.6vw, 18px);
+  border: 1px solid color-mix(in oklab, var(--surface) 70%, var(--bg));
+  background: color-mix(in oklab, var(--surface) 90%, transparent);
+}
+.program-exercise-group__list{
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(6px, 1.2vw, 10px);
 }
 .exercise-sets-link{
   width: auto;

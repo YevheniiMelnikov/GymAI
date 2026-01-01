@@ -117,6 +117,17 @@ type DisplaySet = {
   readonly weightUnit: string | null;
 };
 
+type IndexedExercise = {
+  readonly exercise: Exercise;
+  readonly index: number;
+};
+
+type SupersetGroup = {
+  readonly kind: 'superset';
+  readonly id: number;
+  readonly exercises: IndexedExercise[];
+};
+
 const LEADING_NUMBER_PATTERN = /^\s*\d+(?:\.\d+)*\s*[).:\-–—]?\s*/;
 const NOISE_TOKEN_PATTERN = /\bset\s+\d+\b/i;
 const NOISE_TOKEN_GLOBAL_PATTERN = /\bset\s+\d+\b/gi;
@@ -195,6 +206,52 @@ function buildDisplaySets(exercise: Exercise): DisplaySet[] {
     weight,
     weightUnit
   }));
+}
+
+function groupExercises(exercises: Exercise[]): Array<IndexedExercise | SupersetGroup> {
+  const groups = new Map<number, IndexedExercise[]>();
+  exercises.forEach((exercise, index) => {
+    const supersetId = exercise.superset_id;
+    if (typeof supersetId !== 'number') {
+      return;
+    }
+    if (!groups.has(supersetId)) {
+      groups.set(supersetId, []);
+    }
+    groups.get(supersetId)?.push({ exercise, index });
+  });
+
+  const seen = new Set<number>();
+  const items: Array<IndexedExercise | SupersetGroup> = [];
+  exercises.forEach((exercise, index) => {
+    const supersetId = exercise.superset_id;
+    if (typeof supersetId !== 'number') {
+      items.push({ exercise, index });
+      return;
+    }
+    if (seen.has(supersetId)) {
+      return;
+    }
+    seen.add(supersetId);
+    const group = groups.get(supersetId) ?? [];
+    if (group.length < 2) {
+      items.push({ exercise, index });
+      return;
+    }
+    const orderedGroup = [...group].sort((left, right) => {
+      const leftOrder = typeof left.exercise.superset_order === 'number' ? left.exercise.superset_order : null;
+      const rightOrder = typeof right.exercise.superset_order === 'number' ? right.exercise.superset_order : null;
+      if (leftOrder !== null && rightOrder !== null) {
+        return leftOrder - rightOrder;
+      }
+      if (leftOrder !== null) return -1;
+      if (rightOrder !== null) return 1;
+      return left.index - right.index;
+    });
+    items.push({ kind: 'superset', id: supersetId, exercises: orderedGroup });
+  });
+
+  return items;
 }
 
 const CLOSE_ICON = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
@@ -901,6 +958,7 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
 
   const details = document.createElement('details');
   details.className = 'program-exercise-details';
+  const hasSuperset = typeof ex.superset_id === 'number';
 
   const summary = document.createElement('summary');
   summary.className = 'program-exercise-summary';
@@ -917,6 +975,12 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
 
   summary.appendChild(indexLabel);
   summary.appendChild(titleLabel);
+  if (hasSuperset) {
+    const supersetTag = document.createElement('span');
+    supersetTag.className = 'program-exercise-tag program-exercise-tag--superset';
+    supersetTag.textContent = t('program.exercise.superset_label');
+    summary.appendChild(supersetTag);
+  }
   details.appendChild(summary);
 
   const content = document.createElement('div');
@@ -931,6 +995,16 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
     meta.className = 'program-exercise-meta';
     meta.textContent = meaningfulDetails.join(', ');
     content.appendChild(meta);
+  }
+
+  if (ex.drop_set) {
+    const flags = document.createElement('div');
+    flags.className = 'program-exercise-flags';
+    const dropTag = document.createElement('span');
+    dropTag.className = 'program-exercise-tag program-exercise-tag--drop';
+    dropTag.textContent = t('program.exercise.drop_set_label');
+    flags.appendChild(dropTag);
+    content.appendChild(flags);
   }
 
   const techniqueLink = document.createElement('span');
@@ -969,6 +1043,10 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
     const header = document.createElement('div');
     header.className = 'exercise-sets-table__row exercise-sets-table__row--header';
 
+    const setHeader = document.createElement('div');
+    setHeader.className = 'exercise-sets-table__cell';
+    setHeader.textContent = t('program.exercise.edit_dialog.set');
+
     const repsHeader = document.createElement('div');
     repsHeader.className = 'exercise-sets-table__cell';
     repsHeader.textContent = t('program.exercise.edit_dialog.reps');
@@ -977,12 +1055,16 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
     weightHeader.className = 'exercise-sets-table__cell';
     weightHeader.textContent = t('program.exercise.edit_dialog.weight');
 
-    header.append(repsHeader, weightHeader);
+    header.append(setHeader, repsHeader, weightHeader);
     table.appendChild(header);
 
-    sets.forEach((set) => {
+    sets.forEach((set, setIndex) => {
       const row = document.createElement('div');
       row.className = 'exercise-sets-table__row';
+
+      const setCell = document.createElement('div');
+      setCell.className = 'exercise-sets-table__cell';
+      setCell.textContent = String(setIndex + 1);
 
       const repsCell = document.createElement('div');
       repsCell.className = 'exercise-sets-table__cell';
@@ -994,7 +1076,7 @@ function createExerciseItem(ex: Exercise, index: number): HTMLLIElement {
       weightCell.textContent =
         set.weight <= 0 ? '—' : set.weightUnit ? `${weightValue} ${set.weightUnit}` : weightValue;
 
-      row.append(repsCell, weightCell);
+      row.append(setCell, repsCell, weightCell);
       table.appendChild(row);
     });
 
@@ -1037,8 +1119,21 @@ function renderDay(day: Day): HTMLElement {
   if (day.type === 'workout' && day.exercises) {
     const list = document.createElement('ul');
     list.className = 'program-day-list';
-    day.exercises.forEach((ex, idx) => {
-      list.appendChild(createExerciseItem(ex, idx));
+    const grouped = groupExercises(day.exercises);
+    grouped.forEach((item) => {
+      if ('kind' in item) {
+        const groupItem = document.createElement('li');
+        groupItem.className = 'program-exercise-group';
+        const groupList = document.createElement('ul');
+        groupList.className = 'program-exercise-group__list';
+        item.exercises.forEach((entry) => {
+          groupList.appendChild(createExerciseItem(entry.exercise, entry.index));
+        });
+        groupItem.appendChild(groupList);
+        list.appendChild(groupItem);
+        return;
+      }
+      list.appendChild(createExerciseItem(item.exercise, item.index));
     });
     details.appendChild(list);
   }

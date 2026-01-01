@@ -20,12 +20,56 @@ class ExerciseSerializer(serializers.Serializer):
     reps = serializers.CharField()
     weight = serializers.CharField(required=False, allow_null=True)
     set_id = serializers.IntegerField(required=False, allow_null=True)
+    drop_set = serializers.BooleanField(required=False)
+    superset_id = serializers.IntegerField(required=False, allow_null=True)
+    superset_order = serializers.IntegerField(required=False, allow_null=True)
     sets_detail = ExerciseSetDetailSerializer(many=True, required=False)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        superset_id = attrs.get("superset_id")
+        superset_order = attrs.get("superset_order")
+        set_id = attrs.get("set_id")
+        if superset_id is not None:
+            if set_id is None:
+                raise ValidationError("set_id is required when superset_id is provided")
+            if superset_order is None:
+                raise ValidationError("superset_order is required when superset_id is provided")
+        if superset_order is not None and superset_id is None:
+            raise ValidationError("superset_id is required when superset_order is provided")
+        if superset_order is not None and superset_order < 1:
+            raise ValidationError("superset_order must be >= 1")
+        return attrs
 
 
 class DayExercisesSerializer(serializers.Serializer):
     day = serializers.CharField()
     exercises = ExerciseSerializer(many=True)
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        exercises = attrs.get("exercises", [])
+        if not isinstance(exercises, list):
+            return attrs
+        set_ids = {item.get("set_id") for item in exercises if item.get("set_id") is not None}
+        superset_counts: dict[int, int] = {}
+        superset_orders: dict[int, set[int]] = {}
+        for item in exercises:
+            superset_id = item.get("superset_id")
+            if superset_id is None:
+                continue
+            if superset_id not in set_ids:
+                raise ValidationError("superset_id must reference an existing set_id within the same day")
+            superset_counts[superset_id] = superset_counts.get(superset_id, 0) + 1
+            order = item.get("superset_order")
+            if order is None:
+                continue
+            orders = superset_orders.setdefault(superset_id, set())
+            if order in orders:
+                raise ValidationError("superset_order must be unique within the same superset_id")
+            orders.add(order)
+        for superset_id, count in superset_counts.items():
+            if count < 2:
+                raise ValidationError("superset_id must group at least two exercises")
+        return attrs
 
 
 class ProgramSerializer(serializers.ModelSerializer):

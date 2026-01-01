@@ -45,6 +45,8 @@ export const fallbackEn = {
   'program.exercise.technique.title': 'Technique not available',
   'program.exercise.technique.body': 'No videos yet. We will add them soon.',
   'program.exercise.technique.close': 'Close',
+  'program.exercise.superset_label': 'Superset',
+  'program.exercise.drop_set_label': 'Drop set',
   'program.exercise.edit_dialog.set': 'Set',
   'program.exercise.edit_dialog.reps': 'Reps',
   'program.exercise.edit_dialog.weight': 'Weight',
@@ -98,7 +100,7 @@ export const fallbackEn = {
     'All interaction with the bot builds contextual knowledge: your goals, progress, discussed topics, health considerations, and feedback. This information is continuously taken into account. You can update key details at any time in the My Profile section.',
   'faq.q4.question': 'How does the payment system work?',
   'faq.q4.answer':
-    'You purchase a credit package (several options available) using a Ukrainian bank card. Credits do not expire and can be used for any services in the bot, including workout plans, nutrition plans, and personalized consultations.',
+    'You purchase a credit package (several options available) using a Ukrainian bank card. Credits do not expire and can be used for any services in the bot, including workout plans, nutrition plans, and personalized consultations. All generated workout plans stay available in the "Archive" section on the "My Workouts" page.',
   'faq.q5.question': 'How much can I trust the AI coach on training and nutrition?',
   'faq.q5.answer':
     'Recommendations are based on current scientific research and practical coaching experience. If you have medical conditions or injuries, consulting a healthcare professional before starting training is advised.',

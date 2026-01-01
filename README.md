@@ -173,6 +173,17 @@ The project ships an AI coach backed by Cognee. Each client and chat is mapped t
 
 To refresh external knowledge (e.g., documents from Google Drive), Celery calls `refresh_external_knowledge` every `KNOWLEDGE_REFRESH_INTERVAL` seconds. The task sends an authenticated request to the AI coach, which in turn runs `KnowledgeBase.refresh()`.
 
+## Workout plan exercise annotations
+
+Workout plan exercises can include optional annotations inside the `exercises_by_day` / `exercises` JSON payloads:
+
+- `drop_set` (bool) — flags a drop set for the exercise.
+- `set_id` (int) — unique exercise identifier within a day.
+- `superset_id` (int) — links exercises into a superset; must equal the `set_id` of the first exercise in that superset.
+- `superset_order` (int) — order of the exercise within the superset (starting at 1).
+
+For supersets, at least two exercises must share the same `superset_id`, and the `superset_order` values must be unique within that superset.
+
 **Key settings**
 
 * `KNOWLEDGE_REFRESH_INTERVAL` – periodic rebuild interval in seconds

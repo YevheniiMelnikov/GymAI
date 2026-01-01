@@ -63,6 +63,8 @@ class Exercise(BaseModel):
     set_id: int | None = None
     gif_key: str | None = None
     drop_set: bool = False
+    superset_id: int | None = None
+    superset_order: int | None = None
     sets_detail: list[ExerciseSetDetail] | None = None
     model_config = ConfigDict(extra="ignore")
 
