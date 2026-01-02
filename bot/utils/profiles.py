@@ -3,11 +3,12 @@ from typing import TYPE_CHECKING, Any, Optional, cast
 from loguru import logger
 
 from aiogram.types import CallbackQuery as TgCallbackQuery, Message as TgMessage
+from aiogram.types import InlineKeyboardButton as KbBtn, WebAppInfo
 
 from bot.states import States
-from bot.texts import MessageText, translate
-from bot.utils.bot import answer_msg, del_msg, delete_messages
-from bot.utils.text import get_profile_attributes
+from bot.keyboard_builder import SafeInlineKeyboardMarkup as KbMarkup
+from bot.texts import ButtonText, MessageText, translate
+from bot.utils.bot import answer_msg, del_msg, delete_messages, get_webapp_url
 from config.app_settings import settings
 from core.cache import Cache
 from core.exceptions import ProfileNotFoundError
@@ -255,17 +256,20 @@ async def _send_profile_info_after_questionnaire(
     state: "FSMContext",
 ) -> None:
     lang = profile.language or settings.DEFAULT_LANG
-    text = translate(MessageText.profile_info, lang).format(**get_profile_attributes(profile, lang))
-    from bot.keyboards import profile_menu_kb
-
+    webapp_url = get_webapp_url("profile", lang)
+    if not webapp_url:
+        await message.answer(translate(MessageText.unexpected_error, lang))
+        return
     profile_msg = await answer_msg(
         message,
-        text,
-        reply_markup=profile_menu_kb(lang, show_balance=True),
+        translate(ButtonText.my_profile, lang),
+        reply_markup=KbMarkup(
+            inline_keyboard=[[KbBtn(text=translate(ButtonText.my_profile, lang), web_app=WebAppInfo(url=webapp_url))]]
+        ),
     )
     if profile_msg is not None:
         await state.update_data(chat_id=profile_msg.chat.id, message_ids=[profile_msg.message_id])
-    await state.set_state(States.profile)
+    await state.set_state(States.main_menu)
 
 
 async def fetch_user(profile: Profile, *, refresh_if_incomplete: bool = False) -> Profile:

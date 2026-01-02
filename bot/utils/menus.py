@@ -4,20 +4,20 @@ from typing import Any, TypedDict, cast
 from loguru import logger
 from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message, FSInputFile
+from aiogram.types import CallbackQuery, Message, FSInputFile, InlineKeyboardButton as KbBtn, WebAppInfo
 from pathlib import Path
 
 from bot import keyboards as kb
+from bot.keyboard_builder import SafeInlineKeyboardMarkup as KbMarkup
 from bot.keyboards import select_gender_kb, yes_no_kb, confirm_service_kb
-from bot.utils.profiles import fetch_user, answer_profile
+from bot.utils.profiles import fetch_user
 from bot.services.pricing import ServiceCatalog
 from bot.states import States
-from bot.texts import MessageText, translate
+from bot.texts import ButtonText, MessageText, translate
 from core.cache import Cache
 from core.enums import ProfileStatus
 from core.exceptions import ProfileNotFoundError
 from core.schemas import Profile
-from bot.utils.text import get_profile_attributes
 from config.app_settings import settings
 from bot.types.messaging import BotMessageProxy
 from bot.utils.bot import del_msg, answer_msg, get_webapp_url
@@ -32,17 +32,32 @@ async def show_profile_editing_menu(message: Message, profile: Profile, state: F
     reply_markup = None
     try:
         user_profile = await Cache.profile.get_record(profile.id)
-        show_diet = False
-        if user_profile is not None:
-            allergies = (user_profile.diet_allergies or "").strip()
-            products = user_profile.diet_products or []
-            show_diet = bool(allergies or products)
-        reply_markup = kb.edit_profile_kb(profile.language, show_diet=show_diet, show_language=True)
     except ProfileNotFoundError:
         logger.info(f"Profile data not found for profile {profile.id} during profile editing setup.")
 
-    state_to_set = States.edit_profile if user_profile else States.gender
-    response_text = MessageText.choose_profile_parameter if user_profile else MessageText.edit_profile
+    if user_profile:
+        webapp_url = get_webapp_url("profile", profile.language)
+        if webapp_url:
+            await answer_msg(
+                message,
+                translate(ButtonText.my_profile, profile.language),
+                reply_markup=KbMarkup(
+                    inline_keyboard=[
+                        [
+                            KbBtn(
+                                text=translate(ButtonText.my_profile, profile.language),
+                                web_app=WebAppInfo(url=webapp_url),
+                            )
+                        ]
+                    ]
+                ),
+            )
+        await del_msg(cast(Message | CallbackQuery | None, message))
+        return
+
+    state_to_set = States.gender
+    response_text = MessageText.edit_profile
+    reply_markup = kb.edit_profile_kb(profile.language, show_diet=False, show_language=True)
 
     profile_msg = await answer_msg(
         message,
@@ -186,6 +201,23 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
     user = await fetch_user(profile, refresh_if_incomplete=True)
     lang = cast(str, profile.language)
 
+    webapp_url = get_webapp_url("profile", lang)
+    if webapp_url:
+        message = cast(Message, callback_query.message)
+        assert message
+        await callback_query.answer()
+        await answer_msg(
+            message,
+            translate(ButtonText.my_profile, lang),
+            reply_markup=KbMarkup(
+                inline_keyboard=[
+                    [KbBtn(text=translate(ButtonText.my_profile, lang), web_app=WebAppInfo(url=webapp_url))]
+                ]
+            ),
+        )
+        await del_msg(cast(Message | CallbackQuery | None, callback_query))
+        return
+
     if isinstance(user, Profile) and user.status != ProfileStatus.completed:
         await prompt_profile_completion_questionnaire(
             callback_query,
@@ -198,17 +230,7 @@ async def show_my_profile_menu(callback_query: CallbackQuery, profile: Profile, 
         await del_msg(cast(Message | CallbackQuery | None, callback_query))
         return
 
-    text = translate(MessageText.profile_info, lang).format(**get_profile_attributes(user, lang))
-
-    await answer_profile(
-        callback_query,
-        profile,
-        user,
-        text,
-        show_balance=True,
-    )
-    await state.set_state(States.profile)
-    await del_msg(cast(Message | CallbackQuery | None, callback_query))
+    await callback_query.answer(translate(MessageText.unexpected_error, lang), show_alert=True)
 
 
 async def show_my_workouts_menu(callback_query: CallbackQuery, profile: Profile, state: FSMContext) -> None:

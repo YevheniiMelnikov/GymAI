@@ -1,10 +1,7 @@
 from functools import lru_cache
-from typing import Optional
-
 from aiogram.fsm.state import State
 
 from bot.states import States
-from core.schemas import Profile
 from bot.texts import ButtonText, MessageText, translate
 from config.app_settings import settings
 
@@ -27,62 +24,6 @@ def get_state_and_message(callback: str, lang: str) -> tuple[State, str]:
     state, msg_key = _STATE_MESSAGE_KEYS.get(callback, (States.gender, None))
     message = translate(msg_key, lang) if msg_key else ""
     return state, message
-
-
-def get_profile_attributes(user: Optional[Profile], lang: str) -> dict[str, str]:
-    def attr(name: str) -> str:
-        val = getattr(user, name, "") if user else ""
-        return str(val) if val is not None else ""
-
-    def fill_template(template: str, **values: str) -> str:
-        result = template
-        for key, value in values.items():
-            result = result.replace(f"{{{key}}}", value)
-        return result
-
-    def diet_block() -> str:
-        if user is None:
-            return ""
-        allergies = str(user.diet_allergies or "").strip()
-        products = user.diet_products or []
-        if not allergies and not products:
-            return ""
-        separator = translate(MessageText.diet_preferences_separator, lang)
-        title_line = translate(MessageText.diet_preferences_title_line, lang)
-        allergies_line = translate(MessageText.diet_preferences_allergies_line, lang)
-        products_header = translate(MessageText.diet_preferences_products_header, lang)
-        product_item = translate(MessageText.diet_preferences_product_item, lang)
-        lines = [title_line]
-        if allergies:
-            lines.append(fill_template(allergies_line, allergies=allergies))
-        if products:
-            product_labels = {
-                "plant_food": translate(ButtonText.plant_food, lang),
-                "meat": translate(ButtonText.meat, lang),
-                "fish_seafood": translate(ButtonText.fish_seafood, lang),
-                "eggs": translate(ButtonText.eggs, lang),
-                "dairy": translate(ButtonText.dairy, lang),
-            }
-            translated = [product_labels.get(item, item) for item in products if str(item).strip()]
-            if translated:
-                lines.append(products_header)
-                lines.extend(fill_template(product_item, product=product) for product in translated)
-        return f"{separator}{'\n'.join(lines)}"
-
-    location_key = attr("workout_location").strip().lower()
-    workout_locations = get_workout_locations(lang)
-    experience_key = attr("workout_experience").strip().lower()
-    experience_levels = get_workout_experience_levels(lang)
-    return {
-        "born_in": attr("born_in"),
-        "experience": experience_levels.get(experience_key, attr("workout_experience")),
-        "goals": attr("workout_goals"),
-        "workout_location": workout_locations.get(location_key, "") if location_key else "",
-        "weight": attr("weight"),
-        "height": attr("height"),
-        "notes": attr("health_notes"),
-        "diet_preferences": diet_block(),
-    }
 
 
 @lru_cache(maxsize=None)

@@ -80,7 +80,6 @@ class MessageText(AutoName):
     unexpected_error = auto()
     coach_agent_error = auto()
 
-    profile_info = auto()
     default_status = auto()
     request_in_progress = auto()
     waiting_for_text = auto()
@@ -96,15 +95,9 @@ class MessageText(AutoName):
     diet_allergies_question = auto()
     diet_allergies = auto()
     diet_products = auto()
-    diet_preferences_separator = auto()
-    diet_preferences_title_line = auto()
-    diet_preferences_allergies_line = auto()
-    diet_preferences_products_header = auto()
-    diet_preferences_product_item = auto()
     diet_service_intro = auto()
 
     edit_profile = auto()
-    choose_profile_parameter = auto()
     verified = auto()
     finish_registration_to_get_credits = auto()
     finish_registration = auto()
