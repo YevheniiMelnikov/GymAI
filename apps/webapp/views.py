@@ -239,7 +239,12 @@ async def subscription_data(request: HttpRequest) -> JsonResponse:
 
     subscription_id = getattr(subscription, "id", None)
     days = transform_days(exercises)
-    response: dict[str, object] = {"days": days, "language": profile.language, "program": days}
+    response: dict[str, object] = {
+        "days": days,
+        "language": profile.language,
+        "program": days,
+        "created_at": parse_timestamp(getattr(subscription, "updated_at", None)),
+    }
     if subscription_id is not None:
         response["id"] = str(subscription_id)
     return JsonResponse(response)

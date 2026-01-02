@@ -87,6 +87,7 @@ export type SubscriptionResp = {
   id?: string;
   error?: string;
   language?: string;
+  created_at?: number | string | null;
 };
 
 export type SubscriptionStatusResp = {

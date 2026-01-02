@@ -192,7 +192,7 @@ const ProgramPage: React.FC = () => {
                         programData = {
                             id: sub.id || 'sub',
                             locale: appliedLocale,
-                            created_at: null,
+                            created_at: sub.created_at ?? null,
                             days: sub.days
                         };
                     } else if (sub.program) {

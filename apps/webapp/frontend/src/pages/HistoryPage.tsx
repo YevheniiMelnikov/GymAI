@@ -188,11 +188,11 @@ const HistoryPage: React.FC = () => {
                                         </span>
                                         <span>{sortOrder === 'newest' ? t('sort_newest') : t('sort_oldest')}</span>
                                         <span className="sort-trigger__chevron" aria-hidden="true">
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
                                                 <path
                                                     d="M7 10l5 5 5-5"
                                                     stroke="currentColor"
-                                                    strokeWidth="2"
+                                                    strokeWidth="1.6"
                                                     strokeLinecap="round"
                                                     strokeLinejoin="round"
                                                 />
